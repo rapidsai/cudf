@@ -10,7 +10,6 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, TypeAlias, TypedDict
 
-from cuda.bindings import runtime as cudart
 from rapidsmpf.buffer.resource import BufferResource
 from rapidsmpf.communicator.single import new_communicator
 from rapidsmpf.config import Options, get_environment_variables
@@ -26,6 +25,7 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import pylibcudf as plc
 import rmm
+from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import (
@@ -197,10 +197,10 @@ def generate_network(
     }
     mapper: SubNetGenerator = CachingVisitor(generate_ir_sub_network, state=state)
     node_mapping, channels = mapper(ir)
-    nodes = list(node_mapping.values())
+    nodes = [node for sublist in node_mapping.values() for node in sublist]
     ch_out = channels[ir]
 
-    # Add node to concatenate final chunks
+    # Add node to concatenate multiple chunks
     choncat_ch_out = Channel()
     nodes.append(concatenate(ctx, ch_in=ch_out, ch_out=choncat_ch_out))
     ch_out = choncat_ch_out
@@ -261,15 +261,15 @@ async def pointwise_single_channel_node(
     async with shutdown_on_error(ctx, ch_in, ch_out):
         while (msg := await ch_in.recv(ctx)) is not None:
             # Receive an input chunk
-            chunk: TableChunk = TableChunk.from_message(msg).to_device(ctx.br())
+            chunk: TableChunk = TableChunk.from_message(msg)
 
             # Evaluate the IR node
             df: DataFrame = ir.do_evaluate(
                 *ir._non_child_args,
                 DataFrame.from_table(
                     chunk.table_view(),
-                    list(ir.schema.keys()),
-                    list(ir.schema.values()),
+                    list(ir.children[0].schema.keys()),
+                    list(ir.children[0].schema.values()),
                 ),
             )
 
@@ -299,37 +299,16 @@ async def concatenate(
     ch_out
         The output channel.
     """
+    # TODO: Use multiple streams
     async with shutdown_on_error(ctx, ch_in, ch_out):
         chunks = []
-        build_stream = ctx.get_stream()
-        err, event = cudart.cudaEventCreateWithFlags(cudart.cudaEventDisableTiming)
-        if err != cudart.cudaError_t.cudaSuccess:
-            raise RuntimeError(err)
-        chunk_streams = set()
+        build_stream = DEFAULT_STREAM
         while (msg := await ch_in.recv(ctx)) is not None:
-            chunk = TableChunk.from_message(msg).to_device(ctx.br())
+            chunk = TableChunk.from_message(msg)
             chunks.append(chunk)
-            (err,) = cudart.cudaEventRecord(event, chunk.stream.value())
-            chunk_streams.add(chunk.stream)
-            if err != cudart.cudaError_t.cudaSuccess:
-                raise RuntimeError(err)
-            (err,) = cudart.cudaStreamWaitEvent(
-                build_stream.value(), event, cudart.cudaEventWaitDefault
-            )
-            if err != cudart.cudaError_t.cudaSuccess:
-                raise RuntimeError(err)
-        table = plc.concatenate.concatenate(
+        table = chunks[0].table_view() if len(chunks) == 1 else plc.concatenate.concatenate(
             [chunk.table_view() for chunk in chunks], build_stream
         )
-        (err,) = cudart.cudaEventRecord(event, build_stream.value())
-        if err != cudart.cudaError_t.cudaSuccess:
-            raise RuntimeError(err)
-        for s in chunk_streams:
-            (err,) = cudart.cudaStreamWaitEvent(
-                s.value(), event, cudart.cudaEventWaitDefault
-            )
-            if err != cudart.cudaError_t.cudaSuccess:
-                raise RuntimeError(err)
         await ch_out.send(
             ctx, Message(TableChunk.from_pylibcudf_table(0, table, build_stream))
         )
@@ -360,7 +339,6 @@ async def dataframe_scan_node(
     # TODO: Use (throttled) thread pool
     # TODO: Use multiple streams
     nrows = max(ir.df.shape()[0], 1)
-    stream = ctx.get_stream()
     async with shutdown_on_error(ctx, ch_out):
         for seq_num, offset in enumerate(range(0, nrows, rows_per_partition)):
             ir_slice = DataFrameScan(
@@ -373,7 +351,7 @@ async def dataframe_scan_node(
             df: DataFrame = ir_slice.do_evaluate(*ir_slice._non_child_args)
 
             # Return the output chunk
-            chunk = TableChunk.from_pylibcudf_table(seq_num, df.table, stream)
+            chunk = TableChunk.from_pylibcudf_table(seq_num, df.table, DEFAULT_STREAM)
             await ch_out.send(ctx, Message(chunk))
         await ch_out.drain(ctx)
 
