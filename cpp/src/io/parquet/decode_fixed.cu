@@ -1158,7 +1158,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
       } else {
         // direct copy: no nulls, no lists, no need to update validity or row indices
         // This ASSUMES that s->row_index_lower_bound is always -1!
-        // It's purpose is to handle rows than span page boundaries, which only happen for lists.
+        // Its purpose is to handle rows than span page boundaries, which only happen for lists.
         processed_count += min(rolling_buf_size, s->page.num_input_values - processed_count);
         int const capped_target_value_count = min(processed_count, last_row);
         if (t == 0) { s->input_row_count = capped_target_value_count; }
