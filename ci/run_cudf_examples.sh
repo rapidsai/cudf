@@ -41,7 +41,7 @@ compute-sanitizer --tool memcheck parquet_io_multithreaded example.parquet
 compute-sanitizer --tool memcheck parquet_io_multithreaded example.parquet 4 DEVICE_BUFFER 2 2
 popd || exit
 
-pushd parquet_inspect || exits
+pushd parquet_inspect || exit
 compute-sanitizer --tool memcheck parquet_inspect example.parquet
 popd || exit
 
