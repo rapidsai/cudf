@@ -7,7 +7,7 @@ from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.fixed_point.fixed_point cimport scale_type
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport data_type
-
+from pylibcudf.libcudf.fixed_point.fixed_point cimport scale_type
 
 cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
     cdef cppclass scalar:
@@ -74,3 +74,12 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
     cdef cppclass struct_scalar(scalar):
         struct_scalar(table_view cols, bool valid) except +libcudf_exception_handler
         table_view view() except +libcudf_exception_handler
+
+    cdef cppclass fixed_point_scalar[T](scalar):
+        fixed_point_scalar() except +libcudf_exception_handler
+        fixed_point_scalar(
+            T value,
+            scale_type scale,
+            bool is_valid
+        ) except +libcudf_exception_handler
+        T value() except +libcudf_exception_handler

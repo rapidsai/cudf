@@ -979,4 +979,24 @@ TYPED_TEST(TransformTest, ComplexScalarOnly)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TYPED_TEST(TransformTest, DecimalLiteralComparisonWithColumn)
+{
+  using Executor = TypeParam;
+
+  auto d_col =
+    cudf::test::fixed_point_column_wrapper<int64_t>({100, 12345, -567, 0}, numeric::scale_type{-2});
+  auto table = cudf::table_view{{d_col}};
+
+  cudf::fixed_point_scalar<numeric::decimal64> val{123, numeric::scale_type{-2}, true};
+  auto literal = cudf::ast::literal(val);
+
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_0, literal);
+
+  auto result   = Executor::compute_column(table, expression);
+  auto expected = column_wrapper<bool>{false, true, false, false};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
