@@ -507,7 +507,7 @@ __device__ int update_validity_and_row_indices_flat(
     // here we need to adjust our computed mask to take into account the write row bounds.
     bool const in_write_row_bounds     = in_row_bounds && (row_index >= first_row);
     int const in_write_row_bounds_mask = ballot(in_write_row_bounds);
-    int const write_start = __ffs(in_write_row_bounds_mask) - 1;  // first bit in the warp to store
+    int const write_start = cuda::std::countr_zero(in_write_row_bounds_mask);  // first bit in the warp to store
     int warp_null_count   = 0;
     // lane 0 from each warp writes out validity
     if ((write_start >= 0) && ((t % cudf::detail::warp_size) == 0)) {
