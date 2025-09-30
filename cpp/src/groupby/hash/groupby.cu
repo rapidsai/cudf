@@ -126,7 +126,7 @@ struct can_use_hash_groupby_fn {
   bool operator()() const
   {
     using TargetType       = cudf::detail::target_type_t<T, K>;
-    using DeviceTargetType = cuda::std::
+    using DeviceTargetType = std::
       conditional_t<uses_underlying_type<K>(), cudf::device_storage_type_t<TargetType>, TargetType>;
     if constexpr (not std::is_void_v<DeviceTargetType>) {
       return cudf::has_atomic_support<DeviceTargetType>();
