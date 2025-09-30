@@ -2,9 +2,14 @@
 
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.types cimport size_type
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 
 cpdef Column jaccard_index(
-    Column input1, Column input2, size_type width, Stream stream=*
+    Column input1,
+    Column input2,
+    size_type width,
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )

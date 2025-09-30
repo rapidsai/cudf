@@ -9,14 +9,15 @@ from pylibcudf.libcudf.io.timezone cimport (
 )
 from pylibcudf.libcudf.table.table cimport table
 
-from ..utils cimport _get_stream
+from ..utils cimport _get_stream, _get_memory_resource
 from ..table cimport Table
 from .types cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 __all__ = ["make_timezone_transition_table"]
 
 cpdef Table make_timezone_transition_table(
-    str tzif_dir, str timezone_name, Stream stream=None
+    str tzif_dir, str timezone_name, Stream stream=None, DeviceMemoryResource mr=None,
 ):
     """
     Creates a transition table to convert ORC timestamps to UTC.
@@ -39,6 +40,7 @@ cpdef Table make_timezone_transition_table(
     cdef string c_tzdir = tzif_dir.encode()
     cdef string c_tzname = timezone_name.encode()
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_make_timezone_transition_table(
@@ -47,4 +49,4 @@ cpdef Table make_timezone_transition_table(
             stream.view()
         )
 
-    return Table.from_libcudf(move(c_result), stream)
+    return Table.from_libcudf(move(c_result), stream, mr)
