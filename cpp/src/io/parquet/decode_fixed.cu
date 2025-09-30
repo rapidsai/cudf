@@ -515,7 +515,7 @@ __device__ int update_validity_and_row_indices_flat(
       int const bit_offset = (valid_map_offset + vindex + write_start) -
                              first_row;  // absolute bit offset into the output validity map
       int const write_end =
-        cudf::detail::warp_size - __clz(in_write_row_bounds_mask);  // last bit in the warp to store
+        cudf::detail::warp_size - cuda::std::countl_zero(in_write_row_bounds_mask);  // last bit in the warp to store
       int const bit_count = write_end - write_start;
       warp_null_count     = bit_count - __popc(warp_validity_mask >> write_start);
 
