@@ -22,6 +22,7 @@ from pylibcudf.libcudf.io.types cimport (
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport data_type, size_type
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.memory_resource cimport device_memory_resource
 
 
 cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
@@ -94,6 +95,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
     cdef table_with_metadata read_parquet(
         parquet_reader_options args,
         cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef cppclass parquet_writer_options_base:
@@ -282,6 +284,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             size_t pass_read_limit,
             const parquet_reader_options& options,
             cuda_stream_view stream,
+            device_memory_resource* mr
         ) except +libcudf_exception_handler
         bool has_next() except +libcudf_exception_handler
         table_with_metadata read_chunk() except +libcudf_exception_handler
