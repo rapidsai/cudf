@@ -1439,9 +1439,7 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
             "Use cudf.api.types.is_any_real_numeric_dtype instead",
             FutureWarning,
         )
-        return cudf.api.types.is_any_real_numeric_dtype(
-            self.dtype
-        )  # self._is_numeric()
+        return cudf.api.types.is_any_real_numeric_dtype(self.dtype)
 
     def is_boolean(self):
         """
