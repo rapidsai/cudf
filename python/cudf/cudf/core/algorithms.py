@@ -5,13 +5,12 @@ import warnings
 from typing import TYPE_CHECKING
 
 import cupy as cp
-import pyarrow as pa
 
 import cudf
 from cudf.core.column import as_column
 from cudf.core.dtypes import CategoricalDtype
 from cudf.options import get_option
-from cudf.utils.dtypes import can_convert_to_column, cudf_dtype_to_pa_type
+from cudf.utils.dtypes import can_convert_to_column
 
 if TYPE_CHECKING:
     from cudf.core.index import Index
@@ -98,10 +97,8 @@ def factorize(
         warnings.warn("size_hint is not applicable for cudf.factorize")
 
     if use_na_sentinel:
-        na_sentinel = pa.scalar(-1)
         cats = values.dropna()
     else:
-        na_sentinel = pa.scalar(None, type=cudf_dtype_to_pa_type(values.dtype))
         cats = values
 
     cats = cats.unique().astype(values.dtype)
@@ -111,7 +108,6 @@ def factorize(
 
     labels = values._label_encoding(
         cats=cats,
-        na_sentinel=na_sentinel,
         dtype="int64" if get_option("mode.pandas_compatible") else None,
     ).values
 

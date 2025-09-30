@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import itertools
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pandas as pd
@@ -23,6 +23,7 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
+    cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     get_dtype_of_same_kind,
     is_dtype_obj_string,
@@ -517,15 +518,6 @@ class StringColumn(ColumnBase):
             res = self
         return res.replace(df._data["old"], df._data["new"])
 
-    def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
-        if is_scalar(other):
-            if is_na_like(other):
-                return super()._normalize_binop_operand(other)
-            return pa.scalar(other)
-        elif isinstance(other, type(self)):
-            return other
-        return NotImplemented
-
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
         # Due to https://github.com/pandas-dev/pandas/issues/46332 we need to
@@ -551,8 +543,12 @@ class StringColumn(ColumnBase):
             elif op == "__ne__":
                 return self.isnull()
 
-        other = self._normalize_binop_operand(other)
-        if other is NotImplemented:
+        if is_scalar(other):
+            if is_na_like(other):
+                other = pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
+            else:
+                other = pa.scalar(other)  # type: ignore[arg-type]
+        elif not isinstance(other, type(self)):
             return NotImplemented
 
         if isinstance(other, (StringColumn, pa.Scalar)):
