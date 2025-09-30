@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl import ir
 
 
-def make_snaphot(
+def make_snapshot(
     node_type: type[ir.IR],
     frames: Sequence[cudf_polars.containers.DataFrame],
     extra: dict[str, Any] | None = None,
@@ -151,7 +151,7 @@ def log_do_evaluate(
                 list(args) + list(kwargs.values())
             )[len(cls._non_child) :]  # type: ignore[assignment]
 
-            before = make_snaphot(
+            before = make_snapshot(
                 cls, frames, phase="input", device_handle=maybe_handle, pid=pid
             )
 
@@ -163,7 +163,7 @@ def log_do_evaluate(
             result = func(cls, *args, **kwargs)
             stop = time.monotonic_ns()
 
-            after = make_snaphot(
+            after = make_snapshot(
                 cls,
                 [result],
                 phase="output",

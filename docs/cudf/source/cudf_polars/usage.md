@@ -87,7 +87,7 @@ shape: (3, 3)
 ## Tracing
 
 cudf-polars can optionally trace execution of the various nodes of each node in
-the query plan by setting the environment variable ``CUDF_POLARS_TRACE`` to a
+the query plan by setting the environment variable ``CUDF_POLARS_LOG_TRACES`` to a
 true value ("1", "true", "y", "yes") before starting your process. This will
 capture and log information about each node before and after it executes, including information on
 
