@@ -689,6 +689,7 @@ cpdef tuple chunked_read_json(
     JsonReaderOptions options,
     int chunk_size=100_000_000,
     Stream stream = None,
+    DeviceMemoryResource mr = None,
 ):
     """
     Reads chunks of a JSON file into a :py:class:`~.types.TableWithMetadata`.
@@ -718,6 +719,7 @@ cpdef tuple chunked_read_json(
     child_names = None
     i = 0
     cdef Stream s = _get_stream(stream)
+    mr = _get_memory_resource(mr)
     while True:
         options.enable_lines(True)
         options.set_byte_range_offset(c_range_size * i)
@@ -725,7 +727,7 @@ cpdef tuple chunked_read_json(
 
         try:
             with nogil:
-                c_result = move(cpp_read_json(options.c_obj, s.view()))
+                c_result = move(cpp_read_json(options.c_obj, s.view(), mr.get_mr()))
         except (ValueError, OverflowError):
             break
         if meta_names is None:
@@ -754,7 +756,8 @@ cpdef tuple chunked_read_json(
 
 cpdef TableWithMetadata read_json(
     JsonReaderOptions options,
-    Stream stream = None
+    Stream stream = None,
+    DeviceMemoryResource mr = None
 ):
     """
     Read from JSON format.
@@ -778,8 +781,9 @@ cpdef TableWithMetadata read_json(
     """
     cdef table_with_metadata c_result
     cdef Stream s = _get_stream(stream)
+    mr = _get_memory_resource(mr)
     with nogil:
-        c_result = move(cpp_read_json(options.c_obj, s.view()))
+        c_result = move(cpp_read_json(options.c_obj, s.view(), mr.get_mr()))
 
     return TableWithMetadata.from_libcudf(c_result, s)
 
