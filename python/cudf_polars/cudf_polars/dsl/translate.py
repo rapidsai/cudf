@@ -911,13 +911,21 @@ def _(
 def _(
     node: pl_expr.Agg, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
-    value = expr.Agg(
-        dtype,
-        node.name,
-        node.options,
-        *(translator.translate_expr(n=n, schema=schema) for n in node.arguments),
-    )
-    if value.name in ("count", "n_unique") and value.dtype.id() != plc.TypeId.INT32:
+    agg_name = node.name
+    args = [translator.translate_expr(n=arg, schema=schema) for arg in node.arguments]
+
+    if agg_name not in ("count", "n_unique"):
+        args = [
+            expr.Cast(dtype, a)
+            if plc.traits.is_fixed_point(a.dtype.plc_type)
+            and a.dtype.plc_type != dtype.plc_type
+            else a
+            for a in args
+        ]
+
+    value = expr.Agg(dtype, agg_name, node.options, *args)
+
+    if agg_name in ("count", "n_unique") and value.dtype.id() != plc.TypeId.INT32:
         return expr.Cast(value.dtype, value)
     return value
 
