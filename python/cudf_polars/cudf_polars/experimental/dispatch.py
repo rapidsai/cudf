@@ -76,37 +76,6 @@ def lower_ir_node(
 
 
 @singledispatch
-def lower_ir_node_rapidsmpf(
-    ir: IR, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    """
-    Rewrite an IR node and extract partitioning information for RAPIDS-MPF.
-
-    Parameters
-    ----------
-    ir
-        IR node to rewrite.
-    rec
-        Recursive LowerIRTransformer callable.
-
-    Returns
-    -------
-    new_ir, partition_info
-        The rewritten node, and a mapping from unique nodes in
-        the full IR graph to associated partitioning information.
-
-    Notes
-    -----
-    This function is used by `lower_ir_graph_rapidsmpf`.
-
-    See Also
-    --------
-    lower_ir_graph_rapidsmpf
-    """
-    raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover
-
-
-@singledispatch
 def generate_ir_tasks(
     ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
@@ -133,32 +102,6 @@ def generate_ir_tasks(
     See Also
     --------
     task_graph
-    """
-    raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover
-
-
-@singledispatch
-def generate_ir_sub_network(
-    ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
-) -> tuple[dict[IR, list[Any]], dict[IR, Any]]:
-    """
-    Generate a sub-network for evaluation of an IR node with rapidsmpf.
-
-    Parameters
-    ----------
-    ir
-        IR node to generate tasks for.
-    partition_info
-        Partitioning information, obtained from :func:`lower_ir_graph_rapidsmpf`.
-
-    Returns
-    -------
-    nodes
-        Dictionary mapping between each IR node and its
-        corresponding streaming-network node(s).
-    channels
-        Dictionary mapping between each IR node and its
-        corresponding streaming-network output channel.
     """
     raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover
 

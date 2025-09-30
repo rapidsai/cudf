@@ -14,9 +14,9 @@ from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 from cudf_polars.dsl.ir import DataFrameScan
 from cudf_polars.experimental.base import PartitionInfo
-from cudf_polars.experimental.dispatch import (
+from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
-    lower_ir_node_rapidsmpf,
+    lower_ir_node,
 )
 from cudf_polars.experimental.rapidsmpf.utils import define_py_node, shutdown_on_error
 
@@ -27,11 +27,11 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
+    from cudf_polars.experimental.rapidsmpf.dispatch import LowerIRTransformer
 
 
-@lower_ir_node_rapidsmpf.register(DataFrameScan)
+@lower_ir_node.register(DataFrameScan)
 def _(
     ir: DataFrameScan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:

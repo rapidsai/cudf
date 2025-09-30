@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, Any, TypeAlias, TypedDict
+from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.buffer.resource import BufferResource
 from rapidsmpf.communicator.single import new_communicator
@@ -27,17 +27,15 @@ from cudf_polars.dsl.ir import (
     IR,
 )
 from cudf_polars.dsl.traversal import CachingVisitor
-from cudf_polars.experimental.dispatch import (
+from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
     lower_ir_node,
-    lower_ir_node_rapidsmpf,
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     concatenate,
     pointwise_single_channel_node,
 )
 from cudf_polars.experimental.statistics import collect_statistics
-from cudf_polars.typing import GenericTransformer
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -47,31 +45,7 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.experimental.dispatch import LowerIRTransformer, State
     from cudf_polars.experimental.parallel import ConfigOptions
-
-
-class GenState(TypedDict):
-    """
-    State used for generating a streaming sub-network.
-
-    Parameters
-    ----------
-    ctx
-        The rapidsmpf context.
-    config_options
-        GPUEngine configuration options.
-    partition_info
-        Partition information.
-    """
-
-    ctx: Context
-    config_options: ConfigOptions
-    partition_info: MutableMapping[IR, PartitionInfo]
-
-
-SubNetGenerator: TypeAlias = GenericTransformer[
-    "IR", "tuple[dict[IR, list[Any]], dict[IR, Any]]", GenState
-]
-"""Protocol for Generating a streaming sub-network."""
+    from cudf_polars.experimental.rapidsmpf.dispatch import GenState, SubNetGenerator
 
 
 def evaluate_logical_plan(ir: IR, config_options: ConfigOptions) -> DataFrame:
@@ -103,15 +77,6 @@ def evaluate_logical_plan(ir: IR, config_options: ConfigOptions) -> DataFrame:
         list(ir.schema.keys()),
         list(ir.schema.values()),
     )
-
-
-@lower_ir_node_rapidsmpf.register(IR)
-def _(
-    ir: IR, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:  # pragma: no cover
-    # Default logic - Use ``lower_ir_node``, but
-    # many IR types will need different logic.
-    return lower_ir_node(ir, rec)
 
 
 def lower_ir_graph_rapidsmpf(
@@ -146,7 +111,7 @@ def lower_ir_graph_rapidsmpf(
         "config_options": config_options,
         "stats": collect_statistics(ir, config_options),
     }
-    mapper: LowerIRTransformer = CachingVisitor(lower_ir_node_rapidsmpf, state=state)
+    mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
     return mapper(ir)
 
 
@@ -194,8 +159,22 @@ def generate_network(
     return nodes, output
 
 
+@lower_ir_node.register(IR)
+def _(
+    ir: IR, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:  # pragma: no cover
+    # Default lower_ir_node logic.
+    # Use task-based lower_ir_node (for now).
+    from cudf_polars.experimental.dispatch import lower_ir_node as base_lower_ir_node
+
+    return base_lower_ir_node(ir, rec)
+
+
 @generate_ir_sub_network.register(IR)
 def _(ir: IR, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]:
+    # Default generate_ir_sub_network logic.
+    # Use simple pointwise node (for now).
+
     # Process children
     if len(ir.children) != 1:
         raise NotImplementedError(f"Unsupported IR node for rapidsmpf: {type(ir)}.")
