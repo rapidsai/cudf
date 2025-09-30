@@ -475,7 +475,7 @@ __device__ int update_validity_and_row_indices_flat(
 
     // compute our row index, whether we're in row bounds, and validity
     // This ASSUMES that s->row_index_lower_bound is always -1!
-    // It's purpose is to handle rows than span page boundaries, which only happen for lists.
+    // Its purpose is to handle rows than span page boundaries, which only happen for lists.
     int const row_index     = thread_value_count + value_count;
     int const in_row_bounds = (row_index < last_row);
 
