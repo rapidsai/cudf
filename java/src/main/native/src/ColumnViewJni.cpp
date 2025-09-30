@@ -1162,20 +1162,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_unaryOperation(JNIEnv* en
   JNI_CATCH(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_round(
-  JNIEnv* env, jclass, jlong input_ptr, jint decimal_places, jint rounding_method)
-{
-  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
-  JNI_TRY
-  {
-    cudf::jni::auto_set_device(env);
-    cudf::column_view* input     = reinterpret_cast<cudf::column_view*>(input_ptr);
-    cudf::rounding_method method = static_cast<cudf::rounding_method>(rounding_method);
-    return release_as_jlong(cudf::round(*input, decimal_places, method));
-  }
-  JNI_CATCH(env, 0);
-}
-
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractDateTimeComponent(JNIEnv* env,
                                                                                 jclass,
                                                                                 jlong input_ptr,
