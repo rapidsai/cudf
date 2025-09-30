@@ -631,10 +631,10 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
   if (stats_columns_mask.empty()) {
     auto row_mask = cudf::make_numeric_column(
       data_type{cudf::type_id::BOOL8}, total_rows, rmm::device_buffer{}, 0, stream, mr);
-    thrust::fill(rmm::exec_policy_nosync(stream),
-                 row_mask->mutable_view().begin<bool>(),
-                 row_mask->mutable_view().end<bool>(),
-                 true);
+    thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
+                               row_mask->mutable_view().begin<bool>(),
+                               row_mask->mutable_view().end<bool>(),
+                               true);
     return row_mask;
   }
 

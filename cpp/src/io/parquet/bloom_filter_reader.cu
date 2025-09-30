@@ -254,6 +254,8 @@ class bloom_filter_expression_converter : public equality_literals_collector {
             lit == &_always_true) {
           _bloom_filter_expr.push(
             ast::operation{ast_operator::IDENTITY, _bloom_filter_expr.back()});
+          // Propagate the `_always_true` as expression to its parent
+          return _always_true;
         } else {
           _bloom_filter_expr.push(ast::operation{op, new_operands.front()});
         }
