@@ -204,6 +204,7 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
       if (auto* lit = dynamic_cast<ast::literal const*>(&new_operands.front().get());
           lit == &_always_true) {
         _stats_expr.push(ast::operation{ast_operator::IDENTITY, _stats_expr.back()});
+        return _always_true;
       } else {
         _stats_expr.push(ast::operation{op, new_operands.front()});
       }

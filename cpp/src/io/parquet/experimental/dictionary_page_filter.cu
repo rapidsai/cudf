@@ -1461,6 +1461,7 @@ class dictionary_expression_converter : public equality_literals_collector {
         if (auto* lit = dynamic_cast<ast::literal const*>(&new_operands.front().get());
             lit == &_always_true) {
           _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, _dictionary_expr.back()});
+          return _always_true;
         } else {
           _dictionary_expr.push(ast::operation{op, new_operands.front()});
         }
