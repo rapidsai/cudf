@@ -306,8 +306,13 @@ async def concatenate(
         while (msg := await ch_in.recv(ctx)) is not None:
             chunk = TableChunk.from_message(msg)
             chunks.append(chunk)
-        table = chunks[0].table_view() if len(chunks) == 1 else plc.concatenate.concatenate(
-            [chunk.table_view() for chunk in chunks], build_stream
+
+        table = (
+            chunks[0].table_view()
+            if len(chunks) == 1
+            else plc.concatenate.concatenate(
+                [chunk.table_view() for chunk in chunks], build_stream
+            )
         )
         await ch_out.send(
             ctx, Message(TableChunk.from_pylibcudf_table(0, table, build_stream))

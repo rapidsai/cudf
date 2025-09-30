@@ -13,12 +13,13 @@ from polars.testing import assert_frame_equal
 def test_rapidmpf_scheduler_simple(rows_per_partition: int) -> None:
     df = pl.LazyFrame(
         {
-            "a": list(range(0, 20)),
+            "a": list(range(20)),
             "b": list(range(20, 40)),
             "c": list(range(40, 60)),
             "d": list(range(60, 80)),
         }
     )
+
     q = df.select(pl.col("a") - (pl.col("b") + pl.col("c") * 2), pl.col("d")).sort("d")
 
     expected = q.collect(engine="cpu")
