@@ -892,9 +892,8 @@ class NumericalColumn(NumericalBaseColumn):
         dtype: Dtype,
     ) -> ColumnBase:
         if isinstance(dtype, CategoricalDtype):
-            codes = cudf.core.column.categorical.as_unsigned_codes(
-                len(dtype.categories), self
-            )
+            codes_dtype = min_unsigned_type(len(dtype.categories))
+            codes = cast(NumericalColumn, self.astype(codes_dtype))
             return cudf.core.column.CategoricalColumn(
                 data=None,
                 size=self.size,
