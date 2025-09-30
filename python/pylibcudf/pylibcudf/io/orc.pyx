@@ -7,6 +7,7 @@ from libcpp.vector cimport vector
 import datetime
 
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from pylibcudf.io.types cimport SourceInfo, TableWithMetadata, SinkInfo
 
@@ -49,7 +50,7 @@ from pylibcudf.types cimport DataType
 
 from pylibcudf.variant cimport get_if, holds_alternative
 
-from pylibcudf.utils cimport _get_stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
 
 
 __all__ = [
@@ -417,7 +418,9 @@ cdef class OrcReaderOptionsBuilder:
         return orc_options
 
 
-cpdef TableWithMetadata read_orc(OrcReaderOptions options, Stream stream = None):
+cpdef TableWithMetadata read_orc(
+    OrcReaderOptions options, Stream stream = None, DeviceMemoryResource mr=None
+):
     """
     Read from ORC format.
 
@@ -432,12 +435,15 @@ cpdef TableWithMetadata read_orc(OrcReaderOptions options, Stream stream = None)
         Settings for controlling reading behavior
     stream : Stream | None
         CUDA stream used for device memory operations and kernel launches
+    mr : DeviceMemoryResource, optional
+        Device memory resource used to allocate the returned table's device memory.
     """
     cdef table_with_metadata c_result
     cdef Stream s = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = move(cpp_read_orc(options.c_obj, s.view()))
+        c_result = move(cpp_read_orc(options.c_obj, s.view(), mr.get_mr()))
 
     return TableWithMetadata.from_libcudf(c_result, s)
 

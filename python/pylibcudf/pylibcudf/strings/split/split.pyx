@@ -28,7 +28,10 @@ __all__ = [
 ]
 
 cpdef Table split(
-    Column strings_column, Scalar delimiter, size_type maxsplit, Stream stream=None,
+    Column strings_column,
+    Scalar delimiter,
+    size_type maxsplit,
+    Stream stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -77,7 +80,10 @@ cpdef Table split(
 
 
 cpdef Table rsplit(
-    Column strings_column, Scalar delimiter, size_type maxsplit, Stream stream=None,
+    Column strings_column,
+    Scalar delimiter,
+    size_type maxsplit,
+    Stream stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -125,7 +131,10 @@ cpdef Table rsplit(
     return Table.from_libcudf(move(c_result), stream, mr)
 
 cpdef Column split_record(
-    Column strings, Scalar delimiter, size_type maxsplit, Stream stream=None,
+    Column strings,
+    Scalar delimiter,
+    size_type maxsplit,
+    Stream stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -170,7 +179,10 @@ cpdef Column split_record(
 
 
 cpdef Column rsplit_record(
-    Column strings, Scalar delimiter, size_type maxsplit, Stream stream=None,
+    Column strings,
+    Scalar delimiter,
+    size_type maxsplit,
+    Stream stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -216,7 +228,10 @@ cpdef Column rsplit_record(
 
 
 cpdef Table split_re(
-    Column input, RegexProgram prog, size_type maxsplit, Stream stream=None,
+    Column input,
+    RegexProgram prog,
+    size_type maxsplit,
+    Stream stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -258,7 +273,10 @@ cpdef Table split_re(
     return Table.from_libcudf(move(c_result), stream, mr)
 
 cpdef Table rsplit_re(
-    Column input, RegexProgram prog, size_type maxsplit, Stream stream=None,
+    Column input,
+    RegexProgram prog,
+    size_type maxsplit,
+    Stream stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -301,7 +319,10 @@ cpdef Table rsplit_re(
     return Table.from_libcudf(move(c_result), stream, mr)
 
 cpdef Column split_record_re(
-    Column input, RegexProgram prog, size_type maxsplit, Stream stream=None,
+    Column input,
+    RegexProgram prog,
+    size_type maxsplit,
+    Stream stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
