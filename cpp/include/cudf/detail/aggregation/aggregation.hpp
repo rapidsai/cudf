@@ -1379,11 +1379,9 @@ constexpr bool is_sum_product_agg(aggregation::Kind k)
          (k == aggregation::SUM_OF_SQUARES);
 }
 
-// Summing/Multiplying integers of any type, always use int64_t accumulator (except
-// SUM_WITH_OVERFLOW which has its own template)
+// Summing/Multiplying integers of any type, always use int64_t accumulator
 template <typename Source, aggregation::Kind k>
-  requires(std::is_integral_v<Source> && is_sum_product_agg(k) &&
-           k != aggregation::SUM_WITH_OVERFLOW)
+  requires(std::is_integral_v<Source> && is_sum_product_agg(k))
 struct target_type_impl<Source, k> {
   using type = int64_t;
 };
@@ -1397,11 +1395,9 @@ struct target_type_impl<
   using type = Source;
 };
 
-// Summing/Multiplying float/doubles, use same type accumulator (except SUM_WITH_OVERFLOW which has
-// its own template)
+// Summing/Multiplying float/doubles, use same type accumulator
 template <typename Source, aggregation::Kind k>
-  requires(std::is_floating_point_v<Source> && is_sum_product_agg(k) &&
-           k != aggregation::SUM_WITH_OVERFLOW)
+  requires(std::is_floating_point_v<Source> && is_sum_product_agg(k))
 struct target_type_impl<Source, k> {
   using type = Source;
 };

@@ -6,6 +6,7 @@ from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.scalar.scalar cimport string_scalar
 from pylibcudf.libcudf.types cimport size_type
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.memory_resource cimport device_memory_resource
 
 
 cdef extern from "nvtext/replace.hpp" namespace "nvtext" nogil:
@@ -15,7 +16,8 @@ cdef extern from "nvtext/replace.hpp" namespace "nvtext" nogil:
         const column_view & targets,
         const column_view & replacements,
         const string_scalar & delimiter,
-        cuda_stream_view stream
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] filter_tokens(
@@ -23,5 +25,6 @@ cdef extern from "nvtext/replace.hpp" namespace "nvtext" nogil:
         size_type min_token_length,
         const string_scalar & replacement,
         const string_scalar & delimiter,
-        cuda_stream_view stream
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler

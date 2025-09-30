@@ -128,11 +128,14 @@ def assert_gpu_result_equal(
     else:
         tol_kwargs = {"rel_tol": rtol, "abs_tol": atol}
 
+    # the type checker errors with:
+    # Argument 4 to "assert_frame_equal" has incompatible type "**dict[str, float]"; expected "bool"  [arg-type]
+    # which seems to be a bug in the type checker / type annotations.
     assert_frame_equal(
         expect,
         got,
         **assert_kwargs_bool,
-        **tol_kwargs,
+        **tol_kwargs,  # type: ignore[arg-type]
     )
 
 
