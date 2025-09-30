@@ -18,10 +18,7 @@ python -m pytest --cache-clear "$@" tests --executor streaming
 python -m pytest --cache-clear "$@" tests --executor streaming --blocksize-mode small
 
 # Run experimental tests with Distributed cluster
-# Runtime in CI tends to increase when running these tests with multiple processes.
-# https://github.com/rapidsai/cudf/pull/19980#issuecomment-3340039980
 python -m pytest --cache-clear "$@" "tests/experimental" \
     --executor streaming \
     --scheduler distributed \
-    --numprocesses=0 \
     --cov-fail-under=0  # No code-coverage requirement for these tests.
