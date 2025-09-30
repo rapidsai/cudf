@@ -1,52 +1,50 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-"""RAPIDS-MPF streaming-network evaluation."""
+"""Evaluation with the RAPIDS-MPF streaming engine."""
 
 from __future__ import annotations
 
-import asyncio
-import math
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, TypeAlias, TypedDict
 
 from rapidsmpf.buffer.resource import BufferResource
 from rapidsmpf.communicator.single import new_communicator
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
-from rapidsmpf.streaming.core.channel import Channel, Message
+from rapidsmpf.streaming.core.channel import Channel
 from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.leaf_node import pull_from_channel
 from rapidsmpf.streaming.core.node import (
-    define_py_node,
     run_streaming_pipeline,
 )
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
-import pylibcudf as plc
 import rmm
-from rmm.pylibrmm.stream import DEFAULT_STREAM
 
+import cudf_polars.experimental.rapidsmpf.io  # noqa: F401
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import (
     IR,
-    DataFrameScan,
 )
 from cudf_polars.dsl.traversal import CachingVisitor
-from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import (
     generate_ir_sub_network,
     lower_ir_node,
     lower_ir_node_rapidsmpf,
 )
+from cudf_polars.experimental.rapidsmpf.utils import (
+    concatenate,
+    pointwise_single_channel_node,
+)
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.typing import GenericTransformer
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, MutableMapping
+    from collections.abc import MutableMapping
 
     from rapidsmpf.streaming.core.leaf_node import DeferredMessages
 
+    from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.experimental.dispatch import LowerIRTransformer, State
     from cudf_polars.experimental.parallel import ConfigOptions
 
@@ -114,23 +112,6 @@ def _(
     # Default logic - Use ``lower_ir_node``, but
     # many IR types will need different logic.
     return lower_ir_node(ir, rec)
-
-
-@lower_ir_node_rapidsmpf.register(DataFrameScan)
-def _(
-    ir: DataFrameScan, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    config_options = rec.state["config_options"]
-
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'lower_ir_node_rapidsmpf'"
-    )
-
-    # TODO: Handle multiple workers.
-    rows_per_partition = config_options.executor.max_rows_per_partition
-    nrows = max(ir.df.shape()[0], 1)
-    count = math.ceil(nrows / rows_per_partition)
-    return ir, {ir: PartitionInfo(count=count)}
 
 
 def lower_ir_graph_rapidsmpf(
@@ -213,154 +194,6 @@ def generate_network(
     return nodes, output
 
 
-@asynccontextmanager
-async def shutdown_on_error(
-    ctx: Context, *channels: Channel[Any]
-) -> AsyncIterator[None]:
-    """
-    Shutdown on error for rapidsmpf.
-
-    Parameters
-    ----------
-    ctx
-        The context.
-    channels
-        The channels to shutdown.
-    """
-    try:
-        yield
-    except Exception:
-        await asyncio.gather(*(ch.shutdown(ctx) for ch in channels))
-        raise
-
-
-@define_py_node()
-async def pointwise_single_channel_node(
-    ctx: Context,
-    ir: IR,
-    ch_in: Channel[TableChunk],
-    ch_out: Channel[TableChunk],
-    partition_info: PartitionInfo,
-) -> None:
-    """
-    Pointwise single node for rapidsmpf.
-
-    Parameters
-    ----------
-    ctx
-        The context.
-    ir
-        The IR node.
-    ch_in
-        The input channel.
-    ch_out
-        The output channel.
-    partition_info
-        The partition information.
-    """
-    async with shutdown_on_error(ctx, ch_in, ch_out):
-        while (msg := await ch_in.recv(ctx)) is not None:
-            # Receive an input chunk
-            chunk: TableChunk = TableChunk.from_message(msg)
-
-            # Evaluate the IR node
-            df: DataFrame = ir.do_evaluate(
-                *ir._non_child_args,
-                DataFrame.from_table(
-                    chunk.table_view(),
-                    list(ir.children[0].schema.keys()),
-                    list(ir.children[0].schema.values()),
-                ),
-            )
-
-            # Return the output chunk
-            chunk = TableChunk.from_pylibcudf_table(
-                chunk.sequence_number,
-                df.table,
-                chunk.stream,
-            )
-            await ch_out.send(ctx, Message(chunk))
-        await ch_out.drain(ctx)
-
-
-@define_py_node()
-async def concatenate(
-    ctx: Context, ch_in: Channel[TableChunk], ch_out: Channel[TableChunk]
-) -> None:
-    """
-    Concatenate node for rapidsmpf.
-
-    Parameters
-    ----------
-    ctx
-        The context.
-    ch_in
-        The input channel.
-    ch_out
-        The output channel.
-    """
-    # TODO: Use multiple streams
-    async with shutdown_on_error(ctx, ch_in, ch_out):
-        chunks = []
-        build_stream = DEFAULT_STREAM
-        while (msg := await ch_in.recv(ctx)) is not None:
-            chunk = TableChunk.from_message(msg)
-            chunks.append(chunk)
-
-        table = (
-            chunks[0].table_view()
-            if len(chunks) == 1
-            else plc.concatenate.concatenate(
-                [chunk.table_view() for chunk in chunks], build_stream
-            )
-        )
-        await ch_out.send(
-            ctx, Message(TableChunk.from_pylibcudf_table(0, table, build_stream))
-        )
-        await ch_out.drain(ctx)
-
-
-@define_py_node()
-async def dataframe_scan_node(
-    ctx: Context,
-    ch_out: Channel[TableChunk],
-    ir: DataFrameScan,
-    rows_per_partition: int,
-) -> None:
-    """
-    DataFrame scan node for rapidsmpf.
-
-    Parameters
-    ----------
-    ctx
-        The context.
-    ch_out
-        The output channel.
-    ir
-        The DataFrameScan node.
-    rows_per_partition
-        The number of rows per partition.
-    """
-    # TODO: Use (throttled) thread pool
-    # TODO: Use multiple streams
-    nrows = max(ir.df.shape()[0], 1)
-    async with shutdown_on_error(ctx, ch_out):
-        for seq_num, offset in enumerate(range(0, nrows, rows_per_partition)):
-            ir_slice = DataFrameScan(
-                ir.schema,
-                ir.df.slice(offset, rows_per_partition),
-                ir.projection,
-            )
-
-            # Evaluate the IR node
-            df: DataFrame = ir_slice.do_evaluate(*ir_slice._non_child_args)
-
-            # Return the output chunk
-            chunk = TableChunk.from_pylibcudf_table(seq_num, df.table, DEFAULT_STREAM)
-            await ch_out.send(ctx, Message(chunk))
-        await ch_out.drain(ctx)
-
-
 @generate_ir_sub_network.register(IR)
 def _(ir: IR, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]:
     # Process children
@@ -382,23 +215,4 @@ def _(ir: IR, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]
         )
     ]
 
-    return nodes, channels
-
-
-@generate_ir_sub_network.register(DataFrameScan)
-def _(
-    ir: DataFrameScan, rec: SubNetGenerator
-) -> tuple[dict[IR, list[Any]], dict[IR, Any]]:
-    config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_sub_network'"
-    )
-    rows_per_partition = config_options.executor.max_rows_per_partition
-
-    ctx = rec.state["ctx"]
-    ch_out = Channel()
-    nodes: dict[IR, list[Any]] = {
-        ir: [dataframe_scan_node(ctx, ch_out, ir, rows_per_partition)]
-    }
-    channels: dict[IR, Any] = {ir: ch_out}
     return nodes, channels

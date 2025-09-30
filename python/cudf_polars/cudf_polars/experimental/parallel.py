@@ -232,7 +232,7 @@ def evaluate_rapidsmpf(
     -------
     A cudf-polars DataFrame object.
     """
-    from cudf_polars.experimental.rapidsmpf import evaluate_logical_plan
+    from cudf_polars.experimental.rapidsmpf.core import evaluate_logical_plan
 
     return evaluate_logical_plan(ir, config_options)
 
