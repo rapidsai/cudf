@@ -64,7 +64,7 @@ struct row_group_stats_caster : public stats_caster_base {
 
   // Creates device columns from column statistics (min, max)
   template <typename T>
-  std::pair<std::unique_ptr<column>, std::unique_ptr<column>> operator()(
+  std::tuple<std::unique_ptr<column>, std::unique_ptr<column>, std::unique_ptr<column>> operator()(
     int schema_idx,
     cudf::data_type dtype,
     rmm::cuda_stream_view stream,
@@ -76,6 +76,8 @@ struct row_group_stats_caster : public stats_caster_base {
     } else {
       host_column<T> min(total_row_groups, stream);
       host_column<T> max(total_row_groups, stream);
+      host_column<bool> is_null(total_row_groups, stream);
+
       size_type stats_idx = 0;
       for (size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
         for (auto const rg_idx : row_group_indices[src_idx]) {
@@ -96,15 +98,31 @@ struct row_group_stats_caster : public stats_caster_base {
             // translate binary data to Type then to <T>
             min.set_index(stats_idx, min_value, colchunk.meta_data.type);
             max.set_index(stats_idx, max_value, colchunk.meta_data.type);
+            // Check the nullability of this column chunk
+            if (colchunk.meta_data.statistics.null_count.has_value()) {
+              auto const& null_count = colchunk.meta_data.statistics.null_count.value();
+              if (null_count == 0) {
+                is_null.val[stats_idx] = false;
+              } else if (null_count < colchunk.meta_data.num_values) {
+                is_null.set_index(stats_idx, std::nullopt, {});
+              } else if (null_count == colchunk.meta_data.num_values) {
+                is_null.val[stats_idx] = true;
+              } else {
+                CUDF_FAIL("Invalid null count");
+              }
+            }
           } else {
             // Marking it null, if column present in row group
             min.set_index(stats_idx, std::nullopt, {});
             max.set_index(stats_idx, std::nullopt, {});
+            is_null.set_index(stats_idx, std::nullopt, {});
           }
           stats_idx++;
         }
       };
-      return {min.to_device(dtype, stream, mr), max.to_device(dtype, stream, mr)};
+      return {min.to_device(dtype, stream, mr),
+              max.to_device(dtype, stream, mr),
+              is_null.to_device(data_type{cudf::type_id::BOOL8}, stream, mr)};
     }
   }
 };
@@ -122,7 +140,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   auto mr = cudf::get_current_device_resource_ref();
 
   // Get a boolean mask indicating which columns can participate in stats based filtering
-  auto const stats_columns_mask =
+  auto const [stats_columns_mask, has_is_null_operator] =
     stats_columns_collector{filter.get(), static_cast<size_type>(output_dtypes.size())}
       .get_stats_columns_mask();
 
@@ -146,12 +164,15 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
         data_type{cudf::type_id::BOOL8}, total_row_groups, rmm::device_buffer{}, 0, stream, mr));
       columns.push_back(cudf::make_numeric_column(
         data_type{cudf::type_id::BOOL8}, total_row_groups, rmm::device_buffer{}, 0, stream, mr));
+      columns.push_back(cudf::make_numeric_column(
+        data_type{cudf::type_id::BOOL8}, total_row_groups, rmm::device_buffer{}, 0, stream, mr));
       continue;
     }
-    auto [min_col, max_col] =
+    auto [min_col, max_col, is_null_col] =
       cudf::type_dispatcher<dispatch_storage_type>(dtype, stats_col, schema_idx, dtype, stream, mr);
     columns.push_back(std::move(min_col));
     columns.push_back(std::move(max_col));
+    columns.push_back(std::move(is_null_col));
   }
   auto stats_table = cudf::table(std::move(columns));
 
