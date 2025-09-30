@@ -918,11 +918,11 @@ def _(
 
     if agg_name not in ("count", "n_unique"):
         args = [
-            expr.Cast(dtype, a)
-            if plc.traits.is_fixed_point(a.dtype.plc_type)
-            and a.dtype.plc_type != dtype.plc_type
-            else a
-            for a in args
+            expr.Cast(dtype, arg)
+            if plc.traits.is_fixed_point(arg.dtype.plc_type)
+            and arg.dtype.plc_type != dtype.plc_type
+            else arg
+            for arg in args
         ]
 
     value = expr.Agg(dtype, agg_name, node.options, *args)
