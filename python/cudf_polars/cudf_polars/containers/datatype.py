@@ -124,6 +124,22 @@ class DataType:
             return [DataType(self.polars_type.inner)]  # type: ignore[attr-defined]
         return []
 
+    def scale(self) -> int:
+        """The scale of this DataType."""
+        return self.plc_type.scale()
+
+    @staticmethod
+    def common_decimal_dtype(left: DataType, right: DataType) -> DataType:
+        """Return a common decimal DataType for the two inputs."""
+        if not (
+            plc.traits.is_fixed_point(left.plc_type)
+            and plc.traits.is_fixed_point(right.plc_type)
+        ):
+            raise ValueError("Requires inputs to be decimal types.")  # pragma: no cover
+        target_scale = min(left.scale(), right.scale())
+        polars_scale = -target_scale if target_scale < 0 else target_scale
+        return DataType(pl.Decimal(38, polars_scale))
+
     def __eq__(self, other: object) -> bool:
         """Equality of DataTypes."""
         if not isinstance(other, DataType):

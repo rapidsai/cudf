@@ -238,11 +238,12 @@ def _align_parquet_schema(df: DataFrame, schema: Schema) -> DataFrame:
     for name, col in df.column_map.items():
         src = col.obj.type()
         dst = schema[name].plc_type
+
         if (
-            src.id() in _DECIMAL_TYPES
-            and dst.id() in _DECIMAL_TYPES
-            and ((src.id() != dst.id()) or (src.scale != dst.scale))
-        ):
+            plc.traits.is_fixed_point(src)
+            and plc.traits.is_fixed_point(dst)
+            and (src.id() != dst.id())
+        ) or (src.scale() != dst.scale()):
             cast_list.append(
                 Column(plc.unary.cast(col.obj, dst), name=name, dtype=schema[name])
             )
@@ -1599,8 +1600,7 @@ def _strip_predicate_casts(node: expr.Expr) -> expr.Expr:
     children = node.children
     if not children:
         return node
-    new_children = tuple(_strip_predicate_casts(child) for child in children)
-    return node.reconstruct(list(new_children))
+    return node.reconstruct([_strip_predicate_casts(child) for child in children])
 
 
 def _add_cast(
@@ -1623,30 +1623,27 @@ def _align_decimal_binop_types(
     left_casts: dict[str, DataType],
     right_casts: dict[str, DataType],
 ) -> None:
-    left_type, right_type = left_expr.dtype.plc_type, right_expr.dtype.plc_type
-    left_tid, right_tid = left_type.id(), right_type.id()
+    left_type, right_type = left_expr.dtype, right_expr.dtype
 
-    if left_tid in _DECIMAL_TYPES and right_tid in _DECIMAL_TYPES:
-        target_scale = min(left_type.scale(), right_type.scale())
-        target = DataType(
-            pl.Decimal(38, -target_scale if target_scale < 0 else target_scale)
-        )
+    if plc.traits.is_fixed_point(left_type.plc_type) and plc.traits.is_fixed_point(
+        right_type.plc_type
+    ):
+        target = DataType.common_decimal_dtype(left_type, right_type)
 
-        if (
-            left_tid != target.plc_type.id()
-            or left_type.scale() != target.plc_type.scale()
-        ):
+        if left_type.id() != target.id() or left_type.scale() != target.scale():
             _add_cast(target, left_expr, left_casts, right_casts)
-        if (
-            right_tid != target.plc_type.id()
-            or right_type.scale() != target.plc_type.scale()
-        ):
+
+        if right_type.id() != target.id() or right_type.scale() != target.scale():
             _add_cast(target, right_expr, left_casts, right_casts)
 
-    elif (left_tid in _DECIMAL_TYPES and right_tid in _FLOAT_TYPES) or (
-        right_tid in _DECIMAL_TYPES and left_tid in _FLOAT_TYPES
+    elif (
+        plc.traits.is_fixed_point(left_type.plc_type)
+        and plc.traits.is_floating_point(right_type.plc_type)
+    ) or (
+        plc.traits.is_fixed_point(right_type.plc_type)
+        and plc.traits.is_floating_point(left_type.plc_type)
     ):
-        is_decimal_left = left_tid in _DECIMAL_TYPES
+        is_decimal_left = plc.traits.is_fixed_point(left_type.plc_type)
         decimal_expr, float_expr = (
             (left_expr, right_expr) if is_decimal_left else (right_expr, left_expr)
         )

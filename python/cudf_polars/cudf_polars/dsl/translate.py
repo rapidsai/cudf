@@ -339,17 +339,19 @@ _DECIMAL_TYPES = {plc.TypeId.DECIMAL32, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL
 def _align_decimal_scales(
     left: expr.Expr, right: expr.Expr
 ) -> tuple[expr.Expr, expr.Expr]:
-    left_type = left.dtype.plc_type.id()
-    right_type = right.dtype.plc_type.id()
-    if left_type in _DECIMAL_TYPES and right_type in _DECIMAL_TYPES:
-        left_scale = left.dtype.plc_type.scale()
-        right_scale = right.dtype.plc_type.scale()
-        if left_scale != right_scale:
-            cudf_scale = min(left_scale, right_scale)
-            polars_scale = -cudf_scale if cudf_scale < 0 else cudf_scale
-            decimal128 = DataType(pl.Decimal(38, polars_scale))
-            left = expr.Cast(decimal128, left)
-            right = expr.Cast(decimal128, right)
+    left_type, right_type = left.dtype, right.dtype
+
+    if plc.traits.is_fixed_point(left_type.plc_type) and plc.traits.is_fixed_point(
+        right_type.plc_type
+    ):
+        target = DataType.common_decimal_dtype(left_type, right_type)
+
+        if left_type.id() != target.id() or left_type.scale() != target.scale():
+            left = expr.Cast(target, left)
+
+        if right_type.id() != target.id() or right_type.scale() != target.scale():
+            right = expr.Cast(target, right)
+
     return left, right
 
 
