@@ -2949,6 +2949,29 @@ void filter_unary_operation_typed_test()
                             null_count);
   }
 
+  // Expression `NOT(NOT(IS_NULL))` should not filter any row groups and yield exactly
+  // `null_count` rows
+  {
+    auto constexpr expected_total_row_groups          = 4;
+    auto constexpr expected_stats_filtered_row_groups = 4;
+
+    auto const is_null_expr = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_name_0);
+    auto const not_is_null_expr = cudf::ast::operation(cudf::ast::ast_operator::NOT, is_null_expr);
+    auto const filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::NOT, not_is_null_expr);
+
+    auto const is_null_ref_expr = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_ref_0);
+    auto const not_is_null_ref_expr =
+      cudf::ast::operation(cudf::ast::ast_operator::NOT, is_null_ref_expr);
+    auto const ref_filter =
+      cudf::ast::operation(cudf::ast::ast_operator::NOT, not_is_null_ref_expr);
+    test_predicate_pushdown(filter_expression,
+                            ref_filter,
+                            expected_total_row_groups,
+                            expected_stats_filtered_row_groups,
+                            null_count);
+  }
+
   // Unary operation `NOT(IS_NULL)` should not filter any row groups and yield exactly `num_rows -
   // null_count` rows
   {
@@ -2959,6 +2982,34 @@ void filter_unary_operation_typed_test()
     auto const filter_expression = cudf::ast::operation(cudf::ast::ast_operator::NOT, is_null_expr);
     auto const is_null_ref_expr = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_ref_0);
     auto const ref_filter = cudf::ast::operation(cudf::ast::ast_operator::NOT, is_null_ref_expr);
+
+    test_predicate_pushdown(filter_expression,
+                            ref_filter,
+                            expected_total_row_groups,
+                            expected_stats_filtered_row_groups,
+                            num_ordered_rows - null_count);
+  }
+
+  // Unary operation `NOT(NOT(NOT(IS_NULL)))` should not filter any row groups and yield exactly
+  // `num_rows - null_count` rows
+  {
+    auto constexpr expected_total_row_groups          = 4;
+    auto constexpr expected_stats_filtered_row_groups = 4;
+
+    auto const is_null_expr = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_name_0);
+    auto const not_is_null_expr = cudf::ast::operation(cudf::ast::ast_operator::NOT, is_null_expr);
+    auto const not_not_is_null_expr =
+      cudf::ast::operation(cudf::ast::ast_operator::NOT, not_is_null_expr);
+    auto const filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::NOT, not_not_is_null_expr);
+
+    auto const is_null_ref_expr = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_ref_0);
+    auto const not_is_null_ref_expr =
+      cudf::ast::operation(cudf::ast::ast_operator::NOT, is_null_ref_expr);
+    auto const not_not_is_null_ref_expr =
+      cudf::ast::operation(cudf::ast::ast_operator::NOT, not_is_null_ref_expr);
+    auto const ref_filter =
+      cudf::ast::operation(cudf::ast::ast_operator::NOT, not_not_is_null_ref_expr);
 
     test_predicate_pushdown(filter_expression,
                             ref_filter,
