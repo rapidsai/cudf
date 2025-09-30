@@ -22,7 +22,7 @@ import pylibcudf as plc
         (plc.aggregation.median(), pa.uint64()),
         (plc.aggregation.quantile([10]), pa.int64()),
         (plc.aggregation.count(), pa.duration("ms")),
-        (plc.aggregation.nunique(), pa.decimal32(6, 1)),
+        (plc.aggregation.nunique(), pa.decimal128(6, 1)),
         (plc.aggregation.nth_element(10), pa.float32()),
     ],
 )
@@ -41,7 +41,7 @@ def test_is_valid_aggregation(agg, dt):
         (plc.aggregation.correlation(0, 1), pa.float64()),
         (plc.aggregation.sum(), pa.string()),
         (plc.aggregation.sum(), pa.timestamp("ms")),
-        (plc.aggregation.mean(), pa.decimal64(6, 1)),
+        (plc.aggregation.mean(), pa.decimal128(6, 1)),
     ],
 )
 def test_is_not_valid_aggregation(agg, dt):
