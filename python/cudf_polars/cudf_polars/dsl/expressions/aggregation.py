@@ -140,7 +140,8 @@ class Agg(Expr):
     ) -> Column:
         return Column(
             plc.Column.from_scalar(
-                plc.reduce.reduce(column.obj, request, self.dtype.plc_type), 1
+                plc.reduce.reduce(column.obj, request, self.dtype.plc_type),
+                1,
             ),
             name=column.name,
             dtype=self.dtype,
