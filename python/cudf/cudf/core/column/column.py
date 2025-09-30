@@ -1963,6 +1963,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
             header["subheaders"] = list(child_headers)
             frames.extend(chain(*child_frames))
+        if isinstance(self.dtype, CategoricalDtype):
+            header["codes_dtype"] = self.codes.dtype.str  # type: ignore[attr-defined]
         header["size"] = self.size
         header["frame_count"] = len(frames)
         return header, frames
@@ -1999,13 +2001,35 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 child, frames = unpack(h, frames)
                 children.append(child)
         assert len(frames) == 0, "Deserialization did not consume all frames"
-        return build_column(
-            data=data,
-            dtype=dtype,
-            mask=mask,
-            size=header.get("size", None),
-            children=tuple(children),
+        if "codes_dtype" in header:
+            codes_dtype = np.dtype(header["codes_dtype"])
+        else:
+            codes_dtype = None
+        if mask is None:
+            null_count = 0
+        else:
+            null_count = plc.null_mask.null_count(
+                plc.gpumemoryview(mask), 0, header["size"]
+            )
+        if isinstance(dtype, IntervalDtype):
+            # TODO: Handle in dtype_to_pylibcudf_type?
+            plc_type = plc.DataType(plc.TypeId.STRUCT)
+        else:
+            plc_type = dtype_to_pylibcudf_type(
+                codes_dtype if codes_dtype is not None else dtype
+            )
+        if isinstance(dtype, CategoricalDtype):
+            data = children.pop(0)
+        plc_column = plc.Column(
+            plc_type,
+            header["size"],
+            plc.gpumemoryview(data) if data is not None else None,
+            plc.gpumemoryview(mask) if mask is not None else None,
+            null_count,
+            0,
+            [child.to_pylibcudf(mode="read") for child in children],
         )
+        return cls.from_pylibcudf(plc_column)._with_type_metadata(dtype)
 
     def unary_operator(self, unaryop: str):
         raise TypeError(
