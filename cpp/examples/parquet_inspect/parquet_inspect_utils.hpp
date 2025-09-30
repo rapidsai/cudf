@@ -61,7 +61,7 @@ cudf::host_span<uint8_t const> fetch_page_index_bytes(
  * @return A tuple containing the parquet metadata and a boolean indicating if the file contains a
  * page index
  */
-std::tuple<cudf::io::parquet::FileMetaData, bool> read_parquet_metadata(
+std::tuple<cudf::io::parquet::FileMetaData, bool> read_parquet_file_metadata(
   std::string_view input_filepath);
 
 /**

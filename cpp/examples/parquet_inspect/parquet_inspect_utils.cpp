@@ -246,7 +246,7 @@ cudf::host_span<uint8_t const> fetch_page_index_bytes(
     page_index_bytes.size());
 }
 
-std::tuple<cudf::io::parquet::FileMetaData, bool> read_parquet_metadata(
+std::tuple<cudf::io::parquet::FileMetaData, bool> read_parquet_file_metadata(
   std::string_view input_filepath)
 {
   CUDF_FUNC_RANGE();
@@ -391,6 +391,8 @@ void write_page_metadata(cudf::io::parquet::FileMetaData const& metadata,
         page_row_offsets, col_page_offsets, num_row_groups, num_pages_this_column, stream));
       columns.emplace_back(make_page_data_list_column<int64_t>(
         page_byte_offsets, col_page_offsets, num_row_groups, num_pages_this_column, stream));
+
+      stream.synchronize();
     });
 
   CUDF_EXPECTS(columns.size() == (num_columns * output_cols_per_column) + 1,

@@ -88,7 +88,7 @@ int main(int argc, char const** argv)
   cudf::set_current_device_resource(mr.get());
 
   // Read parquet footer metadata
-  auto [metadata, has_page_index] = read_parquet_metadata(input_filepath);
+  auto [metadata, has_page_index] = read_parquet_file_metadata(input_filepath);
 
   // Write row group metadata
   auto output_filepath = output_path + "/" + filename + ".rowgroups.parquet";
