@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-"""Evaluation with the RAPIDS-MPF streaming engine."""
+"""Core RapidsMPF streaming-engine API."""
 
 from __future__ import annotations
 
@@ -49,17 +49,37 @@ if TYPE_CHECKING:
 
 
 def evaluate_logical_plan(ir: IR, config_options: ConfigOptions) -> DataFrame:
-    """Evaluate a logical plan with RAPIDS-MPF."""
+    """
+    Evaluate a logical plan with the RapidsMPF streaming engine.
+
+    Parameters
+    ----------
+    ir
+        The IR node.
+    config_options
+        The configuration options.
+
+    Returns
+    -------
+    The output DataFrame.
+    """
     assert config_options.executor.name == "streaming", "Executor must be streaming"
     assert config_options.executor.engine == "rapidsmpf", "Engine must be rapidsmpf"
 
-    if config_options.executor.scheduler == "distributed":
+    if (
+        config_options.executor.scheduler == "distributed"
+    ):  # pragma: no cover; Requires distributed
         # TODO: Add distributed-execution support
         raise NotImplementedError(
             "The rapidsmpf engine does not support distributed execution yet."
         )
 
     # Lower the IR graph on the client process (for now).
+    # NOTE: The `PartitionInfo.count` attribute is only used
+    # for "guidance" in most cases, because a Rechunk node
+    # is allowed to produce an arbitrary number of chunks.
+    # For now, we use the `count` attribute to trigger early
+    # fallback behavior in the lower_ir_graph call below.
     ir, partition_info = lower_ir_graph(ir, config_options)
 
     # Configure the context.
@@ -82,7 +102,7 @@ def evaluate_logical_plan(ir: IR, config_options: ConfigOptions) -> DataFrame:
 
     # Extract/return the result
     msgs = output.release()
-    assert len(msgs) == 1, "Expected exactly one message"
+    assert len(msgs) == 1, f"Expected exactly one output message, got {len(msgs)}"
     return DataFrame.from_table(
         TableChunk.from_message(msgs[0]).table_view(),
         list(ir.schema.keys()),
@@ -112,8 +132,10 @@ def lower_ir_graph(
 
     Notes
     -----
-    This function traverses the unique nodes of the graph with
-    root `ir`, and applies :func:`lower_ir_node` to each node.
+    This function is nearly identical to the `lower_ir_graph` function
+    in the `parallel` module, but with some differences:
+    - A distinct `lower_ir_node` function is used.
+    - A `Rechunk` node is added to ensure a single chunk is produced.
 
     See Also
     --------
@@ -144,7 +166,7 @@ def generate_network(
     config_options: ConfigOptions,
 ) -> tuple[list[Any], DeferredMessages]:
     """
-    Generate network nodes for a logical plan.
+    Translate the IR graph to a RapidsMPF streaming network.
 
     Parameters
     ----------
@@ -156,6 +178,10 @@ def generate_network(
         The partition information.
     config_options
         The configuration options.
+
+    Returns
+    -------
+    The network nodes and output hook.
     """
     # Generate the network
     state: GenState = {

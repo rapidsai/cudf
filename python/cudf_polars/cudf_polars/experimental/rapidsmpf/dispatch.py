@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-"""Dispatch functions for the RAPIDS-MPF streaming engine."""
+"""Dispatching for the RapidsMPF streaming engine."""
 
 from __future__ import annotations
 
@@ -74,7 +74,7 @@ def lower_ir_node(
     ir: IR, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """
-    Rewrite an IR node and extract partitioning information for RAPIDS-MPF.
+    Rewrite an IR node and extract partitioning information.
 
     Parameters
     ----------
@@ -91,11 +91,13 @@ def lower_ir_node(
 
     Notes
     -----
-    This function is used by `lower_ir_graph_rapidsmpf`.
+    This function is distinct from the `lower_ir_node` function
+    in the `parallel` module, because the lowering logic for the
+    streaming engine is different for some IR sub-classes.
 
     See Also
     --------
-    lower_ir_graph_rapidsmpf
+    lower_ir_graph
     """
     raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover
 
@@ -105,14 +107,14 @@ def generate_ir_sub_network(
     ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> tuple[dict[IR, list[Any]], dict[IR, Any]]:
     """
-    Generate a sub-network for evaluation of an IR node with rapidsmpf.
+    Generate a sub-network for the RapidsMPF streaming engine.
 
     Parameters
     ----------
     ir
         IR node to generate tasks for.
     partition_info
-        Partitioning information, obtained from :func:`lower_ir_graph_rapidsmpf`.
+        Partitioning information, obtained from :func:`lower_ir_graph`.
 
     Returns
     -------

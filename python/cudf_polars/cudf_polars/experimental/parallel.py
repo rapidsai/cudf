@@ -219,7 +219,7 @@ def evaluate_rapidsmpf(
     config_options: ConfigOptions,
 ) -> DataFrame:
     """
-    Evaluate a streaming network.
+    Evaluate with the RapidsMPF streaming engine.
 
     Parameters
     ----------
@@ -260,10 +260,10 @@ def evaluate_streaming(
 
     assert config_options.executor.name == "streaming", "Executor must be streaming"
     if config_options.executor.engine == "rapidsmpf":
-        # Using rapidsmpf for evaluation.
+        # Using the RapidsMPF streaming engine.
         return evaluate_rapidsmpf(ir, config_options)
     else:
-        # Using task graph for evaluation.
+        # Using the default task engine.
         ir, partition_info = lower_ir_graph(ir, config_options)
 
         graph, key = task_graph(ir, partition_info, config_options)

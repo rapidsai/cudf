@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-"""Core node definitions for the RAPIDS-MPF streaming engine."""
+"""Core node definitions for the RapidsMPF streaming engine."""
 
 from __future__ import annotations
 
