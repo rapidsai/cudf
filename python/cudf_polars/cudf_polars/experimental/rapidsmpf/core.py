@@ -76,10 +76,10 @@ def evaluate_logical_plan(ir: IR, config_options: ConfigOptions) -> DataFrame:
 
     # Lower the IR graph on the client process (for now).
     # NOTE: The `PartitionInfo.count` attribute is only used
-    # for "guidance" in most cases, because a Rechunk node
-    # is allowed to produce an arbitrary number of chunks.
-    # For now, we use the `count` attribute to trigger early
-    # fallback behavior in the lower_ir_graph call below.
+    # for "guidance", because the number of chunks produced
+    # by a streaming node may be dynamic. For now, we populate
+    # and use the `count` attribute to trigger fallback
+    # warnings in the lower_ir_graph call below.
     ir, partition_info = lower_ir_graph(ir, config_options)
 
     # Configure the context.

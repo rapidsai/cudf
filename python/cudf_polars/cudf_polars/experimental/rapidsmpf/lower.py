@@ -12,10 +12,8 @@ import cudf_polars.experimental.rapidsmpf.io  # noqa: F401
 from cudf_polars.dsl.ir import (
     IR,
     Cache,
-    Filter,
     HConcat,
     HStack,
-    MapFunction,
     Projection,
     Union,
 )
@@ -40,11 +38,9 @@ def _(ir: IR, rec: LowerIRTransformer) -> tuple[IR, MutableMapping[IR, Partition
 
 
 @lower_ir_node.register(Union)
-@lower_ir_node.register(MapFunction)
 @lower_ir_node.register(Projection)
 @lower_ir_node.register(Cache)
 @lower_ir_node.register(HConcat)
-@lower_ir_node.register(Filter)
 @lower_ir_node.register(HStack)
 def _lower_ir_simple(
     ir: IR,
@@ -94,23 +90,25 @@ def _lower_ir_fallback(
 
     # Ensure all children are single-partitioned
     children = []
-    fallback = False
+    inform = False
     for c in lowered_children:
-        child = c
         if partition_info[c].count > 1:
             # Fall-back logic
-            fallback = True
-            child = Rechunk(
-                child.schema,
-                "single",
-                child,
-            )
-            partition_info[child] = PartitionInfo(count=1)
+            inform = True
+        # Always use a Rechunk node to ensure a single chunk is produced.
+        # The Rechunk node will be a no-op if the child only produces
+        # a single chunk at run-time, but we don't know the chunk
+        # count ahead of time.
+        child = Rechunk(
+            c.schema,
+            "single",
+            c,
+        )
+        partition_info[child] = PartitionInfo(count=1)
         children.append(child)
 
-    if fallback and msg:
-        # Warn/raise the user if any children were collapsed
-        # and the "fallback_mode" configuration is not "silent"
+    if inform and msg:
+        # Warn/raise the user if "fallback_mode" is not "silent"
         _fallback_inform(msg, config_options)
 
     # Reconstruct and return
