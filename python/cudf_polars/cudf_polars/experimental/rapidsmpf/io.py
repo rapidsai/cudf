@@ -36,15 +36,13 @@ def _(
     ir: DataFrameScan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     config_options = rec.state["config_options"]
-
     assert config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'lower_ir_node_rapidsmpf'"
     )
-
-    # TODO: Handle multiple workers.
     rows_per_partition = config_options.executor.max_rows_per_partition
     nrows = max(ir.df.shape()[0], 1)
     count = math.ceil(nrows / rows_per_partition)
+
     return ir, {ir: PartitionInfo(count=count)}
 
 
@@ -81,8 +79,15 @@ async def dataframe_scan_node(
     # TODO: Use (throttled) thread pool
     # TODO: Use multiple streams
     nrows = max(ir.df.shape()[0], 1)
+    global_count = math.ceil(nrows / rows_per_partition)
+    local_count = math.ceil(global_count / ctx.comm().nranks)
+    local_offset = local_count * ctx.comm().rank
+
     async with shutdown_on_error(ctx, ch_out):
-        for seq_num, offset in enumerate(range(0, nrows, rows_per_partition)):
+        for seq_num in range(local_count):
+            offset = local_offset + seq_num * rows_per_partition
+            if offset >= nrows:
+                break  # pragma: no cover; Requires multiple ranks
             ir_slice = DataFrameScan(
                 ir.schema,
                 ir.df.slice(offset, rows_per_partition),

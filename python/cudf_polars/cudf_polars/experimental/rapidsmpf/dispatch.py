@@ -17,9 +17,34 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import (
         PartitionInfo,
+        StatsCollector,
     )
-    from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.utils.config import ConfigOptions
+
+
+class LowerState(TypedDict):
+    """
+    State used for lowering an IR node.
+
+    Parameters
+    ----------
+    ctx
+        The rapidsmpf context.
+    config_options
+        GPUEngine configuration options.
+    stats
+        Statistics collector.
+    """
+
+    ctx: Context
+    config_options: ConfigOptions
+    stats: StatsCollector
+
+
+LowerIRTransformer: TypeAlias = GenericTransformer[
+    "IR", "tuple[IR, MutableMapping[IR, PartitionInfo]]", LowerState
+]
+"""Protocol for Lowering IR nodes."""
 
 
 class GenState(TypedDict):

@@ -17,7 +17,7 @@ def test_rapidmpf_engine_fallback(rows_per_partition: int, fallback_mode: str) -
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "scheduler": "rapidsmpf",
+            "engine": "rapidsmpf",
             "max_rows_per_partition": rows_per_partition,
             "fallback_mode": fallback_mode,
         },
@@ -43,7 +43,7 @@ def test_rapidmpf_engine_concat() -> None:
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "scheduler": "rapidsmpf",
+            "engine": "rapidsmpf",
             "max_rows_per_partition": 3,
         },
     )

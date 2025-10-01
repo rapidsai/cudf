@@ -28,7 +28,7 @@ from cudf_polars.experimental.rapidsmpf.rechunk import Rechunk
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
-    from cudf_polars.experimental.dispatch import LowerIRTransformer
+    from cudf_polars.experimental.rapidsmpf.dispatch import LowerIRTransformer
 
 
 @lower_ir_node.register(IR)
@@ -75,8 +75,13 @@ def _lower_ir_fallback(
     # is under heavy development.
 
     # NOTE: (IMPORTANT) Since Rechunk is a local operation,
-    # this fallback logic will only work for single-rank
-    # execution!
+    # the current fallback logic will only work for one rank!
+    ctx = rec.state["ctx"]
+    if ctx.comm().nranks > 1:  # pragma: no cover; Requires multiple ranks
+        raise NotImplementedError(
+            "Fallback is not yet supported multi-rank execution "
+            "with the RAPIDS-MPF streaming engine."
+        )
 
     # Lower children
     lowered_children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
@@ -92,7 +97,7 @@ def _lower_ir_fallback(
             fallback = True
             child = Rechunk(
                 child.schema,
-                True,  # noqa: FBT003
+                "single",
                 child,
             )
             partition_info[child] = PartitionInfo(count=1)

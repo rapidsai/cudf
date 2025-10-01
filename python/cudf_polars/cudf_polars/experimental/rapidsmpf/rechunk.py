@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from rapidsmpf.streaming.core.channel import Channel, Message
 from rapidsmpf.streaming.core.node import define_py_node
@@ -32,30 +32,30 @@ class Rechunk(IR):
     ----------
     schema
         The schema of the output data.
-    single_chunk
-        Whether to concatenate input data into a single chunk.
-        Otherwise, the output count is determined dynamically.
+    goal
+        The goal of the local rechunking operation.
+        The default is 'single', which concatenates all
+        input data into a single chunk.
     df
         The input IR node.
     """
 
-    __slots__ = ("single_chunk",)
-    _non_child = ("schema", "single_chunk")
+    __slots__ = ("goal",)
+    _non_child = ("schema", "goal")
 
     def __init__(
         self,
         schema: Schema,
-        single_chunk: bool,  # noqa: FBT001
+        goal: Literal["single"],
         df: IR,
     ):
         self.schema = schema
         self._non_child_args = ()
         self.children = (df,)
-        self.single_chunk = single_chunk
-        if not single_chunk:
-            raise NotImplementedError(
-                "Only single-chunk rechunking is supported for now."
-            )
+        self.goal = goal
+        if goal != "single":  # pragma: no cover
+            # TODO: Add other rechunking goals, e.g. 'row_count', 'byte_size'
+            raise NotImplementedError("Only 'single' rechunking is supported for now.")
 
 
 @define_py_node()
@@ -81,8 +81,8 @@ async def rechunk_node(
     """
     # TODO: Use multiple streams
     # TODO: Shupport single_chunk=False
-    if not ir.single_chunk:  # pragma: no cover
-        raise NotImplementedError("Only single-chunk rechunking is supported for now.")
+    if ir.goal != "single":  # pragma: no cover
+        raise NotImplementedError("Only single rechunking is supported for now.")
 
     async with shutdown_on_error(ctx, ch_in, ch_out):
         chunks = []

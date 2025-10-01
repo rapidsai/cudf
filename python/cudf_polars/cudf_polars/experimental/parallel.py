@@ -259,7 +259,7 @@ def evaluate_streaming(
     _clear_source_info_cache()
 
     assert config_options.executor.name == "streaming", "Executor must be streaming"
-    if config_options.executor.scheduler == "rapidsmpf":
+    if config_options.executor.engine == "rapidsmpf":
         # Using rapidsmpf for evaluation.
         return evaluate_rapidsmpf(ir, config_options)
     else:

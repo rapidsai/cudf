@@ -120,6 +120,20 @@ class StreamingFallbackMode(str, enum.Enum):
     SILENT = "silent"
 
 
+class Engine(str, enum.Enum):
+    """
+    The compute engine to use for the streaming executor.
+
+    * ``Engine.TASKS`` : Use the task-based execution engine.
+      This is the default engine.
+    * ``Engine.RAPIDSMPF`` : Use the rapidsmpf streaming engine.
+      This engine is experimental.
+    """
+
+    TASKS = "tasks"
+    RAPIDSMPF = "rapidsmpf"
+
+
 class Scheduler(str, enum.Enum):
     """
     The scheduler to use for the streaming executor.
@@ -128,15 +142,10 @@ class Scheduler(str, enum.Enum):
       single-threaded scheduler.
     * ``Scheduler.DISTRIBUTED`` : A Dask-based distributed scheduler.
       Using this scheduler requires an active Dask cluster.
-    * ``Scheduler.RAPIDSMPF`` : The rapidsmpf streaming engine.
-      This option uses a fundamentally different execution model
-      than the "synchronous" and "distributed" task-based schedulers.
-      WARNING: This option is experimental.
     """
 
     SYNCHRONOUS = "synchronous"
     DISTRIBUTED = "distributed"
-    RAPIDSMPF = "rapidsmpf"
 
 
 class ShuffleMethod(str, enum.Enum):
@@ -385,6 +394,9 @@ class StreamingExecutor:
 
     Parameters
     ----------
+    engine
+        The execution engine to use for the streaming executor.
+        ``Engine.TASKS`` by default.
     scheduler
         The scheduler to use for the streaming executor. ``Scheduler.SYNCHRONOUS``
         by default.
@@ -464,6 +476,13 @@ class StreamingExecutor:
     _env_prefix = "CUDF_POLARS__EXECUTOR"
 
     name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
+    engine: Engine = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__ENGINE",
+            Engine.__call__,
+            default=Engine.TASKS,
+        )
+    )
     scheduler: Scheduler = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__SCHEDULER",
@@ -525,6 +544,16 @@ class StreamingExecutor:
     )
 
     def __post_init__(self) -> None:  # noqa: D105
+        # Check for rapidsmpf engine
+        if self.engine == "rapidsmpf":
+            if not rapidsmpf_single_available():
+                raise ValueError("The rapidsmpf streaming engine requires rapidsmpf.")
+            if self.shuffle_method == "tasks":
+                raise ValueError(
+                    "The rapidsmpf streaming engine does not support task-based shuffling."
+                )
+            object.__setattr__(self, "shuffle_method", "rapidsmpf")
+
         # Handle shuffle_method defaults for streaming executor
         if self.shuffle_method is None:
             if self.scheduler == "distributed" and rapidsmpf_distributed_available():
