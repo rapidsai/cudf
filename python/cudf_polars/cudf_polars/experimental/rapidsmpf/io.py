@@ -46,6 +46,12 @@ def _(
     assert config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'lower_ir_node_rapidsmpf'"
     )
+
+    # NOTE: We calculate the expected partition count
+    # to help trigger fallback warnings in lower_ir_graph.
+    # The generate_ir_sub_network logic is NOT required
+    # to obey this partition count. However, the count
+    # WILL match after an IO operation (for now).
     rows_per_partition = config_options.executor.max_rows_per_partition
     nrows = max(ir.df.shape()[0], 1)
     count = math.ceil(nrows / rows_per_partition)
@@ -133,6 +139,12 @@ def _(
     ):
         plan = ScanPartitionPlan.from_scan(ir, rec.state["stats"], config_options)
         paths = list(ir.paths)
+
+        # NOTE: We calculate the expected partition count
+        # to help trigger fallback warnings in lower_ir_graph.
+        # The generate_ir_sub_network logic is NOT required
+        # to obey this partition count. However, the count
+        # WILL match after an IO operation (for now).
         if plan.flavor == ScanPartitionFlavor.SPLIT_FILES:
             count = plan.factor * len(paths)
         else:

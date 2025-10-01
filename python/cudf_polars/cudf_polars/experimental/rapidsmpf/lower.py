@@ -46,8 +46,8 @@ def _lower_ir_simple(
     ir: IR,
     rec: LowerIRTransformer,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    # Simple single-partition lowering logic.
-    # Use the same lowering logic as the task-based engine.
+    # Simple point-wise lowering logic.
+    # We can use the same lowering logic as the task-based engine.
     from cudf_polars.experimental.dispatch import lower_ir_node as base_lower_ir_node
 
     return base_lower_ir_node(ir, rec)
