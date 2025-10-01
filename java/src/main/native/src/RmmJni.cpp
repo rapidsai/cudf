@@ -20,6 +20,7 @@
 #include <cudf/utilities/pinned_memory.hpp>
 
 #include <rmm/aligned.hpp>
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/aligned_resource_adaptor.hpp>
 #include <rmm/mr/device/arena_memory_resource.hpp>
 #include <rmm/mr/device/cuda_async_memory_resource.hpp>
