@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import collections
 import itertools
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -293,6 +294,13 @@ class ListColumn(ColumnBase):
         )
         return cls.from_pylibcudf(plc_column)  # type: ignore[return-value]
 
+    @cached_property
+    def _string_separators(self) -> plc.Column:
+        # Separator strings to match the Python format
+        return plc.Column.from_iterable_of_py(
+            [", ", "[", "]"], dtype=plc.DataType(plc.TypeId.STRING)
+        )
+
     def as_string_column(self, dtype) -> StringColumn:
         """
         Create a strings column from a list column
@@ -304,44 +312,42 @@ class ListColumn(ColumnBase):
                 )
         lc = self._transform_leaves(lambda col: col.as_string_column(dtype))
 
-        # Separator strings to match the Python format
-        separators = as_column([", ", "[", "]"])
-
         with acquire_spill_lock():
             plc_column = plc.strings.convert.convert_lists.format_list_column(
                 lc.to_pylibcudf(mode="read"),
                 pa_scalar_to_plc_scalar(pa.scalar("None")),
-                separators.to_pylibcudf(mode="read"),
+                self._string_separators,
             )
             return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
-    def _transform_leaves(self, func, *args, **kwargs) -> Self:
-        # return a new list column with the same nested structure
-        # as ``self``, but with the leaf column transformed
-        # by applying ``func`` to it
+    def _transform_leaves(self, func, *args) -> Self:
+        """
+        Return a new column like Self but with func applied to the last leaf column.
+        """
+        leaf_queue: collections.deque[ListColumn] = collections.deque()
+        curr_col: ColumnBase = self
 
-        cc: list[ListColumn] = []
-        c: ColumnBase = self
+        while isinstance(curr_col, ListColumn):
+            leaf_queue.append(curr_col)
+            curr_col = curr_col.children[1]
 
-        while isinstance(c, ListColumn):
-            cc.insert(0, c)
-            c = c.children[1]
-
-        lc = func(c, *args, **kwargs)
+        leaf_col = func(curr_col, *args)
 
         # Rebuild the list column replacing just the leaf child
-        for c in cc:
-            o = c.children[0]
-            lc = ListColumn(  # type: ignore
-                data=None,
-                size=c.size,
-                dtype=cudf.ListDtype(lc.dtype),
-                mask=c.mask,
-                offset=c.offset,
-                null_count=c.null_count,
-                children=(o, lc),  # type: ignore[arg-type]
+        while leaf_queue:
+            col = leaf_queue.pop()
+            offsets = col.children[0].to_pylibcudf(mode="read")
+            plc_leaf_col = plc.Column(
+                plc.DataType(plc.TypeId.LIST),
+                col.size,
+                None,
+                plc.gpumemoryview(col.mask) if col.mask is not None else None,
+                col.null_count,
+                col.offset,
+                [offsets, leaf_col.to_pylibcudf(mode="read")],
             )
-        return lc
+            leaf_col = type(self).from_pylibcudf(plc_leaf_col)
+        return leaf_col
 
     @property
     def element_type(self) -> Dtype:
