@@ -13,9 +13,6 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.config import ConfigOptions
 
-# Skip if rapidsmpf is not installed
-pytest.importorskip("rapidsmpf")
-
 
 @pytest.mark.parametrize("fallback_mode", ["warn", "silent"])
 @pytest.mark.parametrize("rows_per_partition", [1, 10, 20])
