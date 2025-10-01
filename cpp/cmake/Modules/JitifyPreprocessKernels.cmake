@@ -67,10 +67,14 @@ if(NOT (EXISTS "${CUDF_GENERATED_INCLUDE_DIR}/include"))
 endif()
 
 jit_preprocess_files(
-  SOURCE_DIRECTORY ${CUDF_SOURCE_DIR}/src FILES binaryop/jit/kernel.cu join/jit/conditional_join_jit_kernel.cu
-  rolling/jit/kernel.cu 
-  stream_compaction/filter/jit/kernel.cu transform/jit/kernel.cu
-  
+  SOURCE_DIRECTORY
+  ${CUDF_SOURCE_DIR}/src
+  FILES
+  binaryop/jit/kernel.cu
+  join/jit/conditional_join_jit_kernel.cu
+  rolling/jit/kernel.cu
+  stream_compaction/filter/jit/kernel.cu
+  transform/jit/kernel.cu
 )
 
 add_custom_target(
