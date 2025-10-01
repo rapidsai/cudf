@@ -20,11 +20,11 @@ cuDF accelerates pandas-like data processing on NVIDIA GPUs, ideal for large dat
 
 ![Performance](https://i.ibb.co/0ybhzYMv/Screenshot-2025-10-01-123714.png)
 
-Fig 1: On small data (1k rows), pandas is faster due to GPU overhead.
+*Fig 1: On small data (1k rows), pandas is faster due to GPU overhead.*
 
 ![Performance](https://i.ibb.co/nK5kvWH/Screenshot-2025-10-01-145759.png)
 
-Fig 2: On large data (10M rows), cuDF is over 19x faster.
+*Fig 2: On large data (10M rows), cuDF is over 19x faster.*
 
 **Try It Yourself**
 Run this code to compare speeds on your system:
