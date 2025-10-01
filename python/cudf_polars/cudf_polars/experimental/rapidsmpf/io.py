@@ -12,13 +12,13 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 from rmm.pylibrmm.stream import DEFAULT_STREAM
 
-from cudf_polars.dsl.ir import DataFrameScan
+from cudf_polars.dsl.ir import DataFrameScan, Scan
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
     lower_ir_node,
 )
-from cudf_polars.experimental.rapidsmpf.utils import define_py_node, shutdown_on_error
+from cudf_polars.experimental.rapidsmpf.nodes import define_py_node, shutdown_on_error
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -46,6 +46,15 @@ def _(
     nrows = max(ir.df.shape()[0], 1)
     count = math.ceil(nrows / rows_per_partition)
     return ir, {ir: PartitionInfo(count=count)}
+
+
+@lower_ir_node.register(Scan)
+def _(
+    ir: Scan, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:  # pragma: no cover
+    raise NotImplementedError(
+        "Scan is not yet supported in the RAPIDS-MPF streaming engine"
+    )
 
 
 @define_py_node()
