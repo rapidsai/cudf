@@ -18,6 +18,7 @@ import rmm
 
 from cudf_polars.containers import Column, DataFrame, DataType
 from cudf_polars.dsl.expressions.base import NamedExpr
+from cudf_polars.utils.cuda_stream import get_dask_cuda_stream
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, Mapping
@@ -84,7 +85,11 @@ def register() -> None:
     ) -> DataFrame:
         with log_errors():
             metadata, gpudata = frames  # TODO: check if this is a length-2 list...
-            return DataFrame.deserialize(header, (metadata, plc.gpumemoryview(gpudata)))
+            return DataFrame.deserialize(
+                header,
+                (metadata, plc.gpumemoryview(gpudata)),
+                stream=get_dask_cuda_stream(),
+            )
 
     @cuda_deserialize.register(Column)
     def _(header: ColumnHeader, frames: tuple[memoryview, plc.gpumemoryview]) -> Column:
@@ -171,7 +176,7 @@ def register() -> None:
             assert len(frames) == 2
             # Copy the second frame (the gpudata in host memory) back to the gpu
             frames = frames[0], plc.gpumemoryview(rmm.DeviceBuffer.to_device(frames[1]))
-            return DataFrame.deserialize(header, frames)
+            return DataFrame.deserialize(header, frames, stream=get_dask_cuda_stream())
 
     @sizeof_dispatch.register(Column)
     def _(x: Column) -> int:

@@ -641,5 +641,5 @@ class GroupedRollingWindow(Expr):
 
         # Create a temporary DataFrame with the broadcasted columns named by their
         # placeholder names from agg decomposition, then evaluate the post-expression.
-        df = DataFrame(broadcasted_cols)
+        df = DataFrame(broadcasted_cols, stream=df.stream)
         return self.post.value.evaluate(df, context=ExecutionContext.FRAME)
