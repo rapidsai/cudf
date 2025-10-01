@@ -41,6 +41,23 @@
 
 namespace cudf::io::parquet::detail {
 
+namespace {
+// Tests the passed in logical type for a FIXED_LENGTH_BYTE_ARRAY column to see if it should
+// be treated as a string. Currently the only logical type that has special handling is DECIMAL.
+// Other valid types in the future would be UUID (still treated as string) and FLOAT16 (which
+// for now would also be treated as a string).
+inline bool is_treat_fixed_length_as_string(std::optional<LogicalType> const& logical_type)
+{
+  if (!logical_type.has_value()) { return true; }
+  return logical_type->type != LogicalType::DECIMAL;
+}
+
+struct set_str_bytes_all {
+  __device__ void operator()(PageInfo& p) { p.str_bytes_all = p.str_bytes; }
+};
+
+}  // namespace
+
 void reader_impl::build_string_dict_indices()
 {
   CUDF_FUNC_RANGE();
@@ -504,6 +521,9 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
+  // figure out which kernels to run
+  subpass.kernel_mask = get_aggregated_decode_kernel_mask(subpass.pages, _stream);
+
   // iterate over all input columns and determine if they contain lists.
   // TODO: we could do this once at the file level instead of every time we get in here. the set of
   // columns we are processing does not change over multiple passes/subpasses/output chunks.
@@ -543,8 +563,7 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
                        pass.chunks,
                        0,  // 0-max size_t. process all possible rows
                        std::numeric_limits<size_t>::max(),
-                       true,                  // compute num_rows
-                       chunk_read_limit > 0,  // compute string sizes
+                       true,  // compute num_rows
                        _pass_itm_data->level_type_size,
                        _stream);
   }
@@ -580,6 +599,33 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
                      iter,
                      iter + subpass.pages.size(),
                      update_subpass_chunk_row{pass.pages, subpass.pages, subpass.page_src_index});
+  }
+
+  // compute string sizes if necessary. if we are doing chunking, we need to know
+  // the sizes of all strings so we can properly compute chunk boundaries.
+  if ((chunk_read_limit > 0) && (subpass.kernel_mask & STRINGS_MASK)) {
+    auto const has_flba =
+      std::any_of(pass.chunks.begin(), pass.chunks.end(), [](auto const& chunk) {
+        return chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY and
+               is_treat_fixed_length_as_string(chunk.logical_type);
+      });
+    if (!_has_page_index || has_flba) {
+      constexpr bool compute_all_string_sizes = true;
+      compute_page_string_sizes_pass1(subpass.pages,
+                                      pass.chunks,
+                                      {},
+                                      pass.skip_rows,
+                                      pass.num_rows,
+                                      subpass.kernel_mask,
+                                      compute_all_string_sizes,
+                                      _pass_itm_data->level_type_size,
+                                      _stream);
+    }
+    // set str_bytes_all
+    thrust::for_each(rmm::exec_policy_nosync(_stream),
+                     subpass.pages.device_begin(),
+                     subpass.pages.device_end(),
+                     set_str_bytes_all{});
   }
 
   // retrieve pages back
@@ -650,22 +696,6 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
 
   // Should not reach here if there is no page data.
   CUDF_EXPECTS(subpass.pages.size() > 0, "There are no pages present in the subpass");
-
-  // computes:
-  // PageNestingInfo::batch_size for each level of nesting, for each page, taking row bounds into
-  // account. PageInfo::skipped_values, which tells us where to start decoding in the input to
-  // respect the user bounds. It is only necessary to do this second pass if uses_custom_row_bounds
-  // is set (if the user has specified artificial bounds).
-  if (uses_custom_row_bounds(mode)) {
-    compute_page_sizes(subpass.pages,
-                       pass.chunks,
-                       skip_rows,
-                       num_rows,
-                       false,  // num_rows is already computed
-                       false,  // no need to compute string sizes
-                       pass.level_type_size,
-                       _stream);
-  }
 
   // iterate over all input columns and allocate any associated output
   // buffers if they are not part of a list hierarchy. mark down
