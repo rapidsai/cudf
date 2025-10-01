@@ -39,6 +39,7 @@ print(f"Pandas read: {time.time() - start:.4f} s")
 start = time.time()
 gdf = cudf.read_csv("large.csv")
 print(f"cuDF read: {time.time() - start:.4f} s")
+```
 
 ## 📢 cuDF can now be used as a no-code-change accelerator for pandas! To learn more, see [here](https://rapids.ai/cudf-pandas/)!
 
