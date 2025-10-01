@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import decimal
 import pickle
 import warnings
 from collections.abc import Iterable, Iterator, MutableSequence, Sequence
@@ -2378,20 +2377,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
 
 
-def _has_any_nan(arbitrary: pd.Series | np.ndarray) -> bool:
-    """Check if an object dtype Series or array contains NaN."""
-    return any(
-        (isinstance(x, (float, np.floating)) and np.isnan(x))
-        or (isinstance(x, decimal.Decimal) and x.is_nan())
-        for x in np.asarray(arbitrary)
-    )
-
-
-def _has_any_nat(arbitrary: pd.Series | np.ndarray) -> bool:
-    """Check if an object dtype Series or array contains NaT."""
-    return any(x is pd.NaT for x in np.asarray(arbitrary))
-
-
 def column_empty(
     row_count: int,
     dtype: DtypeObj = CUDF_STRING_DTYPE,
@@ -2845,11 +2830,16 @@ def as_column(
                 arbitrary, nan_as_null=nan_as_null, dtype=dtype, length=length
             )
         elif arbitrary.dtype.kind == "O":
+            pyarrow_array = None
             if isinstance(arbitrary, NumpyExtensionArray):
                 # infer_dtype does not handle NumpyExtensionArray
                 arbitrary = np.array(arbitrary, dtype=object)
             inferred_dtype = infer_dtype(
-                arbitrary, skipna=not cudf.get_option("mode.pandas_compatible")
+                arbitrary,
+                skipna=(
+                    not cudf.get_option("mode.pandas_compatible")
+                    and nan_as_null is not False
+                ),
             )
             if inferred_dtype in ("mixed-integer", "mixed-integer-float"):
                 raise MixedTypeError("Cannot create column with mixed types")
@@ -2869,23 +2859,33 @@ def as_column(
                         raise MixedTypeError(
                             f"Cannot have mixed values with {inferred_dtype}"
                         )
-                elif nan_as_null is False and _has_any_nan(arbitrary):
+                elif nan_as_null is False:
                     raise MixedTypeError(
-                        f"Cannot have mixed values with {inferred_dtype}"
+                        f"Cannot have a {inferred_dtype} type with dtype=object"
                     )
-            elif (
-                nan_as_null is False
-                and inferred_dtype not in ("decimal", "empty")
-                and (_has_any_nan(arbitrary) or _has_any_nat(arbitrary))
+            elif nan_as_null is False and inferred_dtype not in (
+                "decimal",
+                "empty",
+                "string",
             ):
-                # Decimal can hold float("nan")
-                # All np.nan is not restricted by type
-                raise MixedTypeError(f"Cannot have NaN with {inferred_dtype}")
+                if inferred_dtype == "floating":
+                    raise MixedTypeError(
+                        f"Cannot have a {inferred_dtype} type with dtype=object"
+                    )
+                try:
+                    pyarrow_array = pa.array(arbitrary, from_pandas=False)
+                except (pa.lib.ArrowInvalid, pa.lib.ArrowTypeError):
+                    # Decimal can hold float("nan")
+                    # All np.nan is not restricted by type
+                    raise MixedTypeError(
+                        f"Cannot have NaN with {inferred_dtype}"
+                    )
 
-            pyarrow_array = pa.array(
-                arbitrary,
-                from_pandas=True,
-            )
+            if pyarrow_array is None:
+                pyarrow_array = pa.array(
+                    arbitrary,
+                    from_pandas=True,
+                )
             if (
                 cudf.get_option("mode.pandas_compatible")
                 and inferred_dtype == "mixed"
