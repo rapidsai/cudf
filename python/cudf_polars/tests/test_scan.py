@@ -2,7 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from decimal import Decimal
+from typing import TYPE_CHECKING
+
 import pytest
+from werkzeug import Response
 
 import polars as pl
 
@@ -11,7 +15,14 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.testing.io import make_partitioned_source
-from cudf_polars.utils.versions import POLARS_VERSION_LT_128
+from cudf_polars.utils.versions import POLARS_VERSION_LT_131
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from pytest_httpserver import HTTPServer
+    from werkzeug import Request
+
 
 NO_CHUNK_ENGINE = pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": False})
 
@@ -40,7 +51,16 @@ def df():
             "a": [1, 2, 3, None, 4, 5],
             "b": ["ẅ", "x", "y", "z", "123", "abcd"],
             "c": [None, None, 4, 5, -1, 0],
-        }
+            "d": [
+                Decimal("1.23"),
+                None,
+                Decimal("0.00"),
+                None,
+                Decimal("-5.67"),
+                None,
+            ],
+        },
+        schema={"a": pl.Int64, "b": pl.String, "c": pl.Int32, "d": pl.Decimal(15, 2)},
     )
 
 
@@ -100,11 +120,7 @@ def test_scan(
     )
     request.applymarker(
         pytest.mark.xfail(
-            condition=(
-                not POLARS_VERSION_LT_128
-                and zlice is not None
-                and scan_fn is pl.scan_ndjson
-            ),
+            condition=(zlice is not None and scan_fn is pl.scan_ndjson),
             reason="slice pushdown not supported in the libcudf JSON reader",
         )
     )
@@ -407,18 +423,7 @@ def test_scan_parquet_chunked(
     )
 
 
-def test_scan_hf_url_raises():
-    q = pl.scan_csv("hf://datasets/scikit-learn/iris/Iris.csv")
-    assert_ir_translation_raises(q, NotImplementedError)
-
-
-def test_select_arbitrary_order_with_row_index_column(request, tmp_path):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_128,
-            reason="unsupported until polars 1.28",
-        )
-    )
+def test_select_arbitrary_order_with_row_index_column(tmp_path):
     df = pl.DataFrame({"a": [1, 2, 3]})
     df.write_parquet(tmp_path / "df.parquet")
     q = pl.scan_parquet(tmp_path / "df.parquet", row_index_name="foo").select(
@@ -465,3 +470,135 @@ def test_scan_csv_without_header_and_new_column_names_raises(df, tmp_path):
     make_partitioned_source(df, path, "csv", write_kwargs={"include_header": False})
     q = pl.scan_csv(path, has_header=False)
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_scan_with_row_index(tmp_path: Path) -> None:
+    df = pl.DataFrame({"a": [1, 2, 3, 4]})
+    df.write_csv(tmp_path / "test-0.csv")
+    df.write_csv(tmp_path / "test-1.csv")
+
+    q = pl.scan_csv(tmp_path / "test-*.csv", row_index_name="index", row_index_offset=0)
+    assert_gpu_result_equal(q)
+
+
+def test_scan_from_file_uri(tmp_path: Path) -> None:
+    tmp_path.mkdir(exist_ok=True)
+    path = tmp_path / "out.parquet"
+    df = pl.DataFrame({"a": 1})
+    df.write_parquet(path)
+    q = pl.scan_parquet(f"file://{path}")
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.parametrize("chunked", [False, True])
+def test_scan_parquet_remote(
+    request, tmp_path: Path, df: pl.DataFrame, httpserver: HTTPServer, *, chunked: bool
+) -> None:
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=POLARS_VERSION_LT_131,
+            reason="remote IO not supported",
+        )
+    )
+    path = tmp_path / "foo.parquet"
+    df.write_parquet(path)
+    bytes_ = path.read_bytes()
+    size = len(bytes_)
+
+    def head_handler(_: Request) -> Response:
+        return Response(
+            status=200,
+            headers={
+                "Content-Type": "parquet",
+                "Accept-Ranges": "bytes",
+                "Content-Length": size,
+            },
+        )
+
+    def get_handler(req: Request) -> Response:
+        # parse bytes=200-500 for example (the actual data)
+        rng = req.headers.get("Range")
+        if rng and rng.startswith("bytes="):
+            start, end = map(int, req.headers["Range"][6:].split("-"))
+            mv = memoryview(bytes_)[start : end + 1]
+            return Response(
+                mv.tobytes(),
+                status=206,
+                headers={
+                    "Content-Type": "parquet",
+                    "Accept-Ranges": "bytes",
+                    "Content-Length": len(mv),
+                    "Content-Range": f"bytes {start}-{end}/{size}",
+                },
+            )
+        return Response(
+            bytes_,
+            status=200,
+            headers={
+                "Content-Type": "parquet",
+                "Accept-Ranges": "bytes",
+                "Content-Length": size,
+            },
+        )
+
+    server_path = "/foo.parquet"
+    httpserver.expect_request(server_path, method="HEAD").respond_with_handler(
+        head_handler
+    )
+    httpserver.expect_request(server_path, method="GET").respond_with_handler(
+        get_handler
+    )
+
+    q = pl.scan_parquet(httpserver.url_for(server_path))
+
+    assert_gpu_result_equal(
+        q, engine=pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": chunked})
+    )
+
+
+def test_scan_ndjson_remote(
+    request: pytest.FixtureRequest,
+    tmp_path: Path,
+    df: pl.DataFrame,
+    httpserver: HTTPServer,
+) -> None:
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=POLARS_VERSION_LT_131,
+            reason="remote IO not supported",
+        )
+    )
+    path = tmp_path / "foo.jsonl"
+    df.write_ndjson(path)
+    bytes_ = path.read_bytes()
+    size = len(bytes_)
+
+    def head_handler(_: Request) -> Response:
+        return Response(
+            status=200,
+            headers={
+                "Content-Type": "ndjson",
+                "Content-Length": size,
+            },
+        )
+
+    def get_handler(_: Request) -> Response:
+        return Response(
+            bytes_,
+            status=200,
+            headers={
+                "Content-Type": "ndjson",
+                "Content-Length": size,
+            },
+        )
+
+    server_path = "/foo.jsonl"
+    httpserver.expect_request(server_path, method="HEAD").respond_with_handler(
+        head_handler
+    )
+    httpserver.expect_request(server_path, method="GET").respond_with_handler(
+        get_handler
+    )
+
+    q = pl.scan_ndjson(httpserver.url_for(server_path))
+    assert_gpu_result_equal(q)

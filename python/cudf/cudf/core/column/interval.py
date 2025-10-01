@@ -1,13 +1,14 @@
 # Copyright (c) 2018-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import functools
 from typing import TYPE_CHECKING, Literal
 
 import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf.core.column.column import as_column, pa_mask_buffer_to_mask
+from cudf.core.column.column import as_column
 from cudf.core.column.struct import StructColumn
 from cudf.core.dtypes import IntervalDtype
 from cudf.utils.dtypes import is_dtype_obj_interval
@@ -57,27 +58,13 @@ class IntervalColumn(StructColumn):
         return dtype
 
     @classmethod
-    def from_arrow(cls, data: pa.Array) -> Self:
-        new_col = super().from_arrow(data.storage)
-        size = len(data)
-        dtype = IntervalDtype.from_arrow(data.type)
-        mask = data.buffers()[0]
-        if mask is not None:
-            mask = pa_mask_buffer_to_mask(mask, len(data))
-
-        offset = data.offset
-        null_count = data.null_count
-        children = new_col.children
-
-        return cls(
-            data=None,
-            size=size,
-            dtype=dtype,
-            mask=mask,
-            offset=offset,
-            null_count=null_count,
-            children=children,  # type: ignore[arg-type]
-        )
+    def from_arrow(cls, array: pa.Array | pa.ChunkedArray) -> Self:
+        if not isinstance(array, pa.ExtensionArray):
+            raise ValueError("Expected ExtensionArray for interval data")
+        new_col = super().from_arrow(array.storage)
+        return new_col._with_type_metadata(
+            IntervalDtype.from_arrow(array.type)
+        )  # type: ignore[return-value]
 
     def to_arrow(self) -> pa.Array:
         typ = self.dtype.to_arrow()
@@ -88,38 +75,10 @@ class IntervalColumn(StructColumn):
             struct_arrow = pa.array([], typ.storage_type)
         return pa.ExtensionArray.from_storage(typ, struct_arrow)
 
-    @classmethod
-    def from_struct_column(
-        cls,
-        struct_column: StructColumn,
-        closed: Literal["left", "right", "both", "neither"] = "right",
-    ) -> Self:
-        first_field_name = next(iter(struct_column.dtype.fields.keys()))
-        return cls(
-            data=None,
-            size=struct_column.size,
-            dtype=IntervalDtype(
-                struct_column.dtype.fields[first_field_name], closed
-            ),
-            mask=struct_column.base_mask,
-            offset=struct_column.offset,
-            null_count=struct_column.null_count,
-            children=struct_column.base_children,  # type: ignore[arg-type]
-        )
-
     def copy(self, deep: bool = True) -> Self:
-        struct_copy = super().copy(deep=deep)
-        return IntervalColumn(  # type: ignore[return-value]
-            data=None,
-            size=struct_copy.size,
-            dtype=IntervalDtype(self.dtype.subtype, self.dtype.closed),
-            mask=struct_copy.base_mask,
-            offset=struct_copy.offset,
-            null_count=struct_copy.null_count,
-            children=struct_copy.base_children,  # type: ignore[arg-type]
-        )
+        return super().copy(deep=deep)._with_type_metadata(self.dtype)  # type: ignore[return-value]
 
-    @property
+    @functools.cached_property
     def is_empty(self) -> ColumnBase:
         left_equals_right = (self.right == self.left).fillna(False)
         not_closed_both = as_column(
@@ -127,19 +86,19 @@ class IntervalColumn(StructColumn):
         )
         return left_equals_right & not_closed_both
 
-    @property
+    @functools.cached_property
     def is_non_overlapping_monotonic(self) -> bool:
         raise NotImplementedError(
             "is_overlapping is currently not implemented."
         )
 
-    @property
+    @functools.cached_property
     def is_overlapping(self) -> bool:
         raise NotImplementedError(
             "is_overlapping is currently not implemented."
         )
 
-    @property
+    @functools.cached_property
     def length(self) -> ColumnBase:
         return self.right - self.left
 
@@ -147,7 +106,7 @@ class IntervalColumn(StructColumn):
     def left(self) -> ColumnBase:
         return self.children[0]
 
-    @property
+    @functools.cached_property
     def mid(self) -> ColumnBase:
         try:
             return 0.5 * (self.left + self.right)

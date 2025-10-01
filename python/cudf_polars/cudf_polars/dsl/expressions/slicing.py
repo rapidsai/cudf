@@ -28,13 +28,14 @@ class Slice(Expr):
         self,
         dtype: DataType,
         offset: int,
-        length: int,
+        length: int | None,
         column: Expr,
     ) -> None:
         self.dtype = dtype
         self.offset = offset
         self.length = length
         self.children = (column,)
+        self.is_pointwise = False
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME

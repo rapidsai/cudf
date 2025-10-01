@@ -1,13 +1,15 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 import operator
 
 import numpy as np
 from numba import types
+from numba.core import cgutils
 from numba.core.extending import models, register_model
 from numba.core.typing import signature as nb_signature
 from numba.core.typing.templates import AbstractTemplate, AttributeTemplate
 from numba.cuda.cudadecl import registry as cuda_decl_registry
+from numba.cuda.descriptor import cuda_target
 
 import rmm
 
@@ -23,7 +25,18 @@ class UDFString(types.Type):
         super().__init__(name="udf_string")
 
     @property
-    def return_type(self):
+    def return_as(self):
+        return self
+
+
+class ManagedUDFString(types.Type):
+    np_dtype = np.dtype("object")
+
+    def __init__(self):
+        super().__init__(name="managed_udf_string")
+
+    @property
+    def return_as(self):
         return self
 
 
@@ -34,8 +47,8 @@ class StringView(types.Type):
         super().__init__(name="string_view")
 
     @property
-    def return_type(self):
-        return UDFString()
+    def return_as(self):
+        return ManagedUDFString()
 
 
 @register_model(StringView)
@@ -75,9 +88,29 @@ class udf_string_model(models.StructModel):
         super().__init__(dmm, fe_type, self._members)
 
 
-any_string_ty = (StringView, UDFString, types.StringLiteral)
-string_view = StringView()
 udf_string = UDFString()
+
+
+@register_model(ManagedUDFString)
+class managed_udf_string_model(models.StructModel):
+    _members = (("meminfo", types.voidptr), ("udf_string", udf_string))
+
+    def __init__(self, dmm, fe_type):
+        super().__init__(dmm, fe_type, self._members)
+
+    def has_nrt_meminfo(self):
+        return True
+
+    def get_nrt_meminfo(self, builder, value):
+        udf_str_and_meminfo = cgutils.create_struct_proxy(managed_udf_string)(
+            cuda_target.target_context, builder, value=value
+        )
+        return udf_str_and_meminfo.meminfo
+
+
+managed_udf_string = ManagedUDFString()
+any_string_ty = (StringView, UDFString, ManagedUDFString, types.StringLiteral)
+string_view = StringView()
 
 
 class StrViewArgHandler:
@@ -96,7 +129,7 @@ class StrViewArgHandler:
 
     def prepare_args(self, ty, val, **kwargs):
         if isinstance(ty, types.CPointer) and isinstance(
-            ty.dtype, (StringView, UDFString)
+            ty.dtype, (StringView, UDFString, ManagedUDFString)
         ):
             return types.uint64, val.ptr if isinstance(
                 val, rmm.pylibrmm.device_buffer.DeviceBuffer
@@ -122,6 +155,17 @@ class StringLength(AbstractTemplate):
             # udf_string -> int32
             # literal -> int32
             return nb_signature(size_type, string_view)
+
+
+def NRT_decref(st):
+    pass
+
+
+@cuda_decl_registry.register_global(NRT_decref)
+class NRT_decref_typing(AbstractTemplate):
+    def generic(self, args, kws):
+        if isinstance(args[0], ManagedUDFString):
+            return nb_signature(types.void, managed_udf_string)
 
 
 def register_stringview_binaryop(op, retty):
@@ -191,7 +235,7 @@ class StringViewReplace(AbstractTemplate):
 
     def generic(self, args, kws):
         return nb_signature(
-            udf_string, string_view, string_view, recvr=self.this
+            managed_udf_string, string_view, string_view, recvr=self.this
         )
 
 
@@ -232,7 +276,7 @@ for func in string_return_attrs:
     setattr(
         StringViewAttrs,
         f"resolve_{func}",
-        create_binary_attr(func, udf_string),
+        create_binary_attr(func, managed_udf_string),
     )
 
 
@@ -252,17 +296,17 @@ for func in string_unary_funcs:
     setattr(
         StringViewAttrs,
         f"resolve_{func}",
-        create_identifier_attr(func, udf_string),
+        create_identifier_attr(func, managed_udf_string),
     )
 
 
 @cuda_decl_registry.register_attr
-class UDFStringAttrs(StringViewAttrs):
-    key = udf_string
+class ManagedUDFStringAttrs(StringViewAttrs):
+    key = managed_udf_string
 
 
 cuda_decl_registry.register_attr(StringViewAttrs)
-cuda_decl_registry.register_attr(UDFStringAttrs)
+cuda_decl_registry.register_attr(ManagedUDFStringAttrs)
 
 register_stringview_binaryop(operator.eq, types.boolean)
 register_stringview_binaryop(operator.ne, types.boolean)
@@ -275,4 +319,4 @@ register_stringview_binaryop(operator.ge, types.boolean)
 register_stringview_binaryop(operator.contains, types.boolean)
 
 # st + other
-register_stringview_binaryop(operator.add, udf_string)
+register_stringview_binaryop(operator.add, managed_udf_string)

@@ -16,8 +16,7 @@ import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_scalar
 from cudf.core.accessors.base_accessor import BaseAccessor
-from cudf.core.column.column import ColumnBase, as_column
-from cudf.core.column.lists import ListColumn
+from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.dtypes import ListDtype
 from cudf.options import get_option
 from cudf.utils.dtypes import (
@@ -499,14 +498,18 @@ class StringMethods(BaseAccessor):
             )
 
         if isinstance(self._column.dtype, ListDtype):
-            list_column: ListColumn = self._column  # type: ignore[assignment]
+            list_column = self._column
         else:
             # If self._column is not a ListColumn, we will have to
             # split each row by character and create a ListColumn out of it.
-            list_column = self._split_by_character()  # type: ignore[assignment]
+            list_column = self._column.fillna("").character_tokenize()  # type: ignore[assignment]
+            if len(list_column) == 0:
+                list_column = column_empty(  # type: ignore[assignment]
+                    len(self._column), dtype=list_column.dtype
+                )
 
         if is_scalar(sep):
-            data = list_column.join_list_elements(sep, string_na_rep, "")
+            data = list_column.join_list_elements(sep, string_na_rep, "")  # type: ignore[attr-defined]
         elif can_convert_to_column(sep):
             sep_column = as_column(sep)
             if len(sep_column) != len(list_column):
@@ -519,7 +522,7 @@ class StringMethods(BaseAccessor):
                     f"sep_na_rep should be a string scalar, got {sep_na_rep} "
                     f"of type: {type(sep_na_rep)}"
                 )
-            data = list_column.join_list_elements(
+            data = list_column.join_list_elements(  # type: ignore[attr-defined]
                 sep_column,  # type: ignore[arg-type]
                 sep_na_rep,
                 string_na_rep,  # type: ignore[arg-type]
@@ -531,22 +534,6 @@ class StringMethods(BaseAccessor):
             )
 
         return self._return_or_inplace(data)
-
-    def _split_by_character(self) -> ListColumn:
-        col = self._column.fillna("")  # sanitize nulls
-        result_col = col.character_tokenize()
-
-        offset_col = col.children[0]
-
-        return ListColumn(
-            data=None,
-            size=len(col),
-            dtype=ListDtype(col.dtype),
-            mask=col.mask,
-            offset=0,
-            null_count=0,
-            children=(offset_col, result_col),  # type: ignore[arg-type]
-        )
 
     def extract(
         self, pat: str, flags: int = 0, expand: bool = True
@@ -983,7 +970,7 @@ class StringMethods(BaseAccessor):
             if regex:
                 result = self._column.replace_re(
                     list(pat),
-                    as_column(repl, dtype=CUDF_STRING_DTYPE),
+                    as_column(repl, dtype=CUDF_STRING_DTYPE),  # type: ignore[arg-type]
                 )
             else:
                 result = self._column.replace_multiple(
@@ -991,9 +978,6 @@ class StringMethods(BaseAccessor):
                     as_column(repl, dtype=CUDF_STRING_DTYPE),  # type: ignore[arg-type]
                 )
             return self._return_or_inplace(result)
-        # Pandas treats 0 as all
-        if n == 0:
-            n = -1
 
         # If 'pat' is re.Pattern then get the pattern string from it
         if regex and isinstance(pat, re.Pattern):
@@ -1014,6 +998,7 @@ class StringMethods(BaseAccessor):
             result = self._column.replace_str(
                 pat,  # type: ignore[arg-type]
                 pa_repl,
+                n,
             )
         return self._return_or_inplace(result)
 
@@ -4621,7 +4606,7 @@ class StringMethods(BaseAccessor):
         2    .
         dtype: object
         """
-        result_col = self._column.character_tokenize()
+        result_col = self._column.character_tokenize().children[1]
         if isinstance(self._parent, cudf.Series):
             lengths = self.len().fillna(0)
             index = self._parent.index.repeat(lengths)

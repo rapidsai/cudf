@@ -81,6 +81,8 @@ def _from_polars(dtype: pl.DataType) -> plc.DataType:
         assert_never(dtype.time_unit)
     elif isinstance(dtype, pl.String):
         return plc.DataType(plc.TypeId.STRING)
+    elif isinstance(dtype, pl.Decimal):
+        return plc.DataType(plc.TypeId.DECIMAL128, scale=-dtype.scale)
     elif isinstance(dtype, pl.Null):
         # TODO: Hopefully
         return plc.DataType(plc.TypeId.EMPTY)
@@ -100,27 +102,38 @@ def _from_polars(dtype: pl.DataType) -> plc.DataType:
 class DataType:
     """A datatype, preserving polars metadata."""
 
-    polars: pl.datatypes.DataType
-    plc: plc.DataType
+    polars_type: pl.datatypes.DataType
+    plc_type: plc.DataType
 
     def __init__(self, polars_dtype: pl.DataType) -> None:
-        self.polars = polars_dtype
-        self.plc = _from_polars(polars_dtype)
+        self.polars_type = polars_dtype
+        self.plc_type = _from_polars(polars_dtype)
 
     def id(self) -> plc.TypeId:
         """The pylibcudf.TypeId of this DataType."""
-        return self.plc.id()
+        return self.plc_type.id()
+
+    @property
+    def children(self) -> list[DataType]:
+        """The children types of this DataType."""
+        # these type ignores are needed because the type checker doesn't
+        # see that these equality checks passing imply a specific type for each child field.
+        if self.plc_type.id() == plc.TypeId.STRUCT:
+            return [DataType(field.dtype) for field in self.polars_type.fields]  # type: ignore[attr-defined]
+        elif self.plc_type.id() == plc.TypeId.LIST:
+            return [DataType(self.polars_type.inner)]  # type: ignore[attr-defined]
+        return []
 
     def __eq__(self, other: object) -> bool:
         """Equality of DataTypes."""
         if not isinstance(other, DataType):
             return False
-        return self.polars == other.polars
+        return self.polars_type == other.polars_type
 
     def __hash__(self) -> int:
         """Hash of the DataType."""
-        return hash(self.polars)
+        return hash(self.polars_type)
 
     def __repr__(self) -> str:
         """Representation of the DataType."""
-        return f"<DataType(polars={self.polars}, plc={self.id()!r})>"
+        return f"<DataType(polars={self.polars_type}, plc={self.id()!r})>"

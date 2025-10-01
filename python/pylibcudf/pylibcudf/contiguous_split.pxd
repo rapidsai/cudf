@@ -30,7 +30,7 @@ cdef class PackedColumns:
 
     @staticmethod
     cdef PackedColumns from_libcudf(unique_ptr[packed_columns] data)
-    cpdef tuple release(self)
+    cpdef tuple release(self, Stream stream=*)
 
 cdef class ChunkedPack:
     cdef unique_ptr[chunked_pack] c_obj
@@ -47,6 +47,8 @@ cdef class ChunkedPack:
 
 cpdef PackedColumns pack(Table input)
 
-cpdef Table unpack(PackedColumns input)
+cpdef Table unpack(PackedColumns input, DeviceMemoryResource mr=*)
 
-cpdef Table unpack_from_memoryviews(memoryview metadata, gpumemoryview gpu_data)
+cpdef Table unpack_from_memoryviews(
+    memoryview metadata, gpumemoryview gpu_data, DeviceMemoryResource mr=*
+)

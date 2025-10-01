@@ -31,6 +31,10 @@ class ExecutionContext(IntEnum):
     FRAME = enum.auto()
     GROUPBY = enum.auto()
     ROLLING = enum.auto()
+    # Follows GROUPBY semantics but useful
+    # to differentiate from GROUPBY so we can
+    # implement agg/per-row ops independently
+    WINDOW = enum.auto()
 
 
 class Expr(Node["Expr"]):

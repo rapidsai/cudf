@@ -14,24 +14,25 @@
  * limitations under the License.
  */
 
-#include "jit/cache.hpp"
-#include "jit/helpers.hpp"
-#include "jit/parser.hpp"
-#include "jit/span.cuh"
-#include "jit/util.hpp"
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
-#include <cudf/jit/runtime_support.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <jit/cache.hpp>
+#include <jit/helpers.hpp>
+#include <jit/parser.hpp>
+#include <jit/row_ir.hpp>
+#include <jit/span.cuh>
+#include <jit/util.hpp>
 #include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
 
 namespace cudf {
@@ -42,16 +43,7 @@ namespace {
 jitify2::Kernel get_kernel(std::string const& kernel_name, std::string const& cuda_source)
 {
   return cudf::jit::get_program_cache(*transform_jit_kernel_cu_jit)
-    .get_kernel(kernel_name,
-                {},
-                {{"transform/jit/operation-udf.hpp", cuda_source}},
-                {"-arch=sm_.",
-                 "--device-int128",
-                 // TODO: remove when we upgrade to CCCL >= 3.0
-
-                 // CCCL WAR for not using the correct INT128 feature macro:
-                 // https://github.com/NVIDIA/cccl/issues/3801
-                 "-D__SIZEOF_INT128__=16"});
+    .get_kernel(kernel_name, {}, {{"cudf/detail/operation-udf.hpp", cuda_source}}, {"-arch=sm_."});
 }
 
 jitify2::ConfiguredKernel build_transform_kernel(
@@ -60,6 +52,7 @@ jitify2::ConfiguredKernel build_transform_kernel(
   std::vector<mutable_column_view> const& output_columns,
   std::vector<column_view> const& input_columns,
   bool has_user_data,
+  null_aware is_null_aware,
   std::string const& udf,
   bool is_ptx,
   rmm::cuda_stream_view stream,
@@ -77,6 +70,7 @@ jitify2::ConfiguredKernel build_transform_kernel(
   return get_kernel(jitify2::reflection::Template(kernel_name)
                       .instantiate(cudf::jit::build_jit_template_params(
                         has_user_data,
+                        is_null_aware,
                         {},
                         cudf::jit::column_type_names(output_columns),
                         cudf::jit::reflect_input_columns(base_column_size, input_columns))),
@@ -89,6 +83,7 @@ jitify2::ConfiguredKernel build_span_kernel(std::string const& kernel_name,
                                             std::vector<std::string> const& span_outputs,
                                             std::vector<column_view> const& input_columns,
                                             bool has_user_data,
+                                            null_aware is_null_aware,
                                             std::string const& udf,
                                             bool is_ptx,
                                             rmm::cuda_stream_view stream,
@@ -105,6 +100,7 @@ jitify2::ConfiguredKernel build_span_kernel(std::string const& kernel_name,
   return get_kernel(jitify2::reflection::Template(kernel_name)
                       .instantiate(cudf::jit::build_jit_template_params(
                         has_user_data,
+                        is_null_aware,
                         span_outputs,
                         {},
                         cudf::jit::reflect_input_columns(base_column_size, input_columns))),
@@ -131,7 +127,7 @@ void launch_column_output_kernel(jitify2::ConfiguredKernel& kernel,
 
   std::array<void*, 3> args{&outputs_ptr, &inputs_ptr, &p_user_data};
 
-  kernel->launch(args.data());
+  kernel->launch_raw(args.data());
 }
 
 template <typename T>
@@ -158,7 +154,7 @@ void launch_span_kernel(jitify2::ConfiguredKernel& kernel,
 
   std::array<void*, 3> args{&outputs_ptr, &inputs_ptr, &p_user_data};
 
-  kernel->launch(args.data());
+  kernel->launch_raw(args.data());
 }
 
 std::tuple<rmm::device_buffer, size_type> make_transform_null_mask(
@@ -195,10 +191,17 @@ std::unique_ptr<column> transform_operation(column_view base_column,
                                             std::string const& udf,
                                             bool is_ptx,
                                             std::optional<void*> user_data,
+                                            null_aware is_null_aware,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
-  auto [null_mask, null_count] = make_transform_null_mask(base_column, inputs, stream, mr);
+  rmm::device_buffer null_mask{};
+  cudf::size_type null_count{0};
+  if (is_null_aware == null_aware::NO) {
+    std::tie(null_mask, null_count) = make_transform_null_mask(base_column, inputs, stream, mr);
+  } else {
+    null_mask = create_null_mask(base_column.size(), mask_state::UNALLOCATED, stream, mr);
+  }
 
   auto output = make_fixed_width_column(
     output_type, base_column.size(), std::move(null_mask), null_count, stream, mr);
@@ -210,13 +213,13 @@ std::unique_ptr<column> transform_operation(column_view base_column,
                                        {*output},
                                        inputs,
                                        user_data.has_value(),
+                                       is_null_aware,
                                        udf,
                                        is_ptx,
                                        stream,
                                        mr);
 
   launch_column_output_kernel(kernel, {*output}, inputs, user_data, stream, mr);
-
   return output;
 }
 
@@ -225,16 +228,25 @@ std::unique_ptr<column> string_view_operation(column_view base_column,
                                               std::string const& udf,
                                               bool is_ptx,
                                               std::optional<void*> user_data,
+                                              null_aware is_null_aware,
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
 {
-  auto [null_mask, null_count] = make_transform_null_mask(base_column, inputs, stream, mr);
+  rmm::device_buffer null_mask{};
+  cudf::size_type null_count{0};
+
+  if (is_null_aware == null_aware::NO) {
+    std::tie(null_mask, null_count) = make_transform_null_mask(base_column, inputs, stream, mr);
+  } else {
+    null_mask = create_null_mask(base_column.size(), mask_state::UNALLOCATED, stream, mr);
+  }
 
   auto kernel = build_span_kernel("cudf::transformation::jit::span_kernel",
                                   base_column.size(),
                                   {"cudf::string_view"},
                                   inputs,
                                   user_data.has_value(),
+                                  is_null_aware,
                                   udf,
                                   is_ptx,
                                   stream,
@@ -261,7 +273,6 @@ void perform_checks(column_view base_column,
                     data_type output_type,
                     std::vector<column_view> const& inputs)
 {
-  CUDF_EXPECTS(is_runtime_jit_supported(), "Runtime JIT is only supported on CUDA Runtime 11.5+");
   CUDF_EXPECTS(is_fixed_width(output_type) || output_type.id() == type_id::STRING,
                "Transforms only support output of fixed-width or string types",
                std::invalid_argument);
@@ -295,23 +306,26 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
                                   data_type output_type,
                                   bool is_ptx,
                                   std::optional<void*> user_data,
+                                  null_aware is_null_aware,
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(
     !inputs.empty(), "Transform must have at least 1 input column", std::invalid_argument);
+  CUDF_EXPECTS(!(is_null_aware == null_aware::YES && is_ptx),
+               "Optional types are not supported in PTX UDFs",
+               std::invalid_argument);
 
-  auto const base_column = std::max_element(
-    inputs.begin(), inputs.end(), [](auto& a, auto& b) { return a.size() < b.size(); });
+  auto const base_column = cudf::jit::get_transform_base_column(inputs);
 
   transformation::jit::perform_checks(*base_column, output_type, inputs);
 
   if (is_fixed_width(output_type)) {
     return transformation::jit::transform_operation(
-      *base_column, output_type, inputs, udf, is_ptx, user_data, stream, mr);
+      *base_column, output_type, inputs, udf, is_ptx, user_data, is_null_aware, stream, mr);
   } else if (output_type.id() == type_id::STRING) {
     return transformation::jit::string_view_operation(
-      *base_column, inputs, udf, is_ptx, user_data, stream, mr);
+      *base_column, inputs, udf, is_ptx, user_data, is_null_aware, stream, mr);
   } else {
     CUDF_FAIL("Unsupported output type for transform operation");
   }
@@ -324,11 +338,31 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
                                   data_type output_type,
                                   bool is_ptx,
                                   std::optional<void*> user_data,
+                                  null_aware is_null_aware,
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::transform(inputs, udf, output_type, is_ptx, user_data, stream, mr);
+  return detail::transform(inputs, udf, output_type, is_ptx, user_data, is_null_aware, stream, mr);
+}
+
+std::unique_ptr<column> compute_column_jit(table_view const& table,
+                                           ast::expression const& expr,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr)
+{
+  cudf::detail::row_ir::ast_args ast_args{.table = table};
+  auto args = cudf::detail::row_ir::ast_converter::compute_column(
+    cudf::detail::row_ir::target::CUDA, expr, ast_args, stream, mr);
+
+  return cudf::transform(args.columns,
+                         args.udf,
+                         args.output_type,
+                         args.is_ptx,
+                         args.user_data,
+                         args.is_null_aware,
+                         stream,
+                         mr);
 }
 
 }  // namespace cudf

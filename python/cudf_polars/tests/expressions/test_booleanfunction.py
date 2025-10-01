@@ -12,7 +12,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_128, POLARS_VERSION_LT_130
+from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -91,7 +91,15 @@ def test_boolean_function_unary(
     assert_gpu_result_equal(q)
 
 
-def test_nan_in_non_floating_point_column():
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pytest.param(lambda e: e.is_nan(), id="is_nan"),
+        pytest.param(lambda e: e.is_not_nan(), id="is_not_nan"),
+        pytest.param(lambda e: e.is_finite(), id="is_finite"),
+    ],
+)
+def test_nan_in_non_floating_point_column(expr):
     ldf = pl.LazyFrame({"int": [-1, 1, None]}).with_columns(
         float=pl.col("int").cast(pl.Float64),
         float_na=pl.col("int") ** 0.5,
@@ -99,24 +107,13 @@ def test_nan_in_non_floating_point_column():
 
     q = ldf.select(
         [
-            pl.col("int").is_nan().alias("int"),
-            pl.col("float").is_nan().alias("float"),
-            pl.col("float_na").is_nan().alias("float_na"),
+            expr(pl.col("int")),
+            expr(pl.col("float")),
+            expr(pl.col("float_na")),
         ]
     )
 
-    if POLARS_VERSION_LT_130:
-        with pytest.raises(
-            pl.exceptions.ComputeError,
-            match="NAN is not supported in a Non-floating point type column",
-        ):
-            assert_gpu_result_equal(q)
-    else:
-        with pytest.raises(
-            RuntimeError,
-            match="NAN is not supported in a Non-floating point type column",
-        ):
-            assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q)
 
 
 @pytest.mark.parametrize(
@@ -191,6 +188,7 @@ def test_boolean_horizontal(expr, has_nulls, wide):
             marks=pytest.mark.xfail(reason="Need to support implode agg"),
         ),
         pl.col("a").is_in([1, 2, 3]),
+        pl.col("a").is_in([]),
         pl.col("a").is_in([3, 4, 2]),
         pl.col("c").is_in([10, None, 11]),
     ],
@@ -233,17 +231,23 @@ def test_boolean_is_in_raises_unsupported():
 def test_boolean_is_in_with_nested_list_raises():
     ldf = pl.LazyFrame({"x": [1, 2, 3], "y": [[1, 2], [2, 3], [4]]})
     q = ldf.select(pl.col("x").is_in(pl.col("y")))
-    if POLARS_VERSION_LT_128:
-        assert_ir_translation_raises(q, NotImplementedError)
-    elif POLARS_VERSION_LT_130:
-        with pytest.raises(pl.exceptions.ComputeError, match="Column types mismatch"):
-            assert_gpu_result_equal(q)
-    else:
-        with pytest.raises(AssertionError, match="DataFrames are different"):
-            assert_gpu_result_equal(q)
+    with pytest.raises(AssertionError, match="DataFrames are different"):
+        assert_gpu_result_equal(q)
 
 
 def test_expr_is_in_empty_list():
     ldf = pl.LazyFrame({"a": [1, 2, 3, 4]})
     q = ldf.select(pl.col("a").is_in([]))
     assert_gpu_result_equal(q)
+
+
+def test_boolean_is_close(request):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=POLARS_VERSION_LT_132, reason="Not supported until polars 1.32"
+        )
+    )
+    ldf = pl.LazyFrame({"a": [1.0, 1.2, 1.4, 1.45, 1.6]})
+    q = ldf.select(pl.col("a").is_close(1.4, abs_tol=0.1))
+
+    assert_ir_translation_raises(q, NotImplementedError)

@@ -24,6 +24,7 @@ from rmm._cuda import gpu
 
 from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN
 from cudf_polars.dsl.translate import Translator
+from cudf_polars.utils.config import _env_get_int, get_total_device_memory
 from cudf_polars.utils.timer import Timer
 
 if TYPE_CHECKING:
@@ -37,21 +38,6 @@ if TYPE_CHECKING:
     from cudf_polars.utils.config import ConfigOptions
 
 __all__: list[str] = ["execute_with_cudf"]
-
-
-_SUPPORTED_PREFETCHES = {
-    "column_view::get_data",
-    "mutable_column_view::get_data",
-    "gather",
-    "hash_join",
-}
-
-
-def _env_get_int(name: str, default: int) -> int:
-    try:
-        return int(os.getenv(name, default))
-    except (ValueError, TypeError):  # pragma: no cover
-        return default  # pragma: no cover
 
 
 @cache
@@ -86,8 +72,7 @@ def default_memory_resource(
             # Leaving a 20% headroom to avoid OOM errors.
             free_memory, _ = rmm.mr.available_device_memory()
             free_memory = int(round(float(free_memory) * 0.80 / 256) * 256)
-            for key in _SUPPORTED_PREFETCHES:
-                pylibcudf.experimental.enable_prefetching(key)
+            pylibcudf.prefetch.enable()
             mr = rmm.mr.PrefetchResourceAdaptor(
                 rmm.mr.PoolMemoryResource(
                     rmm.mr.ManagedMemoryResource(),
@@ -104,8 +89,7 @@ def default_memory_resource(
         ):
             raise ComputeError(
                 "GPU engine requested, but incorrect cudf-polars package installed. "
-                "If your system has a CUDA 11 driver, please uninstall `cudf-polars-cu12` "
-                "and install `cudf-polars-cu11`"
+                "cudf-polars requires CUDA 12.0+ to installed."
             ) from None
         else:
             raise
@@ -142,7 +126,11 @@ def set_memory_resource(
         mr = default_memory_resource(
             device=device,
             cuda_managed_memory=bool(
-                _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) != 0
+                _env_get_int(
+                    "POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY",
+                    default=1 if get_total_device_memory() is not None else 0,
+                )
+                != 0
             ),
         )
     rmm.mr.set_current_device_resource(mr)

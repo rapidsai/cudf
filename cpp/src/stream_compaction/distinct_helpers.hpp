@@ -17,8 +17,8 @@
 #pragma once
 
 #include <cudf/detail/cuco_helpers.hpp>
+#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/stream_compaction.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
@@ -55,10 +55,10 @@ using distinct_set_t =
                    cuco::extent<int64_t>,
                    cuda::thread_scope_device,
                    RowEqual,
-                   cuco::linear_probing<1,
-                                        cudf::experimental::row::hash::device_row_hasher<
-                                          cudf::hashing::detail::default_hash,
-                                          cudf::nullate::DYNAMIC>>,
+                   cuco::linear_probing<
+                     1,
+                     cudf::detail::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
+                                                                cudf::nullate::DYNAMIC>>,
                    cudf::detail::cuco_allocator<char>,
                    cuco::storage<1>>;
 

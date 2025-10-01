@@ -1,19 +1,9 @@
-# Experimental streaming and multi-GPU options
-
-As well as in-memory execution, obtained by selecting `engine="gpu"`
-when `collect`ing a query, the GPU engine supports streaming execution
-that partitions the data in the query into chunks. To select streaming
-execution, we need to pass an appropriately configured `GPUEngine`
-object into `collect`.
+(cudf-polars-streaming)=
+# Streaming Execution
 
 The streaming executors work best when the inputs to your query come
 from parquet files. That is, start with `scan_parquet`, not existing
 Polars `DataFrame`s or CSV files.
-
-````{note}
-Streaming execution is in an experimental state and not all queries
-will run in streaming mode.
-````
 
 ## Single GPU streaming
 
@@ -21,11 +11,12 @@ The simplest case, requiring no additional dependencies, is the
 `synchronous` scheduler. An appropriate engine is:
 
 ```python
-engine = pl.GPUEngine(executor="streaming")
+engine = pl.GPUEngine()
 ```
 
 This uses the default synchronous *scheduler* and is equivalent to
-`pl.GPUEngine(executor="streaming", executor_options={"scheduler": "synchronous"})`.
+`pl.GPUEngine(executor="streaming", executor_options={"scheduler": "synchronous"})`,
+or simply passing `engine="gpu"` to `.collect()`.
 
 When executed with this engine, any parquet inputs are split into
 "partitions" that are streamed through the query graph. We try to
@@ -69,6 +60,10 @@ this fallback occurs or silence the warning instead:
 
 ## Multi GPU streaming
 
+```{note}
+The distributed scheduler is considered experimental and might change without warning.
+```
+
 Streaming utilising multiple GPUs simultaneously is supported by
 setting the `"scheduler"` to `"distributed"`:
 ```python
@@ -82,9 +77,9 @@ Unlike the single GPU executor, this does require a number of
 additional dependencies. We currently require
 [Dask](https://www.dask.org/) and
 [Dask-CUDA](https://docs.rapids.ai/api/dask-cuda/nightly/) to be
-installed. In addition, we recommend that
-[ucxx](https://github.com/rapidsai/ucxx) and
-[rapidsmpf](https://github.com/rapidsai/rapidsmpf) are installed to
+installed. In addition, we recommend that Dask Distributed plugin of
+[UCXX](https://github.com/rapidsai/ucxx) and
+[RapidsMPF](https://github.com/rapidsai/rapidsmpf) are installed to
 take advantage of any high-performance networking.
 
 To quickly install all of these dependencies into a conda environment,
@@ -92,7 +87,7 @@ you can run:
 
 ```
 conda install -c rapidsai -c conda-forge \
-    cudf-polars rapidsmpf dask-cuda ucxx
+    cudf-polars rapidsmpf dask-cuda distributed-ucxx
 ```
 
 
@@ -126,6 +121,17 @@ result = q.collect(engine=engine)
 If you request a `"distributed"` scheduler but do not have a cluster
 deployed, `collect`ing the query will fail.
 ````
+
+### Streaming sink operations
+
+When the `"distributed"` scheduler is active, sink operations like
+`df.sink_parquet("my_path")` will always produce a directory containing
+one or more files. It is not currently possible to disable this behavior.
+
+When the `"sycnhronous"` scheduler is active, sink operations will
+generate a single file by default. However, you may opt into the
+distributed sink behavior by adding `{"sink_to_directory": True}`
+to your `executor_options` dictionary.
 
 ## Get Started
 

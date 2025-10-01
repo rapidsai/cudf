@@ -89,11 +89,14 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   // Write list offsets and exit if the page does not need to be decoded
   if (not page_mask[page_idx]) {
-    auto& page      = pages[page_idx];
-    page.num_nulls  = page.num_rows;
-    page.num_valids = 0;
+    auto& page = pages[page_idx];
     // Update offsets for all list depth levels
     if (has_repetition) { update_list_offsets_for_pruned_pages<decode_block_size>(s); }
+
+    // Must be set after computing above list offsets
+    page.num_nulls = page.nesting[s->col.max_nesting_depth - 1].batch_size;
+    page.num_nulls -= has_repetition ? 0 : s->first_row;
+    page.num_valids = 0;
     return;
   }
 
@@ -104,6 +107,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   __shared__ level_t rep[rolling_buf_size];  // circular buffer of repetition level values
   __shared__ level_t def[rolling_buf_size];  // circular buffer of definition level values
+
+  // Capture initial valid_map_offset before any processing that might modify it
+  int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
 
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t skipped_leaf_values = s->page.skipped_leaf_values;
@@ -216,6 +222,16 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     }
     block.sync();
   }
+
+  // Zero-fill null positions after decoding valid values
+  int const leaf_level_index = s->col.max_nesting_depth - 1;
+  auto const& ni             = s->nesting_info[leaf_level_index];
+  if (ni.valid_map != nullptr) {
+    int const num_values = ni.valid_map_offset - init_valid_map_offset;
+    zero_fill_null_positions_shared<decode_block_size>(
+      s, s->dtype_len, init_valid_map_offset, num_values, static_cast<int>(block.thread_rank()));
+  }
+
   if (block.thread_rank() == 0 and s->error != 0) { set_error(s->error, error_code); }
 }
 
@@ -272,9 +288,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   // Write list offsets and exit if the page does not need to be decoded
   if (not page_mask[page_idx]) {
-    auto& page      = pages[page_idx];
-    page.num_nulls  = page.num_rows;
-    page.num_valids = 0;
+    auto& page = pages[page_idx];
 
     // Update offsets for all list depth levels
     if (has_repetition) { update_list_offsets_for_pruned_pages<decode_block_size>(s); }
@@ -288,11 +302,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
     if (dtype == Type::FIXED_LEN_BYTE_ARRAY or (dtype == Type::BYTE_ARRAY and not is_decimal)) {
       // Initial string offset
-      auto const initial_value = s->page.str_offset;
+      auto const initial_value = page.str_offset;
+
+      // We must use the batch size from the nesting info (the size of the page for this batch)
+      auto value_count = page.nesting[s->col.max_nesting_depth - 1].batch_size;
 
       // If no repetition we haven't calculated start/end bounds and instead just skipped
       // values until we reach first_row. account for that here.
-      auto value_count = s->page.num_input_values;
       if (not has_repetition) { value_count -= s->first_row; }
 
       auto& ni    = s->nesting_info[s->col.max_nesting_depth - 1];
@@ -303,10 +319,18 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         offptr[idx] = initial_value;
       }
     }
+
+    page.num_nulls = page.nesting[s->col.max_nesting_depth - 1].batch_size;
+    page.num_nulls -= has_repetition ? 0 : s->first_row;
+    page.num_valids = 0;
+
     return;
   }
 
   PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
+
+  // Capture initial valid_map_offset before any processing that might modify it
+  int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
 
   if (s->dict_base) {
     out_warp_id = (s->dict_bits > 0) ? 2 : 1;
@@ -447,7 +471,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
             // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
             // TIME_MILLIS is the only duration type stored as int32:
             // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
-            read_fixed_width_value_fast(s, sb, val_src_pos, static_cast<uint32_t*>(dst));
+            auto const dst_ptr = static_cast<uint32_t*>(dst);
+            read_fixed_width_value_fast(s, sb, val_src_pos, dst_ptr);
+            // zero out most significant bytes
+            cuda::std::memset(dst_ptr + 1, 0, sizeof(int32_t));
           } else if (s->ts_scale) {
             read_int64_timestamp(s, sb, val_src_pos, static_cast<int64_t*>(dst));
           } else {
@@ -464,6 +491,15 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     }
     __syncthreads();
   }
+
+  // Zero-fill null positions after decoding valid values
+  auto const& ni = s->nesting_info[s->col.max_nesting_depth - 1];
+  if (ni.valid_map != nullptr) {
+    int const num_values = ni.valid_map_offset - init_valid_map_offset;
+    zero_fill_null_positions_shared<decode_block_size>(
+      s, s->dtype_len, init_valid_map_offset, num_values, static_cast<int>(block.thread_rank()));
+  }
+
   if (block.thread_rank() == 0 and s->error != 0) { set_error(s->error, error_code); }
 }
 
@@ -473,8 +509,8 @@ struct mask_tform {
 
 }  // anonymous namespace
 
-uint32_t GetAggregatedDecodeKernelMask(cudf::detail::hostdevice_span<PageInfo const> pages,
-                                       rmm::cuda_stream_view stream)
+uint32_t get_aggregated_decode_kernel_mask(cudf::detail::hostdevice_span<PageInfo const> pages,
+                                           rmm::cuda_stream_view stream)
 {
   // determine which kernels to invoke
   auto mask_iter = thrust::make_transform_iterator(pages.device_begin(), mask_tform{});
@@ -539,9 +575,9 @@ void decode_split_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
   }
 }
 
-void WriteFinalOffsets(host_span<size_type const> offsets,
-                       host_span<size_type* const> buff_addrs,
-                       rmm::cuda_stream_view stream)
+void write_final_offsets(host_span<size_type const> offsets,
+                         host_span<size_type* const> buff_addrs,
+                         rmm::cuda_stream_view stream)
 {
   // Copy offsets to device and create an iterator
   auto d_src_data = cudf::detail::make_device_uvector_async(

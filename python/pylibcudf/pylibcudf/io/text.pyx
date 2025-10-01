@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
 from libc.stdint cimport uint64_t
@@ -7,6 +7,9 @@ from libcpp.string cimport string
 from libcpp.utility cimport move
 
 from pylibcudf.column cimport Column
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from pylibcudf.io.types cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.io cimport text as cpp_text
 
@@ -159,7 +162,9 @@ cpdef DataChunkSource make_source_from_bgzip_file(
 cpdef Column multibyte_split(
     DataChunkSource source,
     str delimiter,
-    ParseOptions options=None
+    ParseOptions options=None,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Splits the source text into a strings column using a multiple byte delimiter.
@@ -177,6 +182,9 @@ cpdef Column multibyte_split(
     options : ParseOptions
         The parsing options to use (including byte range).
 
+    stream : Stream, optional
+        CUDA stream for device memory operations and kernel launches
+
     Returns
     -------
     Column
@@ -186,6 +194,8 @@ cpdef Column multibyte_split(
     cdef unique_ptr[column] c_result
     cdef unique_ptr[data_chunk_source] c_source = move(source.c_source)
     cdef string c_delimiter = delimiter.encode()
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     if options is None:
         options = ParseOptions()
@@ -196,7 +206,9 @@ cpdef Column multibyte_split(
         c_result = cpp_text.multibyte_split(
             dereference(c_source),
             c_delimiter,
-            c_options
+            c_options,
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream, mr)

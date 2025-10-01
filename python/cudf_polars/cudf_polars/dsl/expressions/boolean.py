@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-# TODO: remove need for this
+# TODO: Document BooleanFunction to remove noqa
 # ruff: noqa: D101
 """Boolean DSL nodes."""
 
@@ -17,7 +17,6 @@ from cudf_polars.dsl.expressions.base import (
     ExecutionContext,
     Expr,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_128
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -39,6 +38,7 @@ class BooleanFunction(Expr):
         Any = auto()
         AnyHorizontal = auto()
         IsBetween = auto()
+        IsClose = auto()
         IsDuplicated = auto()
         IsFinite = auto()
         IsFirstDistinct = auto()
@@ -86,16 +86,12 @@ class BooleanFunction(Expr):
             BooleanFunction.Name.IsLastDistinct,
             BooleanFunction.Name.IsUnique,
         )
-        if (
-            POLARS_VERSION_LT_128
-            and self.name is BooleanFunction.Name.IsIn
-            and not all(
-                c.dtype.plc == self.children[0].dtype.plc for c in self.children
-            )
-        ):  # pragma: no cover
-            # TODO: If polars IR doesn't put the casts in, we need to
-            # mimic the supertype promotion rules.
-            raise NotImplementedError("IsIn doesn't support supertype casting")
+        if self.name in {
+            BooleanFunction.Name.IsClose,
+        }:
+            raise NotImplementedError(
+                f"Boolean function {self.name}"
+            )  # pragma: no cover
 
     @staticmethod
     def _distinct(
@@ -157,13 +153,18 @@ class BooleanFunction(Expr):
         ):
             # Avoid evaluating the child if the dtype tells us it's unnecessary.
             (child,) = self.children
-            is_finite = self.name is BooleanFunction.Name.IsFinite
-            if child.dtype.id() not in (plc.TypeId.FLOAT32, plc.TypeId.FLOAT64):
-                value = plc.Scalar.from_py(is_finite)
-                return Column(
-                    plc.Column.from_scalar(value, df.num_rows), dtype=self.dtype
-                )
             needles = child.evaluate(df, context=context)
+            is_float = needles.obj.type().id() in (
+                plc.TypeId.FLOAT32,
+                plc.TypeId.FLOAT64,
+            )
+            is_finite = self.name is BooleanFunction.Name.IsFinite
+            if not is_float:
+                base = plc.Column.from_scalar(
+                    plc.Scalar.from_py(py_val=is_finite), needles.size
+                )
+                out = base.with_mask(needles.obj.null_mask(), needles.null_count)
+                return Column(out, dtype=self.dtype)
             to_search = [-float("inf"), float("inf")]
             if is_finite:
                 # NaN is neither finite not infinite
@@ -175,7 +176,10 @@ class BooleanFunction(Expr):
             result = plc.search.contains(haystack, needles.obj)
             if is_finite:
                 result = plc.unary.unary_operation(result, plc.unary.UnaryOperator.NOT)
-            return Column(result, dtype=self.dtype)
+            return Column(
+                result.with_mask(needles.obj.null_mask(), needles.null_count),
+                dtype=self.dtype,
+            )
         columns = [child.evaluate(df, context=context) for child in self.children]
         # Kleene logic for Any (OR) and All (AND) if ignore_nulls is
         # False
@@ -184,7 +188,7 @@ class BooleanFunction(Expr):
             (column,) = columns
             is_any = self.name is BooleanFunction.Name.Any
             agg = plc.aggregation.any() if is_any else plc.aggregation.all()
-            result = plc.reduce.reduce(column.obj, agg, self.dtype.plc)
+            result = plc.reduce.reduce(column.obj, agg, self.dtype.plc_type)
             if not ignore_nulls and column.null_count > 0:
                 #      Truth tables
                 #     Any         All
@@ -210,30 +214,38 @@ class BooleanFunction(Expr):
         elif self.name is BooleanFunction.Name.IsNotNull:
             (column,) = columns
             return Column(plc.unary.is_valid(column.obj), dtype=self.dtype)
-        elif self.name is BooleanFunction.Name.IsNan:
+        elif self.name in (BooleanFunction.Name.IsNan, BooleanFunction.Name.IsNotNan):
             (column,) = columns
-            return Column(
-                plc.unary.is_nan(column.obj).with_mask(
-                    column.obj.null_mask(), column.null_count
-                ),
-                dtype=self.dtype,
+            is_float = column.obj.type().id() in (
+                plc.TypeId.FLOAT32,
+                plc.TypeId.FLOAT64,
             )
-        elif self.name is BooleanFunction.Name.IsNotNan:
-            (column,) = columns
-            return Column(
-                plc.unary.is_not_nan(column.obj).with_mask(
-                    column.obj.null_mask(), column.null_count
-                ),
-                dtype=self.dtype,
-            )
+            if is_float:
+                op = (
+                    plc.unary.is_nan
+                    if self.name is BooleanFunction.Name.IsNan
+                    else plc.unary.is_not_nan
+                )
+                base = op(column.obj)
+            else:
+                base = plc.Column.from_scalar(
+                    plc.Scalar.from_py(
+                        py_val=self.name is not BooleanFunction.Name.IsNan
+                    ),
+                    column.size,
+                )
+            out = base.with_mask(column.obj.null_mask(), column.null_count)
+            return Column(out, dtype=self.dtype)
         elif self.name is BooleanFunction.Name.IsFirstDistinct:
             (column,) = columns
             return self._distinct(
                 column,
                 dtype=self.dtype,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
-                source_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype.plc),
-                target_value=plc.Scalar.from_py(py_val=False, dtype=self.dtype.plc),
+                source_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype.plc_type),
+                target_value=plc.Scalar.from_py(
+                    py_val=False, dtype=self.dtype.plc_type
+                ),
             )
         elif self.name is BooleanFunction.Name.IsLastDistinct:
             (column,) = columns
@@ -241,8 +253,10 @@ class BooleanFunction(Expr):
                 column,
                 dtype=self.dtype,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
-                source_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype.plc),
-                target_value=plc.Scalar.from_py(py_val=False, dtype=self.dtype.plc),
+                source_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype.plc_type),
+                target_value=plc.Scalar.from_py(
+                    py_val=False, dtype=self.dtype.plc_type
+                ),
             )
         elif self.name is BooleanFunction.Name.IsUnique:
             (column,) = columns
@@ -250,8 +264,10 @@ class BooleanFunction(Expr):
                 column,
                 dtype=self.dtype,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_NONE,
-                source_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype.plc),
-                target_value=plc.Scalar.from_py(py_val=False, dtype=self.dtype.plc),
+                source_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype.plc_type),
+                target_value=plc.Scalar.from_py(
+                    py_val=False, dtype=self.dtype.plc_type
+                ),
             )
         elif self.name is BooleanFunction.Name.IsDuplicated:
             (column,) = columns
@@ -259,8 +275,10 @@ class BooleanFunction(Expr):
                 column,
                 dtype=self.dtype,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_NONE,
-                source_value=plc.Scalar.from_py(py_val=False, dtype=self.dtype.plc),
-                target_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype.plc),
+                source_value=plc.Scalar.from_py(
+                    py_val=False, dtype=self.dtype.plc_type
+                ),
+                target_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype.plc_type),
             )
         elif self.name is BooleanFunction.Name.AllHorizontal:
             return Column(
@@ -268,7 +286,7 @@ class BooleanFunction(Expr):
                     partial(
                         plc.binaryop.binary_operation,
                         op=plc.binaryop.BinaryOperator.NULL_LOGICAL_AND,
-                        output_type=self.dtype.plc,
+                        output_type=self.dtype.plc_type,
                     ),
                     (c.obj for c in columns),
                 ),
@@ -280,7 +298,7 @@ class BooleanFunction(Expr):
                     partial(
                         plc.binaryop.binary_operation,
                         op=plc.binaryop.BinaryOperator.NULL_LOGICAL_OR,
-                        output_type=self.dtype.plc,
+                        output_type=self.dtype.plc_type,
                     ),
                     (c.obj for c in columns),
                 ),
@@ -294,7 +312,7 @@ class BooleanFunction(Expr):
                 # which always has an inner attribute.
                 haystack = Column(
                     haystack.obj.children()[1],
-                    dtype=DataType(haystack.dtype.polars.inner),  # type: ignore[attr-defined]
+                    dtype=DataType(haystack.dtype.polars_type.inner),  # type: ignore[attr-defined]
                 ).astype(needles.dtype)
             if haystack.size:
                 return Column(

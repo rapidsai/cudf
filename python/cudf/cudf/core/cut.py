@@ -9,7 +9,6 @@ import pandas as pd
 import cudf
 from cudf.api.types import is_list_like
 from cudf.core.column import as_column
-from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.core.index import IntervalIndex, interval_range
 
 
@@ -168,6 +167,10 @@ def cut(
             else:
                 mn = min(x)
                 mx = max(x)
+            if mn == mx:
+                raise NotImplementedError(
+                    "cut on homogeneous data is not supported."
+                )
             bins = np.linspace(mn, mx, bins + 1, endpoint=True)
             adj = (mx - mn) * 0.001
             if right:
@@ -286,21 +289,11 @@ def cut(
             # should allow duplicate categories.
             return interval_labels[index_labels]
 
-    index_labels = as_unsigned_codes(len(interval_labels), index_labels)  # type: ignore[arg-type]
-
-    col = CategoricalColumn(
-        data=None,
-        size=index_labels.size,
-        dtype=cudf.CategoricalDtype(
-            categories=interval_labels, ordered=ordered
-        ),
-        mask=index_labels.base_mask,
-        offset=index_labels.offset,
-        children=(index_labels,),
+    categorical_index = cudf.CategoricalIndex.from_codes(
+        categories=interval_labels,
+        codes=index_labels,
+        ordered=ordered,
     )
-
-    # we return a categorical index, as we don't have a Categorical method
-    categorical_index = cudf.CategoricalIndex._from_column(col)
 
     if isinstance(orig_x, (pd.Series, cudf.Series)):
         # if we have a series input we return a series output

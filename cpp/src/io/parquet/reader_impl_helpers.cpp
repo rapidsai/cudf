@@ -465,7 +465,7 @@ std::vector<size_type> aggregate_reader_metadata::get_num_row_groups_per_file() 
 
 // Copies info from the column and offset indexes into the passed in row_group_info.
 void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_info,
-                                                          size_type chunk_start_row) const
+                                                          size_t chunk_start_row) const
 {
   auto const& fmd = per_file_metadata[rg_info.source_index];
   auto const& rg  = fmd.row_groups[rg_info.index];
@@ -537,8 +537,8 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
                              ? rg.num_rows
                              : offset_index.page_locations[pg_idx + 1].first_row_index);
 
-      auto const num_rows = pg_end_row - pg_start_row;
-      page_info pg_info{page_loc, num_rows};
+      auto const num_rows = static_cast<int64_t>(pg_end_row - pg_start_row);
+      page_info pg_info{.location = page_loc, .num_rows = num_rows};
 
       // check to see if we already have null counts for each page
       if (column_index.null_counts.has_value()) {
@@ -1136,8 +1136,8 @@ std::vector<std::string> aggregate_reader_metadata::get_pandas_index_names() con
 
 std::tuple<int64_t,
            std::vector<std::vector<size_type>>,
-           std::vector<std::vector<size_type>>,
-           std::vector<std::vector<size_type>>>
+           std::vector<std::vector<size_t>>,
+           std::vector<std::vector<size_t>>>
 aggregate_reader_metadata::apply_row_bounds_filter(
   host_span<std::vector<size_type> const> input_row_group_indices,
   int64_t rows_to_skip,
@@ -1146,62 +1146,63 @@ aggregate_reader_metadata::apply_row_bounds_filter(
   auto const num_sources = input_row_group_indices.size();
 
   auto filtered_row_group_indices = std::vector<std::vector<size_type>>(num_sources);
-  auto row_group_row_counts       = std::vector<std::vector<size_type>>{};
+  auto row_group_row_counts       = std::vector<std::vector<size_t>>{};
   row_group_row_counts.reserve(num_sources);
-  auto row_group_row_offsets = std::vector<std::vector<size_type>>{};
+  auto row_group_row_offsets = std::vector<std::vector<size_t>>{};
   row_group_row_offsets.reserve(num_sources);
 
-  size_type current_row_index = 0;
+  size_t current_row_index = 0;
 
   // Rows to skip relative to the row offset of the first surviving row group index
   int64_t first_row_group_relative_rows_to_skip = 0;
 
   // For each data source
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(num_sources),
-                [&](auto const& src_idx) {
-                  auto const& file_metadata = per_file_metadata[src_idx];
-                  auto const num_row_groups = input_row_group_indices[src_idx].size();
+  std::for_each(
+    thrust::counting_iterator<size_t>(0),
+    thrust::counting_iterator(num_sources),
+    [&](auto const& src_idx) {
+      auto const& file_metadata = per_file_metadata[src_idx];
+      auto const num_row_groups = input_row_group_indices[src_idx].size();
 
-                  // Fill row group rows counts and row offsets with zeros
-                  row_group_row_counts.emplace_back(num_row_groups, size_type{0});
-                  row_group_row_offsets.emplace_back(num_row_groups, current_row_index);
+      // Fill row group rows counts and row offsets with zeros
+      row_group_row_counts.emplace_back(num_row_groups, size_type{0});
+      row_group_row_offsets.emplace_back(num_row_groups, current_row_index);
 
-                  // Return early if we have reached the maximum number of rows
-                  if (current_row_index >= rows_to_skip + rows_to_read) { return; }
+      // Return early if we have reached the maximum number of rows
+      if (std::cmp_greater_equal(current_row_index, rows_to_skip + rows_to_read)) { return; }
 
-                  // For each row group in this data source
-                  std::for_each(
-                    input_row_group_indices[src_idx].begin(),
-                    input_row_group_indices[src_idx].end(),
-                    [&](auto const& rg_idx) {
-                      // Return early if we have reached the maximum number of rows to read
-                      if (current_row_index >= rows_to_skip + rows_to_read) { return; }
+      // For each row group in this data source
+      std::for_each(
+        input_row_group_indices[src_idx].begin(),
+        input_row_group_indices[src_idx].end(),
+        [&](auto const& rg_idx) {
+          // Return early if we have reached the maximum number of rows to read
+          if (std::cmp_greater_equal(current_row_index, rows_to_skip + rows_to_read)) { return; }
 
-                      auto const& rg             = file_metadata.row_groups[rg_idx];
-                      auto const chunk_start_row = current_row_index;
-                      current_row_index += rg.num_rows;
-                      row_group_row_offsets[src_idx][rg_idx] = chunk_start_row;
-                      if (current_row_index > rows_to_skip or current_row_index == 0) {
-                        // Check if this is the first surviving row group
-                        if (chunk_start_row <= rows_to_skip) {
-                          // Set the relative number of rows to skip relative to this row group's
-                          // offset
-                          first_row_group_relative_rows_to_skip = rows_to_skip - chunk_start_row;
-                          row_group_row_counts[src_idx][rg_idx] = current_row_index - rows_to_skip;
-                        } else {
-                          row_group_row_counts[src_idx][rg_idx] = rg.num_rows;
-                        }
+          auto const& rg             = file_metadata.row_groups[rg_idx];
+          auto const chunk_start_row = current_row_index;
+          current_row_index += rg.num_rows;
+          row_group_row_offsets[src_idx][rg_idx] = chunk_start_row;
+          if (std::cmp_greater(current_row_index, rows_to_skip) or current_row_index == 0) {
+            // Check if this is the first surviving row group
+            if (std::cmp_less_equal(chunk_start_row, rows_to_skip)) {
+              // Set the relative number of rows to skip relative to this row group's
+              // offset
+              first_row_group_relative_rows_to_skip = rows_to_skip - chunk_start_row;
+              row_group_row_counts[src_idx][rg_idx] = current_row_index - rows_to_skip;
+            } else {
+              row_group_row_counts[src_idx][rg_idx] = rg.num_rows;
+            }
 
-                        filtered_row_group_indices[src_idx].emplace_back(rg_idx);
-                      }
-                      // Adjust the number of rows for the last source file.
-                      if (current_row_index >= rows_to_skip + rows_to_read) {
-                        row_group_row_counts[src_idx][rg_idx] -=
-                          current_row_index - rows_to_skip - rows_to_read;
-                      }
-                    });
-                });
+            filtered_row_group_indices[src_idx].emplace_back(rg_idx);
+          }
+          // Adjust the number of rows for the last source file.
+          if (std::cmp_greater_equal(current_row_index, rows_to_skip + rows_to_read)) {
+            row_group_row_counts[src_idx][rg_idx] -=
+              current_row_index - rows_to_skip - rows_to_read;
+          }
+        });
+    });
 
   return std::tuple{first_row_group_relative_rows_to_skip,
                     std::move(filtered_row_group_indices),
@@ -1209,8 +1210,54 @@ aggregate_reader_metadata::apply_row_bounds_filter(
                     std::move(row_group_row_offsets)};
 }
 
+std::vector<std::vector<size_type>> aggregate_reader_metadata::apply_byte_bounds_filter(
+  host_span<std::vector<size_type> const> input_row_group_indices,
+  size_t bytes_to_skip,
+  std::optional<size_t> const& bytes_to_read) const
+{
+  CUDF_EXPECTS(input_row_group_indices.size() == 1,
+               "Byte bounds filter can only be applied to a single source",
+               std::invalid_argument);
+
+  auto filtered_row_group_indices =
+    std::vector<std::vector<size_type>>(input_row_group_indices.size());
+
+  std::for_each(
+    input_row_group_indices.front().begin(),
+    input_row_group_indices.front().end(),
+    [&](auto const& rg_idx) {
+      // Get the file offset of this row group
+      auto const row_group_file_offset = [&]() {
+        auto const& rg = per_file_metadata.front().row_groups[rg_idx];
+        if (rg.file_offset.has_value()) {
+          return rg.file_offset.value();
+        } else if (rg.columns.front().file_offset != 0) {
+          return rg.columns.front().file_offset;
+        } else {
+          auto const& col_meta = rg.columns.front().meta_data;
+          return col_meta.dictionary_page_offset != 0
+                   ? std::min(col_meta.dictionary_page_offset, col_meta.data_page_offset)
+                   : col_meta.data_page_offset;
+        }
+      }();
+
+      // Check if the row group starts within the byte range: row group file offset is >=
+      // bytes_to_skip AND (bytes_to_read is not specified OR the max byte offset overflows
+      // size_t OR row group file offset is < bytes_to_skip + bytes_to_read)
+      auto const is_within_byte_range =
+        std::cmp_greater_equal(row_group_file_offset, bytes_to_skip) and
+        (not bytes_to_read.has_value() or
+         (std::numeric_limits<size_t>::max() - bytes_to_read.value() <= bytes_to_skip) or
+         std::cmp_less(row_group_file_offset, bytes_to_skip + bytes_to_read.value()));
+
+      if (is_within_byte_range) { filtered_row_group_indices.front().emplace_back(rg_idx); }
+    });
+
+  return filtered_row_group_indices;
+}
+
 std::tuple<int64_t,
-           size_type,
+           size_t,
            std::vector<row_group_info>,
            std::vector<size_t>,
            size_type,
@@ -1219,7 +1266,9 @@ aggregate_reader_metadata::select_row_groups(
   host_span<std::unique_ptr<datasource> const> sources,
   host_span<std::vector<size_type> const> row_group_indices,
   int64_t skip_rows_opt,
-  std::optional<size_type> const& num_rows_opt,
+  std::optional<int64_t> const& num_rows_opt,
+  size_t skip_bytes_opt,
+  std::optional<size_t> const& byte_count_opt,
   host_span<data_type const> output_dtypes,
   host_span<int const> output_column_schemas,
   std::optional<std::reference_wrapper<ast::expression const>> filter,
@@ -1235,13 +1284,10 @@ aggregate_reader_metadata::select_row_groups(
 
   // Compute the row bounds if no row group indices are provided, else return zeros
   auto [rows_to_skip, rows_to_read] = [&]() {
-    if (not row_group_indices.empty()) { return std::pair<int64_t, size_type>{}; }
+    if (not row_group_indices.empty()) { return std::pair<int64_t, size_t>{}; }
     auto const from_opts =
       cudf::io::detail::skip_rows_num_rows_from_options(skip_rows_opt, num_rows_opt, max_num_rows);
-    CUDF_EXPECTS(std::cmp_less_equal(from_opts.second, std::numeric_limits<size_type>::max()),
-                 "Number of reading rows exceeds cudf's column size limit.");
-    return std::pair{static_cast<int64_t>(from_opts.first),
-                     static_cast<size_type>(from_opts.second)};
+    return std::pair{static_cast<int64_t>(from_opts.first), static_cast<size_t>(from_opts.second)};
   }();
 
   // If there are no input row groups specified and zero number of rows to read, return empty
@@ -1294,15 +1340,15 @@ aggregate_reader_metadata::select_row_groups(
                                              : compute_total_row_groups(current_row_group_indices);
 
   // Flag to check if the row groups will be filtered using row bounds
-  bool const is_trimmed_row_groups =
-    row_group_indices.empty() and (rows_to_skip > 0 or rows_to_read < max_num_rows);
+  bool const is_row_bounded_row_groups =
+    row_group_indices.empty() and (rows_to_skip > 0 or std::cmp_less(rows_to_read, max_num_rows));
 
   // Use row bounds to filter row group indices if possible
   std::vector<std::vector<size_type>> trimmed_row_group_indices;
-  std::vector<std::vector<size_type>> row_group_row_counts;
-  std::vector<std::vector<size_type>> row_group_row_offsets;
+  std::vector<std::vector<size_t>> row_group_row_counts;
+  std::vector<std::vector<size_t>> row_group_row_offsets;
 
-  if (is_trimmed_row_groups) {
+  if (is_row_bounded_row_groups) {
     std::tie(first_row_group_relative_rows_to_skip,
              trimmed_row_group_indices,
              row_group_row_counts,
@@ -1313,10 +1359,30 @@ aggregate_reader_metadata::select_row_groups(
     current_row_group_indices = host_span<std::vector<size_type> const>(trimmed_row_group_indices);
   }
 
-  // Compute number of input row groups after row bounds filter
-  auto const total_row_bounds_filtered_row_groups =
-    is_trimmed_row_groups ? compute_total_row_groups(current_row_group_indices)
-                          : total_input_row_groups;
+  // Flag to check if the row groups will be filtered using byte bounds
+  bool const is_byte_bounded_row_groups = row_group_indices.empty() and
+
+                                          (skip_bytes_opt > 0 or byte_count_opt.has_value());
+
+  // We can't filter with both row bounds and byte bounds
+  CUDF_EXPECTS(not(is_row_bounded_row_groups and is_byte_bounded_row_groups),
+               "Byte bounds filter can only be applied to a single source",
+               std::invalid_argument);
+
+  if (is_byte_bounded_row_groups) {
+    // Byte bounds don't skip rows within row groups
+    first_row_group_relative_rows_to_skip = 0;
+    trimmed_row_group_indices =
+      apply_byte_bounds_filter(current_row_group_indices, skip_bytes_opt, byte_count_opt);
+
+    // Update the current span of row group indices
+    current_row_group_indices = host_span<std::vector<size_type> const>(trimmed_row_group_indices);
+  }
+
+  // Compute number of input row groups after row or byte bounds trimming
+  auto const total_trimmed_row_groups = (is_row_bounded_row_groups or is_byte_bounded_row_groups)
+                                          ? compute_total_row_groups(current_row_group_indices)
+                                          : total_input_row_groups;
 
   // Struct to store the number of row groups after filtering using stats and bloom filters
   surviving_row_group_metrics num_row_groups_after_filters{};
@@ -1328,7 +1394,7 @@ aggregate_reader_metadata::select_row_groups(
     std::tie(filtered_row_group_indices, num_row_groups_after_filters) =
       filter_row_groups(sources,
                         current_row_group_indices,
-                        total_row_bounds_filtered_row_groups,
+                        total_trimmed_row_groups,
                         output_dtypes,
                         output_column_schemas,
                         filter.value(),
@@ -1343,7 +1409,7 @@ aggregate_reader_metadata::select_row_groups(
 
       // Only need to update the rows to skip relative to the first surviving row group
       // if row bounds were previously applied
-      if (is_trimmed_row_groups) {
+      if (is_row_bounded_row_groups) {
         // Find the source index of the first non-empty row group
         auto const first_non_empty_source_idx =
           std::distance(current_row_group_indices.begin(),
@@ -1373,61 +1439,61 @@ aggregate_reader_metadata::select_row_groups(
   std::vector<size_t> num_rows_per_source(per_file_metadata.size(), 0);
 
   // Track the starting row index of the current row group
-  size_type current_row_index = 0;
+  size_t current_row_index = 0;
 
   // Track the number of rows read so far (may be different from the current row index if row bounds
   // were applied)
-  size_type total_selected_rows = 0;
+  size_t total_selected_rows = 0;
 
   // For each data source
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(current_row_group_indices.size()),
-                [&](auto const& src_idx) {
-                  auto const& file_metadata = per_file_metadata[src_idx];
+  std::for_each(
+    thrust::counting_iterator<size_t>(0),
+    thrust::counting_iterator(current_row_group_indices.size()),
+    [&](auto const& src_idx) {
+      auto const& file_metadata = per_file_metadata[src_idx];
 
-                  // For each row group in this data source
-                  std::for_each(
-                    current_row_group_indices[src_idx].begin(),
-                    current_row_group_indices[src_idx].end(),
-                    [&](auto const& rg_idx) {
-                      // Validate the row group index
-                      CUDF_EXPECTS(
-                        rg_idx >= 0 and std::cmp_less(rg_idx, file_metadata.row_groups.size()),
-                        "Invalid row group index",
-                        std::invalid_argument);
+      // For each row group in this data source
+      std::for_each(
+        current_row_group_indices[src_idx].begin(),
+        current_row_group_indices[src_idx].end(),
+        [&](auto const& rg_idx) {
+          // Validate the row group index
+          CUDF_EXPECTS(rg_idx >= 0 and std::cmp_less(rg_idx, file_metadata.row_groups.size()),
+                       "Invalid row group index",
+                       std::invalid_argument);
 
-                      // Get the row group
-                      auto const& rg = file_metadata.row_groups[rg_idx];
+          // Get the row group
+          auto const& rg = file_metadata.row_groups[rg_idx];
 
-                      // Use the effective start index of this row group if row bounds filter was
-                      // applied, else use the unadjusted start index
-                      auto const row_group_start_row = current_row_index;
+          // Use the effective start index of this row group if row bounds filter was
+          // applied, else use the unadjusted start index
+          auto const row_group_start_row = current_row_index;
 
-                      // Update the starting row index of the next row group
-                      current_row_index += rg.num_rows;
+          // Update the starting row index of the next row group
+          current_row_index += rg.num_rows;
 
-                      // Get the number of rows in this row group
-                      auto const num_rows_this_row_group =
-                        is_trimmed_row_groups ? row_group_row_counts[src_idx][rg_idx] : rg.num_rows;
+          // Get the number of rows in this row group
+          auto const num_rows_this_row_group =
+            is_row_bounded_row_groups ? row_group_row_counts[src_idx][rg_idx] : rg.num_rows;
 
-                      // Update the total number of rows selected
-                      total_selected_rows += num_rows_this_row_group;
+          // Update the total number of rows selected
+          total_selected_rows += num_rows_this_row_group;
 
-                      // Update the number of rows read from this data source
-                      num_rows_per_source[src_idx] += num_rows_this_row_group;
+          // Update the number of rows read from this data source
+          num_rows_per_source[src_idx] += num_rows_this_row_group;
 
-                      // We need the unadjusted start index of this row group to correctly
-                      // initialize ColumnChunkDesc for this row group in
-                      // create_global_chunk_info() and calculate the row offset for the first
-                      // pass in compute_input_passes().
-                      selection.emplace_back(rg_idx, row_group_start_row, src_idx);
+          // We need the unadjusted start index of this row group to correctly
+          // initialize ColumnChunkDesc for this row group in
+          // create_global_chunk_info() and calculate the row offset for the first
+          // pass in compute_input_passes().
+          selection.emplace_back(rg_idx, row_group_start_row, src_idx);
 
-                      // If page-level indexes are present, then collect extra chunk and page
-                      // info. The page indexes rely on absolute row numbers - not adjusted for
-                      // skip_rows.
-                      column_info_for_row_group(selection.back(), row_group_start_row);
-                    });
-                });
+          // If page-level indexes are present, then collect extra chunk and page
+          // info. The page indexes rely on absolute row numbers - not adjusted for
+          // skip_rows.
+          column_info_for_row_group(selection.back(), row_group_start_row);
+        });
+    });
 
   // Set rows_to_read to the total number of rows selected and rows_to_skip to the number of rows
   // to skip relative to the first surviving row group
@@ -1438,7 +1504,7 @@ aggregate_reader_metadata::select_row_groups(
           rows_to_read,
           std::move(selection),
           std::move(num_rows_per_source),
-          total_row_bounds_filtered_row_groups,
+          total_trimmed_row_groups,
           std::move(num_row_groups_after_filters)};
 }
 

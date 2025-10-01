@@ -9,7 +9,7 @@ from numba.np import numpy_support
 import pylibcudf as plc
 
 from cudf.api.types import is_scalar
-from cudf.utils import cudautils
+from cudf.core.udf.utils import compile_udf
 from cudf.utils.dtypes import SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
 
 if TYPE_CHECKING:
@@ -233,7 +233,7 @@ class Aggregation:
         # Handling UDF type
         nb_type = numpy_support.from_dtype(kwargs["dtype"])
         type_signature = (nb_type[:],)
-        ptx_code, output_dtype = cudautils.compile_udf(op, type_signature)
+        ptx_code, output_dtype = compile_udf(op, type_signature)
         output_np_dtype = np.dtype(output_dtype)
         if output_np_dtype not in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
             raise TypeError(

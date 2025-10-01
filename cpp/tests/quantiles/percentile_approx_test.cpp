@@ -31,13 +31,17 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <arrow/util/tdigest.h>
+#include <arrow/api.h>
+#include <arrow/compute/api.h>
+#include <arrow/compute/initialize.h>
 
 namespace {
 std::unique_ptr<cudf::column> arrow_percentile_approx(cudf::column_view const& _values,
                                                       int delta,
                                                       std::vector<double> const& percentages)
 {
+  static auto const _arrow_init_status = arrow::compute::Initialize();
+  EXPECT_TRUE(_arrow_init_status.ok());
   // sort the incoming values using the same settings that groupby does.
   // this is a little weak because null_order::AFTER is hardcoded internally to groupby.
   cudf::table_view t({_values});
@@ -59,17 +63,28 @@ std::unique_ptr<cudf::column> arrow_percentile_approx(cudf::column_view const& _
   }
 
   // generate the tdigest
-  arrow::internal::TDigest atd(delta, sorted_values.size() * 2);
+  arrow::DoubleBuilder builder;
   for (size_t idx = 0; idx < h_values.size(); idx++) {
-    if (sorted_values.null_mask() == nullptr || h_validity[idx]) { atd.Add(h_values[idx]); }
+    if (sorted_values.null_mask() == nullptr || h_validity[idx]) {
+      EXPECT_TRUE(builder.Append(h_values[idx]).ok());
+    }
   }
+  std::shared_ptr<arrow::Array> array;
+  EXPECT_TRUE(builder.Finish(&array).ok());
 
-  // generate the percentiles and stuff them into a list column
+  auto const udelta = static_cast<uint32_t>(delta);
+  auto const usize  = static_cast<uint32_t>(h_values.size()) * 2;
+  arrow::compute::TDigestOptions options{percentages, udelta, usize};
+
+  auto arrow_result = arrow::compute::CallFunction("tdigest", {array}, &options);
+  auto result_array = arrow_result.ValueOrDie().array_as<arrow::DoubleArray>();
+
+  // copy the percentiles and stuff them into a list column
   std::vector<double> h_result;
   h_result.reserve(percentages.size());
   std::transform(
-    percentages.begin(), percentages.end(), std::back_inserter(h_result), [&atd](double p) {
-      return atd.Quantile(p);
+    result_array->begin(), result_array->end(), std::back_inserter(h_result), [](auto p) {
+      return p.value();
     });
   cudf::test::fixed_width_column_wrapper<double> result(h_result.begin(), h_result.end());
   cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets{

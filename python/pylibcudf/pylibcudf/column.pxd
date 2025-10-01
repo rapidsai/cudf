@@ -6,6 +6,7 @@ from libc.stdint cimport uint64_t
 
 from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport (
     column_view,
@@ -56,7 +57,11 @@ cdef class Column:
     cdef mutable_column_view mutable_view(self) nogil
 
     @staticmethod
-    cdef Column from_libcudf(unique_ptr[column] libcudf_col, Stream stream=*)
+    cdef Column from_libcudf(
+        unique_ptr[column] libcudf_col,
+        Stream stream,
+        DeviceMemoryResource mr=*
+    )
 
     @staticmethod
     cdef Column from_column_view(const column_view& cv, Column owner)
@@ -72,7 +77,7 @@ cdef class Column:
         Column base=*,
     )
 
-    cpdef Scalar to_scalar(self)
+    cpdef Scalar to_scalar(self, Stream stream=*, DeviceMemoryResource mr=*)
     cpdef DataType type(self)
     cpdef Column child(self, size_type index)
     cpdef size_type num_children(self)
@@ -82,7 +87,7 @@ cdef class Column:
     cpdef gpumemoryview data(self)
     cpdef gpumemoryview null_mask(self)
     cpdef list children(self)
-    cpdef Column copy(self)
+    cpdef Column copy(self, Stream stream=*, DeviceMemoryResource mr=*)
     cpdef uint64_t device_buffer_size(self)
     cpdef Column with_mask(self, gpumemoryview, size_type)
 

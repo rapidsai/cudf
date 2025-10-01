@@ -20,6 +20,8 @@ import pandas as pd
 import cudf
 from cudf.api.types import infer_dtype, is_scalar
 from cudf.core import column
+from cudf.errors import MixedTypeError
+from cudf.utils.dtypes import is_mixed_with_object_dtype
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -251,7 +253,9 @@ class ColumnAccessor(MutableMapping):
         return the underlying mapping as a nested mapping.
         """
         if self.multiindex:
-            return _NestedGetItemDict.from_zip(zip(self.names, self.columns))
+            return _NestedGetItemDict.from_zip(
+                zip(self.names, self.columns, strict=True)
+            )
         else:
             return self._data
 
@@ -357,22 +361,33 @@ class ColumnAccessor(MutableMapping):
         elif old_ncols > 0 and len(value) != self.nrows:
             raise ValueError("All columns must be of equal length")
 
+        if cudf.get_option("mode.pandas_compatible"):
+            try:
+                pd_idx1 = pd.Index(
+                    [*list(self.names), name], dtype=self.label_dtype
+                )
+                pd_idx2 = pd.Index([*list(self.names), name])
+                if (
+                    pd_idx1.dtype != pd_idx2.dtype
+                    and is_mixed_with_object_dtype(pd_idx1, pd_idx2)
+                    and pd_idx1.inferred_type != pd_idx2.inferred_type
+                ):
+                    raise MixedTypeError(
+                        "Cannot insert column with mixed types when label_dtype is set"
+                    )
+            except Exception as e:
+                raise e
+        else:
+            self.label_dtype = None
         # TODO: we should move all insert logic here
         if loc == old_ncols:
             self._data[name] = value
         else:
             new_keys = self.names[:loc] + (name,) + self.names[loc:]
             new_values = self.columns[:loc] + (value,) + self.columns[loc:]
-            self._data = dict(zip(new_keys, new_values))
+            self._data = dict(zip(new_keys, new_values, strict=True))
         self._clear_cache(old_ncols, old_ncols + 1)
         # The type(name) may no longer match the prior label_dtype
-        if cudf.get_option("mode.pandas_compatible"):
-            try:
-                pd.Index([*list(self.names), name], dtype=self.label_dtype)
-            except Exception:
-                self.label_dtype = None
-        else:
-            self.label_dtype = None
 
     def copy(self, deep: bool = False) -> Self:
         """
@@ -445,7 +460,9 @@ class ColumnAccessor(MutableMapping):
                     "Cannot use Series object for mask iloc indexing"
                 )
             # TODO: Doesn't handle on-device columns
-            return tuple(n for n, keep in zip(self.names, index) if keep)
+            return tuple(
+                n for n, keep in zip(self.names, index, strict=True) if keep
+            )
         else:
             if len(set(index)) != len(index):  # type: ignore[arg-type]
                 raise NotImplementedError(
@@ -556,7 +573,9 @@ class ColumnAccessor(MutableMapping):
                 )
             data = dict(
                 item
-                for item, keep in zip(self._grouped_data.items(), key)
+                for item, keep in zip(
+                    self._grouped_data.items(), key, strict=True
+                )
                 if keep
             )
         else:
@@ -730,7 +749,7 @@ class ColumnAccessor(MutableMapping):
             if not all(isinstance(label, old_type) for label in new_col_names):
                 label_dtype = None
 
-        data = dict(zip(new_col_names, self.values()))
+        data = dict(zip(new_col_names, self.values(), strict=True))
         return type(self)(
             data=data,
             level_names=self.level_names,

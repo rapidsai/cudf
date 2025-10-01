@@ -1,10 +1,12 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from libc.stdint cimport uint64_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
+from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.memory_resource cimport device_memory_resource
 
 
 cdef extern from "cudf/io/text/byte_range_info.hpp" \
@@ -56,5 +58,14 @@ cdef extern from "cudf/io/text/multibyte_split.hpp" \
     unique_ptr[column] multibyte_split(
         data_chunk_source source,
         string delimiter,
-        parse_options options
+        parse_options options,
+        cuda_stream_view stream
+    ) except +libcudf_exception_handler
+
+    unique_ptr[column] multibyte_split(
+        data_chunk_source source,
+        string delimiter,
+        parse_options options,
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler

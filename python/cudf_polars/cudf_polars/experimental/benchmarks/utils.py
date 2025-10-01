@@ -12,10 +12,11 @@ import json
 import os
 import statistics
 import sys
+import textwrap
 import time
+import traceback
 from collections import defaultdict
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, assert_never
 
 import nvtx
@@ -32,6 +33,7 @@ try:
     from cudf_polars.experimental.explain import explain_query
     from cudf_polars.experimental.parallel import evaluate_streaming
     from cudf_polars.testing.asserts import assert_gpu_result_equal
+    from cudf_polars.utils.config import ConfigOptions
 
     CUDF_POLARS_AVAILABLE = True
 except ImportError:
@@ -39,6 +41,7 @@ except ImportError:
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
+    from pathlib import Path
 
 
 ExecutorType = Literal["in-memory", "streaming", "cpu"]
@@ -50,16 +53,25 @@ class Record:
 
     query: int
     duration: float
+    shuffle_stats: dict[str, dict[str, int | float]] | None = None
+
+
+@dataclasses.dataclass
+class VersionInfo:
+    """Information about the commit of the software used to run the query."""
+
+    version: str
+    commit: str
 
 
 @dataclasses.dataclass
 class PackageVersions:
     """Information about the versions of the software used to run the query."""
 
-    cudf_polars: str
+    cudf_polars: str | VersionInfo
     polars: str
     python: str
-    rapidsmpf: str | None
+    rapidsmpf: str | VersionInfo | None
 
     @classmethod
     def collect(cls) -> PackageVersions:
@@ -69,15 +81,24 @@ class PackageVersions:
             "polars",
             "rapidsmpf",
         ]
-        versions = {}
+        versions: dict[str, str | VersionInfo | None] = {}
         for name in packages:
             try:
                 package = importlib.import_module(name)
-                versions[name] = package.__version__
             except (AttributeError, ImportError):  # noqa: PERF203
                 versions[name] = None
+            else:
+                if name in ("cudf_polars", "rapidsmpf"):
+                    versions[name] = VersionInfo(
+                        version=package.__version__,
+                        commit=package.__git_commit__,
+                    )
+                else:
+                    versions[name] = package.__version__
+
         versions["python"] = ".".join(str(v) for v in sys.version_info[:3])
-        return cls(**versions)
+        # we manually ensure that only cudf-polars and rapidsmpf have a VersionInfo
+        return cls(**versions)  # type: ignore[arg-type]
 
 
 @dataclasses.dataclass
@@ -86,23 +107,35 @@ class GPUInfo:
 
     name: str
     index: int
-    free_memory: int
-    used_memory: int
-    total_memory: int
+    free_memory: int | None
+    used_memory: int | None
+    total_memory: int | None
 
     @classmethod
     def from_index(cls, index: int) -> GPUInfo:
         """Create a GPUInfo from an index."""
         pynvml.nvmlInit()
         handle = pynvml.nvmlDeviceGetHandleByIndex(index)
-        memory = pynvml.nvmlDeviceGetMemoryInfo(handle)
-        return cls(
-            name=pynvml.nvmlDeviceGetName(handle),
-            index=index,
-            free_memory=memory.free,
-            used_memory=memory.used,
-            total_memory=memory.total,
-        )
+        try:
+            memory = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            return cls(
+                name=pynvml.nvmlDeviceGetName(handle),
+                index=index,
+                free_memory=memory.free,
+                used_memory=memory.used,
+                total_memory=memory.total,
+            )
+        except pynvml.NVMLError_NotSupported:
+            # Happens on systems without traditional GPU memory (e.g., Grace Hopper),
+            # where nvmlDeviceGetMemoryInfo is not supported.
+            # See: https://github.com/rapidsai/cudf/issues/19427
+            return cls(
+                name=pynvml.nvmlDeviceGetName(handle),
+                index=index,
+                free_memory=None,
+                used_memory=None,
+                total_memory=None,
+            )
 
 
 @dataclasses.dataclass
@@ -124,9 +157,7 @@ class HardwareInfo:
         return cls(gpus=gpus)
 
 
-def _infer_scale_factor(path: str | Path, suffix: str) -> int | float:
-    name = Path(sys.argv[0]).name
-
+def _infer_scale_factor(name: str, path: str | Path, suffix: str) -> int | float:
     if "pdsh" in name:
         supplier = get_data(path, "supplier", suffix)
         num_rows = supplier.select(pl.len()).collect().item(0, 0)
@@ -145,7 +176,7 @@ def _infer_scale_factor(path: str | Path, suffix: str) -> int | float:
 
 @dataclasses.dataclass(kw_only=True)
 class RunConfig:
-    """Results for a PDS-H query run."""
+    """Results for a PDS-H or PDS-DS query run."""
 
     queries: list[int]
     suffix: str
@@ -158,9 +189,11 @@ class RunConfig:
     records: dict[int, list[Record]] = dataclasses.field(default_factory=dict)
     dataset_path: Path
     scale_factor: int | float
-    shuffle: str | None = None
+    shuffle: Literal["rapidsmpf", "tasks"] | None = None
+    gather_shuffle_stats: bool = False
     broadcast_join_limit: int | None = None
     blocksize: int | None = None
+    max_rows_per_partition: int | None = None
     threads: int
     iterations: int
     timestamp: str = dataclasses.field(
@@ -171,6 +204,14 @@ class RunConfig:
     rapidsmpf_oom_protection: bool
     rapidsmpf_spill: bool
     spill_device: float
+    query_set: str
+    stats_planning: bool
+
+    def __post_init__(self) -> None:  # noqa: D105
+        if self.gather_shuffle_stats and self.shuffle != "rapidsmpf":
+            raise ValueError(
+                "gather_shuffle_stats is only supported when shuffle='rapidsmpf'."
+            )
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> RunConfig:
@@ -182,12 +223,21 @@ class RunConfig:
             scheduler = None
 
         path = args.path
-        if (scale_factor := args.scale) is None:
+        name = args.query_set
+        scale_factor = args.scale
+
+        if scale_factor is None:
+            if "pdsds" in name:
+                raise ValueError(
+                    "--scale is required for PDS-DS benchmarks.\n"
+                    "TODO: This will be inferred once we maintain a map of scale factors to row counts."
+                )
             if path is None:
                 raise ValueError(
                     "Must specify --root and --scale if --path is not specified."
                 )
-            scale_factor = _infer_scale_factor(path, args.suffix)
+            # For PDS-H, infer scale factor based on row count
+            scale_factor = _infer_scale_factor(name, path, args.suffix)
         if path is None:
             path = f"{args.root}/scale-{scale_factor}"
         try:
@@ -195,9 +245,9 @@ class RunConfig:
         except ValueError:
             scale_factor = float(scale_factor)
 
-        if args.scale is not None:
+        if "pdsh" in name and args.scale is not None:
             # Validate the user-supplied scale factor
-            sf_inf = _infer_scale_factor(path, args.suffix)
+            sf_inf = _infer_scale_factor(name, path, args.suffix)
             rel_error = abs((scale_factor - sf_inf) / sf_inf)
             if rel_error > 0.01:
                 raise ValueError(
@@ -211,6 +261,7 @@ class RunConfig:
             scheduler=scheduler,
             n_workers=args.n_workers,
             shuffle=args.shuffle,
+            gather_shuffle_stats=args.rapidsmpf_dask_statistics,
             broadcast_join_limit=args.broadcast_join_limit,
             dataset_path=path,
             scale_factor=scale_factor,
@@ -222,11 +273,19 @@ class RunConfig:
             rapidsmpf_oom_protection=args.rapidsmpf_oom_protection,
             spill_device=args.spill_device,
             rapidsmpf_spill=args.rapidsmpf_spill,
+            max_rows_per_partition=args.max_rows_per_partition,
+            query_set=args.query_set,
+            stats_planning=args.stats_planning,
         )
 
-    def serialize(self) -> dict:
+    def serialize(self, engine: pl.GPUEngine | None) -> dict:
         """Serialize the run config to a dictionary."""
-        return dataclasses.asdict(self)
+        result = dataclasses.asdict(self)
+
+        if engine is not None:
+            config_options = ConfigOptions.from_polars_engine(engine)
+            result["config_options"] = dataclasses.asdict(config_options)
+        return result
 
     def summarize(self) -> None:
         """Print a summary of the results."""
@@ -243,6 +302,7 @@ class RunConfig:
                 print(f"blocksize: {self.blocksize}")
                 print(f"shuffle_method: {self.shuffle}")
                 print(f"broadcast_join_limit: {self.broadcast_join_limit}")
+                print(f"stats_planning: {self.stats_planning}")
                 if self.scheduler == "distributed":
                     print(f"n_workers: {self.n_workers}")
                     print(f"threads: {self.threads}")
@@ -259,6 +319,12 @@ class RunConfig:
                     f"mean time: {statistics.mean(record.duration for record in records):0.4f}"
                 )
                 print("=======================================")
+        total_mean_time = sum(
+            statistics.mean(record.duration for record in records)
+            for records in self.records.values()
+            if records
+        )
+        print(f"Total mean time across all queries: {total_mean_time:.4f} seconds")
 
 
 def get_data(path: str | Path, table_name: str, suffix: str = "") -> pl.LazyFrame:
@@ -274,6 +340,8 @@ def get_executor_options(
 
     if run_config.blocksize:
         executor_options["target_partition_size"] = run_config.blocksize
+    if run_config.max_rows_per_partition:
+        executor_options["max_rows_per_partition"] = run_config.max_rows_per_partition
     if run_config.shuffle:
         executor_options["shuffle_method"] = run_config.shuffle
     if run_config.broadcast_join_limit:
@@ -282,11 +350,15 @@ def get_executor_options(
         executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
     if run_config.scheduler == "distributed":
         executor_options["scheduler"] = "distributed"
+    if run_config.stats_planning:
+        executor_options["stats_planning"] = {"use_reduction_planning": True}
 
     if (
         benchmark
         and benchmark.__name__ == "PDSHQueries"
         and run_config.executor == "streaming"
+        # Only use the unique_fraction config if stats_planning is disabled
+        and not run_config.stats_planning
     ):
         executor_options["unique_fraction"] = {
             "c_custkey": 0.05,
@@ -310,7 +382,7 @@ def print_query_plan(
         if args.explain_logical:
             print(f"\nQuery {q_id} - Logical plan\n")
             print(q.explain())
-        elif args.explain:
+        if args.explain:
             print(f"\nQuery {q_id} - Physical plan\n")
             print(q.show_graph(engine="streaming", plan_stage="physical"))
     elif CUDF_POLARS_AVAILABLE:
@@ -318,7 +390,7 @@ def print_query_plan(
         if args.explain_logical:
             print(f"\nQuery {q_id} - Logical plan\n")
             print(explain_query(q, engine, physical=False))
-        elif args.explain:
+        if args.explain:
             print(f"\nQuery {q_id} - Physical plan\n")
             print(explain_query(q, engine))
     else:
@@ -341,6 +413,7 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
         "protocol": args.protocol,
         "rmm_pool_size": args.rmm_pool_size,
         "rmm_async": args.rmm_async,
+        "rmm_release_threshold": args.rmm_release_threshold,
         "threads_per_worker": run_config.threads,
     }
 
@@ -358,7 +431,9 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
                 options=Options(
                     {
                         "dask_spill_device": str(run_config.spill_device),
-                        "dask_statistics": str(args.rapidsmpf_oom_protection),
+                        "dask_statistics": str(args.rapidsmpf_dask_statistics),
+                        "dask_print_statistics": str(args.rapidsmpf_print_statistics),
+                        "oom_protection": str(args.rapidsmpf_oom_protection),
                     }
                 ),
             )
@@ -409,10 +484,17 @@ def _query_type(num_queries: int) -> Callable[[str | int], list[int]]:
     def parse(query: str | int) -> list[int]:
         if isinstance(query, int):
             return [query]
-        elif query == "all":
+        if query == "all":
             return list(range(1, num_queries + 1))
-        else:
-            return [int(q) for q in query.split(",")]
+
+        result: set[int] = set()
+        for part in query.split(","):
+            if "-" in part:
+                start, end = part.split("-")
+                result.update(range(int(start), int(end) + 1))
+            else:
+                result.add(int(part))
+        return sorted(result)
 
     return parse
 
@@ -424,17 +506,25 @@ def parse_args(
     parser = argparse.ArgumentParser(
         prog="Cudf-Polars PDS-H Benchmarks",
         description="Experimental streaming-executor benchmarks.",
+        formatter_class=argparse.RawTextHelpFormatter,
     )
     parser.add_argument(
         "query",
         type=_query_type(num_queries),
-        help="Query number or comma-separated list of query numbers, or 'all'.",
+        help=textwrap.dedent("""\
+            Query to run. One of the following:
+            - A single number (e.g. 11)
+            - A comma-separated list of query numbers (e.g. 1,3,7)
+            - A range of query number (e.g. 1-11,23-34)
+            - The string 'all' to run all queries (1 through 22)"""),
     )
     parser.add_argument(
         "--path",
         type=str,
         default=os.environ.get("PDSH_DATASET_PATH"),
-        help="Full PDS-H dataset directory path.",
+        help=textwrap.dedent("""\
+            Path to the root directory of the PDS-H dataset.
+            Defaults to the PDSH_DATASET_PATH environment variable."""),
     )
     parser.add_argument(
         "--root",
@@ -452,7 +542,9 @@ def parse_args(
         "--suffix",
         type=str,
         default=".parquet",
-        help="Table file suffix.",
+        help=textwrap.dedent("""\
+            File suffix for input table files.
+            Default: .parquet"""),
     )
     parser.add_argument(
         "-e",
@@ -460,7 +552,11 @@ def parse_args(
         default="streaming",
         type=str,
         choices=["in-memory", "streaming", "cpu"],
-        help="Executor.",
+        help=textwrap.dedent("""\
+            Query executor backend:
+                - in-memory : Evaluate query in GPU memory
+                - streaming : Partitioned evaluation (default)
+                - cpu       : Use Polars CPU engine"""),
     )
     parser.add_argument(
         "-s",
@@ -468,7 +564,10 @@ def parse_args(
         default="synchronous",
         type=str,
         choices=["synchronous", "distributed"],
-        help="Scheduler to use with the 'streaming' executor.",
+        help=textwrap.dedent("""\
+            Scheduler type to use with the 'streaming' executor.
+                - synchronous : Run locally in a single process
+                - distributed : Use Dask for multi-GPU execution"""),
     )
     parser.add_argument(
         "--n-workers",
@@ -480,7 +579,13 @@ def parse_args(
         "--blocksize",
         default=None,
         type=int,
-        help="Approx. partition size.",
+        help="Target partition size, in bytes, for IO tasks.",
+    )
+    parser.add_argument(
+        "--max-rows-per-partition",
+        default=None,
+        type=int,
+        help="The maximum number of rows to process per partition.",
     )
     parser.add_argument(
         "--iterations",
@@ -498,8 +603,8 @@ def parse_args(
         "--protocol",
         default="ucx",
         type=str,
-        choices=["ucx", "ucxx"],
-        help="Communication protocol to use for Dask: ucx (UCX-Py) or ucxx)",
+        choices=["ucx"],
+        help="Communication protocol to use for Dask: ucx (uses ucxx)",
     )
     parser.add_argument(
         "--shuffle",
@@ -524,19 +629,42 @@ def parse_args(
         "--rmm-pool-size",
         default=0.5,
         type=float,
-        help="RMM pool size (fractional).",
+        help=textwrap.dedent("""\
+            Fraction of total GPU memory to allocate for RMM pool.
+            Default: 0.5 (50%% of GPU memory)"""),
+    )
+    parser.add_argument(
+        "--rmm-release-threshold",
+        default=None,
+        type=float,
+        help=textwrap.dedent("""\
+            Passed to dask_cuda.LocalCUDACluster to control the release
+            threshold for RMM pool memory.
+            Default: None (no release threshold)"""),
     )
     parser.add_argument(
         "--rmm-async",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Use RMM async memory resource.",
+        help="Use RMM async memory resource. Note: only affects distributed scheduler!",
     )
     parser.add_argument(
         "--rapidsmpf-oom-protection",
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Use rapidsmpf CUDA managed memory-based OOM protection.",
+    )
+    parser.add_argument(
+        "--rapidsmpf-dask-statistics",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Collect rapidsmpf shuffle statistics. The output will be stored in the 'shuffle_stats' field of each record.",
+    )
+    parser.add_argument(
+        "--rapidsmpf-print-statistics",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Print rapidsmpf shuffle statistics on each Dask worker upon completion.",
     )
     parser.add_argument(
         "--rapidsmpf-spill",
@@ -593,6 +721,12 @@ def parse_args(
         default="duckdb",
         help="Which engine to use as the baseline for validation.",
     )
+    parser.add_argument(
+        "--stats-planning",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Enable statistics planning.",
+    )
     return parser.parse_args(args)
 
 
@@ -603,8 +737,10 @@ def run_polars(
 ) -> None:
     """Run the queries using the given benchmark and executor options."""
     args = parse_args(options, num_queries=num_queries)
+    vars(args).update({"query_set": benchmark.name})
     run_config = RunConfig.from_args(args)
     validation_failures: list[int] = []
+    query_failures: list[tuple[int, int]] = []
 
     client = initialize_dask_cluster(run_config, args)  # type: ignore
 
@@ -632,7 +768,23 @@ def run_polars(
         for i in range(args.iterations):
             t0 = time.monotonic()
 
-            result = execute_query(q_id, i, q, run_config, args, engine)
+            try:
+                result = execute_query(q_id, i, q, run_config, args, engine)
+            except Exception:
+                print(f"❌ query={q_id} iteration={i} failed!")
+                print(traceback.format_exc())
+                query_failures.append((q_id, i))
+                continue
+            if run_config.shuffle == "rapidsmpf" and run_config.gather_shuffle_stats:
+                from rapidsmpf.integrations.dask.shuffler import (
+                    clear_shuffle_statistics,
+                    gather_shuffle_statistics,
+                )
+
+                shuffle_stats = gather_shuffle_statistics(client)  # type: ignore[arg-type]
+                clear_shuffle_statistics(client)  # type: ignore[arg-type]
+            else:
+                shuffle_stats = None
 
             if args.validate and run_config.executor != "cpu":
                 try:
@@ -648,7 +800,7 @@ def run_polars(
                     print(f"❌ Query {q_id} failed validation!\n{e}")
 
             t1 = time.monotonic()
-            record = Record(query=q_id, duration=t1 - t0)
+            record = Record(query=q_id, duration=t1 - t0, shuffle_stats=shuffle_stats)
             if args.print_results:
                 print(result)
 
@@ -672,5 +824,9 @@ def run_polars(
             )
         else:
             print("All validated queries passed.")
-    args.output.write(json.dumps(run_config.serialize()))
+
+    args.output.write(json.dumps(run_config.serialize(engine=engine)))
     args.output.write("\n")
+
+    if query_failures or validation_failures:
+        sys.exit(1)

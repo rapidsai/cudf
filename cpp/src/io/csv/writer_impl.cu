@@ -27,6 +27,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/fill.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/detail/csv.hpp>
@@ -411,6 +412,8 @@ void write_csv(data_sink* out_sink,
   // write header: column names separated by delimiter:
   // (even for tables with no rows)
   //
+  CUDF_FUNC_RANGE();
+
   write_chunked_begin(
     out_sink, table, user_column_names, options, stream, cudf::get_current_device_resource_ref());
 

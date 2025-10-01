@@ -6,6 +6,7 @@ from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from pylibcudf.expressions cimport Expression
 
@@ -53,18 +54,23 @@ cdef class ParquetReaderOptionsBuilder:
     cpdef ParquetReaderOptionsBuilder use_pandas_metadata(self, bool val)
     cpdef ParquetReaderOptionsBuilder allow_mismatched_pq_schemas(self, bool val)
     cpdef ParquetReaderOptionsBuilder use_arrow_schema(self, bool val)
+    cpdef ParquetReaderOptionsBuilder filter(self, Expression filter)
+    cpdef ParquetReaderOptionsBuilder columns(self, list col_names)
     cpdef build(self)
 
 
 cdef class ChunkedParquetReader:
     cdef readonly Stream stream
+    cdef DeviceMemoryResource mr
     cdef unique_ptr[cpp_chunked_parquet_reader] reader
 
     cpdef bool has_next(self)
-    cpdef TableWithMetadata read_chunk(self)
+    cpdef TableWithMetadata read_chunk(self, DeviceMemoryResource mr=*)
 
 
-cpdef read_parquet(ParquetReaderOptions options, Stream stream = *)
+cpdef read_parquet(
+    ParquetReaderOptions options, Stream stream = *, DeviceMemoryResource mr=*
+)
 
 
 cdef class ChunkedParquetWriter:
@@ -151,6 +157,10 @@ cdef class ParquetWriterOptionsBuilder:
     cpdef ParquetWriterOptionsBuilder utc_timestamps(self, bool enabled)
 
     cpdef ParquetWriterOptionsBuilder write_arrow_schema(self, bool enabled)
+
+    cpdef ParquetWriterOptionsBuilder row_group_size_rows(self, size_type val)
+
+    cpdef ParquetWriterOptionsBuilder max_page_size_bytes(self, size_t val)
 
     cpdef ParquetWriterOptions build(self)
 

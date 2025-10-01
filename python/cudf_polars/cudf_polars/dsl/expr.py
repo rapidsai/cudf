@@ -33,6 +33,7 @@ from cudf_polars.dsl.expressions.selection import Filter, Gather
 from cudf_polars.dsl.expressions.slicing import Slice
 from cudf_polars.dsl.expressions.sorting import Sort, SortBy
 from cudf_polars.dsl.expressions.string import StringFunction
+from cudf_polars.dsl.expressions.struct import StructFunction
 from cudf_polars.dsl.expressions.ternary import Ternary
 from cudf_polars.dsl.expressions.unary import Cast, Len, UnaryFunction
 
@@ -58,6 +59,7 @@ __all__ = [
     "Sort",
     "SortBy",
     "StringFunction",
+    "StructFunction",
     "TemporalFunction",
     "Ternary",
     "UnaryFunction",
