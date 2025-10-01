@@ -970,7 +970,7 @@ class StringMethods(BaseAccessor):
             if regex:
                 result = self._column.replace_re(
                     list(pat),
-                    as_column(repl, dtype=CUDF_STRING_DTYPE),
+                    as_column(repl, dtype=CUDF_STRING_DTYPE),  # type: ignore[arg-type]
                 )
             else:
                 result = self._column.replace_multiple(
