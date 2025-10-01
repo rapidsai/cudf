@@ -557,7 +557,10 @@ def test_scan_parquet_remote(
 
 
 def test_scan_ndjson_remote(
-    request, tmp_path: Path, df: pl.LazyFrame, httpserver: HTTPServer
+    request: pytest.FixtureRequest,
+    tmp_path: Path,
+    df: pl.DataFrame,
+    httpserver: HTTPServer,
 ) -> None:
     request.applymarker(
         pytest.mark.xfail(
