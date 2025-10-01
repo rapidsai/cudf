@@ -19,7 +19,7 @@ cuDF accelerates pandas-like data processing on NVIDIA GPUs, ideal for large dat
 -Conclusion: The performance benefit of cuDF is only realized on large datasets where the GPU's processing power outweighs the data transfer costs.
 
 ![Performance](https://i.ibb.co/0ybhzYMv/Screenshot-2025-10-01-123714.png)
-![Performance](https://i.ibb.co/rGhSgX87/Screenshot-2025-10-01-124017.png)
+![Performance](https://i.ibb.co/nK5kvWH/Screenshot-2025-10-01-145759.png)
 
 **Try It Yourself**
 Run this code to compare speeds on your system:
