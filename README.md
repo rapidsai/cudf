@@ -1,5 +1,15 @@
 # <div align="left"><img src="img/rapids_logo.png" width="90px"/>&nbsp;cuDF - GPU DataFrames</div>
 
+### What is a GPU DataFrame?
+A GPU DataFrame is like a pandas DataFrame (a table of data with rows and columns) but powered by your computer's Graphics Processing Unit (GPU) instead of the Central Processing Unit (CPU). 
+
+**What's happening under the hood?**
+- In pandas, operations (like sorting, filtering, or calculations) run on the CPU, which processes tasks one at a time or in small batches.
+- In cuDF, these operations are parallelized across thousands of GPU cores, making them much faster for big datasets. Data is loaded into GPU memory, processed in parallel (e.g., calculating a new column for millions of rows at once), and results are returned.
+- No major code changes needed—cuDF mimics pandas' API, so you can often just replace `import pandas as pd` with `import cudf as pd`.
+
+This is built on NVIDIA's CUDA technology and libraries like libcudf for low-level GPU handling. If you're new to GPUs, think of it as upgrading from a single-lane road (CPU) to a massive highway (GPU) for data traffic.
+
 ## 📢 cuDF can now be used as a no-code-change accelerator for pandas! To learn more, see [here](https://rapids.ai/cudf-pandas/)!
 
 cuDF (pronounced "KOO-dee-eff") is a GPU DataFrame library
