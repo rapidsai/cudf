@@ -14,7 +14,7 @@ This is built on NVIDIA's CUDA technology and libraries like libcudf for low-lev
 cuDF accelerates pandas-like data processing on NVIDIA GPUs, ideal for large datasets in data science, machine learning, or ETL pipelines. It uses the same API as pandas, so you can switch with minimal code changes.
 
 **Speed Benefits**
--Large Data (10 Million Rows): cuDF is 19.17x faster than pandas, leveraging GPU parallelism for a significant speedup.
+-Large Data (100 Million Rows): cuDF is 19.17x faster than pandas, leveraging GPU parallelism for a significant speedup.
 -Small Data (1000 Rows): pandas is much faster. cuDF's performance is hampered by the overhead of transferring the small dataset to the GPU.
 -Conclusion: The performance benefit of cuDF is only realized on large datasets where the GPU's processing power outweighs the data transfer costs.
 
