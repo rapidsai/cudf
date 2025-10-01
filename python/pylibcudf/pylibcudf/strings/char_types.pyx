@@ -6,8 +6,10 @@ from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.scalar.scalar cimport string_scalar
 from pylibcudf.libcudf.strings cimport char_types as cpp_char_types
+from pylibcudf.libcudf.strings.char_types cimport string_character_types
 from pylibcudf.scalar cimport Scalar
-from pylibcudf.utils cimport _get_stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from cython.operator import dereference
@@ -24,7 +26,8 @@ cpdef Column all_characters_of_type(
     Column source_strings,
     string_character_types types,
     string_character_types verify_types,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Identifies strings where all characters match the specified type.
@@ -47,23 +50,26 @@ cpdef Column all_characters_of_type(
     """
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_char_types.all_characters_of_type(
             source_strings.view(),
             types,
             verify_types,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 cpdef Column filter_characters_of_type(
     Column source_strings,
     string_character_types types_to_remove,
     Scalar replacement,
     string_character_types types_to_keep,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Filter specific character types from a column of strings.
@@ -93,6 +99,7 @@ cpdef Column filter_characters_of_type(
     )
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_char_types.filter_characters_of_type(
@@ -100,9 +107,10 @@ cpdef Column filter_characters_of_type(
             types_to_remove,
             dereference(c_replacement),
             types_to_keep,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 StringCharacterTypes.__str__ = StringCharacterTypes.__repr__

@@ -131,14 +131,12 @@ class TemporalBaseColumn(ColumnBase):
     def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if isinstance(other, ColumnBase):
             return other
-        elif self.dtype.kind == "M" and isinstance(other, cudf.DateOffset):
-            return other
         elif isinstance(other, (cp.ndarray, np.ndarray)) and other.ndim == 0:
             other = other[()]
 
         if is_scalar(other):
             if is_na_like(other):
-                return super()._normalize_binop_operand(other)
+                return pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
             elif self.dtype.kind == "M" and isinstance(other, pd.Timestamp):
                 if other.tz is not None:
                     raise NotImplementedError(

@@ -38,8 +38,6 @@ static void bench_groupby_nth(nvbench::state& state)
   auto sorted_keys = cudf::gather(*keys_table, *sort_order);
   // No need to sort values using sort_order because they were generated randomly
 
-  cudf::groupby::groupby gb_obj(*sorted_keys, cudf::null_policy::EXCLUDE, cudf::sorted::YES);
-
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());
   requests[0].values = vals->view();
@@ -47,12 +45,16 @@ static void bench_groupby_nth(nvbench::state& state)
     cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(-1));
 
   state.add_global_memory_reads<nvbench::int8_t>(vals->alloc_size());
-  auto groups = gb_obj.get_groups();
-  state.add_global_memory_writes<nvbench::int8_t>(groups.keys->alloc_size());
+  std::size_t write_size = 0;
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.exec(nvbench::exec_tag::sync,
-             [&](nvbench::launch& launch) { auto result = gb_obj.aggregate(requests); });
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    cudf::groupby::groupby gb_obj(*sorted_keys, cudf::null_policy::EXCLUDE, cudf::sorted::YES);
+    auto result = gb_obj.aggregate(requests);
+    write_size  = result.first->alloc_size() + result.second.front().results.front()->alloc_size();
+  });
+
+  state.add_global_memory_writes<nvbench::int8_t>(write_size);
 }
 
 NVBENCH_BENCH(bench_groupby_nth)
