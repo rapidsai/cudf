@@ -627,7 +627,7 @@ class pinned_fallback_host_memory_resource {
    * @param alignment Alignment in bytes.
    * @return Pointer to the newly allocated memory.
    */
-  static void* allocate(cuda_stream_view stream, std::size_t bytes, std::size_t alignment)
+  static void* allocate(rmm::cuda_stream_view stream, std::size_t bytes, std::size_t alignment)
   {
     return allocate_async(bytes, alignment, stream);
   }
@@ -643,7 +643,7 @@ class pinned_fallback_host_memory_resource {
    * @param bytes Size of the allocation.
    * @param alignment Alignment in bytes.
    */
-  static void deallocate(cuda_stream_view stream,
+  static void deallocate(rmm::cuda_stream_view stream,
                          void* ptr,
                          std::size_t bytes,
                          std::size_t alignment)
