@@ -39,7 +39,6 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.leaf_node import DeferredMessages
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.dispatch import (
         GenState,
@@ -60,8 +59,8 @@ def evaluate_logical_plan(ir: IR, config_options: ConfigOptions) -> DataFrame:
             "The rapidsmpf engine does not support distributed execution yet."
         )
 
-    # Collect statistics up-front on the client process (for now).
-    stats = collect_statistics(ir, config_options)
+    # Lower the IR graph on the client process (for now).
+    ir, partition_info = lower_ir_graph(ir, config_options)
 
     # Configure the context.
     # TODO: Multi-GPU version will be different. The rest of this function
@@ -74,9 +73,6 @@ def evaluate_logical_plan(ir: IR, config_options: ConfigOptions) -> DataFrame:
     rmm.mr.set_current_device_resource(mr)
     ctx = Context(comm, br, options)
     executor = ThreadPoolExecutor(max_workers=1)
-
-    # Lower the IR graph
-    ir, partition_info = lower_ir_graph(ctx, ir, config_options, stats)
 
     # Generate network nodes
     nodes, output = generate_network(ctx, ir, partition_info, config_options)
@@ -95,21 +91,18 @@ def evaluate_logical_plan(ir: IR, config_options: ConfigOptions) -> DataFrame:
 
 
 def lower_ir_graph(
-    ctx: Context, ir: IR, config_options: ConfigOptions, stats: StatsCollector
+    ir: IR,
+    config_options: ConfigOptions,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """
     Rewrite an IR graph and extract partitioning information.
 
     Parameters
     ----------
-    ctx
-        The context.
     ir
         Root of the graph to rewrite.
     config_options
         GPUEngine configuration options.
-    stats
-        Statistics collector.
 
     Returns
     -------
@@ -127,9 +120,8 @@ def lower_ir_graph(
     lower_ir_node
     """
     state: LowerState = {
-        "ctx": ctx,
         "config_options": config_options,
-        "stats": stats,
+        "stats": collect_statistics(ir, config_options),
     }
     mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
     ir, partition_info = mapper(ir)

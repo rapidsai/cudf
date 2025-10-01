@@ -76,10 +76,15 @@ def _lower_ir_fallback(
 
     # NOTE: (IMPORTANT) Since Rechunk is a local operation,
     # the current fallback logic will only work for one rank!
-    ctx = rec.state["ctx"]
-    if ctx.comm().nranks > 1:  # pragma: no cover; Requires multiple ranks
+    config_options = rec.state["config_options"]
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'generate_ir_sub_network'"
+    )
+    if (
+        config_options.executor.scheduler == "distributed"
+    ):  # pragma: no cover; Requires distributed
         raise NotImplementedError(
-            "Fallback is not yet supported multi-rank execution "
+            "Fallback is not yet supported distributed execution "
             "with the RAPIDS-MPF streaming engine."
         )
 
@@ -106,7 +111,7 @@ def _lower_ir_fallback(
     if fallback and msg:
         # Warn/raise the user if any children were collapsed
         # and the "fallback_mode" configuration is not "silent"
-        _fallback_inform(msg, rec.state["config_options"])
+        _fallback_inform(msg, config_options)
 
     # Reconstruct and return
     new_node = ir.reconstruct(children)

@@ -20,19 +20,23 @@ if TYPE_CHECKING:
 class PartitionInfo:
     """Partitioning information."""
 
-    __slots__ = ("count", "partitioned_on")
+    __slots__ = ("count", "metadata", "partitioned_on")
     count: int
     """Partition count."""
     partitioned_on: tuple[NamedExpr, ...]
     """Columns the data is hash-partitioned on."""
+    metadata: dict[str, Any] | None
+    """Optional metadata."""
 
     def __init__(
         self,
         count: int,
         partitioned_on: tuple[NamedExpr, ...] = (),
+        metadata: dict[str, Any] | None = None,
     ):
         self.count = count
         self.partitioned_on = partitioned_on
+        self.metadata = metadata
 
     def keys(self, node: Node) -> Iterator[tuple[str, int]]:
         """Return the partitioned keys for a given node."""

@@ -28,15 +28,12 @@ class LowerState(TypedDict):
 
     Parameters
     ----------
-    ctx
-        The rapidsmpf context.
     config_options
         GPUEngine configuration options.
     stats
         Statistics collector.
     """
 
-    ctx: Context
     config_options: ConfigOptions
     stats: StatsCollector
 

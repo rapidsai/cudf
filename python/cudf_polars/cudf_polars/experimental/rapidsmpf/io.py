@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from typing import TYPE_CHECKING, Any
 
@@ -14,6 +15,11 @@ from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 from cudf_polars.dsl.ir import DataFrameScan, Scan
 from cudf_polars.experimental.base import PartitionInfo
+from cudf_polars.experimental.io import (
+    ScanPartitionFlavor,
+    ScanPartitionPlan,
+    SplitScan,
+)
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
     lower_ir_node,
@@ -29,6 +35,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.dispatch import LowerIRTransformer
+    from cudf_polars.utils.config import ParquetOptions
 
 
 @lower_ir_node.register(DataFrameScan)
@@ -46,15 +53,6 @@ def _(
     return ir, {ir: PartitionInfo(count=count)}
 
 
-@lower_ir_node.register(Scan)
-def _(
-    ir: Scan, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:  # pragma: no cover
-    raise NotImplementedError(
-        "Scan is not yet supported in the RAPIDS-MPF streaming engine"
-    )
-
-
 @define_py_node()
 async def dataframe_scan_node(
     ctx: Context,
@@ -63,7 +61,7 @@ async def dataframe_scan_node(
     rows_per_partition: int,
 ) -> None:
     """
-    DataFrame scan node for rapidsmpf.
+    DataFrameScan node for rapidsmpf.
 
     Parameters
     ----------
@@ -117,6 +115,161 @@ def _(
     ch_out = Channel()
     nodes: dict[IR, list[Any]] = {
         ir: [dataframe_scan_node(ctx, ch_out, ir, rows_per_partition)]
+    }
+    channels: dict[IR, Any] = {ir: ch_out}
+    return nodes, channels
+
+
+@lower_ir_node.register(Scan)
+def _(
+    ir: Scan, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    config_options = rec.state["config_options"]
+    if (
+        ir.typ in ("csv", "parquet", "ndjson")
+        and ir.n_rows == -1
+        and ir.skip_rows == 0
+        and ir.row_index is None
+    ):
+        plan = ScanPartitionPlan.from_scan(ir, rec.state["stats"], config_options)
+        paths = list(ir.paths)
+        if plan.flavor == ScanPartitionFlavor.SPLIT_FILES:
+            count = plan.factor * len(paths)
+        else:
+            count = math.ceil(len(paths) / plan.factor)
+
+        return ir, {ir: PartitionInfo(count=count, metadata={"scan_plan": plan})}
+
+    return ir, {ir: PartitionInfo(count=1)}  # pragma: no cover
+
+
+@define_py_node()
+async def scan_node(
+    ctx: Context,
+    ch_out: Channel[TableChunk],
+    ir: Scan,
+    plan: ScanPartitionPlan,
+    parquet_options: ParquetOptions,
+) -> None:
+    """
+    Scan node for rapidsmpf.
+
+    Parameters
+    ----------
+    ctx
+        The context.
+    ch_out
+        The output channel.
+    ir
+        The Scan node.
+    plan
+        The partitioning plan.
+    parquet_options
+        The Parquet options.
+    """
+    # TODO: Use (throttled) thread pool
+    # TODO: Use multiple streams
+    async with shutdown_on_error(ctx, ch_out):
+        # Build a list of local Scan operations
+        scans: list[Scan | SplitScan] = []
+        if plan.flavor == ScanPartitionFlavor.SPLIT_FILES:
+            count = plan.factor * len(ir.paths)
+            local_count = math.ceil(count / ctx.comm().nranks)
+            local_offset = local_count * ctx.comm().rank
+            path_offset = local_offset // plan.factor
+            path_count = math.ceil(local_count / plan.factor)
+            local_paths = ir.paths[path_offset : path_offset + path_count]
+            sindex = local_offset % plan.factor
+            for path in local_paths:
+                base_scan = Scan(
+                    ir.schema,
+                    ir.typ,
+                    ir.reader_options,
+                    ir.cloud_options,
+                    [path],
+                    ir.with_columns,
+                    ir.skip_rows,
+                    ir.n_rows,
+                    ir.row_index,
+                    ir.include_file_paths,
+                    ir.predicate,
+                    parquet_options,
+                )
+                while sindex < plan.factor:
+                    scans.append(
+                        SplitScan(
+                            ir.schema,
+                            base_scan,
+                            sindex,
+                            plan.factor,
+                            parquet_options,
+                        )
+                    )
+                    sindex += 1
+                sindex = 0
+
+        else:
+            count = math.ceil(len(ir.paths) / plan.factor)
+            local_count = math.ceil(count / ctx.comm().nranks)
+            local_offset = local_count * ctx.comm().rank
+            paths_offset_start = local_offset * plan.factor
+            paths_offset_end = paths_offset_start + plan.factor
+            for offset in range(paths_offset_start, paths_offset_end, plan.factor):
+                local_paths = ir.paths[offset : offset + plan.factor]
+                scans.append(
+                    Scan(
+                        ir.schema,
+                        ir.typ,
+                        ir.reader_options,
+                        ir.cloud_options,
+                        local_paths,
+                        ir.with_columns,
+                        ir.skip_rows,
+                        ir.n_rows,
+                        ir.row_index,
+                        ir.include_file_paths,
+                        ir.predicate,
+                        parquet_options,
+                    )
+                )
+
+        # Read data and push to the output channel
+        for seq_num, scan in enumerate(scans):
+            # Evaluate the IR node
+            df: DataFrame = scan.do_evaluate(*scan._non_child_args)
+
+            # Return the output chunk
+            chunk = TableChunk.from_pylibcudf_table(seq_num, df.table, DEFAULT_STREAM)
+            await ch_out.send(ctx, Message(chunk))
+
+        await ch_out.drain(ctx)
+
+
+@generate_ir_sub_network.register(Scan)
+def _(ir: Scan, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]:
+    config_options = rec.state["config_options"]
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'generate_ir_sub_network'"
+    )
+    parquet_options = config_options.parquet_options
+    partition_info = rec.state["partition_info"][ir]
+
+    assert partition_info.metadata is not None, "Scan node must have a partition plan"
+    plan: ScanPartitionPlan = partition_info.metadata["scan_plan"]
+    if plan.flavor == ScanPartitionFlavor.SPLIT_FILES:
+        parquet_options = dataclasses.replace(parquet_options, chunked=False)
+
+    ch_out = Channel()
+    nodes: dict[IR, list[Any]] = {
+        ir: [
+            scan_node(
+                rec.state["ctx"],
+                ch_out,
+                ir,
+                plan,
+                parquet_options,
+            )
+        ]
     }
     channels: dict[IR, Any] = {ir: ch_out}
     return nodes, channels
