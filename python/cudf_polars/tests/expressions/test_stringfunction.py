@@ -15,7 +15,6 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_129,
     POLARS_VERSION_LT_130,
     POLARS_VERSION_LT_131,
     POLARS_VERSION_LT_132,
@@ -348,7 +347,7 @@ def test_replace_re(ldf):
 def test_replace_many(ldf, target, repl):
     q = ldf.select(pl.col("a").str.replace_many(target, repl))
     _need_support_for_implode_agg = isinstance(repl, list)
-    if POLARS_VERSION_LT_129 or _need_support_for_implode_agg:
+    if _need_support_for_implode_agg:
         assert_gpu_result_equal(q)
     elif POLARS_VERSION_LT_131:
         assert_ir_translation_raises(q, NotImplementedError)
