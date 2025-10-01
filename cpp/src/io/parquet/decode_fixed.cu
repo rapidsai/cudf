@@ -355,8 +355,8 @@ __device__ int update_validity_and_row_indices_nested(
     int const in_row_bounds                 = (row_index < last_row);
     bool const in_write_row_bounds          = in_row_bounds && (row_index >= first_row);
     uint32_t const in_write_row_bounds_mask = ballot(in_write_row_bounds);
-    int const write_start =
-      cuda::std::countr_zero(in_write_row_bounds_mask);  // first bit in the warp to store
+    //NOTE: The below CANNOT be std::countr_zero(), because for zero start must be 0 not 32
+    int const write_start = __ffs(in_write_row_bounds_mask) - 1;  // first bit in the warp to store
 
     // iterate by depth
     for (int d_idx = 0; d_idx <= max_depth; d_idx++) {
@@ -388,7 +388,7 @@ __device__ int update_validity_and_row_indices_nested(
                                  first_row;  // absolute bit offset into the output validity map
           int const write_end =
             cudf::detail::warp_size -
-            cuda::std::countl_zero(in_write_row_bounds_mask);  // last bit in the warp to store
+            __clz(in_write_row_bounds_mask);  // last bit in the warp to store
           int const bit_count = write_end - write_start;
           warp_null_count     = bit_count - __popc(warp_validity_mask >> write_start);
 
@@ -509,9 +509,9 @@ __device__ int update_validity_and_row_indices_flat(
     // the correct position to start reading. since we are about to write the validity vector
     // here we need to adjust our computed mask to take into account the write row bounds.
     bool const in_write_row_bounds          = in_row_bounds && (row_index >= first_row);
-    uint32_t const in_write_row_bounds_mask = ballot(in_write_row_bounds);
-    int const write_start =
-      cuda::std::countr_zero(in_write_row_bounds_mask);  // first bit in the warp to store
+    int const in_write_row_bounds_mask = ballot(in_write_row_bounds);
+    //NOTE: The below CANNOT be std::countr_zero(), because for zero start must be 0 not 32
+    int const write_start = __ffs(in_write_row_bounds_mask) - 1;  // first bit in the warp to store
     int warp_null_count = 0;
     // lane 0 from each warp writes out validity
     if ((write_start >= 0) && ((t % cudf::detail::warp_size) == 0)) {
@@ -520,7 +520,7 @@ __device__ int update_validity_and_row_indices_flat(
                              first_row;  // absolute bit offset into the output validity map
       int const write_end =
         cudf::detail::warp_size -
-        cuda::std::countl_zero(in_write_row_bounds_mask);  // last bit in the warp to store
+        __clz(in_write_row_bounds_mask);  // last bit in the warp to store
       int const bit_count = write_end - write_start;
       warp_null_count     = bit_count - __popc(warp_validity_mask >> write_start);
 
