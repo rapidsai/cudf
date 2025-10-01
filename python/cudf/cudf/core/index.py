@@ -75,14 +75,14 @@ if TYPE_CHECKING:
     from cudf.core.tools.datetimes import DateOffset
 
 
-def ensure_index(index_like: Any) -> Index:
+def ensure_index(index_like: Any, nan_as_null=no_default) -> Index:
     """
     Ensure an Index is returned.
 
     Avoids a shallow copy compared to calling cudf.Index(...)
     """
     if not isinstance(index_like, Index):
-        return cudf.Index(index_like)
+        return Index(index_like, nan_as_null=nan_as_null)
     return index_like
 
 
@@ -449,6 +449,11 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
         >>> cudf.Index.from_pandas(pdi, nan_as_null=False)
         Index([10.0, 20.0, 30.0, nan], dtype='float64')
         """
+        warnings.warn(
+            "from_pandas is deprecated and will be removed in a future version. "
+            "Use the Index constructor instead.",
+            FutureWarning,
+        )
         if nan_as_null is no_default:
             nan_as_null = (
                 False if cudf.get_option("mode.pandas_compatible") else None
@@ -3523,7 +3528,10 @@ class DatetimeIndex(Index):
 
         name = _getdefault_name(data, name=name)
         data = as_column(data)
-
+        if data.dtype.kind == "b":
+            raise ValueError(
+                "Boolean data cannot be converted to a DatetimeIndex"
+            )
         if dtype is not None:
             dtype = cudf.dtype(dtype)
             if dtype.kind != "M":
@@ -5296,10 +5304,10 @@ class IntervalIndex(Index):
         copy: bool = False,
         dtype=None,
     ) -> Self:
-        piidx = pd.IntervalIndex.from_tuples(
+        pidx = pd.IntervalIndex.from_tuples(
             data, closed=closed, name=name, copy=copy, dtype=dtype
         )
-        return cls.from_pandas(piidx)  # type: ignore[return-value]
+        return cls(pidx, name=name)  # type: ignore[return-value]
 
     def __getitem__(self, index):
         raise NotImplementedError(
@@ -5513,8 +5521,11 @@ def _as_index(
                 "dtype must be `None` for inputs of type: "
                 f"{type(data).__name__}, found {dtype=} "
             )
-        return cudf.MultiIndex.from_pandas(
-            data.copy(deep=copy), nan_as_null=nan_as_null
+        return cudf.MultiIndex(
+            levels=data.levels,
+            codes=data.codes,
+            names=data.names,
+            nan_as_null=nan_as_null,
         )
     elif isinstance(data, cudf.DataFrame) or is_scalar(data):
         raise TypeError("Index data must be 1-dimensional and list-like")

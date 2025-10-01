@@ -125,6 +125,31 @@ class NumericalColumn(NumericalBaseColumn):
         # TODO: Use `scalar`-based `contains` wrapper
         return self.contains(as_column([search_item], dtype=self.dtype)).any()
 
+    @property
+    def values(self) -> cp.ndarray:
+        """
+        Return a CuPy representation of the NumericalColumn.
+        """
+        dtype = self.dtype
+        if is_pandas_nullable_extension_dtype(dtype):
+            dtype = getattr(dtype, "numpy_dtype", dtype)
+
+        if len(self) == 0:
+            return cp.empty(0, dtype=dtype)
+
+        col = self
+        if col.has_nulls():
+            if dtype.kind == "b":
+                raise ValueError(
+                    f"Column must have no nulls for dtype={col.dtype}"
+                )
+            elif dtype.kind != "f":
+                dtype = np.dtype(np.float64)
+                col = col.astype(dtype)  # type: ignore[assignment]
+            col = col.fillna(np.nan)
+
+        return cp.asarray(col.data).view(dtype)
+
     def indices_of(self, value: ScalarLike) -> NumericalColumn:
         if isinstance(value, (bool, np.bool_)) and self.dtype.kind != "b":
             raise ValueError(
@@ -225,6 +250,14 @@ class NumericalColumn(NumericalBaseColumn):
                 np.bool_: np.float64,
             }
 
+        cmp_ops = {
+            "__lt__",
+            "__gt__",
+            "__le__",
+            "__ge__",
+            "__eq__",
+            "__ne__",
+        }
         out_dtype = None
         if op in {"__truediv__", "__rtruediv__"}:
             # Division with integer types results in a suitable float.
@@ -236,14 +269,7 @@ class NumericalColumn(NumericalBaseColumn):
                 return self.astype(
                     get_dtype_of_same_kind(self.dtype, np.dtype(truediv_type))
                 )._binaryop(other, op)
-        elif op in {
-            "__lt__",
-            "__gt__",
-            "__le__",
-            "__ge__",
-            "__eq__",
-            "__ne__",
-        }:
+        elif op in cmp_ops:
             out_dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
 
             # If `other` is a Python integer and it is out-of-bounds
@@ -360,6 +386,12 @@ class NumericalColumn(NumericalBaseColumn):
                 and rhs.null_count > 0
             ):
                 res = res.fillna(lhs.to_py())
+        elif (
+            cudf.get_option("mode.pandas_compatible")
+            and op in cmp_ops
+            and not is_pandas_nullable_extension_dtype(self.dtype)
+        ):
+            res = res.fillna(op == "__ne__")
         return res
 
     def nans_to_nulls(self: Self) -> Self:
@@ -377,12 +409,20 @@ class NumericalColumn(NumericalBaseColumn):
             if not isinstance(other, type(self)):
                 return NotImplemented
             return other
-        elif isinstance(other, (cp.ndarray, np.ndarray)) and other.ndim == 0:
+        # TODO: cupy scalars are just aliases for numpy scalars, so extracting a scalar
+        # from a cupy array would always require a D2H copy. As a result, cupy does not
+        # produce scalars without explicit casting requests
+        # https://docs.cupy.dev/en/stable/user_guide/difference.html#zero-dimensional-array
+        # The below logic for type inference relies on numpy, however, so we need to go
+        # that route for now. If possible we should find a way to avoid this.
+        if isinstance(other, cp.ndarray) and other.ndim == 0:
+            other = cp.asnumpy(other)[()]
+        elif isinstance(other, np.ndarray) and other.ndim == 0:
             other = other[()]
 
         if is_scalar(other):
             if is_na_like(other):
-                return super()._normalize_binop_operand(other)
+                return pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
             if not isinstance(other, (int, float, complex)):
                 # Go via NumPy to get the value
                 other = np.array(other)
@@ -412,7 +452,6 @@ class NumericalColumn(NumericalBaseColumn):
                         self.dtype,
                         np.result_type(self.dtype.numpy_dtype, other),  # noqa: TID251
                     )
-
             else:
                 common_dtype = np.result_type(self.dtype, other)  # noqa: TID251
             if common_dtype.kind in {"b", "i", "u", "f"}:  # type: ignore[union-attr]

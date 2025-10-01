@@ -22,6 +22,7 @@ from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
     find_common_type,
+    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.utils import is_na_like
 
@@ -130,14 +131,12 @@ class TemporalBaseColumn(ColumnBase):
     def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if isinstance(other, ColumnBase):
             return other
-        elif self.dtype.kind == "M" and isinstance(other, cudf.DateOffset):
-            return other
         elif isinstance(other, (cp.ndarray, np.ndarray)) and other.ndim == 0:
             other = other[()]
 
         if is_scalar(other):
             if is_na_like(other):
-                return super()._normalize_binop_operand(other)
+                return pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
             elif self.dtype.kind == "M" and isinstance(other, pd.Timestamp):
                 if other.tz is not None:
                     raise NotImplementedError(
@@ -198,9 +197,19 @@ class TemporalBaseColumn(ColumnBase):
     @property
     def values(self) -> cp.ndarray:
         """
-        Return a CuPy representation of the DateTimeColumn.
+        Return a CuPy representation of the TemporalBaseColumn.
         """
-        raise NotImplementedError(f"cupy does not support {self.dtype}")
+        if is_pandas_nullable_extension_dtype(self.dtype):
+            dtype = getattr(self.dtype, "numpy_dtype", self.dtype)
+        else:
+            dtype = self.dtype
+
+        if len(self) == 0:
+            return cp.empty(0, dtype=self._UNDERLYING_DTYPE).view(dtype)
+
+        if self.has_nulls():
+            raise ValueError("cupy does not support NaT.")
+        return cp.asarray(self.data).view(dtype)
 
     def element_indexing(self, index: int) -> ScalarLike:
         result = super().element_indexing(index)

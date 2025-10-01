@@ -89,6 +89,10 @@ def dtype(arbitrary: Any) -> DtypeObj:
                 arrow_type == pa.date32()
                 or arrow_type == pa.binary()
                 or isinstance(arrow_type, pa.DictionaryType)
+            ) or (
+                cudf.get_option("mode.pandas_compatible")
+                and isinstance(arrow_type, pa.TimestampType)
+                and getattr(arrow_type, "tz", None) is not None
             ):
                 raise NotImplementedError(
                     f"cuDF does not yet support {pd_dtype}"
@@ -102,9 +106,9 @@ def dtype(arbitrary: Any) -> DtypeObj:
     elif isinstance(pd_dtype, PANDAS_NUMPY_DTYPE):
         return dtype(pd_dtype.numpy_dtype)
     elif isinstance(pd_dtype, pd.CategoricalDtype):
-        return cudf.CategoricalDtype.from_pandas(pd_dtype)
+        return CategoricalDtype(pd_dtype.categories, pd_dtype.ordered)
     elif isinstance(pd_dtype, pd.IntervalDtype):
-        return cudf.IntervalDtype.from_pandas(pd_dtype)
+        return IntervalDtype(pd_dtype.subtype, pd_dtype.closed)
     elif isinstance(pd_dtype, pd.DatetimeTZDtype):
         return pd_dtype
     else:
@@ -194,6 +198,8 @@ class CategoricalDtype(_BaseDtype):
     """
 
     def __init__(self, categories=None, ordered: bool | None = False) -> None:
+        if not (ordered is None or isinstance(ordered, bool)):
+            raise ValueError("ordered must be a boolean or None")
         self._categories = self._init_categories(categories)
         self._ordered = ordered
 
@@ -250,6 +256,11 @@ class CategoricalDtype(_BaseDtype):
         >>> cudf_dtype
         CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=object)
         """
+        warnings.warn(
+            "from_pandas is deprecated and will be removed in a future version. "
+            "Pass the pandas.CategoricalDtype categories and ordered to the CategoricalDtype constructor instead.",
+            FutureWarning,
+        )
         return CategoricalDtype(
             categories=dtype.categories, ordered=dtype.ordered
         )
@@ -278,9 +289,13 @@ class CategoricalDtype(_BaseDtype):
     def _init_categories(self, categories: Any) -> ColumnBase | None:
         if categories is None:
             return categories
+        from cudf.api.types import is_scalar
+
+        if is_scalar(categories):
+            raise ValueError("categories must be a list-like object")
         if len(categories) == 0 and not isinstance(
             getattr(categories, "dtype", None),
-            (cudf.IntervalDtype, pd.IntervalDtype),
+            (IntervalDtype, pd.IntervalDtype),
         ):
             dtype = CUDF_STRING_DTYPE
         else:
@@ -651,7 +666,8 @@ class StructDtype(_BaseDtype):
         StructType(struct<x: int32, y: string>)
         """
         return pa.struct(
-            {
+            # dict[str, DataType] should be compatible but pyarrow stubs are too strict
+            {  # type: ignore[arg-type]
                 k: cudf_dtype_to_pa_type(dtype)
                 for k, dtype in self.fields.items()
             }
@@ -840,7 +856,11 @@ class DecimalDtype(_BaseDtype):
         return pa.decimal128(self.precision, self.scale)
 
     @classmethod
-    def from_arrow(cls, typ: pa.Decimal128Type) -> Self:
+    def from_arrow(
+        cls, typ: pa.Decimal32Type | pa.Decimal64Type | pa.Decimal128Type
+    ) -> Self:
+        # TODO: Eventually narrow this to only accept the appropriate decimal type
+        # for each specific DecimalNDtype subclass
         """
         Construct a cudf decimal dtype from a ``pyarrow`` dtype
 
@@ -969,10 +989,12 @@ class IntervalDtype(StructDtype):
     def __init__(
         self,
         subtype: None | Dtype = None,
-        closed: Literal["left", "right", "neither", "both"] = "right",
+        closed: Literal["left", "right", "neither", "both", None] = "right",
     ) -> None:
         if closed in {"left", "right", "neither", "both"}:
             self.closed = closed
+        elif closed is None:
+            self.closed = "right"
         else:
             raise ValueError(f"{closed=} is not valid")
         if subtype is None:
@@ -1013,6 +1035,11 @@ class IntervalDtype(StructDtype):
 
     @classmethod
     def from_pandas(cls, pd_dtype: pd.IntervalDtype) -> Self:
+        warnings.warn(
+            "from_pandas is deprecated and will be removed in a future version. "
+            "Pass the pandas.IntervalDtype subtype and closed to the IntervalDtype constructor instead.",
+            FutureWarning,
+        )
         return cls(
             subtype=pd_dtype.subtype,
             closed="right" if pd_dtype.closed is None else pd_dtype.closed,

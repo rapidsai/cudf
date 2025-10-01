@@ -691,7 +691,12 @@ def _(
         )
     elif isinstance(name, str):
         children = (translator.translate_expr(n=n, schema=schema) for n in node.input)
-        if name == "log":
+        if name == "log" or (
+            not POLARS_VERSION_LT_133
+            and name == "l"
+            and isinstance(options[0], str)
+            and "".join((name, *options)) == "log"
+        ):
             if POLARS_VERSION_LT_133:  # pragma: no cover
                 (base,) = options
                 (child,) = children
@@ -736,7 +741,7 @@ def _(
         )
         named_aggs = [agg for agg, _ in aggs]
         orderby = node.options.index_column
-        orderby_dtype = schema[orderby].plc
+        orderby_dtype = schema[orderby].plc_type
         if plc.traits.is_integral(orderby_dtype):
             # Integer orderby column is cast in implementation to int64 in polars
             orderby_dtype = plc.DataType(plc.TypeId.INT64)
@@ -781,24 +786,24 @@ def _(
         descending = bool(getattr(node, "order_by_descending", False))
         nulls_last = bool(getattr(node, "order_by_nulls_last", False))
 
-        if has_order_by or descending or nulls_last:
-            raise NotImplementedError(
-                f"over(order_by) not supported yet: "
-                f"{node.order_by=}, {descending=}, {nulls_last=}"
-            )
-
         if mapping != "groups_to_rows":
             raise NotImplementedError(
                 f"over(mapping_strategy) not supported yet: {mapping=}; "
                 f"expected 'groups_to_rows'"
             )
 
+        order_by_expr = (
+            translator.translate_expr(n=node.order_by, schema=schema)
+            if has_order_by
+            else None
+        )
         return expr.GroupedRollingWindow(
             dtype,
             (mapping, has_order_by, descending, nulls_last),
             [agg for agg, _ in aggs],
             post,
             *(translator.translate_expr(n=n, schema=schema) for n in node.partition_by),
+            _order_by_expr=order_by_expr,
         )
     assert_never(node.options)
 
@@ -932,7 +937,7 @@ def _(
     dtype: DataType,
     schema: Schema,
 ) -> expr.Expr:
-    if plc.traits.is_boolean(dtype.plc) and node.op == pl_expr.Operator.TrueDivide:
+    if plc.traits.is_boolean(dtype.plc_type) and node.op == pl_expr.Operator.TrueDivide:
         dtype = DataType(pl.Float64())
     return expr.BinOp(
         dtype,

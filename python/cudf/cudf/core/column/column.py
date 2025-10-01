@@ -655,48 +655,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             column = column.set_mask(mask)
         return column  # type: ignore[return-value]
 
-    def data_array_view(
-        self, *, mode: Literal["write", "read"] = "write"
-    ) -> cp.ndarray:
-        """
-        View the data as a device array object
-
-        Parameters
-        ----------
-        mode : str, default 'write'
-            Supported values are {'read', 'write'}
-            If 'write' is passed, a device array object
-            with readonly flag set to False in CAI is returned.
-            If 'read' is passed, a device array object
-            with readonly flag set to True in CAI is returned.
-            This also means, If the caller wishes to modify
-            the data returned through this view, they must
-            pass mode="write", else pass mode="read".
-
-        Returns
-        -------
-        cupy.ndarray
-        """
-        if self.data is not None:
-            if mode == "read":
-                obj = cuda_array_interface_wrapper(
-                    ptr=self.data.get_ptr(mode="read"),
-                    size=self.data.size,
-                    owner=self.data,
-                )
-            elif mode == "write":
-                obj = self.data
-            else:
-                raise ValueError(f"Unsupported mode: {mode}")
-        else:
-            obj = None
-
-        if cudf.get_option("mode.pandas_compatible"):
-            dtype = getattr(self.dtype, "numpy_dtype", self.dtype)
-        else:
-            dtype = self.dtype
-        return cp.asarray(obj).view(dtype)
-
     def __len__(self) -> int:
         return self.size
 
@@ -765,44 +723,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         Return a numpy representation of the Column.
         """
-        if len(self) == 0:
-            return np.array([], dtype=self.dtype)
-
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and is_pandas_nullable_extension_dtype(self.dtype)
-            and self.dtype.kind in "iuf"
-            and self.has_nulls()
-        ):
-            col = self.astype(
-                np.dtype("float32")
-                if getattr(self.dtype, "numpy_dtype", self.dtype)
-                == np.dtype("float32")
-                else np.dtype("float64")
-            )
-            col = col.fillna(np.nan)
-            with acquire_spill_lock():
-                res = col.data_array_view(mode="read").get()
-            return res
-
-        if self.has_nulls():
-            raise ValueError("Column must have no nulls.")
-
-        with acquire_spill_lock():
-            return self.data_array_view(mode="read").get()
+        return self.to_pandas().to_numpy()
 
     @property
     def values(self) -> cp.ndarray:
         """
         Return a CuPy representation of the Column.
         """
-        if len(self) == 0:
-            return cp.array([], dtype=self.dtype)
-
-        if self.has_nulls():
-            raise ValueError("Column must have no nulls.")
-
-        return self.data_array_view(mode="write")
+        raise NotImplementedError(f"cupy does not support {self.dtype}")
 
     def find_and_replace(
         self,
@@ -884,10 +812,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
           4
         ]
         """
-        return plc.interop.to_arrow(self.to_pylibcudf(mode="read"))
+        return self.to_pylibcudf(mode="read").to_arrow()
 
     @classmethod
-    def from_arrow(cls, array: pa.Array) -> ColumnBase:
+    def from_arrow(cls, array: pa.Array | pa.ChunkedArray) -> ColumnBase:
         """
         Convert PyArrow Array/ChunkedArray to column
 
@@ -929,16 +857,23 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         if pa.types.is_dictionary(array.type):
             if isinstance(array, pa.Array):
-                codes = array.indices
-                dictionary = array.dictionary
+                dict_array = cast(pa.DictionaryArray, array)
+                codes: pa.Array | pa.ChunkedArray = dict_array.indices
+                dictionary: pa.Array | pa.ChunkedArray = dict_array.dictionary
             else:
                 codes = pa.chunked_array(
-                    [chunk.indices for chunk in array.chunks],
+                    [
+                        cast(pa.DictionaryArray, chunk).indices
+                        for chunk in array.chunks
+                    ],
                     type=array.type.index_type,
                 )
                 dictionary = pc.unique(
                     pa.chunked_array(
-                        [chunk.dictionary for chunk in array.chunks],
+                        [
+                            cast(pa.DictionaryArray, chunk).dictionary
+                            for chunk in array.chunks
+                        ],
                         type=array.type.value_type,
                     )
                 )
@@ -1169,7 +1104,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 self.to_pylibcudf(mode="read"),
                 index,
             )
-        py_element = plc.interop.to_arrow(plc_scalar)
+        py_element = plc_scalar.to_arrow()
         if not py_element.is_valid:
             return self._PANDAS_NA_VALUE
         # Calling .as_py() on a pyarrow.StructScalar with duplicate field names
@@ -1242,11 +1177,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         if out:
             self._mimic_inplace(out, inplace=True)
-
-    def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
-        if is_na_like(other):
-            return pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
-        return NotImplemented
 
     def _all_bools_with_nulls(
         self, other: ColumnBase, bool_fill_value: bool
@@ -2161,7 +2091,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self,
         cats: ColumnBase,
         dtype: Dtype | None = None,
-        na_sentinel: pa.Scalar | None = None,
     ) -> NumericalColumn:
         """
         Convert each value in `self` into an integer code, with `cats`
@@ -2192,8 +2121,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         ]
         dtype: int8
         """
-        if na_sentinel is None or not na_sentinel.is_valid:
-            na_sentinel = pa.scalar(-1)
+        na_sentinel = pa.scalar(-1)
 
         def _return_sentinel_column():
             return as_column(na_sentinel, dtype=dtype, length=len(self))
@@ -2885,7 +2813,10 @@ def as_column(
                     and dtype is None
                 ):
                     # Conversion to arrow converts IntervalDtype to StructDtype
-                    dtype = CategoricalDtype.from_pandas(arbitrary.dtype)
+                    dtype = CategoricalDtype(
+                        categories=arbitrary.dtype.categories,
+                        ordered=arbitrary.dtype.ordered,
+                    )
             result = as_column(
                 pa.array(arbitrary, from_pandas=True),
                 nan_as_null=nan_as_null,
@@ -2904,7 +2835,10 @@ def as_column(
                 # TODO: Move this to near isinstance(arbitrary.dtype.categories.dtype, pd.IntervalDtype)
                 # check above, for which merge should be working fully with pandas nullable extension dtypes.
                 result = result._with_type_metadata(
-                    CategoricalDtype.from_pandas(arbitrary.dtype)
+                    CategoricalDtype(
+                        categories=arbitrary.dtype.categories,
+                        ordered=arbitrary.dtype.ordered,
+                    )
                 )
             return result
         elif is_pandas_nullable_extension_dtype(arbitrary.dtype):

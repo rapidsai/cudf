@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 import polars as pl
 
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
@@ -29,11 +31,14 @@ def test_rolling_datetime():
         executor_options={
             "max_rows_per_partition": 3,
             "scheduler": DEFAULT_SCHEDULER,
-            "fallback_mode": StreamingFallbackMode.SILENT,
+            "fallback_mode": StreamingFallbackMode.WARN,
         },
     )
     q = df.with_columns(pl.sum("a").rolling(index_column="dt", period="2d"))
-    assert_gpu_result_equal(q, engine=engine)
+    with pytest.warns(
+        UserWarning, match="This HStack not supported for multiple partitions."
+    ):
+        assert_gpu_result_equal(q, engine=engine)
 
 
 def test_over_in_filter_unsupported() -> None:
@@ -50,8 +55,11 @@ def test_over_in_filter_unsupported() -> None:
         executor_options={
             "max_rows_per_partition": 1,
             "scheduler": DEFAULT_SCHEDULER,
-            "fallback_mode": StreamingFallbackMode.SILENT,
+            "fallback_mode": StreamingFallbackMode.WARN,
         },
     )
-
-    assert_gpu_result_equal(q, engine=engine)
+    with pytest.warns(
+        UserWarning,
+        match=r"over\(...\) inside filter is not supported for multiple partitions.*",
+    ):
+        assert_gpu_result_equal(q, engine=engine)
