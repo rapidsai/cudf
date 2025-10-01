@@ -5,13 +5,11 @@
 from __future__ import annotations
 
 import dataclasses
-import enum
 import functools
 import itertools
 import math
 import statistics
 from collections import defaultdict
-from enum import IntEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -26,6 +24,8 @@ from cudf_polars.experimental.base import (
     ColumnStats,
     DataSourceInfo,
     DataSourcePair,
+    IOPartitionFlavor,
+    IOPartitionPlan,
     PartitionInfo,
     UniqueStats,
     get_key_name,
@@ -80,73 +80,40 @@ def _(
     return ir, {ir: PartitionInfo(count=1)}
 
 
-class ScanPartitionFlavor(IntEnum):
-    """Flavor of Scan partitioning."""
+def scan_partition_plan(
+    ir: Scan, stats: StatsCollector, config_options: ConfigOptions
+) -> IOPartitionPlan:
+    """Extract the partitioning plan of a Scan operation."""
+    if ir.typ == "parquet":
+        # TODO: Use system info to set default blocksize
+        assert config_options.executor.name == "streaming", (
+            "'in-memory' executor not supported in 'generate_ir_tasks'"
+        )
 
-    SINGLE_FILE = enum.auto()  # 1:1 mapping between files and partitions
-    SPLIT_FILES = enum.auto()  # Split each file into >1 partition
-    FUSED_FILES = enum.auto()  # Fuse multiple files into each partition
+        blocksize: int = config_options.executor.target_partition_size
+        column_stats = stats.column_stats.get(ir, {})
+        column_sizes: list[int] = []
+        for cs in column_stats.values():
+            storage_size = cs.source_info.storage_size
+            if storage_size.value is not None:
+                column_sizes.append(storage_size.value)
 
+        if (file_size := sum(column_sizes)) > 0:
+            if file_size > blocksize:
+                # Split large files
+                return IOPartitionPlan(
+                    math.ceil(file_size / blocksize),
+                    IOPartitionFlavor.SPLIT_FILES,
+                )
+            else:
+                # Fuse small files
+                return IOPartitionPlan(
+                    max(blocksize // int(file_size), 1),
+                    IOPartitionFlavor.FUSED_FILES,
+                )
 
-class ScanPartitionPlan:
-    """
-    Scan partitioning plan.
-
-    Notes
-    -----
-    The meaning of `factor` depends on the value of `flavor`:
-      - SINGLE_FILE: `factor` must be `1`.
-      - SPLIT_FILES: `factor` is the number of partitions per file.
-      - FUSED_FILES: `factor` is the number of files per partition.
-    """
-
-    __slots__ = ("factor", "flavor")
-    factor: int
-    flavor: ScanPartitionFlavor
-
-    def __init__(self, factor: int, flavor: ScanPartitionFlavor) -> None:
-        if (
-            flavor == ScanPartitionFlavor.SINGLE_FILE and factor != 1
-        ):  # pragma: no cover
-            raise ValueError(f"Expected factor == 1 for {flavor}, got: {factor}")
-        self.factor = factor
-        self.flavor = flavor
-
-    @staticmethod
-    def from_scan(
-        ir: Scan, stats: StatsCollector, config_options: ConfigOptions
-    ) -> ScanPartitionPlan:
-        """Extract the partitioning plan of a Scan operation."""
-        if ir.typ == "parquet":
-            # TODO: Use system info to set default blocksize
-            assert config_options.executor.name == "streaming", (
-                "'in-memory' executor not supported in 'generate_ir_tasks'"
-            )
-
-            blocksize: int = config_options.executor.target_partition_size
-            column_stats = stats.column_stats.get(ir, {})
-            column_sizes: list[int] = []
-            for cs in column_stats.values():
-                storage_size = cs.source_info.storage_size
-                if storage_size.value is not None:
-                    column_sizes.append(storage_size.value)
-
-            if (file_size := sum(column_sizes)) > 0:
-                if file_size > blocksize:
-                    # Split large files
-                    return ScanPartitionPlan(
-                        math.ceil(file_size / blocksize),
-                        ScanPartitionFlavor.SPLIT_FILES,
-                    )
-                else:
-                    # Fuse small files
-                    return ScanPartitionPlan(
-                        max(blocksize // int(file_size), 1),
-                        ScanPartitionFlavor.FUSED_FILES,
-                    )
-
-        # TODO: Use file sizes for csv and json
-        return ScanPartitionPlan(1, ScanPartitionFlavor.SINGLE_FILE)
+    # TODO: Use file sizes for csv and json
+    return IOPartitionPlan(1, IOPartitionFlavor.SINGLE_FILE)
 
 
 class SplitScan(IR):
@@ -304,9 +271,9 @@ def _(
         and ir.skip_rows == 0
         and ir.row_index is None
     ):
-        plan = ScanPartitionPlan.from_scan(ir, rec.state["stats"], config_options)
+        plan = scan_partition_plan(ir, rec.state["stats"], config_options)
         paths = list(ir.paths)
-        if plan.flavor == ScanPartitionFlavor.SPLIT_FILES:
+        if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
             # Disable chunked reader when splitting files
             parquet_options = dataclasses.replace(
                 config_options.parquet_options,

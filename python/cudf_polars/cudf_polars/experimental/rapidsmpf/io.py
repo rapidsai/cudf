@@ -14,12 +14,11 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 from cudf_polars.dsl.ir import DataFrameScan, Scan
-from cudf_polars.experimental.base import PartitionInfo
-from cudf_polars.experimental.io import (
-    ScanPartitionFlavor,
-    ScanPartitionPlan,
-    SplitScan,
+from cudf_polars.experimental.base import (
+    IOPartitionFlavor,
+    PartitionInfo,
 )
+from cudf_polars.experimental.io import SplitScan, scan_partition_plan
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
     lower_ir_node,
@@ -33,6 +32,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.ir import IR
+    from cudf_polars.experimental.base import IOPartitionPlan
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.dispatch import LowerIRTransformer
     from cudf_polars.utils.config import ParquetOptions
@@ -137,7 +137,7 @@ def _(
         and ir.skip_rows == 0
         and ir.row_index is None
     ):
-        plan = ScanPartitionPlan.from_scan(ir, rec.state["stats"], config_options)
+        plan = scan_partition_plan(ir, rec.state["stats"], config_options)
         paths = list(ir.paths)
 
         # NOTE: We calculate the expected partition count
@@ -145,12 +145,12 @@ def _(
         # The generate_ir_sub_network logic is NOT required
         # to obey this partition count. However, the count
         # WILL match after an IO operation (for now).
-        if plan.flavor == ScanPartitionFlavor.SPLIT_FILES:
+        if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
             count = plan.factor * len(paths)
         else:
             count = math.ceil(len(paths) / plan.factor)
 
-        return ir, {ir: PartitionInfo(count=count, metadata={"scan_plan": plan})}
+        return ir, {ir: PartitionInfo(count=count, io_plan=plan)}
 
     return ir, {ir: PartitionInfo(count=1)}  # pragma: no cover
 
@@ -160,7 +160,7 @@ async def scan_node(
     ctx: Context,
     ch_out: Channel[TableChunk],
     ir: Scan,
-    plan: ScanPartitionPlan,
+    plan: IOPartitionPlan,
     parquet_options: ParquetOptions,
 ) -> None:
     """
@@ -184,7 +184,7 @@ async def scan_node(
     async with shutdown_on_error(ctx, ch_out):
         # Build a list of local Scan operations
         scans: list[Scan | SplitScan] = []
-        if plan.flavor == ScanPartitionFlavor.SPLIT_FILES:
+        if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
             count = plan.factor * len(ir.paths)
             local_count = math.ceil(count / ctx.comm().nranks)
             local_offset = local_count * ctx.comm().rank
@@ -266,9 +266,9 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any
     parquet_options = config_options.parquet_options
     partition_info = rec.state["partition_info"][ir]
 
-    assert partition_info.metadata is not None, "Scan node must have a partition plan"
-    plan: ScanPartitionPlan = partition_info.metadata["scan_plan"]
-    if plan.flavor == ScanPartitionFlavor.SPLIT_FILES:
+    assert partition_info.io_plan is not None, "Scan node must have a partition plan"
+    plan: IOPartitionPlan = partition_info.io_plan
+    if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
         parquet_options = dataclasses.replace(parquet_options, chunked=False)
 
     ch_out = Channel()
