@@ -548,6 +548,74 @@ class pinned_fallback_host_memory_resource {
   }
   // NOLINTEND(bugprone-easily-swappable-parameters)
 
+#if CCCL_MAJOR_VERSION > 3 || (CCCL_MAJOR_VERSION == 3 && CCCL_MINOR_VERSION >= 1)
+  /**
+   * @brief Allocates pinned host memory of size at least \p bytes bytes.
+   *
+   * @throws rmm::out_of_memory if the requested allocation could not be fulfilled due to to a
+   * CUDA out of memory error.
+   * @throws rmm::bad_alloc if the requested allocation could not be fulfilled due to any other
+   * reason.
+   *
+   * @param bytes The size, in bytes, of the allocation.
+   * @param alignment Alignment in bytes. Default alignment is used if unspecified.
+   *
+   * @return Pointer to the newly allocated memory.
+   */
+  void* allocate_sync(std::size_t bytes, std::size_t alignment)
+  {
+    return allocate(bytes, alignment);
+  }
+
+  /**
+   * @brief Deallocate memory pointed to by \p ptr of size \p bytes bytes.
+   *
+   * @param ptr Pointer to be deallocated.
+   * @param bytes Size of the allocation.
+   * @param alignment Alignment in bytes. Default alignment is used if unspecified.
+   */
+  void deallocate_sync(void* ptr, std::size_t bytes, std::size_t alignment)
+  {
+    return deallocate(ptr, bytes, alignment);
+  }
+
+  /**
+   * @brief Allocates pinned host memory of size at least \p bytes bytes and alignment \p alignment.
+   *
+   * @note Stream argument is ignored and behavior is identical to allocate.
+   *
+   * @throws rmm::out_of_memory if the requested allocation could not be fulfilled due to to a
+   * CUDA out of memory error.
+   * @throws rmm::bad_alloc if the requested allocation could not be fulfilled due to any other
+   * error.
+   *
+   * @param stream CUDA stream on which to perform the allocation (ignored).
+   * @param bytes The size, in bytes, of the allocation.
+   * @param alignment Alignment in bytes.
+   * @return Pointer to the newly allocated memory.
+   */
+  void* allocate(rmm::cuda_stream_view stream, std::size_t bytes, std::size_t alignment)
+  {
+    return allocate_async(bytes, alignment, stream);
+  }
+
+  /**
+   * @brief Deallocate memory pointed to by \p ptr of size \p bytes bytes and alignment \p
+   * alignment bytes.
+   *
+   * @note Stream argument is ignored and behavior is identical to deallocate.
+   *
+   * @param stream CUDA stream on which to perform the deallocation (ignored).
+   * @param ptr Pointer to be deallocated.
+   * @param bytes Size of the allocation.
+   * @param alignment Alignment in bytes.
+   */
+  void deallocate(rmm::cuda_stream_view stream, void* ptr, std::size_t bytes, std::size_t alignment)
+  {
+    return deallocate_async(ptr, bytes, alignment, stream);
+  }
+#endif
+
   /**
    * @briefreturn{true if the specified resource is the same type as this resource.}
    */
@@ -578,86 +646,18 @@ class pinned_fallback_host_memory_resource {
                            cuda::mr::host_accessible) noexcept
   {
   }
-
-#if CCCL_MAJOR_VERSION > 3 || (CCCL_MAJOR_VERSION == 3 && CCCL_MINOR_VERSION >= 1)
-
- public:
-  /**
-   * @brief Allocates pinned host memory of size at least \p bytes bytes.
-   *
-   * @throws rmm::out_of_memory if the requested allocation could not be fulfilled due to to a
-   * CUDA out of memory error.
-   * @throws rmm::bad_alloc if the requested allocation could not be fulfilled due to any other
-   * reason.
-   *
-   * @param bytes The size, in bytes, of the allocation.
-   * @param alignment Alignment in bytes. Default alignment is used if unspecified.
-   *
-   * @return Pointer to the newly allocated memory.
-   */
-  static void* allocate_sync(std::size_t bytes, std::size_t alignment)
-  {
-    return allocate(bytes, alignment);
-  }
-
-  /**
-   * @brief Deallocate memory pointed to by \p ptr of size \p bytes bytes.
-   *
-   * @param ptr Pointer to be deallocated.
-   * @param bytes Size of the allocation.
-   * @param alignment Alignment in bytes. Default alignment is used if unspecified.
-   */
-  static void deallocate_sync(void* ptr, std::size_t bytes, std::size_t alignment)
-  {
-    return deallocate(ptr, bytes, alignment);
-  }
-
-  /**
-   * @brief Allocates pinned host memory of size at least \p bytes bytes and alignment \p alignment.
-   *
-   * @note Stream argument is ignored and behavior is identical to allocate.
-   *
-   * @throws rmm::out_of_memory if the requested allocation could not be fulfilled due to to a
-   * CUDA out of memory error.
-   * @throws rmm::bad_alloc if the requested allocation could not be fulfilled due to any other
-   * error.
-   *
-   * @param stream CUDA stream on which to perform the allocation (ignored).
-   * @param bytes The size, in bytes, of the allocation.
-   * @param alignment Alignment in bytes.
-   * @return Pointer to the newly allocated memory.
-   */
-  static void* allocate(rmm::cuda_stream_view stream, std::size_t bytes, std::size_t alignment)
-  {
-    return allocate_async(bytes, alignment, stream);
-  }
-
-  /**
-   * @brief Deallocate memory pointed to by \p ptr of size \p bytes bytes and alignment \p
-   * alignment bytes.
-   *
-   * @note Stream argument is ignored and behavior is identical to deallocate.
-   *
-   * @param stream CUDA stream on which to perform the deallocation (ignored).
-   * @param ptr Pointer to be deallocated.
-   * @param bytes Size of the allocation.
-   * @param alignment Alignment in bytes.
-   */
-  static void deallocate(rmm::cuda_stream_view stream,
-                         void* ptr,
-                         std::size_t bytes,
-                         std::size_t alignment)
-  {
-    return deallocate_async(ptr, bytes, alignment, stream);
-  }
-
-#endif
 };
 
 // carryover from RMM pinned_host_memory_resource
+#if CCCL_MAJOR_VERSION > 3 || (CCCL_MAJOR_VERSION == 3 && CCCL_MINOR_VERSION >= 1)
+static_assert(cuda::mr::resource_with<pinned_fallback_host_memory_resource,
+                                      cuda::mr::device_accessible,
+                                      cuda::mr::host_accessible>);
+#else
 static_assert(cuda::mr::async_resource_with<pinned_fallback_host_memory_resource,
                                             cuda::mr::device_accessible,
                                             cuda::mr::host_accessible>);
+#endif
 
 // we set this to our fallback resource if we have set it.
 std::unique_ptr<pinned_fallback_host_memory_resource> pinned_fallback_mr;
