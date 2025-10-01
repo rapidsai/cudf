@@ -10,6 +10,36 @@ A GPU DataFrame is like a pandas DataFrame (a table of data with rows and column
 
 This is built on NVIDIA's CUDA technology and libraries like libcudf for low-level GPU handling. If you're new to GPUs, think of it as upgrading from a single-lane road (CPU) to a massive highway (GPU) for data traffic.
 
+### Why Use cuDF?
+cuDF accelerates pandas-like data processing on NVIDIA GPUs, ideal for large datasets in data science, machine learning, or ETL pipelines. It uses the same API as pandas, so you can switch with minimal code changes.
+
+**Speed Benefits**
+- On large datasets (e.g., 100M rows), cuDF can be 10x-150x faster than pandas due to GPU parallelism.
+- Example: Reading a 100M-row CSV took 17.47s in pandas but only 1.02s in cuDF (17x faster). For smaller data (e.g., 1M rows), pandas may be faster due to GPU transfer overhead (0.15s vs. 0.42s).
+- Performance depends on your GPU and data size—bigger datasets see bigger gains.
+
+![Performance](https://i.ibb.co/0ybhzYMv/Screenshot-2025-10-01-123714.png)
+![Performance](https://i.ibb.co/rGhSgX87/Screenshot-2025-10-01-124017.png)
+
+**Try It Yourself**
+Run this code to compare speeds on your system:
+
+```python
+import time, pandas as pd, cudf
+# Generate 100M rows (~1.5GB)
+df = pd.DataFrame({'a': range(100_000_000), 'b': range(100_000_000)})
+df.to_csv("large.csv", index=False)
+
+# Pandas
+start = time.time()
+pdf = pd.read_csv("large.csv")
+print(f"Pandas read: {time.time() - start:.4f} s")
+
+# cuDF
+start = time.time()
+gdf = cudf.read_csv("large.csv")
+print(f"cuDF read: {time.time() - start:.4f} s")
+
 ## 📢 cuDF can now be used as a no-code-change accelerator for pandas! To learn more, see [here](https://rapids.ai/cudf-pandas/)!
 
 cuDF (pronounced "KOO-dee-eff") is a GPU DataFrame library
