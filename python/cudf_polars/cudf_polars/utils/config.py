@@ -57,7 +57,9 @@ def _env_get_int(name: str, default: int) -> int:
         return default  # pragma: no cover
 
 
+@functools.cache
 def get_device_handle() -> Any:
+    # Gets called for each IR.do_evaluate node, so we'll cache it.
     import pynvml
 
     try:

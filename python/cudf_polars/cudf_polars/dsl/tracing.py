@@ -44,6 +44,12 @@ if TYPE_CHECKING:
     from cudf_polars.dsl import ir
 
 
+@functools.cache
+def _getpid() -> int:
+    # Gets called for each IR.do_evaluate node, so we'll cache it.
+    return os.getpid()
+
+
 def make_snapshot(
     node_type: type[ir.IR],
     frames: Sequence[cudf_polars.containers.DataFrame],
@@ -142,7 +148,7 @@ def log_do_evaluate(
             # do this just once
             pynvml.nvmlInit()
             maybe_handle = get_device_handle()
-            pid = os.getpid()
+            pid = _getpid()
             log = structlog.get_logger()
 
             # By convention, all non-dataframe arguments (non_child) come first.
