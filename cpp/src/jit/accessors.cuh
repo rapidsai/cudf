@@ -16,6 +16,7 @@
 
 #pragma once
 #include <cudf/column/column_device_view_base.cuh>
+#include <cudf/table/table_device_view_base.cuh>
 #include <cudf/types.hpp>
 
 #include <cuda/std/cstddef>
@@ -121,6 +122,15 @@ struct scalar_accessor {
   static __device__ decltype(auto) nullable_element(ColumnView const* columns, cudf::size_type)
   {
     return Accessor::nullable_element(columns, 0);
+  }
+};
+
+template <typename... ColumnAccessors>
+struct table_accessor {
+  static __device__ cuda::std::tuple<typename ColumnAccessors::type...> element(
+    table_device_view_core const& table, cudf::size_type row_index)
+  {
+    return {ColumnAccessors::element(table.column(ColumnAccessors::index), row_index)...};
   }
 };
 
