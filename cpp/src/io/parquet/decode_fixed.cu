@@ -22,6 +22,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 
 #include <cooperative_groups.h>
+#include <cuda/std/bit>
 #include <cuda/std/iterator>
 
 namespace cudf::io::parquet::detail {
@@ -350,10 +351,10 @@ __device__ int update_validity_and_row_indices_nested(
     // compute our row index, whether we're in row bounds, and validity
     // This ASSUMES that s->row_index_lower_bound is always -1!
     // Its purpose is to handle rows than span page boundaries, which only happen for lists.
-    int const row_index                = thread_value_count + value_count;
-    int const in_row_bounds            = (row_index < last_row);
-    bool const in_write_row_bounds     = in_row_bounds && (row_index >= first_row);
-    int const in_write_row_bounds_mask = ballot(in_write_row_bounds);
+    int const row_index                     = thread_value_count + value_count;
+    int const in_row_bounds                 = (row_index < last_row);
+    bool const in_write_row_bounds          = in_row_bounds && (row_index >= first_row);
+    uint32_t const in_write_row_bounds_mask = ballot(in_write_row_bounds);
     int const write_start =
       cuda::std::countr_zero(in_write_row_bounds_mask);  // first bit in the warp to store
 
@@ -507,8 +508,8 @@ __device__ int update_validity_and_row_indices_flat(
     // at the first value, even if that is before first_row, because we cannot trivially jump to
     // the correct position to start reading. since we are about to write the validity vector
     // here we need to adjust our computed mask to take into account the write row bounds.
-    bool const in_write_row_bounds     = in_row_bounds && (row_index >= first_row);
-    int const in_write_row_bounds_mask = ballot(in_write_row_bounds);
+    bool const in_write_row_bounds          = in_row_bounds && (row_index >= first_row);
+    uint32_t const in_write_row_bounds_mask = ballot(in_write_row_bounds);
     int const write_start =
       cuda::std::countr_zero(in_write_row_bounds_mask);  // first bit in the warp to store
     int warp_null_count = 0;
@@ -1193,44 +1194,27 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
       block.sync();
     }
 
-    // decode the values themselves
-    if constexpr (has_lists_t) {
+    auto decode_values = [&]<copy_mode copy_mode_t>() {
       if constexpr (has_strings_t) {
         string_output_offset =
-          decode_strings<decode_block_size_t, has_lists_t, split_decode_t, copy_mode::INDIRECT>(
+          decode_strings<decode_block_size_t, has_lists_t, split_decode_t, copy_mode_t>(
             s, sb, valid_count, next_valid_count, t, string_output_offset);
       } else if constexpr (split_decode_t) {
-        decode_fixed_width_split_values<decode_block_size_t, has_lists_t, copy_mode::INDIRECT>(
+        decode_fixed_width_split_values<decode_block_size_t, has_lists_t, copy_mode_t>(
           s, sb, valid_count, next_valid_count, t);
       } else {
-        decode_fixed_width_values<decode_block_size_t, has_lists_t, copy_mode::INDIRECT>(
+        decode_fixed_width_values<decode_block_size_t, has_lists_t, copy_mode_t>(
           s, sb, valid_count, next_valid_count, t);
       }
+    };
+
+    if constexpr (has_lists_t) {
+      decode_values.template operator()<copy_mode::INDIRECT>();
     } else {
-      if (!should_process_nulls) {
-        if constexpr (has_strings_t) {
-          string_output_offset =
-            decode_strings<decode_block_size_t, has_lists_t, split_decode_t, copy_mode::DIRECT>(
-              s, sb, valid_count, next_valid_count, t, string_output_offset);
-        } else if constexpr (split_decode_t) {
-          decode_fixed_width_split_values<decode_block_size_t, has_lists_t, copy_mode::DIRECT>(
-            s, sb, valid_count, next_valid_count, t);
-        } else {
-          decode_fixed_width_values<decode_block_size_t, has_lists_t, copy_mode::DIRECT>(
-            s, sb, valid_count, next_valid_count, t);
-        }
+      if (should_process_nulls) {
+        decode_values.template operator()<copy_mode::INDIRECT>();
       } else {
-        if constexpr (has_strings_t) {
-          string_output_offset =
-            decode_strings<decode_block_size_t, has_lists_t, split_decode_t, copy_mode::INDIRECT>(
-              s, sb, valid_count, next_valid_count, t, string_output_offset);
-        } else if constexpr (split_decode_t) {
-          decode_fixed_width_split_values<decode_block_size_t, has_lists_t, copy_mode::INDIRECT>(
-            s, sb, valid_count, next_valid_count, t);
-        } else {
-          decode_fixed_width_values<decode_block_size_t, has_lists_t, copy_mode::INDIRECT>(
-            s, sb, valid_count, next_valid_count, t);
-        }
+        decode_values.template operator()<copy_mode::DIRECT>();
       }
     }
     block.sync();
