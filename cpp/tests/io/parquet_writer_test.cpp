@@ -1485,7 +1485,7 @@ INSTANTIATE_TEST_CASE_P(DeviceInternal,
 
 INSTANTIATE_TEST_CASE_P(Host,
                         ParquetCompressionTest,
-                        ::testing::Combine(::testing::Values("HOST"),
+                        ::testing::Combine(::testing::Values("HOST", "HYBRID", "AUTO"),
                                            ::testing::Values(cudf::io::compression_type::AUTO,
                                                              cudf::io::compression_type::SNAPPY,
                                                              cudf::io::compression_type::ZSTD)));
