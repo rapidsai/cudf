@@ -688,7 +688,7 @@ def parse_args(
         "--rmm-async",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Use RMM async memory resource.",
+        help="Use RMM async memory resource. Note: only affects distributed scheduler!",
     )
     parser.add_argument(
         "--rapidsmpf-oom-protection",
