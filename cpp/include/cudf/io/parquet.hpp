@@ -88,6 +88,11 @@ class parquet_reader_options {
   // Number of rows to read; `nullopt` is all
   std::optional<size_type> _num_rows;
 
+  // Read row groups that start at or after this byte offset into the source
+  size_t _skip_bytes = 0;
+  // Read row groups that start before _num_bytes bytes after _skip_bytes into the source
+  std::optional<size_t> _num_bytes;
+
   // Predicate filter as AST to filter output rows.
   std::optional<std::reference_wrapper<ast::expression const>> _filter;
 
@@ -101,6 +106,8 @@ class parquet_reader_options {
   bool _allow_mismatched_pq_schemas = false;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
+  // Whether to use JIT compilation for filtering
+  bool _use_jit_filter = false;
 
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
 
@@ -200,6 +207,22 @@ class parquet_reader_options {
   [[nodiscard]] std::optional<size_type> const& get_num_rows() const { return _num_rows; }
 
   /**
+   * @brief Returns bytes to skip before starting reading row groups
+   *
+   * @return Bytes to skip before starting reading row groups; only valid for single parquet source
+   * case
+   */
+  [[nodiscard]] size_t get_skip_bytes() const { return _skip_bytes; }
+
+  /**
+   * @brief Returns number of bytes after skipping to end reading row groups at
+   *
+   * @return Number of bytes after skipping to end reading row groups at; only valid for single
+   * parquet source case
+   */
+  [[nodiscard]] std::optional<size_t> const& get_num_bytes() const { return _num_bytes; }
+
+  /**
    * @brief Returns names of column to be read, if set.
    *
    * @return Names of column to be read; `nullopt` if the option is not set
@@ -226,6 +249,13 @@ class parquet_reader_options {
    * @return Timestamp type used to cast timestamp columns
    */
   [[nodiscard]] data_type get_timestamp_type() const { return _timestamp_type; }
+
+  /**
+   * @brief Returns whether to use JIT compilation for filtering.
+   *
+   * @return `true` if JIT compilation should be used for filtering
+   */
+  [[nodiscard]] bool is_enabled_use_jit_filter() const { return _use_jit_filter; }
 
   /**
    * @brief Sets the names of columns to be read from all input sources.
@@ -353,6 +383,20 @@ class parquet_reader_options {
    * @param val Number of rows to read after skip
    */
   void set_num_rows(size_type val);
+
+  /**
+   * @brief Sets bytes to skip before starting reading row groups.
+   *
+   * @param val Bytes to skip before starting reading row groups
+   */
+  void set_skip_bytes(size_t val);
+
+  /**
+   * @brief Sets number of bytes after skipping to end reading row groups at.
+   *
+   * @param val Number of bytes after skipping to end reading row groups at
+   */
+  void set_num_bytes(size_t val);
 
   /**
    * @brief Sets timestamp_type used to cast timestamp columns.
@@ -506,6 +550,30 @@ class parquet_reader_options_builder {
   }
 
   /**
+   * @brief Sets bytes to skip before starting reading row groups.
+   *
+   * @param val Bytes to skip before starting reading row groups
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& skip_bytes(size_t val)
+  {
+    options.set_skip_bytes(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets number of bytes after skipping to end reading row groups at.
+   *
+   * @param val Number of bytes after skipping to end reading row groups at
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& num_bytes(size_t val)
+  {
+    options.set_num_bytes(val);
+    return *this;
+  }
+
+  /**
    * @brief timestamp_type used to cast timestamp columns.
    *
    * @param type The timestamp data_type to which all timestamp columns need to be cast
@@ -514,6 +582,18 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& timestamp_type(data_type type)
   {
     options._timestamp_type = type;
+    return *this;
+  }
+
+  /**
+   * @brief Enable/disable use of JIT for filter step.
+   *
+   * @param use_jit_filter Boolean value whether to use JIT filter
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& use_jit_filter(bool use_jit_filter)
+  {
+    options._use_jit_filter = use_jit_filter;
     return *this;
   }
 

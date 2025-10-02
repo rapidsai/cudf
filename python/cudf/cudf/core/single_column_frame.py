@@ -25,8 +25,7 @@ from cudf.utils.utils import _is_same_name
 if TYPE_CHECKING:
     from collections.abc import Hashable
 
-    import cupy
-    import numpy
+    import numpy as np
     import pyarrow as pa
 
     from cudf._typing import Dtype, NotImplementedType, ScalarLike
@@ -104,7 +103,7 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @property  # type: ignore
     @_performance_tracking
-    def values(self) -> cupy.ndarray:
+    def values(self) -> cp.ndarray:
         col = self._column
         if col.dtype.kind in {"i", "u", "f", "b"} and not col.has_nulls():
             return cp.asarray(col)
@@ -120,7 +119,7 @@ class SingleColumnFrame(Frame, NotIterable):
         dtype: Dtype | None = None,
         copy: bool = False,
         na_value=None,
-    ) -> cupy.ndarray:
+    ) -> cp.ndarray:
         """
         Convert the SingleColumnFrame (e.g., Series) to a CuPy array.
 
@@ -149,7 +148,7 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @property  # type: ignore
     @_performance_tracking
-    def values_host(self) -> numpy.ndarray:
+    def values_host(self) -> np.ndarray:
         return self._column.values_host
 
     @classmethod
@@ -281,7 +280,7 @@ class SingleColumnFrame(Frame, NotIterable):
     @_performance_tracking
     def factorize(
         self, sort: bool = False, use_na_sentinel: bool = True
-    ) -> tuple[cupy.ndarray, Index]:
+    ) -> tuple[cp.ndarray, Index]:
         """Encode the input values as integer labels.
 
         Parameters

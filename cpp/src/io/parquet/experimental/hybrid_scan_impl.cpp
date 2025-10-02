@@ -714,11 +714,33 @@ table_with_metadata hybrid_scan_reader_impl::read_chunk_internal(
   auto& subpass         = *pass.subpass;
   auto const& read_info = subpass.output_chunk_read_info[subpass.current_output_chunk];
 
+  CUDF_EXPECTS(_subpass_page_mask.size() == subpass.pages.size(),
+               "Page mask size must be equal to the number of pages in the subpass");
+  auto page_mask = cudf::detail::make_device_uvector_async(_subpass_page_mask, _stream, _mr);
+
+  // computes:
+  // PageNestingInfo::batch_size for each level of nesting, for each page, taking row bounds into
+  // account. PageInfo::skipped_values, which tells us where to start decoding in the input to
+  // respect the user bounds. It is only necessary to do this second pass if uses_custom_row_bounds
+  // is set (if the user has specified artificial bounds).
+  if (uses_custom_row_bounds(mode)) {
+    compute_page_sizes(subpass.pages,
+                       pass.chunks,
+                       read_info.skip_rows,
+                       read_info.num_rows,
+                       false,  // num_rows is already computed
+                       pass.level_type_size,
+                       _stream);
+  }
+
+  // preprocess strings
+  preprocess_chunk_strings(mode, read_info, page_mask);
+
   // Allocate memory buffers for the output columns.
   allocate_columns(mode, read_info.skip_rows, read_info.num_rows);
 
   // Parse data into the output buffers.
-  decode_page_data(mode, read_info.skip_rows, read_info.num_rows);
+  decode_page_data(mode, read_info.skip_rows, read_info.num_rows, page_mask);
 
   // Create the final output cudf columns.
   for (size_t i = 0; i < _output_buffers.size(); ++i) {

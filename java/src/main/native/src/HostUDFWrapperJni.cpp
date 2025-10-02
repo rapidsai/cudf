@@ -24,11 +24,12 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_HostUDFWrapper_close(JNIEnv* env,
                                                                 jclass class_object,
                                                                 jlong ptr)
 {
-  try {
+  JNI_TRY
+  {
     auto to_del = reinterpret_cast<cudf::host_udf_base*>(ptr);
     delete to_del;
   }
-  CATCH_STD(env, );
+  JNI_CATCH(env, );
 }
 
 }  // extern "C"

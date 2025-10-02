@@ -263,6 +263,25 @@ class aggregate_reader_metadata {
                           int64_t rows_to_read) const;
 
   /**
+   * @brief Filters the row groups using a byte range specified by [`skip_bytes`, `skip_bytes +
+   * num_bytes`)
+   *
+   * Filters the row groups such that only the row groups that start within the byte range are
+   * selected. Note that the last row group selected may end beyond the byte range. This is only
+   * applicable for single parquet source case.
+   *
+   * @param input_row_group_indices Lists of input row groups, one per source
+   * @param bytes_to_skip Bytes to skip before selecting row groups
+   * @param bytes_to_read Bytes to select row groups after skipping
+   *
+   * @return A vector of surviving row group indices
+   */
+  [[nodiscard]] std::vector<std::vector<size_type>> apply_byte_bounds_filter(
+    host_span<std::vector<size_type> const> input_row_group_indices,
+    size_t bytes_to_skip,
+    std::optional<size_t> const& bytes_to_read) const;
+
+  /**
    * @brief Filters the row groups using stats filter
    *
    * @param input_row_group_indices Lists of input row groups, one per source
@@ -491,6 +510,8 @@ class aggregate_reader_metadata {
    * @param row_group_indices Lists of row groups to read, one per source
    * @param row_start Starting row of the selection
    * @param row_count Total number of rows selected
+   * @param start_byte Byte offset to start selecting row groups from
+   * @param byte_count Number of bytes after the offset to end selecting row groups at
    * @param output_dtypes Datatypes of of output columns
    * @param output_column_schemas schema indices of output columns
    * @param filter Optional AST expression to filter row groups based on Column chunk statistics
@@ -509,6 +530,8 @@ class aggregate_reader_metadata {
                     host_span<std::vector<size_type> const> row_group_indices,
                     int64_t row_start,
                     std::optional<int64_t> const& row_count,
+                    size_t start_byte,
+                    std::optional<size_t> const& byte_count,
                     host_span<data_type const> output_dtypes,
                     host_span<int const> output_column_schemas,
                     std::optional<std::reference_wrapper<ast::expression const>> filter,

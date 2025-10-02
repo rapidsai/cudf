@@ -12,7 +12,8 @@ from pylibcudf.libcudf.nvtext.minhash cimport (
     minhash64_ngrams as cpp_minhash64_ngrams,
 )
 from pylibcudf.libcudf.types cimport size_type
-from pylibcudf.utils cimport _get_stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 __all__ = [
@@ -28,7 +29,8 @@ cpdef Column minhash(
     Column a,
     Column b,
     size_type width,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None
 ):
     """
     Returns the minhash values for each string.
@@ -56,6 +58,7 @@ cpdef Column minhash(
     """
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_minhash(
@@ -64,10 +67,11 @@ cpdef Column minhash(
             a.view(),
             b.view(),
             width,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 cpdef Column minhash64(
     Column input,
@@ -75,7 +79,8 @@ cpdef Column minhash64(
     Column a,
     Column b,
     size_type width,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None
 ):
     """
     Returns the minhash values for each string.
@@ -105,6 +110,7 @@ cpdef Column minhash64(
     """
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_minhash64(
@@ -113,10 +119,11 @@ cpdef Column minhash64(
             a.view(),
             b.view(),
             width,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 cpdef Column minhash_ngrams(
     Column input,
@@ -124,7 +131,8 @@ cpdef Column minhash_ngrams(
     uint32_t seed,
     Column a,
     Column b,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None
 ):
     """
     Returns the minhash values for each input row of strings.
@@ -155,6 +163,7 @@ cpdef Column minhash_ngrams(
     """
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_minhash_ngrams(
@@ -163,10 +172,11 @@ cpdef Column minhash_ngrams(
             seed,
             a.view(),
             b.view(),
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 cpdef Column minhash64_ngrams(
     Column input,
@@ -174,7 +184,8 @@ cpdef Column minhash64_ngrams(
     uint64_t seed,
     Column a,
     Column b,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None
 ):
     """
     Returns the minhash values for each input row of strings.
@@ -205,6 +216,7 @@ cpdef Column minhash64_ngrams(
     """
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_minhash64_ngrams(
@@ -213,7 +225,8 @@ cpdef Column minhash64_ngrams(
             seed,
             a.view(),
             b.view(),
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import warnings
+from typing import cast
 
 import cupy as cp
 import numpy as np
@@ -43,7 +44,9 @@ def _string_view_to_string_schema(schema: pa.Schema) -> pa.Schema:
             )
             for f in schema
         ],
-        metadata=schema.metadata,
+        # Cast needed because schema.metadata is dict[bytes, bytes] but
+        # pa.schema expects dict[bytes | str, bytes | str] | None
+        metadata=cast(dict[bytes | str, bytes | str] | None, schema.metadata),
     )
 
 

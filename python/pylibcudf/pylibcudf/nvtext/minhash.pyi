@@ -1,5 +1,6 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.column import Column
@@ -11,6 +12,7 @@ def minhash(
     b: Column,
     width: int,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def minhash64(
     input: Column,
@@ -19,6 +21,7 @@ def minhash64(
     b: Column,
     width: int,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def minhash_ngrams(
     input: Column,
@@ -27,6 +30,7 @@ def minhash_ngrams(
     a: Column,
     b: Column,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def minhash64_ngrams(
     input: Column,
@@ -35,4 +39,5 @@ def minhash64_ngrams(
     a: Column,
     b: Column,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...

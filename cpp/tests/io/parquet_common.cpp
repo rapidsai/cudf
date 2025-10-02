@@ -667,7 +667,7 @@ std::pair<cudf::table, std::string> create_parquet_typed_with_stats(std::string 
   auto col2 = testdata::unordered<T>();
 
   auto const written_table = table_view{{col0, col1, col2}};
-  auto const filepath      = temp_env->get_temp_filepath("FilterTyped.parquet");
+  auto const filepath      = temp_env->get_temp_filepath(filename);
   {
     cudf::io::table_input_metadata expected_metadata(written_table);
     expected_metadata.column_metadata[0].set_name("col0");

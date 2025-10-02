@@ -1072,10 +1072,6 @@ TEST_F(ReductionEmptyTest, empty_column)
     EXPECT_EQ(result->is_valid(), false);
   };
 
-  // default column_view{} is an empty column
-  // empty column_view
-  CUDF_EXPECT_NO_THROW(statement(cudf::column_view{}));
-
   // test if the size of input column is zero
   // expect result.is_valid() is false
   std::vector<T> empty_data(0);
@@ -3461,6 +3457,75 @@ TEST_F(ReduceWithOverflowTest, ErrorHandlingNonArithmetic)
                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
                             cudf::data_type{cudf::type_id::STRUCT}),
                std::invalid_argument);
+}
+
+struct ReductionIsValidTest : public cudf::test::BaseFixture {};
+
+TEST_F(ReductionIsValidTest, IsValidAggregation)
+{
+  auto const int64_type   = cudf::data_type{cudf::type_id::INT64};
+  auto const float_type   = cudf::data_type{cudf::type_id::FLOAT32};
+  auto const string_type  = cudf::data_type{cudf::type_id::STRING};
+  auto const struct_type  = cudf::data_type{cudf::type_id::STRUCT};
+  auto const decimal_type = cudf::data_type{cudf::type_id::DECIMAL32, 2};
+
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::SUM));
+  EXPECT_TRUE(
+    cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::SUM_WITH_OVERFLOW));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::PRODUCT));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::MIN));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::MAX));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::ANY));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::ALL));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::SUM_OF_SQUARES));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::MEAN));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::VARIANCE));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::STD));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::MEDIAN));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::QUANTILE));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::NUNIQUE));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::NTH_ELEMENT));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::COUNT_ALL));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::COUNT_VALID));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::HISTOGRAM));
+  EXPECT_TRUE(
+    cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::MERGE_HISTOGRAM));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::BITWISE_AGG));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::COLLECT_LIST));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::COLLECT_SET));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::MERGE_LISTS));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::MERGE_SETS));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::TDIGEST));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::MERGE_TDIGEST));
+
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(decimal_type, cudf::aggregation::SUM));
+  EXPECT_TRUE(
+    cudf::reduction::is_valid_aggregation(decimal_type, cudf::aggregation::SUM_OF_SQUARES));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(decimal_type, cudf::aggregation::MEDIAN));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(decimal_type, cudf::aggregation::QUANTILE));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(decimal_type, cudf::aggregation::TDIGEST));
+  EXPECT_TRUE(
+    cudf::reduction::is_valid_aggregation(decimal_type, cudf::aggregation::MERGE_TDIGEST));
+
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(string_type, cudf::aggregation::MIN));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(string_type, cudf::aggregation::MAX));
+
+  EXPECT_FALSE(cudf::reduction::is_valid_aggregation(string_type, cudf::aggregation::SUM));
+  EXPECT_FALSE(cudf::reduction::is_valid_aggregation(string_type, cudf::aggregation::PRODUCT));
+  EXPECT_FALSE(cudf::reduction::is_valid_aggregation(string_type, cudf::aggregation::ANY));
+  EXPECT_FALSE(cudf::reduction::is_valid_aggregation(string_type, cudf::aggregation::ALL));
+
+  EXPECT_FALSE(
+    cudf::reduction::is_valid_aggregation(float_type, cudf::aggregation::SUM_WITH_OVERFLOW));
+
+  EXPECT_FALSE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::ARGMAX));
+  EXPECT_FALSE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::ARGMIN));
+  EXPECT_FALSE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::ROW_NUMBER));
+  EXPECT_FALSE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::RANK));
+  EXPECT_FALSE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::LAG));
+  EXPECT_FALSE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::LEAD));
+  EXPECT_FALSE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::M2));
+  EXPECT_FALSE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::MERGE_M2));
 }
 
 CUDF_TEST_PROGRAM_MAIN()

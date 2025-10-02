@@ -206,24 +206,26 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cudf_setKernelPinnedCopyThreshold(JNI
                                                                              jclass clazz,
                                                                              jlong jthreshold)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto threshold = static_cast<std::size_t>(jthreshold);
     cudf::set_kernel_pinned_copy_threshold(threshold);
   }
-  CATCH_STD(env, )
+  JNI_CATCH(env, );
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cudf_setPinnedAllocationThreshold(JNIEnv* env,
                                                                              jclass clazz,
                                                                              jlong jthreshold)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto threshold = static_cast<std::size_t>(jthreshold);
     cudf::set_allocate_host_as_pinned_threshold(threshold);
   }
-  CATCH_STD(env, )
+  JNI_CATCH(env, );
 }
 
 }  // extern "C"

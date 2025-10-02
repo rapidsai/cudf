@@ -1506,7 +1506,7 @@ def _index_level_name(
 
 def generate_pandas_metadata(table: DataFrame, index: bool | None) -> str:
     col_names: list[Hashable] = []
-    types = []
+    types: list[pa.DataType] = []
     index_levels = []
     index_descriptors = []
     df_meta = table.head(0)
@@ -1577,7 +1577,7 @@ def generate_pandas_metadata(table: DataFrame, index: bool | None) -> str:
                 index_levels.append(idx)
             index_descriptors.append(descr)
 
-    metadata = pa.pandas_compat.construct_metadata(
+    metadata = pa.pandas_compat.construct_metadata(  # type: ignore[attr-defined]
         columns_to_convert=columns_to_convert,
         # It is OKAY to do `.to_pandas()` because
         # this method will extract `.columns` metadata only

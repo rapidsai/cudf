@@ -2,6 +2,7 @@
 
 from enum import IntEnum
 
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.column import Column
@@ -23,12 +24,14 @@ def concatenate(
     col_narep: Scalar | None = None,
     separate_nulls: SeparatorOnNulls = SeparatorOnNulls.YES,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def join_strings(
     input: Column,
     separator: Scalar,
     narep: Scalar,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def join_list_elements(
     lists_strings_column: Column,
@@ -38,4 +41,5 @@ def join_list_elements(
     separate_nulls: SeparatorOnNulls,
     empty_list_policy: OutputIfEmptyList,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...

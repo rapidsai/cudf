@@ -801,8 +801,10 @@ std::unique_ptr<std::vector<uint8_t>> chunked_parquet_writer::close(
 
 void parquet_reader_options::set_row_groups(std::vector<std::vector<size_type>> row_groups)
 {
-  if ((!row_groups.empty()) and ((_skip_rows != 0) or _num_rows.has_value())) {
-    CUDF_FAIL("row_groups can't be set along with skip_rows and num_rows");
+  if ((!row_groups.empty()) and
+      (_skip_rows != 0 or _num_rows.has_value() or _skip_bytes != 0 or _num_bytes.has_value())) {
+    CUDF_FAIL(
+      "row_groups can't be set along with skip_rows and num_rows or skip_bytes and num_bytes");
   }
 
   _row_groups = std::move(row_groups);
@@ -812,6 +814,8 @@ void parquet_reader_options::set_skip_rows(int64_t val)
 {
   CUDF_EXPECTS(val >= 0, "skip_rows cannot be negative");
   CUDF_EXPECTS(_row_groups.empty(), "skip_rows can't be set along with a non-empty row_groups");
+  CUDF_EXPECTS(_skip_bytes == 0 and not _num_bytes.has_value(),
+               "skip_rows can't be set along with skip_bytes or num_bytes");
 
   _skip_rows = val;
 }
@@ -820,8 +824,33 @@ void parquet_reader_options::set_num_rows(size_type val)
 {
   CUDF_EXPECTS(val >= 0, "num_rows cannot be negative");
   CUDF_EXPECTS(_row_groups.empty(), "num_rows can't be set along with a non-empty row_groups");
+  CUDF_EXPECTS(_skip_bytes == 0 and not _num_bytes.has_value(),
+               "num_rows can't be set along with skip_bytes or num_bytes");
 
   _num_rows = val;
+}
+
+void parquet_reader_options::set_skip_bytes(size_t val)
+{
+  CUDF_EXPECTS(val == 0 or std::cmp_equal(_source.num_sources(), 1),
+               "skip_bytes can only be set for single parquet source case");
+  CUDF_EXPECTS(val == 0 or (not _num_rows.has_value() and _skip_rows == 0),
+               "skip_bytes cannot be set along with skip_rows and num_rows");
+  CUDF_EXPECTS(val == 0 or _row_groups.empty(),
+               "skip_bytes can't be set along with a non-empty row_groups");
+
+  _skip_bytes = val;
+}
+
+void parquet_reader_options::set_num_bytes(size_t val)
+{
+  CUDF_EXPECTS(std::cmp_equal(_source.num_sources(), 1),
+               "num_bytes can only be set for single parquet source case");
+  CUDF_EXPECTS(not _num_rows.has_value() and _skip_rows == 0,
+               "num_bytes cannot be set along with skip_rows and num_rows");
+  CUDF_EXPECTS(_row_groups.empty(), "num_bytes can't be set along with a non-empty row_groups");
+
+  _num_bytes = val;
 }
 
 void parquet_writer_options_base::set_metadata(table_input_metadata metadata)

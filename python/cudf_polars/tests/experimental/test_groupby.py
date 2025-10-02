@@ -229,3 +229,26 @@ def test_mean_partitioned(values: list[int | None]) -> None:
         ),
         check_row_order=False,
     )
+
+
+def test_groupby_literal_with_stats_planning(df):
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 4,
+            "scheduler": DEFAULT_SCHEDULER,
+            "stats_planning": {"use_reduction_planning": True},
+        },
+    )
+
+    q = (
+        df.group_by(
+            pl.lit(True).alias("key"),  # noqa: FBT003
+            maintain_order=False,
+        )
+        .agg(pl.col("x").sum())
+        .drop("key")
+    )
+
+    assert_gpu_result_equal(q, engine=engine)

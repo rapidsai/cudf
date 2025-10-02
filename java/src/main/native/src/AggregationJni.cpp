@@ -25,19 +25,21 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Aggregation_close(JNIEnv* env,
                                                              jclass class_object,
                                                              jlong ptr)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto to_del = reinterpret_cast<cudf::aggregation*>(ptr);
     delete to_del;
   }
-  CATCH_STD(env, );
+  JNI_CATCH(env, );
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNoParamAgg(JNIEnv* env,
                                                                          jclass class_object,
                                                                          jint kind)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto ret = [&] {
       // These numbers come from Aggregation.java and must stay in sync
@@ -112,7 +114,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNoParamAgg(JNIEnv*
 
     return reinterpret_cast<jlong>(ret.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNthAgg(JNIEnv* env,
@@ -120,14 +122,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNthAgg(JNIEnv* env
                                                                      jint offset,
                                                                      jboolean include_nulls)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
 
     std::unique_ptr<cudf::aggregation> ret = cudf::make_nth_element_aggregation(
       offset, include_nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE);
     return reinterpret_cast<jlong>(ret.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createDdofAgg(JNIEnv* env,
@@ -135,7 +138,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createDdofAgg(JNIEnv* en
                                                                       jint kind,
                                                                       jint ddof)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
 
     std::unique_ptr<cudf::aggregation> ret;
@@ -151,7 +155,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createDdofAgg(JNIEnv* en
     }
     return reinterpret_cast<jlong>(ret.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createTDigestAgg(JNIEnv* env,
@@ -159,7 +163,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createTDigestAgg(JNIEnv*
                                                                          jint kind,
                                                                          jint delta)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
 
     std::unique_ptr<cudf::aggregation> ret;
@@ -175,7 +180,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createTDigestAgg(JNIEnv*
     }
     return reinterpret_cast<jlong>(ret.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createCountLikeAgg(JNIEnv* env,
@@ -183,7 +188,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createCountLikeAgg(JNIEn
                                                                            jint kind,
                                                                            jboolean include_nulls)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
 
     cudf::null_policy policy =
@@ -201,7 +207,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createCountLikeAgg(JNIEn
     }
     return reinterpret_cast<jlong>(ret.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createQuantAgg(JNIEnv* env,
@@ -210,7 +216,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createQuantAgg(JNIEnv* e
                                                                        jdoubleArray j_quantiles)
 {
   JNI_NULL_CHECK(env, j_quantiles, "quantiles are null", 0);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
 
     const cudf::jni::native_jdoubleArray quantiles(env, j_quantiles);
@@ -221,7 +228,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createQuantAgg(JNIEnv* e
     std::unique_ptr<cudf::aggregation> ret = cudf::make_quantile_aggregation(quants, interp);
     return reinterpret_cast<jlong>(ret.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createLeadLagAgg(JNIEnv* env,
@@ -229,7 +236,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createLeadLagAgg(JNIEnv*
                                                                          jint kind,
                                                                          jint offset)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
 
     std::unique_ptr<cudf::aggregation> ret;
@@ -245,21 +253,22 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createLeadLagAgg(JNIEnv*
     }
     return reinterpret_cast<jlong>(ret.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createCollectListAgg(JNIEnv* env,
                                                                              jclass class_object,
                                                                              jboolean include_nulls)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     cudf::null_policy policy =
       include_nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE;
     std::unique_ptr<cudf::aggregation> ret = cudf::make_collect_list_aggregation(policy);
     return reinterpret_cast<jlong>(ret.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createCollectSetAgg(JNIEnv* env,
@@ -268,7 +277,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createCollectSetAgg(JNIE
                                                                             jboolean nulls_equal,
                                                                             jboolean nans_equal)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     cudf::null_policy null_policy =
       include_nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE;
@@ -280,7 +290,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createCollectSetAgg(JNIE
       cudf::make_collect_set_aggregation(null_policy, null_equality, nan_equality);
     return reinterpret_cast<jlong>(ret.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createMergeSetsAgg(JNIEnv* env,
@@ -288,7 +298,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createMergeSetsAgg(JNIEn
                                                                            jboolean nulls_equal,
                                                                            jboolean nans_equal)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     cudf::null_equality null_equality =
       nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
@@ -298,7 +309,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createMergeSetsAgg(JNIEn
       cudf::make_merge_sets_aggregation(null_equality, nan_equality);
     return reinterpret_cast<jlong>(ret.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createHostUDFAgg(JNIEnv* env,
@@ -306,46 +317,50 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createHostUDFAgg(JNIEnv*
                                                                          jlong udf_native_handle)
 {
   JNI_NULL_CHECK(env, udf_native_handle, "udf_native_handle is null", 0);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto const udf_ptr = reinterpret_cast<cudf::host_udf_base const*>(udf_native_handle);
     auto output        = cudf::make_host_udf_aggregation(udf_ptr->clone());
     return reinterpret_cast<jlong>(output.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createBitAndAgg(JNIEnv* env,
                                                                         jclass class_object)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto output = cudf::make_bitwise_aggregation<cudf::aggregation>(cudf::bitwise_op::AND);
     return reinterpret_cast<jlong>(output.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createBitOrAgg(JNIEnv* env,
                                                                        jclass class_object)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto output = cudf::make_bitwise_aggregation<cudf::aggregation>(cudf::bitwise_op::OR);
     return reinterpret_cast<jlong>(output.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createBitXorAgg(JNIEnv* env,
                                                                         jclass class_object)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto output = cudf::make_bitwise_aggregation<cudf::aggregation>(cudf::bitwise_op::XOR);
     return reinterpret_cast<jlong>(output.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 }  // extern "C"

@@ -8,6 +8,7 @@ from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.scalar.scalar cimport string_scalar
 from pylibcudf.libcudf.types cimport size_type
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.memory_resource cimport device_memory_resource
 
 
 cdef extern from "cudf/strings/replace.hpp" namespace "cudf::strings" nogil:
@@ -16,17 +17,20 @@ cdef extern from "cudf/strings/replace.hpp" namespace "cudf::strings" nogil:
         string_scalar repl,
         size_type start,
         size_type stop,
-        cuda_stream_view stream) except +libcudf_exception_handler
+        cuda_stream_view stream,
+        device_memory_resource* mr) except +libcudf_exception_handler
 
     cdef unique_ptr[column] replace(
         column_view source_strings,
         string_scalar target,
         string_scalar repl,
         int32_t maxrepl,
-        cuda_stream_view stream) except +libcudf_exception_handler
+        cuda_stream_view stream,
+        device_memory_resource* mr) except +libcudf_exception_handler
 
     cdef unique_ptr[column] replace_multiple(
         column_view source_strings,
         column_view target_strings,
         column_view repl_strings,
-        cuda_stream_view stream) except +libcudf_exception_handler
+        cuda_stream_view stream,
+        device_memory_resource* mr) except +libcudf_exception_handler

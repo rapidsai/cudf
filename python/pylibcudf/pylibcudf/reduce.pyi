@@ -2,6 +2,7 @@
 
 from enum import IntEnum
 
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.aggregation import Aggregation
@@ -18,13 +19,17 @@ def reduce(
     agg: Aggregation,
     data_type: DataType,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Scalar: ...
 def scan(
     col: Column,
     agg: Aggregation,
     inclusive: ScanType,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def minmax(
-    col: Column, stream: Stream | None = None
+    col: Column,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> tuple[Scalar, Scalar]: ...

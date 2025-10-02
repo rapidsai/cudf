@@ -48,6 +48,7 @@ __all__: list[str] = [
     "OptimizationArgs",
     "PolarsExpr",
     "PolarsIR",
+    "RankMethod",
     "Schema",
     "Slice",
 ]
@@ -217,3 +218,7 @@ class DataFrameHeader(TypedDict):
 
     columns_kwargs: list[ColumnOptions]
     frame_count: int
+
+
+# Not public in polars yet
+RankMethod = Literal["ordinal", "dense", "min", "max", "average"]

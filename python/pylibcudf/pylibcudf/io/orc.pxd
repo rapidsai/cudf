@@ -9,6 +9,7 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from pylibcudf.io.types cimport (
     SourceInfo,
@@ -61,7 +62,9 @@ cdef class OrcReaderOptionsBuilder:
     cpdef OrcReaderOptionsBuilder use_index(self, bool use)
     cpdef OrcReaderOptions build(self)
 
-cpdef TableWithMetadata read_orc(OrcReaderOptions options)
+cpdef TableWithMetadata read_orc(
+    OrcReaderOptions options, Stream stream = *, DeviceMemoryResource mr=*
+)
 
 cdef class OrcColumnStatistics:
     cdef optional[uint64_t] number_of_values_c

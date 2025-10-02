@@ -209,19 +209,19 @@ TEST_F(BitwiseAggregationTest, InvalidInputType)
 
   // Float input should throw exception
   EXPECT_THROW(cudf::reduce(float_col, *agg_and, cudf::data_type{cudf::type_to_id<float>()}),
-               cudf::logic_error);
+               std::invalid_argument);
   EXPECT_THROW(cudf::reduce(float_col, *agg_or, cudf::data_type{cudf::type_to_id<float>()}),
-               cudf::logic_error);
+               std::invalid_argument);
   EXPECT_THROW(cudf::reduce(float_col, *agg_xor, cudf::data_type{cudf::type_to_id<float>()}),
-               cudf::logic_error);
+               std::invalid_argument);
 
   // String input should throw exception
   EXPECT_THROW(cudf::reduce(string_col, *agg_and, cudf::data_type{cudf::type_to_id<int32_t>()}),
-               cudf::logic_error);
+               std::invalid_argument);
   EXPECT_THROW(cudf::reduce(string_col, *agg_or, cudf::data_type{cudf::type_to_id<int32_t>()}),
-               cudf::logic_error);
+               std::invalid_argument);
   EXPECT_THROW(cudf::reduce(string_col, *agg_xor, cudf::data_type{cudf::type_to_id<int32_t>()}),
-               cudf::logic_error);
+               std::invalid_argument);
 }
 
 // Test with all null values

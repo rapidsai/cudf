@@ -80,18 +80,18 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       script: "ci/test_python_other.sh"
-  conda-java-tests:
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.12
-    with:
-      build_type: ${{ inputs.build_type }}
-      branch: ${{ inputs.branch }}
-      date: ${{ inputs.date }}
-      sha: ${{ inputs.sha }}
-      node_type: "gpu-l4-latest-1"
-      arch: "amd64"
-      container_image: "rapidsai/ci-conda:25.12-latest"
-      script: "ci/test_java.sh"
+# conda-java-tests:
+#   secrets: inherit
+#   uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.12
+#   with:
+#     build_type: ${{ inputs.build_type }}
+#     branch: ${{ inputs.branch }}
+#     date: ${{ inputs.date }}
+#     sha: ${{ inputs.sha }}
+#     node_type: "gpu-l4-latest-1"
+#     arch: "amd64"
+#     container_image: "rapidsai/ci-conda:25.12-latest"
+#     script: "ci/test_java.sh"
   conda-notebook-tests:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.12

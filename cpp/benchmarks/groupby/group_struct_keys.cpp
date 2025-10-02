@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,8 +73,6 @@ void bench_groupby_struct_keys(nvbench::state& state)
   auto const keys_table = cudf::table(std::move(child_cols));
   auto const vals = create_random_column(cudf::type_to_id<int64_t>(), row_count{n_rows}, profile);
 
-  cudf::groupby::groupby gb_obj(keys_table.view());
-
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());
   requests[0].values = vals->view();
@@ -85,8 +83,10 @@ void bench_groupby_struct_keys(nvbench::state& state)
   auto stream                 = cudf::get_default_stream();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
-  state.exec(nvbench::exec_tag::sync,
-             [&](nvbench::launch& launch) { auto const result = gb_obj.aggregate(requests); });
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    cudf::groupby::groupby gb_obj(keys_table.view());
+    auto const result = gb_obj.aggregate(requests);
+  });
 
   state.add_buffer_size(
     mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");

@@ -37,8 +37,6 @@ static void bench_groupby_shift(nvbench::state& state)
   auto vals_table =
     create_random_table({cudf::type_to_id<int64_t>()}, row_count{num_rows}, profile);
 
-  cudf::groupby::groupby gb_obj(keys_table->view());
-
   std::vector<cudf::size_type> offsets{
     static_cast<cudf::size_type>(num_rows / float(num_groups) * 0.5)};  // forward shift half way
   // null fill value
@@ -49,6 +47,7 @@ static void bench_groupby_shift(nvbench::state& state)
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    cudf::groupby::groupby gb_obj(keys_table->view());
     auto result = gb_obj.shift(*vals_table, offsets, {*fill_value});
   });
 }

@@ -7,6 +7,7 @@ from pylibcudf.libcudf.strings.combine cimport (
 )
 from pylibcudf.scalar cimport Scalar
 from pylibcudf.table cimport Table
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 ctypedef fused ColumnOrScalar:
@@ -20,10 +21,15 @@ cpdef Column concatenate(
     Scalar col_narep=*,
     separator_on_nulls separate_nulls=*,
     Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef Column join_strings(
-    Column input, Scalar separator, Scalar narep, Stream stream=*
+    Column input,
+    Scalar separator,
+    Scalar narep,
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef Column join_list_elements(
@@ -34,4 +40,5 @@ cpdef Column join_list_elements(
     separator_on_nulls separate_nulls,
     output_if_empty_list empty_list_policy,
     Stream stream=*,
+    DeviceMemoryResource mr=*,
 )

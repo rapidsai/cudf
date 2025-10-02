@@ -75,6 +75,10 @@ struct CompressionTest
       env_vars.emplace_back(nvcomp_policy_env_var, "OFF");
     } else if (comp_impl == "HOST") {
       env_vars.emplace_back(host_comp_env_var, "ON");
+    } else if (comp_impl == "HYBRID") {
+      env_vars.emplace_back(host_comp_env_var, "HYBRID");
+    } else if (comp_impl == "AUTO") {
+      env_vars.emplace_back(host_comp_env_var, "AUTO");
     } else {
       CUDF_FAIL("Invalid test parameter");
     }
@@ -100,6 +104,10 @@ struct DecompressionTest
       env_vars.emplace_back(nvcomp_policy_env_var, "OFF");
     } else if (comp_impl == "HOST") {
       env_vars.emplace_back(host_decomp_env_var, "ON");
+    } else if (comp_impl == "HYBRID") {
+      env_vars.emplace_back(host_decomp_env_var, "HYBRID");
+    } else if (comp_impl == "AUTO") {
+      env_vars.emplace_back(host_decomp_env_var, "AUTO");
     } else {
       CUDF_FAIL("Invalid test parameter");
     }

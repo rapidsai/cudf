@@ -37,11 +37,14 @@ JsonDecodeType = list[tuple[str, plc.DataType, "JsonDecodeType"]]
 
 def _dtypes_for_json_decode(dtype: DataType) -> JsonDecodeType:
     """Get the dtypes for json decode."""
+    # the type checker doesn't know that this equality check implies a struct dtype.
     if dtype.id() == plc.TypeId.STRUCT:
         return [
             (field.name, child.plc_type, _dtypes_for_json_decode(child))
             for field, child in zip(
-                dtype.polars_type.fields, dtype.children, strict=True
+                dtype.polars_type.fields,  # type: ignore[attr-defined]
+                dtype.children,
+                strict=True,  # type: ignore[attr-defined]
             )
         ]
     else:

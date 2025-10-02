@@ -255,6 +255,20 @@ std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
+/**
+ * @brief Reduction namespace
+ */
+namespace reduction {
+/**
+ * @brief Indicate if a reduction is supported for a source datatype.
+ *
+ * @param source The source data type.
+ * @param kind The reduction aggregation.
+ * @returns true if the reduction is supported.
+ */
+bool is_valid_aggregation(data_type source, aggregation::Kind kind);
+}  // namespace reduction
+
 /** @} */  // end of group
 
 }  // namespace CUDF_EXPORT cudf

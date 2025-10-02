@@ -24,6 +24,7 @@ from pylibcudf.libcudf.types cimport (
 )
 
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.memory_resource cimport device_memory_resource
 
 # workaround for https://github.com/cython/cython/issues/3885
 ctypedef const scalar constscalar
@@ -84,7 +85,8 @@ cdef extern from "cudf/groupby.hpp" \
             vector[aggregation_result]
         ] aggregate(
             const vector[aggregation_request]& requests,
-            cuda_stream_view stream
+            cuda_stream_view stream,
+            device_memory_resource* mr
         ) except +libcudf_exception_handler
 
         pair[
@@ -92,7 +94,8 @@ cdef extern from "cudf/groupby.hpp" \
             vector[aggregation_result]
         ] scan(
             const vector[scan_request]& requests,
-            cuda_stream_view stream
+            cuda_stream_view stream,
+            device_memory_resource* mr
         ) except +libcudf_exception_handler
 
         pair[
@@ -102,17 +105,19 @@ cdef extern from "cudf/groupby.hpp" \
             const table_view values,
             const vector[size_type] offset,
             const vector[reference_wrapper[constscalar]] fill_values,
-            cuda_stream_view stream
+            cuda_stream_view stream,
+            device_memory_resource* mr
         ) except +libcudf_exception_handler
 
-        groups get_groups(cuda_stream_view stream) except +libcudf_exception_handler
         groups get_groups(
             table_view values,
             cuda_stream_view stream,
+            device_memory_resource* mr
         ) except +libcudf_exception_handler
 
         pair[unique_ptr[table], unique_ptr[table]] replace_nulls(
             const table_view& values,
             const vector[replace_policy] replace_policy,
-            cuda_stream_view stream
+            cuda_stream_view stream,
+            device_memory_resource* mr
         ) except +libcudf_exception_handler

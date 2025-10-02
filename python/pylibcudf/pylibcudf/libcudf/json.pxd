@@ -8,6 +8,7 @@ from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.scalar.scalar cimport scalar, string_scalar
 
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.memory_resource cimport device_memory_resource
 
 
 cdef extern from "cudf/json/json.hpp" namespace "cudf" nogil:
@@ -29,4 +30,12 @@ cdef extern from "cudf/json/json.hpp" namespace "cudf" nogil:
         string_scalar json_path,
         get_json_object_options options,
         cuda_stream_view stream
+    ) except +libcudf_exception_handler
+
+    cdef unique_ptr[column] get_json_object(
+        column_view col,
+        string_scalar json_path,
+        get_json_object_options options,
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler

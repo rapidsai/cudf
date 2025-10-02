@@ -37,6 +37,9 @@ context::context(init_flags flags) : _program_cache{nullptr}
 
   auto dump_codegen_flag = getenv_or("LIBCUDF_JIT_DUMP_CODEGEN", std::string{"OFF"});
   _dump_codegen          = (dump_codegen_flag == "ON" || dump_codegen_flag == "1");
+
+  auto use_jit_flag = getenv_or("LIBCUDF_JIT_ENABLED", std::string{"OFF"});
+  _use_jit          = (use_jit_flag == "ON" || use_jit_flag == "1");
 }
 
 jit::program_cache& context::program_cache()
@@ -46,6 +49,8 @@ jit::program_cache& context::program_cache()
 }
 
 bool context::dump_codegen() const { return _dump_codegen; }
+
+bool context::use_jit() const { return _use_jit; }
 
 std::unique_ptr<context>& get_context_ptr_ref()
 {

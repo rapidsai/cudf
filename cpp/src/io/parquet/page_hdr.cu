@@ -505,8 +505,10 @@ void __launch_bounds__(decode_page_headers_block_size)
         // they will be recomputed in the preprocess step by examining repetition and
         // definition levels
         bs->page.chunk_row += bs->page.num_rows;
-        bs->page.num_rows = 0;
-        bs->page.flags    = 0;
+        bs->page.num_rows      = 0;
+        bs->page.flags         = 0;
+        bs->page.str_bytes     = 0;
+        bs->page.str_bytes_all = 0;
         // zero out V2 info
         bs->page.num_nulls                         = 0;
         bs->page.lvl_bytes[level_type::DEFINITION] = 0;

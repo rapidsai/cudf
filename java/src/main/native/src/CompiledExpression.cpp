@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -399,7 +399,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ast_CompiledExpression_compile(JNIEn
                                                                            jbyteArray jni_data)
 {
   JNI_NULL_CHECK(env, jni_data, "Serialized AST data is null", 0);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jbyteArray jbytes(env, jni_data);
     jni_serialized_ast jni_ast(jbytes);
@@ -407,7 +408,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ast_CompiledExpression_compile(JNIEn
     jbytes.cancel();
     return reinterpret_cast<jlong>(compiled_expr_ptr.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ast_CompiledExpression_computeColumn(JNIEnv* env,
@@ -417,7 +418,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ast_CompiledExpression_computeColumn
 {
   JNI_NULL_CHECK(env, j_ast, "Compiled AST pointer is null", 0);
   JNI_NULL_CHECK(env, j_table, "Table view pointer is null", 0);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto compiled_expr_ptr = reinterpret_cast<cudf::jni::ast::compiled_expr const*>(j_ast);
     auto tview_ptr         = reinterpret_cast<cudf::table_view const*>(j_table);
@@ -425,19 +427,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ast_CompiledExpression_computeColumn
       cudf::compute_column(*tview_ptr, compiled_expr_ptr->get_top_expression());
     return reinterpret_cast<jlong>(result.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_ast_CompiledExpression_destroy(JNIEnv* env,
                                                                           jclass,
                                                                           jlong jni_handle)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto ptr = reinterpret_cast<cudf::jni::ast::compiled_expr*>(jni_handle);
     delete ptr;
   }
-  CATCH_STD(env, );
+  JNI_CATCH(env, );
 }
 
 }  // extern "C"

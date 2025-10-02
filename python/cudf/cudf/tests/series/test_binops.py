@@ -3087,3 +3087,14 @@ def test_binops_compare_stdlib_date_scalar(comparison_op):
     result = comparison_op(cudf.Series(data), dt)
     expected = comparison_op(pd.Series(data), dt)
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("xp", [cp, np])
+def test_singleton_array(binary_op, xp):
+    # Validate that we handle singleton numpy/cupy arrays appropriately
+    lhs = cudf.Series([1, 2, 3])
+    rhs_device = xp.array(1)
+    rhs_host = np.array(1)
+    expect = binary_op(lhs.to_pandas(), rhs_host)
+    got = binary_op(lhs, rhs_device)
+    assert_eq(expect, got)

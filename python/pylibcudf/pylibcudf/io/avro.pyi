@@ -1,4 +1,5 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.io.types import SourceInfo, TableWithMetadata
@@ -16,5 +17,7 @@ class AvroReaderOptionsBuilder:
     def build(self) -> AvroReaderOptions: ...
 
 def read_avro(
-    options: AvroReaderOptions, stream: Stream = None
+    options: AvroReaderOptions,
+    stream: Stream = None,
+    mr: DeviceMemoryResource = None,
 ) -> TableWithMetadata: ...

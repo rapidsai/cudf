@@ -47,6 +47,8 @@ cdef class ChunkedPack:
 
 cpdef PackedColumns pack(Table input)
 
-cpdef Table unpack(PackedColumns input)
+cpdef Table unpack(PackedColumns input, DeviceMemoryResource mr=*)
 
-cpdef Table unpack_from_memoryviews(memoryview metadata, gpumemoryview gpu_data)
+cpdef Table unpack_from_memoryviews(
+    memoryview metadata, gpumemoryview gpu_data, DeviceMemoryResource mr=*
+)

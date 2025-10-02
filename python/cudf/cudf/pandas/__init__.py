@@ -78,7 +78,7 @@ def install():
             initial_pool_size=free_memory,
         )
     elif rmm_mode == "async":
-        new_mr = rmm.mr.CudaAsyncMemoryResource(initial_pool_size=free_memory)
+        new_mr = rmm.mr.CudaAsyncMemoryResource()
     elif "managed" in rmm_mode:
         if not managed_memory_is_supported:
             raise ValueError(
