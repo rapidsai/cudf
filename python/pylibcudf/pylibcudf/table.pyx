@@ -33,7 +33,6 @@ from pylibcudf.libcudf.table.table cimport table
 
 from .column cimport Column
 from .types cimport DataType
-# Utils imports removed as parameters are now required
 from pylibcudf._interop_helpers cimport (
     _release_schema,
     _release_array,

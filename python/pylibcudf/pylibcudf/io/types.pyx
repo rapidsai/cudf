@@ -29,7 +29,6 @@ from pylibcudf.libcudf.io.types cimport (
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.libcudf.utilities.span cimport host_span, device_span
 
-# Utils imports removed as parameters are now required
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
