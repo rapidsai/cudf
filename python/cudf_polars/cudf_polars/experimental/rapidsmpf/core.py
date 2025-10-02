@@ -22,7 +22,8 @@ import rmm
 
 import cudf_polars.experimental.rapidsmpf.io
 import cudf_polars.experimental.rapidsmpf.lower
-import cudf_polars.experimental.rapidsmpf.nodes  # noqa: F401
+import cudf_polars.experimental.rapidsmpf.nodes
+import cudf_polars.experimental.rapidsmpf.union  # noqa: F401
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.traversal import CachingVisitor
 from cudf_polars.experimental.base import PartitionInfo

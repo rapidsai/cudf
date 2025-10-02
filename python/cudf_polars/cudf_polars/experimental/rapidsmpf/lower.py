@@ -15,7 +15,6 @@ from cudf_polars.dsl.ir import (
     HConcat,
     HStack,
     Projection,
-    Union,
 )
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.rapidsmpf.dispatch import (
@@ -37,7 +36,6 @@ def _(ir: IR, rec: LowerIRTransformer) -> tuple[IR, MutableMapping[IR, Partition
     )
 
 
-@lower_ir_node.register(Union)
 @lower_ir_node.register(Projection)
 @lower_ir_node.register(Cache)
 @lower_ir_node.register(HConcat)

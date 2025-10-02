@@ -17,7 +17,7 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.ir import IR, Union
+from cudf_polars.dsl.ir import IR
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 
 if TYPE_CHECKING:
@@ -124,61 +124,6 @@ def _(ir: IR, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]
         pwise_node(
             rec.state["ctx"],
             ir,
-            channels[ir],
-            *[channels[c] for c in ir.children],
-        )
-    ]
-    return nodes, channels
-
-
-@define_py_node()
-async def union_node(
-    ctx: Context,
-    ch_out: Channel[TableChunk],
-    *chs_in: Channel[TableChunk],
-) -> None:
-    """
-    Union node for rapidsmpf.
-
-    Parameters
-    ----------
-    ctx
-        The context.
-    ir
-        The IR node.
-    ch_out
-        The output channel.
-    chs_in
-        The input channels.
-    """
-    # TODO: Use multiple streams
-    async with shutdown_on_error(ctx, *chs_in, ch_out):
-        seq_num = 0
-        for ch_in in chs_in:
-            while (msg := await ch_in.recv(ctx)) is not None:
-                await ch_out.send(ctx, Message(TableChunk.from_message(msg)))
-                seq_num += 1
-
-        await ch_out.drain(ctx)
-
-
-@generate_ir_sub_network.register(Union)
-def _(ir: Union, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]:
-    # Union operation.
-    # Pass-through all child chunks in channel order.
-
-    # Process children
-    _nodes, _channels = zip(*(rec(c) for c in ir.children), strict=True)
-    nodes = reduce(operator.or_, _nodes)
-    channels = reduce(operator.or_, _channels)
-
-    # Create output channel
-    channels[ir] = Channel()
-
-    # Add simple python node
-    nodes[ir] = [
-        union_node(
-            rec.state["ctx"],
             channels[ir],
             *[channels[c] for c in ir.children],
         )
