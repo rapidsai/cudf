@@ -55,6 +55,7 @@ from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
+    dtype_to_pylibcudf_type,
     find_common_type,
     is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
@@ -5171,29 +5172,34 @@ class IntervalIndex(Index):
 
         if len(data) == 0:
             if not hasattr(data, "dtype"):
-                data = np.array([], dtype=np.int64)
+                child_type = np.dtype(np.int64)
             elif isinstance(data.dtype, (pd.IntervalDtype, IntervalDtype)):
-                data = np.array([], dtype=data.dtype.subtype)
-            interval_col = IntervalColumn(
+                child_type = data.dtype.subtype
+            else:
+                child_type = data.dtype
+            child_plc_type = dtype_to_pylibcudf_type(child_type)
+            left = plc.column_factories.make_empty_column(child_plc_type)
+            right = plc.column_factories.make_empty_column(child_plc_type)
+            plc_column = plc.Column(
+                plc.DataType(plc.TypeId.STRUCT),
+                0,
                 None,
-                dtype=IntervalDtype(data.dtype, closed),
-                size=len(data),
-                children=(as_column(data), as_column(data)),
+                None,
+                0,
+                0,
+                [left, right],
             )
+            interval_col = ColumnBase.from_pylibcudf(
+                plc_column
+            )._with_type_metadata(IntervalDtype(child_type, closed))
         else:
             col = as_column(data)
             if not isinstance(col, IntervalColumn):
                 raise TypeError("data must be an iterable of Interval data")
             if copy:
                 col = col.copy()
-            interval_col = IntervalColumn(
-                data=None,
-                dtype=IntervalDtype(col.dtype.subtype, closed),
-                mask=col.mask,
-                size=col.size,
-                offset=col.offset,
-                null_count=col.null_count,
-                children=col.children,  # type: ignore[arg-type]
+            interval_col = col._with_type_metadata(
+                IntervalDtype(col.dtype.subtype, closed)
             )
 
         if dtype:
@@ -5263,25 +5269,33 @@ class IntervalIndex(Index):
             breaks = breaks.astype(np.dtype(np.int64))
         if copy:
             breaks = breaks.copy()
-        left_col = breaks.slice(0, len(breaks) - 1)
-        right_col = breaks.slice(1, len(breaks))
+        left_col = breaks.slice(0, len(breaks) - 1).to_pylibcudf(mode="read")
+        right_col = (
+            breaks.slice(1, len(breaks)).copy().to_pylibcudf(mode="read")
+        )
         # For indexing, children should both have 0 offset
-        right_col = type(right_col)(
-            data=right_col.data,
-            dtype=right_col.dtype,
-            size=right_col.size,
-            mask=right_col.mask,
-            offset=0,
-            null_count=right_col.null_count,
-            children=right_col.children,
+        right_col = plc.Column(
+            right_col.type(),
+            right_col.size(),
+            right_col.data(),
+            right_col.null_mask(),
+            right_col.null_count(),
+            0,
+            right_col.children(),
         )
-
-        interval_col = IntervalColumn(
-            data=None,
-            dtype=IntervalDtype(left_col.dtype, closed),
-            size=len(left_col),
-            children=(left_col, right_col),
+        plc_column = plc.Column(
+            plc.DataType(plc.TypeId.STRUCT),
+            left_col.size(),
+            None,
+            None,
+            0,
+            0,
+            [left_col, right_col],
         )
+        dtype = IntervalDtype(breaks.dtype, closed)
+        interval_col = ColumnBase.from_pylibcudf(
+            plc_column
+        )._with_type_metadata(dtype)
         return IntervalIndex._from_column(interval_col, name=name)
 
     @classmethod
