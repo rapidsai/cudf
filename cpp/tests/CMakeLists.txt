@@ -479,7 +479,7 @@ ConfigureTest(DEVICE_ATOMICS_TEST device_atomics/device_atomics_test.cu)
 # ##################################################################################################
 # * transpose tests -------------------------------------------------------------------------------
 ConfigureTest(
-  TRANSPOSE_TEST transpose/transpose_test.cpp
+  TRANSPOSE_TEST transpose/rmm_test.cpp
   GPUS 1
   PERCENT 70
 )
