@@ -11,10 +11,7 @@ from collections.abc import Mapping
 from functools import cached_property, singledispatch
 from typing import TYPE_CHECKING, Any, Literal
 
-# Needed to make Sphinx happy for typing purposes
-import cupy
 import cupy as cp
-import numpy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -581,7 +578,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         )
 
     @cached_property
-    def indices(self) -> dict[ScalarLike, cupy.ndarray]:
+    def indices(self) -> dict[ScalarLike, cp.ndarray]:
         """
         Dict {group name -> group indices}.
 
@@ -1472,7 +1469,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         frac: float | None = None,
         replace: bool = False,
         weights: Sequence | Series | None = None,
-        random_state: numpy.random.RandomState | int | None = None,
+        random_state: np.random.RandomState | int | None = None,
     ):
         """Return a random sample of items in each group.
 
