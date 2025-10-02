@@ -89,6 +89,10 @@ def dtype(arbitrary: Any) -> DtypeObj:
                 arrow_type == pa.date32()
                 or arrow_type == pa.binary()
                 or isinstance(arrow_type, pa.DictionaryType)
+            ) or (
+                cudf.get_option("mode.pandas_compatible")
+                and isinstance(arrow_type, pa.TimestampType)
+                and getattr(arrow_type, "tz", None) is not None
             ):
                 raise NotImplementedError(
                     f"cuDF does not yet support {pd_dtype}"
@@ -662,7 +666,8 @@ class StructDtype(_BaseDtype):
         StructType(struct<x: int32, y: string>)
         """
         return pa.struct(
-            {
+            # dict[str, DataType] should be compatible but pyarrow stubs are too strict
+            {  # type: ignore[arg-type]
                 k: cudf_dtype_to_pa_type(dtype)
                 for k, dtype in self.fields.items()
             }
@@ -851,7 +856,11 @@ class DecimalDtype(_BaseDtype):
         return pa.decimal128(self.precision, self.scale)
 
     @classmethod
-    def from_arrow(cls, typ: pa.Decimal128Type) -> Self:
+    def from_arrow(
+        cls, typ: pa.Decimal32Type | pa.Decimal64Type | pa.Decimal128Type
+    ) -> Self:
+        # TODO: Eventually narrow this to only accept the appropriate decimal type
+        # for each specific DecimalNDtype subclass
         """
         Construct a cudf decimal dtype from a ``pyarrow`` dtype
 

@@ -323,6 +323,11 @@ ConfigureNVBench(
 )
 
 # ##################################################################################################
+# * parquet reader filter benchmark
+# ----------------------------------------------------------------------
+ConfigureNVBench(PARQUET_READER_FILTER_NVBENCH io/parquet/parquet_reader_filter.cpp)
+
+# ##################################################################################################
 # * parquet experimental reader benchmark
 # ----------------------------------------------------------------------
 ConfigureNVBench(

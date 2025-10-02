@@ -190,9 +190,9 @@ def decompose_single_agg(
                 tid = agg.dtype.plc_type.id()
                 if tid in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}:
                     cast_to = (
-                        DataType(pl.Float64)
+                        DataType(pl.Float64())
                         if tid == plc.TypeId.FLOAT64
-                        else DataType(pl.Float32)
+                        else DataType(pl.Float32())
                     )
                     child = expr.Cast(cast_to, child)
                     child_dtype = child.dtype.plc_type

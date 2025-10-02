@@ -118,9 +118,10 @@ class StructColumn(ColumnBase):
         )
 
         if self.mask is not None:
-            buffers = (pa.py_buffer(self.mask.memoryview()),)
+            buffers = [pa.py_buffer(self.mask.memoryview())]
         else:
-            buffers = (None,)
+            # PyArrow stubs are too strict - from_buffers should accept None for missing buffers
+            buffers = [None]  # type: ignore[list-item]
 
         return pa.StructArray.from_buffers(
             pa_type, len(self), buffers, children=children
@@ -219,7 +220,9 @@ class StructColumn(ColumnBase):
                 mask=self.base_mask,
                 offset=self.offset,
                 null_count=self.null_count,
-                children=self.base_children,  # type: ignore[arg-type]
+                children=tuple(  # type: ignore[arg-type]
+                    child.astype(dtype.subtype) for child in self.base_children
+                ),  # type: ignore[arg-type]
             )
         elif isinstance(dtype, StructDtype):
             return StructColumn(

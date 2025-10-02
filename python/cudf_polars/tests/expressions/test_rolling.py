@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
 import polars as pl
@@ -12,6 +14,9 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.utils.versions import POLARS_VERSION_LT_130, POLARS_VERSION_LT_132
+
+if TYPE_CHECKING:
+    from cudf_polars.typing import RankMethod
 
 
 @pytest.fixture
@@ -273,7 +278,7 @@ def test_over_broadcast_input_row_group_indices_aligned():
 def test_rank_over(
     request,
     df: pl.LazyFrame,
-    method: str,
+    method: RankMethod,
     *,
     descending: bool,
     order_by: None | list[str | pl.Expr],
@@ -295,7 +300,7 @@ def test_rank_over(
 def test_rank_over_with_ties(
     request,
     df: pl.LazyFrame,
-    method: str,
+    method: RankMethod,
     *,
     descending: bool,
     order_by: None | list[str | pl.Expr],
@@ -319,7 +324,7 @@ def test_rank_over_with_ties(
 def test_rank_over_with_null_values(
     request,
     df: pl.LazyFrame,
-    method: str,
+    method: RankMethod,
     *,
     descending: bool,
     order_by: None | list[str | pl.Expr],
@@ -343,7 +348,7 @@ def test_rank_over_with_null_values(
 def test_rank_over_with_null_group_keys(
     request,
     df: pl.LazyFrame,
-    method: str,
+    method: RankMethod,
     *,
     descending: bool,
     order_by: None | list[str | pl.Expr],
