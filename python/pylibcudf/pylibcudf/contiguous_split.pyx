@@ -376,8 +376,6 @@ cpdef Table unpack(PackedColumns input, DeviceMemoryResource mr=None):
 cpdef Table unpack_from_memoryviews(
     memoryview metadata,
     gpumemoryview gpu_data,
-    Stream stream=None,
-    DeviceMemoryResource mr=None
 ):
     """Deserialize the result of `pack`.
 
@@ -391,22 +389,22 @@ cpdef Table unpack_from_memoryviews(
         The packed metadata to unpack.
     gpu_data : gpumemoryview
         The packed gpu_data to unpack.
-    stream : Stream, optional
-        CUDA stream used for device memory operations and kernel launches.
-    mr : DeviceMemoryResource, optional
-        Device memory resource used to allocate the returned table's device memory.
 
     Returns
     -------
     Table
         Copy of the packed columns.
     """
-    stream = _get_stream(stream)
-    mr = _get_memory_resource(mr)
     if metadata.nbytes == 0:
         if gpu_data.__cuda_array_interface__["data"][0] != 0:
             raise ValueError("Expected an empty gpu_data from unpacking an empty table")
-        return Table.from_libcudf(make_unique[table](table_view()), stream, mr)
+        # For an empty table we just attach the default stream and mr since neither will
+        # be used for any operations.
+        return Table.from_libcudf(
+            make_unique[table](table_view()),
+            _get_stream(),
+            _get_memory_resource(),
+        )
 
     # Extract the raw data pointers
     cdef const uint8_t[::1] _metadata = metadata
