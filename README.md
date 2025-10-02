@@ -10,7 +10,7 @@ A GPU DataFrame is like a pandas DataFrame (a table of data with rows and column
 
 This is built on NVIDIA's CUDA technology and libraries like libcudf for low-level GPU handling. If you're new to GPUs, think of it as upgrading from a single-lane road (CPU) to a massive highway (GPU) for data traffic.
 
-### Why Use cuDF?
+### ❓Why Use cuDF?
 cuDF accelerates pandas-like data processing on NVIDIA GPUs, ideal for large datasets in data science, machine learning, or ETL pipelines. It uses the same API as pandas, so you can switch with minimal code changes.
 
 **Speed Benefits**
