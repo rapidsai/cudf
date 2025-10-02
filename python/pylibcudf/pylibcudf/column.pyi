@@ -1,6 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from typing import Any, Protocol, TypedDict
 
 from rmm.pylibrmm.device_buffer import DeviceBuffer
@@ -102,6 +102,11 @@ class Column:
     def from_array(
         cls, obj: SupportsCudaArrayInterface | SupportsArrayInterface
     ) -> Column: ...
+    @staticmethod
+    def from_iterable_of_py(
+        obj: Iterable, dtype: DataType | None = None
+    ) -> Column: ...
+    def to_pylist(self) -> list: ...
 
 class ListColumnView:
     def __init__(self, column: Column): ...

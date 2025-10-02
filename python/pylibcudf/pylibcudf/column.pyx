@@ -2,19 +2,19 @@
 
 from cython.operator cimport dereference
 
-from cpython.pycapsule cimport (
-    PyCapsule_GetPointer,
-    PyCapsule_New,
-)
+from cpython.exc cimport PyErr_Occurred
+from cpython.pycapsule cimport PyCapsule_GetPointer, PyCapsule_New
+from cpython.ref cimport PyObject
 
-from libc.stdint cimport uintptr_t
-
+from libc.stddef cimport size_t
+from libc.stdint cimport uint64_t, uintptr_t
 from libcpp.limits cimport numeric_limits
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 
 from pylibcudf.libcudf.column.column cimport column, column_contents
 from pylibcudf.libcudf.column.column_factories cimport make_column_from_scalar
+from pylibcudf.libcudf.copying cimport get_element
 from pylibcudf.libcudf.interop cimport (
     ArrowArray,
     ArrowArrayStream,
@@ -22,17 +22,16 @@ from pylibcudf.libcudf.interop cimport (
     ArrowDeviceArray,
     arrow_column,
     column_metadata,
-    to_arrow_host_raw,
+    release_arrow_array_raw,
     to_arrow_device_raw,
+    to_arrow_host_raw,
     to_arrow_schema_raw,
 )
 from pylibcudf.libcudf.null_mask cimport bitmask_allocation_size_bytes
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.strings.strings_column_view cimport strings_column_view
-from pylibcudf.libcudf.types cimport size_type, size_of as cpp_size_of, bitmask_type
+from pylibcudf.libcudf.types cimport bitmask_type, size_of as cpp_size_of, size_type
 from pylibcudf.libcudf.utilities.traits cimport is_fixed_width
-from pylibcudf.libcudf.copying cimport get_element
-
 
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.stream cimport Stream
@@ -41,30 +40,27 @@ from rmm.pylibrmm.memory_resource cimport (
     get_current_device_resource,
 )
 
-from .gpumemoryview cimport gpumemoryview
+from ._interop_helpers cimport (
+    _metadata_to_libcudf,
+    _release_array,
+    _release_device_array,
+    _release_schema,
+)
 from .filling cimport sequence
 from .gpumemoryview cimport gpumemoryview
 from .scalar cimport Scalar
-from .traits cimport (
-    is_fixed_width as plc_is_fixed_width,
-    is_nested,
-)
+from .traits cimport is_fixed_width as plc_is_fixed_width, is_nested
 from .types cimport DataType, size_of, type_id
-from ._interop_helpers cimport (
-    _release_schema,
-    _release_array,
-    _release_device_array,
-    _metadata_to_libcudf,
-)
+from pylibcudf.types import TypeId
 from .utils cimport _get_stream, _get_memory_resource
 
 from .gpumemoryview import _datatype_from_dtype_desc
 from ._interop_helpers import ArrowLike, ColumnMetadata, _ObjectWithArrowMetadata
 
 import array
-from itertools import accumulate
 import functools
 import operator
+from itertools import accumulate
 from typing import Iterable
 
 try:
@@ -1164,6 +1160,33 @@ cdef class Column:
 
         return Column.from_array_interface(ArrayInterfaceWrapper(iface), stream)
 
+    cpdef list to_pylist(self):
+        """
+        Convert the Column to a Python list.
+
+        Only supports fixed-width and string columns.
+
+        Returns
+        -------
+        list
+            A list of Python objects representing the column data.
+
+        Raises
+        ------
+        NotImplementedError
+            If the column type is not fixed-width or string.
+        """
+        cdef type_id dtype = self.type().id()
+        cdef ArrowArray* raw_host_array_ptr = NULL
+        with nogil:
+            raw_host_array_ptr = to_arrow_host_raw(self.view())
+        try:
+            return _arrow_to_pylist_impl(dtype, raw_host_array_ptr)
+        finally:
+            if raw_host_array_ptr != NULL:
+                with nogil:
+                    release_arrow_array_raw(raw_host_array_ptr)
+
     @classmethod
     def struct_from_children(cls, children: Iterable[Column]):
         """
@@ -1416,3 +1439,219 @@ def is_c_contiguous(
             return False
         cumulative_stride *= dim
     return True
+
+
+cdef extern from *:
+    """
+    #include <Python.h>
+    #include <cstdint>
+    #include <type_traits>
+    #include <cudf/types.hpp>
+
+    // See https://arrow.apache.org/docs/format/Columnar.html#validity-bitmaps
+    // for more details on how the validity bitmap works.
+    static inline bool _is_valid(const uint8_t* bm, size_t idx) {
+        if (!bm) return true;
+        return ((bm[idx >> 3] >> (idx & 7)) & 1) != 0;
+    }
+
+    template <typename T>
+    struct into_py;
+
+    template <typename T>
+    requires (std::is_integral_v<T> && std::is_signed_v<T>)
+    struct into_py<T> {
+        static inline PyObject* convert(T v) {
+            return PyLong_FromLongLong((long long)v);
+        }
+    };
+
+    template <typename T>
+    requires (std::is_integral_v<T> && std::is_unsigned_v<T>)
+    struct into_py<T> {
+        static inline PyObject* convert(T v) {
+            return PyLong_FromUnsignedLongLong((unsigned long long)v);
+        }
+    };
+
+    template <typename T>
+    requires (std::is_floating_point_v<T>)
+        struct into_py<T> {
+        static inline PyObject* convert(T v) {
+            return PyFloat_FromDouble((double)v);
+        }
+    };
+
+    template <typename T>
+    static inline PyObject* _make_pylist(
+        int64_t n,
+        int64_t offset,
+        bool check_valid,
+        const uint8_t* null_bm,
+        const T& conv
+    )
+    {
+        PyObject* out = PyList_New(n);
+        if (!out) return nullptr;
+        for (int64_t i = 0; i < n; ++i) {
+            // PyList_SetItem steals a reference, so this helper pattern
+            // ensures that we incref borrowed singletons before calling it.
+            size_t bit_index = size_t(offset + i);
+            if (check_valid && !_is_valid(null_bm, bit_index)) {
+                Py_INCREF(Py_None);
+                PyList_SET_ITEM(out, i, Py_None);
+                continue;
+            }
+            PyObject* obj = conv(i, bit_index);
+            if (!obj) {
+                Py_DECREF(out);
+                return nullptr;
+            }
+            PyList_SET_ITEM(out, i, obj);
+        }
+        return out;
+    }
+
+    struct bool_converter {
+        const uint8_t* bool_base;
+        PyObject* operator()(int64_t, size_t bit_index) const {
+            bool is_valid = ((bool_base[bit_index >> 3] >> (bit_index & 7)) & 1) != 0;
+            PyObject* obj = is_valid ? Py_True : Py_False;
+            Py_INCREF(obj);
+            return obj;
+        }
+    };
+
+    struct string_converter {
+        const int32_t* str_offsets;
+        const char*    str_base;
+        PyObject* operator()(int64_t i, size_t) const {
+            PyObject* s = PyUnicode_DecodeUTF8(
+                str_base + str_offsets[i],
+                str_offsets[i + 1] - str_offsets[i],
+                nullptr
+            );
+            if (!s) {
+                PyErr_SetString(
+                    PyExc_MemoryError, "Unable to convert string dtype to python"
+                );
+                return (PyObject*)nullptr;
+            }
+            return s;
+        }
+    };
+
+    template <typename T>
+    struct numeric_converter {
+        const T* base;
+        PyObject* operator()(int64_t i, size_t) const {
+            PyObject* obj = into_py<T>::convert(base[i]);
+            if (!obj) {
+                PyErr_SetString(
+                    PyExc_MemoryError, "Unable to convert numeric dtype to python"
+                );
+                return (PyObject*)nullptr;
+            }
+            return obj;
+        }
+    };
+
+    template <typename T>
+    inline PyObject* _make_numeric_pylist(
+        const void* const* buffers,
+        int64_t offset,
+        int64_t n,
+        bool check_valid,
+        const uint8_t* null_bm)
+    {
+    return _make_pylist(
+            n, offset, check_valid, null_bm,
+            numeric_converter<T>{static_cast<const T*>(buffers[1]) + offset}
+        );
+    }
+
+    static inline PyObject* cpp_arrow_to_pylist_impl(
+        cudf::type_id dtype, ArrowArray* arr
+    )
+    {
+        int64_t n = (int64_t)arr->length;
+        if (n == 0) return PyList_New(0);
+
+        const void* const* buffers = arr->buffers;
+        int64_t offset = arr->offset;
+        bool check_valid = (arr->null_count != 0);
+        const uint8_t* null_bm = check_valid ? (const uint8_t*)buffers[0] : nullptr;
+
+        if (dtype == cudf::type_id::BOOL8) {
+            return _make_pylist(
+                n, offset, check_valid, null_bm,
+                bool_converter{(const uint8_t*)buffers[1]}
+            );
+        }
+
+        if (dtype == cudf::type_id::STRING) {
+            return _make_pylist(
+                n, offset, check_valid, null_bm,
+                string_converter{
+                    (const int32_t*)buffers[1] + offset,
+                    (const char*)buffers[2]}
+            );
+        }
+
+        switch (dtype) {
+            case cudf::type_id::INT8:
+                return _make_numeric_pylist<int8_t>(
+                    buffers, offset, n, check_valid, null_bm
+                );
+            case cudf::type_id::INT16:
+                return _make_numeric_pylist<int16_t>(
+                    buffers, offset, n, check_valid, null_bm
+                );
+            case cudf::type_id::INT32:
+                return _make_numeric_pylist<int32_t>(
+                    buffers, offset, n, check_valid, null_bm
+                );
+            case cudf::type_id::INT64:
+                return _make_numeric_pylist<int64_t>(
+                    buffers, offset, n, check_valid, null_bm
+                );
+            case cudf::type_id::UINT8:
+                return _make_numeric_pylist<uint8_t>(
+                    buffers, offset, n, check_valid, null_bm
+                );
+            case cudf::type_id::UINT16:
+                return _make_numeric_pylist<uint16_t>(
+                    buffers, offset, n, check_valid, null_bm
+                );
+            case cudf::type_id::UINT32:
+                return _make_numeric_pylist<uint32_t>(
+                    buffers, offset, n, check_valid, null_bm
+                );
+            case cudf::type_id::UINT64:
+                return _make_numeric_pylist<uint64_t>(
+                    buffers, offset, n, check_valid, null_bm
+                );
+            case cudf::type_id::FLOAT32:
+                return _make_numeric_pylist<float>(
+                    buffers, offset, n, check_valid, null_bm
+                );
+            case cudf::type_id::FLOAT64:
+                return _make_numeric_pylist<double>(
+                    buffers, offset, n, check_valid, null_bm
+                );
+            default:
+                return nullptr;
+        }
+    }
+    """
+    PyObject* cpp_arrow_to_pylist_impl(type_id dtype, ArrowArray* arr)
+
+cdef list _arrow_to_pylist_impl(type_id dtype, ArrowArray* arr):
+    cdef PyObject* list_ = cpp_arrow_to_pylist_impl(dtype, arr)
+    if list_ == NULL:
+        if PyErr_Occurred():
+            raise
+        raise NotImplementedError(
+            f"Column with dtype={TypeId(dtype)} not supported"
+        )
+    return <list>list_

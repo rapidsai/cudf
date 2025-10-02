@@ -77,6 +77,7 @@ cdef class Column:
         Column base=*,
     )
 
+    cpdef list to_pylist(self)
     cpdef Scalar to_scalar(self, Stream stream=*, DeviceMemoryResource mr=*)
     cpdef DataType type(self)
     cpdef Column child(self, size_type index)

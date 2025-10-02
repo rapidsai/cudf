@@ -1,5 +1,5 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION.
-from libc.stdint cimport int32_t
+from libc.stdint cimport int32_t, int64_t
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
 from libcpp.optional cimport optional
@@ -22,15 +22,23 @@ cdef extern from "dlpack/dlpack.h" nogil:
 
 # The Arrow structs are not namespaced.
 cdef extern from "cudf/interop.hpp" nogil:
+    # https://arrow.apache.org/docs/format/CDataInterface.html#structure-definitions
     cdef struct ArrowSchema:
         void (*release)(ArrowSchema*) noexcept
 
     cdef struct ArrowArray:
+        int64_t length
+        int64_t null_count
+        int64_t offset
+        int64_t n_buffers
+        int64_t n_children
+        const void** buffers
         void (*release)(ArrowArray*) noexcept
 
     cdef struct ArrowArrayStream:
         void (*release)(ArrowArrayStream*) noexcept
 
+    # https://arrow.apache.org/docs/format/CDeviceDataInterface.html#structure-definitions
     cdef struct ArrowDeviceArray:
         ArrowArray array
 
