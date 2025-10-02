@@ -49,7 +49,7 @@ def test_groupby_consecutive_operations():
     assert_groupby_results_equal(actual, expected, check_dtype=False)
 
     actual = gg.cumcount()
-    expected = pg.cumcount()
+    expected = pg.cumcount() + 1
 
     assert_groupby_results_equal(actual, expected, check_dtype=False)
 

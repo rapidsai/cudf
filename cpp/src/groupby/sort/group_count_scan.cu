@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ std::unique_ptr<column> count_scan(cudf::device_span<size_type const> group_labe
 
   auto resultview = result->mutable_view();
   // aggregation::COUNT_ALL
-  thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
+  thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                 group_labels.begin(),
                                 group_labels.end(),
                                 thrust::make_constant_iterator<size_type>(1),
