@@ -1037,51 +1037,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 ),
             )
 
-    def view(self, dtype: DtypeObj) -> ColumnBase:
-        """
-        View the data underlying a column as different dtype.
-        The source column must divide evenly into the size of
-        the desired data type. Columns with nulls may only be
-        viewed as dtypes with size equal to source dtype size
-
-        Parameters
-        ----------
-        dtype : Dtype object
-            The dtype to view the data as
-        """
-        if dtype.kind in ("o", "u", "s"):
-            raise TypeError(
-                "Bytes viewed as str without metadata is ambiguous"
-            )
-
-        if self.dtype.itemsize == dtype.itemsize:
-            return build_column(
-                self.base_data,
-                dtype=dtype,
-                mask=self.base_mask,
-                size=self.size,
-                offset=self.offset,
-            )
-
-        else:
-            if self.null_count > 0:
-                raise ValueError(
-                    "Can not produce a view of a column with nulls"
-                )
-
-            if (self.size * self.dtype.itemsize) % dtype.itemsize:
-                raise ValueError(
-                    f"Can not divide {self.size * self.dtype.itemsize}"
-                    + f" total bytes into {dtype} with size {dtype.itemsize}"
-                )
-
-            # This assertion prevents mypy errors below.
-            assert self.base_data is not None
-
-            start = self.offset * self.dtype.itemsize
-            end = start + self.size * self.dtype.itemsize
-            return build_column(self.base_data[start:end], dtype=dtype)
-
     def element_indexing(self, index: int):
         """Default implementation for indexing to an element
 

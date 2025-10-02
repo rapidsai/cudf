@@ -35,7 +35,6 @@ if TYPE_CHECKING:
         ColumnBinaryOperand,
         ColumnLike,
         Dtype,
-        DtypeObj,
         ScalarLike,
     )
     from cudf.core.buffer import Buffer
@@ -178,16 +177,14 @@ class CategoricalColumn(column.ColumnBase):
 
     @property
     def children(self) -> tuple[NumericalColumn]:
+        if self.offset == 0 and self.size == self.base_size:
+            return super().children  # type: ignore[return-value]
         if self._children is None:
-            codes_column = self.base_children[0]
-            start = self.offset * codes_column.dtype.itemsize
-            end = start + self.size * codes_column.dtype.itemsize
-            codes_column = cudf.core.column.NumericalColumn(
-                data=codes_column.base_data[start:end],
-                dtype=codes_column.dtype,
-                size=self.size,
+            # Compute children from the column view (children factoring self.size)
+            child = type(self).from_pylibcudf(
+                self.to_pylibcudf(mode="read").copy()
             )
-            self._children = (codes_column,)
+            self._children = (child,)
         return self._children
 
     @property
@@ -698,11 +695,6 @@ class CategoricalColumn(column.ColumnBase):
         if inplace and isinstance(other_col, CategoricalColumn):
             self._codes = other_col.codes
         return out
-
-    def view(self, dtype: DtypeObj) -> ColumnBase:
-        raise NotImplementedError(
-            "Categorical column views are not currently supported"
-        )
 
     @staticmethod
     def _concat(
