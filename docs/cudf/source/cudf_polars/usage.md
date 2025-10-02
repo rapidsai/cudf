@@ -93,7 +93,7 @@ capture and log information about each node before and after it executes, includ
 
 - The type of the node being executed (e.g. `Scan`, `Select`, `Join`, `Groupby`, etc.)
 - The shape and size (in memory) of each input and output DataFrame
-- The GPU memory usage, as reported by [nvml], before and after executing the ndoe
+- The GPU memory usage, as reported by [nvml], before and after executing the node
 - A start and stop clock, which can be used to measure the duration of the node's execution
 
 The implementation uses [structlog] to build log records. You can configure the
