@@ -12,9 +12,7 @@ from rapidsmpf.streaming.core.channel import Channel, Message
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 from cudf_polars.dsl.ir import Slice, Union
-from cudf_polars.experimental.base import (
-    PartitionInfo,
-)
+from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
     lower_ir_node,
