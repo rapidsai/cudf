@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.streaming.core.channel import Channel, Message
 from rapidsmpf.streaming.core.node import define_py_node
@@ -13,53 +13,15 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 import pylibcudf as plc
 from rmm.pylibrmm.stream import DEFAULT_STREAM
 
-from cudf_polars.dsl.ir import IR
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
+from cudf_polars.experimental.repartition import Repartition
 
 if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
 
+    from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
-    from cudf_polars.typing import Schema
-
-
-class Rechunk(IR):
-    """
-    Rechunk input data locally.
-
-    Parameters
-    ----------
-    schema
-        The schema of the output data.
-    strategy
-        The strategy of the local rechunking operation.
-        Only 'chunk_count' is supported for now.
-    value
-        The numerical value used by the local rechunking strategy.
-        Only `1` is supported for now.
-    df
-        The input IR node.
-    """
-
-    __slots__ = ("strategy", "value")
-    _non_child = ("schema", "strategy", "value")
-
-    def __init__(
-        self,
-        schema: Schema,
-        strategy: Literal["chunk_count", "row_count", "byte_count"],
-        value: int,
-        df: IR,
-    ):
-        self.schema = schema
-        self._non_child_args = ()
-        self.children = (df,)
-        self.strategy = strategy
-        self.value = value
-        if strategy != "chunk_count" or value != 1:  # pragma: no cover
-            # TODO: Support other rechunking strategies
-            raise NotImplementedError("Only rechunking to 1 is supported for now.")
 
 
 @define_py_node()
@@ -101,13 +63,15 @@ async def concatenate_node(
         await ch_out.drain(ctx)
 
 
-@generate_ir_sub_network.register(Rechunk)
-def _(ir: Rechunk, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]:
-    # Rechunk node.
+@generate_ir_sub_network.register(Repartition)
+def _(
+    ir: Repartition, rec: SubNetGenerator
+) -> tuple[dict[IR, list[Any]], dict[IR, Any]]:
+    # Repartition node.
 
-    # TODO: Support other rechunking strategies
-    if ir.strategy != "chunk_count" or ir.value != 1:  # pragma: no cover
-        raise NotImplementedError("Only rechunking to 1 chunk is supported for now.")
+    # TODO: Support other repartitioning strategies
+    partition_info = rec.state["partition_info"]
+    assert partition_info[ir].count == 1, "Only concatenation is supported for now."
 
     # Process children
     nodes, channels = rec(ir.children[0])

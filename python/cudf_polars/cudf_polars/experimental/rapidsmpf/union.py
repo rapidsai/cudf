@@ -11,50 +11,17 @@ from typing import TYPE_CHECKING, Any
 from rapidsmpf.streaming.core.channel import Channel, Message
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
-from cudf_polars.dsl.ir import Slice, Union
-from cudf_polars.experimental.base import PartitionInfo
+from cudf_polars.dsl.ir import Union
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
-    lower_ir_node,
 )
 from cudf_polars.experimental.rapidsmpf.nodes import define_py_node, shutdown_on_error
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
-
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
-    from cudf_polars.experimental.rapidsmpf.dispatch import LowerIRTransformer
-
-
-@lower_ir_node.register(Union)
-def _(
-    ir: Union, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    # Check zlice
-    if ir.zlice is not None:
-        return rec(
-            Slice(
-                ir.schema,
-                *ir.zlice,
-                Union(ir.schema, None, *ir.children),
-            )
-        )
-
-    # Lower children
-    children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
-    partition_info = reduce(operator.or_, _partition_info)
-
-    # Partition count is the sum of all child partitions
-    count = sum(partition_info[c].count for c in children)
-
-    # Return reconstructed node and partition-info dict
-    new_node = ir.reconstruct(children)
-    broadcasted = all(partition_info[c].broadcasted for c in children)
-    partition_info[new_node] = PartitionInfo(count=count, broadcasted=broadcasted)
-    return new_node, partition_info
 
 
 @define_py_node()

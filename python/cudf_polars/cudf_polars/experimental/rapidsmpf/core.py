@@ -31,7 +31,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
     lower_ir_node,
 )
-from cudf_polars.experimental.rapidsmpf.rechunk import Rechunk
+from cudf_polars.experimental.rapidsmpf.repartition import Repartition
 from cudf_polars.experimental.statistics import collect_statistics
 
 if TYPE_CHECKING:
@@ -136,7 +136,7 @@ def lower_ir_graph(
     This function is nearly identical to the `lower_ir_graph` function
     in the `parallel` module, but with some differences:
     - A distinct `lower_ir_node` function is used.
-    - A `Rechunk` node is added to ensure a single chunk is produced.
+    - A `Repartition` node is added to ensure a single chunk is produced.
 
     See Also
     --------
@@ -151,12 +151,7 @@ def lower_ir_graph(
 
     # Ensure the output is always a single chunk
     broadcasted = partition_info[ir].broadcasted
-    ir = Rechunk(
-        ir.schema,
-        "chunk_count",
-        1,
-        ir,
-    )
+    ir = Repartition(ir.schema, ir)
     partition_info[ir] = PartitionInfo(
         count=1,
         broadcasted=broadcasted,
@@ -201,8 +196,9 @@ def generate_network(
     ch_out = channels[ir]
 
     # TODO: If `ir` corresponds to broadcasted data, we can
-    # inject a node to drain the channel and return
-    # an empty DataFrame on ranks > 0.
+    # inject a node to drain the channel and return an empty
+    # DataFrame on ranks > 0. Eventually, we can push the
+    # drain all the way down to the last AllGather node.
 
     # Add final node to pull from the output channel
     output_node, output = pull_from_channel(ctx, ch_in=ch_out)

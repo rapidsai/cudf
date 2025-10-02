@@ -63,30 +63,52 @@ def _lower_ir_fallback(
     # those children will be collapsed with `Repartition`.
     from cudf_polars.experimental.repartition import Repartition
 
+    # TODO: (IMPORTANT) Since Repartition is a local operation,
+    # the current fallback logic will only work for one rank!
+    # For multiple ranks, we will need to AllGather the data
+    # on all ranks.
+    config_options = rec.state["config_options"]
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'generate_ir_sub_network'"
+    )
+    if (
+        (rapidsmpf_engine := config_options.executor.engine == "rapidsmpf")
+        and config_options.executor.scheduler == "distributed"
+    ):  # pragma: no cover; Requires distributed
+        raise NotImplementedError(
+            "Fallback is not yet supported distributed execution "
+            "with the RAPIDS-MPF streaming engine."
+        )
+
     # Lower children
     lowered_children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
     partition_info = reduce(operator.or_, _partition_info)
 
     # Ensure all children are single-partitioned
     children = []
-    fallback = False
+    inform = False
     for c in lowered_children:
         child = c
-        if partition_info[c].count > 1:
+        if multi_partitioned := partition_info[c].count > 1:
+            inform = True
+        if multi_partitioned or rapidsmpf_engine:
             # Fall-back logic
-            fallback = True
             child = Repartition(child.schema, child)
-            partition_info[child] = PartitionInfo(count=1)
+            partition_info[child] = PartitionInfo(
+                count=1,
+                broadcasted=partition_info[c].broadcasted,
+            )
         children.append(child)
 
-    if fallback and msg:
+    if inform and msg:
         # Warn/raise the user if any children were collapsed
         # and the "fallback_mode" configuration is not "silent"
         _fallback_inform(msg, rec.state["config_options"])
 
     # Reconstruct and return
     new_node = ir.reconstruct(children)
-    partition_info[new_node] = PartitionInfo(count=1)
+    broadcasted = all(partition_info[c].broadcasted for c in children)
+    partition_info[new_node] = PartitionInfo(count=1, broadcasted=broadcasted)
     return new_node, partition_info
 
 
