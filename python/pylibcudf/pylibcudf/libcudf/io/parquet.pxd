@@ -89,10 +89,6 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         parquet_reader_options build() except +libcudf_exception_handler
 
     cdef table_with_metadata read_parquet(
-        parquet_reader_options args
-    ) except +libcudf_exception_handler
-
-    cdef table_with_metadata read_parquet(
         parquet_reader_options args,
         cuda_stream_view stream,
         device_memory_resource* mr
@@ -219,10 +215,6 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         parquet_writer_options_builder& column_chunks_file_paths(
             vector[string] column_chunks_file_paths
         ) except +libcudf_exception_handler
-
-    cdef unique_ptr[vector[uint8_t]] write_parquet(
-        parquet_writer_options options
-    ) except +libcudf_exception_handler
 
     cdef unique_ptr[vector[uint8_t]] write_parquet(
         parquet_writer_options options,

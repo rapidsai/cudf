@@ -78,15 +78,6 @@ cdef extern from "cudf/io/orc.hpp" \
         orc_reader_options build() except +libcudf_exception_handler
 
     cdef cudf_io_types.table_with_metadata read_orc(
-        orc_reader_options opts
-    ) except +libcudf_exception_handler
-
-    cdef cudf_io_types.table_with_metadata read_orc(
-        orc_reader_options opts,
-        cuda_stream_view stream,
-    ) except +libcudf_exception_handler
-
-    cdef cudf_io_types.table_with_metadata read_orc(
         orc_reader_options opts,
         cuda_stream_view stream,
         device_memory_resource* mr,
@@ -155,10 +146,6 @@ cdef extern from "cudf/io/orc.hpp" \
         ) except +libcudf_exception_handler
 
         orc_writer_options build() except +libcudf_exception_handler
-
-    cdef void write_orc(
-        orc_writer_options options
-    ) except +libcudf_exception_handler
 
     cdef void write_orc(
         orc_writer_options options,

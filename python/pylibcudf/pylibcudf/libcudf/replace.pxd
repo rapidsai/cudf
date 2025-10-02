@@ -18,47 +18,7 @@ cdef extern from "cudf/replace.hpp" namespace "cudf" nogil:
         PRECEDING
         FOLLOWING
 
-    cdef unique_ptr[column] replace_nulls(
-        column_view source_column,
-        column_view replacement_column,
-        cuda_stream_view stream) except +libcudf_exception_handler
-
-    cdef unique_ptr[column] replace_nulls(
-        column_view source_column,
-        scalar replacement,
-        cuda_stream_view stream) except +libcudf_exception_handler
-
-    cdef unique_ptr[column] replace_nulls(
-        column_view source_column,
-        replace_policy replace_policy,
-        cuda_stream_view stream) except +libcudf_exception_handler
-
-    cdef unique_ptr[column] find_and_replace_all(
-        column_view source_column,
-        column_view values_to_replace,
-        column_view replacement_values,
-        cuda_stream_view stream) except +libcudf_exception_handler
-
-    cdef unique_ptr[column] clamp(
-        column_view source_column,
-        scalar lo, scalar lo_replace,
-        scalar hi, scalar hi_replace,
-        cuda_stream_view stream) except +libcudf_exception_handler
-
-    cdef unique_ptr[column] clamp(
-        column_view source_column,
-        scalar lo, scalar hi,
-        cuda_stream_view stream) except +libcudf_exception_handler
-
-    cdef unique_ptr[column] normalize_nans_and_zeros(
-        column_view source_column,
-        cuda_stream_view stream) except +libcudf_exception_handler
-
-    cdef void normalize_nans_and_zeros(
-        mutable_column_view source_column,
-        cuda_stream_view stream) except +libcudf_exception_handler
-
-    # Memory resource overloads
+    # All functions below include memory resource parameter
     cdef unique_ptr[column] replace_nulls(
         column_view source_column,
         column_view replacement_column,
