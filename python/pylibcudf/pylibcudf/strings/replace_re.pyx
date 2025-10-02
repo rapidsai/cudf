@@ -15,7 +15,8 @@ from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
 from pylibcudf.strings.regex_flags cimport regex_flags
 from pylibcudf.strings.regex_program cimport RegexProgram
-from pylibcudf.utils cimport _get_stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 __all__ = ["replace_re", "replace_with_backrefs"]
@@ -26,6 +27,8 @@ cpdef Column replace_re(
     Replacement replacement=None,
     size_type max_replace_count=-1,
     regex_flags flags=regex_flags.DEFAULT,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     For each string, replaces any character sequence matching the given patterns
@@ -60,11 +63,11 @@ cpdef Column replace_re(
     """
     cdef unique_ptr[column] c_result
     cdef vector[string] c_patterns
-    cdef Stream stream
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     if Patterns is RegexProgram and Replacement is Scalar:
         if replacement is None:
-            stream = _get_stream(None)
             replacement = Scalar.from_libcudf(
                 cpp_make_string_scalar("".encode(), stream.view())
             )
@@ -74,11 +77,13 @@ cpdef Column replace_re(
                     input.view(),
                     patterns.c_obj.get()[0],
                     dereference(<string_scalar*>(replacement.get())),
-                    max_replace_count
+                    max_replace_count,
+                    stream.view(),
+                    mr.get_mr()
                 )
             )
 
-        return Column.from_libcudf(move(c_result))
+        return Column.from_libcudf(move(c_result), stream, mr)
     elif Patterns is list and Replacement is Column:
         c_patterns.reserve(len(patterns))
         for pattern in patterns:
@@ -91,10 +96,12 @@ cpdef Column replace_re(
                     c_patterns,
                     replacement.view(),
                     flags,
+                    stream.view(),
+                    mr.get_mr()
                 )
             )
 
-        return Column.from_libcudf(move(c_result))
+        return Column.from_libcudf(move(c_result), stream, mr)
     else:
         raise TypeError("Must pass either a RegexProgram and a Scalar or a list")
 
@@ -102,7 +109,9 @@ cpdef Column replace_re(
 cpdef Column replace_with_backrefs(
     Column input,
     RegexProgram prog,
-    str replacement
+    str replacement,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     For each string, replaces any character sequence matching the given regex
@@ -127,6 +136,8 @@ cpdef Column replace_with_backrefs(
         New strings column.
     """
     cdef unique_ptr[column] c_result
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
     cdef string c_replacement = replacement.encode()
 
     with nogil:
@@ -134,6 +145,8 @@ cpdef Column replace_with_backrefs(
             input.view(),
             prog.c_obj.get()[0],
             c_replacement,
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream, mr)

@@ -313,7 +313,9 @@ def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
     gpu_data_view = gpu_data.view(to_dtype)
 
     expect = pd.Series(cpu_data_view, dtype=cpu_data_view.dtype)
-    got = cudf.Series._from_column(gpu_data_view).astype(gpu_data_view.dtype)
+    got = cudf.Series._from_column(gpu_data_view).astype(
+        gpu_data_view.dtype, copy=False
+    )
 
     gpu_ptr = gpu_data.data.get_ptr(mode="read")
     assert gpu_ptr == got._column.data.get_ptr(mode="read")
@@ -585,7 +587,7 @@ def test_build_df_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
         data = [1, pd.NA, 3, pd.NA, 5]
 
     pd_data = pd.DataFrame.from_dict({"a": data}, dtype=pd_dtype)
-    gd_data = cudf.DataFrame.from_pandas(pd_data)
+    gd_data = cudf.DataFrame(pd_data)
 
     assert gd_data["a"].dtype == expect_dtype
 
@@ -621,7 +623,7 @@ def test_build_series_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
         data = [1, pd.NA, 3, pd.NA, 5]
 
     pd_data = pd.Series(data, dtype=pd_dtype)
-    gd_data = cudf.Series.from_pandas(pd_data)
+    gd_data = cudf.Series(pd_data)
 
     assert gd_data.dtype == expect_dtype
 

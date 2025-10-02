@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
 import polars as pl
@@ -11,7 +13,10 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_130
+from cudf_polars.utils.versions import POLARS_VERSION_LT_130, POLARS_VERSION_LT_132
+
+if TYPE_CHECKING:
+    from cudf_polars.typing import RankMethod
 
 
 @pytest.fixture
@@ -203,9 +208,31 @@ def test_window_over_group_sum_all_null_group_is_zero(df):
     assert_gpu_result_equal(q)
 
 
-def test_over_with_order_by_unsupported(df):
-    q = df.select(pl.col("x").sum().over("g", order_by="x"))
-    assert_ir_translation_raises(q, NotImplementedError)
+@pytest.mark.parametrize(
+    "order_by",
+    [
+        "x",
+        pl.col("x") * 2,
+        pl.when((pl.col("x") % 2) == 0).then(pl.col("x")).otherwise(-pl.col("x")),
+        ["x", "x2"],
+        ["g_null", "g2", "x2"],
+        [pl.col("g") + 7, (pl.col("x") * 3) - 2],
+    ],
+)
+@pytest.mark.parametrize("order_by_descending", [False, True])
+@pytest.mark.parametrize("order_by_nulls_last", [False, True])
+def test_over_with_order_by(df, order_by, order_by_descending, order_by_nulls_last):
+    q = df.select(
+        pl.col("x")
+        .sum()
+        .over(
+            "g",
+            order_by=order_by,
+            descending=order_by_descending,
+            nulls_last=order_by_nulls_last,
+        )
+    )
+    assert_gpu_result_equal(q)
 
 
 @pytest.mark.parametrize("strategy", ["explode", "join"], ids=["explode", "join"])
@@ -242,4 +269,96 @@ def test_over_broadcast_input_row_group_indices_aligned():
     )
     q = df.select(pl.col("x").sum().over("g"))
 
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("method", ["ordinal", "dense", "min", "max", "average"])
+@pytest.mark.parametrize("descending", [False, True])
+@pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
+def test_rank_over(
+    request,
+    df: pl.LazyFrame,
+    method: RankMethod,
+    *,
+    descending: bool,
+    order_by: None | list[str | pl.Expr],
+) -> None:
+    request.applymarker(
+        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="rank unsupported")
+    )
+    q = df.select(
+        pl.col("x")
+        .rank(method=method, descending=descending)
+        .over("g", order_by=order_by)
+    )
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("method", ["ordinal", "dense", "min", "max", "average"])
+@pytest.mark.parametrize("descending", [False, True])
+@pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
+def test_rank_over_with_ties(
+    request,
+    df: pl.LazyFrame,
+    method: RankMethod,
+    *,
+    descending: bool,
+    order_by: None | list[str | pl.Expr],
+) -> None:
+    request.applymarker(
+        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="rank unsupported")
+    )
+    q = df.select(
+        pl.when(pl.col("g") == 2)
+        .then(pl.lit(4))
+        .otherwise(pl.col("x"))
+        .rank(method=method, descending=descending)
+        .over("g", order_by=order_by)
+    )
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("method", ["ordinal", "dense", "min", "max", "average"])
+@pytest.mark.parametrize("descending", [False, True])
+@pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
+def test_rank_over_with_null_values(
+    request,
+    df: pl.LazyFrame,
+    method: RankMethod,
+    *,
+    descending: bool,
+    order_by: None | list[str | pl.Expr],
+) -> None:
+    request.applymarker(
+        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="rank unsupported")
+    )
+    q = df.select(
+        pl.when((pl.col("x") % 2) == 0)
+        .then(None)
+        .otherwise(pl.col("x"))
+        .rank(method=method, descending=descending)
+        .over("g", order_by=order_by)
+    )
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("method", ["ordinal", "dense", "min", "max", "average"])
+@pytest.mark.parametrize("descending", [False, True])
+@pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
+def test_rank_over_with_null_group_keys(
+    request,
+    df: pl.LazyFrame,
+    method: RankMethod,
+    *,
+    descending: bool,
+    order_by: None | list[str | pl.Expr],
+) -> None:
+    request.applymarker(
+        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="rank unsupported")
+    )
+    q = df.select(
+        pl.col("x")
+        .rank(method=method, descending=descending)
+        .over("g_null", order_by=order_by)
+    )
     assert_gpu_result_equal(q)

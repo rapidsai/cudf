@@ -14,7 +14,8 @@ from pylibcudf.libcudf.strings.convert cimport (
 )
 from pylibcudf.scalar cimport Scalar
 from pylibcudf.types cimport type_id
-from pylibcudf.utils cimport _get_stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from cython.operator import dereference
@@ -25,7 +26,8 @@ cpdef Column format_list_column(
     Column input,
     Scalar na_rep=None,
     Column separators=None,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Convert a list column of strings into a formatted strings column.
@@ -54,13 +56,13 @@ cpdef Column format_list_column(
         New strings column
     """
     cdef unique_ptr[column] c_result
-    cdef Stream stream_local
 
-    stream_local = _get_stream(stream)
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     if na_rep is None:
         na_rep = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream_local.view())
+            cpp_make_string_scalar("".encode(), stream.view())
         )
 
     cdef const string_scalar* c_na_rep = <const string_scalar*>(
@@ -75,7 +77,8 @@ cpdef Column format_list_column(
             input.view(),
             dereference(c_na_rep),
             separators.view(),
-            stream_local.view()
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream_local)
+    return Column.from_libcudf(move(c_result), stream, mr)

@@ -88,7 +88,7 @@ def test_dataframe_transpose(
             data[:] = null_rep
         pdf[colname] = data
 
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     got_function = gdf.transpose()
     got_property = gdf.T
@@ -126,7 +126,7 @@ def test_dataframe_transpose_category():
         }
     )
 
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     got_function = gdf.transpose()
     got_property = gdf.T
@@ -135,3 +135,35 @@ def test_dataframe_transpose_category():
 
     assert_eq(expect, got_function.to_pandas())
     assert_eq(expect, got_property.to_pandas())
+
+
+def test_transpose_multiindex_columns_from_pandas():
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(rng.random(size=(7, 5)))
+    gdf = cudf.from_pandas(pdf)
+    pdfIndex = pd.MultiIndex(
+        [
+            ["a", "b", "c"],
+            ["house", "store", "forest"],
+            ["clouds", "clear", "storm"],
+            ["fire", "smoke", "clear"],
+            [
+                np.datetime64("2001-01-01", "ns"),
+                np.datetime64("2002-01-01", "ns"),
+                np.datetime64("2003-01-01", "ns"),
+            ],
+        ],
+        [
+            [0, 0, 0, 0, 1, 1, 2],
+            [1, 1, 1, 1, 0, 0, 2],
+            [0, 0, 2, 2, 2, 0, 1],
+            [0, 0, 0, 1, 2, 0, 1],
+            [1, 0, 1, 2, 0, 0, 1],
+        ],
+    )
+    pdfIndex.names = ["alpha", "location", "weather", "sign", "timestamp"]
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    pdf.index = pdfIndex
+    gdf.index = gdfIndex
+    assert_eq(gdf, pdf)
+    assert_eq(gdf.T, pdf.T)

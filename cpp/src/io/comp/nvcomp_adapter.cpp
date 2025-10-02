@@ -23,6 +23,7 @@
 #include <cudf/logger.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <io/utilities/hostdevice_vector.hpp>
 #include <nvcomp/deflate.h>
 #include <nvcomp/gzip.h>
 #include <nvcomp/lz4.h>
@@ -715,6 +716,12 @@ void batched_decompress(compression_type compression,
                         size_t max_total_uncomp_size,
                         rmm::cuda_stream_view stream)
 {
+  CUDF_EXPECTS(inputs.size() > 0, "inputs must be non-empty");
+  CUDF_EXPECTS(inputs.size() == outputs.size(), "inputs and outputs must have the same size");
+  CUDF_EXPECTS(inputs.size() == results.size(), "inputs and results must have the same size");
+  CUDF_EXPECTS(max_total_uncomp_size > 0, "max_total_uncomp_size must be greater than 0");
+  CUDF_EXPECTS(max_uncomp_chunk_size > 0, "max_uncomp_chunk_size must be greater than 0");
+
   auto const num_chunks = inputs.size();
 
   // cuDF inflate inputs converted to nvcomp inputs
@@ -837,6 +844,10 @@ void batched_compress(compression_type compression,
                       device_span<codec_exec_result> results,
                       rmm::cuda_stream_view stream)
 {
+  CUDF_EXPECTS(inputs.size() > 0, "inputs must be non-empty");
+  CUDF_EXPECTS(inputs.size() == outputs.size(), "inputs and outputs must have the same size");
+  CUDF_EXPECTS(inputs.size() == results.size(), "inputs and results must have the same size");
+
   auto const num_chunks = inputs.size();
 
   auto nvcomp_args = create_batched_nvcomp_args(inputs, outputs, stream);
@@ -1053,6 +1064,35 @@ std::optional<size_t> compress_max_allowed_chunk_size(compression_type compressi
     case compression_type::LZ4: return nvcompLZ4CompressionMaxAllowedChunkSize;
     default: UNSUPPORTED_COMPRESSION(compression);
   }
+}
+
+void load_nvcomp_library()
+{
+  static std::once_flag nvcomp_initialized_flag;
+
+  std::call_once(nvcomp_initialized_flag, []() {
+    auto const stream = cudf::get_default_stream();
+    auto const mr     = cudf::get_current_device_resource_ref();
+
+    // Allocate dummy input buffer and output buffer
+    auto const d_input             = rmm::device_uvector<uint8_t>(1, stream, mr);
+    auto const max_compressed_size = compress_max_output_chunk_size(compression_type::SNAPPY, 1);
+    rmm::device_uvector<uint8_t> d_compressed(max_compressed_size, stream);
+
+    // Prepare parameters for compression
+    cudf::detail::hostdevice_vector<device_span<uint8_t const>> hd_inputs(1, stream);
+    hd_inputs[0] = d_input;
+    hd_inputs.host_to_device_async(stream);
+    cudf::detail::hostdevice_vector<device_span<uint8_t>> hd_outputs(1, stream);
+    hd_outputs[0] = d_compressed;
+    hd_outputs.host_to_device_async(stream);
+    cudf::detail::hostdevice_vector<codec_exec_result> hd_results(1, stream);
+    hd_results[0] = codec_exec_result{0, codec_status::FAILURE};
+    hd_results.host_to_device_async(stream);
+
+    // Perform compression - this will execute an nvCOMP kernel
+    batched_compress(compression_type::SNAPPY, hd_inputs, hd_outputs, hd_results, stream);
+  });
 }
 
 }  // namespace cudf::io::detail::nvcomp

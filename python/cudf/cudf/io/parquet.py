@@ -1452,7 +1452,7 @@ def _read_parquet(
         ):
             filepaths_or_buffers = filepaths_or_buffers[0]
 
-        return DataFrame.from_pandas(
+        return DataFrame(
             pd.read_parquet(
                 filepaths_or_buffers,
                 columns=columns,
@@ -1605,7 +1605,18 @@ def to_parquet(
             index = True
 
         pa_table = df.to_arrow(preserve_index=index)
-        return pq.write_to_dataset(
+        # Check for conflicting arguments in kwargs
+        if "root_path" in kwargs:
+            raise ValueError(
+                "'root_path' should be passed as 'path' argument to to_parquet(), not in kwargs"
+            )
+        if "partition_cols" in kwargs:
+            raise ValueError(
+                "'partition_cols' should be passed directly to to_parquet(), not in kwargs"
+            )
+        # Type ignore: mypy complains about potential duplicate arguments from *args
+        # but our API design allows passing additional args/kwargs to pyarrow
+        return pq.write_to_dataset(  # type: ignore[misc]
             pa_table,
             root_path=path,
             partition_cols=partition_cols,
@@ -2480,7 +2491,7 @@ def _process_metadata(
                     idx = Index._from_column(column_empty(0))
             else:
                 start = range_index_meta["start"] + skip_rows  # type: ignore[operator]
-                stop = range_index_meta["stop"]
+                stop = int(range_index_meta["stop"])  # type: ignore[arg-type]
                 if nrows > -1:
                     stop = start + nrows
                 idx = RangeIndex(

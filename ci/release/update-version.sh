@@ -37,6 +37,7 @@ function sed_runner() {
 # Centralized version file update
 echo "${NEXT_FULL_TAG}" > VERSION
 echo "${NEXT_FULL_TAG}" > python/cudf/cudf/VERSION
+echo "branch-${NEXT_SHORT_TAG}" > RAPIDS_BRANCH
 
 # Wheel testing script
 sed_runner "s/branch-.*/branch-${NEXT_SHORT_TAG}/g" ci/test_wheel_dask_cudf.sh
@@ -87,6 +88,7 @@ for FILE in .github/workflows/*.yaml .github/workflows/*.yml; do
 done
 sed_runner "s/branch-[0-9]\+\.[0-9]\+/branch-${NEXT_SHORT_TAG}/g" ci/test_wheel_cudf_polars.sh
 sed_runner "s/branch-[0-9]\+\.[0-9]\+/branch-${NEXT_SHORT_TAG}/g" ci/test_cudf_polars_polars_tests.sh
+sed_runner "s/branch-[0-9]\+\.[0-9]\+/branch-${NEXT_SHORT_TAG}/g" ci/cudf_pandas_scripts/pandas-tests/run.sh
 
 # Java files
 NEXT_FULL_JAVA_TAG="${NEXT_SHORT_TAG}.${PATCH_PEP440}-SNAPSHOT"

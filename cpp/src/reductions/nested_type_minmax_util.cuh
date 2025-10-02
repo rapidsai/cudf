@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 #pragma once
 
 #include <cudf/aggregation.hpp>
+#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/reduction/detail/reduction_operators.cuh>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
@@ -90,7 +90,7 @@ class comparison_binop_generator {
   std::unique_ptr<cudf::structs::detail::flattened_table> const flattened_input;
 
   // Contains data used in the returned binop, thus needs to be kept alive as a member variable.
-  cudf::experimental::row::lexicographic::self_comparator row_comparator;
+  cudf::detail::row::lexicographic::self_comparator row_comparator;
 
   comparison_binop_generator(column_view const& input_,
                              bool is_min_op_,
@@ -123,7 +123,7 @@ class comparison_binop_generator {
             // array resulted from struct flattening.
             auto null_orders    = flattened_input->null_orders();
             null_orders.front() = cudf::null_order::AFTER;
-            return cudf::experimental::row::lexicographic::self_comparator{
+            return cudf::detail::row::lexicographic::self_comparator{
               flattened_input->flattened_columns(), {}, null_orders, stream_};
           } else {
             // For list type, we cannot set a separate null order for the top level column.
@@ -139,11 +139,11 @@ class comparison_binop_generator {
                                                   input_.null_count(),
                                                   0,
                                                   {}};
-            return cudf::experimental::row::lexicographic::self_comparator{
+            return cudf::detail::row::lexicographic::self_comparator{
               cudf::table_view{{dummy_struct, input_}}, {}, null_orders, stream_};
           }
         } else {
-          return cudf::experimental::row::lexicographic::self_comparator{
+          return cudf::detail::row::lexicographic::self_comparator{
             input_tview, {}, std::vector<null_order>{DEFAULT_NULL_ORDER}, stream_};
         }
       }()}

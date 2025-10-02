@@ -1379,11 +1379,9 @@ constexpr bool is_sum_product_agg(aggregation::Kind k)
          (k == aggregation::SUM_OF_SQUARES);
 }
 
-// Summing/Multiplying integers of any type, always use int64_t accumulator (except
-// SUM_WITH_OVERFLOW which has its own template)
+// Summing/Multiplying integers of any type, always use int64_t accumulator
 template <typename Source, aggregation::Kind k>
-  requires(std::is_integral_v<Source> && is_sum_product_agg(k) &&
-           k != aggregation::SUM_WITH_OVERFLOW)
+  requires(std::is_integral_v<Source> && is_sum_product_agg(k))
 struct target_type_impl<Source, k> {
   using type = int64_t;
 };
@@ -1397,11 +1395,9 @@ struct target_type_impl<
   using type = Source;
 };
 
-// Summing/Multiplying float/doubles, use same type accumulator (except SUM_WITH_OVERFLOW which has
-// its own template)
+// Summing/Multiplying float/doubles, use same type accumulator
 template <typename Source, aggregation::Kind k>
-  requires(std::is_floating_point_v<Source> && is_sum_product_agg(k) &&
-           k != aggregation::SUM_WITH_OVERFLOW)
+  requires(std::is_floating_point_v<Source> && is_sum_product_agg(k))
 struct target_type_impl<Source, k> {
   using type = Source;
 };
@@ -1517,12 +1513,14 @@ struct target_type_impl<Source, aggregation::LAG> {
 
 // Always use list for MERGE_LISTS
 template <typename Source>
+  requires cuda::std::is_same_v<Source, cudf::list_view>
 struct target_type_impl<Source, aggregation::MERGE_LISTS> {
   using type = list_view;
 };
 
 // Always use list for MERGE_SETS
 template <typename Source>
+  requires cuda::std::is_same_v<Source, cudf::list_view>
 struct target_type_impl<Source, aggregation::MERGE_SETS> {
   using type = list_view;
 };

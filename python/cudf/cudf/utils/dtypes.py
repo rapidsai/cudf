@@ -133,6 +133,8 @@ def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:
     elif pa.types.is_struct(typ):
         return cudf.core.dtypes.StructDtype.from_arrow(typ)
     elif pa.types.is_decimal(typ):
+        if isinstance(typ, pa.Decimal256Type):
+            raise NotImplementedError("cudf does not support Decimal256Type")
         return cudf.core.dtypes.Decimal128Dtype.from_arrow(typ)
     elif pa.types.is_large_string(typ) or pa.types.is_string(typ):
         return CUDF_STRING_DTYPE
@@ -228,8 +230,17 @@ def is_mixed_with_object_dtype(lhs, rhs):
     elif isinstance(rhs.dtype, cudf.CategoricalDtype):
         return is_mixed_with_object_dtype(lhs, rhs.dtype.categories)
 
-    return (lhs.dtype == "object" and rhs.dtype != "object") or (
+    res = (lhs.dtype == "object" and rhs.dtype != "object") or (
         rhs.dtype == "object" and lhs.dtype != "object"
+    )
+    if res:
+        return res
+    return (
+        cudf.api.types.is_string_dtype(lhs.dtype)
+        and not cudf.api.types.is_string_dtype(rhs.dtype)
+    ) or (
+        cudf.api.types.is_string_dtype(rhs.dtype)
+        and not cudf.api.types.is_string_dtype(lhs.dtype)
     )
 
 
@@ -388,8 +399,8 @@ pa_decimal32type = getattr(pa, "Decimal32Type", None)
 pa_decimal64type = getattr(pa, "Decimal64Type", None)
 
 
-def pyarrow_dtype_to_cudf_dtype(dtype: pa.DataType) -> DtypeObj:
-    """Given a pyarrow dtype, converts it into the equivalent cudf pandas
+def pyarrow_dtype_to_cudf_dtype(dtype: pd.ArrowDtype) -> DtypeObj:
+    """Given a pandas ArrowDtype, converts it into the equivalent cudf pandas
     dtype.
     """
 

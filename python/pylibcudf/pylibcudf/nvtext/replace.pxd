@@ -1,8 +1,10 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 
 cpdef Column replace_tokens(
@@ -10,11 +12,15 @@ cpdef Column replace_tokens(
     Column targets,
     Column replacements,
     Scalar delimiter=*,
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef Column filter_tokens(
     Column input,
     size_type min_token_length,
     Scalar replacement=*,
-    Scalar delimiter=*
+    Scalar delimiter=*,
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
