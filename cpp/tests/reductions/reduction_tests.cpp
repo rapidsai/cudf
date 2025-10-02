@@ -128,7 +128,7 @@ using MinMaxTypes = cudf::test::Types<int32_t, int64_t, float, double>;
 TYPED_TEST_SUITE(MinMaxReductionTest, MinMaxTypes);
 
 // ------------------------------------------------------------------------
-TYPED_TEST(MinMaxReductionTest, MinMaxTypes)
+TYPED_TEST(MinMaxReductionTest, MinMaxReductions)
 {
   using T = TypeParam;
   std::vector<int> int_values({5, 0, -120, -111, 0, 64, 63, 99, 123, -16});
@@ -249,6 +249,76 @@ TYPED_TEST(MinMaxReductionTest, MinMaxTypes)
   auto max_all_null_result = static_cast<ScalarType*>(all_null_res.second.get());
   EXPECT_EQ(min_all_null_result->is_valid(), false);
   EXPECT_EQ(max_all_null_result->is_valid(), false);
+}
+
+TYPED_TEST(MinMaxReductionTest, ArgMinMaxReductions)
+{
+  using T = TypeParam;
+
+  // Data copied from MinMaxReductions test above.
+  std::vector<int> int_values({5, 0, -120, -111, 0, 64, 63, 99, 123, -16});
+  std::vector<bool> host_bools({true, true, false, true, true, true, false, true, false, true});
+  std::vector<bool> all_null(
+    {false, false, false, false, false, false, false, false, false, false});
+  std::vector<T> v = convert_values<T>(int_values);
+
+  auto const argmin = [](std::vector<T> const& input) -> int {
+    if (input.empty()) { return -1; }
+    auto it = std::min_element(input.begin(), input.end());
+    return static_cast<int>(std::distance(input.begin(), it));
+  };
+  auto const argmax = [](std::vector<T> const& input) -> int {
+    if (input.empty()) { return -1; }
+    auto it = std::max_element(input.begin(), input.end());
+    return static_cast<int>(std::distance(input.begin(), it));
+  };
+
+  // test without nulls
+  {
+    cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
+    auto const expected_argmin = argmin(v);
+    auto const expected_argmax = argmax(v);
+    EXPECT_EQ(
+      this->template reduction_test<T>(col, *cudf::make_argmin_aggregation<reduce_aggregation>())
+        .first,
+      expected_argmin);
+    EXPECT_EQ(
+      this->template reduction_test<T>(col, *cudf::make_argmax_aggregation<reduce_aggregation>())
+        .first,
+      expected_argmax);
+  }
+
+  // test with some nulls
+  {
+    cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
+    auto r_min                 = replace_nulls(v, host_bools, std::numeric_limits<T>::max());
+    auto r_max                 = replace_nulls(v, host_bools, std::numeric_limits<T>::lowest());
+    auto const expected_argmin = argmin(r_min);
+    auto const expected_argmax = argmax(r_max);
+    EXPECT_EQ(this
+                ->template reduction_test<T>(col_nulls,
+                                             *cudf::make_argmin_aggregation<reduce_aggregation>())
+                .first,
+              expected_argmin);
+    EXPECT_EQ(this
+                ->template reduction_test<T>(col_nulls,
+                                             *cudf::make_argmax_aggregation<reduce_aggregation>())
+                .first,
+              expected_argmax);
+  }
+
+  // test with all null
+  {
+    cudf::test::fixed_width_column_wrapper<T> col_all_nulls = construct_null_column(v, all_null);
+    EXPECT_FALSE(this
+                   ->template reduction_test<T>(
+                     col_all_nulls, *cudf::make_argmin_aggregation<reduce_aggregation>())
+                   .second);
+    EXPECT_FALSE(this
+                   ->template reduction_test<T>(
+                     col_all_nulls, *cudf::make_argmax_aggregation<reduce_aggregation>())
+                   .second);
+  }
 }
 
 template <typename T>
