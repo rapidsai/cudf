@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import operator
-from functools import reduce
+from functools import partial, reduce
 from typing import TYPE_CHECKING
 
 import cudf_polars.experimental.rapidsmpf.io  # noqa: F401
@@ -13,7 +13,6 @@ from cudf_polars.dsl.ir import (
     IR,
     Cache,
     HConcat,
-    HStack,
     Projection,
 )
 from cudf_polars.experimental.base import PartitionInfo
@@ -36,19 +35,40 @@ def _(ir: IR, rec: LowerIRTransformer) -> tuple[IR, MutableMapping[IR, Partition
     )
 
 
-@lower_ir_node.register(Projection)
-@lower_ir_node.register(Cache)
-@lower_ir_node.register(HConcat)
-@lower_ir_node.register(HStack)
-def _lower_ir_simple(
-    ir: IR,
-    rec: LowerIRTransformer,
+def _lower_ir_pwise(
+    ir: IR, rec: LowerIRTransformer, *, preserve_partitioning: bool = False
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    # Simple point-wise lowering logic.
-    # We can use the same lowering logic as the task-based engine.
-    from cudf_polars.experimental.dispatch import lower_ir_node as base_lower_ir_node
+    # Lower a partition-wise (i.e. embarrassingly-parallel) IR node
 
-    return base_lower_ir_node(ir, rec)
+    # Lower children
+    children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
+    partition_info = reduce(operator.or_, _partition_info)
+    counts = {partition_info[c].count for c in children}
+
+    # Check that child partitioning is supported
+    if len(counts) > 1:  # pragma: no cover
+        return _lower_ir_fallback(
+            ir,
+            rec,
+            msg=f"Class {type(ir)} does not support children with mismatched partition counts.",
+        )
+
+    # Preserve child partition_info if possible
+    if preserve_partitioning and len(children) == 1:
+        partition = partition_info[children[0]]
+    else:
+        partition = PartitionInfo(count=max(counts))
+
+    # Return reconstructed node and partition-info dict
+    new_node = ir.reconstruct(children)
+    partition_info[new_node] = partition
+    return new_node, partition_info
+
+
+_lower_ir_pwise_preserve = partial(_lower_ir_pwise, preserve_partitioning=True)
+lower_ir_node.register(Projection, _lower_ir_pwise_preserve)
+lower_ir_node.register(Cache, _lower_ir_pwise)
+lower_ir_node.register(HConcat, _lower_ir_pwise)
 
 
 def _lower_ir_fallback(
