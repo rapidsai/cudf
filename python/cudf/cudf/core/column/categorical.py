@@ -35,7 +35,6 @@ if TYPE_CHECKING:
         ColumnBinaryOperand,
         ColumnLike,
         Dtype,
-        DtypeObj,
         ScalarLike,
     )
     from cudf.core.buffer import Buffer
@@ -698,11 +697,6 @@ class CategoricalColumn(column.ColumnBase):
         if inplace and isinstance(other_col, CategoricalColumn):
             self._codes = other_col.codes
         return out
-
-    def view(self, dtype: DtypeObj) -> ColumnBase:
-        raise NotImplementedError(
-            "Categorical column views are not currently supported"
-        )
 
     @staticmethod
     def _concat(
