@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import collections
 import itertools
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -324,14 +323,14 @@ class ListColumn(ColumnBase):
         """
         Return a new column like Self but with func applied to the last leaf column.
         """
-        leaf_queue: collections.deque[ListColumn] = collections.deque()
+        leaf_queue: list[ListColumn] = []
         curr_col: ColumnBase = self
 
         while isinstance(curr_col, ListColumn):
             leaf_queue.append(curr_col)
             curr_col = curr_col.children[1]
 
-        leaf_col = func(curr_col, *args)
+        plc_leaf_col = func(curr_col, *args).to_pylibcudf(mode="read")
 
         # Rebuild the list column replacing just the leaf child
         while leaf_queue:
@@ -344,10 +343,9 @@ class ListColumn(ColumnBase):
                 plc.gpumemoryview(col.mask) if col.mask is not None else None,
                 col.null_count,
                 col.offset,
-                [offsets, leaf_col.to_pylibcudf(mode="read")],
+                [offsets, plc_leaf_col],
             )
-            leaf_col = type(self).from_pylibcudf(plc_leaf_col)
-        return leaf_col
+        return type(self).from_pylibcudf(plc_leaf_col)
 
     @property
     def element_type(self) -> Dtype:
