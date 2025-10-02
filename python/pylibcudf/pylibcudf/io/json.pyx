@@ -11,6 +11,8 @@ from rmm.pylibrmm.stream cimport Stream
 from pylibcudf.concatenate cimport concatenate
 from pylibcudf.column cimport Column
 from pylibcudf.scalar cimport Scalar
+from pylibcudf.utils cimport _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from pylibcudf.io.types cimport SinkInfo, SourceInfo, TableWithMetadata
 
@@ -687,6 +689,7 @@ cpdef tuple chunked_read_json(
     JsonReaderOptions options,
     int chunk_size=100_000_000,
     Stream stream = None,
+    DeviceMemoryResource mr = None,
 ):
     """
     Reads chunks of a JSON file into a :py:class:`~.types.TableWithMetadata`.
@@ -716,6 +719,7 @@ cpdef tuple chunked_read_json(
     child_names = None
     i = 0
     cdef Stream s = _get_stream(stream)
+    mr = _get_memory_resource(mr)
     while True:
         options.enable_lines(True)
         options.set_byte_range_offset(c_range_size * i)
@@ -723,7 +727,7 @@ cpdef tuple chunked_read_json(
 
         try:
             with nogil:
-                c_result = move(cpp_read_json(options.c_obj, s.view()))
+                c_result = move(cpp_read_json(options.c_obj, s.view(), mr.get_mr()))
         except (ValueError, OverflowError):
             break
         if meta_names is None:
@@ -752,7 +756,8 @@ cpdef tuple chunked_read_json(
 
 cpdef TableWithMetadata read_json(
     JsonReaderOptions options,
-    Stream stream = None
+    Stream stream = None,
+    DeviceMemoryResource mr = None
 ):
     """
     Read from JSON format.
@@ -776,8 +781,9 @@ cpdef TableWithMetadata read_json(
     """
     cdef table_with_metadata c_result
     cdef Stream s = _get_stream(stream)
+    mr = _get_memory_resource(mr)
     with nogil:
-        c_result = move(cpp_read_json(options.c_obj, s.view()))
+        c_result = move(cpp_read_json(options.c_obj, s.view(), mr.get_mr()))
 
     return TableWithMetadata.from_libcudf(c_result, s)
 
@@ -788,7 +794,8 @@ cpdef TableWithMetadata read_json_from_string_column(
     list dtypes = None,
     compression_type compression = compression_type.NONE,
     json_recovery_mode_t recovery_mode = json_recovery_mode_t.RECOVER_WITH_NULL,
-    Stream stream = None
+    Stream stream = None,
+    DeviceMemoryResource mr = None
 ):
     """
     Joins a column of JSON strings into a device buffer and reads it into
@@ -830,6 +837,7 @@ cpdef TableWithMetadata read_json_from_string_column(
     cdef column_contents c_contents
     cdef table_with_metadata c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     # Join the string column into a single string
     with nogil:
@@ -838,7 +846,8 @@ cpdef TableWithMetadata read_json_from_string_column(
                 input.view(),
                 dereference(c_separator),
                 dereference(c_narep),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
         )
         c_contents = c_join_string_column.get().release()
