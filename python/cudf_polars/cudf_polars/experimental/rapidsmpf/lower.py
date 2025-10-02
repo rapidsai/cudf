@@ -88,8 +88,10 @@ def _lower_ir_fallback(
     # is likely to fluctuate while the streaming engine
     # is under heavy development.
 
-    # NOTE: (IMPORTANT) Since Rechunk is a local operation,
+    # TODO: (IMPORTANT) Since Rechunk is a local operation,
     # the current fallback logic will only work for one rank!
+    # For multiple ranks, we will need to AllGather the data
+    # on all ranks.
     config_options = rec.state["config_options"]
     assert config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'generate_ir_sub_network'"
