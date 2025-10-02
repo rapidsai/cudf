@@ -202,17 +202,26 @@ def test_cross_join_empty_right_table(request):
 )
 def test_cross_join_filter_with_decimals(expr, left_dtype, right_dtype):
     left = pl.LazyFrame(
-        {"foo": [Decimal("1.00"), Decimal("2.50"), Decimal("3.00")]},
-        schema={"foo": left_dtype},
+        {
+            "foo": [Decimal("1.00"), Decimal("2.50"), Decimal("3.00")],
+            "foo1": [10, 20, 30],
+        },
+        schema={"foo": left_dtype, "foo1": pl.Int64},
     )
 
     if isinstance(right_dtype, pl.Decimal):
         right = pl.LazyFrame(
-            {"bar": [Decimal("2").scaleb(-right_dtype.scale)]},
-            schema={"bar": right_dtype},
+            {
+                "bar": [Decimal("2").scaleb(-right_dtype.scale)],
+                "foo1": ["x"],
+            },
+            schema={"bar": right_dtype, "foo1": pl.String},
         )
     else:
-        right = pl.LazyFrame({"bar": [2.0]}, schema={"bar": right_dtype})
+        right = pl.LazyFrame(
+            {"bar": [2.0], "foo1": ["x"]},
+            schema={"bar": right_dtype, "foo1": pl.String},
+        )
 
     q = left.join(right, how="cross").filter(expr)
 

@@ -1675,17 +1675,16 @@ def _collect_decimal_binop_casts(
 def _apply_casts(df: DataFrame, casts: dict[str, DataType]) -> DataFrame:
     if not casts:
         return df
-    return DataFrame(
-        [
-            (
-                (casted := col.astype(target))
-                and Column(casted.obj, dtype=casted.dtype, name=col.name)
-                if (target := casts.get(col.name)) is not None
-                else Column(col.obj, dtype=col.dtype, name=col.name)
-            )
-            for col in df.columns
-        ]
-    )
+
+    columns = []
+    for col in df.columns:
+        target = casts.get(col.name)
+        if target is None:
+            columns.append(Column(col.obj, dtype=col.dtype, name=col.name))
+        else:
+            casted = col.astype(target)
+            columns.append(Column(casted.obj, dtype=casted.dtype, name=col.name))
+    return DataFrame(columns)
 
 
 class ConditionalJoin(IR):
