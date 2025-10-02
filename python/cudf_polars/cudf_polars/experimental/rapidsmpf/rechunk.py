@@ -32,58 +32,55 @@ class Rechunk(IR):
     ----------
     schema
         The schema of the output data.
-    goal
-        The goal of the local rechunking operation.
-        The default is 'single', which concatenates all
-        input data into a single chunk.
+    strategy
+        The strategy of the local rechunking operation.
+        Only 'chunk_count' is supported for now.
+    value
+        The numerical value used by the local rechunking strategy.
+        Only `1` is supported for now.
     df
         The input IR node.
     """
 
-    __slots__ = ("goal",)
-    _non_child = ("schema", "goal")
+    __slots__ = ("strategy", "value")
+    _non_child = ("schema", "strategy", "value")
 
     def __init__(
         self,
         schema: Schema,
-        goal: Literal["single"],
+        strategy: Literal["chunk_count", "row_count", "byte_count"],
+        value: int,
         df: IR,
     ):
         self.schema = schema
         self._non_child_args = ()
         self.children = (df,)
-        self.goal = goal
-        if goal != "single":  # pragma: no cover
-            # TODO: Add other rechunking goals, e.g. 'row_count', 'byte_size'
-            raise NotImplementedError("Only 'single' rechunking is supported for now.")
+        self.strategy = strategy
+        self.value = value
+        if strategy != "chunk_count" or value != 1:  # pragma: no cover
+            # TODO: Support other rechunking strategies
+            raise NotImplementedError("Only rechunking to 1 is supported for now.")
 
 
 @define_py_node()
-async def rechunk_node(
+async def concatenate_node(
     ctx: Context,
-    ir: Rechunk,
     ch_in: Channel[TableChunk],
     ch_out: Channel[TableChunk],
 ) -> None:
     """
-    Rechunk node for rapidsmpf.
+    Concatenate node for rapidsmpf.
 
     Parameters
     ----------
     ctx
         The context.
-    ir
-        The IR node.
     ch_in
         The input channel.
     ch_out
         The output channel.
     """
     # TODO: Use multiple streams
-    # TODO: Shupport single_chunk=False
-    if ir.goal != "single":  # pragma: no cover
-        raise NotImplementedError("Only single rechunking is supported for now.")
-
     async with shutdown_on_error(ctx, ch_in, ch_out):
         chunks = []
         build_stream = DEFAULT_STREAM
@@ -108,6 +105,10 @@ async def rechunk_node(
 def _(ir: Rechunk, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]:
     # Rechunk node.
 
+    # TODO: Support other rechunking strategies
+    if ir.strategy != "chunk_count" or ir.value != 1:  # pragma: no cover
+        raise NotImplementedError("Only rechunking to 1 chunk is supported for now.")
+
     # Process children
     nodes, channels = rec(ir.children[0])
 
@@ -116,9 +117,8 @@ def _(ir: Rechunk, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, 
 
     # Add python node
     nodes[ir] = [
-        rechunk_node(
+        concatenate_node(
             rec.state["ctx"],
-            ir=ir,
             ch_in=channels[ir.children[0]],
             ch_out=channels[ir],
         )

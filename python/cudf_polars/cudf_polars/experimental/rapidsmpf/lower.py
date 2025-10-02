@@ -101,7 +101,8 @@ def _lower_ir_fallback(
         # count ahead of time.
         child = Rechunk(
             c.schema,
-            "single",
+            "chunk_count",
+            1,
             c,
         )
         partition_info[child] = PartitionInfo(count=1)

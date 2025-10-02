@@ -151,7 +151,8 @@ def lower_ir_graph(
     # Ensure the output is always a single chunk
     ir = Rechunk(
         ir.schema,
-        "single",
+        "chunk_count",
+        1,
         ir,
     )
     partition_info[ir] = PartitionInfo(count=1)
