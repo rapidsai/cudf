@@ -71,21 +71,21 @@ struct alignas(8) relist {
     size = 0;
   }
 
-  template <positional P = positional::DEFAULT>
+  template <positional P = positional::BEGIN_END>
   __device__ __forceinline__ bool activate(int32_t id, int32_t begin, int32_t end)
   {
     if (readMask(id)) { return false; }
     writeMask(id);
     inst_ids[size * stride] = static_cast<int16_t>(id);
-    if constexpr (P == positional::DEFAULT) { ranges[size * stride] = int2{begin, end}; }
+    if constexpr (P == positional::BEGIN_END) { ranges[size * stride] = int2{begin, end}; }
     ++size;
     return true;
   }
 
-  template <positional P = positional::DEFAULT>
+  template <positional P = positional::BEGIN_END>
   [[nodiscard]] __device__ __forceinline__ restate get_state(int16_t idx) const
   {
-    if constexpr (P == positional::DEFAULT) {
+    if constexpr (P == positional::BEGIN_END) {
       return restate{ranges[idx * stride], inst_ids[idx * stride]};
     }
     return restate{{-1, -1}, inst_ids[idx * stride]};
@@ -114,7 +114,7 @@ struct alignas(8) relist {
   }
 };
 
-template <positional P = positional::DEFAULT>
+template <positional P = positional::BEGIN_END>
 struct reljunk {
   relist* __restrict__ list1;
   relist* __restrict__ list2;

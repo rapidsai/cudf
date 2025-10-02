@@ -34,9 +34,12 @@ namespace cudf {
 namespace strings {
 namespace detail {
 
+/**
+ * @brief Template type used on `find` to specify desired position values in returned match_result
+ */
 enum class positional : int8_t {
-  DEFAULT  = 0,  /// both begin and end are returned
-  END_ONLY = 1,  /// only end is returned
+  BEGIN_END = 0,  /// both begin and end positions are returned
+  END_ONLY  = 1,  /// only the end position is returned
 };
 
 template <positional P>
@@ -186,6 +189,7 @@ class reprog_device {
   /**
    * @brief Does a find evaluation using the compiled expression on the given string.
    *
+   * @tparam P Desired positional values. Default includes valid begin and end match positions.
    * @param thread_idx The index used for mapping the state memory for this string in global memory.
    * @param d_str The string to search.
    * @param begin Position to begin the search within `d_str`.
@@ -193,7 +197,7 @@ class reprog_device {
    *            Specify -1 to match any virtual positions past the end of the string.
    * @return If match found, returns character positions of the matches.
    */
-  template <positional P = positional::DEFAULT>
+  template <positional P = positional::BEGIN_END>
   [[nodiscard]] __device__ inline match_result find(int32_t const thread_idx,
                                                     string_view const d_str,
                                                     string_view::const_iterator begin,
@@ -243,7 +247,7 @@ class reprog_device {
   /**
    * @brief Utility wrapper to setup state memory structures for calling regexec
    */
-  template <positional P = positional::DEFAULT>
+  template <positional P = positional::BEGIN_END>
   [[nodiscard]] __device__ inline match_result call_regexec(
     int32_t const thread_idx,
     string_view const d_str,
