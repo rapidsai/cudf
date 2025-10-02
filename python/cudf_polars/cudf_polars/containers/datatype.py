@@ -135,7 +135,7 @@ class DataType:
             plc.traits.is_fixed_point(left.plc_type)
             and plc.traits.is_fixed_point(right.plc_type)
         ):
-            raise ValueError("Requires inputs to be decimal types.")  # pragma: no cover
+            raise ValueError("Both inputs required to be decimal types.")
         target_scale = min(left.scale(), right.scale())
         polars_scale = -target_scale if target_scale < 0 else target_scale
         return DataType(pl.Decimal(38, polars_scale))
