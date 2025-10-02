@@ -150,13 +150,17 @@ def lower_ir_graph(
     ir, partition_info = mapper(ir)
 
     # Ensure the output is always a single chunk
+    broadcasted = partition_info[ir].broadcasted
     ir = Rechunk(
         ir.schema,
         "chunk_count",
         1,
         ir,
     )
-    partition_info[ir] = PartitionInfo(count=1)
+    partition_info[ir] = PartitionInfo(
+        count=1,
+        broadcasted=broadcasted,
+    )
 
     return ir, partition_info
 
@@ -195,6 +199,10 @@ def generate_network(
     node_mapping, channels = mapper(ir)
     nodes = [node for sublist in node_mapping.values() for node in sublist]
     ch_out = channels[ir]
+
+    # TODO: If `ir` corresponds to broadcasted data, we can
+    # inject a node to drain the channel and return
+    # an empty DataFrame on ranks > 0.
 
     # Add final node to pull from the output channel
     output_node, output = pull_from_channel(ctx, ch_in=ch_out)

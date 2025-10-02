@@ -54,7 +54,8 @@ def _(
 
     # Return reconstructed node and partition-info dict
     new_node = ir.reconstruct(children)
-    partition_info[new_node] = PartitionInfo(count=count)
+    broadcasted = all(partition_info[c].broadcasted for c in children)
+    partition_info[new_node] = PartitionInfo(count=count, broadcasted=broadcasted)
     return new_node, partition_info
 
 

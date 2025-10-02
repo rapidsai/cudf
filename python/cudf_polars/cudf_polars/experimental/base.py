@@ -22,21 +22,28 @@ if TYPE_CHECKING:
 class PartitionInfo:
     """Partitioning information."""
 
-    __slots__ = ("count", "io_plan", "partitioned_on")
+    __slots__ = ("broadcasted", "count", "io_plan", "partitioned_on")
     count: int
     """Partition count."""
     partitioned_on: tuple[NamedExpr, ...]
     """Columns the data is hash-partitioned on."""
     io_plan: IOPartitionPlan | None
-    """IO partitioning plan (Scan nodes only)."""
+    """IO partitioning plan (Scan nodes only).
+    Only used by the rapidsmpf engine."""
+    broadcasted: bool
+    """Whether the data is broadcasted on all workers.
+    Only used by the rapidsmpf engine."""
 
     def __init__(
         self,
         count: int,
+        *,
+        broadcasted: bool = False,
         partitioned_on: tuple[NamedExpr, ...] = (),
         io_plan: IOPartitionPlan | None = None,
     ):
         self.count = count
+        self.broadcasted = broadcasted
         self.partitioned_on = partitioned_on
         self.io_plan = io_plan
 

@@ -57,7 +57,8 @@ def _lower_ir_pwise(
     if preserve_partitioning and len(children) == 1:
         partition = partition_info[children[0]]
     else:
-        partition = PartitionInfo(count=max(counts))
+        broadcasted = all(partition_info[c].broadcasted for c in children)
+        partition = PartitionInfo(count=max(counts), broadcasted=broadcasted)
 
     # Return reconstructed node and partition-info dict
     new_node = ir.reconstruct(children)
@@ -125,7 +126,10 @@ def _lower_ir_fallback(
             1,
             c,
         )
-        partition_info[child] = PartitionInfo(count=1)
+        partition_info[child] = PartitionInfo(
+            count=1,
+            broadcasted=partition_info[c].broadcasted,
+        )
         children.append(child)
 
     if inform and msg:
@@ -134,5 +138,6 @@ def _lower_ir_fallback(
 
     # Reconstruct and return
     new_node = ir.reconstruct(children)
-    partition_info[new_node] = PartitionInfo(count=1)
+    broadcasted = all(partition_info[c].broadcasted for c in children)
+    partition_info[new_node] = PartitionInfo(count=1, broadcasted=broadcasted)
     return new_node, partition_info
