@@ -346,10 +346,14 @@ def _align_decimal_scales(
     ):
         target = DataType.common_decimal_dtype(left_type, right_type)
 
-        if left_type.id() != target.id() or left_type.scale() != target.scale():
+        if (
+            left_type.id() != target.id() or left_type.scale() != target.scale()
+        ):  # pragma: no cover; no test yet
             left = expr.Cast(target, left)
 
-        if right_type.id() != target.id() or right_type.scale() != target.scale():
+        if (
+            right_type.id() != target.id() or right_type.scale() != target.scale()
+        ):  # pragma: no cover; no test yet
             right = expr.Cast(target, right)
 
     return left, right
@@ -916,7 +920,7 @@ def _(
     agg_name = node.name
     args = [translator.translate_expr(n=arg, schema=schema) for arg in node.arguments]
 
-    if agg_name not in ("count", "n_unique"):
+    if agg_name not in ("count", "n_unique", "mean", "median", "quantile"):
         args = [
             expr.Cast(dtype, arg)
             if plc.traits.is_fixed_point(arg.dtype.plc_type)

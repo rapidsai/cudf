@@ -200,7 +200,16 @@ def test_cross_join_empty_right_table(request):
         (pl.Decimal(15, 2), pl.Float64),
     ],
 )
-def test_cross_join_filter_with_decimals(expr, left_dtype, right_dtype):
+def test_cross_join_filter_with_decimals(request, expr, left_dtype, right_dtype):
+    request.applymarker(
+        pytest.mark.xfail(
+            POLARS_VERSION_LT_132
+            and isinstance(left_dtype, pl.Decimal)
+            and isinstance(right_dtype, pl.Decimal)
+            and "==" in repr(expr),
+            reason="Hash Inner Join between i128 and i128",
+        )
+    )
     left = pl.LazyFrame(
         {
             "foo": [Decimal("1.00"), Decimal("2.50"), Decimal("3.00")],

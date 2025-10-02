@@ -1596,11 +1596,26 @@ class GroupBy(IR):
 def _strip_predicate_casts(node: expr.Expr) -> expr.Expr:
     if isinstance(node, expr.Cast):
         (child,) = node.children
-        return _strip_predicate_casts(child)
-    children = node.children
-    if not children:
+        child = _strip_predicate_casts(child)
+
+        src = child.dtype
+        dst = node.dtype
+
+        if dst.id() == src.id() and (
+            not plc.traits.is_fixed_point(dst.plc_type) or dst.scale() == src.scale()
+        ):
+            return child
+
+        if plc.traits.is_fixed_point(src.plc_type) or plc.traits.is_fixed_point(
+            dst.plc_type
+        ):
+            return child
+
+        return node.reconstruct([child])
+
+    if not node.children:
         return node
-    return node.reconstruct([_strip_predicate_casts(child) for child in children])
+    return node.reconstruct([_strip_predicate_casts(child) for child in node.children])
 
 
 def _add_cast(
