@@ -40,7 +40,9 @@ def _get_new_shuffle_id() -> int:
 
 
 @generate_ir_sub_network.register(Shuffle)
-def _(ir: Shuffle, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]:
+def _(
+    ir: Shuffle, rec: SubNetGenerator
+) -> tuple[dict[IR, list[Any]], dict[IR, list[Any]]]:
     # Local shuffle operation.
     # TODO: How to distinguish between local and global shuffle?
     # May need to track two different contexts?
@@ -60,7 +62,7 @@ def _(ir: Shuffle, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, 
     op_id = _get_new_shuffle_id()
 
     # Partition and pack
-    ch1 = channels[child]
+    ch1 = channels[child].pop()
     ch2 = Channel()
     nodes[ir] = []
     nodes[ir].append(
@@ -88,6 +90,6 @@ def _(ir: Shuffle, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, 
     # Unpack and concat
     ch4 = Channel()
     nodes[ir].append(unpack_and_concat(context, ch_in=ch3, ch_out=ch4))
-    channels[ir] = ch4
+    channels[ir] = [ch4]
 
     return nodes, channels

@@ -122,7 +122,7 @@ def _(
     nodes: dict[IR, list[Any]] = {
         ir: [dataframe_scan_node(ctx, ch_out, ir, rows_per_partition)]
     }
-    channels: dict[IR, Any] = {ir: ch_out}
+    channels: dict[IR, list[Any]] = {ir: [ch_out]}
     return nodes, channels
 
 
@@ -283,5 +283,5 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any
             )
         ]
     }
-    channels: dict[IR, Any] = {ir: ch_out}
+    channels: dict[IR, list[Any]] = {ir: [ch_out]}
     return nodes, channels

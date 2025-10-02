@@ -80,7 +80,7 @@ async def concatenate_node(
 @generate_ir_sub_network.register(Repartition)
 def _(
     ir: Repartition, rec: SubNetGenerator
-) -> tuple[dict[IR, list[Any]], dict[IR, Any]]:
+) -> tuple[dict[IR, list[Any]], dict[IR, list[Any]]]:
     # Repartition node.
 
     # TODO: Support other repartitioning?
@@ -96,15 +96,15 @@ def _(
     nodes, channels = rec(ir.children[0])
 
     # Create output channel
-    channels[ir] = Channel()
+    channels[ir] = [Channel()]
 
     # Add python node
     nodes[ir] = [
         concatenate_node(
             rec.state["ctx"],
             max_chunks=max_chunks,
-            ch_in=channels[ir.children[0]],
-            ch_out=channels[ir],
+            ch_in=channels[ir.children[0]].pop(),
+            ch_out=channels[ir][0],
         )
     ]
     return nodes, channels

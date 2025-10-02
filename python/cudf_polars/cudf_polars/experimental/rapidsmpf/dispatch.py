@@ -56,11 +56,14 @@ class GenState(TypedDict):
         GPUEngine configuration options.
     partition_info
         Partition information.
+    output_ch_count
+        Output channel count.
     """
 
     ctx: Context
     config_options: ConfigOptions
     partition_info: MutableMapping[IR, PartitionInfo]
+    output_ch_count: MutableMapping[IR, int]
 
 
 SubNetGenerator: TypeAlias = GenericTransformer[
@@ -104,8 +107,8 @@ def lower_ir_node(
 
 @singledispatch
 def generate_ir_sub_network(
-    ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
-) -> tuple[dict[IR, list[Any]], dict[IR, Any]]:
+    ir: IR, rec: SubNetGenerator
+) -> tuple[dict[IR, list[Any]], dict[IR, list[Any]]]:
     """
     Generate a sub-network for the RapidsMPF streaming engine.
 
@@ -113,8 +116,8 @@ def generate_ir_sub_network(
     ----------
     ir
         IR node to generate tasks for.
-    partition_info
-        Partitioning information, obtained from :func:`lower_ir_graph`.
+    rec
+        Recursive SubNetGenerator callable.
 
     Returns
     -------
@@ -123,6 +126,6 @@ def generate_ir_sub_network(
         corresponding streaming-network node(s).
     channels
         Dictionary mapping between each IR node and its
-        corresponding streaming-network output channel.
+        corresponding streaming-network output channels.
     """
     raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover

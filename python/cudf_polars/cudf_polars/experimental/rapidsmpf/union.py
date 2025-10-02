@@ -56,7 +56,9 @@ async def union_node(
 
 
 @generate_ir_sub_network.register(Union)
-def _(ir: Union, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]:
+def _(
+    ir: Union, rec: SubNetGenerator
+) -> tuple[dict[IR, list[Any]], dict[IR, list[Any]]]:
     # Union operation.
     # Pass-through all child chunks in channel order.
 
@@ -66,14 +68,14 @@ def _(ir: Union, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, An
     channels = reduce(operator.or_, _channels)
 
     # Create output channel
-    channels[ir] = Channel()
+    channels[ir] = [Channel()]
 
     # Add simple python node
     nodes[ir] = [
         union_node(
             rec.state["ctx"],
-            channels[ir],
-            *[channels[c] for c in ir.children],
+            channels[ir][0],
+            *[channels[c].pop() for c in ir.children],
         )
     ]
     return nodes, channels

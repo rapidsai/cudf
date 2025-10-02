@@ -22,16 +22,13 @@ import rmm
 
 import cudf_polars.experimental.rapidsmpf.io
 import cudf_polars.experimental.rapidsmpf.lower
-import cudf_polars.experimental.rapidsmpf.nodes
 import cudf_polars.experimental.rapidsmpf.shuffle
 import cudf_polars.experimental.rapidsmpf.union  # noqa: F401
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.traversal import CachingVisitor
 from cudf_polars.experimental.base import PartitionInfo
-from cudf_polars.experimental.rapidsmpf.dispatch import (
-    generate_ir_sub_network,
-    lower_ir_node,
-)
+from cudf_polars.experimental.rapidsmpf.dispatch import lower_ir_node
+from cudf_polars.experimental.rapidsmpf.nodes import generate_ir_sub_network_wrapper
 from cudf_polars.experimental.rapidsmpf.repartition import Repartition
 from cudf_polars.experimental.statistics import collect_statistics
 
@@ -185,16 +182,27 @@ def generate_network(
     -------
     The network nodes and output hook.
     """
+    # Find IR nodes with multiple references.
+    # We will need to multiply the output channel
+    # for these nodes.
+    output_ch_count = {ir: 0 for ir in partition_info}
+    for ir in partition_info:
+        for child in ir.children:
+            output_ch_count[child] += 1
+
     # Generate the network
     state: GenState = {
         "ctx": ctx,
         "config_options": config_options,
         "partition_info": partition_info,
+        "output_ch_count": output_ch_count,
     }
-    mapper: SubNetGenerator = CachingVisitor(generate_ir_sub_network, state=state)
+    mapper: SubNetGenerator = CachingVisitor(
+        generate_ir_sub_network_wrapper, state=state
+    )
     node_mapping, channels = mapper(ir)
     nodes = [node for sublist in node_mapping.values() for node in sublist]
-    ch_out = channels[ir]
+    ch_out = channels[ir].pop()
 
     # TODO: If `ir` corresponds to broadcasted data, we can
     # inject a node to drain the channel and return an empty

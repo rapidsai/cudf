@@ -53,7 +53,7 @@ async def shutdown_on_error(
 async def default_node(
     ctx: Context,
     ir: IR,
-    bcasted_child: list[int],
+    broadcasted: list[int],
     ch_out: Channel[TableChunk],
     *chs_in: Channel[TableChunk],
 ) -> None:
@@ -66,7 +66,7 @@ async def default_node(
         The context.
     ir
         The IR node.
-    bcasted_child: list[int],
+    broadcasted: list[int],
         The indices of the broadcasted children.
     ch_out
         The output channel.
@@ -77,10 +77,10 @@ async def default_node(
     n_children = len(chs_in)
     async with shutdown_on_error(ctx, *chs_in, ch_out):
         # Collect broadcasted partitions first
-        bcasted = {}
-        for i in range(len(bcasted_child)):
+        broadcasted_data = {}
+        for i in range(len(broadcasted)):
             if (msg := await chs_in[i].recv(ctx)) is not None:
-                bcasted[i] = DataFrame.from_table(
+                broadcasted_data[i] = DataFrame.from_table(
                     TableChunk.from_message(msg).table_view(),
                     list(ir.children[i].schema.keys()),
                     list(ir.children[i].schema.values()),
@@ -90,7 +90,7 @@ async def default_node(
         while True:
             input_dfs: list[DataFrame] = []
             for i, ch_in in enumerate(chs_in):
-                if (_df := bcasted.get(i)) is not None:
+                if (_df := broadcasted_data.get(i)) is not None:
                     input_dfs.append(_df)
                 elif (msg := await ch_in.recv(ctx)) is not None:
                     input_dfs.append(
@@ -111,15 +111,63 @@ async def default_node(
                 )
                 await ch_out.send(ctx, Message(chunk))
                 seq_num += 1
-            elif len(bcasted) == len(input_dfs):
+            elif len(broadcasted) == len(input_dfs):
                 break  # All done
             else:
                 raise ValueError(
                     "Number of input chunks does not match the child count."
                 )
-            if len(bcasted) == n_children:
+            if len(broadcasted) == n_children:
                 break  # All done
         await ch_out.drain(ctx)
+
+
+@define_py_node()
+async def multicast_node(
+    ctx: Context,
+    ch_in: Channel[TableChunk],
+    *chs_out: Channel[TableChunk],
+) -> None:
+    """
+    Fan-out node for rapidsmpf.
+
+    Parameters
+    ----------
+    ctx
+        The context.
+    ch_in
+        The input channel.
+    chs_out
+        The output channels.
+    """
+    # TODO: Use multiple streams
+    async with shutdown_on_error(ctx, ch_in, *chs_out):
+        # Collect all chunks from input channel
+        chunks: list[TableChunk] = []
+        seq_num = 0
+        while (msg := await ch_in.recv(ctx)) is not None:
+            chunks.append(TableChunk.from_message(msg))
+            print(f"Received chunk {seq_num} from input channel", flush=True)
+            seq_num += 1
+
+        # Send chunks to all output channels
+        for i, ch_out in enumerate(chs_out):
+            print(f"Sending chunks to output channel {i}", flush=True)
+            for seq_num, chunk in enumerate(chunks):
+                print(f"Sending chunk {seq_num} to output channel {i}", flush=True)
+                await ch_out.send(
+                    ctx,
+                    Message(
+                        TableChunk.from_pylibcudf_table(
+                            seq_num,
+                            chunk.table_view(),
+                            DEFAULT_STREAM,
+                        )
+                    ),
+                )
+
+        for ch_out in chs_out:
+            await ch_out.drain(ctx)
 
 
 @generate_ir_sub_network.register(IR)
@@ -129,30 +177,63 @@ def _(ir: IR, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]
 
     # Process children
     nodes: dict[IR, list[Any]] = {}
-    channels: dict[IR, Any] = {}
+    channels: dict[IR, list[Any]] = {}
     if ir.children:
         _nodes, _channels = zip(*(rec(c) for c in ir.children), strict=True)
         nodes = reduce(operator.or_, _nodes)
         channels = reduce(operator.or_, _channels)
 
     # Create output channel
-    channels[ir] = Channel()
+    channels[ir] = [Channel()]
 
     # Add simple python node
     partition_info = rec.state["partition_info"]
     # TODO: What about multiple broadcasted partitions?
     # We are tracking broadcasted partitions in PartitionInfo,
-    # but this logic only handles the single-partitoin case.
-    bcasted_child = [
-        i for i, c in enumerate(ir.children) if partition_info[c].count == 1
-    ]
+    # but this logic only handles the single-partition case.
+    counts = [partition_info[c].count for c in ir.children]
+    broadcasted = (
+        []
+        if all(count == 1 for count in counts)
+        else [i for i, c in enumerate(ir.children) if partition_info[c].count == 1]
+    )
     nodes[ir] = [
         default_node(
             rec.state["ctx"],
             ir,
-            bcasted_child,
-            channels[ir],
-            *[channels[c] for c in ir.children],
+            broadcasted,
+            channels[ir][0],
+            *[channels[c].pop() for c in ir.children],
         )
     ]
+    return nodes, channels
+
+
+def generate_ir_sub_network_wrapper(
+    ir: IR, rec: SubNetGenerator
+) -> tuple[dict[IR, list[Any]], dict[IR, list[Any]]]:
+    """
+    Generate a sub-network for the RapidsMPF streaming engine.
+
+    Parameters
+    ----------
+    ir
+        The IR node.
+    rec
+        Recursive SubNetGenerator callable.
+
+    Returns
+    -------
+    nodes
+        Dictionary mapping between each IR node and its
+        corresponding streaming-network node(s).
+    channels
+        Dictionary mapping between each IR node and its
+        corresponding streaming-network output channels.
+    """
+    nodes, channels = generate_ir_sub_network(ir, rec)
+    if (count := rec.state["output_ch_count"][ir]) > 1:
+        output_chs = [Channel() for _ in range(count)]
+        nodes[ir].append(multicast_node(rec.state["ctx"], *channels[ir], *output_chs))
+        channels[ir] = output_chs
     return nodes, channels
