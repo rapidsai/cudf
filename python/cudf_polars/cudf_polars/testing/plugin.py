@@ -157,10 +157,6 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/test_predicates.py::test_predicate_pushdown_split_pushable": "Casting that raises not supported on GPU",
     "tests/unit/io/test_scan_row_deletion.py::test_scan_row_deletion_skips_file_with_all_rows_deleted": "The test intentionally corrupts the parquet file, so we cannot read the row count from the header.",
     "tests/unit/io/test_multiscan.py::test_multiscan_row_index[scan_csv-write_csv-csv]": "Debug output on stderr doesn't match",
-    "tests/unit/functions/range/test_linear_space.py::test_linear_space_date": "Needs https://github.com/pola-rs/polars/issues/23020",
-    "tests/unit/sql/test_temporal.py::test_implicit_temporal_strings[dt IN ('1960-01-07','2077-01-01','2222-02-22')-expected15]": "Needs https://github.com/pola-rs/polars/issues/23020",
-    "tests/unit/sql/test_operators.py::test_in_not_in[dt NOT IN ('1950-12-24', '1997-07-05')]": "Needs https://github.com/pola-rs/polars/issues/23020",
-    "tests/unit/sql/test_operators.py::test_in_not_in[dt IN ('2020-10-10', '2077-03-18')]": "Needs https://github.com/pola-rs/polars/issues/23020",
     "tests/unit/datatypes/test_struct.py::test_struct_agg_all": "Needs nested list[struct] support",
     "tests/unit/constructors/test_structs.py::test_constructor_non_strict_schema_17956": "Needs nested list[struct] support",
     "tests/unit/io/test_delta.py::test_read_delta_arrow_map_type": "Needs nested list[struct] support",
@@ -176,6 +172,8 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_lazy_parquet.py::test_parquet_schema_arg[False-none]": "allow_missing_columns argument in read_parquet not translated in IR",
     "tests/unit/datatypes/test_decimal.py::test_decimal_aggregations": "https://github.com/pola-rs/polars/issues/23899",
     "tests/unit/datatypes/test_decimal.py::test_decimal_arithmetic_schema": "https://github.com/pola-rs/polars/issues/23899",
+    "tests/unit/test_cse.py::test_cse_predicate_self_join[False]": "polars removed the refcount in the logical plan",
+    "tests/unit/io/test_multiscan.py::test_multiscan_row_index[scan_csv-write_csv]": "CSV multiscan with row_index and no row limit is not yet supported.",
 }
 
 

@@ -62,6 +62,7 @@ class Translator:
         self.config_options = config.ConfigOptions.from_polars_engine(engine)
         self.errors: list[Exception] = []
         self._cache_nodes: dict[int, ir.Cache] = {}
+        self._expr_context: ExecutionContext = ExecutionContext.FRAME
 
     def translate_ir(self, *, n: int | None = None) -> ir.IR:
         """
@@ -202,6 +203,23 @@ class set_node(AbstractContextManager[None]):
 noop_context: nullcontext[None] = nullcontext()
 
 
+class set_expr_context(AbstractContextManager[None]):
+    __slots__ = ("_prev", "ctx", "translator")
+
+    def __init__(self, translator: Translator, ctx: ExecutionContext) -> None:
+        self.translator = translator
+        self.ctx = ctx
+        self._prev: ExecutionContext | None = None
+
+    def __enter__(self) -> None:
+        self._prev = self.translator._expr_context
+        self.translator._expr_context = self.ctx
+
+    def __exit__(self, *args: Any) -> None:
+        assert self._prev is not None
+        self.translator._expr_context = self._prev
+
+
 @singledispatch
 def _translate_ir(node: Any, translator: Translator, schema: Schema) -> ir.IR:
     raise NotImplementedError(
@@ -255,6 +273,17 @@ def _(node: pl_ir.Scan, translator: Translator, schema: Schema) -> ir.IR:
         skip_rows = 0
     else:
         skip_rows, n_rows = pre_slice
+
+    if (
+        typ == "csv"
+        and row_index is not None
+        and n_rows == -1
+        and len(paths) > 1
+        and skip_rows
+    ):
+        raise NotImplementedError(
+            "CSV multiscan with slice pushdown and row_index is not yet supported."
+        )
 
     return ir.Scan(
         schema,
@@ -319,9 +348,11 @@ def _(node: pl_ir.GroupBy, translator: Translator, schema: Schema) -> ir.IR:
         keys = [
             translate_named_expr(translator, n=e, schema=inp.schema) for e in node.keys
         ]
-        original_aggs = [
-            translate_named_expr(translator, n=e, schema=inp.schema) for e in node.aggs
-        ]
+        with set_expr_context(translator, ExecutionContext.GROUPBY):
+            original_aggs = [
+                translate_named_expr(translator, n=e, schema=inp.schema)
+                for e in node.aggs
+            ]
     is_rolling = node.options.rolling is not None
     is_dynamic = node.options.dynamic is not None
     if is_dynamic:
@@ -731,7 +762,8 @@ def _(
 ) -> expr.Expr:
     if isinstance(node.options, pl_expr.RollingGroupOptions):
         # pl.col("a").rolling(...)
-        agg = translator.translate_expr(n=node.function, schema=schema)
+        with set_expr_context(translator, ExecutionContext.ROLLING):
+            agg = translator.translate_expr(n=node.function, schema=schema)
         name_generator = unique_names(schema)
         aggs, named_post_agg = decompose_single_agg(
             expr.NamedExpr(next(name_generator), agg),
@@ -772,7 +804,8 @@ def _(
         return replace([named_post_agg.value], replacements)[0]
     elif isinstance(node.options, pl_expr.WindowMapping):
         # pl.col("a").over(...)
-        agg = translator.translate_expr(n=node.function, schema=schema)
+        with set_expr_context(translator, ExecutionContext.WINDOW):
+            agg = translator.translate_expr(n=node.function, schema=schema)
         name_gen = unique_names(schema)
         aggs, post = decompose_single_agg(
             expr.NamedExpr(next(name_gen), agg),
@@ -911,6 +944,7 @@ def _(
         dtype,
         node.name,
         node.options,
+        translator._expr_context,
         *(translator.translate_expr(n=n, schema=schema) for n in node.arguments),
     )
     if value.name in ("count", "n_unique") and value.dtype.id() != plc.TypeId.INT32:
