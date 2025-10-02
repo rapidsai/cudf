@@ -1458,10 +1458,8 @@ class dictionary_expression_converter : public equality_literals_collector {
         _dictionary_expr.push(ast::operation{op, new_operands.front(), new_operands.back()});
       } else if (cudf::ast::detail::ast_operator_arity(op) == 1) {
         // If the new_operands is just a `_always_true` literal, propagate it here
-        if (auto* lit = dynamic_cast<ast::literal const*>(&new_operands.front().get());
-            lit == &_always_true) {
+        if (&new_operands.front().get() == &_always_true) {
           _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, _dictionary_expr.back()});
-          // Propagate the `_always_true` as expression to its parent
           return _always_true;
         } else {
           _dictionary_expr.push(ast::operation{op, new_operands.front()});
