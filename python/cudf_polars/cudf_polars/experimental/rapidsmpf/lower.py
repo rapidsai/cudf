@@ -9,17 +9,14 @@ from typing import TYPE_CHECKING
 import cudf_polars.experimental.rapidsmpf.io  # noqa: F401
 from cudf_polars.dsl.ir import (
     IR,
-    Cache,
-    Filter,
-    HConcat,
-    MapFunction,
-    Projection,
-    Slice,
-    Union,
+    Join,
+    Sort,
 )
+from cudf_polars.experimental.io import StreamingSink
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     lower_ir_node,
 )
+from cudf_polars.experimental.sort import ShuffleSorted
 from cudf_polars.experimental.utils import _lower_ir_fallback
 
 if TYPE_CHECKING:
@@ -30,20 +27,6 @@ if TYPE_CHECKING:
 
 
 @lower_ir_node.register(IR)
-def _(ir: IR, rec: LowerIRTransformer) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    # Default logic - Fall back to a single partition/chunk.
-    return _lower_ir_fallback(
-        ir, rec, msg=f"Class {type(ir)} does not support multiple partitions."
-    )
-
-
-@lower_ir_node.register(Projection)
-@lower_ir_node.register(Cache)
-@lower_ir_node.register(HConcat)
-@lower_ir_node.register(Slice)
-@lower_ir_node.register(Filter)
-@lower_ir_node.register(MapFunction)
-@lower_ir_node.register(Union)
 def _lower_ir_node_task_engine(
     ir: IR, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
@@ -51,3 +34,16 @@ def _lower_ir_node_task_engine(
     from cudf_polars.experimental.dispatch import lower_ir_node as base_lower_ir_node
 
     return base_lower_ir_node(ir, rec)
+
+
+@lower_ir_node.register(Join)
+@lower_ir_node.register(Sort)
+@lower_ir_node.register(ShuffleSorted)
+@lower_ir_node.register(StreamingSink)
+def _unsupported(
+    ir: IR, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # Unsupported operations - Fall back to a single partition/chunk.
+    return _lower_ir_fallback(
+        ir, rec, msg=f"Class {type(ir)} does not support multiple partitions."
+    )

@@ -50,9 +50,10 @@ async def shutdown_on_error(
 
 
 @define_py_node()
-async def pwise_node(
+async def default_node(
     ctx: Context,
     ir: IR,
+    bcasted_child: list[int],
     ch_out: Channel[TableChunk],
     *chs_in: Channel[TableChunk],
 ) -> None:
@@ -65,6 +66,8 @@ async def pwise_node(
         The context.
     ir
         The IR node.
+    bcasted_child: list[int],
+        The indices of the broadcasted children.
     ch_out
         The output channel.
     chs_in
@@ -73,11 +76,23 @@ async def pwise_node(
     # TODO: Use multiple streams
     n_children = len(chs_in)
     async with shutdown_on_error(ctx, *chs_in, ch_out):
+        # Collect broadcasted partitions first
+        bcasted = {}
+        for i in range(len(bcasted_child)):
+            if (msg := await chs_in[i].recv(ctx)) is not None:
+                bcasted[i] = DataFrame.from_table(
+                    TableChunk.from_message(msg).table_view(),
+                    list(ir.children[i].schema.keys()),
+                    list(ir.children[i].schema.values()),
+                )
+
         seq_num = 0
         while True:
             input_dfs: list[DataFrame] = []
             for i, ch_in in enumerate(chs_in):
-                if (msg := await ch_in.recv(ctx)) is not None:
+                if (_df := bcasted.get(i)) is not None:
+                    input_dfs.append(_df)
+                elif (msg := await ch_in.recv(ctx)) is not None:
                     input_dfs.append(
                         DataFrame.from_table(
                             TableChunk.from_message(msg).table_view(),
@@ -86,12 +101,7 @@ async def pwise_node(
                         )
                     )
 
-            if input_dfs:
-                if len(input_dfs) != n_children:
-                    raise ValueError(
-                        "Number of input chunks does not match the child count."
-                    )
-
+            if len(input_dfs) == n_children:
                 # Evaluate the IR node
                 df: DataFrame = ir.do_evaluate(*ir._non_child_args, *input_dfs)
 
@@ -101,8 +111,14 @@ async def pwise_node(
                 )
                 await ch_out.send(ctx, Message(chunk))
                 seq_num += 1
+            elif len(bcasted) == len(input_dfs):
+                break  # All done
             else:
-                break
+                raise ValueError(
+                    "Number of input chunks does not match the child count."
+                )
+            if len(bcasted) == n_children:
+                break  # All done
         await ch_out.drain(ctx)
 
 
@@ -112,18 +128,29 @@ def _(ir: IR, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]
     # Use simple pointwise node.
 
     # Process children
-    _nodes, _channels = zip(*(rec(c) for c in ir.children), strict=True)
-    nodes = reduce(operator.or_, _nodes)
-    channels = reduce(operator.or_, _channels)
+    nodes: dict[IR, list[Any]] = {}
+    channels: dict[IR, Any] = {}
+    if ir.children:
+        _nodes, _channels = zip(*(rec(c) for c in ir.children), strict=True)
+        nodes = reduce(operator.or_, _nodes)
+        channels = reduce(operator.or_, _channels)
 
     # Create output channel
     channels[ir] = Channel()
 
     # Add simple python node
+    partition_info = rec.state["partition_info"]
+    # TODO: What about multiple broadcasted partitions?
+    # We are tracking broadcasted partitions in PartitionInfo,
+    # but this logic only handles the single-partitoin case.
+    bcasted_child = [
+        i for i, c in enumerate(ir.children) if partition_info[c].count == 1
+    ]
     nodes[ir] = [
-        pwise_node(
+        default_node(
             rec.state["ctx"],
             ir,
+            bcasted_child,
             channels[ir],
             *[channels[c] for c in ir.children],
         )

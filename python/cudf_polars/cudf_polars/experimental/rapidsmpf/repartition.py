@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.streaming.core.channel import Channel, Message
@@ -27,6 +28,7 @@ if TYPE_CHECKING:
 @define_py_node()
 async def concatenate_node(
     ctx: Context,
+    max_chunks: int | None,
     ch_in: Channel[TableChunk],
     ch_out: Channel[TableChunk],
 ) -> None:
@@ -37,29 +39,41 @@ async def concatenate_node(
     ----------
     ctx
         The context.
+    max_chunks
+        The maximum number of chunks to concatenate at once.
+        If `None`, concatenate all input chunks.
     ch_in
         The input channel.
     ch_out
         The output channel.
     """
     # TODO: Use multiple streams
+    max_chunks = max(2, max_chunks) if max_chunks else None
     async with shutdown_on_error(ctx, ch_in, ch_out):
-        chunks = []
         build_stream = DEFAULT_STREAM
-        while (msg := await ch_in.recv(ctx)) is not None:
-            chunk = TableChunk.from_message(msg)
-            chunks.append(chunk)
+        while True:
+            chunks = []
+            while (msg := await ch_in.recv(ctx)) is not None:
+                chunk = TableChunk.from_message(msg)
+                chunks.append(chunk)
+                if max_chunks and len(chunks) >= max_chunks:
+                    break
 
-        table = (
-            chunks[0].table_view()
-            if len(chunks) == 1
-            else plc.concatenate.concatenate(
-                [chunk.table_view() for chunk in chunks], build_stream
-            )
-        )
-        await ch_out.send(
-            ctx, Message(TableChunk.from_pylibcudf_table(0, table, build_stream))
-        )
+            if chunks:
+                table = (
+                    chunks[0].table_view()
+                    if len(chunks) == 1
+                    else plc.concatenate.concatenate(
+                        [chunk.table_view() for chunk in chunks], build_stream
+                    )
+                )
+                await ch_out.send(
+                    ctx,
+                    Message(TableChunk.from_pylibcudf_table(0, table, build_stream)),
+                )
+            if msg is None:
+                break
+
         await ch_out.drain(ctx)
 
 
@@ -69,9 +83,14 @@ def _(
 ) -> tuple[dict[IR, list[Any]], dict[IR, Any]]:
     # Repartition node.
 
-    # TODO: Support other repartitioning strategies
+    # TODO: Support other repartitioning?
     partition_info = rec.state["partition_info"]
-    assert partition_info[ir].count == 1, "Only concatenation is supported for now."
+    max_chunks: int | None = None
+    if partition_info[ir].count > 1:
+        max_chunks = max(
+            2,
+            math.ceil(partition_info[ir.children[0]].count / partition_info[ir].count),
+        )
 
     # Process children
     nodes, channels = rec(ir.children[0])
@@ -83,6 +102,7 @@ def _(
     nodes[ir] = [
         concatenate_node(
             rec.state["ctx"],
+            max_chunks=max_chunks,
             ch_in=channels[ir.children[0]],
             ch_out=channels[ir],
         )
