@@ -533,10 +533,18 @@ class NumericalColumn(NumericalBaseColumn):
         )
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
-        return type(self).from_pylibcudf(self._as_temporal_column(dtype))  # type: ignore[return-value]
+        return (
+            type(self)  # type: ignore[return-value]
+            .from_pylibcudf(self._as_temporal_column(dtype))
+            ._with_type_metadata(dtype)
+        )
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
-        return type(self).from_pylibcudf(self._as_temporal_column(dtype))  # type: ignore[return-value]
+        return (
+            type(self)  # type: ignore[return-value]
+            .from_pylibcudf(self._as_temporal_column(dtype))
+            ._with_type_metadata(dtype)
+        )
 
     def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
         return self.cast(dtype=dtype)  # type: ignore[return-value]
