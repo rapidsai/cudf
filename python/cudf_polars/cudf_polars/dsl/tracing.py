@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 
 
 @functools.cache
-def _getpid() -> int:
+def _getpid() -> int:  # pragma: no cover
     # Gets called for each IR.do_evaluate node, so we'll cache it.
     return os.getpid()
 
