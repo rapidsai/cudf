@@ -275,8 +275,11 @@ template <typename T>
 std::vector<T> make_std_vector_async(device_span<T const> source_data, rmm::cuda_stream_view stream)
 {
   std::vector<T> result(source_data.size());
-  CUDF_CUDA_TRY(cudaMemcpyAsync(
-    result.data(), source_data.data(), source_data.size() * sizeof(T), cudaMemcpyDefault, stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(result.data(),
+                                source_data.data(),
+                                source_data.size() * sizeof(T),
+                                cudaMemcpyDefault,
+                                stream.value()));
   return result;
 }
 
@@ -386,7 +389,8 @@ host_vector<T> make_empty_host_vector(size_t capacity, rmm::cuda_stream_view str
  * @return The data copied to the host
  */
 template <typename T>
-host_vector<T> make_host_vector_async(device_span<T const> source_data, rmm::cuda_stream_view stream)
+host_vector<T> make_host_vector_async(device_span<T const> source_data,
+                                      rmm::cuda_stream_view stream)
 {
   auto result = make_host_vector<T>(source_data.size(), stream);
   cuda_memcpy_async<T>(result, source_data, stream);
@@ -435,8 +439,8 @@ host_vector<T> make_host_vector(device_span<T const> source_data, rmm::cuda_stre
 }
 
 /**
- * @brief Synchronously construct a `cudf::detail::host_vector` containing a copy of data from a device
- * container
+ * @brief Synchronously construct a `cudf::detail::host_vector` containing a copy of data from a
+ * device container
  *
  * @note This function synchronizes `stream` after the copy.
  *
@@ -489,8 +493,8 @@ host_vector<T> make_pinned_vector(size_t size, rmm::cuda_stream_view stream)
 }
 
 /**
- * @brief Asynchronously construct a pinned `cudf::detail::host_vector` containing a copy of data from a
- * `device_span`
+ * @brief Asynchronously construct a pinned `cudf::detail::host_vector` containing a copy of data
+ * from a `device_span`
  *
  * @note This function does not synchronize `stream` after the copy. The returned vector uses
  * a pinned memory resource.
@@ -501,7 +505,8 @@ host_vector<T> make_pinned_vector(size_t size, rmm::cuda_stream_view stream)
  * @return The data copied to the host
  */
 template <typename T>
-host_vector<T> make_pinned_vector_async(device_span<T const> source_data, rmm::cuda_stream_view stream)
+host_vector<T> make_pinned_vector_async(device_span<T const> source_data,
+                                        rmm::cuda_stream_view stream)
 {
   auto result = make_pinned_vector_async<T>(source_data.size(), stream);
   cuda_memcpy_async<T>(result, source_data, stream);
@@ -510,8 +515,8 @@ host_vector<T> make_pinned_vector_async(device_span<T const> source_data, rmm::c
 
 /**
  *
- * @brief Asynchronously construct a pinned `cudf::detail::host_vector` containing a copy of data from a
- * device container
+ * @brief Asynchronously construct a pinned `cudf::detail::host_vector` containing a copy of data
+ * from a device container
  *
  * @note This function does not synchronize `stream` after the copy. The returned vector uses
  *  a pinned memory resource.
@@ -531,8 +536,8 @@ host_vector<typename Container::value_type> make_pinned_vector_async(Container c
 }
 
 /**
- * @brief Synchronously construct a pinned `cudf::detail::host_vector` containing a copy of data from a
- * `device_span`
+ * @brief Synchronously construct a pinned `cudf::detail::host_vector` containing a copy of data
+ * from a `device_span`
  *
  * @note This function does a synchronize on `stream` after the copy. The returned vector uses
  * a pinned memory resource.
@@ -551,8 +556,8 @@ host_vector<T> make_pinned_vector(device_span<T const> source_data, rmm::cuda_st
 }
 
 /**
- * @brief Synchronously construct a pinned `cudf::detail::host_vector` containing a copy of data from a
- * device container
+ * @brief Synchronously construct a pinned `cudf::detail::host_vector` containing a copy of data
+ * from a device container
  *
  * @note This function synchronizes `stream` after the copy. The returned vector uses
  * a pinned memory resource.
