@@ -1,7 +1,7 @@
 # <div align="left"><img src="img/rapids_logo.png" width="90px"/>&nbsp;cuDF - GPU DataFrames</div>
 
 ### What is a GPU DataFrame?
-A GPU DataFrame is like a pandas DataFrame (a table of data with rows and columns) but powered by your computer's Graphics Processing Unit (GPU) instead of the Central Processing Unit (CPU). 
+A GPU DataFrame is like a pandas DataFrame (a table of data with rows and columns) but powered by your computer's Graphics Processing Unit (GPU) instead of the Central Processing Unit (CPU).
 
 **What's happening under the hood?**
 - In pandas, operations (like sorting, filtering, or calculations) run on the CPU, which processes tasks one at a time or in small batches.
