@@ -21,8 +21,6 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/quantiles.hpp>
-#include <cudf/detail/sorting.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/reduction.hpp>
@@ -30,7 +28,6 @@
 #include <cudf/reduction/detail/reduction_functions.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -147,6 +144,22 @@ struct reduction_function<Source, cudf::aggregation::MAX> : public base_reductio
   [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     return max(params.col, params.output_dtype, params.init, params.stream, params.mr);
+  }
+};
+
+template <typename Source>
+struct reduction_function<Source, cudf::aggregation::ARGMIN> : public base_reduction_function {
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  {
+    return argmin(params.col, params.output_dtype, params.stream, params.mr);
+  }
+};
+
+template <typename Source>
+struct reduction_function<Source, cudf::aggregation::ARGMAX> : public base_reduction_function {
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  {
+    return argmax(params.col, params.output_dtype, params.stream, params.mr);
   }
 };
 
