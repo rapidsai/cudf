@@ -43,7 +43,7 @@ class PDSHQueries:
         line_item_ds = get_data(
             run_config.dataset_path, "lineitem", run_config.suffix
         )
-        # TODO: Remove this workaround cuDF supports subtraction between float and decimal
+        # TODO: Remove float64 casting once cuDF supports subtraction between float and decimal
         line_item_ds["l_quantity"] = line_item_ds["l_quantity"].astype(
             "float64"
         )
