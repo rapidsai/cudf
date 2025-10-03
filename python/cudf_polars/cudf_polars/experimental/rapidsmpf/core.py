@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
@@ -25,7 +26,7 @@ import cudf_polars.experimental.rapidsmpf.lower
 import cudf_polars.experimental.rapidsmpf.shuffle
 import cudf_polars.experimental.rapidsmpf.union  # noqa: F401
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.traversal import CachingVisitor
+from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.rapidsmpf.dispatch import lower_ir_node
 from cudf_polars.experimental.rapidsmpf.nodes import generate_ir_sub_network_wrapper
@@ -185,9 +186,9 @@ def generate_network(
     # Find IR nodes with multiple references.
     # We will need to multiply the output channel
     # for these nodes.
-    output_ch_count = {ir: 0 for ir in partition_info}
-    for ir in partition_info:
-        for child in ir.children:
+    output_ch_count = defaultdict(int)
+    for node in traversal([ir]):
+        for child in node.children:
             output_ch_count[child] += 1
 
     # Generate the network

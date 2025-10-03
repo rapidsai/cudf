@@ -84,14 +84,21 @@ async def dataframe_scan_node(
     # TODO: Use multiple streams
     nrows = max(ir.df.shape()[0], 1)
     global_count = math.ceil(nrows / rows_per_partition)
-    local_count = math.ceil(global_count / ctx.comm().nranks)
-    local_offset = local_count * ctx.comm().rank
+
+    # For single rank, simplify the logic
+    if ctx.comm().nranks == 1:
+        local_count = global_count
+        local_offset = 0
+    else:
+        local_count = math.ceil(global_count / ctx.comm().nranks)
+        local_offset = local_count * ctx.comm().rank
 
     async with shutdown_on_error(ctx, ch_out):
         for seq_num in range(local_count):
-            offset = local_offset + seq_num * rows_per_partition
+            offset = local_offset * rows_per_partition + seq_num * rows_per_partition
             if offset >= nrows:
-                break  # pragma: no cover; Requires multiple ranks
+                break
+
             ir_slice = DataFrameScan(
                 ir.schema,
                 ir.df.slice(offset, rows_per_partition),
@@ -104,6 +111,7 @@ async def dataframe_scan_node(
             # Return the output chunk
             chunk = TableChunk.from_pylibcudf_table(seq_num, df.table, DEFAULT_STREAM)
             await ch_out.send(ctx, Message(chunk))
+
         await ch_out.drain(ctx)
 
 

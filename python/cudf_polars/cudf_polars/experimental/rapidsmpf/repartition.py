@@ -51,14 +51,20 @@ async def concatenate_node(
     max_chunks = max(2, max_chunks) if max_chunks else None
     async with shutdown_on_error(ctx, ch_in, ch_out):
         build_stream = DEFAULT_STREAM
+
         while True:
             chunks = []
-            while (msg := await ch_in.recv(ctx)) is not None:
+            msg = None
+
+            # Collect chunks up to max_chunks or until end of stream
+            while len(chunks) < (max_chunks or float("inf")):
+                msg = await ch_in.recv(ctx)
+                if msg is None:
+                    break
                 chunk = TableChunk.from_message(msg)
                 chunks.append(chunk)
-                if max_chunks and len(chunks) >= max_chunks:
-                    break
 
+            # Process collected chunks
             if chunks:
                 table = (
                     chunks[0].table_view()
@@ -71,6 +77,8 @@ async def concatenate_node(
                     ctx,
                     Message(TableChunk.from_pylibcudf_table(0, table, build_stream)),
                 )
+
+            # Break if we reached end of stream
             if msg is None:
                 break
 
