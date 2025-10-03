@@ -53,7 +53,7 @@ async def shutdown_on_error(
 async def default_node(
     ctx: Context,
     ir: IR,
-    broadcasted: list[int],
+    bcast_indices: list[int],
     ch_out: Channel[TableChunk],
     *chs_in: Channel[TableChunk],
 ) -> None:
@@ -66,7 +66,7 @@ async def default_node(
         The context.
     ir
         The IR node.
-    broadcasted: list[int],
+    bcast_indices: list[int],
         The indices of the broadcasted children.
     ch_out
         The output channel.
@@ -76,49 +76,40 @@ async def default_node(
     # TODO: Use multiple streams
     n_children = len(chs_in)
     async with shutdown_on_error(ctx, *chs_in, ch_out):
-        # Collect broadcasted partitions first
-        broadcasted_data = {}
-        for i in range(len(broadcasted)):
-            if (msg := await chs_in[i].recv(ctx)) is not None:
-                broadcasted_data[i] = DataFrame.from_table(
-                    TableChunk.from_message(msg).table_view(),
-                    list(ir.children[i].schema.keys()),
-                    list(ir.children[i].schema.values()),
-                )
-
         seq_num = 0
+        bcast_data = {}
         while True:
-            input_dfs: list[DataFrame] = []
+            chunks = {}
             for i, ch_in in enumerate(chs_in):
-                if (_df := broadcasted_data.get(i)) is not None:
-                    input_dfs.append(_df)
-                elif (msg := await ch_in.recv(ctx)) is not None:
-                    input_dfs.append(
-                        DataFrame.from_table(
-                            TableChunk.from_message(msg).table_view(),
-                            list(ir.children[i].schema.keys()),
-                            list(ir.children[i].schema.values()),
-                        )
+                if (i not in bcast_indices or seq_num == 0) and (
+                    msg := await ch_in.recv(ctx)
+                ) is not None:
+                    chunk = DataFrame.from_table(
+                        TableChunk.from_message(msg).table_view(),
+                        list(ir.children[i].schema.keys()),
+                        list(ir.children[i].schema.values()),
                     )
+                    if i in bcast_indices:
+                        assert seq_num == 0
+                        bcast_data[i] = chunk
+                    else:
+                        chunks[i] = chunk
 
-            if len(input_dfs) == n_children:
-                # Evaluate the IR node
-                df: DataFrame = ir.do_evaluate(*ir._non_child_args, *input_dfs)
+            if seq_num > 0 and not chunks:
+                for i in bcast_indices:
+                    assert await chs_in[i].recv(ctx) is None
+                break  # No more work to do
 
-                # Return the output chunk
-                chunk = TableChunk.from_pylibcudf_table(
-                    seq_num, df.table, DEFAULT_STREAM
-                )
-                await ch_out.send(ctx, Message(chunk))
-                seq_num += 1
-            elif len(broadcasted) == len(input_dfs):
-                break  # All done
-            else:
-                raise ValueError(
-                    "Number of input chunks does not match the child count."
-                )
-            if len(broadcasted) == n_children:
-                break  # All done
+            # Evaluate the IR node
+            child_data = [bcast_data.get(i, chunks.get(i)) for i in range(n_children)]
+            df: DataFrame = ir.do_evaluate(*ir._non_child_args, *child_data)
+
+            # Return the output chunk
+            chunk = TableChunk.from_pylibcudf_table(seq_num, df.table, DEFAULT_STREAM)
+            await ch_out.send(ctx, Message(chunk))
+            seq_num += 1
+
+        # print(f"[{name} node] Draining", flush=True)
         await ch_out.drain(ctx)
 
 
@@ -129,7 +120,7 @@ async def multicast_node(
     *chs_out: Channel[TableChunk],
 ) -> None:
     """
-    Fan-out node for rapidsmpf.
+    Multicast node for rapidsmpf.
 
     Parameters
     ----------
@@ -147,27 +138,26 @@ async def multicast_node(
         seq_num = 0
         while (msg := await ch_in.recv(ctx)) is not None:
             chunks.append(TableChunk.from_message(msg))
-            print(f"Received chunk {seq_num} from input channel", flush=True)
             seq_num += 1
 
         # Send chunks to all output channels
-        for i, ch_out in enumerate(chs_out):
-            print(f"Sending chunks to output channel {i}", flush=True)
-            for seq_num, chunk in enumerate(chunks):
-                print(f"Sending chunk {seq_num} to output channel {i}", flush=True)
-                await ch_out.send(
-                    ctx,
-                    Message(
-                        TableChunk.from_pylibcudf_table(
-                            seq_num,
-                            chunk.table_view(),
-                            DEFAULT_STREAM,
-                        )
-                    ),
-                )
-
+        coros = []
         for ch_out in chs_out:
-            await ch_out.drain(ctx)
+            for seq_num, chunk in enumerate(chunks):
+                coros.append(
+                    ch_out.send(
+                        ctx,
+                        Message(
+                            TableChunk.from_pylibcudf_table(
+                                seq_num,
+                                chunk.table_view(),
+                                DEFAULT_STREAM,
+                            )
+                        ),
+                    )
+                )
+            coros.append(ch_out.drain(ctx))
+        await asyncio.gather(*coros)
 
 
 @generate_ir_sub_network.register(IR)
@@ -192,7 +182,7 @@ def _(ir: IR, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]
     # We are tracking broadcasted partitions in PartitionInfo,
     # but this logic only handles the single-partition case.
     counts = [partition_info[c].count for c in ir.children]
-    broadcasted = (
+    bcast_indices = (
         []
         if all(count == 1 for count in counts)
         else [i for i, c in enumerate(ir.children) if partition_info[c].count == 1]
@@ -201,7 +191,7 @@ def _(ir: IR, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]
         default_node(
             rec.state["ctx"],
             ir,
-            broadcasted,
+            bcast_indices,
             channels[ir][0],
             *[channels[c].pop() for c in ir.children],
         )

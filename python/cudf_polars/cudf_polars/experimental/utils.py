@@ -96,7 +96,7 @@ def _lower_ir_fallback(
             child = Repartition(child.schema, child)
             partition_info[child] = PartitionInfo(
                 count=1,
-                broadcasted=partition_info[c].broadcasted,
+                bcasted=partition_info[c].bcasted,
             )
         children.append(child)
 
@@ -107,8 +107,8 @@ def _lower_ir_fallback(
 
     # Reconstruct and return
     new_node = ir.reconstruct(children)
-    broadcasted = all(partition_info[c].broadcasted for c in children)
-    partition_info[new_node] = PartitionInfo(count=1, broadcasted=broadcasted)
+    bcasted = all(partition_info[c].bcasted for c in children)
+    partition_info[new_node] = PartitionInfo(count=1, bcasted=bcasted)
     return new_node, partition_info
 
 

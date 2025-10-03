@@ -148,11 +148,11 @@ def lower_ir_graph(
     ir, partition_info = mapper(ir)
 
     # Ensure the output is always a single chunk
-    broadcasted = partition_info[ir].broadcasted
+    bcasted = partition_info[ir].bcasted
     ir = Repartition(ir.schema, ir)
     partition_info[ir] = PartitionInfo(
         count=1,
-        broadcasted=broadcasted,
+        bcasted=bcasted,
     )
 
     return ir, partition_info
