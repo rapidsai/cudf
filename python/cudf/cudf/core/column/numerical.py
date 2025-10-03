@@ -17,6 +17,7 @@ import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column.categorical import CategoricalColumn
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtypes import CategoricalDtype
@@ -517,22 +518,32 @@ class NumericalColumn(NumericalBaseColumn):
                 ._with_type_metadata(dtype)
             )
 
-    def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
-        return cudf.core.column.DatetimeColumn(
-            data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
-            dtype=dtype,
-            mask=self.base_mask,
-            offset=self.offset,
+    def _as_temporal_column(self, dtype: np.dtype) -> plc.Column:
+        """Convert Self to a temporal pylibcudf Column for as_datetime_column and as_timedelta_column"""
+        return plc.Column(
+            data_type=dtype_to_pylibcudf_type(dtype),
             size=self.size,
+            data=plc.gpumemoryview(self.astype(np.dtype(np.int64)).base_data),
+            mask=plc.gpumemoryview(self.base_mask)
+            if self.base_mask is not None
+            else None,
+            null_count=self.null_count,
+            offset=self.offset,
+            children=[],
+        )
+
+    def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
+        return (
+            type(self)  # type: ignore[return-value]
+            .from_pylibcudf(self._as_temporal_column(dtype))
+            ._with_type_metadata(dtype)
         )
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
-        return cudf.core.column.TimeDeltaColumn(
-            data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
-            dtype=dtype,
-            mask=self.base_mask,
-            offset=self.offset,
-            size=self.size,
+        return (
+            type(self)  # type: ignore[return-value]
+            .from_pylibcudf(self._as_temporal_column(dtype))
+            ._with_type_metadata(dtype)
         )
 
     def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
@@ -892,10 +903,9 @@ class NumericalColumn(NumericalBaseColumn):
         dtype: Dtype,
     ) -> ColumnBase:
         if isinstance(dtype, CategoricalDtype):
-            codes = cudf.core.column.categorical.as_unsigned_codes(
-                len(dtype.categories), self
-            )
-            return cudf.core.column.CategoricalColumn(
+            codes_dtype = min_unsigned_type(len(dtype.categories))
+            codes = cast(NumericalColumn, self.astype(codes_dtype))
+            return CategoricalColumn(
                 data=None,
                 size=self.size,
                 dtype=dtype,

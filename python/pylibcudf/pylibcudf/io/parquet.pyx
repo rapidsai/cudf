@@ -360,7 +360,7 @@ cdef class ChunkedParquetReader:
         with nogil:
             c_result = move(self.reader.get()[0].read_chunk())
 
-        return TableWithMetadata.from_libcudf(c_result, self.stream)
+        return TableWithMetadata.from_libcudf(c_result, self.stream, mr)
 
 
 cpdef read_parquet(
@@ -388,7 +388,7 @@ cpdef read_parquet(
     with nogil:
         c_result = move(cpp_read_parquet(options.c_obj, s.view(), mr.get_mr()))
 
-    return TableWithMetadata.from_libcudf(c_result, s)
+    return TableWithMetadata.from_libcudf(c_result, s, mr)
 
 
 cdef class ChunkedParquetWriter:
