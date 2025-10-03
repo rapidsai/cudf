@@ -13,6 +13,7 @@ files:
       - clang
       - cuda
       - cuda_version
+      - cudf_polars_trace
       - depends_on_cupy
       - depends_on_dask_cuda
       - depends_on_libkvikio
@@ -337,6 +338,15 @@ files:
       - numpy_run
       - test_python_common
       - test_python_cudf_polars
+      - cudf_polars_trace
+  py_trace_cudf_polars:
+    output: pyproject
+    pyproject_dir: python/cudf_polars
+    extras:
+      table: project.optional-dependencies
+      key: trace
+    includes:
+      - cudf_polars_trace
   py_build_dask_cudf:
     output: pyproject
     pyproject_dir: python/dask_cudf
@@ -790,7 +800,7 @@ dependencies:
               - numba-cuda==0.19.1
           - matrix: {dependencies: "latest"}
             packages:
-              - pandas==2.3.2
+              - pandas==2.3.3
           - matrix:
             packages:
       - output_types: conda
@@ -1214,3 +1224,8 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - narwhals==2.0.1
+  cudf_polars_trace:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - structlog
