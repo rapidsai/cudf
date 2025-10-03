@@ -127,10 +127,11 @@ TYPED_TEST(ParquetWriterDeltaTest, SupportedDeltaListSliced)
 // Base test fixture for size-parameterized tests
 class ParquetSizedTest : public ::cudf::test::BaseFixtureWithParam<int> {};
 
-// test the allowed bit widths: [1, 25) for dictionary encoding
+// Test the allowed bit widths: [1, 25) for dictionary encoding
+// Note: Using a step of 3 and avoiding bit width of 24 to reduce the test suite execution time
 INSTANTIATE_TEST_SUITE_P(ParquetDictionaryTest,
                          ParquetSizedTest,
-                         testing::Range(2, 25, 3),
+                         testing::Range(2, 24, 3),
                          testing::PrintToStringParamName());
 
 TEST_P(ParquetSizedTest, DictionaryTest)
