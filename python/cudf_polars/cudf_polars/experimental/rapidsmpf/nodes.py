@@ -78,6 +78,7 @@ async def default_node(
     async with shutdown_on_error(ctx, *chs_in, ch_out):
         seq_num = 0
         bcast_data = {}
+        sends = []
         while True:
             chunks = {}
             for i, ch_in in enumerate(chs_in):
@@ -96,8 +97,6 @@ async def default_node(
                         chunks[i] = chunk
 
             if seq_num > 0 and not chunks:
-                for i in bcast_indices:
-                    assert await chs_in[i].recv(ctx) is None
                 break  # No more work to do
 
             # Evaluate the IR node
@@ -106,10 +105,17 @@ async def default_node(
 
             # Return the output chunk
             chunk = TableChunk.from_pylibcudf_table(seq_num, df.table, DEFAULT_STREAM)
-            await ch_out.send(ctx, Message(chunk))
+            sends.append(ch_out.send(ctx, Message(chunk)))
             seq_num += 1
 
-        # print(f"[{name} node] Draining", flush=True)
+        # Make sure input bcast channels are empty
+        for i in bcast_indices:
+            assert await chs_in[i].recv(ctx) is None
+
+        # Await all output sends
+        await asyncio.gather(*sends)
+
+        # Drain the output channel
         await ch_out.drain(ctx)
 
 
