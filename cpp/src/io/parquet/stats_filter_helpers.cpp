@@ -109,7 +109,10 @@ std::vector<std::reference_wrapper<ast::expression const>> stats_columns_collect
 }
 
 stats_expression_converter::stats_expression_converter(ast::expression const& expr,
-                                                       size_type num_columns)
+                                                       size_type num_columns,
+                                                       rmm::cuda_stream_view stream)
+  : _always_true_scalar(std::make_unique<cudf::numeric_scalar<bool>>(true, true, stream)),
+    _always_true(std::make_unique<ast::literal>(*_always_true_scalar))
 {
   _num_columns = num_columns;
   expr.accept(*this);
@@ -134,9 +137,9 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
 
     // For unary operators, push and return the `_always_true` expression
     if (cudf::ast::detail::ast_operator_arity(op) == 1) {
-      _stats_expr.push(ast::operation{ast_operator::IDENTITY, _always_true});
+      _stats_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
       // Propagate the `_always_true` as expression to its unary operator parent
-      return _always_true;
+      return *_always_true;
     }
 
     // Push literal into the ast::tree
@@ -190,9 +193,9 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
       _stats_expr.push(ast::operation{op, new_operands.front(), new_operands.back()});
     } else if (cudf::ast::detail::ast_operator_arity(op) == 1) {
       // If the new_operands is just a `_always_true` literal, propagate it here
-      if (&new_operands.front().get() == &_always_true) {
+      if (&new_operands.front().get() == _always_true.get()) {
         _stats_expr.push(ast::operation{ast_operator::IDENTITY, _stats_expr.back()});
-        return _always_true;
+        return *_always_true;
       } else {
         _stats_expr.push(ast::operation{op, new_operands.front()});
       }

@@ -1366,8 +1366,11 @@ class dictionary_expression_converter : public equality_literals_collector {
  public:
   dictionary_expression_converter(ast::expression const& expr,
                                   size_type num_input_columns,
-                                  cudf::host_span<std::vector<ast::literal*> const> literals)
-    : _literals{literals}
+                                  cudf::host_span<std::vector<ast::literal*> const> literals,
+                                  rmm::cuda_stream_view stream)
+    : _literals{literals},
+      _always_true_scalar(std::make_unique<cudf::numeric_scalar<bool>>(true, true, stream)),
+      _always_true(std::make_unique<ast::literal>(*_always_true_scalar))
   {
     // Set the num columns
     _num_input_columns = num_input_columns;
@@ -1418,8 +1421,8 @@ class dictionary_expression_converter : public equality_literals_collector {
 
       // Propagate the `_always_true` as expression to its unary operator parent
       if (cudf::ast::detail::ast_operator_arity(op) == 1) {
-        _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, _always_true});
-        return _always_true;
+        _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
+        return *_always_true;
       }
 
       if (op == ast_operator::EQUAL or op == ast::ast_operator::NOT_EQUAL) {
@@ -1450,7 +1453,7 @@ class dictionary_expression_converter : public equality_literals_collector {
       }
       // For all other expressions, push the `_always_true` expression
       else {
-        _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, _always_true});
+        _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
       }
     } else {
       auto new_operands = visit_operands(operands);
@@ -1458,9 +1461,9 @@ class dictionary_expression_converter : public equality_literals_collector {
         _dictionary_expr.push(ast::operation{op, new_operands.front(), new_operands.back()});
       } else if (cudf::ast::detail::ast_operator_arity(op) == 1) {
         // If the new_operands is just a `_always_true` literal, propagate it here
-        if (&new_operands.front().get() == &_always_true) {
+        if (&new_operands.front().get() == _always_true.get()) {
           _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, _dictionary_expr.back()});
-          return _always_true;
+          return *_always_true;
         } else {
           _dictionary_expr.push(ast::operation{op, new_operands.front()});
         }
@@ -1483,8 +1486,8 @@ class dictionary_expression_converter : public equality_literals_collector {
   std::vector<cudf::size_type> _col_literals_offsets;
   cudf::host_span<std::vector<ast::literal*> const> _literals;
   ast::tree _dictionary_expr;
-  cudf::numeric_scalar<bool> _always_true_scalar{true};
-  ast::literal const _always_true{_always_true_scalar};
+  std::unique_ptr<cudf::numeric_scalar<bool>> _always_true_scalar;
+  std::unique_ptr<ast::literal> _always_true;
 };
 
 }  // namespace
@@ -1566,7 +1569,8 @@ aggregate_reader_metadata::apply_dictionary_filter(
 
   // Convert AST to DictionaryAST expression with reference to dictionary membership
   // in above `dictionary_membership_table`
-  dictionary_expression_converter dictionary_expr{filter.get(), num_input_columns, literals};
+  dictionary_expression_converter dictionary_expr{
+    filter.get(), num_input_columns, literals, stream};
 
   // Filter dictionary membership table with the DictionaryAST expression and collect
   // filtered row group indices
