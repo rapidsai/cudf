@@ -1369,8 +1369,8 @@ class dictionary_expression_converter : public equality_literals_collector {
                                   cudf::host_span<std::vector<ast::literal*> const> literals,
                                   rmm::cuda_stream_view stream)
     : _literals{literals},
-      _always_true_scalar(std::make_unique<cudf::numeric_scalar<bool>>(true, true, stream)),
-      _always_true(std::make_unique<ast::literal>(*_always_true_scalar))
+      _always_true_scalar{std::make_unique<cudf::numeric_scalar<bool>>(true, true, stream)},
+      _always_true{std::make_unique<ast::literal>(*_always_true_scalar)}
   {
     // Set the num columns
     _num_input_columns = num_input_columns;
