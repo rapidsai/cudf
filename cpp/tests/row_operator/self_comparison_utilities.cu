@@ -25,7 +25,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
-// Including this declaration/defintion in row_operator_tests_utilities.cu causes
+// Including this declaration/defintion in two_table_comparison_utilities.cu causes
 // the nvcc compiler to segfault when built with the debug (-g) flag.
 
 template <typename PhysicalElementComparator>
