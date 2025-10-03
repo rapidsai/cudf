@@ -571,7 +571,7 @@ class pinned_fallback_host_memory_resource {
    * @param bytes Size of the allocation.
    * @param alignment Alignment in bytes. Default alignment is used if unspecified.
    */
-  void deallocate_sync(void* ptr, std::size_t bytes, std::size_t alignment)
+  void deallocate_sync(void* ptr, std::size_t bytes, std::size_t alignment) noexcept
   {
     return deallocate(ptr, bytes, alignment);
   }
@@ -607,7 +607,10 @@ class pinned_fallback_host_memory_resource {
    * @param bytes Size of the allocation.
    * @param alignment Alignment in bytes.
    */
-  void deallocate(rmm::cuda_stream_view stream, void* ptr, std::size_t bytes, std::size_t alignment)
+  void deallocate(rmm::cuda_stream_view stream,
+                  void* ptr,
+                  std::size_t bytes,
+                  std::size_t alignment) noexcept
   {
     return deallocate_async(ptr, bytes, alignment, stream);
   }
