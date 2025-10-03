@@ -503,7 +503,7 @@ host_vector<T> make_pinned_vector(size_t size, rmm::cuda_stream_view stream)
 template <typename T>
 host_vector<T> make_pinned_vector_async(device_span<T const> source_data, rmm::cuda_stream_view stream)
 {
-  auto result = make_pinned_vector<T>(source_data.size(), stream);
+  auto result = make_pinned_vector_async<T>(source_data.size(), stream);
   cuda_memcpy_async<T>(result, source_data, stream);
   return result;
 }
