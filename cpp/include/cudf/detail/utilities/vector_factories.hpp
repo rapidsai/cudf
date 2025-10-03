@@ -545,7 +545,7 @@ host_vector<typename Container::value_type> make_pinned_vector_async(Container c
 template <typename T>
 host_vector<T> make_pinned_vector(device_span<T const> source_data, rmm::cuda_stream_view stream)
 {
-  auto result = make_pinned_vector_async(source_data.size(), stream);
+  auto result = make_pinned_vector_async(source_data, stream);
   stream.synchronize();
   return result;
 }
