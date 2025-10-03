@@ -337,7 +337,8 @@ metadata::metadata(datasource* source, bool read_page_indexes)
   auto const has_strings = std::any_of(
     schema.begin(), schema.end(), [](auto const& elem) { return elem.type == Type::BYTE_ARRAY; });
 
-  if (read_page_indexes and has_strings and not row_groups.empty() and not row_groups.front().columns.empty()) {
+  if (read_page_indexes and has_strings and not row_groups.empty() and
+      not row_groups.front().columns.empty()) {
     // column index and offset index are encoded back to back.
     // the first column of the first row group will have the first column index, the last
     // column of the last row group will have the final offset index.
@@ -378,7 +379,7 @@ std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
   host_span<std::unique_ptr<datasource> const> sources, bool read_page_indexes)
 {
   // Avoid using the thread pool for a single source
-  if (sources.size() == 1) { 
+  if (sources.size() == 1) {
     std::vector<metadata> result;
     result.emplace_back(sources[0].get(), read_page_indexes);
     return result;

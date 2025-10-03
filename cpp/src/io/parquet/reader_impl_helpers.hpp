@@ -115,12 +115,12 @@ struct row_group_info {
 struct metadata : public FileMetaData {
   metadata() = default;
   explicit metadata(datasource* source, bool read_page_indexes = true);
-  metadata(metadata const& other) = delete;
-  metadata(metadata&& other) = default;
+  metadata(metadata const& other)            = delete;
+  metadata(metadata&& other)                 = default;
   metadata& operator=(metadata const& other) = delete;
-  metadata& operator=(metadata&& other) = default;
-  ~metadata() = default;
-  
+  metadata& operator=(metadata&& other)      = default;
+  ~metadata()                                = default;
+
   void sanitize_schema();
 };
 
