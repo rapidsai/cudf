@@ -579,20 +579,9 @@ void write_final_offsets(host_span<size_type const> offsets,
                          host_span<size_type* const> buff_addrs,
                          rmm::cuda_stream_view stream)
 {
-  auto host_pinned_offsets = cudf::detail::make_host_vector<size_type>(offsets.size(), stream);
-  auto host_pinned_buff_addrs = cudf::detail::make_host_vector<size_type*>(buff_addrs.size(), stream);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(host_pinned_offsets.data(),
-                                 offsets.data(),
-                                 offsets.size_bytes(),
-                                 cudaMemcpyHostToHost,
-                                 stream.value()));
-  CUDF_CUDA_TRY(cudaMemcpyAsync(host_pinned_buff_addrs.data(),
-                                 buff_addrs.data(),
-                                 buff_addrs.size_bytes(),
-                                 cudaMemcpyHostToHost,
-                                 stream.value()));
+  // Copy offsets to device and create an iterator
   auto d_src_data = cudf::detail::make_device_uvector_async(
-    host_pinned_offsets, stream, cudf::get_current_device_resource_ref());
+    offsets, stream, cudf::get_current_device_resource_ref());
   // Iterator for the source (scalar) data
   auto src_iter = thrust::make_transform_iterator(
     thrust::make_counting_iterator<std::size_t>(0),
@@ -601,7 +590,7 @@ void write_final_offsets(host_span<size_type const> offsets,
 
   // Copy buffer addresses to device and create an iterator
   auto d_dst_addrs = cudf::detail::make_device_uvector_async(
-    host_pinned_buff_addrs, stream, cudf::get_current_device_resource_ref());
+    buff_addrs, stream, cudf::get_current_device_resource_ref());
   // size_iter is simply a constant iterator of sizeof(size_type) bytes.
   auto size_iter = thrust::make_constant_iterator(sizeof(size_type));
 
