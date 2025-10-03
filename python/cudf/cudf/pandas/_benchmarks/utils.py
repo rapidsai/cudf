@@ -20,10 +20,13 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Literal
 
 import nvtx
-import pandas as pd
 
-from cudf.pandas import install
+import cudf.pandas
 from cudf.pandas.module_accelerator import disable_module_accelerator
+
+cudf.pandas.install()
+
+import pandas as pd  # noqa: E402
 
 try:
     import pynvml
@@ -279,7 +282,7 @@ def get_data(
     path: str | Path, table_name: str, suffix: str = ""
 ) -> pd.DataFrame:
     """Get table from dataset."""
-    return pd.read_parquet(f"{path}/{table_name}{suffix}", engine="pyarrow")
+    return pd.read_parquet(f"{path}/{table_name}{suffix}")
 
 
 def execute_query(
@@ -294,10 +297,11 @@ def execute_query(
         domain="cudf.pandas",
         color="green",
     ):
-        install()
         if run_config.executor == "cpu":
             with disable_module_accelerator():
+                assert not cudf.pandas.LOADED
                 return q(run_config)
+        assert cudf.pandas.LOADED
         return q(run_config)
 
 
@@ -370,9 +374,9 @@ def parse_args(
     parser.add_argument(
         "-e",
         "--executor",
-        default="streaming",
+        default="in-memory",
         type=str,
-        choices=["in-memory", "streaming", "cpu"],
+        choices=["in-memory", "cpu"],
         help=textwrap.dedent("""\
             Query executor backend:
                 - in-memory : Use cudf.pandas
@@ -433,10 +437,9 @@ def run_pandas(
     records: defaultdict[int, list[Record]] = defaultdict(list)
 
     for q_id in run_config.queries:
-        q = getattr(benchmark, f"q{q_id}")
         try:
-            getattr(benchmark, f"q{q_id}")(run_config)
-        except NotImplementedError as err:
+            q = getattr(benchmark, f"q{q_id}")
+        except AttributeError as err:
             raise NotImplementedError(
                 f"Query {q_id} not implemented."
             ) from err

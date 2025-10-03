@@ -13,21 +13,18 @@ and may be modified or removed at any time.
 
 from __future__ import annotations
 
-import contextlib
 from datetime import date
 from typing import TYPE_CHECKING
 
 import pandas as pd
 
-with contextlib.suppress(ImportError):
-    from .utils import (
-        get_data,
-        run_pandas,
-    )
-
+from cudf.pandas._benchmarks.utils import (
+    get_data,
+    run_pandas,
+)
 
 if TYPE_CHECKING:
-    from .utils import RunConfig
+    from cudf.pandas._benchmarks.utils import RunConfig
 
 
 class PDSHQueries:
@@ -46,6 +43,17 @@ class PDSHQueries:
         line_item_ds = get_data(
             run_config.dataset_path, "lineitem", run_config.suffix
         )
+        # TODO: Remove this workaround cuDF supports subtraction between float and decimal
+        line_item_ds["l_quantity"] = line_item_ds["l_quantity"].astype(
+            "float64"
+        )
+        line_item_ds["l_extendedprice"] = line_item_ds[
+            "l_extendedprice"
+        ].astype("float64")
+        line_item_ds["l_discount"] = line_item_ds["l_discount"].astype(
+            "float64"
+        )
+        line_item_ds["l_tax"] = line_item_ds["l_tax"].astype("float64")
 
         var1 = date(1998, 9, 2)
 
@@ -74,111 +82,6 @@ class PDSHQueries:
         )
 
         return agg.sort_values(["l_returnflag", "l_linestatus"])
-
-    @staticmethod
-    def q2(run_config: RunConfig) -> pd.DataFrame:
-        """Query 2."""
-        raise NotImplementedError
-
-    @staticmethod
-    def q3(run_config: RunConfig) -> pd.DataFrame:
-        """Query 3."""
-        raise NotImplementedError
-
-    @staticmethod
-    def q4(run_config: RunConfig) -> pd.DataFrame:
-        """Query 4."""
-        raise NotImplementedError
-
-    @staticmethod
-    def q5(run_config: RunConfig) -> pd.DataFrame:
-        """Query 5."""
-        raise NotImplementedError
-
-    @staticmethod
-    def q6(run_config: RunConfig) -> pd.DataFrame:
-        """Query 6."""
-        raise NotImplementedError
-
-    @staticmethod
-    def q7(run_config: RunConfig) -> pd.DataFrame:
-        """Query 7."""
-        raise NotImplementedError
-
-    @staticmethod
-    def q8(run_config: RunConfig) -> pd.DataFrame:
-        """Query 8."""
-        raise NotImplementedError
-
-    @staticmethod
-    def q9(run_config: RunConfig) -> pd.DataFrame:
-        """Query 9."""
-        raise NotImplementedError
-
-    @staticmethod
-    def q10(run_config: RunConfig) -> pd.DataFrame:
-        """Query 10."""
-        raise NotImplementedError
-
-    @staticmethod
-    def q11(run_config: RunConfig) -> pd.DataFrame:
-        """Query 11."""
-        raise NotImplementedError
-
-    @staticmethod
-    def q12(run_config: RunConfig) -> pd.DataFrame:
-        """Query 12."""
-        raise NotImplementedError
-
-    @staticmethod
-    def q13(run_config: RunConfig) -> pd.DataFrame:
-        """Query 13."""
-        raise NotImplementedError
-
-    @staticmethod
-    def q14(run_config: RunConfig) -> pd.DataFrame:
-        """Query 14."""
-        raise NotImplementedError
-
-    @staticmethod
-    def q15(run_config: RunConfig) -> pd.DataFrame:
-        """Query 15."""
-        raise NotImplementedError
-
-    @staticmethod
-    def q16(run_config: RunConfig) -> pd.DataFrame:
-        """Query 16."""
-        raise NotImplementedError
-
-    @staticmethod
-    def q17(run_config: RunConfig) -> pd.DataFrame:
-        """Query 17."""
-        raise NotImplementedError
-
-    @staticmethod
-    def q18(run_config: RunConfig) -> pd.DataFrame:
-        """Query 18."""
-        raise NotImplementedError
-
-    @staticmethod
-    def q19(run_config: RunConfig) -> pd.DataFrame:
-        """Query 19."""
-        raise NotImplementedError
-
-    @staticmethod
-    def q20(run_config: RunConfig) -> pd.DataFrame:
-        """Query 20."""
-        raise NotImplementedError
-
-    @staticmethod
-    def q21(run_config: RunConfig) -> pd.DataFrame:
-        """Query 21."""
-        raise NotImplementedError
-
-    @staticmethod
-    def q22(run_config: RunConfig) -> pd.DataFrame:
-        """Query 22."""
-        raise NotImplementedError
 
 
 if __name__ == "__main__":
