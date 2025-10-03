@@ -529,8 +529,7 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   _metadata = std::make_unique<aggregate_reader_metadata>(
     _sources,
     options.is_enabled_use_arrow_schema(),
-    options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas(),
-    true);
+    options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
 
   // Number of input sources
   _num_sources = _sources.size();

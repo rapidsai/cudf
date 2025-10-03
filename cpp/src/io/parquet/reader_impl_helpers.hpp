@@ -335,7 +335,7 @@ class aggregate_reader_metadata {
   aggregate_reader_metadata(host_span<std::unique_ptr<datasource> const> sources,
                             bool use_arrow_schema,
                             bool has_cols_from_mismatched_srcs,
-                            bool read_page_indexes);
+                            bool read_page_indexes = true);
 
   [[nodiscard]] RowGroup const& get_row_group(size_type row_group_index, size_type src_idx) const;
 
