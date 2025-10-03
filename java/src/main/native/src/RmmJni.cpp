@@ -141,7 +141,7 @@ class tracking_resource_adaptor final : public base_tracking_resource_adaptor {
     return result;
   }
 
-  void do_deallocate(void* p, std::size_t size, rmm::cuda_stream_view stream) override
+  void do_deallocate(void* p, std::size_t size, rmm::cuda_stream_view stream) noexcept override
   {
     size = (size + size_align - 1) / size_align * size_align;
 
@@ -269,12 +269,9 @@ class java_event_handler_memory_resource : public device_memory_resource {
       auto it = std::find_if(thresholds.begin(), thresholds.end(), [=](std::size_t t) -> bool {
         return low < t && high >= t;
       });
-      if (it != thresholds.end()) {
+      if (it != thresholds.end()) {  // throw Java exception, but not C++ exception
         JNIEnv* env = cudf::jni::get_jni_env(jvm);
         env->CallVoidMethod(handler_obj, callback_method, current_total);
-        if (env->ExceptionCheck()) {
-          throw std::runtime_error("onAllocThreshold handler threw an exception");
-        }
       }
     }
   }
@@ -318,7 +315,7 @@ class java_event_handler_memory_resource : public device_memory_resource {
     return result;
   }
 
-  void do_deallocate(void* p, std::size_t size, rmm::cuda_stream_view stream) override
+  void do_deallocate(void* p, std::size_t size, rmm::cuda_stream_view stream) noexcept override
   {
     auto total_before = tracker->get_total_allocated();
     resource->deallocate(p, size, stream);
@@ -381,7 +378,7 @@ class java_debug_event_handler_memory_resource final : public java_event_handler
     return result;
   }
 
-  void do_deallocate(void* p, std::size_t size, rmm::cuda_stream_view stream) override
+  void do_deallocate(void* p, std::size_t size, rmm::cuda_stream_view stream) noexcept override
   {
     java_event_handler_memory_resource::do_deallocate(p, size, stream);
     on_deallocated_callback(p, size, stream);
