@@ -299,14 +299,15 @@ async def scan_node(
                     )
                 )
 
-        # Read data concurrently (using io_throttle)
-        tasks = []
+        # Read data (using io_throttle).
+        # In some cases, we may may be able to read data
+        # concurrently. We are reading the chunks
+        # sequentially for now, because some tests assume
+        # chunks are read in order.
         for seq_num, scan in enumerate(scans):
-            tasks.append(read_chunk(ctx, io_throttle, scan, seq_num, ch_out))
+            await read_chunk(ctx, io_throttle, scan, seq_num, ch_out)
 
-        # Wait for all read tasks to complete,
-        # and then drain the output channel.
-        await asyncio.gather(*tasks)
+        # Erain the output channel
         await ch_out.drain(ctx)
 
 
