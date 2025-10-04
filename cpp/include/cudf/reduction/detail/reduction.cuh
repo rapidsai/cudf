@@ -66,10 +66,10 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 {
   auto const binary_op     = cudf::detail::cast_functor<OutputType>(op.get_binary_op());
   auto const initial_value = init.value_or(op.template get_identity<OutputType>());
-  auto pinned_initial = cudf::detail::make_pinned_vector_async<OutputType>(1, stream);
-  pinned_initial[0] = initial_value;
+  auto pinned_initial      = cudf::detail::make_pinned_vector<OutputType>(1, stream);
+  pinned_initial[0]        = initial_value;
   using ScalarType         = cudf::scalar_type_t<OutputType>;
-  auto result = std::make_unique<ScalarType>(pinned_initial[0], true, stream, mr);
+  auto result              = std::make_unique<ScalarType>(pinned_initial[0], true, stream, mr);
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -126,9 +126,9 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 {
   auto const binary_op     = cudf::detail::cast_functor<OutputType>(op.get_binary_op());
   auto const initial_value = init.value_or(op.template get_identity<OutputType>());
-  auto pinned_initial = cudf::detail::make_pinned_vector_async<OutputType>(1, stream);
-  pinned_initial[0] = initial_value;
-  auto dev_result = cudf::detail::device_scalar<OutputType>{pinned_initial[0], stream};
+  auto pinned_initial      = cudf::detail::make_pinned_vector_async<OutputType>(1, stream);
+  pinned_initial[0]        = initial_value;
+  auto dev_result          = cudf::detail::device_scalar<OutputType>{pinned_initial[0], stream};
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -190,8 +190,8 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 {
   auto const binary_op     = cudf::detail::cast_functor<IntermediateType>(op.get_binary_op());
   auto const initial_value = op.template get_identity<IntermediateType>();
-  auto pinned_initial = cudf::detail::make_pinned_vector_async<IntermediateType>(1, stream);
-  pinned_initial[0] = initial_value;
+  auto pinned_initial      = cudf::detail::make_pinned_vector_async<IntermediateType>(1, stream);
+  pinned_initial[0]        = initial_value;
   cudf::detail::device_scalar<IntermediateType> intermediate_result{pinned_initial[0], stream};
 
   // Allocate temporary storage
