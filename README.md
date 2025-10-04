@@ -1,4 +1,4 @@
-# <img align="left" src="img/rapids_logo.png" width="200"/>
+#  <div align="left"><img src="img/rapids_logo.png" width="90px"/>&nbsp;cuDF - GPU DataFrames</div>
 
 ### What is a GPU DataFrame?
 A GPU DataFrame is like a pandas DataFrame (a table of data with rows and columns) but powered by your computer's Graphics Processing Unit (GPU) instead of the Central Processing Unit (CPU).
