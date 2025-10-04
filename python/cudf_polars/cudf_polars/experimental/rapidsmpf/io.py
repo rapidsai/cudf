@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import math
 from typing import TYPE_CHECKING, Any
@@ -60,8 +61,9 @@ def _(
 
 
 @define_py_node()
-async def dataframe_scan_node(
+async def dataframescan_node(
     ctx: Context,
+    io_throttle: asyncio.Semaphore,
     ch_out: Channel[TableChunk],
     ir: DataFrameScan,
     rows_per_partition: int,
@@ -73,6 +75,8 @@ async def dataframe_scan_node(
     ----------
     ctx
         The context.
+    io_throttle
+        The IO throttle.
     ch_out
         The output channel.
     ir
@@ -94,6 +98,7 @@ async def dataframe_scan_node(
         local_offset = local_count * ctx.comm().rank
 
     async with shutdown_on_error(ctx, ch_out):
+        tasks = []
         for seq_num in range(local_count):
             offset = local_offset * rows_per_partition + seq_num * rows_per_partition
             if offset >= nrows:
@@ -104,14 +109,11 @@ async def dataframe_scan_node(
                 ir.df.slice(offset, rows_per_partition),
                 ir.projection,
             )
+            tasks.append(read_chunk(ctx, io_throttle, ir_slice, seq_num, ch_out))
 
-            # Evaluate the IR node
-            df: DataFrame = ir_slice.do_evaluate(*ir_slice._non_child_args)
-
-            # Return the output chunk
-            chunk = TableChunk.from_pylibcudf_table(seq_num, df.table, DEFAULT_STREAM)
-            await ch_out.send(ctx, Message(chunk))
-
+        # Wait for all read tasks to complete,
+        # and then drain the output channel.
+        await asyncio.gather(*tasks)
         await ch_out.drain(ctx)
 
 
@@ -128,8 +130,17 @@ def _(
     ctx = rec.state["ctx"]
     ch_out = Channel()
     nodes: dict[IR, list[Any]] = {
-        ir: [dataframe_scan_node(ctx, ch_out, ir, rows_per_partition)]
+        ir: [
+            dataframescan_node(
+                ctx,
+                rec.state["io_throttle"],
+                ch_out,
+                ir,
+                rows_per_partition,
+            )
+        ]
     }
+
     channels: dict[IR, list[Any]] = {ir: [ch_out]}
     return nodes, channels
 
@@ -163,9 +174,42 @@ def _(
     return ir, {ir: PartitionInfo(count=1)}  # pragma: no cover
 
 
+async def read_chunk(
+    ctx: Context,
+    io_throttle: asyncio.Semaphore,
+    scan: Scan | SplitScan | DataFrameScan,
+    seq_num: int,
+    ch_out: Channel[TableChunk],
+) -> None:
+    """
+    Read a chunk from disk and send it to the output channel.
+
+    Parameters
+    ----------
+    ctx
+        The context.
+    io_throttle
+        The IO throttle.
+    scan
+        The Scan or DataFrameScan node.
+    seq_num
+        The sequence number.
+    ch_out
+        The output channel.
+    """
+    async with io_throttle:
+        # Evaluate the IR node
+        df: DataFrame = scan.do_evaluate(*scan._non_child_args)
+
+        # Return the output chunk
+        chunk = TableChunk.from_pylibcudf_table(seq_num, df.table, DEFAULT_STREAM)
+        await ch_out.send(ctx, Message(chunk))
+
+
 @define_py_node()
 async def scan_node(
     ctx: Context,
+    io_throttle: asyncio.Semaphore,
     ch_out: Channel[TableChunk],
     ir: Scan,
     plan: IOPartitionPlan,
@@ -178,6 +222,8 @@ async def scan_node(
     ----------
     ctx
         The context.
+    io_throttle
+        The IO throttle.
     ch_out
         The output channel.
     ir
@@ -253,15 +299,14 @@ async def scan_node(
                     )
                 )
 
-        # Read data and push to the output channel
+        # Read data concurrently (using io_throttle)
+        tasks = []
         for seq_num, scan in enumerate(scans):
-            # Evaluate the IR node
-            df: DataFrame = scan.do_evaluate(*scan._non_child_args)
+            tasks.append(read_chunk(ctx, io_throttle, scan, seq_num, ch_out))
 
-            # Return the output chunk
-            chunk = TableChunk.from_pylibcudf_table(seq_num, df.table, DEFAULT_STREAM)
-            await ch_out.send(ctx, Message(chunk))
-
+        # Wait for all read tasks to complete,
+        # and then drain the output channel.
+        await asyncio.gather(*tasks)
         await ch_out.drain(ctx)
 
 
@@ -284,6 +329,7 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any
         ir: [
             scan_node(
                 rec.state["ctx"],
+                rec.state["io_throttle"],
                 ch_out,
                 ir,
                 plan,

@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
@@ -88,7 +89,9 @@ def evaluate_logical_plan(ir: IR, config_options: ConfigOptions) -> DataFrame:
     # TODO: Need a way to configure options specific to the rapidmspf engine.
     options = Options(get_environment_variables())
     comm = new_communicator(options)
-    mr = RmmResourceAdaptor(rmm.mr.CudaAsyncMemoryResource())
+    # NOTE: Maybe use rmm.mr.CudaAsyncMemoryResource() by default
+    # in callback.py instead of UVM (by default)?
+    mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
     br = BufferResource(mr)
     rmm.mr.set_current_device_resource(mr)
     ctx = Context(comm, br, options)
@@ -191,12 +194,17 @@ def generate_network(
         for child in node.children:
             output_ch_count[child] += 1
 
+    # IO Throttling
+    max_io_threads = 2  # TODO: Make this configurable
+    io_throttle = asyncio.Semaphore(max_io_threads)
+
     # Generate the network
     state: GenState = {
         "ctx": ctx,
         "config_options": config_options,
         "partition_info": partition_info,
         "output_ch_count": output_ch_count,
+        "io_throttle": io_throttle,
     }
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state

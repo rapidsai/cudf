@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, TypeAlias, TypedDict
 from cudf_polars.typing import GenericTransformer
 
 if TYPE_CHECKING:
+    import asyncio
     from collections.abc import MutableMapping
 
     from rapidsmpf.streaming.core.context import Context
@@ -58,12 +59,15 @@ class GenState(TypedDict):
         Partition information.
     output_ch_count
         Output channel count.
+    io_throttle
+        IO throttle.
     """
 
     ctx: Context
     config_options: ConfigOptions
     partition_info: MutableMapping[IR, PartitionInfo]
     output_ch_count: MutableMapping[IR, int]
+    io_throttle: asyncio.Semaphore
 
 
 SubNetGenerator: TypeAlias = GenericTransformer[
