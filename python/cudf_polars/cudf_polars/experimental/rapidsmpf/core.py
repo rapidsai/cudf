@@ -186,7 +186,7 @@ def generate_network(
     # Find IR nodes with multiple references.
     # We will need to multiply the output channel
     # for these nodes.
-    output_ch_count = defaultdict(int)
+    output_ch_count: defaultdict[IR, int] = defaultdict(int)
     for node in traversal([ir]):
         for child in node.children:
             output_ch_count[child] += 1

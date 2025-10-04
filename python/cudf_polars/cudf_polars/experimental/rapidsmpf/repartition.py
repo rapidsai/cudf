@@ -53,8 +53,8 @@ async def concatenate_node(
         build_stream = DEFAULT_STREAM
 
         while True:
-            chunks = []
-            msg = None
+            chunks: list[TableChunk] = []
+            msg: TableChunk | None = None
 
             # Collect chunks up to max_chunks or until end of stream
             while len(chunks) < (max_chunks or float("inf")):

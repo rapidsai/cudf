@@ -17,13 +17,15 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.ir import IR
+from cudf_polars.dsl.ir import IR, Empty
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
     from rapidsmpf.streaming.core.context import Context
+
+    import pylibcudf as plc
 
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
 
@@ -120,7 +122,7 @@ async def default_node(
             seq_num += 1
 
         # Send all output chunks at once to avoid circular blocking
-        for i, chunk in enumerate(output_chunks):
+        for chunk in output_chunks:
             await ch_out.send(ctx, Message(chunk))
 
         # Make sure input bcast channels are empty
@@ -235,6 +237,45 @@ def _(ir: IR, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]
             *[channels[c].pop() for c in ir.children],
         )
     ]
+    return nodes, channels
+
+
+@define_py_node()
+async def empty_node(
+    ctx: Context,
+    ch_out: Channel[TableChunk],
+    ir: Empty,
+) -> None:
+    """
+    Empty node for rapidsmpf - produces a single empty chunk.
+
+    Parameters
+    ----------
+    ctx
+        The context.
+    ch_out
+        The output channel.
+    ir
+        The Empty node.
+    """
+    async with shutdown_on_error(ctx, ch_out):
+        # Evaluate the IR node to create an empty DataFrame
+        df: DataFrame = ir.do_evaluate(*ir._non_child_args)
+
+        # Return the output chunk (empty but with correct schema)
+        chunk = TableChunk.from_pylibcudf_table(0, df.table, DEFAULT_STREAM)
+        await ch_out.send(ctx, Message(chunk))
+
+        await ch_out.drain(ctx)
+
+
+@generate_ir_sub_network.register(Empty)
+def _(ir: Empty, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]:
+    """Generate network for Empty node - produces one empty chunk."""
+    ctx = rec.state["ctx"]
+    ch_out = Channel()
+    nodes: dict[IR, list[Any]] = {ir: [empty_node(ctx, ch_out, ir)]}
+    channels: dict[IR, list[Any]] = {ir: [ch_out]}
     return nodes, channels
 
 
