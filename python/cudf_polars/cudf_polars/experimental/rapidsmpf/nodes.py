@@ -44,6 +44,7 @@ async def shutdown_on_error(
     channels
         The channels to shutdown.
     """
+    # TODO: This probably belongs in rapidsmpf.
     try:
         yield
     except Exception:
@@ -82,8 +83,9 @@ async def default_node(
 
         # First, collect broadcast data (if any)
         for i in bcast_indices:
-            msg = await chs_in[i].recv(ctx)
-            if msg is not None:
+            while (msg := await chs_in[i].recv(ctx)) is not None:
+                if i in bcast_data:
+                    raise RuntimeError(f"Broadcast channel {i} already has data")
                 chunk = DataFrame.from_table(
                     TableChunk.from_message(msg).table_view(),
                     list(ir.children[i].schema.keys()),
@@ -92,11 +94,9 @@ async def default_node(
                 bcast_data[i] = chunk
 
         # Then, process streaming data from non-broadcast channels
-        output_chunks = []
         while True:
             chunks = {}
             has_data = False
-
             for i, ch_in in enumerate(chs_in):
                 if i not in bcast_indices:
                     msg = await ch_in.recv(ctx)
@@ -110,25 +110,25 @@ async def default_node(
                         has_data = True
 
             if not has_data:
+                if seq_num == 0:
+                    # We are probably using default_node incorrectly
+                    # if we aren't sending any data. Perhaps we are
+                    # treating all children as broadcasted.
+                    raise RuntimeError("Not producing any output chunks.")
                 break
 
             # Evaluate the IR node
             child_data = [chunks.get(i, bcast_data.get(i)) for i in range(len(chs_in))]
             df: DataFrame = ir.do_evaluate(*ir._non_child_args, *child_data)
 
-            # Store output chunk instead of sending immediately
-            chunk = TableChunk.from_pylibcudf_table(seq_num, df.table, DEFAULT_STREAM)
-            output_chunks.append(chunk)
+            # Send output chunk
+            await ch_out.send(
+                ctx,
+                Message(
+                    TableChunk.from_pylibcudf_table(seq_num, df.table, DEFAULT_STREAM)
+                ),
+            )
             seq_num += 1
-
-        # Send all output chunks at once to avoid circular blocking
-        for chunk in output_chunks:
-            await ch_out.send(ctx, Message(chunk))
-
-        # Make sure input bcast channels are empty
-        for i in bcast_indices:
-            remaining = await chs_in[i].recv(ctx)
-            assert remaining is None, f"Broadcast channel {i} should be empty"
 
         # Drain the output channel
         await ch_out.drain(ctx)

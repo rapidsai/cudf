@@ -91,14 +91,15 @@ def _(
 ) -> tuple[dict[IR, list[Any]], dict[IR, list[Any]]]:
     # Repartition node.
 
-    # TODO: Support other repartitioning?
     partition_info = rec.state["partition_info"]
     max_chunks: int | None = None
     if partition_info[ir].count > 1:
-        max_chunks = max(
-            2,
-            math.ceil(partition_info[ir.children[0]].count / partition_info[ir].count),
-        )
+        count_output = partition_info[ir].count
+        count_input = partition_info[ir.children[0]].count
+        if count_input < count_output:
+            raise ValueError("Repartitioning to more chunks is not supported.")
+        # Make sure max_chunks is at least 2
+        max_chunks = max(2, math.ceil(count_input / count_output))
 
     # Process children
     nodes, channels = rec(ir.children[0])
