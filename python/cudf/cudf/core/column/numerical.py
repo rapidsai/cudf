@@ -17,6 +17,7 @@ import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column.categorical import CategoricalColumn
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtypes import CategoricalDtype
@@ -409,12 +410,20 @@ class NumericalColumn(NumericalBaseColumn):
             if not isinstance(other, type(self)):
                 return NotImplemented
             return other
-        elif isinstance(other, (cp.ndarray, np.ndarray)) and other.ndim == 0:
+        # TODO: cupy scalars are just aliases for numpy scalars, so extracting a scalar
+        # from a cupy array would always require a D2H copy. As a result, cupy does not
+        # produce scalars without explicit casting requests
+        # https://docs.cupy.dev/en/stable/user_guide/difference.html#zero-dimensional-array
+        # The below logic for type inference relies on numpy, however, so we need to go
+        # that route for now. If possible we should find a way to avoid this.
+        if isinstance(other, cp.ndarray) and other.ndim == 0:
+            other = cp.asnumpy(other)[()]
+        elif isinstance(other, np.ndarray) and other.ndim == 0:
             other = other[()]
 
         if is_scalar(other):
             if is_na_like(other):
-                return super()._normalize_binop_operand(other)
+                return pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
             if not isinstance(other, (int, float, complex)):
                 # Go via NumPy to get the value
                 other = np.array(other)
@@ -444,7 +453,6 @@ class NumericalColumn(NumericalBaseColumn):
                         self.dtype,
                         np.result_type(self.dtype.numpy_dtype, other),  # noqa: TID251
                     )
-
             else:
                 common_dtype = np.result_type(self.dtype, other)  # noqa: TID251
             if common_dtype.kind in {"b", "i", "u", "f"}:  # type: ignore[union-attr]
@@ -510,22 +518,32 @@ class NumericalColumn(NumericalBaseColumn):
                 ._with_type_metadata(dtype)
             )
 
-    def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
-        return cudf.core.column.DatetimeColumn(
-            data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
-            dtype=dtype,
-            mask=self.base_mask,
-            offset=self.offset,
+    def _as_temporal_column(self, dtype: np.dtype) -> plc.Column:
+        """Convert Self to a temporal pylibcudf Column for as_datetime_column and as_timedelta_column"""
+        return plc.Column(
+            data_type=dtype_to_pylibcudf_type(dtype),
             size=self.size,
+            data=plc.gpumemoryview(self.astype(np.dtype(np.int64)).base_data),
+            mask=plc.gpumemoryview(self.base_mask)
+            if self.base_mask is not None
+            else None,
+            null_count=self.null_count,
+            offset=self.offset,
+            children=[],
+        )
+
+    def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
+        return (
+            type(self)  # type: ignore[return-value]
+            .from_pylibcudf(self._as_temporal_column(dtype))
+            ._with_type_metadata(dtype)
         )
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
-        return cudf.core.column.TimeDeltaColumn(
-            data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
-            dtype=dtype,
-            mask=self.base_mask,
-            offset=self.offset,
-            size=self.size,
+        return (
+            type(self)  # type: ignore[return-value]
+            .from_pylibcudf(self._as_temporal_column(dtype))
+            ._with_type_metadata(dtype)
         )
 
     def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
@@ -885,10 +903,9 @@ class NumericalColumn(NumericalBaseColumn):
         dtype: Dtype,
     ) -> ColumnBase:
         if isinstance(dtype, CategoricalDtype):
-            codes = cudf.core.column.categorical.as_unsigned_codes(
-                len(dtype.categories), self
-            )
-            return cudf.core.column.CategoricalColumn(
+            codes_dtype = min_unsigned_type(len(dtype.categories))
+            codes = cast(NumericalColumn, self.astype(codes_dtype))
+            return CategoricalColumn(
                 data=None,
                 size=self.size,
                 dtype=dtype,

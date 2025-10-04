@@ -11,10 +11,7 @@ from collections.abc import Mapping
 from functools import cached_property, singledispatch
 from typing import TYPE_CHECKING, Any, Literal
 
-# Needed to make Sphinx happy for typing purposes
-import cupy
 import cupy as cp
-import numpy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -34,7 +31,6 @@ from cudf.core.column.column import (
     deserialize_columns,
     serialize_columns,
 )
-from cudf.core.column.struct import StructColumn
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.common import pipe
 from cudf.core.copy_types import GatherMap
@@ -582,7 +578,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         )
 
     @cached_property
-    def indices(self) -> dict[ScalarLike, cupy.ndarray]:
+    def indices(self) -> dict[ScalarLike, cp.ndarray]:
         """
         Dict {group name -> group indices}.
 
@@ -1473,7 +1469,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         frac: float | None = None,
         replace: bool = False,
         weights: Sequence | Series | None = None,
-        random_state: numpy.random.RandomState | int | None = None,
+        random_state: np.random.RandomState | int | None = None,
     ):
         """Return a random sample of items in each group.
 
@@ -2546,15 +2542,15 @@ class GroupBy(Serializable, Reducible, Scannable):
                 )
                 x, y = str(x), str(y)
 
-            column_pair_structs[(x, y)] = StructColumn(
-                data=None,
-                dtype=StructDtype(
-                    fields={x: self.obj._data[x].dtype, y: self.obj._data[y]}
-                ),
-                children=(self.obj._data[x], self.obj._data[y]),
-                size=len(self.obj),
-                offset=0,
-            )
+            struct_column = ColumnBase.from_pylibcudf(
+                plc.Column.struct_from_children(
+                    [
+                        self.obj._data[x].to_pylibcudf(mode="read"),
+                        self.obj._data[y].to_pylibcudf(mode="read"),
+                    ]
+                )
+            ).set_mask(None)
+            column_pair_structs[(x, y)] = struct_column
 
         from cudf.core.dataframe import DataFrame
 

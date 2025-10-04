@@ -6,6 +6,7 @@ from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.types cimport size_type
 
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.memory_resource cimport device_memory_resource
 
 
 cdef extern from "cudf/strings/repeat_strings.hpp" namespace "cudf::strings" \
@@ -14,11 +15,13 @@ cdef extern from "cudf/strings/repeat_strings.hpp" namespace "cudf::strings" \
     cdef unique_ptr[column] repeat_strings(
         column_view input,
         size_type repeat_times,
-        cuda_stream_view stream
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] repeat_strings(
         column_view input,
         column_view repeat_times,
-        cuda_stream_view stream
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
