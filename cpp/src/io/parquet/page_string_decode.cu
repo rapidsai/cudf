@@ -594,6 +594,7 @@ template <typename level_t>
 CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   compute_string_page_bounds_kernel(PageInfo* pages,
                                     device_span<ColumnChunkDesc const> chunks,
+                                    device_span<bool const> page_mask,
                                     size_t min_row,
                                     size_t num_rows,
                                     bool all_rows)
@@ -608,8 +609,8 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   if (t == 0) {
     // don't clobber these if they're already computed from the index
     if (!pp->has_page_index) {
-      s->page.num_nulls  = 0;
-      s->page.num_valids = 0;
+      pp->num_nulls  = 0;
+      pp->num_valids = 0;
     }
     // reset str_bytes to 0 in case it's already been calculated (esp needed for chunked reads).
     pp->str_bytes = 0;
@@ -643,6 +644,16 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
                              num_rows,
                              mask_filter{STRINGS_MASK},
                              page_processing_stage::STRING_BOUNDS)) {
+    return;
+  }
+
+  if (not page_mask[page_idx]) {
+    if (t == 0) {
+      pp->num_nulls  = 0;
+      pp->num_valids = s->num_input_values;
+      pp->start_val  = 0;
+      pp->end_val    = s->num_input_values;
+    }
     return;
   }
 
@@ -1018,10 +1029,10 @@ void compute_page_string_sizes_pass1(cudf::detail::hostdevice_span<PageInfo> pag
 
   if (level_type_size == 1) {
     compute_string_page_bounds_kernel<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, all_rows);
+      pages.device_ptr(), chunks, page_mask, min_row, num_rows, all_rows);
   } else {
     compute_string_page_bounds_kernel<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, all_rows);
+      pages.device_ptr(), chunks, page_mask, min_row, num_rows, all_rows);
   }
 
   // kernel mask may contain other kernels we don't need to count

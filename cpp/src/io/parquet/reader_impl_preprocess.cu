@@ -559,8 +559,11 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
     // if:
     // - user has passed custom row bounds
     // - we will be doing a chunked read
+    auto const page_mask =
+      cudf::detail::make_device_uvector_async(_subpass_page_mask, _stream, _mr);
     compute_page_sizes(subpass.pages,
                        pass.chunks,
+                       page_mask,
                        0,  // 0-max size_t. process all possible rows
                        std::numeric_limits<size_t>::max(),
                        true,  // compute num_rows

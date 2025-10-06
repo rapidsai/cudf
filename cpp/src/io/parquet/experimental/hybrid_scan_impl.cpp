@@ -726,6 +726,7 @@ table_with_metadata hybrid_scan_reader_impl::read_chunk_internal(
   if (uses_custom_row_bounds(mode)) {
     compute_page_sizes(subpass.pages,
                        pass.chunks,
+                       page_mask,
                        read_info.skip_rows,
                        read_info.num_rows,
                        false,  // num_rows is already computed
