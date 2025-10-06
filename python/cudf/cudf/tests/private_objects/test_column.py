@@ -20,7 +20,6 @@ from cudf.core.buffer import as_buffer
 from cudf.core.column.column import _can_values_be_equal, as_column
 from cudf.core.column.decimal import Decimal32Column, Decimal64Column
 from cudf.testing import assert_eq
-from cudf.testing._utils import assert_exceptions_equal
 
 
 @pytest.fixture
@@ -282,144 +281,6 @@ def test_column_chunked_array_creation():
     )
 
 
-@pytest.mark.parametrize(
-    "data,from_dtype,to_dtype",
-    [
-        # equal size different kind
-        (np.arange(3), "int64", "float64"),
-        (np.arange(3), "float32", "int32"),
-        (np.arange(1), "int64", "datetime64[ns]"),
-        # size / 2^n should work for all n
-        (np.arange(3), "int64", "int32"),
-        (np.arange(3), "int64", "int16"),
-        (np.arange(3), "int64", "int8"),
-        (np.arange(3), "float64", "float32"),
-        # evenly divides into bigger type
-        (np.arange(8), "int8", "int64"),
-        (np.arange(16), "int8", "int64"),
-        (np.arange(128), "int8", "int64"),
-        (np.arange(2), "float32", "int64"),
-        (np.arange(8), "int8", "datetime64[ns]"),
-        (np.arange(16), "int8", "datetime64[ns]"),
-    ],
-)
-def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
-    from_dtype = np.dtype(from_dtype)
-    to_dtype = np.dtype(to_dtype)
-    cpu_data = np.asarray(data, dtype=from_dtype)
-    gpu_data = as_column(data, dtype=from_dtype)
-
-    cpu_data_view = cpu_data.view(to_dtype)
-    gpu_data_view = gpu_data.view(to_dtype)
-
-    expect = pd.Series(cpu_data_view, dtype=cpu_data_view.dtype)
-    got = cudf.Series._from_column(gpu_data_view).astype(
-        gpu_data_view.dtype, copy=False
-    )
-
-    gpu_ptr = gpu_data.data.get_ptr(mode="read")
-    assert gpu_ptr == got._column.data.get_ptr(mode="read")
-    assert_eq(expect, got)
-
-
-@pytest.mark.parametrize(
-    "to_dtype",
-    [
-        "int64",
-        "int16",
-        "float32",
-        "datetime64[ns]",
-    ],
-)
-def test_column_view_invalid_numeric_to_numeric(to_dtype):
-    data = np.arange(5)
-    from_dtype = np.dtype("int8")
-    to_dtype = np.dtype(to_dtype)
-    cpu_data = np.asarray(data, dtype=from_dtype)
-    gpu_data = as_column(data, dtype=from_dtype)
-
-    assert_exceptions_equal(
-        lfunc=cpu_data.view,
-        rfunc=gpu_data.view,
-        lfunc_args_and_kwargs=([to_dtype],),
-        rfunc_args_and_kwargs=([to_dtype],),
-    )
-
-
-@pytest.mark.parametrize(
-    "data,to_dtype",
-    [
-        (["a", "b", "c"], "int8"),
-        (["ab"], "int8"),
-        (["ab"], "int16"),
-        (["a", "ab", "a"], "int8"),
-        (["abcd", "efgh"], "float32"),
-        (["abcdefgh"], "datetime64[ns]"),
-    ],
-)
-def test_column_view_valid_string_to_numeric(data, to_dtype):
-    to_dtype = np.dtype(to_dtype)
-    expect = cudf.Series._from_column(cudf.Series(data)._column.view(to_dtype))
-    got = cudf.Series(str_host_view(data, to_dtype))
-
-    assert_eq(expect, got)
-
-
-def test_column_view_nulls_widths_even():
-    data = [1, 2, None, 4, None]
-    expect_data = [
-        np.int32(val).view("float32") if val is not None else np.nan
-        for val in data
-    ]
-
-    sr = cudf.Series(data, dtype="int32")
-    expect = cudf.Series(expect_data, dtype="float32")
-    got = cudf.Series._from_column(sr._column.view(np.dtype(np.float32)))
-
-    assert_eq(expect, got)
-
-    data = [None, 2.1, None, 5.3, 8.8]
-    expect_data = [
-        np.float64(val).view("int64") if val is not None else val
-        for val in data
-    ]
-
-    sr = cudf.Series(data, dtype="float64")
-    expect = cudf.Series(expect_data, dtype="int64")
-    got = cudf.Series._from_column(sr._column.view(np.dtype(np.int64)))
-
-    assert_eq(expect, got)
-
-
-@pytest.mark.parametrize("slc", [slice(1, 5), slice(0, 4), slice(2, 4)])
-def test_column_view_numeric_slice(slc):
-    data = np.array([1, 2, 3, 4, 5], dtype="int32")
-    sr = cudf.Series(data)
-
-    expect = cudf.Series(data[slc].view("int64"))
-    got = cudf.Series._from_column(
-        sr._column.slice(slc.start, slc.stop).view(np.dtype(np.int64))
-    )
-
-    assert_eq(expect, got)
-
-
-@pytest.mark.parametrize(
-    "slc", [slice(3, 5), slice(0, 4), slice(2, 5), slice(1, 3)]
-)
-def test_column_view_string_slice(slc):
-    data = ["a", "bcde", "cd", "efg", "h"]
-
-    expect = cudf.Series._from_column(
-        cudf.Series(data)
-        ._column.slice(slc.start, slc.stop)
-        .view(np.dtype(np.int8))
-    )
-    got = cudf.Series(str_host_view(data[slc], "int8"))
-
-    assert_eq(expect, got)
-
-
 @pytest.mark.parametrize("box", [cp.asarray, np.asarray])
 @pytest.mark.parametrize(
     "data",
@@ -587,7 +448,7 @@ def test_build_df_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
         data = [1, pd.NA, 3, pd.NA, 5]
 
     pd_data = pd.DataFrame.from_dict({"a": data}, dtype=pd_dtype)
-    gd_data = cudf.DataFrame.from_pandas(pd_data)
+    gd_data = cudf.DataFrame(pd_data)
 
     assert gd_data["a"].dtype == expect_dtype
 
@@ -623,7 +484,7 @@ def test_build_series_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
         data = [1, pd.NA, 3, pd.NA, 5]
 
     pd_data = pd.Series(data, dtype=pd_dtype)
-    gd_data = cudf.Series.from_pandas(pd_data)
+    gd_data = cudf.Series(pd_data)
 
     assert gd_data.dtype == expect_dtype
 

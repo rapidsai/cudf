@@ -88,7 +88,7 @@ def test_categorical_empty():
 def test_categorical_set_categories():
     cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
     psr = pd.Series(cat)
-    sr = cudf.Series.from_pandas(cat)
+    sr = cudf.Series(cat)
 
     # adding category
     expect = psr.cat.set_categories(["a", "b", "c", "d"])

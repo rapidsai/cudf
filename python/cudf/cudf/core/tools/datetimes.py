@@ -938,8 +938,8 @@ def date_range(
         # may contain extra elements that exceeds `end`, they are trimmed
         # as a post processing step. [1]
         _periods_not_specified = True
-        start = dtype.type(start, unit)
-        end = dtype.type(end, unit)
+        start = pd.Timestamp(start).as_unit("ns").to_numpy()
+        end = pd.Timestamp(end).as_unit("ns").to_numpy()
         _is_increment_sequence = end >= start
 
         periods = math.floor(

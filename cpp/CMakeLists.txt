@@ -744,6 +744,7 @@ add_library(
   src/strings/convert/convert_ipv4.cu
   src/strings/convert/convert_urls.cu
   src/strings/convert/convert_lists.cu
+  src/strings/convert/int_cast.cu
   src/strings/copying/concatenate.cu
   src/strings/copying/copying.cu
   src/strings/copying/copy_range.cu
@@ -794,8 +795,6 @@ add_library(
   src/structs/structs_column_factories.cu
   src/structs/structs_column_view.cpp
   src/structs/utilities.cu
-  src/table/primitive_row_operators.cu
-  src/table/row_operators.cu
   src/table/table.cpp
   src/table/table_device_view.cu
   src/table/table_view.cpp

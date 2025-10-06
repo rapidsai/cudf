@@ -1287,11 +1287,14 @@ void split_nested_list_of_structs(SplitFunc Split, CompareFunc Compare, bool spl
   std::vector<bool> outer_validity{true, true, true, false, true, true, false};
   auto [outer_null_mask, outer_null_count] =
     cudf::test::detail::make_null_mask(outer_validity.begin(), outer_validity.end());
-  auto outer_list = make_lists_column(static_cast<cudf::size_type>(outer_validity.size()),
-                                      outer_offsets_col.release(),
-                                      struct_column.release(),
-                                      outer_null_count,
-                                      std::move(outer_null_mask));
+  auto outer_list = [&] {
+    auto tmp = make_lists_column(static_cast<cudf::size_type>(outer_validity.size()),
+                                 outer_offsets_col.release(),
+                                 struct_column.release(),
+                                 outer_null_count,
+                                 std::move(outer_null_mask));
+    return cudf::purge_nonempty_nulls(tmp->view());
+  }();
   if (split) {
     std::vector<cudf::size_type> splits{1, 3, 7};
     cudf::table_view tbl({static_cast<cudf::column_view>(*outer_list)});

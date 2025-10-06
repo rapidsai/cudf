@@ -309,7 +309,7 @@ cdef class ChunkedPack:
         )
 
 
-cpdef PackedColumns pack(Table input, Stream stream=None):
+cpdef PackedColumns pack(Table input, Stream stream=None, DeviceMemoryResource mr=None):
     """Deep-copy a table into a serialized contiguous memory format.
 
     Later use `unpack` or `unpack_from_memoryviews` to unpack the serialized
@@ -340,12 +340,15 @@ cpdef PackedColumns pack(Table input, Stream stream=None):
     """
     cdef unique_ptr[packed_columns] pack
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
     with nogil:
-        pack = move(make_unique[packed_columns](cpp_pack(input.view(), stream.view())))
+        pack = move(make_unique[packed_columns](
+            cpp_pack(input.view(), stream.view(), mr.get_mr())
+        ))
     return PackedColumns.from_libcudf(move(pack))
 
 
-cpdef Table unpack(PackedColumns input):
+cpdef Table unpack(PackedColumns input, DeviceMemoryResource mr=None):
     """Deserialize the result of `pack`.
 
     Copies the result of a serialized table into a table.
@@ -356,6 +359,8 @@ cpdef Table unpack(PackedColumns input):
     ----------
     input : PackedColumns
         The packed columns to unpack.
+    mr : DeviceMemoryResource, optional
+        Device memory resource used to allocate the returned table's device memory.
 
     Returns
     -------
@@ -368,7 +373,10 @@ cpdef Table unpack(PackedColumns input):
     return Table.from_table_view_of_arbitrary(v, input)
 
 
-cpdef Table unpack_from_memoryviews(memoryview metadata, gpumemoryview gpu_data):
+cpdef Table unpack_from_memoryviews(
+    memoryview metadata,
+    gpumemoryview gpu_data,
+):
     """Deserialize the result of `pack`.
 
     Copies the result of a serialized table into a table.
@@ -390,7 +398,13 @@ cpdef Table unpack_from_memoryviews(memoryview metadata, gpumemoryview gpu_data)
     if metadata.nbytes == 0:
         if gpu_data.__cuda_array_interface__["data"][0] != 0:
             raise ValueError("Expected an empty gpu_data from unpacking an empty table")
-        return Table.from_libcudf(make_unique[table](table_view()))
+        # For an empty table we just attach the default stream and mr since neither will
+        # be used for any operations.
+        return Table.from_libcudf(
+            make_unique[table](table_view()),
+            _get_stream(),
+            _get_memory_resource(),
+        )
 
     # Extract the raw data pointers
     cdef const uint8_t[::1] _metadata = metadata

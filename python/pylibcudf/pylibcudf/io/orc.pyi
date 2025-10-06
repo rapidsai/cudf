@@ -4,6 +4,7 @@ from typing import Any
 
 from typing_extensions import Self
 
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.io.types import (
@@ -30,7 +31,9 @@ class OrcReaderOptionsBuilder:
     def build(self) -> OrcReaderOptions: ...
 
 def read_orc(
-    options: OrcReaderOptions, stream: Stream = None
+    options: OrcReaderOptions,
+    stream: Stream = None,
+    mr: DeviceMemoryResource = None,
 ) -> TableWithMetadata: ...
 
 class OrcColumnStatistics:
@@ -81,7 +84,7 @@ class OrcChunkedWriter:
     @staticmethod
     def from_options(
         options: ChunkedOrcWriterOptions, stream: Stream = None
-    ) -> Self: ...
+    ) -> OrcChunkedWriter: ...
 
 class ChunkedOrcWriterOptions:
     def __init__(self): ...
