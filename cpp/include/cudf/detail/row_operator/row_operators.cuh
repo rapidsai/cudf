@@ -18,5 +18,4 @@
 
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/row_operator/hashing.cuh>
-#include <cudf/detail/row_operator/lexicographic.cuh>
 #include <cudf/detail/row_operator/preprocessed_table.cuh>

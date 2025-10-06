@@ -20,7 +20,9 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/row_operator/row_operators.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
+#include <cudf/detail/row_operator/lexicographic.cuh>
+#include <cudf/detail/row_operator/preprocessed_table.cuh>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/linked_column.hpp>
