@@ -546,6 +546,8 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
     if (has_lists) { break; }
   }
 
+  auto const page_mask = cudf::detail::make_device_uvector_async(_subpass_page_mask, _stream, _mr);
+
   // in some cases we will need to do further preprocessing of pages.
   // - if we have lists, the num_rows field in PageInfo will be incorrect coming out of the file
   // - if we are doing a chunked read, we need to compute the size of all string data
@@ -559,8 +561,6 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
     // if:
     // - user has passed custom row bounds
     // - we will be doing a chunked read
-    auto const page_mask =
-      cudf::detail::make_device_uvector_async(_subpass_page_mask, _stream, _mr);
     compute_page_sizes(subpass.pages,
                        pass.chunks,
                        page_mask,
@@ -616,7 +616,7 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
       constexpr bool compute_all_string_sizes = true;
       compute_page_string_sizes_pass1(subpass.pages,
                                       pass.chunks,
-                                      {},
+                                      page_mask,
                                       pass.skip_rows,
                                       pass.num_rows,
                                       subpass.kernel_mask,

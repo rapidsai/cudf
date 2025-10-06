@@ -647,7 +647,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
     return;
   }
 
-  if (not page_mask[page_idx]) {
+  if (page_mask.size() and not page_mask[page_idx]) {
     if (t == 0) {
       pp->num_nulls  = 0;
       pp->num_valids = s->num_input_values;
