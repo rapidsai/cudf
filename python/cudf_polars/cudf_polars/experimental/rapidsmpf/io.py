@@ -31,7 +31,6 @@ if TYPE_CHECKING:
 
     from rapidsmpf.streaming.core.context import Context
 
-    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import IOPartitionPlan
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
@@ -199,12 +198,17 @@ async def read_chunk(
         The output channel.
     """
     async with io_throttle:
-        # Evaluate the IR node
-        df: DataFrame = scan.do_evaluate(*scan._non_child_args)
-
-        # Return the output chunk
-        chunk = TableChunk.from_pylibcudf_table(seq_num, df.table, DEFAULT_STREAM)
-        await ch_out.send(ctx, Message(chunk))
+        # Evaluate and send the Scan-node result
+        await ch_out.send(
+            ctx,
+            Message(
+                TableChunk.from_pylibcudf_table(
+                    seq_num,
+                    scan.do_evaluate(*scan._non_child_args).table,
+                    DEFAULT_STREAM,
+                )
+            ),
+        )
 
 
 @define_py_node()
