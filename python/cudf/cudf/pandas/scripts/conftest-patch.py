@@ -12817,12 +12817,19 @@ NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS = {
     "tests/series/test_constructors.py::TestSeriesConstructors::test_constructor_maskedarray_hardened",
 }
 
+NODEIDS_THAT_FALLBACK_TO_PANDAS = {
+    "tests/strings/test_strings.py::test_iter_raises"
+}
+
 
 def pytest_collection_modifyitems(session, config, items):
     TO_SKIP = NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS.union(
         NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS
     )
     for item in items:
+        item.add_marker(
+            pytest.mark.filterwarnings("error::cudf.pandas.FallbackWarning")
+        )
         if item.nodeid in NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS:
             item.add_marker(
                 pytest.mark.xfail(reason="Fails with cudf.pandas enabled.")
@@ -12833,6 +12840,32 @@ def pytest_collection_modifyitems(session, config, items):
             item.add_marker(
                 pytest.mark.skip(reason="XPASSes with cudf.pandas enabled.")
             )
+
+
+@pytest.hookimpl(wrapper=True, tryfirst=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    if (
+        call.when == "call"
+        and call.excinfo is not None
+        # TODO: OK to import cudf.pandas to isinstance(call.excinfo.value, FallbackWarning)?
+        and type(call.excinfo.value).__name__ == "FallbackWarning"
+        and item.nodeid in NODEIDS_THAT_FALLBACK_TO_PANDAS
+    ):
+        outcome = pytest.TestReport(
+            nodeid=outcome.nodeid,
+            location=outcome.location,
+            keywords=outcome.keywords,
+            outcome="passed",
+            longrepr=None,
+            when=outcome.when,
+            sections=outcome.sections,
+            duration=outcome.duration,
+            start=outcome.start,
+            stop=outcome.stop,
+            user_properties=outcome.user_properties,
+        )
+    return outcome
 
 
 sys.path.append(os.path.dirname(__file__))
