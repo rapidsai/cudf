@@ -19,7 +19,6 @@ from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.errors import MixedTypeError
-from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
@@ -598,28 +597,6 @@ class StringColumn(ColumnBase):
                     ),
                 )
         return NotImplemented
-
-    @copy_docstring(ColumnBase.view)
-    def view(self, dtype: DtypeObj) -> ColumnBase:
-        if self.null_count > 0:
-            raise ValueError(
-                "Can not produce a view of a string column with nulls"
-            )
-        str_byte_offset = self.base_children[0].element_indexing(self.offset)
-        str_end_byte_offset = self.base_children[0].element_indexing(
-            self.offset + self.size
-        )
-
-        n_bytes_to_view = str_end_byte_offset - str_byte_offset
-
-        to_view = cudf.core.column.NumericalColumn(
-            self.base_data,  # type: ignore[arg-type]
-            dtype=np.dtype(np.int8),
-            offset=str_byte_offset,
-            size=n_bytes_to_view,
-        )
-
-        return to_view.view(dtype)
 
     @acquire_spill_lock()
     def minhash(

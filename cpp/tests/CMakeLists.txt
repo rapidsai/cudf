@@ -427,6 +427,7 @@ ConfigureTest(
   utilities_tests/column_debug_tests.cpp
   utilities_tests/column_utilities_tests.cpp
   utilities_tests/column_wrapper_tests.cpp
+  utilities_tests/context_tests.cpp
   utilities_tests/default_stream_tests.cpp
   utilities_tests/io_utilities_tests.cpp
   utilities_tests/lists_column_wrapper_tests.cpp
@@ -486,14 +487,17 @@ ConfigureTest(
 
 # ##################################################################################################
 # * table tests -----------------------------------------------------------------------------------
+ConfigureTest(TABLE_TEST table/table_tests.cpp table/table_view_tests.cu)
+
+# ##################################################################################################
+# * row operator tests ----------------------------------------------------------------------------
 ConfigureTest(
-  TABLE_TEST
-  table/table_tests.cpp
-  table/table_view_tests.cu
-  table/row_operators_tests.cpp
-  table/experimental_row_operator_tests.cu
-  table/row_operator_tests_utilities.cu
-  table/row_operator_tests_utilities2.cu
+  ROW_OPERATOR_TEST
+  row_operator/row_operator_tests.cu
+  row_operator/nan_tests.cpp
+  row_operator/self_comparison_utilities.cu
+  row_operator/two_table_comparison_utilities.cu
+  row_operator/two_table_equality_utilities.cu
 )
 
 # ##################################################################################################

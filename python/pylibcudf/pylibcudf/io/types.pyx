@@ -29,9 +29,9 @@ from pylibcudf.libcudf.io.types cimport (
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.libcudf.utilities.span cimport host_span, device_span
 
-from pylibcudf.utils cimport _get_stream
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 import codecs
 import errno
@@ -393,12 +393,13 @@ cdef class TableWithMetadata:
 
     @staticmethod
     cdef TableWithMetadata from_libcudf(
-        table_with_metadata& tbl_with_meta, Stream stream = None
+        table_with_metadata& tbl_with_meta,
+        Stream stream,
+        DeviceMemoryResource mr
     ):
         """Create a Python TableWithMetadata from a libcudf table_with_metadata"""
         cdef TableWithMetadata out = TableWithMetadata.__new__(TableWithMetadata)
-        stream = _get_stream(stream)
-        out.tbl = Table.from_libcudf(move(tbl_with_meta.tbl), stream)
+        out.tbl = Table.from_libcudf(move(tbl_with_meta.tbl), stream, mr)
         out.metadata = tbl_with_meta.metadata
         return out
 
