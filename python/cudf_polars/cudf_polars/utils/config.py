@@ -89,7 +89,11 @@ def get_total_device_memory() -> int | None:
     maybe_handle = get_device_handle()
 
     if maybe_handle is not None:
-        return pynvml.nvmlDeviceGetMemoryInfo(maybe_handle).total
+        try:
+            return pynvml.nvmlDeviceGetMemoryInfo(maybe_handle).total
+        except pynvml.NVMLError_NotSupported:  # pragma: no cover
+            # System doesn't have proper "GPU memory".
+            return None
     else:  # pragma: no cover
         return None
 
