@@ -12852,7 +12852,6 @@ def pytest_runtest_makereport(item, call):
         and type(call.excinfo.value).__name__ == "FallbackWarning"
         and item.nodeid in NODEIDS_THAT_FALLBACK_TO_PANDAS
     ):
-        # TODO: check if we can use the pytest_warning_recorded hook
         # If we expect a test to raise a cudf.pandas.FallbackWarning,
         # we consider the test "passed" (assuming we are running with warning as errors)
         outcome = pytest.TestReport(
