@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include "thrust/iterator/counting_iterator.h"
 #include <cudf/column/column_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
@@ -26,6 +25,7 @@
 #include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/random/linear_congruential_engine.h>
 #include <thrust/random/uniform_int_distribution.h>
 #include <thrust/random/uniform_real_distribution.h>
 #include <thrust/transform.h>
@@ -71,15 +71,14 @@ std::unique_ptr<cudf::column> generate_random_numeric_column(T lower,
   auto col = cudf::make_numeric_column(
     cudf::data_type{cudf::type_to_id<T>()}, num_rows, cudf::mask_state::UNALLOCATED, stream, mr);
 
-  // Generate random numbers on device using thrust
   thrust::transform(
     rmm::exec_policy(stream),
     thrust::counting_iterator(0),
     thrust::counting_iterator(num_rows),
     col->mutable_view().begin<T>(),
-    [lower, upper] __device__(cudf::size_type idx) -> T {
+    [lower, upper] __device__(auto idx) -> T {
       thrust::minstd_rand engine;
-      engine.discard(idx);  // Deterministic seeding based on index
+      engine.discard(idx);  
       if constexpr (std::is_integral_v<T>) {
         thrust::uniform_int_distribution<T> dist(lower, upper);
         return dist(engine);
@@ -112,22 +111,13 @@ std::unique_ptr<cudf::column> generate_random_numeric_column(T lower,
  * @param mr Device memory resource for allocations
  * @return Unique pointer to the generated table
  */
-std::unique_ptr<cudf::table> generate_random_table(cudf::size_type n_columns,
+std::unique_ptr<cudf::table> generate_random_table(std::vector<cudf::data_type> const &types,
+                                                    cudf::size_type n_columns,
                                                     cudf::size_type m_rows,
                                                     rmm::cuda_stream_view stream,
                                                     rmm::device_async_resource_ref mr)
 {
   std::vector<std::unique_ptr<cudf::column>> columns;
-  columns.reserve(n_columns);
-
-  // Create a mix of different data types for more realistic testing
-  std::vector<cudf::data_type> types = {
-    cudf::data_type{cudf::type_id::INT32},    // Integer column for primary sorting
-    cudf::data_type{cudf::type_id::FLOAT64},  // Double precision floating point
-    cudf::data_type{cudf::type_id::INT64},    // Long integer
-    cudf::data_type{cudf::type_id::FLOAT32},  // Single precision floating point
-    cudf::data_type{cudf::type_id::INT16}     // Short integer
-  };
 
   for (cudf::size_type i = 0; i < n_columns; ++i) {
     auto type_idx = i % types.size();
@@ -160,7 +150,8 @@ std::unique_ptr<cudf::table> generate_random_table(cudf::size_type n_columns,
           stream,
           mr));
         break;
-      default: break;  // Should not reach here with current types
+      default: 
+        CUDF_FAIL("Unsupported data type");
     }
   }
 

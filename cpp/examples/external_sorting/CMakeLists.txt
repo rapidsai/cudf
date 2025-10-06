@@ -23,10 +23,11 @@ rapids_cmake_build_type("Release")
 # gcc>=14. We can remove this once we upgrade to a newer sccache version.
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
-# Build and install external sorting example
-add_executable(external_sort sort.cpp parquet_io.cpp)
+add_executable(external_sort sort.cu parquet_io.cpp)
 target_link_libraries(
   external_sort PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
 )
 target_compile_features(external_sort PRIVATE cxx_std_20)
+set_property(TARGET external_sort PROPERTY CUDA_SEPARABLE_COMPILATION ON)
+target_compile_options(external_sort PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>)
 install(TARGETS external_sort DESTINATION bin/examples/libcudf/external_sorting)
