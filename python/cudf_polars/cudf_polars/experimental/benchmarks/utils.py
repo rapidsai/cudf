@@ -218,6 +218,7 @@ class RunConfig:
     suffix: str
     executor: ExecutorType
     scheduler: str
+    rapidsmpf_engine: bool
     n_workers: int
     versions: PackageVersions = dataclasses.field(
         default_factory=PackageVersions.collect
@@ -255,6 +256,7 @@ class RunConfig:
         """Create a RunConfig from command line arguments."""
         executor: ExecutorType = args.executor
         scheduler = args.scheduler
+        rapidsmpf_engine = args.rapidsmpf_engine
 
         if executor == "in-memory" or executor == "cpu":
             scheduler = None
@@ -296,6 +298,7 @@ class RunConfig:
             queries=args.query,
             executor=executor,
             scheduler=scheduler,
+            rapidsmpf_engine=rapidsmpf_engine,
             n_workers=args.n_workers,
             shuffle=args.shuffle,
             gather_shuffle_stats=args.rapidsmpf_dask_statistics,
@@ -337,6 +340,7 @@ class RunConfig:
             print(f"executor: {self.executor}")
             if self.executor == "streaming":
                 print(f"scheduler: {self.scheduler}")
+                print(f"engine: {'rapidsmpf' if self.rapidsmpf_engine else 'tasks'}")
                 print(f"blocksize: {self.blocksize}")
                 print(f"shuffle_method: {self.shuffle}")
                 print(f"broadcast_join_limit: {self.broadcast_join_limit}")
@@ -390,6 +394,7 @@ def get_executor_options(
         executor_options["scheduler"] = "distributed"
     if run_config.stats_planning:
         executor_options["stats_planning"] = {"use_reduction_planning": True}
+    executor_options["engine"] = "rapidsmpf" if run_config.rapidsmpf_engine else "tasks"
 
     if (
         benchmark
@@ -610,6 +615,12 @@ def parse_args(
             Scheduler type to use with the 'streaming' executor.
                 - synchronous : Run locally in a single process
                 - distributed : Use Dask for multi-GPU execution"""),
+    )
+    parser.add_argument(
+        "--rapidsmpf-engine",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Whether to use the 'rapidsmpf' streaming engine.",
     )
     parser.add_argument(
         "--n-workers",
