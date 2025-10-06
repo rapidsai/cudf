@@ -21,6 +21,7 @@ set(cython_sources
     concatenate.pyx
     copying.pyx
     datetime.pyx
+    decimal_division.pyx
     expressions.pyx
     filling.pyx
     gpumemoryview.pyx
