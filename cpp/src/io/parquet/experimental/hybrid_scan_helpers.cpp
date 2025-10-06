@@ -423,9 +423,17 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
             auto dictionary_offset = int64_t{0};
             auto dictionary_size   = int64_t{0};
 
-            // If any columns lack the page indexes then just return without modifying the
-            // row_group_info.
-            if (col_chunk.offset_index.has_value() and col_chunk.column_index.has_value()) {
+            // Make sure that we have page index and the column chunk doesn't have any
+            // non-dictionary encoded pages
+            auto const has_page_index_and_only_dict_encoded_pages =
+              col_chunk.offset_index.has_value() and col_chunk.column_index.has_value() and
+              std::all_of(
+                col_meta.encodings.cbegin(), col_meta.encodings.cend(), [](auto const& encoding) {
+                  return encoding == Encoding::PLAIN_DICTIONARY or
+                         encoding == Encoding::RLE_DICTIONARY;
+                });
+
+            if (has_page_index_and_only_dict_encoded_pages) {
               auto const& offset_index = col_chunk.offset_index.value();
               auto const num_pages     = offset_index.page_locations.size();
 
