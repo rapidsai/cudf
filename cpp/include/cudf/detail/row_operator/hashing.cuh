@@ -18,6 +18,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/row_operator/common_utils.cuh>
 #include <cudf/detail/row_operator/preprocessed_table.cuh>
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/assert.cuh>
@@ -37,13 +38,7 @@
 #include <memory>
 
 namespace CUDF_EXPORT cudf {
-namespace detail {
-
-template <cudf::type_id t>
-struct dispatch_void_if_nested;
-
-namespace row {
-namespace hash {
+namespace detail::row::hash {
 
 /**
  * @brief Computes the hash value of an element in the given column.
@@ -275,9 +270,5 @@ class row_hasher {
   std::shared_ptr<preprocessed_table> d_t;
 };
 
-}  // namespace hash
-
-}  // namespace row
-
-}  // namespace detail
+}  // namespace detail::row::hash
 }  // namespace CUDF_EXPORT cudf

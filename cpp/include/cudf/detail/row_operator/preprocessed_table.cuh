@@ -26,7 +26,6 @@
 #include <vector>
 
 namespace CUDF_EXPORT cudf {
-
 namespace detail::row::primitive {
 class row_equality_comparator;
 
@@ -34,9 +33,7 @@ template <template <typename> class Hash>
 class row_hasher;
 }  // namespace detail::row::primitive
 
-namespace detail {
-namespace row {
-namespace equality {
+namespace detail::row::equality {
 
 namespace hash {
 class row_hasher;
@@ -95,14 +92,11 @@ struct preprocessed_table {
   std::vector<std::unique_ptr<column>> _tmp_columns;
 };
 
-}  // namespace equality
+}  // namespace detail::row::equality
 
-namespace hash {
+namespace detail::row::hash {
 
 using preprocessed_table = row::equality::preprocessed_table;
 
-}  // namespace hash
-
-}  // namespace row
-}  // namespace detail
+}  // namespace detail::row::hash
 }  // namespace CUDF_EXPORT cudf

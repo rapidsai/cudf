@@ -38,10 +38,7 @@
 #include <memory>
 
 namespace CUDF_EXPORT cudf {
-namespace detail {
-namespace row {
-
-namespace equality {
+namespace detail::row::equality {
 
 /**
  * @brief Equality comparator functor that compares physical values rather than logical
@@ -525,9 +522,5 @@ class two_table_comparator {
   std::shared_ptr<preprocessed_table> d_right_table;
 };
 
-}  // namespace equality
-
-}  // namespace row
-
-}  // namespace detail
+}  // namespace detail::row::equality
 }  // namespace CUDF_EXPORT cudf

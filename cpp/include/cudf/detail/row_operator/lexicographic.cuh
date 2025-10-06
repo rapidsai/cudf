@@ -45,10 +45,7 @@
 #include <vector>
 
 namespace CUDF_EXPORT cudf {
-namespace detail {
-namespace row {
-
-namespace lexicographic {
+namespace detail::row::lexicographic {
 
 /**
  * @brief Computes a weak ordering of two values with special sorting behavior.
@@ -1130,9 +1127,5 @@ class two_table_comparator {
   std::shared_ptr<preprocessed_table> d_right_table;
 };
 
-}  // namespace lexicographic
-
-}  // namespace row
-
-}  // namespace detail
+}  // namespace detail::row::lexicographic
 }  // namespace CUDF_EXPORT cudf

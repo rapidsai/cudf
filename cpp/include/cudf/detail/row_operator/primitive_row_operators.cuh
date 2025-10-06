@@ -18,7 +18,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/row_operator/common_utils.cuh>
-#include <cudf/detail/row_operator/row_operators.cuh>
+#include <cudf/detail/row_operator/preprocessed_table.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/hashing/detail/hash_functions.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
@@ -35,7 +35,6 @@
 #include <memory>
 
 namespace CUDF_EXPORT cudf {
-
 namespace detail {
 
 /**
@@ -49,7 +48,9 @@ namespace detail {
  */
 bool is_primitive_row_op_compatible(cudf::table_view const& table);
 
-namespace row::primitive {
+}  // namespace detail
+
+namespace detail::row::primitive {
 
 /**
  * @brief Returns `void` if it's not a primitive type
@@ -282,6 +283,5 @@ class row_hasher {
   hash_value_type _seed;
 };
 
-}  // namespace row::primitive
-}  // namespace detail
+}  // namespace detail::row::primitive
 }  // namespace CUDF_EXPORT cudf
