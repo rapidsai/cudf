@@ -20,7 +20,7 @@
 #include <cudf/detail/row_operator/common_utils.cuh>
 #include <cudf/detail/row_operator/preprocessed_table.cuh>
 #include <cudf/detail/utilities/assert.cuh>
-#include <cudf/hashing/detail/hash_functions.cuh>
+#include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
