@@ -63,9 +63,10 @@ def _(
 @define_py_node()
 async def dataframescan_node(
     ctx: Context,
-    io_throttle: asyncio.Semaphore,
-    ch_out: Channel[TableChunk],
     ir: DataFrameScan,
+    ch_out: Channel[TableChunk],
+    *,
+    io_throttle: asyncio.Semaphore,
     rows_per_partition: int,
 ) -> None:
     """
@@ -75,12 +76,12 @@ async def dataframescan_node(
     ----------
     ctx
         The context.
-    io_throttle
-        The IO throttle.
-    ch_out
-        The output channel.
     ir
         The DataFrameScan node.
+    ch_out
+        The output channel.
+    io_throttle
+        The IO throttle.
     rows_per_partition
         The number of rows per partition.
     """
@@ -133,10 +134,10 @@ def _(
         ir: [
             dataframescan_node(
                 ctx,
-                rec.state["io_throttle"],
-                ch_out,
                 ir,
-                rows_per_partition,
+                ch_out,
+                io_throttle=rec.state["io_throttle"],
+                rows_per_partition=rows_per_partition,
             )
         ]
     }
@@ -209,9 +210,10 @@ async def read_chunk(
 @define_py_node()
 async def scan_node(
     ctx: Context,
-    io_throttle: asyncio.Semaphore,
-    ch_out: Channel[TableChunk],
     ir: Scan,
+    ch_out: Channel[TableChunk],
+    *,
+    io_throttle: asyncio.Semaphore,
     plan: IOPartitionPlan,
     parquet_options: ParquetOptions,
 ) -> None:
@@ -222,12 +224,12 @@ async def scan_node(
     ----------
     ctx
         The context.
-    io_throttle
-        The IO throttle.
-    ch_out
-        The output channel.
     ir
         The Scan node.
+    ch_out
+        The output channel.
+    io_throttle
+        The IO throttle.
     plan
         The partitioning plan.
     parquet_options
@@ -330,11 +332,11 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any
         ir: [
             scan_node(
                 rec.state["ctx"],
-                rec.state["io_throttle"],
-                ch_out,
                 ir,
-                plan,
-                parquet_options,
+                ch_out,
+                io_throttle=rec.state["io_throttle"],
+                plan=plan,
+                parquet_options=parquet_options,
             )
         ]
     }

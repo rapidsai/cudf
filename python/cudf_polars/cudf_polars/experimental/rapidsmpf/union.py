@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 @define_py_node()
 async def union_node(
     ctx: Context,
+    ir: Union,
     ch_out: Channel[TableChunk],
     *chs_in: Channel[TableChunk],
 ) -> None:
@@ -38,7 +39,7 @@ async def union_node(
     ctx
         The context.
     ir
-        The IR node.
+        The Union IR node.
     ch_out
         The output channel.
     chs_in
@@ -74,6 +75,7 @@ def _(
     nodes[ir] = [
         union_node(
             rec.state["ctx"],
+            ir,
             channels[ir][0],
             *[channels[c].pop() for c in ir.children],
         )

@@ -28,9 +28,11 @@ if TYPE_CHECKING:
 @define_py_node()
 async def concatenate_node(
     ctx: Context,
-    max_chunks: int | None,
-    ch_in: Channel[TableChunk],
+    ir: Repartition,
     ch_out: Channel[TableChunk],
+    ch_in: Channel[TableChunk],
+    *,
+    max_chunks: int | None,
 ) -> None:
     """
     Concatenate node for rapidsmpf.
@@ -39,13 +41,15 @@ async def concatenate_node(
     ----------
     ctx
         The context.
+    ir
+        The Repartition IR node.
+    ch_out
+        The output channel.
+    ch_in
+        The input channel.
     max_chunks
         The maximum number of chunks to concatenate at once.
         If `None`, concatenate all input chunks.
-    ch_in
-        The input channel.
-    ch_out
-        The output channel.
     """
     # TODO: Use multiple streams
     max_chunks = max(2, max_chunks) if max_chunks else None
@@ -111,9 +115,10 @@ def _(
     nodes[ir] = [
         concatenate_node(
             rec.state["ctx"],
+            ir,
+            channels[ir][0],
+            channels[ir.children[0]].pop(),
             max_chunks=max_chunks,
-            ch_in=channels[ir.children[0]].pop(),
-            ch_out=channels[ir][0],
         )
     ]
     return nodes, channels

@@ -56,9 +56,9 @@ async def shutdown_on_error(
 async def default_node(
     ctx: Context,
     ir: IR,
-    bcast_indices: list[int],
     ch_out: Channel[TableChunk],
     *chs_in: Channel[TableChunk],
+    bcast_indices: list[int],
 ) -> None:
     """
     Pointwise node for rapidsmpf.
@@ -69,12 +69,12 @@ async def default_node(
         The context.
     ir
         The IR node.
-    bcast_indices: list[int],
-        The indices of the broadcasted children.
     ch_out
         The output channel.
     chs_in
         The input channels.
+    bcast_indices
+        The indices of the broadcasted children.
     """
     # TODO: Use multiple streams
     async with shutdown_on_error(ctx, *chs_in, ch_out):
@@ -232,9 +232,9 @@ def _(ir: IR, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]
         default_node(
             rec.state["ctx"],
             ir,
-            bcast_indices,
             channels[ir][0],
             *[channels[c].pop() for c in ir.children],
+            bcast_indices=bcast_indices,
         )
     ]
     return nodes, channels
@@ -243,8 +243,8 @@ def _(ir: IR, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]
 @define_py_node()
 async def empty_node(
     ctx: Context,
-    ch_out: Channel[TableChunk],
     ir: Empty,
+    ch_out: Channel[TableChunk],
 ) -> None:
     """
     Empty node for rapidsmpf - produces a single empty chunk.
@@ -253,10 +253,10 @@ async def empty_node(
     ----------
     ctx
         The context.
-    ch_out
-        The output channel.
     ir
         The Empty node.
+    ch_out
+        The output channel.
     """
     async with shutdown_on_error(ctx, ch_out):
         # Evaluate the IR node to create an empty DataFrame
@@ -274,7 +274,7 @@ def _(ir: Empty, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, An
     """Generate network for Empty node - produces one empty chunk."""
     ctx = rec.state["ctx"]
     ch_out = Channel()
-    nodes: dict[IR, list[Any]] = {ir: [empty_node(ctx, ch_out, ir)]}
+    nodes: dict[IR, list[Any]] = {ir: [empty_node(ctx, ir, ch_out)]}
     channels: dict[IR, list[Any]] = {ir: [ch_out]}
     return nodes, channels
 
@@ -304,6 +304,6 @@ def generate_ir_sub_network_wrapper(
     nodes, channels = generate_ir_sub_network(ir, rec)
     if (count := rec.state["output_ch_count"][ir]) > 1:
         output_chs = [Channel() for _ in range(count)]
-        nodes[ir].append(multicast_node(rec.state["ctx"], *channels[ir], *output_chs))
+        nodes[ir].append(multicast_node(rec.state["ctx"], channels[ir][0], *output_chs))
         channels[ir] = output_chs
     return nodes, channels
