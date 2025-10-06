@@ -1268,7 +1268,7 @@ cdef class Column:
         stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
         with nogil:
-            c_result = make_unique[column](self.view(), stream.view())
+            c_result = make_unique[column](self.view(), stream.view(), mr.get_mr())
         return Column.from_libcudf(move(c_result), stream, mr)
 
     cpdef uint64_t device_buffer_size(self):
