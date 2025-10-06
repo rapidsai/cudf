@@ -219,49 +219,51 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   }
 
   if (page_mask.size() and not page_mask[page_idx]) {
-    auto const max_depth = s->page.num_output_nesting_levels;
-    // Base case: no repetition levels and no nesting levels
-    if (not has_repetition and max_depth == 0) {
-      if (is_base_pass) { pp->nesting[0].size = pp->num_rows; }
-      pp->nesting[0].batch_size = s->num_rows;
+    auto const max_depth = pp->num_output_nesting_levels;
+    // Return early if no repetition and max depth is 1
+    if (not has_repetition and max_depth == 1) {
+      if (!t) {
+        if (is_base_pass) { pp->nesting[0].size = pp->num_rows; }
+        pp->nesting[0].batch_size = s->num_rows;
+      }
       return;
     }
 
-    // Shared variable set to the depth of the first LIST in the nesting hierarchy, if any
-    __shared__ int list_depth;
+    // Use warp 0 to set nesting size information for all depths
     auto const warp = cg::tiled_partition<cudf::detail::warp_size>(block);
     if (warp.meta_group_rank() == 0) {
-      auto warp_list_depth = 0;
-      auto warp_depth      = 0;
-      while (warp_depth < max_depth) {
-        auto const depth   = warp_depth + warp.thread_rank();
-        auto const is_list = depth < max_depth and s->page.nesting[depth].type == type_id::LIST;
+      auto list_depth = 0;
+      auto depth      = 0;
+      while (depth < max_depth) {
+        auto const thread_depth = depth + warp.thread_rank();
+        auto const is_list =
+          thread_depth < max_depth and pp->nesting[thread_depth].type == type_id::LIST;
         uint32_t const list_mask = warp.ballot(is_list);
         if (list_mask != 0) {
           auto const first_list_lane = cuda::std::countr_zero(list_mask);
-          warp_list_depth            = warp.shfl(depth, first_list_lane);
+          list_depth                 = warp.shfl(thread_depth, first_list_lane);
           break;
         }
-        warp_depth += warp.size();
+        depth += warp.size();
       }
-      // Warp thread 0 sets the list depth and writes size information at that depth
+
+      // Write size information at the list depth
       if (warp.thread_rank() == 0) {
-        if (is_base_pass) { pp->nesting[warp_list_depth].size = pp->num_rows; }
-        pp->nesting[warp_list_depth].batch_size = s->num_rows;
-        list_depth                              = warp_list_depth;
+        if (is_base_pass) { pp->nesting[list_depth].size = pp->num_rows; }
+        pp->nesting[list_depth].batch_size = s->num_rows;
       }
-    }
-    block.sync();
-    // Write size information for all levels up to the list depth
-    for (auto depth = t; depth < list_depth; depth += block.size()) {
-      if (is_base_pass) { pp->nesting[depth].size = pp->num_rows; }
-      pp->nesting[depth].batch_size = s->num_rows;
-    }
-    // Zero out size information for all levels after the first list depth
-    if (has_repetition) {
-      for (auto depth = list_depth + 1 + t; depth < max_depth; depth += block.size()) {
-        if (is_base_pass) { pp->nesting[depth].size = 0; }
-        pp->nesting[depth].batch_size = 0;
+      // Write size information for all depths up to the list depth
+      for (auto depth = warp.thread_rank(); depth < list_depth; depth += warp.size()) {
+        if (is_base_pass) { pp->nesting[depth].size = pp->num_rows; }
+        pp->nesting[depth].batch_size = s->num_rows;
+      }
+      // Zero out size information for all depths after the first list depth
+      if (has_repetition) {
+        for (auto depth = list_depth + 1 + warp.thread_rank(); depth < max_depth;
+             depth += warp.size()) {
+          if (is_base_pass) { pp->nesting[depth].size = 0; }
+          pp->nesting[depth].batch_size = 0;
+        }
       }
     }
     return;
