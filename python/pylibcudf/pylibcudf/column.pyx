@@ -834,10 +834,10 @@ cdef class Column:
         Column
             An all-null column of `size` rows and type matching `like`.
         """
-        cdef Scalar slr = Scalar.empty_like(like)
-        cdef unique_ptr[column] c_result
         stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
+        cdef Scalar slr = Scalar.empty_like(like, stream, mr)
+        cdef unique_ptr[column] c_result
         with nogil:
             c_result = make_column_from_scalar(
                 dereference(slr.get()),
