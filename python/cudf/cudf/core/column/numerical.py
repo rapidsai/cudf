@@ -488,7 +488,7 @@ class NumericalColumn(NumericalBaseColumn):
             )
         if len(self) == 0:
             return cast(
-                cudf.core.column.StringColumn,
+                "cudf.core.column.StringColumn",
                 column_empty(0, dtype=CUDF_STRING_DTYPE),
             )
         elif self.dtype.kind == "b":
@@ -742,7 +742,7 @@ class NumericalColumn(NumericalBaseColumn):
             )
         elif len(replacement_col) == 1 and len(to_replace_col) == 0:
             return self.copy()
-        replaced = cast(Self, self.astype(common_type))
+        replaced = cast("Self", self.astype(common_type))
         df = cudf.DataFrame._from_data(
             {
                 "old": to_replace_col.astype(common_type),
@@ -904,7 +904,7 @@ class NumericalColumn(NumericalBaseColumn):
     ) -> ColumnBase:
         if isinstance(dtype, CategoricalDtype):
             codes_dtype = min_unsigned_type(len(dtype.categories))
-            codes = cast(NumericalColumn, self.astype(codes_dtype))
+            codes = cast("NumericalColumn", self.astype(codes_dtype))
             return CategoricalColumn(
                 data=None,
                 size=self.size,

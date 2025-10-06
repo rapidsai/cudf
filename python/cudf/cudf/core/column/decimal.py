@@ -177,7 +177,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
         else:
             return cast(
-                cudf.core.column.StringColumn,
+                "cudf.core.column.StringColumn",
                 cudf.core.column.column_empty(0, dtype=CUDF_STRING_DTYPE),
             )
 
@@ -445,7 +445,7 @@ class Decimal128Column(DecimalBaseColumn):
 
     @classmethod
     def from_arrow(cls, data: pa.Array | pa.ChunkedArray) -> Self:
-        result = cast(Decimal128Dtype, super().from_arrow(data))
+        result = cast("Decimal128Dtype", super().from_arrow(data))
         result.dtype.precision = data.type.precision
         return result
 

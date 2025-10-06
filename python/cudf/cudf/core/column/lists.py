@@ -178,7 +178,7 @@ class ListColumn(ColumnBase):
         """
         Integer offsets to elements specifying each row of the ListColumn
         """
-        return cast(NumericalColumn, self.children[0])
+        return cast("NumericalColumn", self.children[0])
 
     def to_arrow(self) -> pa.Array:
         offsets = self.offsets.to_arrow()

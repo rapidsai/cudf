@@ -149,7 +149,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         # will only have values in range [0, 1]
         if len(self) == 0:
             result = cast(
-                NumericalBaseColumn,
+                "NumericalBaseColumn",
                 column_empty(row_count=len(q), dtype=self.dtype),
             )
         else:

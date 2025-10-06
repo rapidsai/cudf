@@ -240,7 +240,7 @@ def _union_categoricals(
 
     result_col = cudf.core.column.CategoricalColumn._concat(
         [
-            cast(cudf.core.column.CategoricalColumn, obj._column)
+            cast("cudf.core.column.CategoricalColumn", obj._column)
             for obj in to_union
         ]
     )
