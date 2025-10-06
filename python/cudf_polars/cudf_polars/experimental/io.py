@@ -127,9 +127,9 @@ class ScanPartitionPlan:
             column_stats = stats.column_stats.get(ir, {})
             column_sizes: list[int] = []
             for cs in column_stats.values():
-                storage_size = cs.source_info.storage_size
-                if storage_size.value is not None:
-                    column_sizes.append(storage_size.value)
+                partial_file_size = cs.source_info.partial_file_size
+                if partial_file_size.value is not None:
+                    column_sizes.append(partial_file_size.value)
 
             if (file_size := sum(column_sizes)) > 0:
                 if file_size > blocksize:
@@ -811,7 +811,7 @@ class ParquetSourceInfo(DataSourceInfo):
         self._update_unique_stats(column)
         return self._unique_stats.get(column, UniqueStats())
 
-    def storage_size(self, column: str) -> ColumnStat[int]:
+    def partial_file_size(self, column: str) -> ColumnStat[int]:
         """Return the average column size for a single file."""
         return self.metadata.mean_size_per_file.get(column, ColumnStat[int]())
 
