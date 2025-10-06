@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/row_operator/preprocessed_table.cuh>
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/assert.cuh>
@@ -76,9 +77,10 @@ class element_hasher {
    * @param row_index The index of the row to hash
    * @return The hash value of the given element
    */
-  template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
+  template <typename T>
   __device__ hash_value_type operator()(column_device_view const& col,
                                         size_type row_index) const noexcept
+    requires(column_device_view::has_element_accessor<T>())
   {
     if (_check_nulls && col.is_null(row_index)) { return _null_hash; }
     return hash_function<T>{_seed}(col.element<T>(row_index));
@@ -92,9 +94,10 @@ class element_hasher {
    * @param row_index The index of the row to hash
    * @return The hash value of the given element
    */
-  template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
+  template <typename T>
   __device__ hash_value_type operator()(column_device_view const& col,
                                         size_type row_index) const noexcept
+    requires(not column_device_view::has_element_accessor<T>())
   {
     CUDF_UNREACHABLE("Unsupported type in hash.");
   }
@@ -156,16 +159,18 @@ class device_row_hasher {
     {
     }
 
-    template <typename T, CUDF_ENABLE_IF(not cudf::is_nested<T>())>
+    template <typename T>
     __device__ hash_value_type operator()(column_device_view const& col,
                                           size_type row_index) const noexcept
+      requires(not cudf::is_nested<T>())
     {
       return _element_hasher.template operator()<T>(col, row_index);
     }
 
-    template <typename T, CUDF_ENABLE_IF(cudf::is_nested<T>())>
+    template <typename T>
     __device__ hash_value_type operator()(column_device_view const& col,
                                           size_type row_index) const noexcept
+      requires(cudf::is_nested<T>())
     {
       auto hash                   = hash_value_type{0};
       column_device_view curr_col = col.slice(row_index, 1);

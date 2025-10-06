@@ -86,9 +86,10 @@ struct sorting_physical_element_comparator {
    * @param rhs Second element
    * @return Relation between elements
    */
-  template <typename Element, CUDF_ENABLE_IF(not std::is_floating_point_v<Element>)>
+  template <typename Element>
   __device__ constexpr cudf::detail::weak_ordering operator()(Element const lhs,
                                                               Element const rhs) const noexcept
+    requires(not cuda::std::is_floating_point_v<Element>)
   {
     return cudf::detail::compare_elements(lhs, rhs);
   }
@@ -100,9 +101,10 @@ struct sorting_physical_element_comparator {
    * @param rhs Second element
    * @return Relation between elements
    */
-  template <typename Element, CUDF_ENABLE_IF(std::is_floating_point_v<Element>)>
+  template <typename Element>
   __device__ constexpr cudf::detail::weak_ordering operator()(Element const lhs,
                                                               Element const rhs) const noexcept
+    requires(cuda::std::is_floating_point_v<Element>)
   {
     if (isnan(lhs)) {
       return isnan(rhs) ? cudf::detail::weak_ordering::EQUIVALENT
@@ -231,7 +233,7 @@ class device_row_comparator {
    * `null_order::BEFORE` for all columns.
    * @param comparator Physical element relational comparison functor.
    */
-  template <bool nested_disable = not has_nested_columns, CUDF_ENABLE_IF(nested_disable)>
+  template <bool nested_disable = not has_nested_columns>
   __device__ device_row_comparator(
     Nullate check_nulls,
     table_device_view lhs,
@@ -239,6 +241,7 @@ class device_row_comparator {
     cuda::std::optional<device_span<order const>> column_order         = cuda::std::nullopt,
     cuda::std::optional<device_span<null_order const>> null_precedence = cuda::std::nullopt,
     PhysicalElementComparator comparator                               = {}) noexcept
+    requires(nested_disable)
     : _lhs{lhs},
       _rhs{rhs},
       _l_dremel{},
@@ -299,10 +302,10 @@ class device_row_comparator {
      * @return Indicates the relationship between the elements in the `lhs` and `rhs` columns, along
      * with the depth at which a null value was encountered.
      */
-    template <typename Element,
-              CUDF_ENABLE_IF(cudf::is_relationally_comparable<Element, Element>())>
+    template <typename Element>
     __device__ cuda::std::pair<cudf::detail::weak_ordering, int> operator()(
       size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
+      requires(cudf::is_relationally_comparable<Element, Element>())
     {
       if (_check_nulls) {
         bool const lhs_is_null{_lhs.is_null(lhs_element_index)};
@@ -326,11 +329,11 @@ class device_row_comparator {
      *
      * @return Ordering
      */
-    template <typename Element,
-              CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
-                             (not has_nested_columns or not cudf::is_nested<Element>()))>
+    template <typename Element>
     __device__ cuda::std::pair<cudf::detail::weak_ordering, int> operator()(
       size_type const, size_type const) const noexcept
+      requires(not cudf::is_relationally_comparable<Element, Element>() and
+               (not has_nested_columns or not cudf::is_nested<Element>()))
     {
       CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
     }
@@ -343,10 +346,10 @@ class device_row_comparator {
      * @return Indicates the relationship between the elements in the `lhs` and `rhs` columns, along
      * with the depth at which a null value was encountered.
      */
-    template <typename Element,
-              CUDF_ENABLE_IF(has_nested_columns and std::is_same_v<Element, cudf::struct_view>)>
+    template <typename Element>
     __device__ cuda::std::pair<cudf::detail::weak_ordering, int> operator()(
       size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
+      requires(has_nested_columns and cuda::std::is_same_v<Element, cudf::struct_view>)
     {
       column_device_view lcol = _lhs;
       column_device_view rcol = _rhs;
@@ -386,10 +389,10 @@ class device_row_comparator {
      * @return Indicates the relationship between the elements in the `lhs` and `rhs` columns, along
      * with the depth at which a null value was encountered.
      */
-    template <typename Element,
-              CUDF_ENABLE_IF(has_nested_columns and std::is_same_v<Element, cudf::list_view>)>
+    template <typename Element>
     __device__ cuda::std::pair<cudf::detail::weak_ordering, int> operator()(
       size_type lhs_element_index, size_type rhs_element_index)
+      requires(has_nested_columns and cuda::std::is_same_v<Element, cudf::list_view>)
     {
       auto const is_l_row_null = _lhs.is_null(lhs_element_index);
       auto const is_r_row_null = _rhs.is_null(rhs_element_index);
@@ -810,7 +813,8 @@ struct preprocessed_table {
   template <typename PhysicalElementComparator>
   void check_physical_element_comparator()
   {
-    if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
+    if constexpr (!cuda::std::is_same_v<PhysicalElementComparator,
+                                        sorting_physical_element_comparator>) {
       CUDF_EXPECTS(!_has_ranked_children,
                    "The input table has nested type children and they were transformed using a "
                    "different type of physical element comparator.");

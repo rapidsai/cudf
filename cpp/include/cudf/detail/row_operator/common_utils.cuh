@@ -24,8 +24,6 @@
 #include <thrust/iterator/iterator_categories.h>
 #include <thrust/iterator/iterator_facade.h>
 
-#include <type_traits>
-
 namespace cudf::detail {
 
 /**
@@ -45,7 +43,8 @@ namespace cudf::detail {
  */
 template <cudf::type_id t>
 struct dispatch_void_if_nested {
-  using type = std::conditional_t<t == type_id::STRUCT or t == type_id::LIST, void, id_to_type<t>>;
+  using type =
+    cuda::std::conditional_t<t == type_id::STRUCT or t == type_id::LIST, void, id_to_type<t>>;
 };
 
 namespace row {
@@ -66,7 +65,7 @@ enum class rhs_index_type : size_type {};
  *
  * @tparam Index The strong index type
  */
-template <typename Index, typename Underlying = std::underlying_type_t<Index>>
+template <typename Index, typename Underlying = cuda::std::underlying_type_t<Index>>
 struct strong_index_iterator : public thrust::iterator_facade<strong_index_iterator<Index>,
                                                               Index,
                                                               thrust::use_default,
