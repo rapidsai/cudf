@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -26,9 +26,20 @@ def from_arrow(
     obj: pa.Scalar[Any], *, data_type: DataType | None = None
 ) -> Scalar: ...
 @overload
-def from_arrow(obj: pa.Array[Any]) -> Column: ...
+def from_arrow(
+    obj: pa.Array[Any],
+    *,
+    data_type: DataType | None = None,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
 @overload
-def from_arrow(obj: pa.Table) -> Table: ...
+def from_arrow(
+    obj: pa.Table,
+    *,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Table: ...
 @overload
 def to_arrow(
     obj: DataType,
