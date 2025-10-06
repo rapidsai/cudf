@@ -162,7 +162,7 @@ ConfigureTest(
   groupby/sum_of_squares_tests.cpp
   groupby/sum_scan_tests.cpp
   groupby/sum_tests.cpp
-  groupby/tdigest_tests.cu
+  groupby/tdigest_tests.cpp
   groupby/var_tests.cpp
   GPUS 1
   PERCENT 100
@@ -230,7 +230,7 @@ ConfigureTest(
   reductions/reduction_tests.cpp
   reductions/scan_tests.cpp
   reductions/segmented_reduction_tests.cpp
-  reductions/tdigest_tests.cu
+  reductions/tdigest_tests.cpp
   GPUS 1
   PERCENT 70
 )

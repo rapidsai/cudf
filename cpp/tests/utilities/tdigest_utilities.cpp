@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,11 @@
 
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/tdigest_utilities.cuh>
+#include <cudf_test/tdigest_utilities.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/tdigest/tdigest_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -27,8 +28,6 @@
 
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/fill.h>
-#include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/tuple.h>
 
@@ -43,27 +42,19 @@ void tdigest_sample_compare(cudf::tdigest::tdigest_column_view const& tdv,
   column_view result_mean   = tdv.means();
   column_view result_weight = tdv.weights();
 
-  auto expected_mean = cudf::make_fixed_width_column(
-    data_type{type_id::FLOAT64}, h_expected.size(), mask_state::UNALLOCATED);
-  auto expected_weight = cudf::make_fixed_width_column(
-    data_type{type_id::FLOAT64}, h_expected.size(), mask_state::UNALLOCATED);
-  auto sampled_result_mean = cudf::make_fixed_width_column(
-    data_type{type_id::FLOAT64}, h_expected.size(), mask_state::UNALLOCATED);
-  auto sampled_result_weight = cudf::make_fixed_width_column(
-    data_type{type_id::FLOAT64}, h_expected.size(), mask_state::UNALLOCATED);
-
-  auto h_expected_src    = std::vector<size_type>(h_expected.size());
-  auto h_expected_mean   = std::vector<double>(h_expected.size());
+  auto h_expected_src = std::vector<size_type>(h_expected.size());
+  std::transform(h_expected.begin(), h_expected.end(), h_expected_src.begin(), [](auto const& ex) {
+    return thrust::get<0>(ex);
+  });
+  auto h_expected_mean = std::vector<double>(h_expected.size());
+  std::transform(h_expected.begin(), h_expected.end(), h_expected_mean.begin(), [](auto const& ex) {
+    return thrust::get<1>(ex);
+  });
   auto h_expected_weight = std::vector<double>(h_expected.size());
-
-  {
-    auto iter = thrust::make_counting_iterator(0);
-    std::for_each_n(iter, h_expected.size(), [&](size_type const index) {
-      h_expected_src[index]    = thrust::get<0>(h_expected[index]);
-      h_expected_mean[index]   = thrust::get<1>(h_expected[index]);
-      h_expected_weight[index] = thrust::get<2>(h_expected[index]);
+  std::transform(
+    h_expected.begin(), h_expected.end(), h_expected_weight.begin(), [](auto const& ex) {
+      return thrust::get<2>(ex);
     });
-  }
 
   auto d_expected_src = cudf::detail::make_device_uvector_async(
     h_expected_src, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
@@ -72,30 +63,16 @@ void tdigest_sample_compare(cudf::tdigest::tdigest_column_view const& tdv,
   auto d_expected_weight = cudf::detail::make_device_uvector_async(
     h_expected_weight, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
-  auto iter = thrust::make_counting_iterator(0);
-  thrust::for_each(
-    rmm::exec_policy(cudf::get_default_stream()),
-    iter,
-    iter + h_expected.size(),
-    [expected_src_in     = d_expected_src.data(),
-     expected_mean_in    = d_expected_mean.data(),
-     expected_weight_in  = d_expected_weight.data(),
-     expected_mean       = expected_mean->mutable_view().begin<double>(),
-     expected_weight     = expected_weight->mutable_view().begin<double>(),
-     result_mean         = result_mean.begin<double>(),
-     result_weight       = result_weight.begin<double>(),
-     sampled_result_mean = sampled_result_mean->mutable_view().begin<double>(),
-     sampled_result_weight =
-       sampled_result_weight->mutable_view().begin<double>()] __device__(size_type index) {
-      expected_mean[index]         = expected_mean_in[index];
-      expected_weight[index]       = expected_weight_in[index];
-      auto const src_index         = expected_src_in[index];
-      sampled_result_mean[index]   = result_mean[src_index];
-      sampled_result_weight[index] = result_weight[src_index];
-    });
+  auto map = cudf::device_span<cudf::size_type const>(d_expected_src);
+  auto sampled_result_mean =
+    std::move(cudf::gather(cudf::table_view({result_mean}), map)->release().front());
+  auto sampled_result_weight =
+    std::move(cudf::gather(cudf::table_view({result_weight}), map)->release().front());
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected_mean, *sampled_result_mean);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_weight, *sampled_result_weight);
+  auto expected_mean   = cudf::device_span<double const>(d_expected_mean);
+  auto expected_weight = cudf::device_span<double const>(d_expected_weight);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_mean, *sampled_result_mean);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_weight, *sampled_result_weight);
 }
 
 std::unique_ptr<column> make_expected_tdigest_column(std::vector<expected_tdigest> const& groups)
@@ -121,23 +98,13 @@ std::unique_ptr<column> make_expected_tdigest_column(std::vector<expected_tdiges
 
     auto list = cudf::make_lists_column(1, std::move(offsets), std::move(tdigests), 0, {});
 
-    auto min_col =
-      cudf::make_fixed_width_column(data_type{type_id::FLOAT64}, 1, mask_state::UNALLOCATED);
-    thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
-                 min_col->mutable_view().begin<double>(),
-                 min_col->mutable_view().end<double>(),
-                 tdigest.min);
-    auto max_col =
-      cudf::make_fixed_width_column(data_type{type_id::FLOAT64}, 1, mask_state::UNALLOCATED);
-    thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
-                 max_col->mutable_view().begin<double>(),
-                 max_col->mutable_view().end<double>(),
-                 tdigest.max);
+    auto min_col = cudf::test::fixed_width_column_wrapper<double>({tdigest.min});
+    auto max_col = cudf::test::fixed_width_column_wrapper<double>({tdigest.max});
 
     std::vector<std::unique_ptr<column>> children;
     children.push_back(std::move(list));
-    children.push_back(std::move(min_col));
-    children.push_back(std::move(max_col));
+    children.push_back(min_col.release());
+    children.push_back(max_col.release());
     return make_structs_column(1, std::move(children), 0, {});
   };
 
