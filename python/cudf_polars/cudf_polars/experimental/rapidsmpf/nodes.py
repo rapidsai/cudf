@@ -97,14 +97,14 @@ async def default_node(
         while True:
             chunks = {}
             has_data = False
-            for i, ch_in in enumerate(chs_in):
+            for i, (ch_in, child) in enumerate(zip(chs_in, ir.children, strict=True)):
                 if i not in bcast_indices:
                     msg = await ch_in.recv(ctx)
                     if msg is not None:
                         chunk = DataFrame.from_table(
                             TableChunk.from_message(msg).table_view(),
-                            list(ir.children[i].schema.keys()),
-                            list(ir.children[i].schema.values()),
+                            list(child.schema.keys()),
+                            list(child.schema.values()),
                         )
                         chunks[i] = chunk
                         has_data = True
@@ -117,15 +117,22 @@ async def default_node(
                     raise RuntimeError("Not producing any output chunks.")
                 break
 
-            # Evaluate the IR node
-            child_data = [chunks.get(i, bcast_data.get(i)) for i in range(len(chs_in))]
-            df: DataFrame = ir.do_evaluate(*ir._non_child_args, *child_data)
-
             # Send output chunk
             await ch_out.send(
                 ctx,
                 Message(
-                    TableChunk.from_pylibcudf_table(seq_num, df.table, DEFAULT_STREAM)
+                    TableChunk.from_pylibcudf_table(
+                        seq_num,
+                        # Evaluate the IR node
+                        ir.do_evaluate(
+                            *ir._non_child_args,
+                            *[
+                                chunks.pop(i, bcast_data.get(i))
+                                for i in range(len(chs_in))
+                            ],
+                        ).table,
+                        DEFAULT_STREAM,
+                    )
                 ),
             )
             seq_num += 1
