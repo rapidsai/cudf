@@ -118,8 +118,23 @@ class DataSourceInfo:
         """Return unique-value statistics for a column."""
         raise NotImplementedError("Sub-class must implement unique_stats.")
 
-    def partial_file_size(self, column: str) -> ColumnStat[int]:
-        """Return the average column size for a single file."""
+    def partial_file_size(
+        self, column: str, *, element_size: int = 1
+    ) -> ColumnStat[int]:
+        """
+        Return the average column size for a single file.
+
+        Parameters
+        ----------
+        column
+            The column name.
+        element_size
+            The minimum storage size of each element in the column.
+
+        Returns
+        -------
+        The average column size for a single file.
+        """
         return ColumnStat[int]()
 
     @property
@@ -213,14 +228,26 @@ class ColumnSourceInfo:
             # wasn't marked as "needing" unique-stats.
             return UniqueStats()
 
-    @property
-    def partial_file_size(self) -> ColumnStat[int]:
-        """Return the average column size for a single file."""
+    def partial_file_size(self, *, element_size: int = 1) -> ColumnStat[int]:
+        """
+        Return the average column size for a single file.
+
+        Parameters
+        ----------
+        element_size
+            The minimum storage size of each element in the column.
+
+        Returns
+        -------
+        The average column size for a single file.
+        """
         # We don't need to handle concatenated statistics for ``partial_file_size``.
         # Just return the storage size of the first table source.
         if self.table_source_pairs:
             table_source, column_name = self.table_source_pairs[0]
-            return table_source.partial_file_size(column_name)
+            return table_source.partial_file_size(
+                column_name, element_size=element_size
+            )
         else:  # pragma: no cover; We never call this for empty table sources.
             return ColumnStat[int]()
 
