@@ -277,10 +277,15 @@ class RunConfig:
             scale_factor = _infer_scale_factor(name, path, args.suffix)
         if path is None:
             path = f"{args.root}/scale-{scale_factor}"
+
+        scale_factor = float(scale_factor)
         try:
-            scale_factor = int(scale_factor)
+            scale_factor_int = int(scale_factor)
         except ValueError:
-            scale_factor = float(scale_factor)
+            pass
+        else:
+            if scale_factor_int == scale_factor:
+                scale_factor = scale_factor_int
 
         if "pdsh" in name and args.scale is not None:
             # Validate the user-supplied scale factor
