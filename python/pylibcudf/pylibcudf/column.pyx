@@ -135,7 +135,7 @@ cdef class OwnerMaskWithCAI:
         obj.owner = owner
 
         obj.cai = {
-            "shape": (bitmask_allocation_size_bytes(cv.size()),),
+            "shape": (bitmask_allocation_size_bytes(cv.size(), 64),),
             "strides": None,
             # For the purposes in this function, just treat all of the types as byte
             # streams of the appropriate size. This matches what we currently get from
