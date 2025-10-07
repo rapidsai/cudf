@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "cuda/std/__expected/expected.h"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
@@ -264,16 +266,16 @@ TYPED_TEST(MinMaxReductionTest, ArgMinMaxReductions)
 
   auto const argmin = [](std::vector<T> const& input) -> int {
     if (input.empty()) { return -1; }
-    auto it = std::min_element(input.begin(), input.end());
+    auto const it = std::min_element(input.begin(), input.end());
     return static_cast<int>(std::distance(input.begin(), it));
   };
   auto const argmax = [](std::vector<T> const& input) -> int {
     if (input.empty()) { return -1; }
-    auto it = std::max_element(input.begin(), input.end());
+    auto const it = std::max_element(input.begin(), input.end());
     return static_cast<int>(std::distance(input.begin(), it));
   };
 
-  // test without nulls
+  // Test without nulls.
   {
     cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
     auto const expected_argmin = argmin(v);
@@ -292,7 +294,7 @@ TYPED_TEST(MinMaxReductionTest, ArgMinMaxReductions)
               expected_argmax);
   }
 
-  // test with some nulls
+  // Test with some nulls.
   {
     cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
     auto r_min                 = replace_nulls(v, host_bools, std::numeric_limits<T>::max());
@@ -313,7 +315,7 @@ TYPED_TEST(MinMaxReductionTest, ArgMinMaxReductions)
               expected_argmax);
   }
 
-  // test with all null
+  // Test with all nulls.
   {
     cudf::test::fixed_width_column_wrapper<T> col_all_nulls = construct_null_column(v, all_null);
     EXPECT_FALSE(
@@ -1278,7 +1280,6 @@ TEST_P(ReductionParamTest, std_var)
 struct StringReductionTest : public cudf::test::BaseFixture,
                              public testing::WithParamInterface<std::vector<std::string>> {
   // Min/Max
-
   void reduction_test(cudf::column_view const& underlying_column,
                       std::string expected_value,
                       bool succeeded_condition,
@@ -1332,6 +1333,19 @@ struct StringReductionTest : public cudf::test::BaseFixture,
     } else {
       EXPECT_ANY_THROW(statement());
     }
+  }
+
+  // ARGMIN/ARGMAX
+  template <typename OutputType>
+  void reduction_test(cudf::column_view const& underlying_column,
+                      OutputType expected,
+                      reduce_aggregation const& agg,
+                      cudf::data_type output_dtype = cudf::data_type{cudf::type_id::INT32})
+  {
+    std::unique_ptr<cudf::scalar> reduction = cudf::reduce(underlying_column, agg, output_dtype);
+    using ScalarType                        = cudf::scalar_type_t<OutputType>;
+    auto const result                       = static_cast<ScalarType*>(reduction.get());
+    EXPECT_EQ(result->value(), expected);
   }
 };
 
@@ -1433,6 +1447,74 @@ TEST_P(StringReductionTest, MinMax)
             expected_max_null_result);
 }
 
+// Copied from the MinMax test above.
+TEST_P(StringReductionTest, ArgMinMax)
+{
+  // Data and valid arrays.
+  std::vector<std::string> host_strings(GetParam());
+  std::vector<bool> host_bools({true, false, true, true, true, true, false, false, true});
+  std::transform(thrust::counting_iterator<std::size_t>(0),
+                 thrust::counting_iterator<std::size_t>(host_strings.size()),
+                 host_strings.begin(),
+                 [host_strings, host_bools](auto idx) {
+                   return host_bools[idx] ? host_strings[idx] : std::string{};
+                 });
+
+  auto const argmin = [](std::vector<std::string> const& input) -> int {
+    if (input.empty()) { return -1; }
+    auto const it = std::min_element(input.begin(), input.end());
+    return static_cast<int>(std::distance(input.begin(), it));
+  };
+  auto const argmax = [](std::vector<std::string> const& input) -> int {
+    if (input.empty()) { return -1; }
+    auto const it = std::max_element(input.begin(), input.end());
+    return static_cast<int>(std::distance(input.begin(), it));
+  };
+
+  // All valid string column.
+  {
+    cudf::test::strings_column_wrapper col(host_strings.begin(), host_strings.end());
+    auto const expected_argmin = argmin(host_strings);
+    auto const expected_argmax = argmax(host_strings);
+    this->reduction_test<int>(
+      col, expected_argmin, *cudf::make_argmin_aggregation<reduce_aggregation>());
+    this->reduction_test<int>(
+      col, expected_argmax, *cudf::make_argmax_aggregation<reduce_aggregation>());
+  }
+
+  // String column with nulls.
+  {
+    cudf::test::strings_column_wrapper col_nulls(
+      host_strings.begin(), host_strings.end(), host_bools.begin());
+
+    std::string const min_string_sentinel{"\x0\x0\x0\x0"};
+    std::string const max_string_sentinel{"\xF7\xBF\xBF\xBF"};
+    std::vector<std::string> argmin_strings;
+    std::vector<std::string> argmax_strings;
+    std::transform(host_strings.begin(),
+                   host_strings.end(),
+                   std::back_inserter(argmin_strings),
+                   [&, i = 0](auto const& s) mutable {
+                     auto const valid = host_bools[i++];
+                     return valid ? s : max_string_sentinel;
+                   });
+    std::transform(host_strings.begin(),
+                   host_strings.end(),
+                   std::back_inserter(argmax_strings),
+                   [&, i = 0](auto const& s) mutable {
+                     auto const valid = host_bools[i++];
+                     return valid ? s : min_string_sentinel;
+                   });
+
+    auto const expected_argmin = argmin(argmin_strings);
+    auto const expected_argmax = argmax(argmax_strings);
+    this->reduction_test<int>(
+      col_nulls, expected_argmin, *cudf::make_argmin_aggregation<reduce_aggregation>());
+    this->reduction_test<int>(
+      col_nulls, expected_argmax, *cudf::make_argmax_aggregation<reduce_aggregation>());
+  }
+}
+
 TEST_P(StringReductionTest, DictionaryMinMax)
 {
   // data and valid arrays
@@ -1510,6 +1592,16 @@ TEST_F(StringReductionTest, AllNull)
   auto mm_result = cudf::minmax(col_nulls);
   EXPECT_FALSE(mm_result.first->is_valid());
   EXPECT_FALSE(mm_result.second->is_valid());
+  // ARGMIN
+  result = cudf::reduce(col_nulls,
+                        *cudf::make_argmin_aggregation<reduce_aggregation>(),
+                        cudf::data_type{cudf::type_id::INT32});
+  EXPECT_FALSE(result->is_valid());
+  // ARGMAX
+  result = cudf::reduce(col_nulls,
+                        *cudf::make_argmax_aggregation<reduce_aggregation>(),
+                        cudf::data_type{cudf::type_id::INT32});
+  EXPECT_FALSE(result->is_valid());
 }
 
 TYPED_TEST(ReductionTest, Median)
@@ -1950,7 +2042,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionSumLarge)
   }
 }
 
-TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMin)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMinAndArgMin)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1958,26 +2050,37 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMin)
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
   for (auto const i : {0, -1, -2, -3}) {
-    auto const scale    = scale_type{i};
-    auto const ONE      = decimalXX{scaled_integer<RepType>{1, scale}};
-    auto const column   = fp_wrapper{{1, 2, 3, 4}, scale};
-    auto const out_type = static_cast<cudf::column_view>(column).type();
+    auto const scale        = scale_type{i};
+    auto const ONE          = decimalXX{scaled_integer<RepType>{1, scale}};
+    auto const column       = fp_wrapper{{2, 3, 1, 4}, scale};
+    auto const min_out_type = static_cast<cudf::column_view>(column).type();
 
-    auto const result =
-      cudf::reduce(column, *cudf::make_min_aggregation<reduce_aggregation>(), out_type);
-    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
-
-    EXPECT_EQ(result_scalar->fixed_point_value(), ONE);
+    {
+      auto const result =
+        cudf::reduce(column, *cudf::make_min_aggregation<reduce_aggregation>(), min_out_type);
+      auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
+      EXPECT_EQ(result_scalar->fixed_point_value(), ONE);
+    }
 
     // Test with initial value
-    auto const init_expected = decimalXX{scaled_integer<RepType>{0, scale}};
-    auto const init_scalar   = cudf::make_fixed_point_scalar<decimalXX>(0, scale);
+    {
+      auto const init_expected = decimalXX{scaled_integer<RepType>{0, scale}};
+      auto const init_scalar   = cudf::make_fixed_point_scalar<decimalXX>(0, scale);
+      auto const init_result   = cudf::reduce(
+        column, *cudf::make_min_aggregation<reduce_aggregation>(), min_out_type, *init_scalar);
+      auto const init_result_scalar =
+        static_cast<cudf::scalar_type_t<decimalXX>*>(init_result.get());
+      EXPECT_EQ(init_result_scalar->fixed_point_value(), init_expected);
+    }
 
-    auto const init_result = cudf::reduce(
-      column, *cudf::make_min_aggregation<reduce_aggregation>(), out_type, *init_scalar);
-    auto const init_result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(init_result.get());
-
-    EXPECT_EQ(init_result_scalar->fixed_point_value(), init_expected);
+    // Test ARGMIN
+    {
+      auto const argmin_out_type = cudf::data_type{cudf::type_id::INT32};
+      auto const result =
+        cudf::reduce(column, *cudf::make_argmin_aggregation<reduce_aggregation>(), argmin_out_type);
+      auto const result_scalar = static_cast<cudf::scalar_type_t<int>*>(result.get());
+      EXPECT_EQ(result_scalar->value(), 2);
+    }
   }
 }
 
@@ -2013,7 +2116,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMinLarge)
   }
 }
 
-TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMax)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMaxAndArgMax)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -2021,26 +2124,37 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMax)
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
   for (auto const i : {0, -1, -2, -3}) {
-    auto const scale    = scale_type{i};
-    auto const FOUR     = decimalXX{scaled_integer<RepType>{4, scale}};
-    auto const column   = fp_wrapper{{1, 2, 3, 4}, scale};
-    auto const out_type = static_cast<cudf::column_view>(column).type();
+    auto const scale        = scale_type{i};
+    auto const FOUR         = decimalXX{scaled_integer<RepType>{4, scale}};
+    auto const column       = fp_wrapper{{2, 3, 1, 4}, scale};
+    auto const max_out_type = static_cast<cudf::column_view>(column).type();
 
-    auto const result =
-      cudf::reduce(column, *cudf::make_max_aggregation<reduce_aggregation>(), out_type);
-    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
-
-    EXPECT_EQ(result_scalar->fixed_point_value(), FOUR);
+    {
+      auto const result =
+        cudf::reduce(column, *cudf::make_max_aggregation<reduce_aggregation>(), max_out_type);
+      auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
+      EXPECT_EQ(result_scalar->fixed_point_value(), FOUR);
+    }
 
     // Test with initial value
-    auto const init_expected = decimalXX{scaled_integer<RepType>{5, scale}};
-    auto const init_scalar   = cudf::make_fixed_point_scalar<decimalXX>(5, scale);
+    {
+      auto const init_expected = decimalXX{scaled_integer<RepType>{5, scale}};
+      auto const init_scalar   = cudf::make_fixed_point_scalar<decimalXX>(5, scale);
+      auto const init_result   = cudf::reduce(
+        column, *cudf::make_max_aggregation<reduce_aggregation>(), max_out_type, *init_scalar);
+      auto const init_result_scalar =
+        static_cast<cudf::scalar_type_t<decimalXX>*>(init_result.get());
+      EXPECT_EQ(init_result_scalar->fixed_point_value(), init_expected);
+    }
 
-    auto const init_result = cudf::reduce(
-      column, *cudf::make_max_aggregation<reduce_aggregation>(), out_type, *init_scalar);
-    auto const init_result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(init_result.get());
-
-    EXPECT_EQ(init_result_scalar->fixed_point_value(), init_expected);
+    // Test ARGMAX
+    {
+      auto const argmax_out_type = cudf::data_type{cudf::type_id::INT32};
+      auto const result =
+        cudf::reduce(column, *cudf::make_argmax_aggregation<reduce_aggregation>(), argmax_out_type);
+      auto const result_scalar = static_cast<cudf::scalar_type_t<int>*>(result.get());
+      EXPECT_EQ(result_scalar->value(), 3);
+    }
   }
 }
 
@@ -2892,7 +3006,7 @@ TEST_F(ListReductionTest, NonValidListReductionNthElement)
     *cudf::make_nth_element_aggregation<reduce_aggregation>(0, cudf::null_policy::INCLUDE));
 }
 
-TEST_F(ListReductionTest, ReductionMinMaxNoNull)
+TEST_F(ListReductionTest, ReductionMinMaxAndArgMinMaxNoNull)
 {
   using INTS_CW          = cudf::test::fixed_width_column_wrapper<int>;
   using LISTS_CW         = cudf::test::lists_column_wrapper<int>;
@@ -2905,7 +3019,18 @@ TEST_F(ListReductionTest, ReductionMinMaxNoNull)
       input, INTS_CW{0, 8}, true, true, *cudf::make_min_aggregation<reduce_aggregation>());
     this->reduction_test(
       input, INTS_CW{9, 10}, true, true, *cudf::make_max_aggregation<reduce_aggregation>());
+
+    using ScalarType  = cudf::scalar_type_t<int>;
+    auto const argmin = cudf::reduce(input,
+                                     *cudf::make_argmin_aggregation<reduce_aggregation>(),
+                                     cudf::data_type{cudf::type_id::INT32});
+    auto const argmax = cudf::reduce(input,
+                                     *cudf::make_argmax_aggregation<reduce_aggregation>(),
+                                     cudf::data_type{cudf::type_id::INT32});
+    EXPECT_EQ(static_cast<ScalarType*>(argmin.get())->value(), 3);
+    EXPECT_EQ(static_cast<ScalarType*>(argmax.get())->value(), 4);
   }
+
   {
     auto const input = LISTS_STRINGS_CW{
       {"34", "43"}, {"12", "21"}, {"567", "6", "765"}, {"08", "8"}, {"109", "10"}, {"10", "00"}};
@@ -2916,10 +3041,20 @@ TEST_F(ListReductionTest, ReductionMinMaxNoNull)
                          true,
                          true,
                          *cudf::make_max_aggregation<reduce_aggregation>());
+
+    using ScalarType  = cudf::scalar_type_t<int>;
+    auto const argmin = cudf::reduce(input,
+                                     *cudf::make_argmin_aggregation<reduce_aggregation>(),
+                                     cudf::data_type{cudf::type_id::INT32});
+    auto const argmax = cudf::reduce(input,
+                                     *cudf::make_argmax_aggregation<reduce_aggregation>(),
+                                     cudf::data_type{cudf::type_id::INT32});
+    EXPECT_EQ(static_cast<ScalarType*>(argmin.get())->value(), 3);
+    EXPECT_EQ(static_cast<ScalarType*>(argmax.get())->value(), 2);
   }
 }
 
-TEST_F(ListReductionTest, ReductionMinMaxSlicedInput)
+TEST_F(ListReductionTest, ReductionMinMaxAndArgMinMaxSlicedInput)
 {
   using INTS_CW          = cudf::test::fixed_width_column_wrapper<int>;
   using LISTS_CW         = cudf::test::lists_column_wrapper<int>;
@@ -2989,6 +3124,16 @@ TEST_F(ListReductionTest, ReductionMinMaxWithNulls)
                        true,
                        true,
                        *cudf::make_max_aggregation<reduce_aggregation>());
+
+  using ScalarType  = cudf::scalar_type_t<int>;
+  auto const argmin = cudf::reduce(input,
+                                   *cudf::make_argmin_aggregation<reduce_aggregation>(),
+                                   cudf::data_type{cudf::type_id::INT32});
+  auto const argmax = cudf::reduce(input,
+                                   *cudf::make_argmax_aggregation<reduce_aggregation>(),
+                                   cudf::data_type{cudf::type_id::INT32});
+  EXPECT_EQ(static_cast<ScalarType*>(argmin.get())->value(), 2);
+  EXPECT_EQ(static_cast<ScalarType*>(argmax.get())->value(), 6);
 }
 
 struct StructReductionTest : public cudf::test::BaseFixture {
@@ -3153,7 +3298,7 @@ TEST_F(StructReductionTest, NonValidStructReductionNthElement)
     *cudf::make_nth_element_aggregation<reduce_aggregation>(0, cudf::null_policy::INCLUDE));
 }
 
-TEST_F(StructReductionTest, StructReductionMinMaxNoNull)
+TEST_F(StructReductionTest, StructReductionMinMaxAndArgMinMaxNoNull)
 {
   using INTS_CW    = cudf::test::fixed_width_column_wrapper<int>;
   using STRINGS_CW = cudf::test::strings_column_wrapper;
@@ -3184,9 +3329,21 @@ TEST_F(StructReductionTest, StructReductionMinMaxNoNull)
                          true,
                          *cudf::make_max_aggregation<reduce_aggregation>());
   }
+
+  {
+    using ScalarType  = cudf::scalar_type_t<int>;
+    auto const argmin = cudf::reduce(input,
+                                     *cudf::make_argmin_aggregation<reduce_aggregation>(),
+                                     cudf::data_type{cudf::type_id::INT32});
+    auto const argmax = cudf::reduce(input,
+                                     *cudf::make_argmax_aggregation<reduce_aggregation>(),
+                                     cudf::data_type{cudf::type_id::INT32});
+    EXPECT_EQ(static_cast<ScalarType*>(argmin.get())->value(), 7);
+    EXPECT_EQ(static_cast<ScalarType*>(argmax.get())->value(), 2);
+  }
 }
 
-TEST_F(StructReductionTest, StructReductionMinMaxSlicedInput)
+TEST_F(StructReductionTest, StructReductionMinMaxAndArgMinMaxSlicedInput)
 {
   using INTS_CW    = cudf::test::fixed_width_column_wrapper<int>;
   using STRINGS_CW = cudf::test::strings_column_wrapper;
@@ -3232,9 +3389,21 @@ TEST_F(StructReductionTest, StructReductionMinMaxSlicedInput)
                          true,
                          *cudf::make_max_aggregation<reduce_aggregation>());
   }
+
+  {
+    using ScalarType  = cudf::scalar_type_t<int>;
+    auto const argmin = cudf::reduce(input,
+                                     *cudf::make_argmin_aggregation<reduce_aggregation>(),
+                                     cudf::data_type{cudf::type_id::INT32});
+    auto const argmax = cudf::reduce(input,
+                                     *cudf::make_argmax_aggregation<reduce_aggregation>(),
+                                     cudf::data_type{cudf::type_id::INT32});
+    EXPECT_EQ(static_cast<ScalarType*>(argmin.get())->value(), 7);
+    EXPECT_EQ(static_cast<ScalarType*>(argmax.get())->value(), 2);
+  }
 }
 
-TEST_F(StructReductionTest, StructReductionMinMaxWithNulls)
+TEST_F(StructReductionTest, StructReductionMinMaxAndArgMinMaxWithNulls)
 {
   using INTS_CW    = cudf::test::fixed_width_column_wrapper<int>;
   using STRINGS_CW = cudf::test::strings_column_wrapper;
@@ -3287,6 +3456,18 @@ TEST_F(StructReductionTest, StructReductionMinMaxWithNulls)
                          true,
                          true,
                          *cudf::make_max_aggregation<reduce_aggregation>());
+  }
+
+  {
+    using ScalarType  = cudf::scalar_type_t<int>;
+    auto const argmin = cudf::reduce(input,
+                                     *cudf::make_argmin_aggregation<reduce_aggregation>(),
+                                     cudf::data_type{cudf::type_id::INT32});
+    auto const argmax = cudf::reduce(input,
+                                     *cudf::make_argmax_aggregation<reduce_aggregation>(),
+                                     cudf::data_type{cudf::type_id::INT32});
+    EXPECT_EQ(static_cast<ScalarType*>(argmin.get())->value(), 2);
+    EXPECT_EQ(static_cast<ScalarType*>(argmax.get())->value(), 4);
   }
 }
 
