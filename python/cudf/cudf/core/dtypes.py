@@ -194,6 +194,8 @@ class CategoricalDtype(_BaseDtype):
     """
 
     def __init__(self, categories=None, ordered: bool | None = False) -> None:
+        if not (ordered is None or isinstance(ordered, bool)):
+            raise ValueError("ordered must be a boolean or None")
         self._categories = self._init_categories(categories)
         self._ordered = ordered
 
@@ -278,6 +280,10 @@ class CategoricalDtype(_BaseDtype):
     def _init_categories(self, categories: Any) -> ColumnBase | None:
         if categories is None:
             return categories
+        from cudf.api.types import is_scalar
+
+        if is_scalar(categories):
+            raise ValueError("categories must be a list-like object")
         if len(categories) == 0 and not isinstance(
             getattr(categories, "dtype", None),
             (cudf.IntervalDtype, pd.IntervalDtype),
@@ -718,7 +724,7 @@ class StructDtype(_BaseDtype):
         """
         new_result = {}
         for (new_field, field_dtype), result_value in zip(
-            self.fields.items(), result.values()
+            self.fields.items(), result.values(), strict=True
         ):
             if isinstance(field_dtype, StructDtype) and isinstance(
                 result_value, dict

@@ -574,7 +574,11 @@ class GroupBy(Serializable, Reducible, Scannable):
             )
 
         return dict(
-            zip(group_names.to_pandas(), grouped_index._split(offsets[1:-1]))
+            zip(
+                group_names.to_pandas(),
+                grouped_index._split(offsets[1:-1]),
+                strict=True,
+            )
         )
 
     @cached_property
@@ -608,7 +612,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         else:
             index = Index._from_column(group_keys[0])
         return dict(
-            zip(index.to_pandas(), cp.split(indices.values, offsets[1:-1]))
+            zip(
+                index.to_pandas(),
+                cp.split(indices.values, offsets[1:-1]),
+                strict=True,
+            )
         )
 
     @_performance_tracking
@@ -807,7 +815,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         requests = []
         result_columns: list[list[ColumnBase]] = []
 
-        for i, (col, aggs) in enumerate(zip(values, aggregations)):
+        for i, (col, aggs) in enumerate(
+            zip(values, aggregations, strict=True)
+        ):
             valid_aggregations = get_valid_aggregation(col.dtype)
             included_aggregations_i = []
             col_aggregations = []
@@ -845,7 +855,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             else self._groupby.plc_groupby.aggregate(requests)
         )
 
-        for i, result, val in zip(column_included, results, values):
+        for i, result in zip(column_included, results, strict=True):
             result_columns[i] = [
                 ColumnBase.from_pylibcudf(col) for col in result.columns()
             ]
@@ -866,7 +876,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 pa_scalar_to_plc_scalar(
                     pa.scalar(val, type=cudf_dtype_to_pa_type(col.dtype))
                 )
-                for val, col in zip(fill_values, values)
+                for val, col in zip(fill_values, values, strict=True)
             ],
         )
         return (ColumnBase.from_pylibcudf(col) for col in shifts.columns())
@@ -1012,8 +1022,9 @@ class GroupBy(Serializable, Reducible, Scannable):
             included_aggregations,
             result_columns,
             orig_dtypes,
+            strict=True,
         ):
-            for agg_tuple, col in zip(aggs, cols):
+            for agg_tuple, col in zip(aggs, cols, strict=True):
                 agg, agg_kind = agg_tuple
                 agg_name = agg.__name__ if callable(agg) else agg
                 if multilevel:
@@ -1078,11 +1089,11 @@ class GroupBy(Serializable, Reducible, Scannable):
                 right_cols = result_index._columns
                 join_keys = [
                     _match_join_keys(lcol, rcol, "inner")
-                    for lcol, rcol in zip(left_cols, right_cols)
+                    for lcol, rcol in zip(left_cols, right_cols, strict=True)
                 ]
                 # TODO: In future, see if we can centralize
                 # logic else where that has similar patterns.
-                join_keys = map(list, zip(*join_keys))
+                join_keys = map(list, zip(*join_keys, strict=True))
                 # By construction, left and right keys are related by
                 # a permutation, so we can use an inner join.
                 with acquire_spill_lock():
@@ -1563,7 +1574,9 @@ class GroupBy(Serializable, Reducible, Scannable):
                 # Empirically shuffling with cupy is faster at this scale
                 rs = cp.random.get_random_state()
                 rs.seed(seed=random_state)
-                for off, size in zip(group_offsets, size_per_group):
+                for off, size in zip(
+                    group_offsets[:-1], size_per_group, strict=True
+                ):
                     rs.shuffle(indices[off : off + size])
             else:
                 keys = cp.random.default_rng(seed=random_state).random(
@@ -1580,7 +1593,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                         [plc.types.NullOrder.AFTER],
                     )
                     indices = ColumnBase.from_pylibcudf(plc_table.columns()[0])
-                indices = cp.asarray(indices.data_array_view(mode="read"))
+                indices = indices.values
             # Which indices are we going to want?
             want = np.arange(samples_per_group.sum(), dtype=SIZE_TYPE_DTYPE)
             scan = np.empty_like(samples_per_group)
@@ -1689,6 +1702,10 @@ class GroupBy(Serializable, Reducible, Scannable):
                 column_names, aggs_per_column = aggs.keys(), aggs.values()
                 columns = tuple(self.obj._data[col] for col in column_names)
             else:
+                if isinstance(aggs, list) and len(aggs) != len(set(aggs)):
+                    raise pd.errors.SpecificationError(
+                        "Function names must be unique if there is no new column names assigned"
+                    )
                 values = self.grouping.values
                 column_names = values._column_names
                 columns = values._columns
@@ -1707,7 +1724,8 @@ class GroupBy(Serializable, Reducible, Scannable):
                     if isinstance(x, tuple)
                     else _raise_invalid_type(x)
                     for x in kwargs.values()
-                )
+                ),
+                strict=True,
             )
         else:
             raise TypeError("Must provide at least one aggregation function.")
@@ -2180,12 +2198,22 @@ class GroupBy(Serializable, Reducible, Scannable):
         <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.rolling.html>`_
 
         """
+        warnings.warn(
+            "apply_grouped is deprecated and will be "
+            "removed in a future release. Please use `apply` "
+            "or use a custom numba kernel instead or refer "
+            "to the UDF guidelines for more information "
+            "https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html",
+            FutureWarning,
+        )
         if not callable(function):
             raise TypeError(f"type {type(function)} is not callable")
 
         _, offsets, _, grouped_values = self._grouped()
         kwargs.update({"chunks": offsets})
-        return grouped_values.apply_chunks(function, **kwargs)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            return grouped_values.apply_chunks(function, **kwargs)
 
     @_performance_tracking
     def _broadcast(self, values: Series) -> Series:
@@ -2570,7 +2598,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         res = DataFrame._from_data(
             {
                 x: interleave_columns([gb_cov_corr._data[y] for y in ys])
-                for ys, x in zip(cols_split, column_names)
+                for ys, x in zip(cols_split, column_names, strict=True)
             }
         )
 
@@ -2737,6 +2765,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 zip(
                     values._column_names,
                     self._replace_nulls(values._columns, method),
+                    strict=True,
                 )
             )
         )
@@ -2906,6 +2935,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 zip(
                     values._column_names,
                     self._shift(values._columns, periods, fill_value),
+                    strict=True,
                 )
             )
         )

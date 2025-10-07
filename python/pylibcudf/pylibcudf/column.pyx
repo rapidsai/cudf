@@ -36,6 +36,10 @@ from pylibcudf.libcudf.copying cimport get_element
 
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport (
+    DeviceMemoryResource,
+    get_current_device_resource,
+)
 
 from .gpumemoryview cimport gpumemoryview
 from .filling cimport sequence
@@ -52,10 +56,10 @@ from ._interop_helpers cimport (
     _release_device_array,
     _metadata_to_libcudf,
 )
-from .utils cimport _get_stream
+from .utils cimport _get_stream, _get_memory_resource
 
 from .gpumemoryview import _datatype_from_dtype_desc
-from ._interop_helpers import ArrowLike, ColumnMetadata
+from ._interop_helpers import ArrowLike, ColumnMetadata, _ObjectWithArrowMetadata
 
 import array
 from itertools import accumulate
@@ -63,12 +67,29 @@ import functools
 import operator
 from typing import Iterable
 
+try:
+    import pyarrow as pa
+    pa_err = None
+except ImportError as e:
+    pa = None
+    pa_err = e
+
+
 __all__ = ["Column", "ListColumnView", "is_c_contiguous"]
+
+
+cdef is_iterable(obj):
+    try:
+        iter(obj)
+    except Exception:
+        return False
+    return True
 
 
 cdef class _ArrowColumnHolder:
     """A holder for an Arrow column for gpumemoryview lifetime management."""
     cdef unique_ptr[arrow_column] col
+    cdef DeviceMemoryResource mr
 
 
 cdef class OwnerWithCAI:
@@ -328,8 +349,38 @@ cdef class Column:
         self._children = children
         self._num_children = len(children)
 
+    def to_arrow(
+        self,
+        metadata: ColumnMetadata | str | None = None
+    ) -> ArrowLike:
+        """Create a pyarrow array from a pylibcudf column.
+
+        Parameters
+        ----------
+        metadata : ColumnMetadata | str | None
+            The metadata to attach to the column.
+
+        Returns
+        -------
+        pyarrow.Array
+        """
+        if pa_err is not None:
+            raise RuntimeError(
+                "pyarrow was not found on your system. Please "
+                "pip install pylibcudf with the [pyarrow] extra for a "
+                "compatible pyarrow version."
+            ) from pa_err
+        # TODO: Once the arrow C device interface registers more
+        # types that it supports, we can call pa.array(self) if
+        # no metadata is passed.
+        return pa.array(_ObjectWithArrowMetadata(self, metadata))
+
     @staticmethod
-    def from_arrow(obj: ArrowLike, dtype: DataType | None = None) -> Column:
+    def from_arrow(
+        obj: ArrowLike,
+        dtype: DataType | None = None,
+        Stream stream=None
+    ) -> ArrowLike:
         """
         Create a Column from an Arrow-like object using the Arrow C Data Interface.
 
@@ -347,6 +398,8 @@ cdef class Column:
             - `__arrow_c_device_stream__` (device Arrow stream)
         dtype : DataType | None
             The pylibcudf data type.
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
 
         Returns
         -------
@@ -374,6 +427,8 @@ cdef class Column:
         cdef ArrowDeviceArray* c_device_array
         cdef _ArrowColumnHolder result
         cdef unique_ptr[arrow_column] c_result
+
+        stream = _get_stream(stream)
         if hasattr(obj, "__arrow_c_device_array__"):
             schema, d_array = obj.__arrow_c_device_array__()
             c_schema = <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
@@ -382,9 +437,12 @@ cdef class Column:
             )
 
             result = _ArrowColumnHolder()
+            result.mr = get_current_device_resource()
             with nogil:
                 c_result = make_unique[arrow_column](
-                    move(dereference(c_schema)), move(dereference(c_device_array))
+                    move(dereference(c_schema)),
+                    move(dereference(c_device_array)),
+                    stream.view(),
                 )
             result.col.swap(c_result)
 
@@ -395,23 +453,30 @@ cdef class Column:
             c_array = <ArrowArray*>PyCapsule_GetPointer(h_array, "arrow_array")
 
             result = _ArrowColumnHolder()
+            result.mr = get_current_device_resource()
             with nogil:
                 c_result = make_unique[arrow_column](
-                    move(dereference(c_schema)), move(dereference(c_array))
+                    move(dereference(c_schema)),
+                    move(dereference(c_array)),
+                    stream.view(),
                 )
             result.col.swap(c_result)
 
             return Column.from_column_view_of_arbitrary(result.col.get().view(), result)
         elif hasattr(obj, "__arrow_c_stream__"):
-            stream = obj.__arrow_c_stream__()
-            c_stream = (
-                <ArrowArrayStream*>PyCapsule_GetPointer(stream, "arrow_array_stream")
+            arrow_stream = obj.__arrow_c_stream__()
+            c_arrow_stream = (
+                <ArrowArrayStream*>PyCapsule_GetPointer(
+                    arrow_stream,
+                    "arrow_array_stream",
+                )
             )
 
             result = _ArrowColumnHolder()
+            result.mr = get_current_device_resource()
             with nogil:
                 c_result = make_unique[arrow_column](
-                    move(dereference(c_stream))
+                    move(dereference(c_arrow_stream)), stream.view()
                 )
             result.col.swap(c_result)
 
@@ -536,7 +601,11 @@ cdef class Column:
         )
 
     @staticmethod
-    cdef Column from_libcudf(unique_ptr[column] libcudf_col, Stream stream=None):
+    cdef Column from_libcudf(
+        unique_ptr[column] libcudf_col,
+        Stream stream,
+        DeviceMemoryResource mr=None
+    ):
         """Create a Column from a libcudf column.
 
         This method is for pylibcudf's functions to use to ingest outputs of
@@ -551,23 +620,24 @@ cdef class Column:
         cdef column_contents contents = libcudf_col.get().release()
 
         stream = _get_stream(stream)
+        mr = _get_memory_resource(mr)
         # Note that when converting to cudf Column objects we'll need to pull
         # out the base object.
         cdef gpumemoryview data = gpumemoryview(
-            DeviceBuffer.c_from_unique_ptr(move(contents.data), stream)
+            DeviceBuffer.c_from_unique_ptr(move(contents.data), stream, mr)
         )
 
         cdef gpumemoryview mask = None
         if null_count > 0:
             mask = gpumemoryview(
-                DeviceBuffer.c_from_unique_ptr(move(contents.null_mask))
+                DeviceBuffer.c_from_unique_ptr(move(contents.null_mask), stream, mr)
             )
 
         children = []
         if contents.children.size() != 0:
             for i in range(contents.children.size()):
                 children.append(
-                    Column.from_libcudf(move(contents.children[i]), stream)
+                    Column.from_libcudf(move(contents.children[i]), stream, mr)
                 )
 
         return Column(
@@ -677,7 +747,7 @@ cdef class Column:
         )
 
     @staticmethod
-    def from_scalar(Scalar slr, size_type size):
+    def from_scalar(Scalar slr, size_type size, Stream stream=None):
         """Create a Column from a Scalar.
 
         Parameters
@@ -686,6 +756,8 @@ cdef class Column:
             The scalar to create a column from.
         size : size_type
             The number of elements in the column.
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
 
         Returns
         -------
@@ -694,11 +766,16 @@ cdef class Column:
         """
         cdef const scalar* c_scalar = slr.get()
         cdef unique_ptr[column] c_result
+        stream = _get_stream(stream)
         with nogil:
-            c_result = make_column_from_scalar(dereference(c_scalar), size)
-        return Column.from_libcudf(move(c_result))
+            c_result = make_column_from_scalar(
+                dereference(c_scalar),
+                size,
+                stream.view()
+            )
+        return Column.from_libcudf(move(c_result), stream)
 
-    cpdef Scalar to_scalar(self):
+    cpdef Scalar to_scalar(self, Stream stream=None):
         """
         Return the first value of 1-element column as a Scalar.
 
@@ -706,6 +783,8 @@ cdef class Column:
         ------
         ValueError
             If the column has more than one row.
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
 
         Returns
         -------
@@ -717,14 +796,15 @@ cdef class Column:
 
         cdef column_view cv = self.view()
         cdef unique_ptr[scalar] result
+        stream = _get_stream(stream)
 
         with nogil:
-            result = get_element(cv, 0)
+            result = get_element(cv, 0, stream.view())
 
         return Scalar.from_libcudf(move(result))
 
     @staticmethod
-    def all_null_like(Column like, size_type size):
+    def all_null_like(Column like, size_type size, Stream stream=None):
         """Create an all null column from a template.
 
         Parameters
@@ -733,6 +813,8 @@ cdef class Column:
             Column whose type we should mimic
         size : int
             Number of rows in the resulting column.
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
 
         Returns
         -------
@@ -741,9 +823,14 @@ cdef class Column:
         """
         cdef Scalar slr = Scalar.empty_like(like)
         cdef unique_ptr[column] c_result
+        stream = _get_stream(stream)
         with nogil:
-            c_result = make_column_from_scalar(dereference(slr.get()), size)
-        return Column.from_libcudf(move(c_result))
+            c_result = make_column_from_scalar(
+                dereference(slr.get()),
+                size,
+                stream.view()
+            )
+        return Column.from_libcudf(move(c_result), stream)
 
     @staticmethod
     cdef Column _wrap_nested_list_column(
@@ -801,7 +888,7 @@ cdef class Column:
         return nested
 
     @classmethod
-    def from_array_interface(cls, obj):
+    def from_array_interface(cls, obj, Stream stream=None):
         """
         Create a Column from an object implementing the NumPy Array Interface.
 
@@ -813,6 +900,8 @@ cdef class Column:
         ----------
         obj : Any
             Must implement the ``__array_interface__`` protocol.
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
 
         Returns
         -------
@@ -839,13 +928,14 @@ cdef class Column:
 
         cdef const unsigned char* ptr
         cdef const unsigned char[:] view
+        stream = _get_stream(stream)
 
         if nbytes > 0:
             ptr = <const unsigned char*><uintptr_t>data_ptr
             view = (<const unsigned char[:nbytes]> ptr)[:nbytes]
-            dbuf = DeviceBuffer.to_device(view)
+            dbuf = DeviceBuffer.to_device(view, stream)
         else:
-            dbuf = DeviceBuffer(size=0)
+            dbuf = DeviceBuffer(size=0, stream=stream)
 
         return Column._wrap_nested_list_column(gpumemoryview(dbuf), shape, dtype)
 
@@ -925,7 +1015,11 @@ cdef class Column:
         )
 
     @staticmethod
-    def from_iterable_of_py(obj: Iterable, dtype: DataType | None = None) -> Column:
+    def from_iterable_of_py(
+        obj: Iterable,
+        dtype: DataType | None = None,
+        Stream stream=None
+    ) -> Column:
         """
         Create a Column from a Python iterable of scalar values or nested iterables.
 
@@ -935,6 +1029,8 @@ cdef class Column:
             An iterable of Python scalar values (int, float, bool, str) or nested lists.
         dtype : DataType | None
             The type of the leaf elements. If not specified, the type is inferred.
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
 
         Returns
         -------
@@ -959,8 +1055,31 @@ cdef class Column:
           (in bytes) can exceed the maximum 32-bit integer value. In that case,
           the offsets column is automatically promoted to use 64-bit integers.
         """
+        if not is_iterable(obj):
+            raise ValueError(f"{obj=} is not iterable")
 
-        obj = list(obj)
+        if (
+            hasattr(obj, "__cuda_array_interface__")
+            or hasattr(obj, "__array_interface__")
+        ):
+            raise TypeError(
+                "Object has __cuda_array_interface__ or __array_interface__. "
+                "Please call Column.from_array(obj)."
+            )
+
+        if (
+            hasattr(obj, "__arrow_c_array__")
+            or hasattr(obj, "__arrow_c_device_array__")
+            or hasattr(obj, "__arrow_c_stream__")
+            or hasattr(obj, "__arrow_c_device_stream__")
+        ):
+            raise TypeError(
+                "Object implements the Arrow C data interface protocol. "
+                "Please call Column.from_arrow(obj)."
+            )
+
+        if not isinstance(obj, (list, tuple)):
+            obj = list(obj)
 
         if not obj:
             if dtype is None:
@@ -1026,7 +1145,7 @@ cdef class Column:
             "version": 3,
         }
 
-        return Column.from_array_interface(ArrayInterfaceWrapper(iface))
+        return Column.from_array_interface(ArrayInterfaceWrapper(iface), stream)
 
     @classmethod
     def struct_from_children(cls, children: Iterable[Column]):
@@ -1128,12 +1247,13 @@ cdef class Column:
         """The children of the column."""
         return self._children
 
-    cpdef Column copy(self):
+    cpdef Column copy(self, Stream stream=None):
         """Create a copy of the column."""
         cdef unique_ptr[column] c_result
+        stream = _get_stream(stream)
         with nogil:
-            c_result = make_unique[column](self.view())
-        return Column.from_libcudf(move(c_result))
+            c_result = make_unique[column](self.view(), stream.view())
+        return Column.from_libcudf(move(c_result), stream)
 
     cpdef uint64_t device_buffer_size(self):
         """
@@ -1235,7 +1355,7 @@ cdef class ListColumnView:
 
     cpdef offsets(self):
         """The offsets column of the underlying list column."""
-        return self._column.child(1)
+        return self._column.child(0)
 
     cdef lists_column_view view(self) nogil:
         """Generate a libcudf lists_column_view to pass to libcudf algorithms.

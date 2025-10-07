@@ -18,6 +18,7 @@ from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_129,
     POLARS_VERSION_LT_130,
     POLARS_VERSION_LT_131,
+    POLARS_VERSION_LT_132,
 )
 
 
@@ -256,38 +257,54 @@ def test_split_exact_inclusive_unsupported(ldf_split):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-@pytest.fixture
-def to_datetime_data():
-    return pl.LazyFrame(
-        {
-            "a": [
-                "2021-01-01",
-                "2021-01-02",
-                "abcd",
-            ]
-        }
-    )
-
-
 @pytest.mark.parametrize("cache", [True, False], ids=lambda cache: f"{cache=}")
 @pytest.mark.parametrize("strict", [True, False], ids=lambda strict: f"{strict=}")
 @pytest.mark.parametrize("exact", [True, False], ids=lambda exact: f"{exact=}")
 @pytest.mark.parametrize("format", ["%Y-%m-%d", None], ids=lambda format: f"{format=}")
-def test_to_datetime(to_datetime_data, cache, strict, format, exact):
-    q = to_datetime_data.select(
+@pytest.mark.parametrize(
+    "values, has_invalid_row",
+    [
+        (["2024-01-01", "2023-12-31", "2023-06-15"], False),
+        (["2024-01-01", "2023-12-31", None], False),
+        (["2024-13-01", "2023-12-31", "2023-06-15"], True),
+        (["2024-01-01", "foo", None], True),
+        (["foo", "2023-06-15"], True),
+        ([None, None, None], False),
+    ],
+    ids=["valid", "valid", "invalid", "invalid", "invalid", "valid"],
+)
+def test_to_datetime(values, has_invalid_row, cache, strict, format, exact):
+    df = pl.DataFrame({"a": pl.Series(values, dtype=pl.String())})
+    q = df.lazy().select(
         pl.col("a").str.strptime(
-            pl.Datetime("ns"), format=format, cache=cache, strict=strict, exact=exact
+            pl.Datetime("ns"),
+            format=format,
+            cache=cache,
+            strict=strict,
+            exact=exact,
         )
     )
-    if cache or format is None or not exact:
+    if cache or not exact or (not strict and format is None):
+        outcome = "translation_error"
+    elif (values[0] == "foo" and format is None and strict) or (
+        strict and has_invalid_row
+    ):
+        outcome = "collect_error"
+    else:
+        outcome = "success"
+
+    if outcome == "translation_error":
         assert_ir_translation_raises(q, NotImplementedError)
-    elif strict:
+    elif outcome == "collect_error":
+        cudf_exc = (
+            pl.exceptions.ComputeError
+            if POLARS_VERSION_LT_130
+            else pl.exceptions.InvalidOperationError
+        )
         assert_collect_raises(
             q,
             polars_except=pl.exceptions.InvalidOperationError,
-            cudf_except=pl.exceptions.ComputeError
-            if POLARS_VERSION_LT_130
-            else pl.exceptions.InvalidOperationError,
+            cudf_except=cudf_exc,
         )
     else:
         assert_gpu_result_equal(q)
@@ -440,7 +457,7 @@ def test_invalid_regex_raises():
     )
 
 
-@pytest.mark.parametrize("pattern", ["a{1000}", "a(?i:B)"])
+@pytest.mark.parametrize("pattern", ["a{1000}", "a(?i:B)", ""])
 def test_unsupported_regex_raises(pattern):
     df = pl.LazyFrame({"a": ["abc"]})
 
@@ -502,6 +519,118 @@ def test_string_to_numeric_invalid(numeric_type):
 def test_string_join(ldf, ignore_nulls, delimiter):
     q = ldf.select(pl.col("a").str.join(delimiter, ignore_nulls=ignore_nulls))
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "fill",
+    [
+        0,
+        1,
+        2,
+        5,
+        999,
+        -1,
+        None,
+    ],
+)
+@pytest.mark.parametrize(
+    "input_strings",
+    [
+        ["1", "0"],
+        ["123", "45"],
+        ["", "0"],
+        ["abc", "def"],
+    ],
+)
+def test_string_zfill(fill, input_strings):
+    ldf = pl.LazyFrame({"a": input_strings})
+    q = ldf.select(pl.col("a").str.zfill(fill))
+
+    if fill is not None and fill < 0:
+        cudf_except = (
+            pl.exceptions.InvalidOperationError
+            if not POLARS_VERSION_LT_132
+            else pl.exceptions.ComputeError
+        )
+        assert_collect_raises(
+            q,
+            polars_except=pl.exceptions.InvalidOperationError,
+            cudf_except=cudf_except,
+        )
+    else:
+        assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "fill",
+    [
+        5
+        if not POLARS_VERSION_LT_131
+        else pytest.param(5, marks=pytest.mark.xfail(reason="fixed in Polars 1.30")),
+        999
+        if not POLARS_VERSION_LT_131
+        else pytest.param(999, marks=pytest.mark.xfail(reason="fixed in Polars 1.30")),
+    ],
+)
+def test_string_zfill_pl_129(fill):
+    ldf = pl.LazyFrame({"a": ["-1", "+2"]})
+    q = ldf.select(pl.col("a").str.zfill(fill))
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "fill",
+    [
+        0,
+        1,
+        2,
+        5
+        if not POLARS_VERSION_LT_131
+        else pytest.param(5, marks=pytest.mark.xfail(reason="fixed in Polars 1.30")),
+        999
+        if not POLARS_VERSION_LT_131
+        else pytest.param(999, marks=pytest.mark.xfail(reason="fixed in Polars 1.30")),
+        -1,
+        pytest.param(None, marks=pytest.mark.xfail(reason="None dtype")),
+    ],
+)
+def test_string_zfill_column(fill):
+    ldf = pl.DataFrame(
+        {
+            "input_strings": ["1", "0", "123", "45", "", "0", "-1", "+2", "abc", "def"],
+            "fill": [fill] * 10,
+        }
+    ).lazy()
+    q = ldf.select(pl.col("input_strings").str.zfill(pl.col("fill")))
+    if fill is not None and fill < 0:
+        cudf_except = (
+            (
+                pl.exceptions.InvalidOperationError
+                if not POLARS_VERSION_LT_130
+                else pl.exceptions.ComputeError
+            )
+            if POLARS_VERSION_LT_132
+            else ()
+        )
+        assert_collect_raises(
+            q,
+            polars_except=pl.exceptions.InvalidOperationError,
+            cudf_except=cudf_except,
+        )
+    else:
+        assert_gpu_result_equal(q)
+
+
+def test_string_zfill_forbidden_chars():
+    ldf = pl.LazyFrame({"a": ["Café", "345", "東京", None]})
+    q = ldf.select(pl.col("a").str.zfill(3))
+    assert_collect_raises(
+        q,
+        polars_except=(),
+        cudf_except=pl.exceptions.InvalidOperationError
+        if not POLARS_VERSION_LT_130
+        else pl.exceptions.ComputeError,
+    )
 
 
 @pytest.mark.parametrize(
@@ -754,4 +883,11 @@ def test_len_bytes(ldf):
 
 def test_len_chars(ldf):
     q = ldf.select(pl.col("a").str.len_chars())
+    assert_gpu_result_equal(q)
+
+
+def test_string_concat_empty_frame():
+    lf = pl.LazyFrame({"a": pl.Series([], dtype=pl.String)})
+    q = lf.select(pl.lit(", ") + pl.col("a"))
+
     assert_gpu_result_equal(q)

@@ -178,6 +178,11 @@ class reader_impl {
   void setup_next_subpass(read_mode mode);
 
   /**
+   * @brief Copies over the relevant page mask information for the subpass
+   */
+  void set_subpass_page_mask();
+
+  /**
    * @brief Read a chunk of data and return an output table.
    *
    * This function is called internally and expects all preprocessing steps have already been done.
@@ -282,7 +287,7 @@ class reader_impl {
    *
    * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param skip_rows Crop all rows below skip_rows
-   * @param num_rows Maximum number of rows to read
+   * @param num_rows Number of rows to read
    */
   void allocate_columns(read_mode mode, size_t skip_rows, size_t num_rows);
 
@@ -297,8 +302,8 @@ class reader_impl {
    * @brief Converts the page data and outputs to columns.
    *
    * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
-   * @param skip_rows Minimum number of rows from start
-   * @param num_rows Number of rows to output
+   * @param skip_rows Number of rows to skip from the start
+   * @param num_rows Number of rows to decode
    */
   void decode_page_data(read_mode mode, size_t skip_rows, size_t num_rows);
 
@@ -306,8 +311,12 @@ class reader_impl {
    * @brief Invalidate output buffer nullmask for rows spanned by the pruned pages
    *
    * @param page_mask Boolean vector indicating if a page needs to be decoded or is pruned
+   * @param skip_rows Offset of the first row in the table chunk
+   * @param num_rows Number of rows in the table chunk
    */
-  void update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> page_mask);
+  void update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> page_mask,
+                                                size_t skip_rows,
+                                                size_t num_rows);
 
   /**
    * @brief Creates file-wide parquet chunk information.
@@ -393,6 +402,8 @@ class reader_impl {
     // User specified reading rows/stripes selection.
     int64_t const skip_rows;
     std::optional<int64_t> num_rows;
+    size_t skip_bytes;
+    std::optional<size_t> num_bytes;
     std::vector<std::vector<size_type>> row_group_indices;
   } _options;
 
@@ -417,8 +428,11 @@ class reader_impl {
   // _output_buffers associated schema indices
   std::vector<int> _output_column_schemas;
 
-  // Page mask for filtering out data pages
-  cudf::detail::host_vector<bool> _page_mask;
+  // Page mask for filtering out pass data pages
+  cudf::detail::host_vector<bool> _pass_page_mask;
+
+  // Page mask for filtering out subpass data pages
+  cudf::detail::host_vector<bool> _subpass_page_mask;
 
   // _output_buffers associated metadata
   std::unique_ptr<table_metadata> _output_metadata;

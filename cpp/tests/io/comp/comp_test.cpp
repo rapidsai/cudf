@@ -340,8 +340,9 @@ TEST_F(NvcompConfigTest, Compression)
   auto const& comp_disabled = nvcomp::is_compression_disabled;
 
   EXPECT_FALSE(comp_disabled(compression_type::DEFLATE, {true, true}));
-  // all integrations enabled required
-  EXPECT_TRUE(comp_disabled(compression_type::DEFLATE, {false, true}));
+  EXPECT_FALSE(comp_disabled(compression_type::DEFLATE, {false, true}));
+  // stable integrations enabled required
+  EXPECT_TRUE(comp_disabled(compression_type::DEFLATE, {false, false}));
 
   EXPECT_FALSE(comp_disabled(compression_type::ZSTD, {true, true}));
   EXPECT_FALSE(comp_disabled(compression_type::ZSTD, {false, true}));
@@ -360,8 +361,9 @@ TEST_F(NvcompConfigTest, Decompression)
   auto const& decomp_disabled = nvcomp::is_decompression_disabled;
 
   EXPECT_FALSE(decomp_disabled(compression_type::DEFLATE, {true, true}));
-  // all integrations enabled required
-  EXPECT_TRUE(decomp_disabled(compression_type::DEFLATE, {false, true}));
+  EXPECT_FALSE(decomp_disabled(compression_type::DEFLATE, {false, true}));
+  // stable integrations enabled required
+  EXPECT_TRUE(decomp_disabled(compression_type::DEFLATE, {false, false}));
 
   EXPECT_FALSE(decomp_disabled(compression_type::ZSTD, {true, true}));
   EXPECT_FALSE(decomp_disabled(compression_type::ZSTD, {false, true}));

@@ -15,6 +15,7 @@
  */
 
 #include "rolling.cuh"
+#include "rolling_udf.cuh"
 #include "rolling_utils.cuh"
 
 #include <cudf/detail/aggregation/aggregation.hpp>
@@ -22,8 +23,6 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
-
-#include <cuda/functional>
 
 namespace cudf::detail {
 

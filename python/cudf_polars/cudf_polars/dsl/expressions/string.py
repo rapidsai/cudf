@@ -7,10 +7,13 @@
 from __future__ import annotations
 
 import functools
+import re
+from datetime import datetime
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from polars.exceptions import InvalidOperationError
+from polars.polars import dtype_str_repr
 
 import pylibcudf as plc
 
@@ -18,6 +21,7 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal, LiteralColumn
 from cudf_polars.dsl.utils.reshape import broadcast
+from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -137,6 +141,7 @@ class StringFunction(Expr):
         Name.Reverse,
         Name.Tail,
         Name.Titlecase,
+        Name.ZFill,
     }
     __slots__ = ("_regex_program", "name", "options")
     _non_child = ("dtype", "name", "options")
@@ -248,11 +253,11 @@ class StringFunction(Expr):
             if inclusive:
                 raise NotImplementedError(f"{inclusive=} is not supported for split")
         elif self.name is StringFunction.Name.Strptime:
-            format, _, exact, cache = self.options
+            format, strict, exact, cache = self.options
+            if not format and not strict:
+                raise NotImplementedError("format inference requires strict checking")
             if cache:
                 raise NotImplementedError("Strptime cache is a CPU feature")
-            if format is None:
-                raise NotImplementedError("Strptime format is required")
             if not exact:
                 raise NotImplementedError("Strptime does not support exact=False")
         elif self.name in {
@@ -264,12 +269,29 @@ class StringFunction(Expr):
                 raise NotImplementedError(
                     "strip operations only support scalar patterns"
                 )
+        elif self.name is StringFunction.Name.ZFill:
+            if isinstance(self.children[1], Literal):
+                _, width = self.children
+                assert isinstance(width, Literal)
+                if (
+                    POLARS_VERSION_LT_132
+                    and width.value is not None
+                    and width.value < 0
+                ):  # pragma: no cover
+                    dtypestr = dtype_str_repr(width.dtype.polars)
+                    raise InvalidOperationError(
+                        f"conversion from `{dtypestr}` to `u64` "
+                        f"failed in column 'literal' for 1 out of "
+                        f"1 values: [{width.value}]"
+                    ) from None
 
     @staticmethod
     def _create_regex_program(
         pattern: str,
         flags: plc.strings.regex_flags.RegexFlags = plc.strings.regex_flags.RegexFlags.DEFAULT,
     ) -> plc.strings.regex_program.RegexProgram:
+        if pattern == "":
+            raise NotImplementedError("Empty regex pattern is not yet supported")
         try:
             return plc.strings.regex_program.RegexProgram.create(
                 pattern,
@@ -292,8 +314,10 @@ class StringFunction(Expr):
                 for child in self.children
             ]
 
+            non_unit_sizes = [c.size for c in columns if c.size != 1]
             broadcasted = broadcast(
-                *columns, target_length=max(col.size for col in columns)
+                *columns,
+                target_length=max(non_unit_sizes) if non_unit_sizes else None,
             )
 
             delimiter, ignore_nulls = self.options
@@ -322,6 +346,66 @@ class StringFunction(Expr):
                 ),
                 dtype=self.dtype,
             )
+        elif self.name is StringFunction.Name.ZFill:
+            # TODO: expensive validation
+            # polars pads based on bytes, libcudf by visual width
+            # only pass chars if the visual width matches the byte length
+            column = self.children[0].evaluate(df, context=context)
+            col_len_bytes = plc.strings.attributes.count_bytes(column.obj)
+            col_len_chars = plc.strings.attributes.count_characters(column.obj)
+            equal = plc.binaryop.binary_operation(
+                col_len_bytes,
+                col_len_chars,
+                plc.binaryop.BinaryOperator.NULL_EQUALS,
+                plc.DataType(plc.TypeId.BOOL8),
+            )
+            if not plc.reduce.reduce(
+                equal,
+                plc.aggregation.all(),
+                plc.DataType(plc.TypeId.BOOL8),
+            ).to_py():
+                raise InvalidOperationError(
+                    "zfill only supports ascii strings with no unicode characters"
+                )
+            if isinstance(self.children[1], Literal):
+                width = self.children[1]
+                assert isinstance(width, Literal)
+                if width.value is None:
+                    return Column(
+                        plc.Column.from_scalar(
+                            plc.Scalar.from_py(None, self.dtype.plc),
+                            column.size,
+                        ),
+                        self.dtype,
+                    )
+                return Column(
+                    plc.strings.padding.zfill(column.obj, width.value), self.dtype
+                )
+            else:
+                col_width = self.children[1].evaluate(df, context=context)
+                assert isinstance(col_width, Column)
+                all_gt_0 = plc.binaryop.binary_operation(
+                    col_width.obj,
+                    plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT64)),
+                    plc.binaryop.BinaryOperator.GREATER_EQUAL,
+                    plc.DataType(plc.TypeId.BOOL8),
+                )
+
+                if (
+                    POLARS_VERSION_LT_132
+                    and not plc.reduce.reduce(
+                        all_gt_0,
+                        plc.aggregation.all(),
+                        plc.DataType(plc.TypeId.BOOL8),
+                    ).to_py()
+                ):  # pragma: no cover
+                    raise InvalidOperationError("fill conversion failed.")
+
+                return Column(
+                    plc.strings.padding.zfill_by_widths(column.obj, col_width.obj),
+                    self.dtype,
+                )
+
         elif self.name is StringFunction.Name.Contains:
             child, arg = self.children
             column = child.evaluate(df, context=context)
@@ -676,13 +760,38 @@ class StringFunction(Expr):
             )
         elif self.name is StringFunction.Name.Strptime:
             # TODO: ignores ambiguous
-            format, strict, exact, cache = self.options
+            format, strict, _, _ = self.options
             col = self.children[0].evaluate(df, context=context)
+            plc_col = col.obj
+            if plc_col.null_count() == plc_col.size():
+                return Column(
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(None, self.dtype.plc),
+                        plc_col.size(),
+                    ),
+                    self.dtype,
+                )
+            if format is None:
+                # Polars begins inference with the first non null value
+                if plc_col.null_mask() is not None:
+                    boolmask = plc.unary.is_valid(plc_col)
+                    table = plc.stream_compaction.apply_boolean_mask(
+                        plc.Table([plc_col]), boolmask
+                    )
+                    filtered = table.columns()[0]
+                    first_valid_data = plc.copying.get_element(filtered, 0).to_py()
+                else:
+                    first_valid_data = plc.copying.get_element(plc_col, 0).to_py()
+
+                format = _infer_datetime_format(first_valid_data)
+                if not format:
+                    raise InvalidOperationError(
+                        "Unable to infer datetime format from data"
+                    )
 
             is_timestamps = plc.strings.convert.convert_datetime.is_timestamp(
-                col.obj, format
+                plc_col, format
             )
-
             if strict:
                 if not plc.reduce.reduce(
                     is_timestamps,
@@ -694,16 +803,17 @@ class StringFunction(Expr):
                 not_timestamps = plc.unary.unary_operation(
                     is_timestamps, plc.unary.UnaryOperator.NOT
                 )
-                null = plc.Scalar.from_py(None, col.obj.type())
-                res = plc.copying.boolean_mask_scatter(
-                    [null], plc.Table([col.obj]), not_timestamps
-                )
-                return Column(
-                    plc.strings.convert.convert_datetime.to_timestamps(
-                        res.columns()[0], self.dtype.plc, format
-                    ),
-                    dtype=self.dtype,
-                )
+                null = plc.Scalar.from_py(None, plc_col.type())
+                plc_col = plc.copying.boolean_mask_scatter(
+                    [null], plc.Table([plc_col]), not_timestamps
+                ).columns()[0]
+
+            return Column(
+                plc.strings.convert.convert_datetime.to_timestamps(
+                    plc_col, self.dtype.plc, format
+                ),
+                dtype=self.dtype,
+            )
         elif self.name is StringFunction.Name.Replace:
             column, target, repl = columns
             n, _ = self.options
@@ -720,8 +830,15 @@ class StringFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.PadStart:
-            (column,) = columns
-            width, char = self.options
+            if POLARS_VERSION_LT_132:  # pragma: no cover
+                (column,) = columns
+                width, char = self.options
+            else:
+                (column, width_col) = columns
+                (char,) = self.options
+                # TODO: Maybe accept a string scalar in
+                # cudf::strings::pad to avoid DtoH transfer
+                width = width_col.obj.to_scalar().to_py()
             return Column(
                 plc.strings.padding.pad(
                     column.obj, width, plc.strings.SideType.LEFT, char
@@ -729,8 +846,15 @@ class StringFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.PadEnd:
-            (column,) = columns
-            width, char = self.options
+            if POLARS_VERSION_LT_132:  # pragma: no cover
+                (column,) = columns
+                width, char = self.options
+            else:
+                (column, width_col) = columns
+                (char,) = self.options
+                # TODO: Maybe accept a string scalar in
+                # cudf::strings::pad to avoid DtoH transfer
+                width = width_col.obj.to_scalar().to_py()
             return Column(
                 plc.strings.padding.pad(
                     column.obj, width, plc.strings.SideType.RIGHT, char
@@ -746,3 +870,133 @@ class StringFunction(Expr):
         raise NotImplementedError(
             f"StringFunction {self.name}"
         )  # pragma: no cover; handled by init raising
+
+
+def _infer_datetime_format(val: str) -> str | None:
+    # port of parts of infer.rs and patterns.rs from polars rust
+    DATETIME_DMY_RE = re.compile(
+        r"""
+        ^
+        ['"]?
+        (\d{1,2})
+        [-/\.]
+        (?P<month>[01]?\d{1})
+        [-/\.]
+        (\d{4,})
+        (
+            [T\ ]
+            (\d{1,2})
+            :?
+            (\d{1,2})
+            (
+                :?
+                (\d{1,2})
+                (
+                    \.(\d{1,9})
+                )?
+            )?
+        )?
+        ['"]?
+        $
+    """,
+        re.VERBOSE,
+    )
+
+    DATETIME_YMD_RE = re.compile(
+        r"""
+        ^
+        ['"]?
+        (\d{4,})
+        [-/\.]
+        (?P<month>[01]?\d{1})
+        [-/\.]
+        (\d{1,2})
+        (
+            [T\ ]
+            (\d{1,2})
+            :?
+            (\d{1,2})
+            (
+                :?
+                (\d{1,2})
+                (
+                    \.(\d{1,9})
+                )?
+            )?
+        )?
+        ['"]?
+        $
+    """,
+        re.VERBOSE,
+    )
+
+    DATETIME_YMDZ_RE = re.compile(
+        r"""
+        ^
+        ['"]?
+        (\d{4,})
+        [-/\.]
+        (?P<month>[01]?\d{1})
+        [-/\.]
+        (\d{1,2})
+        [T\ ]
+        (\d{2})
+        :?
+        (\d{2})
+        (
+            :?
+            (\d{2})
+            (
+                \.(\d{1,9})
+            )?
+        )?
+        (
+            [+-](\d{2})(:?(\d{2}))? | Z
+        )
+        ['"]?
+        $
+    """,
+        re.VERBOSE,
+    )
+    PATTERN_FORMATS = {
+        "DATETIME_DMY": [
+            "%d-%m-%Y",
+            "%d/%m/%Y",
+            "%d.%m.%Y",
+            "%d-%m-%Y %H:%M:%S",
+            "%d/%m/%Y %H:%M:%S",
+            "%d.%m.%Y %H:%M:%S",
+        ],
+        "DATETIME_YMD": [
+            "%Y/%m/%d",
+            "%Y-%m-%d",
+            "%Y.%m.%d",
+            "%Y-%m-%d %H:%M:%S",
+            "%Y/%m/%d %H:%M:%S",
+            "%Y.%m.%d %H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S",
+        ],
+        "DATETIME_YMDZ": [
+            "%Y-%m-%dT%H:%M:%S%z",
+            "%Y-%m-%dT%H:%M:%S.%f%z",
+            "%Y-%m-%d %H:%M:%S%z",
+        ],
+    }
+    for pattern_name, regex in [
+        ("DATETIME_DMY", DATETIME_DMY_RE),
+        ("DATETIME_YMD", DATETIME_YMD_RE),
+        ("DATETIME_YMDZ", DATETIME_YMDZ_RE),
+    ]:
+        m = regex.match(val)
+        if m:
+            month = int(m.group("month"))
+            if not (1 <= month <= 12):
+                continue
+            for fmt in PATTERN_FORMATS[pattern_name]:
+                try:
+                    datetime.strptime(val, fmt)
+                except ValueError:  # noqa: PERF203
+                    continue
+                else:
+                    return fmt
+    return None

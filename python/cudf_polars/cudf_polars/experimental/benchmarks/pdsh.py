@@ -39,6 +39,8 @@ os.environ["KVIKIO_NTHREADS"] = os.environ.get("KVIKIO_NTHREADS", "8")
 class PDSHQueries:
     """PDS-H query definitions."""
 
+    name: str = "pdsh"
+
     @staticmethod
     def q0(run_config: RunConfig) -> pl.LazyFrame:
         """Query 0."""

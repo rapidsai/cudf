@@ -897,6 +897,16 @@ jlongArray mixed_join_size(JNIEnv* env,
   CATCH_STD(env, NULL);
 }
 
+std::pair<std::size_t, cudf::device_span<cudf::size_type const>> get_mixed_size_info(
+  JNIEnv* env, jlong j_output_row_count, jlong j_matches_view)
+{
+  auto const row_count = static_cast<std::size_t>(j_output_row_count);
+  auto const matches   = reinterpret_cast<cudf::column_view const*>(j_matches_view);
+  return std::make_pair(row_count,
+                        cudf::device_span<cudf::size_type const>(
+                          matches->template data<cudf::size_type>(), matches->size()));
+}
+
 template <typename T>
 jlongArray mixed_join_gather_maps(JNIEnv* env,
                                   jlong j_left_keys,
@@ -965,16 +975,6 @@ jlongArray mixed_join_gather_single_map(JNIEnv* env,
                                         nulls_equal));
   }
   CATCH_STD(env, NULL);
-}
-
-std::pair<std::size_t, cudf::device_span<cudf::size_type const>> get_mixed_size_info(
-  JNIEnv* env, jlong j_output_row_count, jlong j_matches_view)
-{
-  auto const row_count = static_cast<std::size_t>(j_output_row_count);
-  auto const matches   = reinterpret_cast<cudf::column_view const*>(j_matches_view);
-  return std::make_pair(row_count,
-                        cudf::device_span<cudf::size_type const>(
-                          matches->template data<cudf::size_type>(), matches->size()));
 }
 
 cudf::column_view remove_validity_from_col(cudf::column_view column_view)
@@ -2420,6 +2420,7 @@ Java_ai_rapids_cudf_Table_readORCFromDataSource(JNIEnv* env,
                                                 jboolean usingNumPyTypes,
                                                 jint unit,
                                                 jobjectArray dec128_col_names,
+                                                jboolean ignore_timezone_in_stripe_footer,
                                                 jlong ds_handle)
 {
   JNI_NULL_CHECK(env, ds_handle, "no data source handle given", 0);
@@ -2444,21 +2445,24 @@ Java_ai_rapids_cudf_Table_readORCFromDataSource(JNIEnv* env,
         .use_np_dtypes(static_cast<bool>(usingNumPyTypes))
         .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
         .decimal128_columns(n_dec128_col_names.as_cpp_vector())
+        .ignore_timezone_in_stripe_footer(ignore_timezone_in_stripe_footer)
         .build();
     return convert_table_for_return(env, cudf::io::read_orc(opts).tbl);
   }
   CATCH_STD(env, NULL);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readORC(JNIEnv* env,
-                                                               jclass,
-                                                               jobjectArray filter_col_names,
-                                                               jstring inputfilepath,
-                                                               jlong buffer,
-                                                               jlong buffer_length,
-                                                               jboolean usingNumPyTypes,
-                                                               jint unit,
-                                                               jobjectArray dec128_col_names)
+JNIEXPORT jlongArray JNICALL
+Java_ai_rapids_cudf_Table_readORC(JNIEnv* env,
+                                  jclass,
+                                  jobjectArray filter_col_names,
+                                  jstring inputfilepath,
+                                  jlong buffer,
+                                  jlong buffer_length,
+                                  jboolean usingNumPyTypes,
+                                  jint unit,
+                                  jobjectArray dec128_col_names,
+                                  jboolean ignore_timezone_in_stripe_footer)
 {
   bool read_buffer = true;
   if (buffer == 0) {
@@ -2500,6 +2504,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readORC(JNIEnv* env,
         .use_np_dtypes(static_cast<bool>(usingNumPyTypes))
         .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
         .decimal128_columns(n_dec128_col_names.as_cpp_vector())
+        .ignore_timezone_in_stripe_footer(ignore_timezone_in_stripe_footer)
         .build();
     return convert_table_for_return(env, cudf::io::read_orc(opts).tbl);
   }

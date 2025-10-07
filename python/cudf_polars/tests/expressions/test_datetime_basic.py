@@ -11,6 +11,7 @@ import polars as pl
 
 from cudf_polars.dsl.expr import TemporalFunction
 from cudf_polars.testing.asserts import (
+    assert_collect_raises,
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
@@ -343,4 +344,81 @@ def test_datetime_cast_time_unit_duration(dtype, time_unit):
     df = pl.DataFrame({"date": sr}).lazy()
 
     q = df.select(pl.col("date").dt.cast_time_unit(time_unit).alias("time_unit_ms"))
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "datetime_dtype",
+    [
+        pl.Datetime("ms"),
+        pl.Datetime("us"),
+        pl.Datetime("ns"),
+    ],
+)
+@pytest.mark.parametrize(
+    "integer_dtype",
+    [
+        pl.Int64(),
+        pl.UInt64(),
+        pl.Int32(),
+        pl.UInt32(),
+        pl.Int16(),
+        pl.UInt16(),
+        pl.Int8(),
+        pl.UInt8(),
+    ],
+)
+def test_datetime_from_integer(datetime_dtype, integer_dtype):
+    values = [
+        0,
+        1,
+        100,
+        pl.select(integer_dtype.max()).item(),
+        pl.select(integer_dtype.min()).item(),
+    ]
+    df = pl.LazyFrame({"data": pl.Series(values, dtype=integer_dtype)})
+    q = df.select(pl.col("data").cast(datetime_dtype).alias("datetime_from_int"))
+    if integer_dtype == pl.UInt64():
+        assert_collect_raises(
+            q,
+            cudf_except=pl.exceptions.ComputeError,
+            polars_except=pl.exceptions.InvalidOperationError,
+        )
+    else:
+        assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "datetime_dtype",
+    [
+        pl.Datetime("ms"),
+        pl.Datetime("us"),
+        pl.Datetime("ns"),
+    ],
+)
+@pytest.mark.parametrize(
+    "integer_dtype",
+    [
+        pl.Int64(),
+        pytest.param(
+            pl.UInt64(), marks=pytest.mark.xfail(reason="INT64 can not fit max(UINT64)")
+        ),
+        pl.Int32(),
+        pl.UInt32(),
+        pl.Int16(),
+        pl.UInt16(),
+        pl.Int8(),
+        pl.UInt8(),
+    ],
+)
+def test_integer_from_datetime(datetime_dtype, integer_dtype):
+    values = [
+        0,
+        1,
+        100,
+        pl.select(integer_dtype.max()).item(),
+        pl.select(integer_dtype.min()).item(),
+    ]
+    df = pl.LazyFrame({"data": pl.Series(values, dtype=datetime_dtype)})
+    q = df.select(pl.col("data").cast(integer_dtype).alias("int_from_datetime"))
     assert_gpu_result_equal(q)

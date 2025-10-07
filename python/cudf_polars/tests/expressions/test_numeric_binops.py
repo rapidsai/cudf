@@ -97,3 +97,12 @@ def test_floor_div_binop_by_zero(zero, ltype):
     q = df.select(pl.col("a") // zero)
 
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("divisor", [1, 2.0])
+def test_true_div_boolean_column(divisor):
+    df = pl.LazyFrame({"a": [True, False]})
+
+    q = df.select(pl.col("a") / divisor)
+
+    assert_gpu_result_equal(q)

@@ -391,7 +391,7 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
 
   // Read task sync function
   for (auto& task : read_tasks) {
-    task.wait();
+    task.get();
   }
 }
 

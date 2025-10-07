@@ -44,6 +44,7 @@ __all__ = [
     "ParquetOptions",
     "Scheduler",
     "ShuffleMethod",
+    "StatsPlanningOptions",
     "StreamingExecutor",
     "StreamingFallbackMode",
 ]
@@ -82,8 +83,17 @@ def get_total_device_memory() -> int | None:
 
 
 @functools.cache
-def rapidsmpf_available() -> bool:  # pragma: no cover
-    """Query whether rapidsmpf is available as a shuffle method."""
+def rapidsmpf_single_available() -> bool:  # pragma: no cover
+    """Query whether rapidsmpf is available as a single-process shuffle method."""
+    try:
+        return importlib.util.find_spec("rapidsmpf.integrations.single") is not None
+    except (ImportError, ValueError):
+        return False
+
+
+@functools.cache
+def rapidsmpf_distributed_available() -> bool:  # pragma: no cover
+    """Query whether rapidsmpf is available as a distributed shuffle method."""
     try:
         return importlib.util.find_spec("rapidsmpf.integrations.dask") is not None
     except (ImportError, ValueError):
@@ -129,15 +139,21 @@ class ShuffleMethod(str, enum.Enum):
     The method to use for shuffling data between workers with the streaming executor.
 
     * ``ShuffleMethod.TASKS`` : Use the task-based shuffler.
-    * ``ShuffleMethod.RAPIDSMPF`` : Use the rapidsmpf scheduler.
+    * ``ShuffleMethod.RAPIDSMPF`` : Use the rapidsmpf shuffler.
+    * ``ShuffleMethod._RAPIDSMPF_SINGLE`` : Use the single-process rapidsmpf shuffler.
 
-    With :class:`cudf_polars.utils.config.StreamingExecutor`, the default of ``None`` will attempt to use
-    ``ShuffleMethod.RAPIDSMPF``, but will fall back to ``ShuffleMethod.TASKS``
-    if rapidsmpf is not installed.
+    With :class:`cudf_polars.utils.config.StreamingExecutor`, the default of ``None``
+    will attempt to use ``ShuffleMethod.RAPIDSMPF`` for the distributed scheduler,
+    but will fall back to ``ShuffleMethod.TASKS`` if rapidsmpf is not installed.
+
+    The user should **not** specify ``ShuffleMethod._RAPIDSMPF_SINGLE`` directly.
+    A setting of ``ShuffleMethod.RAPIDSMPF`` will be converted to the single-process
+    shuffler automatically when the 'synchronous' scheduler is active.
     """
 
     TASKS = "tasks"
     RAPIDSMPF = "rapidsmpf"
+    _RAPIDSMPF_SINGLE = "rapidsmpf-single"
 
 
 T = TypeVar("T")
@@ -176,9 +192,11 @@ class ParquetOptions:
     Parameters
     ----------
     chunked
-        Whether to use libcudf's ``ChunkedParquetReader`` to read the parquet
-        dataset in chunks. This is useful when reading very large parquet
-        files.
+        Whether to use libcudf's ``ChunkedParquetReader`` or ``ChunkedParquetWriter``
+        to read/write the parquet dataset in chunks. This is useful when reading/writing
+        very large parquet files.
+    n_output_chunks
+        Split the dataframe in ``n_output_chunks`` when using libcudf's ``ChunkedParquetWriter``.
     chunk_read_limit
         Limit on total number of bytes to be returned per read, or 0 if
         there is no limit.
@@ -206,6 +224,11 @@ class ParquetOptions:
             f"{_env_prefix}__CHUNKED", _bool_converter, default=True
         )
     )
+    n_output_chunks: int = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__N_OUTPUT_CHUNKS", int, default=1
+        )
+    )
     chunk_read_limit: int = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__CHUNK_READ_LIMIT", int, default=0
@@ -230,6 +253,8 @@ class ParquetOptions:
     def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.chunked, bool):
             raise TypeError("chunked must be a bool")
+        if not isinstance(self.n_output_chunks, int):
+            raise TypeError("n_output_chunks must be an int")
         if not isinstance(self.chunk_read_limit, int):
             raise TypeError("chunk_read_limit must be an int")
         if not isinstance(self.pass_read_limit, int):
@@ -263,6 +288,86 @@ def default_blocksize(scheduler: str) -> int:
 
     # Use lower and upper bounds of 1GB and 10GB
     return min(max(blocksize, 1_000_000_000), 10_000_000_000)
+
+
+@dataclasses.dataclass(frozen=True)
+class StatsPlanningOptions:
+    """
+    Configuration for statistics-based query planning.
+
+    These options can be configured via environment variables
+    with the prefix ``CUDF_POLARS__EXECUTOR__STATS_PLANNING__``.
+
+    Parameters
+    ----------
+    use_io_partitioning
+        Whether to use estimated file-size statistics to calculate
+        the ideal input-partition count for IO operations.
+        This option currently applies to Parquet data only.
+        Default is True.
+    use_reduction_planning
+        Whether to use estimated column statistics to calculate
+        the output-partition count for reduction operations
+        like `Distinct`, `GroupBy`, and `Select(unique)`.
+        Default is False.
+    use_join_heuristics
+        Whether to use join heuristics to estimate row-count
+        and unique-count statistics. Default is True.
+        These statistics may only be collected when they are
+        actually needed for query planning and when row-count
+        statistics are available for the underlying datasource
+        (e.g. Parquet and in-memory LazyFrame data).
+    use_sampling
+        Whether to sample real data to estimate unique-value
+        statistics. Default is True.
+        These statistics may only be collected when they are
+        actually needed for query planning, and when the
+        underlying datasource supports sampling (e.g. Parquet
+        and in-memory LazyFrame data).
+    default_selectivity
+        The default selectivity of a predicate.
+        Default is 0.8.
+    """
+
+    _env_prefix = "CUDF_POLARS__EXECUTOR__STATS_PLANNING"
+
+    use_io_partitioning: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__USE_IO_PARTITIONING", _bool_converter, default=True
+        )
+    )
+    use_reduction_planning: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__USE_REDUCTION_PLANNING", _bool_converter, default=False
+        )
+    )
+    use_join_heuristics: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__USE_JOIN_HEURISTICS", _bool_converter, default=True
+        )
+    )
+    use_sampling: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__USE_SAMPLING", _bool_converter, default=True
+        )
+    )
+    default_selectivity: float = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__DEFAULT_SELECTIVITY", float, default=0.8
+        )
+    )
+
+    def __post_init__(self) -> None:  # noqa: D105
+        if not isinstance(self.use_io_partitioning, bool):
+            raise TypeError("use_io_partitioning must be a bool")
+        if not isinstance(self.use_reduction_planning, bool):
+            raise TypeError("use_reduction_planning must be a bool")
+        if not isinstance(self.use_join_heuristics, bool):
+            raise TypeError("use_join_heuristics must be a bool")
+        if not isinstance(self.use_sampling, bool):
+            raise TypeError("use_sampling must be a bool")
+        if not isinstance(self.default_selectivity, float):
+            raise TypeError("default_selectivity must be a float")
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -339,6 +444,9 @@ class StreamingExecutor:
         rather than a single file. By default, this will be set to True for
         the 'distributed' scheduler and False otherwise. The 'distrubuted'
         scheduler does not currently support ``sink_to_directory=False``.
+    stats_planning
+        Options controlling statistics-based query planning. See
+        :class:`~cudf_polars.utils.config.StatsPlanningOptions` for more.
 
     Notes
     -----
@@ -407,28 +515,39 @@ class StreamingExecutor:
             f"{_env_prefix}__SINK_TO_DIRECTORY", _bool_converter, default=None
         )
     )
+    stats_planning: StatsPlanningOptions = dataclasses.field(
+        default_factory=StatsPlanningOptions
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         # Handle shuffle_method defaults for streaming executor
         if self.shuffle_method is None:
-            if self.scheduler == "distributed" and rapidsmpf_available():
+            if self.scheduler == "distributed" and rapidsmpf_distributed_available():
                 # For distributed scheduler, prefer rapidsmpf if available
                 object.__setattr__(self, "shuffle_method", "rapidsmpf")
             else:
+                # Otherwise, use task-based shuffle for now.
+                # TODO: Evaluate single-process shuffle by default.
                 object.__setattr__(self, "shuffle_method", "tasks")
-        else:
+        elif self.shuffle_method == "rapidsmpf-single":
+            # The user should NOT specify "rapidsmpf-single" directly.
+            raise ValueError("rapidsmpf-single is not a supported shuffle method.")
+        elif self.shuffle_method == "rapidsmpf":
+            # Check that we have rapidsmpf installed
             if (
                 self.scheduler == "distributed"
-                and self.shuffle_method == "rapidsmpf"
-                and not rapidsmpf_available()
+                and not rapidsmpf_distributed_available()
             ):
                 raise ValueError(
-                    "rapidsmpf shuffle method requested, but rapidsmpf is not installed"
+                    "rapidsmpf shuffle method requested, but rapidsmpf.integrations.dask is not installed."
                 )
-        if self.scheduler == "synchronous" and self.shuffle_method == "rapidsmpf":
-            raise ValueError(
-                "rapidsmpf shuffle method is not supported for synchronous scheduler"
-            )
+            elif self.scheduler == "synchronous" and not rapidsmpf_single_available():
+                raise ValueError(
+                    "rapidsmpf shuffle method requested, but rapidsmpf is not installed."
+                )
+            # Select "rapidsmpf-single" for the synchronous
+            if self.scheduler == "synchronous":
+                object.__setattr__(self, "shuffle_method", "rapidsmpf-single")
 
         # frozen dataclass, so use object.__setattr__
         object.__setattr__(
@@ -447,6 +566,14 @@ class StreamingExecutor:
             )
         object.__setattr__(self, "scheduler", Scheduler(self.scheduler))
         object.__setattr__(self, "shuffle_method", ShuffleMethod(self.shuffle_method))
+
+        # Make sure stats_planning is a dataclass
+        if isinstance(self.stats_planning, dict):
+            object.__setattr__(
+                self,
+                "stats_planning",
+                StatsPlanningOptions(**self.stats_planning),
+            )
 
         if self.scheduler == "distributed":
             if self.sink_to_directory is False:
@@ -473,11 +600,20 @@ class StreamingExecutor:
         if not isinstance(self.sink_to_directory, bool):
             raise TypeError("sink_to_directory must be bool")
 
+        # RapidsMPF spill is only supported for the distributed scheduler for now.
+        # This is because the spilling API is still within the RMPF-Dask integration.
+        # (See https://github.com/rapidsai/rapidsmpf/issues/439)
+        if self.scheduler == "synchronous" and self.rapidsmpf_spill:  # pragma: no cover
+            raise ValueError(
+                "rapidsmpf_spill is not supported for the synchronous scheduler."
+            )
+
     def __hash__(self) -> int:  # noqa: D105
         # cardinality factory, a dict, isn't natively hashable. We'll dump it
         # to json and hash that.
         d = dataclasses.asdict(self)
         d["unique_fraction"] = json.dumps(d["unique_fraction"])
+        d["stats_planning"] = json.dumps(d["stats_planning"])
         return hash(tuple(sorted(d.items())))
 
 
