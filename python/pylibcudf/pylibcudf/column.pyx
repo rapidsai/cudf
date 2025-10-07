@@ -604,7 +604,7 @@ cdef class Column:
     cdef Column from_libcudf(
         unique_ptr[column] libcudf_col,
         Stream stream,
-        DeviceMemoryResource mr=None
+        DeviceMemoryResource mr
     ):
         """Create a Column from a libcudf column.
 
@@ -619,8 +619,6 @@ cdef class Column:
 
         cdef column_contents contents = libcudf_col.get().release()
 
-        stream = _get_stream(stream)
-        mr = _get_memory_resource(mr)
         # Note that when converting to cudf Column objects we'll need to pull
         # out the base object.
         cdef gpumemoryview data = gpumemoryview(
