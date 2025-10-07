@@ -1124,6 +1124,9 @@ struct packed_partition_buf_size_and_dst_buf_info {
       d_dst_buf_info{
         reinterpret_cast<dst_buf_info*>(d_buf_sizes_and_dst_info.data() + buf_sizes_size), num_bufs}
   {
+    // Zero init to avoid copying of uninitialized data in copy_to_host()
+    CUDF_CUDA_TRY(
+      cudaMemsetAsync(d_buf_sizes_and_dst_info.data(), 0, d_buf_sizes_and_dst_info.size(), stream));
   }
 
   void copy_to_host()
