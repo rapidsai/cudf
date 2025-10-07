@@ -35,7 +35,6 @@ if TYPE_CHECKING:
         ColumnBinaryOperand,
         ColumnLike,
         Dtype,
-        DtypeObj,
         ScalarLike,
     )
     from cudf.core.buffer import Buffer
@@ -51,15 +50,6 @@ if TYPE_CHECKING:
 # Using np.int8(-1) to allow silent wrap-around when casting to uint
 # it may make sense to make this dtype specific or a function.
 _DEFAULT_CATEGORICAL_VALUE = np.int8(-1)
-
-
-def as_unsigned_codes(
-    num_cats: int, codes: NumericalColumn
-) -> NumericalColumn:
-    codes_dtype = min_unsigned_type(num_cats)
-    return cast(
-        cudf.core.column.numerical.NumericalColumn, codes.astype(codes_dtype)
-    )
 
 
 def validate_categorical_children(children) -> None:
@@ -178,16 +168,14 @@ class CategoricalColumn(column.ColumnBase):
 
     @property
     def children(self) -> tuple[NumericalColumn]:
+        if self.offset == 0 and self.size == self.base_size:
+            return super().children  # type: ignore[return-value]
         if self._children is None:
-            codes_column = self.base_children[0]
-            start = self.offset * codes_column.dtype.itemsize
-            end = start + self.size * codes_column.dtype.itemsize
-            codes_column = cudf.core.column.NumericalColumn(
-                data=codes_column.base_data[start:end],
-                dtype=codes_column.dtype,
-                size=self.size,
+            # Compute children from the column view (children factoring self.size)
+            child = type(self).from_pylibcudf(
+                self.to_pylibcudf(mode="read").copy()
             )
-            self._children = (codes_column,)
+            self._children = (child,)
         return self._children
 
     @property
@@ -699,11 +687,6 @@ class CategoricalColumn(column.ColumnBase):
             self._codes = other_col.codes
         return out
 
-    def view(self, dtype: DtypeObj) -> ColumnBase:
-        raise NotImplementedError(
-            "Categorical column views are not currently supported"
-        )
-
     @staticmethod
     def _concat(
         objs: MutableSequence[CategoricalColumn],
@@ -733,10 +716,6 @@ class CategoricalColumn(column.ColumnBase):
         else:
             codes_col = column.concat_columns(codes)  # type: ignore[arg-type]
 
-        codes_col = as_unsigned_codes(
-            len(cats),
-            cast(cudf.core.column.numerical.NumericalColumn, codes_col),
-        )
         return codes_col._with_type_metadata(CategoricalDtype(categories=cats))  # type: ignore[return-value]
 
     def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
