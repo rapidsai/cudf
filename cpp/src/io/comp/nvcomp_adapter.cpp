@@ -91,7 +91,6 @@ namespace {
   } while (0)
 
 // Dispatcher for nvcompBatched<format>DecompressGetTempSizeAsync
-template <typename... Args>
 auto batched_decompress_get_temp_size_async(compression_type compression,
                                             size_t num_chunks,
                                             size_t max_uncompressed_chunk_bytes,
@@ -135,7 +134,6 @@ auto batched_decompress_get_temp_size_async(compression_type compression,
 }
 
 // Dispatcher for nvcompBatched<format>DecompressAsync
-template <typename... Args>
 auto batched_decompress_async(compression_type compression,
                               std::optional<bool> use_hw_decompression,
                               void const* const* device_compressed_chunk_ptrs,
