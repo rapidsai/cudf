@@ -14,26 +14,34 @@
  * limitations under the License.
  */
 
-#include "parquet_io.hpp"
-#include "cudf/io/types.hpp"
+#pragma once
 
-#include <cudf/copying.hpp>
-#include <cudf/io/parquet.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/column/column.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-#include <iostream>
+#include <memory>
 
 namespace cudf {
 namespace examples {
 
-std::unique_ptr<cudf::table> read_parquet_file(std::string const& filepath,
+/**
+ * @brief Sample splitters from a sorted table
+ *
+ * Extracts n equally spaced rows from the first column of a sorted table
+ * to use as splitters for external sorting.
+ *
+ * @param sorted_table The table sorted by first column
+ * @param num_splitters Number of splitters to extract
+ * @param stream CUDA stream for operations
+ * @return Column containing the sampled splitter values
+ */
+std::unique_ptr<cudf::column> sample_splitters(cudf::table_view const& tv,
+                                               cudf::size_type num_splitters,
                                                rmm::cuda_stream_view stream,
-                                               rmm::device_async_resource_ref mr)
-{
-  std::unique_ptr<cudf::table> table;
-  std::cout << "Reading: " << filepath << std::endl;
-  return cudf::io::read_parquet(cudf::io::parquet_reader_options::builder(cudf::io::source_info(filepath)), stream).tbl;
-}
+                                               rmm::device_async_resource_ref mr);
 
 }  // namespace examples
 }  // namespace cudf

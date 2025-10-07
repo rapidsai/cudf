@@ -14,25 +14,31 @@
  * limitations under the License.
  */
 
-#include "parquet_io.hpp"
-#include "cudf/io/types.hpp"
+#include "cusort.hpp"
 
 #include <cudf/copying.hpp>
-#include <cudf/io/parquet.hpp>
-#include <rmm/resource_ref.hpp>
-
-#include <iostream>
+#include <cudf/sorting.hpp>
 
 namespace cudf {
 namespace examples {
 
-std::unique_ptr<cudf::table> read_parquet_file(std::string const& filepath,
+std::unique_ptr<cudf::column> sample_splitters(cudf::table_view const& table_view,
+                                               cudf::size_type num_splitters,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
 {
-  std::unique_ptr<cudf::table> table;
-  std::cout << "Reading: " << filepath << std::endl;
-  return cudf::io::read_parquet(cudf::io::parquet_reader_options::builder(cudf::io::source_info(filepath)), stream).tbl;
+  if (table_view.num_rows() == 0 || num_splitters <= 0) {
+    // Return empty column of the same type as the first column
+    return cudf::empty_like(table_view.column(0));
+  }
+  
+  // Sort this table by first column
+  std::vector<cudf::order> column_order{cudf::order::ASCENDING};
+  std::vector<cudf::null_order> null_precedence{cudf::null_order::AFTER};
+  
+  auto sorted_indices = cudf::sorted_order(table_view.select({0}), column_order, null_precedence, stream, mr);
+  // TODO: sample
+  return sorted_indices;
 }
 
 }  // namespace examples

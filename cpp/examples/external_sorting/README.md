@@ -1,11 +1,11 @@
 # External Sorting Example
 
-This example demonstrates external sorting using libcudf by:
+This example demonstrates external sorting using libcudf with a sample sort algorithm:
 
-1. **Generating random data**: Creates tables with configurable numbers of columns and rows
-2. **Writing to parquet files**: Stores data across multiple parquet files to simulate external storage
-3. **Multithreaded I/O**: Uses parallel reading and writing for better performance
-4. **Sorting large datasets**: Combines all data and sorts using libcudf's optimized sorting algorithms
+1. **Reading parquet files**: Reads existing parquet files from a specified directory individually (without concatenating to avoid memory limits)
+2. **Individual sorting**: Sorts each table separately by the first column
+3. **Splitter sampling**: Extracts equally spaced splitter values from each sorted table
+4. **External sorting**: Demonstrates the sample sort algorithm suitable for datasets larger than available memory
 
 ## Building
 
@@ -20,126 +20,128 @@ make -j
 ## Usage
 
 ```bash
-./sort [n_columns] [m_rows_per_file] [num_files] [output_dir]
+./sort [input_dir] [num_files]
 ```
 
 ### Arguments
 
-- **n_columns**: Number of columns in each table (default: 5)
-- **m_rows_per_file**: Number of rows per parquet file (default: 1,000,000)
-- **num_files**: Number of parquet files to create (default: 4)
-- **output_dir**: Directory to store parquet files (default: ./sort_data)
+- **input_dir**: Directory containing parquet files to read (default: ./sort_data)
+- **num_files**: Number of parquet files to read (default: 4)
+
+The program expects parquet files named `data_0.parquet`, `data_1.parquet`, etc. in the input directory.
 
 ### Examples
 
 ```bash
-# Default run: 5 columns, 4 files of 1M rows each (4M total rows)
+# Default run: Read 4 files from ./sort_data
 ./sort
 
-# Custom run: 3 columns, 8 files of 500K rows each (4M total rows)
-./sort 3 500000 8 /tmp/my_sort_test
+# Read 8 files from a specific directory
+./sort /path/to/data 8
 
-# Large dataset: 10 columns, 10 files of 2M rows each (20M total rows)
-./sort 10 2000000 10 /data/large_sort
+# Process large number of files
+./sort /data/large_dataset 20
 ```
 
-## What it Does
+## Algorithm: Sample Sort for External Sorting
 
-### Phase 1: Data Generation and Storage
-- Generates random tables with mixed data types (int32, float64, int64, float32, int16)
-- Writes each table to a separate parquet file using Snappy compression
-- Uses multithreaded writing for better I/O performance
+This example implements the initial phases of a sample sort algorithm, which is commonly used for external sorting:
 
-### Phase 2: Data Reading
-- Reads all parquet files back using multithreaded I/O
-- Concatenates data from multiple threads efficiently
+### Phase 1: Data Reading
+- Reads parquet files sequentially from the specified input directory
+- **Crucially, does NOT concatenate the tables** - this avoids memory limitations
+- Each table is kept separate to simulate external sorting constraints
+- Validates that all expected files exist before processing
 
-### Phase 3: Data Concatenation
-- Combines all data into a single large table
-- Reports total number of rows processed
+### Phase 2: Individual Sorting and Splitter Sampling
+- Sorts each table individually by the first column using libcudf's optimized sorting
+- Samples n equally spaced splitter values from each sorted table (where n = number of files)
+- These splitters would be used in a full external sort to partition data across buckets
+- Keeps memory usage bounded by processing one table at a time
 
-### Phase 4: Sorting
-- Sorts the combined dataset by the first column (ascending order)
-- Uses libcudf's optimized sorting algorithms including:
-  - Radix sort for integer types
-  - Multi-path optimization based on data characteristics
-  - Index-based sorting for memory efficiency
+## Sample Sort Algorithm Overview
 
-### Phase 5: Result Output
-- Writes the sorted result to a parquet file
-- Provides performance metrics for each phase
+The sample sort algorithm is designed for sorting datasets that don't fit in memory:
 
-## Data Types
+1. **Local Sort**: Sort each chunk/partition individually ✓ (implemented)
+2. **Sample Collection**: Extract representative samples from each sorted chunk ✓ (implemented)  
+3. **Global Splitter Selection**: Choose global splitters from all samples (future enhancement)
+4. **Data Partitioning**: Redistribute data based on global splitters (future enhancement)
+5. **Final Sort**: Sort each partition and concatenate results (future enhancement)
 
-The example generates columns with different data types to demonstrate libcudf's type system:
+This example demonstrates steps 1 and 2, providing a foundation for a complete external sorting implementation.
 
-- **INT32**: Primary sorting column with large integer values
-- **FLOAT64**: Double precision floating point numbers
-- **INT64**: Long integer values
-- **FLOAT32**: Single precision floating point numbers  
-- **INT16**: Short integer values
+## Input File Format
 
-Each column type has different value ranges to create diverse datasets for testing.
+The program expects parquet files with the naming pattern:
+- `data_0.parquet`
+- `data_1.parquet`
+- `data_2.parquet`
+- etc.
+
+All files should have the same schema (same column names and types).
 
 ## Performance Notes
 
 - **Memory Management**: Uses RMM (Rapids Memory Manager) with pooled allocations for optimal GPU memory usage
-- **Stream Management**: Utilizes CUDA stream pools for concurrent operations
-- **I/O Optimization**: Leverages multithreaded parquet I/O for better disk/network throughput
-- **Compression**: Uses Snappy compression for parquet files to reduce storage requirements
+- **Bounded Memory Usage**: Processes one table at a time to avoid memory limitations
+- **Sequential I/O**: Reads parquet files sequentially for simplicity and reliability
+- **Sorting Efficiency**: Uses libcudf's optimized sorting for each individual table
+- **External Algorithm**: Designed for datasets larger than available memory
 
 ## Example Output
 
 ```
-External Sorting Example
-========================
-Columns per table: 5
-Rows per file: 1000000
+External Sorting Example (Sample Sort Algorithm)
+================================================
+Input directory: /path/to/data
 Number of files: 4
-Total rows: 4000000
-Output directory: ./sort_data
 
-Phase 1: Generating and writing 4 parquet files...
-Generating table 1/4
-Generating table 2/4
-Generating table 3/4
-Generating table 4/4
-Data generation Elapsed Time: 1250ms
-
-Writing parquet files Elapsed Time: 2100ms
-
-Phase 2: Reading parquet files...
+Phase 1: Reading parquet files...
+Reading: /path/to/data/data_0.parquet
+Reading: /path/to/data/data_1.parquet
+Reading: /path/to/data/data_2.parquet
+Reading: /path/to/data/data_3.parquet
 Reading parquet files Elapsed Time: 800ms
 
-Phase 3: Concatenating data...
-Total rows to concatenate: 4000000
-Data concatenation Elapsed Time: 150ms
+Phase 2: Sorting individual tables and sampling splitters...
+Sorting table 0 (1000000 rows)
+  Sampled 4 splitters from table 0
+Sorting table 1 (1000000 rows)
+  Sampled 4 splitters from table 1
+Sorting table 2 (1000000 rows)
+  Sampled 4 splitters from table 2
+Sorting table 3 (1000000 rows)
+  Sampled 4 splitters from table 3
+Sorting individual tables and sampling Elapsed Time: 650ms
 
-Phase 4: Sorting data...
-Sorting by first column (ascending)
-Computing sort order Elapsed Time: 320ms
-Gathering sorted data Elapsed Time: 180ms
-
-Phase 5: Writing sorted result...
-Writing sorted result Elapsed Time: 750ms
-
-External sorting completed successfully!
+External sorting (sample sort) completed!
 Summary:
-  Input: 4 files × 1000000 rows × 5 columns
-  Total processed: 4000000 rows
-  Sorted result: ./sort_data/sorted_result.parquet
+  Input: 4 files from /path/to/data
+  Total processed: 4000000 rows across 4 tables
+  Algorithm: Sample sort with 4 splitters per table
+  Memory usage: Each table processed individually (external sorting)
 ```
+
+## Error Handling
+
+The program performs several validation checks:
+
+- Verifies the input directory exists and is accessible
+- Checks that all required parquet files exist before processing
+- Validates that the number of files parameter is positive
+- Provides clear error messages for common issues
 
 ## Educational Value
 
-This example demonstrates several key libcudf concepts:
+This example demonstrates several key libcudf concepts and external sorting principles:
 
-- **Column Creation**: Using factory functions to create columns with different types
-- **Table Management**: Working with tables as collections of columns
-- **Memory Management**: Proper use of RMM for GPU memory allocation
-- **I/O Operations**: Reading and writing parquet files with optimal settings
+- **Parquet I/O**: Reading parquet files with optimal performance settings
+- **Table Management**: Working with individual tables without concatenation
+- **Memory Management**: Proper use of RMM for GPU memory allocation with bounded usage
 - **Sorting Algorithms**: Leveraging libcudf's high-performance sorting capabilities
-- **Multithreading**: Using CUDA streams for concurrent operations
-- **Data Concatenation**: Efficiently combining multiple tables
+- **External Sorting**: Processing datasets larger than available memory
+- **Sample Sort Algorithm**: Implementing the sampling phase of distributed sorting
+- **Splitter Sampling**: Extracting representative values for data partitioning
 
-The code serves as a practical reference for building applications that need to process large datasets that don't fit in memory, demonstrating the external sorting pattern commonly used in big data processing.
+The code serves as a foundation for building applications that need to sort large datasets stored across multiple parquet files using external sorting techniques. It demonstrates the critical concept of bounded memory usage and the sample sort algorithm commonly used in distributed big data processing systems.
