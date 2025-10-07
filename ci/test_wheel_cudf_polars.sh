@@ -71,6 +71,8 @@ for version in "${VERSIONS[@]}"; do
 
     ./ci/run_cudf_polars_pytests.sh \
         "${COVERAGE_ARGS[@]}" \
+        --numprocesses=8 \
+        --dist=worksteal \
         --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-${version}.xml"
 
     if [ $? -ne 0 ]; then
