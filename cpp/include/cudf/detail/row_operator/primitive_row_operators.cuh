@@ -48,9 +48,7 @@ namespace detail {
  */
 bool is_primitive_row_op_compatible(cudf::table_view const& table);
 
-}  // namespace detail
-
-namespace detail::row::primitive {
+namespace row::primitive {
 
 /**
  * @brief Returns `void` if it's not a primitive type
@@ -283,5 +281,6 @@ class row_hasher {
   hash_value_type _seed;
 };
 
-}  // namespace detail::row::primitive
+}  // namespace row::primitive
+}  // namespace detail
 }  // namespace CUDF_EXPORT cudf
