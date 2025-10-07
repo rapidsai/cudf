@@ -197,7 +197,7 @@ class generic_scalar_device_view : public cudf::detail::scalar_device_view_base 
    *
    * @param s The fixed-point scalar to construct from
    */
-  template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_point<T>())>
+  template <typename T>
   generic_scalar_device_view(cudf::fixed_point_scalar<T>& s)
     : generic_scalar_device_view{s.type(), s.data(), s.validity_data()}
   {
@@ -284,7 +284,7 @@ class literal : public expression {
    *
    * @param value A fixed-point scalar value
    */
-  template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_point<T>())>
+  template <typename T>
   literal(cudf::fixed_point_scalar<T>& value) : scalar(value), value(value)
   {
   }
