@@ -411,9 +411,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         new_plc_column = self.to_pylibcudf(
             mode="read", use_base=False
         ).with_mask(new_mask, new_null_count)
-        return self.from_pylibcudf(  # type: ignore[return-value]
-            new_plc_column,
-        )._with_type_metadata(self.dtype)
+        return (
+            type(self)
+            .from_pylibcudf(  # type: ignore[return-value]
+                new_plc_column,
+            )
+            ._with_type_metadata(self.dtype)
+        )
 
     @property
     def null_count(self) -> int:
