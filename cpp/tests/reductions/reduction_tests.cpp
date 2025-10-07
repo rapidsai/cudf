@@ -278,14 +278,18 @@ TYPED_TEST(MinMaxReductionTest, ArgMinMaxReductions)
     cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
     auto const expected_argmin = argmin(v);
     auto const expected_argmax = argmax(v);
-    EXPECT_EQ(
-      this->template reduction_test<T>(col, *cudf::make_argmin_aggregation<reduce_aggregation>())
-        .first,
-      expected_argmin);
-    EXPECT_EQ(
-      this->template reduction_test<T>(col, *cudf::make_argmax_aggregation<reduce_aggregation>())
-        .first,
-      expected_argmax);
+    EXPECT_EQ(this
+                ->template reduction_test<int>(col,
+                                               *cudf::make_argmin_aggregation<reduce_aggregation>(),
+                                               cudf::data_type{cudf::type_id::INT32})
+                .first,
+              expected_argmin);
+    EXPECT_EQ(this
+                ->template reduction_test<int>(col,
+                                               *cudf::make_argmax_aggregation<reduce_aggregation>(),
+                                               cudf::data_type{cudf::type_id::INT32})
+                .first,
+              expected_argmax);
   }
 
   // test with some nulls
@@ -296,13 +300,15 @@ TYPED_TEST(MinMaxReductionTest, ArgMinMaxReductions)
     auto const expected_argmin = argmin(r_min);
     auto const expected_argmax = argmax(r_max);
     EXPECT_EQ(this
-                ->template reduction_test<T>(col_nulls,
-                                             *cudf::make_argmin_aggregation<reduce_aggregation>())
+                ->template reduction_test<int>(col_nulls,
+                                               *cudf::make_argmin_aggregation<reduce_aggregation>(),
+                                               cudf::data_type{cudf::type_id::INT32})
                 .first,
               expected_argmin);
     EXPECT_EQ(this
-                ->template reduction_test<T>(col_nulls,
-                                             *cudf::make_argmax_aggregation<reduce_aggregation>())
+                ->template reduction_test<int>(col_nulls,
+                                               *cudf::make_argmax_aggregation<reduce_aggregation>(),
+                                               cudf::data_type{cudf::type_id::INT32})
                 .first,
               expected_argmax);
   }
@@ -310,14 +316,18 @@ TYPED_TEST(MinMaxReductionTest, ArgMinMaxReductions)
   // test with all null
   {
     cudf::test::fixed_width_column_wrapper<T> col_all_nulls = construct_null_column(v, all_null);
-    EXPECT_FALSE(this
-                   ->template reduction_test<T>(
-                     col_all_nulls, *cudf::make_argmin_aggregation<reduce_aggregation>())
-                   .second);
-    EXPECT_FALSE(this
-                   ->template reduction_test<T>(
-                     col_all_nulls, *cudf::make_argmax_aggregation<reduce_aggregation>())
-                   .second);
+    EXPECT_FALSE(
+      this
+        ->template reduction_test<int>(col_all_nulls,
+                                       *cudf::make_argmin_aggregation<reduce_aggregation>(),
+                                       cudf::data_type{cudf::type_id::INT32})
+        .second);
+    EXPECT_FALSE(
+      this
+        ->template reduction_test<int>(col_all_nulls,
+                                       *cudf::make_argmax_aggregation<reduce_aggregation>(),
+                                       cudf::data_type{cudf::type_id::INT32})
+        .second);
   }
 }
 
@@ -3539,6 +3549,8 @@ TEST_F(ReductionIsValidTest, IsValidAggregation)
   auto const struct_type  = cudf::data_type{cudf::type_id::STRUCT};
   auto const decimal_type = cudf::data_type{cudf::type_id::DECIMAL32, 2};
 
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::ARGMAX));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::ARGMIN));
   EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::SUM));
   EXPECT_TRUE(
     cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::SUM_WITH_OVERFLOW));
@@ -3588,8 +3600,6 @@ TEST_F(ReductionIsValidTest, IsValidAggregation)
   EXPECT_FALSE(
     cudf::reduction::is_valid_aggregation(float_type, cudf::aggregation::SUM_WITH_OVERFLOW));
 
-  EXPECT_FALSE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::ARGMAX));
-  EXPECT_FALSE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::ARGMIN));
   EXPECT_FALSE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::ROW_NUMBER));
   EXPECT_FALSE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::RANK));
   EXPECT_FALSE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::LAG));
