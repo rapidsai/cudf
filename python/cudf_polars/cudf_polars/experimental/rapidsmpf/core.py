@@ -29,7 +29,6 @@ import cudf_polars.experimental.rapidsmpf.repartition
 import cudf_polars.experimental.rapidsmpf.shuffle
 import cudf_polars.experimental.rapidsmpf.union  # noqa: F401
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.ir import DataFrameScan, Scan
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.rapidsmpf.dispatch import lower_ir_node
 from cudf_polars.experimental.rapidsmpf.nodes import generate_ir_sub_network_wrapper
@@ -208,17 +207,14 @@ def generate_network(
     # We will need to multiply the output channel
     # for these nodes.
     output_ch_count: defaultdict[IR, int] = defaultdict(int)
-    io_node_count = 0
     for node in traversal([ir]):
-        if isinstance(node, (DataFrameScan, Scan)):
-            io_node_count += 1
         for child in node.children:
             output_ch_count[child] += 1
 
     # IO Throttling
     # TODO: Make this configurable.
-    # TODO: Does it make sense to hang when this is too small?
-    max_io_threads = max(io_node_count, 2)
+    # TODO: Does it make sense to hang when this is <2?
+    max_io_threads = 2
     io_throttle = asyncio.Semaphore(max_io_threads)
 
     # Generate the network
