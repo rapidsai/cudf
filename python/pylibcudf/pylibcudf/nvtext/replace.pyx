@@ -58,7 +58,7 @@ cpdef Column replace_tokens(
     mr = _get_memory_resource(mr)
     if delimiter is None:
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view())
+            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
         )
     with nogil:
         c_result = cpp_replace_tokens(
@@ -110,11 +110,11 @@ cpdef Column filter_tokens(
     mr = _get_memory_resource(mr)
     if delimiter is None:
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view())
+            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
         )
     if replacement is None:
         replacement = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view())
+            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
         )
 
     with nogil:
