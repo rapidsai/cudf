@@ -17,17 +17,16 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
-#include <cudf_test/tdigest_utilities.cuh>
+#include <cudf_test/tdigest_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
+#include <cudf/filling.hpp>
 #include <cudf/tdigest/tdigest_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <thrust/copy.h>
-#include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <functional>
@@ -74,12 +73,8 @@ struct tdigest_groupby_simple_op {
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& values, int delta) const
   {
     // make a simple set of matching keys.
-    auto keys = cudf::make_fixed_width_column(
-      cudf::data_type{cudf::type_id::INT32}, values.size(), cudf::mask_state::UNALLOCATED);
-    thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
-                 keys->mutable_view().template begin<int>(),
-                 keys->mutable_view().template end<int>(),
-                 0);
+    auto zero = cudf::numeric_scalar<int32_t>(0);
+    auto keys = cudf::sequence(values.size(), zero, zero);
 
     cudf::table_view t({*keys});
     cudf::groupby::groupby gb(t);
@@ -101,12 +96,8 @@ struct tdigest_groupby_simple_merge_op {
                                            int merge_delta) const
   {
     // make a simple set of matching keys.
-    auto merge_keys = cudf::make_fixed_width_column(
-      cudf::data_type{cudf::type_id::INT32}, merge_values.size(), cudf::mask_state::UNALLOCATED);
-    thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
-                 merge_keys->mutable_view().template begin<int>(),
-                 merge_keys->mutable_view().template end<int>(),
-                 0);
+    auto zero       = cudf::numeric_scalar<int32_t>(0);
+    auto merge_keys = cudf::sequence(merge_values.size(), zero, zero);
 
     cudf::table_view key_table({*merge_keys});
     cudf::groupby::groupby gb(key_table);
@@ -239,19 +230,218 @@ TEST_F(TDigestTest, EmptyMixed)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result.second[0].results[0], *expected);
 }
 
+template <typename Func>
+void tdigest_simple_large_input_double_aggregation(Func op)
+{
+  bool is_cpu_cluster_computation_disabled[2] = {true, false};
+  for (int idx = 0; idx < 2; idx++) {
+    cudf::tdigest::detail::is_cpu_cluster_computation_disabled =
+      is_cpu_cluster_computation_disabled[idx];
+
+    auto values = cudf::test::generate_standardized_percentile_distribution(
+      cudf::data_type{cudf::type_id::FLOAT64});
+
+    // compare against a sample of known/expected values (which themselves were verified against the
+    // Arrow implementation)
+
+    {
+      int const delta = 1000;
+      auto result =
+        cudf::type_dispatcher(values->view().type(), cudf::test::tdigest_gen{}, op, *values, delta);
+
+      std::vector<cudf::test::expected_value> expected{{0, 0.00040692343794663995, 7},
+                                                       {10, 0.16234555627091204477, 153},
+                                                       {59, 5.12764811246045937310, 858},
+                                                       {250, 62.54581814492237157310, 2356},
+                                                       {368, 87.85834376680742252574, 1735},
+                                                       {409, 94.07685720279611985006, 1272},
+                                                       {491, 99.94197663121231300920, 130},
+                                                       {500, 99.99969880795092080916, 2}};
+      cudf::tdigest::tdigest_column_view tdv(*result);
+      cudf::test::tdigest_sample_compare(tdv, expected);
+      cudf::test::tdigest_minmax_compare<double>(tdv, *values);
+    }
+
+    {
+      int const delta = 100;
+      auto result =
+        cudf::type_dispatcher(values->view().type(), cudf::test::tdigest_gen{}, op, *values, delta);
+
+      std::vector<cudf::test::expected_value> expected{{0, 0.07265722021410986331, 739},
+                                                       {7, 8.19766194442652640362, 10693},
+                                                       {16, 36.82277869518204482802, 20276},
+                                                       {29, 72.95424834129075009059, 22623},
+                                                       {38, 90.61229683516096145013, 15581},
+                                                       {46, 99.07283498858802772702, 5142},
+                                                       {50, 99.99970905482754801596, 1}};
+      cudf::tdigest::tdigest_column_view tdv(*result);
+      cudf::test::tdigest_sample_compare(tdv, expected);
+      cudf::test::tdigest_minmax_compare<double>(tdv, *values);
+    }
+
+    {
+      int const delta = 10;
+      auto result =
+        cudf::type_dispatcher(values->view().type(), cudf::test::tdigest_gen{}, op, *values, delta);
+
+      std::vector<cudf::test::expected_value> expected{{0, 7.15508346777729631327, 71618},
+                                                       {1, 33.04971680740474226923, 187499},
+                                                       {2, 62.50566666553867634093, 231762},
+                                                       {3, 83.46216572053654658703, 187500},
+                                                       {4, 96.42204425201593664951, 71620},
+                                                       {5, 99.99970905482754801596, 1}};
+      cudf::tdigest::tdigest_column_view tdv(*result);
+      cudf::test::tdigest_sample_compare(tdv, expected);
+      cudf::test::tdigest_minmax_compare<double>(tdv, *values);
+    }
+  }
+}
+
+template <typename Func>
+void tdigest_simple_large_input_int_aggregation(Func op)
+{
+  bool is_cpu_cluster_computation_disabled[2] = {true, false};
+  for (int idx = 0; idx < 2; idx++) {
+    cudf::tdigest::detail::is_cpu_cluster_computation_disabled =
+      is_cpu_cluster_computation_disabled[idx];
+
+    auto values = cudf::test::generate_standardized_percentile_distribution(
+      cudf::data_type{cudf::type_id::INT32});
+
+    // compare against a sample of known/expected values (which themselves were verified against the
+    // Arrow implementation)
+
+    {
+      int const delta = 1000;
+      auto result =
+        cudf::type_dispatcher(values->view().type(), cudf::test::tdigest_gen{}, op, *values, delta);
+      std::vector<cudf::test::expected_value> expected{{0, 0, 7},
+                                                       {14, 0, 212},
+                                                       {26, 0.83247422680412408447, 388},
+                                                       {44, 2, 648},
+                                                       {45, 2.42598187311178170589, 662},
+                                                       {342, 82.75190258751908345403, 1971},
+                                                       {383, 90, 1577},
+                                                       {417, 94.88376068376066996279, 1170},
+                                                       {418, 95, 1157},
+                                                       {479, 99, 307},
+                                                       {500, 99, 2}};
+      cudf::tdigest::tdigest_column_view tdv(*result);
+      cudf::test::tdigest_sample_compare(tdv, expected);
+      cudf::test::tdigest_minmax_compare<int>(tdv, *values);
+    }
+
+    {
+      int const delta = 100;
+      auto result =
+        cudf::type_dispatcher(values->view().type(), cudf::test::tdigest_gen{}, op, *values, delta);
+      std::vector<cudf::test::expected_value> expected{{0, 0, 739},
+                                                       {7, 7.71486018890863167741, 10693},
+                                                       {16, 36.32491615703294485229, 20276},
+                                                       {29, 72.44392874508245938614, 22623},
+                                                       {38, 90.14209614273795523332, 15581},
+                                                       {46, 98.64041229093737683797, 5142},
+                                                       {50, 99, 1}};
+      cudf::tdigest::tdigest_column_view tdv(*result);
+      cudf::test::tdigest_sample_compare(tdv, expected);
+      cudf::test::tdigest_minmax_compare<int>(tdv, *values);
+    }
+
+    {
+      int const delta = 10;
+      auto result =
+        cudf::type_dispatcher(values->view().type(), cudf::test::tdigest_gen{}, op, *values, delta);
+      std::vector<cudf::test::expected_value> expected{{0, 6.66025300902007799664, 71618},
+                                                       {1, 32.54912826201739051157, 187499},
+                                                       {2, 62.00734805533262772315, 231762},
+                                                       {3, 82.96355733333332693746, 187500},
+                                                       {4, 95.91280368612116546956, 71620},
+                                                       {5, 99, 1}};
+      cudf::tdigest::tdigest_column_view tdv(*result);
+      cudf::test::tdigest_sample_compare(tdv, expected);
+      cudf::test::tdigest_minmax_compare<int>(tdv, *values);
+    }
+  }
+}
+
+template <typename Func>
+void tdigest_simple_large_input_decimal_aggregation(Func op)
+{
+  bool is_cpu_cluster_computation_disabled[2] = {true, false};
+  for (int idx = 0; idx < 2; idx++) {
+    cudf::tdigest::detail::is_cpu_cluster_computation_disabled =
+      is_cpu_cluster_computation_disabled[idx];
+
+    auto values = cudf::test::generate_standardized_percentile_distribution(
+      cudf::data_type{cudf::type_id::DECIMAL32, -4});
+    auto cast_values = cudf::cast(*values, cudf::data_type{cudf::type_id::FLOAT64});
+
+    // compare against a sample of known/expected values (which themselves were verified against the
+    // Arrow implementation)
+
+    {
+      int const delta = 1000;
+      auto result =
+        cudf::type_dispatcher(values->view().type(), cudf::test::tdigest_gen{}, op, *values, delta);
+      std::vector<cudf::test::expected_value> expected{{0, 0.00035714285714285709, 7},
+                                                       {10, 0.16229738562091505782, 153},
+                                                       {59, 5.12759696969697031932, 858},
+                                                       {250, 62.54576854838715860296, 2356},
+                                                       {368, 87.85829446685879418055, 1735},
+                                                       {409, 94.07680636792450457051, 1272},
+                                                       {491, 99.94192461538463589932, 130},
+                                                       {500, 99.99965000000000259206, 2}};
+      cudf::tdigest::tdigest_column_view tdv(*result);
+      cudf::test::tdigest_sample_compare(tdv, expected);
+      cudf::test::tdigest_minmax_compare<double>(tdv, *cast_values);
+    }
+
+    {
+      int const delta = 100;
+      auto result =
+        cudf::type_dispatcher(values->view().type(), cudf::test::tdigest_gen{}, op, *values, delta);
+      std::vector<cudf::test::expected_value> expected{{0, 0.07260811907983763525, 739},
+                                                       {7, 8.19761183016926864298, 10693},
+                                                       {16, 36.82272891595975750079, 20276},
+                                                       {29, 72.95419827167043536065, 22623},
+                                                       {38, 90.61224673640975879607, 15581},
+                                                       {46, 99.07278498638662256326, 5142},
+                                                       {50, 99.99970000000000425189, 1}};
+      cudf::tdigest::tdigest_column_view tdv(*result);
+      cudf::test::tdigest_sample_compare(tdv, expected);
+      cudf::test::tdigest_minmax_compare<double>(tdv, *cast_values);
+    }
+
+    {
+      int const delta = 10;
+      auto result =
+        cudf::type_dispatcher(values->view().type(), cudf::test::tdigest_gen{}, op, *values, delta);
+      std::vector<cudf::test::expected_value> expected{{0, 7.15503361864335740705, 71618},
+                                                       {1, 33.04966679715625588187, 187499},
+                                                       {2, 62.50561666407782013266, 231762},
+                                                       {3, 83.46211575573336460820, 187500},
+                                                       {4, 96.42199425300195514410, 71620},
+                                                       {5, 99.99970000000000425189, 1}};
+      cudf::tdigest::tdigest_column_view tdv(*result);
+      cudf::test::tdigest_sample_compare(tdv, expected);
+      cudf::test::tdigest_minmax_compare<double>(tdv, *cast_values);
+    }
+  }
+}
+
 TEST_F(TDigestTest, LargeInputDouble)
 {
-  cudf::test::tdigest_simple_large_input_double_aggregation(tdigest_groupby_simple_op{});
+  tdigest_simple_large_input_double_aggregation(tdigest_groupby_simple_op{});
 }
 
 TEST_F(TDigestTest, LargeInputInt)
 {
-  cudf::test::tdigest_simple_large_input_int_aggregation(tdigest_groupby_simple_op{});
+  tdigest_simple_large_input_int_aggregation(tdigest_groupby_simple_op{});
 }
 
 TEST_F(TDigestTest, LargeInputDecimal)
 {
-  cudf::test::tdigest_simple_large_input_decimal_aggregation(tdigest_groupby_simple_op{});
+  tdigest_simple_large_input_decimal_aggregation(tdigest_groupby_simple_op{});
 }
 
 struct TDigestMergeTest : public cudf::test::BaseFixture {};
@@ -263,23 +453,15 @@ TEST_F(TDigestMergeTest, Simple)
   cudf::test::tdigest_merge_simple(tdigest_groupby_simple_op{}, tdigest_groupby_simple_merge_op{});
 }
 
-struct key_groups {
-  __device__ cudf::size_type operator()(cudf::size_type i) { return i < 250000 ? 0 : 1; }
-};
 TEST_F(TDigestMergeTest, Grouped)
 {
   auto values = cudf::test::generate_standardized_percentile_distribution(
     cudf::data_type{cudf::type_id::FLOAT64});
   ASSERT_EQ(values->size(), 750000);
-  // all in the same group
-  auto keys = cudf::make_fixed_width_column(
-    cudf::data_type{cudf::type_id::INT32}, values->size(), cudf::mask_state::UNALLOCATED);
   // 3 groups. 0-250000 in group 0.  250000-500000 in group 1 and 500000-750000 in group 1
-  auto key_iter = cudf::detail::make_counting_transform_iterator(0, key_groups{});
-  thrust::copy(rmm::exec_policy(cudf::get_default_stream()),
-               key_iter,
-               key_iter + keys->size(),
-               keys->mutable_view().template begin<int>());
+  auto repeat   = cudf::test::fixed_width_column_wrapper<cudf::size_type>({250000, 500000});
+  auto zero_one = cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 1});
+  auto keys     = std::move(cudf::repeat(cudf::table_view({zero_one}), repeat)->release().front());
 
   auto split_values         = cudf::split(*values, {250000, 500000});
   auto grouped_split_values = cudf::split(*values, {250000});
