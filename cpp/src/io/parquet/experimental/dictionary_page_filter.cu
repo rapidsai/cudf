@@ -1525,8 +1525,8 @@ aggregate_reader_metadata::apply_dictionary_filter(
 
   // For each input column
   std::for_each(
-    thrust::counting_iterator<size_t>(0),
-    thrust::counting_iterator(output_dtypes.size()),
+    thrust::counting_iterator(0),
+    thrust::counting_iterator(num_input_columns),
     [&](auto input_col_idx) {
       auto const& dtype = output_dtypes[input_col_idx];
 

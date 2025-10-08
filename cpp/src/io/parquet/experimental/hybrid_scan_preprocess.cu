@@ -223,12 +223,11 @@ hybrid_scan_reader_impl::prepare_dictionaries(
   auto const row_groups_info = std::get<2>(_extended_metadata->select_row_groups(
     {}, row_group_indices, {}, {}, {}, {}, {}, {}, {}, _stream));
 
-  CUDF_EXPECTS(row_groups_info.size() * _input_columns.size() == dictionary_page_data.size(),
-               "Dictionary page data size must match the number of row groups times the number of "
-               "input columns");
+  CUDF_EXPECTS(
+    row_groups_info.size() * dictionary_col_schemas.size() == dictionary_page_data.size(),
+    "Dictionary page data size must match the number of row groups times the number of columns "
+    "with dictionaries and a(n) (in)equality predicate");
 
-  // Number of input columns
-  auto const num_input_columns = _input_columns.size();
   // Number of column chunks
   auto const total_column_chunks = dictionary_page_data.size();
 
