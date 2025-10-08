@@ -74,9 +74,9 @@ class make_scalar_fn {
  * @tparam Functor The functor to prevent inlining.
  */
 template <typename Functor>
-struct non_inline_adapter_fn {
+struct noinline_adapter_fn {
   Functor f;
-  non_inline_adapter_fn(Functor&& f_) : f{std::forward<Functor>(f_)} {}
+  noinline_adapter_fn(Functor&& f_) : f{std::forward<Functor>(f_)} {}
   template <typename... Args>
   [[nodiscard]] __attribute__((noinline)) __device__ auto operator()(Args&&... args) const
   {
@@ -101,52 +101,75 @@ class arg_minmax_dispatcher {
     return !cudf::is_dictionary<ElementType>() && !std::is_same_v<ElementType, void>;
   }
 
-  template <typename Comparator>
-  [[nodiscard]] size_type find_minmax_idx(size_type size,
-                                          Comparator comp,
-                                          rmm::cuda_stream_view stream) const
+  template <typename InputIterator, typename... Args>
+  size_type find_extremum_idx(InputIterator it,
+                              size_type size,
+                              rmm::cuda_stream_view stream,
+                              Args&&... args) const
   {
-    auto const input_it     = thrust::make_counting_iterator<size_type>(0);
-    auto const extremum_pos = [&] {
+    auto const pos = [&] {
       if constexpr (K == aggregation::ARGMIN) {
-        return thrust::min_element(rmm::exec_policy_nosync(stream),
-                                   input_it,
-                                   input_it + size,
-                                   non_inline_adapter_fn<Comparator>{std::move(comp)});
+        return thrust::min_element(
+          rmm::exec_policy_nosync(stream), it, it + size, std::forward<Args>(args)...);
       } else {
-        return thrust::max_element(rmm::exec_policy_nosync(stream),
-                                   input_it,
-                                   input_it + size,
-                                   non_inline_adapter_fn<Comparator>{std::move(comp)});
+        return thrust::max_element(
+          rmm::exec_policy_nosync(stream), it, it + size, std::forward<Args>(args)...);
       }
     }();
-    return static_cast<size_type>(cuda::std::distance(input_it, extremum_pos));
+    return static_cast<size_type>(cuda::std::distance(it, pos));
   }
 
   template <typename ElementType>
-  [[nodiscard]] size_type find_minmax_idx_numeric(column_view const& input,
-                                                  rmm::cuda_stream_view stream) const
+  [[nodiscard]] size_type find_arg_minmax(column_view const& input,
+                                          rmm::cuda_stream_view stream) const
+    requires(cudf::is_nested<ElementType>())
   {
-    auto const find_extremum = [&](auto const& it) {
-      if constexpr (K == aggregation::ARGMIN) {
-        return thrust::min_element(rmm::exec_policy_nosync(stream), it, it + input.size());
-      } else {
-        return thrust::max_element(rmm::exec_policy_nosync(stream), it, it + input.size());
-      }
-    };
-
     using Op = std::conditional_t<K == aggregation::ARGMIN,
                                   reduction::detail::op::min,
                                   reduction::detail::op::max>;
+    auto const binop_generator =
+      reduction::detail::comparison_binop_generator::create<Op>(input, stream);
+    return find_extremum_idx(thrust::make_counting_iterator(0),
+                             input.size(),
+                             stream,
+                             noinline_adapter_fn{binop_generator.less()});
+  }
+
+  // This function is used for types such as string, timestamp, fixed point, etc.
+  template <typename ElementType>
+  [[nodiscard]] size_type find_arg_minmax(column_view const& input,
+                                          rmm::cuda_stream_view stream) const
+    requires(not cudf::is_nested<ElementType>() and not cudf::is_numeric<ElementType>())
+  {
+    // Nulls are considered "greater" (ARGMIN), or "less" (ARGMAX) than non-null values.
+    auto const null_orders =
+      std::vector<null_order>{K == aggregation::ARGMIN ? null_order::AFTER : null_order::BEFORE};
+    auto const comparator = cudf::detail::row::lexicographic::self_comparator{
+      table_view{{input}}, {}, null_orders, stream};
+    auto d_comp =
+      comparator.less<false /* has_nested_columns */>(nullate::DYNAMIC{input.has_nulls()});
+    return find_extremum_idx(thrust::make_counting_iterator(0),
+                             input.size(),
+                             stream,
+                             noinline_adapter_fn{std::move(d_comp)});
+  }
+
+  template <typename ElementType>
+  [[nodiscard]] size_type find_arg_minmax(column_view const& input,
+                                          rmm::cuda_stream_view stream) const
+    requires(cudf::is_numeric<ElementType>())  // integer + floating point numbers
+  {
     if (input.has_nulls()) {
+      using Op               = std::conditional_t<K == aggregation::ARGMIN,
+                                                  reduction::detail::op::min,
+                                                  reduction::detail::op::max>;
       auto const d_input     = column_device_view::create(input, stream);
       auto const transformer = Op{}.template get_null_replacing_element_transformer<ElementType>();
       auto const it =
         thrust::make_transform_iterator(d_input->pair_begin<ElementType, true>(), transformer);
-      return static_cast<size_type>(cuda::std::distance(it, find_extremum(it)));
+      return find_extremum_idx(it, input.size(), stream);
     } else {
-      auto const it = input.template begin<ElementType>();
-      return static_cast<size_type>(cuda::std::distance(it, find_extremum(it)));
+      return find_extremum_idx(input.begin<ElementType>(), input.size(), stream);
     }
   }
 
@@ -172,32 +195,7 @@ class arg_minmax_dispatcher {
                  cudf::data_type_error);
     auto const& values =
       is_dictionary(input.type()) ? dictionary_column_view(input).get_indices_annotated() : input;
-
-    auto const idx = [&] {
-      if constexpr (not cudf::is_nested<ElementType>()) {
-        if constexpr (cudf::is_numeric<ElementType>() and not cudf::is_fixed_point<ElementType>()) {
-          return find_minmax_idx_numeric<ElementType>(values, stream);
-        } else {  // fixed-point or strings, which are not supported by null replacement transformer
-          // Nulls are considered "greater" (ARGMIN), or "less" (ARGMAX) than non-null values.
-          auto const null_orders = std::vector<null_order>{
-            K == aggregation::ARGMIN ? null_order::AFTER : null_order::BEFORE};
-          auto const comparator = cudf::detail::row::lexicographic::self_comparator{
-            table_view{{values}}, {}, null_orders, stream};
-          return find_minmax_idx(
-            input.size(),
-            comparator.less<false /*has_nested_columns*/>(nullate::DYNAMIC{input.has_nulls()}),
-            stream);
-        }
-      } else {  // nested types
-        using Op = std::conditional_t<K == aggregation::ARGMIN,
-                                      reduction::detail::op::min,
-                                      reduction::detail::op::max>;
-        auto const binop_generator =
-          reduction::detail::comparison_binop_generator::create<Op>(values, stream);
-        return find_minmax_idx(input.size(), binop_generator.less(), stream);
-      }
-    }();
-
+    auto const idx = find_arg_minmax<ElementType>(values, stream);
     return type_dispatcher(output_type, make_scalar_fn<size_type>{}, idx, stream, mr);
   }
 
