@@ -49,7 +49,7 @@ constexpr int max_delta_mini_block_size = 64;
 // since it is not encoded in the first mini-block.
 // The extra 1 is for the first value, from the block header. It's not stored in the buffer, but it
 // still impacts buffer indexing and we need to account for it to avoid race conditions.
-constexpr int delta_rolling_buf_size = 2 * max_delta_mini_block_size + 1;
+constexpr int delta_rolling_buf_size = (2 * max_delta_mini_block_size) + 1;
 
 /**
  * @brief Read a ULEB128 varint integer
