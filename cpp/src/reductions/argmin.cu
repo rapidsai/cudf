@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "simple.cuh"
+#include "extrema_utils.cuh"
 
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/traits.hpp>
