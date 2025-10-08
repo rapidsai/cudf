@@ -162,3 +162,9 @@ def test_implode_agg_unsupported():
     )
     q = df.select(pl.col("b").implode())
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_invalid_agg():
+    df = pl.LazyFrame({"s": pl.Series(["a", "b", "c"], dtype=pl.String())})
+    q = df.select(pl.col("s").sum())
+    assert_ir_translation_raises(q, NotImplementedError)

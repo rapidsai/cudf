@@ -364,10 +364,6 @@ class Scan(IR):
         ):
             raise NotImplementedError("Read from file URI")
         if self.typ == "csv":
-            if row_index is not None and n_rows == -1 and len(paths) > 1 and skip_rows:
-                raise NotImplementedError(
-                    "CSV multiscan with slice pushdown and row_index is not yet supported."
-                )
             if any(
                 plc.io.SourceInfo._is_remote_uri(p) for p in self.paths
             ):  # pragma: no cover; no test yet

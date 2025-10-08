@@ -274,17 +274,6 @@ def _(node: pl_ir.Scan, translator: Translator, schema: Schema) -> ir.IR:
     else:
         skip_rows, n_rows = pre_slice
 
-    if (
-        typ == "csv"
-        and row_index is not None
-        and n_rows == -1
-        and len(paths) > 1
-        and skip_rows
-    ):
-        raise NotImplementedError(
-            "CSV multiscan with slice pushdown and row_index is not yet supported."
-        )
-
     return ir.Scan(
         schema,
         typ,
@@ -973,8 +962,12 @@ def _(
 ) -> expr.Expr:
     left = translator.translate_expr(n=node.left, schema=schema)
     right = translator.translate_expr(n=node.right, schema=schema)
-    if plc.traits.is_boolean(dtype.plc_type) and node.op == pl_expr.Operator.TrueDivide:
-        dtype = DataType(pl.Float64())
+    if (
+        POLARS_VERSION_LT_133
+        and plc.traits.is_boolean(dtype.plc_type)
+        and node.op == pl_expr.Operator.TrueDivide
+    ):
+        dtype = DataType(pl.Float64())  # pragma: no cover
     if node.op == pl_expr.Operator.TrueDivide and (
         plc.traits.is_fixed_point(left.dtype.plc_type)
         or plc.traits.is_fixed_point(right.dtype.plc_type)

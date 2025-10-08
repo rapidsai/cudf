@@ -299,16 +299,6 @@ def _(
     partition_info: MutableMapping[IR, PartitionInfo]
     config_options = rec.state["config_options"]
     if (
-        ir.typ == "csv"
-        and ir.row_index is not None
-        and ir.n_rows == -1
-        and len(ir.paths) > 1
-        and ir.skip_rows
-    ):
-        raise NotImplementedError(
-            "CSV multiscan with slice pushdown and row_index is not yet supported."
-        )
-    if (
         ir.typ in ("csv", "parquet", "ndjson")
         and ir.n_rows == -1
         and ir.skip_rows == 0
