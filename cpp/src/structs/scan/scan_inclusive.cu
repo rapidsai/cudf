@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "reductions/nested_type_minmax_util.cuh"
+#include "reductions/nested_types_extrema_utils.cuh"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
@@ -46,7 +46,7 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
   // Create a gather map containing indices of the prefix min/max elements.
   auto gather_map = rmm::device_uvector<size_type>(input.size(), stream);
   auto const binop_generator =
-    cudf::reduction::detail::comparison_binop_generator::create<Op>(input, stream);
+    cudf::reduction::detail::arg_minmax_binop_generator::create<Op>(input, stream);
   thrust::inclusive_scan(rmm::exec_policy(stream),
                          thrust::counting_iterator<size_type>(0),
                          thrust::counting_iterator<size_type>(input.size()),
