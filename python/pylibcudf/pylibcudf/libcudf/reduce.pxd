@@ -5,7 +5,7 @@ from libcpp.memory cimport unique_ptr
 from libcpp.optional cimport optional
 from libcpp.utility cimport pair
 from pylibcudf.exception_handler cimport libcudf_exception_handler
-from pylibcudf.libcudf.aggregation cimport reduce_aggregation, scan_aggregation
+from pylibcudf.libcudf.aggregation cimport reduce_aggregation, scan_aggregation, Kind
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.scalar.scalar cimport scalar
@@ -43,3 +43,9 @@ cdef extern from "cudf/reduction.hpp" namespace "cudf" nogil:
         cuda_stream_view stream,
         device_memory_resource* mr
     ) except +libcudf_exception_handler
+
+
+cdef extern from "cudf/reduction.hpp" namespace "cudf::reduction" nogil:
+    bool is_valid_aggregation(
+        data_type source, Kind kind
+    ) noexcept

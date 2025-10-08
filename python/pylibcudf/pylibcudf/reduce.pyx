@@ -2,6 +2,7 @@
 
 from cython.operator cimport dereference
 from libcpp.functional cimport reference_wrapper
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.optional cimport optional, nullopt
 from libcpp.utility cimport move, pair
@@ -13,6 +14,7 @@ from pylibcudf.libcudf.reduce cimport (
     minmax as cpp_minmax,
     scan_type,
     constscalar,
+    is_valid_aggregation as cpp_is_valid_aggregation,
 )
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.types cimport null_policy
@@ -27,7 +29,7 @@ from .utils cimport _get_stream, _get_memory_resource
 
 from pylibcudf.libcudf.reduce import scan_type as ScanType  # no-cython-lint
 
-__all__ = ["ScanType", "minmax", "reduce", "scan"]
+__all__ = ["ScanType", "minmax", "reduce", "scan", "is_valid_reduce_aggregation"]
 
 cpdef Scalar reduce(
     Column col,
@@ -169,5 +171,24 @@ cpdef tuple minmax(Column col, Stream stream=None, DeviceMemoryResource mr=None)
     min_scalar = Scalar.from_libcudf(move(result.first))
     max_scalar = Scalar.from_libcudf(move(result.second))
     return (min_scalar, max_scalar)
+
+
+cpdef bool is_valid_reduce_aggregation(DataType source, Aggregation agg):
+    """
+    Return if an aggregation is supported for a given datatype.
+
+    Parameters
+    ----------
+    source
+        The type of the column the aggregation is being performed on.
+    agg
+        The aggregation.
+
+    Returns
+    -------
+    True if the aggregation is supported.
+    """
+    return cpp_is_valid_aggregation(source.c_obj, agg.kind())
+
 
 ScanType.__str__ = ScanType.__repr__
