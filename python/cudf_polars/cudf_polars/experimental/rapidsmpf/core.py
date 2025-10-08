@@ -29,11 +29,10 @@ import cudf_polars.experimental.rapidsmpf.shuffle
 import cudf_polars.experimental.rapidsmpf.union  # noqa: F401
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
-from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.rapidsmpf.dispatch import lower_ir_node
 from cudf_polars.experimental.rapidsmpf.nodes import generate_ir_sub_network_wrapper
-from cudf_polars.experimental.rapidsmpf.repartition import Repartition
 from cudf_polars.experimental.statistics import collect_statistics
+from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -41,6 +40,7 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.leaf_node import DeferredMessages
 
     from cudf_polars.dsl.ir import IR
+    from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.dispatch import (
         GenState,
@@ -106,12 +106,36 @@ def evaluate_logical_plan(ir: IR, config_options: ConfigOptions) -> DataFrame:
     run_streaming_pipeline(nodes=nodes, py_executor=executor)
 
     # Extract/return the result
-    msgs = output.release()
-    assert len(msgs) == 1, f"Expected exactly one output message, got {len(msgs)}"
-    return DataFrame.from_table(
-        TableChunk.from_message(msgs[0]).table_view(),
-        list(ir.schema.keys()),
-        list(ir.schema.values()),
+    return combine_output_chunks(
+        ir,
+        *(TableChunk.from_message(msg) for msg in output.release()),
+    )
+
+
+def combine_output_chunks(ir: IR, *chunks: TableChunk) -> DataFrame:
+    """
+    Combine the output chunks into a single DataFrame.
+
+    Parameters
+    ----------
+    ir
+        The IR node.
+    chunks
+        The output chunks.
+
+    Returns
+    -------
+    The combined DataFrame, ordered by sequence number.
+    """
+    return _concat(
+        *(
+            DataFrame.from_table(
+                chunk.table_view(),
+                list(ir.schema.keys()),
+                list(ir.schema.values()),
+            )
+            for chunk in sorted(chunks, key=lambda c: c.sequence_number)
+        )
     )
 
 
@@ -151,17 +175,7 @@ def lower_ir_graph(
         "stats": collect_statistics(ir, config_options),
     }
     mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
-    ir, partition_info = mapper(ir)
-
-    # Ensure the output is always a single chunk
-    bcasted = partition_info[ir].bcasted
-    ir = Repartition(ir.schema, ir)
-    partition_info[ir] = PartitionInfo(
-        count=1,
-        bcasted=bcasted,
-    )
-
-    return ir, partition_info
+    return mapper(ir)
 
 
 def generate_network(

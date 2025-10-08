@@ -91,7 +91,7 @@ def test_target_partition_size(tmp_path, blocksize, n_files):
     qir = Translator(q._ldf.visit(), engine).translate_ir()
     ir, info = lower_ir_graph(qir, ConfigOptions.from_polars_engine(engine))
     # NOTE: The first child is the Scan node.
-    count = info[ir.children[0]].count
+    count = info[ir].count
     if blocksize <= 12_000:
         assert count > n_files
     else:
