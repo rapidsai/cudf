@@ -52,15 +52,6 @@ if TYPE_CHECKING:
 _DEFAULT_CATEGORICAL_VALUE = np.int8(-1)
 
 
-def as_unsigned_codes(
-    num_cats: int, codes: NumericalColumn
-) -> NumericalColumn:
-    codes_dtype = min_unsigned_type(num_cats)
-    return cast(
-        cudf.core.column.numerical.NumericalColumn, codes.astype(codes_dtype)
-    )
-
-
 def validate_categorical_children(children) -> None:
     if not (
         len(children) == 1
@@ -340,13 +331,8 @@ class CategoricalColumn(column.ColumnBase):
             raise NotImplementedError(f"{arrow_type=} is not supported.")
 
         if self.categories.dtype.kind == "f":
-            col = type(self)(
-                data=self.data,  # type: ignore[arg-type]
-                size=self.size,
-                dtype=self.dtype,
-                mask=self.notnull().fillna(False).as_mask(),
-                children=self.children,
-            )
+            new_mask = self.notnull().fillna(False).as_mask()
+            col = self.set_mask(new_mask)
         else:
             col = self
 
@@ -725,10 +711,6 @@ class CategoricalColumn(column.ColumnBase):
         else:
             codes_col = column.concat_columns(codes)  # type: ignore[arg-type]
 
-        codes_col = as_unsigned_codes(
-            len(cats),
-            cast(cudf.core.column.numerical.NumericalColumn, codes_col),
-        )
         return codes_col._with_type_metadata(CategoricalDtype(categories=cats))  # type: ignore[return-value]
 
     def _with_type_metadata(self: Self, dtype: Dtype) -> Self:

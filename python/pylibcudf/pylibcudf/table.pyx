@@ -33,7 +33,6 @@ from pylibcudf.libcudf.table.table cimport table
 
 from .column cimport Column
 from .types cimport DataType
-from .utils cimport _get_stream, _get_memory_resource
 from pylibcudf._interop_helpers cimport (
     _release_schema,
     _release_array,
@@ -202,8 +201,8 @@ cdef class Table:
     @staticmethod
     cdef Table from_libcudf(
         unique_ptr[table] libcudf_tbl,
-        Stream stream=None,
-        DeviceMemoryResource mr=None
+        Stream stream,
+        DeviceMemoryResource mr
     ):
         """Create a Table from a libcudf table.
 
@@ -214,8 +213,6 @@ cdef class Table:
         cdef vector[unique_ptr[column]] c_columns = dereference(libcudf_tbl).release()
 
         cdef vector[unique_ptr[column]].size_type i
-        stream = _get_stream(stream)
-        mr = _get_memory_resource(mr)
         return Table([
             Column.from_libcudf(move(c_columns[i]), stream, mr)
             for i in range(c_columns.size())
