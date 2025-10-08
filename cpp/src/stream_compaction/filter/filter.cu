@@ -48,16 +48,14 @@ namespace cudf {
 namespace {
 
 struct filter_predicate {
-  static constexpr cudf::size_type NOT_APPLIED = -1;
-
-  constexpr __device__ bool operator()(cudf::size_type flag) const { return flag != NOT_APPLIED; }
+  constexpr __device__ bool operator()(int32_t flag) const { return flag == true; }
 };
 
 /// @brief counts the number of items that are not marked as NOT_APPLIED
 struct filter_histogram {
-  constexpr __device__ cudf::size_type operator()(cudf::size_type flag) const
+  constexpr __device__ cudf::size_type operator()(int32_t flag) const
   {
-    return (flag == filter_predicate::NOT_APPLIED) ? 0 : 1;
+    return flag == true ? 1 : 0;
   }
 };
 
@@ -67,7 +65,7 @@ template <typename InputIterator>
 auto filter_by(InputIterator input_begin,
                InputIterator input_end,
                cudf::size_type num_selected,
-               cudf::size_type const* stencil,
+               int32_t const* stencil,
                rmm::cuda_stream_view stream,
                rmm::device_async_resource_ref mr)
 {
@@ -99,7 +97,7 @@ struct filter_dispatcher<false> {
     requires(cudf::is_rep_layout_compatible<T>() && cudf::is_fixed_width<T>())
   std::unique_ptr<cudf::column> operator()(cudf::column_device_view const& col,
                                            cudf::size_type num_selected,
-                                           cudf::size_type const* stencil_iterator,
+                                           int32_t const* stencil_iterator,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr) const
   {
@@ -115,7 +113,7 @@ struct filter_dispatcher<false> {
     requires(std::is_same_v<T, cudf::string_view>)
   std::unique_ptr<cudf::column> operator()(cudf::column_device_view const& col,
                                            cudf::size_type num_selected,
-                                           cudf::size_type const* stencil_iterator,
+                                           int32_t const* stencil_iterator,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr) const
   {
@@ -131,7 +129,7 @@ struct filter_dispatcher<false> {
   template <typename T>
   std::unique_ptr<cudf::column> operator()(cudf::column_device_view const& col,
                                            cudf::size_type num_selected,
-                                           cudf::size_type const* stencil_iterator,
+                                           int32_t const* stencil_iterator,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr) const
   {
@@ -141,38 +139,32 @@ struct filter_dispatcher<false> {
   }
 };
 
-std::unique_ptr<cudf::column> filter_column(
-  cudf::column_device_view const& column,
-  cudf::size_type num_selected,
-  cudf::jit::device_span<cudf::size_type const> filter_indices,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+std::unique_ptr<cudf::column> filter_column(cudf::column_device_view const& column,
+                                            cudf::size_type num_selected,
+                                            cudf::jit::device_span<int32_t const> stencil,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::device_async_resource_ref mr)
 {
-  return cudf::type_dispatcher<dispatch_storage_type>(column.type(),
-                                                      filter_dispatcher<false>{},
-                                                      column,
-                                                      num_selected,
-                                                      filter_indices.begin(),
-                                                      stream,
-                                                      mr);
+  return cudf::type_dispatcher<dispatch_storage_type>(
+    column.type(), filter_dispatcher<false>{}, column, num_selected, stencil.begin(), stream, mr);
 }
 
 void launch_filter_kernel(jitify2::ConfiguredKernel& kernel,
-                          cudf::jit::device_span<cudf::size_type> output,
+                          cudf::jit::device_span<int32_t> output,
                           std::vector<column_view> const& input_columns,
                           std::optional<void*> user_data,
                           rmm::cuda_stream_view stream,
                           rmm::device_async_resource_ref mr)
 {
   auto outputs = cudf::jit::to_device_vector(
-    std::vector{cudf::jit::device_optional_span<cudf::size_type>{output, nullptr}}, stream, mr);
+    std::vector{cudf::jit::device_optional_span<int32_t>{output, nullptr}}, stream, mr);
 
   auto [input_handles, inputs] =
     cudf::jit::column_views_to_device<column_device_view, column_view>(input_columns, stream, mr);
 
-  cudf::jit::device_optional_span<cudf::size_type> const* outputs_ptr = outputs.data();
-  column_device_view const* inputs_ptr                                = inputs.data();
-  void* p_user_data                                                   = user_data.value_or(nullptr);
+  cudf::jit::device_optional_span<int32_t> const* outputs_ptr = outputs.data();
+  column_device_view const* inputs_ptr                        = inputs.data();
+  void* p_user_data                                           = user_data.value_or(nullptr);
 
   std::array<void*, 3> args{&outputs_ptr, &inputs_ptr, &p_user_data};
 
@@ -257,12 +249,11 @@ std::vector<std::unique_ptr<column>> filter_operation(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  rmm::device_uvector<cudf::size_type> filter_indices{
-    static_cast<size_t>(base_column.size()), stream, mr};
+  rmm::device_uvector<int32_t> stencil{static_cast<size_t>(base_column.size()), stream, mr};
 
   auto kernel = build_kernel("cudf::filtering::jit::kernel",
                              base_column.size(),
-                             {"cudf::size_type"},
+                             {"int32_t"},
                              predicate_columns,
                              user_data.has_value(),
                              is_null_aware,
@@ -271,17 +262,16 @@ std::vector<std::unique_ptr<column>> filter_operation(
                              stream,
                              mr);
 
-  cudf::jit::device_span<cudf::size_type> const filter_indices_span{filter_indices.data(),
-                                                                    filter_indices.size()};
+  cudf::jit::device_span<int32_t> const stencil_span{stencil.data(), stencil.size()};
 
-  launch_filter_kernel(kernel, filter_indices_span, predicate_columns, user_data, stream, mr);
+  launch_filter_kernel(kernel, stencil_span, predicate_columns, user_data, stream, mr);
 
   auto num_selected = thrust::transform_reduce(rmm::exec_policy(stream),
-                                               filter_indices.begin(),
-                                               filter_indices.end(),
+                                               stencil.begin(),
+                                               stencil.end(),
                                                filter_histogram{},
                                                cudf::size_type{0},
-                                               std::plus<cudf::size_type>{});
+                                               cuda::std::plus<cudf::size_type>{});
 
   std::vector<std::unique_ptr<column>> filtered;
 
@@ -297,7 +287,7 @@ std::vector<std::unique_ptr<column>> filter_operation(
                    } else {
                      auto d_column = cudf::column_device_view::create(column, stream);
                      return filter_column(
-                       *d_column, num_selected, filter_indices_span.as_const(), stream, mr);
+                       *d_column, num_selected, stencil_span.as_const(), stream, mr);
                    }
                  });
 
