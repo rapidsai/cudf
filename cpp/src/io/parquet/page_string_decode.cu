@@ -687,7 +687,6 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
  * @param page_mask Page mask indicating if this column needs to be decoded
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
- * other settings and records the result in the PageInfo::str_bytes_all field
  */
 CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size)
   compute_delta_page_string_sizes_kernel(PageInfo* pages,
@@ -781,7 +780,6 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size)
  * @param page_mask Page mask indicating if this column needs to be decoded
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
- * other settings
  */
 CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
   compute_delta_length_page_string_sizes_kernel(PageInfo* pages,

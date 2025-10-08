@@ -547,8 +547,8 @@ TEST_F(HybridScanTest, MaterializeListsOfStructs)
 {
   std::mt19937 gen(0xcaLL);
 
-  auto const num_concat   = 2;
-  auto constexpr num_rows = num_ordered_rows;
+  auto constexpr num_concat = 2;
+  auto constexpr num_rows   = num_ordered_rows;
 
   // uint32_t(non-nullable)
   auto col0 = testdata::ascending<uint32_t>();
@@ -739,7 +739,7 @@ TEST_F(HybridScanTest, MaterializeMixedPayloadColumns)
   auto col9 = cudf::make_lists_column(
     num_rows, list_list_offsets.release(), std::move(list_col), null_count, std::move(null_mask));
 
-  auto const num_concat = 3;
+  auto constexpr num_concat = 3;
   test_hybrid_scan<num_concat, num_rows>(
     {col0, col1, *col2, *col3, col4, *col5, *col6, *col7, *col8, *col9});
 }

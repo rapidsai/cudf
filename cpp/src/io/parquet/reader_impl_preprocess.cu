@@ -690,7 +690,10 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
   compute_output_chunks_for_subpass();
 }
 
-void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_rows)
+void reader_impl::allocate_columns(read_mode mode,
+                                   size_t skip_rows,
+                                   size_t num_rows,
+                                   cudf::device_span<bool const> page_mask)
 {
   CUDF_FUNC_RANGE();
 
@@ -782,17 +785,20 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
 
     // To keep track of the starting key of an iteration
     size_t key_start = 0;
+
     // Loop until all keys are processed
     while (key_start < num_keys) {
       // Number of keys processed in this iteration
       auto const num_keys_this_iter = std::min<size_t>(num_keys_per_iter, num_keys - key_start);
-      thrust::transform(
-        rmm::exec_policy_nosync(_stream),
-        thrust::make_counting_iterator<size_t>(key_start),
-        thrust::make_counting_iterator<size_t>(key_start + num_keys_this_iter),
-        size_input.begin(),
-        get_page_nesting_size{
-          d_cols_info.data(), max_depth, subpass.pages.size(), subpass.pages.device_begin()});
+      thrust::transform(rmm::exec_policy_nosync(_stream),
+                        thrust::make_counting_iterator<size_t>(key_start),
+                        thrust::make_counting_iterator<size_t>(key_start + num_keys_this_iter),
+                        size_input.begin(),
+                        get_page_nesting_size{d_cols_info.data(),
+                                              max_depth,
+                                              subpass.pages.size(),
+                                              subpass.pages.device_begin(),
+                                              page_mask.data()});
 
       // Manually create a size_t `key_start` compatible counting_transform_iterator.
       auto const reduction_keys =
