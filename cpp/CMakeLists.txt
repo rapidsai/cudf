@@ -1087,13 +1087,13 @@ if(CUDF_BUILD_TESTUTIL)
               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/debug_utilities.cu>
               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/random_seed.cpp>
               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/table_utilities.cu>
-              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/tdigest_utilities.cu>
+              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/tdigest_utilities.cpp>
               $<INSTALL_INTERFACE:src/cudftestutil/io/metadata_utilities.cpp>
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/column_utilities.cu>
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/debug_utilities.cu>
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/random_seed.cpp>
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/table_utilities.cu>
-              $<INSTALL_INTERFACE:src/cudftestutil/utilities/tdigest_utilities.cu>
+              $<INSTALL_INTERFACE:src/cudftestutil/utilities/tdigest_utilities.cpp>
   )
   target_link_libraries(cudftestutil_impl INTERFACE cudf::cudftestutil)
   target_compile_features(cudftestutil_impl INTERFACE cxx_std_20)
@@ -1115,7 +1115,7 @@ if(CUDF_BUILD_TESTUTIL)
           tests/utilities/debug_utilities.cu
           tests/utilities/random_seed.cpp
           tests/utilities/table_utilities.cu
-          tests/utilities/tdigest_utilities.cu
+          tests/utilities/tdigest_utilities.cpp
     DESTINATION src/cudftestutil/utilities
   )
 endif()

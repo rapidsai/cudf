@@ -33,7 +33,7 @@ from cudf_polars.dsl.expressions import rolling, unary
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
-from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
+from cudf_polars.dsl.tracing import log_do_evaluate, nvtx_annotate_cudf_polars
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import range_window_bounds
 from cudf_polars.utils import dtypes
@@ -479,6 +479,7 @@ class Scan(IR):
         return max(total_rows, 0)
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Scan")
     def do_evaluate(
         cls,
@@ -975,6 +976,7 @@ class Sink(IR):
             plc.io.parquet.write_parquet(writer_options)
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Sink")
     def do_evaluate(
         cls,
@@ -1034,6 +1036,7 @@ class Cache(IR):
         return False
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Cache")
     def do_evaluate(
         cls, key: int, refcount: int | None, df: DataFrame
@@ -1114,6 +1117,7 @@ class DataFrameScan(IR):
         )
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="DataFrameScan")
     def do_evaluate(
         cls,
@@ -1173,6 +1177,7 @@ class Select(IR):
         return False
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Select")
     def do_evaluate(
         cls,
@@ -1256,6 +1261,7 @@ class Reduce(IR):
         self._non_child_args = (self.exprs,)
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Reduce")
     def do_evaluate(
         cls,
@@ -1352,6 +1358,7 @@ class Rolling(IR):
         )
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Rolling")
     def do_evaluate(
         cls,
@@ -1476,6 +1483,7 @@ class GroupBy(IR):
         )
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="GroupBy")
     def do_evaluate(
         cls,
@@ -1603,7 +1611,8 @@ class ConditionalJoin(IR):
         tuple[
             str,
             pl_expr.Operator | Iterable[pl_expr.Operator],
-        ],
+        ]
+        | None,
         bool,
         Zlice | None,
         str,
@@ -1625,6 +1634,12 @@ class ConditionalJoin(IR):
     ) -> None:
         self.schema = schema
         self.predicate = predicate
+        # options[0] is a tuple[str, Operator, ...]
+        # The Operator class can't be pickled, but we don't use it anyway so
+        # just throw that away
+        if options[0] is not None:
+            options = (None, *options[1:])
+
         self.options = options
         self.children = (left, right)
         predicate_wrapper = self.Predicate(predicate)
@@ -1637,20 +1652,21 @@ class ConditionalJoin(IR):
             raise NotImplementedError(
                 f"Conditional join with predicate {predicate}"
             )  # pragma: no cover; polars never delivers expressions we can't handle
-        self._non_child_args = (predicate_wrapper, zlice, suffix, maintain_order)
+        self._non_child_args = (predicate_wrapper, options)
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="ConditionalJoin")
     def do_evaluate(
         cls,
         predicate_wrapper: Predicate,
-        zlice: Zlice | None,
-        suffix: str,
-        maintain_order: Literal["none", "left", "right", "left_right", "right_left"],
+        options: tuple,
         left: DataFrame,
         right: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
+        _, _, zlice, suffix, _, _ = options
+
         lg, rg = plc.join.conditional_inner_join(
             left.table,
             right.table,
@@ -1875,6 +1891,7 @@ class Join(IR):
         return columns
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Join")
     def do_evaluate(
         cls,
@@ -2027,6 +2044,7 @@ class HStack(IR):
         self.children = (df,)
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="HStack")
     def do_evaluate(
         cls,
@@ -2092,6 +2110,7 @@ class Distinct(IR):
     }
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Distinct")
     def do_evaluate(
         cls,
@@ -2182,6 +2201,7 @@ class Sort(IR):
         self.children = (df,)
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Sort")
     def do_evaluate(
         cls,
@@ -2232,6 +2252,7 @@ class Slice(IR):
         self.children = (df,)
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Slice")
     def do_evaluate(cls, offset: int, length: int, df: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -2253,6 +2274,7 @@ class Filter(IR):
         self.children = (df,)
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Filter")
     def do_evaluate(cls, mask_expr: expr.NamedExpr, df: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -2272,6 +2294,7 @@ class Projection(IR):
         self.children = (df,)
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Projection")
     def do_evaluate(cls, schema: Schema, df: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -2305,6 +2328,7 @@ class MergeSorted(IR):
         self._non_child_args = (key,)
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="MergeSorted")
     def do_evaluate(cls, key: str, *dfs: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -2425,6 +2449,7 @@ class MapFunction(IR):
         )
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="MapFunction")
     def do_evaluate(
         cls, schema: Schema, name: str, options: Any, df: DataFrame
@@ -2525,6 +2550,7 @@ class Union(IR):
         schema = self.children[0].schema
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Union")
     def do_evaluate(cls, zlice: Zlice | None, *dfs: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -2582,6 +2608,7 @@ class HConcat(IR):
         )
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="HConcat")
     def do_evaluate(
         cls,
@@ -2627,6 +2654,7 @@ class Empty(IR):
         self.children = ()
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Empty")
     def do_evaluate(cls, schema: Schema) -> DataFrame:  # pragma: no cover
         """Evaluate and return a dataframe."""
