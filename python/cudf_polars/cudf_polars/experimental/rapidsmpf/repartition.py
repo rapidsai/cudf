@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import math
 from typing import TYPE_CHECKING, Any
 
@@ -57,6 +58,12 @@ async def concatenate_node(
         build_stream = DEFAULT_STREAM
 
         seq_num = 0
+        # TODO: The sequence number currently has nothing to do with
+        # the sequence number of the input chunks. We may need to add
+        # an `ordered` option to this node to enforce the original
+        # sequence-number ordering. However, we don't need this for
+        # simple aggregations yet.
+        sends = []
         while True:
             chunks: list[TableChunk] = []
             msg: TableChunk | None = None
@@ -78,11 +85,15 @@ async def concatenate_node(
                         [chunk.table_view() for chunk in chunks], build_stream
                     )
                 )
-                await ch_out.send(
-                    ctx,
-                    Message(
-                        TableChunk.from_pylibcudf_table(seq_num, table, build_stream)
-                    ),
+                sends.append(
+                    ch_out.send(
+                        ctx,
+                        Message(
+                            TableChunk.from_pylibcudf_table(
+                                seq_num, table, build_stream
+                            )
+                        ),
+                    )
                 )
                 seq_num += 1
 
@@ -90,6 +101,8 @@ async def concatenate_node(
             if msg is None:
                 break
 
+        # Await all sends and drain the output channel
+        await asyncio.gather(*sends)
         await ch_out.drain(ctx)
 
 

@@ -21,7 +21,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
 )
 from cudf_polars.experimental.rapidsmpf.nodes import (
-    default_node,
+    default_node_multi,
     define_py_node,
     shutdown_on_error,
 )
@@ -122,10 +122,11 @@ async def broadcast_join_node(
         get_small_table_fut = get_small_table(ctx, small_child, small_ch)
 
         # Stream through large side, joining with broadcast data
-        seq_num = 0
+        sends = []
         while (msg := await large_ch.recv(ctx)) is not None:
+            large_chunk = TableChunk.from_message(msg)
             large_df = DataFrame.from_table(
-                TableChunk.from_message(msg).table_view(),
+                large_chunk.table_view(),
                 list(large_child.schema.keys()),
                 list(large_child.schema.values()),
             )
@@ -148,18 +149,21 @@ async def broadcast_join_node(
                 )
 
             # Send output chunk
-            await ch_out.send(
-                ctx,
-                Message(
-                    TableChunk.from_pylibcudf_table(
-                        seq_num,
-                        result.table,
-                        DEFAULT_STREAM,
-                    )
-                ),
+            sends.append(
+                ch_out.send(
+                    ctx,
+                    Message(
+                        TableChunk.from_pylibcudf_table(
+                            large_chunk.sequence_number,
+                            result.table,
+                            DEFAULT_STREAM,
+                        )
+                    ),
+                )
             )
-            seq_num += 1
 
+        # Await all sends and drain the output channel
+        await asyncio.gather(*sends)
         await ch_out.drain(ctx)
 
 
@@ -194,9 +198,9 @@ def _(
     channels[ir] = [Channel()]
 
     if output_count == 1 or (left_partitioned and right_partitioned):
-        # Partition-wise join (use default_node)
+        # Partition-wise join (use default_node_multi)
         nodes[ir] = [
-            default_node(
+            default_node_multi(
                 rec.state["ctx"],
                 ir,
                 channels[ir][0],

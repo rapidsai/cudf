@@ -47,11 +47,23 @@ async def union_node(
     """
     # TODO: Use multiple streams
     async with shutdown_on_error(ctx, *chs_in, ch_out):
-        seq_num = 0
+        seq_num_offset = 0
         for ch_in in chs_in:
+            num_ch_chunks = 0
             while (msg := await ch_in.recv(ctx)) is not None:
-                await ch_out.send(ctx, Message(TableChunk.from_message(msg)))
-                seq_num += 1
+                table_chunk = TableChunk.from_message(msg)
+                num_ch_chunks += 1
+                await ch_out.send(
+                    ctx,
+                    Message(
+                        TableChunk.from_pylibcudf_table(
+                            table_chunk.sequence_number + seq_num_offset,
+                            table_chunk.table_view(),
+                            table_chunk.stream,
+                        )
+                    ),
+                )
+            seq_num_offset += num_ch_chunks
 
         await ch_out.drain(ctx)
 

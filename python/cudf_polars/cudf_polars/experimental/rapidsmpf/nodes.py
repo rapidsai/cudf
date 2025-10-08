@@ -53,7 +53,51 @@ async def shutdown_on_error(
 
 
 @define_py_node()
-async def default_node(
+async def default_node_single(
+    ctx: Context,
+    ir: IR,
+    ch_out: Channel[TableChunk],
+    ch_in: Channel[TableChunk],
+) -> None:
+    """
+    Single-channel default node for rapidsmpf.
+
+    Parameters
+    ----------
+    ctx
+        The context.
+    ir
+        The IR node.
+    ch_out
+        The output channel.
+    ch_in
+        The input channel.
+
+    Notes
+    -----
+    Chunks are processed in the order they are received.
+    """
+    async with shutdown_on_error(ctx, ch_in, ch_out):
+        sends = []
+        while (msg := await ch_in.recv(ctx)) is not None:
+            chunk = TableChunk.from_message(msg)
+            seq_num = chunk.sequence_number
+            df = ir.do_evaluate(
+                *ir._non_child_args,
+                DataFrame.from_table(
+                    chunk.table_view(),
+                    list(ir.children[0].schema.keys()),
+                    list(ir.children[0].schema.values()),
+                ),
+            )
+            chunk = TableChunk.from_pylibcudf_table(seq_num, df.table, chunk.stream)
+            sends.append(ch_out.send(ctx, Message(chunk)))
+        await asyncio.gather(*sends)
+        await ch_out.drain(ctx)
+
+
+@define_py_node()
+async def default_node_multi(
     ctx: Context,
     ir: IR,
     ch_out: Channel[TableChunk],
@@ -75,6 +119,10 @@ async def default_node(
         The input channels.
     bcast_indices
         The indices of the broadcasted children.
+
+    Notes
+    -----
+    Input chunks are aligned for evaluation.
     """
     # TODO: Use multiple streams
     async with shutdown_on_error(ctx, *chs_in, ch_out):
@@ -85,6 +133,7 @@ async def default_node(
         staged_chunks: dict[int, dict[int, DataFrame]] = {
             c: {} for c in range(n_children)
         }
+        sends = []
         while True:
             if accepting_data:
                 for ch_idx, (ch_in, child) in enumerate(
@@ -94,6 +143,10 @@ async def default_node(
                         msg := await ch_in.recv(ctx)
                     ) is not None:
                         table_chunk = TableChunk.from_message(msg)
+                        if ch_idx in bcast_indices and staged_chunks[ch_idx]:
+                            raise RuntimeError(
+                                f"Broadcasted chunk already staged for channel {ch_idx}."
+                            )
                         staged_chunks[ch_idx][table_chunk.sequence_number] = (
                             DataFrame.from_table(
                                 table_chunk.table_view(),
@@ -117,25 +170,27 @@ async def default_node(
             ):
                 # Ready to produce the output chunk for seq_num.
                 # Evaluate and send.
-                await ch_out.send(
-                    ctx,
-                    Message(
-                        TableChunk.from_pylibcudf_table(
-                            seq_num,
-                            ir.do_evaluate(
-                                *ir._non_child_args,
-                                *[
-                                    (
-                                        staged_chunks[ch_idx][0]
-                                        if ch_idx in bcast_indices
-                                        else staged_chunks[ch_idx].pop(seq_num)
-                                    )
-                                    for ch_idx in range(n_children)
-                                ],
-                            ).table,
-                            DEFAULT_STREAM,
-                        )
-                    ),
+                sends.append(
+                    ch_out.send(
+                        ctx,
+                        Message(
+                            TableChunk.from_pylibcudf_table(
+                                seq_num,
+                                ir.do_evaluate(
+                                    *ir._non_child_args,
+                                    *[
+                                        (
+                                            staged_chunks[ch_idx][0]
+                                            if ch_idx in bcast_indices
+                                            else staged_chunks[ch_idx].pop(seq_num)
+                                        )
+                                        for ch_idx in range(n_children)
+                                    ],
+                                ).table,
+                                DEFAULT_STREAM,
+                            )
+                        ),
+                    )
                 )
                 seq_num += 1
             elif not accepting_data:
@@ -149,7 +204,8 @@ async def default_node(
                     )
                 break  # All channels have finished
 
-        # Drain the output channel
+        # Await all sends and drain the output channel
+        await asyncio.gather(*sends)
         await ch_out.drain(ctx)
 
 
@@ -236,26 +292,34 @@ def _(ir: IR, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]
     # Create output channel
     channels[ir] = [Channel()]
 
-    # Add simple python node
-    partition_info = rec.state["partition_info"]
-    # TODO: What about multiple broadcasted partitions?
-    # We are tracking broadcasted partitions in PartitionInfo,
-    # but this logic only handles the single-partition case.
-    counts = [partition_info[c].count for c in ir.children]
-    bcast_indices = (
-        []
-        if all(c == 1 for c in counts)
-        else [i for i, c in enumerate(counts) if c == 1]
-    )
-    nodes[ir] = [
-        default_node(
-            rec.state["ctx"],
-            ir,
-            channels[ir][0],
-            *[channels[c].pop() for c in ir.children],
-            bcast_indices=bcast_indices,
+    if len(ir.children) == 1:
+        # Single-channel default node
+        nodes[ir] = [
+            default_node_single(
+                rec.state["ctx"],
+                ir,
+                channels[ir][0],
+                channels[ir.children[0]].pop(),
+            )
+        ]
+    else:
+        # Multi-channel default node
+        counts = [rec.state["partition_info"][c].count for c in ir.children]
+        bcast_indices = (
+            []
+            if all(c == 1 for c in counts)
+            else [i for i, c in enumerate(counts) if c == 1]
         )
-    ]
+        nodes[ir] = [
+            default_node_multi(
+                rec.state["ctx"],
+                ir,
+                channels[ir][0],
+                *[channels[c].pop() for c in ir.children],
+                bcast_indices=bcast_indices,
+            )
+        ]
+
     return nodes, channels
 
 
