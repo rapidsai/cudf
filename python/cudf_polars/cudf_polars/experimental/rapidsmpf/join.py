@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import operator
 from functools import reduce
+from itertools import chain
 from typing import TYPE_CHECKING, Any, Literal
 
 from rapidsmpf.streaming.core.channel import Channel, Message
@@ -25,6 +26,7 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
     define_py_node,
     shutdown_on_error,
 )
+from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
@@ -37,9 +39,9 @@ async def get_small_table(
     ctx: Context,
     small_child: IR,
     ch_small: Channel[TableChunk],
-) -> DataFrame:
+) -> list[DataFrame]:
     """
-    Get the small-table DataFrame container from the small-table channel.
+    Get the small-table DataFrame partitions from the small-table channel.
 
     Parameters
     ----------
@@ -52,8 +54,8 @@ async def get_small_table(
 
     Returns
     -------
-    DataFrame
-        The small-table DataFrame container.
+    list[DataFrame]
+        The small-table DataFrame partitions.
     """
     small_chunks = []
     while (msg := await ch_small.recv(ctx)) is not None:
@@ -62,18 +64,14 @@ async def get_small_table(
     if len(small_chunks) == 0:
         raise ValueError("Empty small side")
 
-    return DataFrame.from_table(
-        (
-            small_chunks[0]
-            if len(small_chunks) == 1
-            else plc.concatenate.concatenate(
-                small_chunks,
-                DEFAULT_STREAM,
-            )
-        ),
-        list(small_child.schema.keys()),
-        list(small_child.schema.values()),
-    )
+    return [
+        DataFrame.from_table(
+            small_chunk,
+            list(small_child.schema.keys()),
+            list(small_child.schema.values()),
+        )
+        for small_chunk in small_chunks
+    ]
 
 
 @define_py_node()
@@ -118,8 +116,10 @@ async def broadcast_join_node(
             large_child = ir.children[1]
 
         # TODO: Build output partition incrementally?
-        small_df: DataFrame | None = None
-        get_small_table_fut = get_small_table(ctx, small_child, small_ch)
+        small_dfs: list[DataFrame] = []
+        get_small_table_fut = asyncio.create_task(
+            get_small_table(ctx, small_child, small_ch)
+        )
 
         # Stream through large side, joining with broadcast data
         while (msg := await large_ch.recv(ctx)) is not None:
@@ -130,31 +130,47 @@ async def broadcast_join_node(
                 list(large_child.schema.values()),
             )
 
-            if small_df is None:
-                small_df = (await asyncio.gather(get_small_table_fut))[0]
+            if not small_dfs:
+                small_dfs = list(
+                    chain.from_iterable(await asyncio.gather(get_small_table_fut))
+                )
+                if ir.options[0] != "Inner":
+                    # TODO: Use local repartitioning for non-inner joins
+                    small_dfs = [_concat(*small_dfs)]
 
             # Perform the join
-            if broadcast_side == "right":
-                result = ir.do_evaluate(
-                    *ir._non_child_args,
-                    large_df,
-                    small_df,
-                )
-            else:
-                result = ir.do_evaluate(
-                    *ir._non_child_args,
-                    small_df,
-                    large_df,
-                )
+            results = []
+            for small_df in small_dfs:
+                if broadcast_side == "right":
+                    results.append(
+                        ir.do_evaluate(
+                            *ir._non_child_args,
+                            large_df,
+                            small_df,
+                        ).table
+                    )
+                else:
+                    results.append(
+                        ir.do_evaluate(
+                            *ir._non_child_args,
+                            small_df,
+                            large_df,
+                        ).table
+                    )
 
             # Send output chunk
+            build_stream = DEFAULT_STREAM
             await ch_out.send(
                 ctx,
                 Message(
                     TableChunk.from_pylibcudf_table(
                         large_chunk.sequence_number,
-                        result.table,
-                        DEFAULT_STREAM,
+                        (
+                            results[0]
+                            if len(results) == 1
+                            else plc.concatenate.concatenate(results, build_stream)
+                        ),
+                        build_stream,
                     )
                 ),
             )

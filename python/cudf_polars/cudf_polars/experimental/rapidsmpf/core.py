@@ -98,6 +98,7 @@ def evaluate_logical_plan(ir: IR, config_options: ConfigOptions) -> DataFrame:
     br = BufferResource(mr)
     rmm.mr.set_current_device_resource(mr)
     ctx = Context(comm, br, options)
+    # TODO: Make this configurable.
     executor = ThreadPoolExecutor(max_workers=1)
 
     # Generate network nodes
