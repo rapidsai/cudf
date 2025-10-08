@@ -118,10 +118,13 @@ TEST_F(ParquetTest, ParquetReaderPredicatePushdown)
   auto col3_ref      = cudf::ast::column_reference(3);
   auto literal_value = cudf::numeric_scalar<int32_t>(0);
   auto literal       = cudf::ast::literal(literal_value);
-  auto expr1    = cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col3_ref, literal);
+  auto expr1 = cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col3_ref, literal);
+
   auto col0_ref = cudf::ast::column_reference(0);
   auto expr2    = cudf::ast::operation(cudf::ast::ast_operator::IDENTITY, col0_ref);
-  auto filter_expr = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, expr1, expr2);
+  auto expr3    = cudf::ast::operation(cudf::ast::ast_operator::NOT, expr2);
+
+  auto filter_expr = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, expr1, expr3);
   cudf::io::parquet_reader_options in_opts =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter_expr);
   auto result = cudf::io::read_parquet(in_opts, cudf::test::get_default_stream());
