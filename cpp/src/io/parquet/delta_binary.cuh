@@ -47,7 +47,9 @@ constexpr int max_delta_mini_block_size = 64;
 // batch of size `values_per_mb`. The largest value for values_per_miniblock among the
 // major writers seems to be 64, so 2 * 64 should be good. We save the first value separately
 // since it is not encoded in the first mini-block.
-constexpr int delta_rolling_buf_size = 2 * max_delta_mini_block_size;
+// The extra 1 is for the first value, from the block header. It's not stored in the buffer, but it
+// still impacts buffer indexing and we need to account for it to avoid race conditions.
+constexpr int delta_rolling_buf_size = 2 * max_delta_mini_block_size + 1;
 
 /**
  * @brief Read a ULEB128 varint integer
