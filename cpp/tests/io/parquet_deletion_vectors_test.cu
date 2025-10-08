@@ -167,11 +167,11 @@ auto build_deletion_vector_and_expected_row_mask(cudf::size_type num_rows,
                   }
                 });
 
-  auto serialized_roaring64_bitmap = serialize_deletion_vector(deletion_vector);
+  auto serialized_roaring64 = serialize_deletion_vector(deletion_vector);
   roaring::api::roaring64_bitmap_free(deletion_vector);
 
   return std::make_pair(
-    std::move(serialized_roaring64_bitmap),
+    std::move(serialized_roaring64),
     build_column_from_host_data<bool>(expected_row_mask, cudf::type_id::BOOL8, stream, mr));
 }
 
@@ -213,10 +213,11 @@ std::unique_ptr<cudf::table> build_expected_table(
 
 /**
  * @brief Constructs a resultant table by applying the specified deletion vector to the input table
- * and compares it to the table read via the `read_parquet_and_apply_deletion_vector` API
+ * and compares it to the table read via the `cudf::io::parquet::experimental::read_parquet` API as
+ * well as the `cudf::io::parquet::experimental::chunked_parquet_reader`
  *
  * @param parquet_buffer Span of host buffer containing Parquet data
- * @param deletion_vector Pointer to roaring64 bitmap deletion vector
+ * @param serialized_roaring64 Span of `portable` serialized 64-bit roaring bitmap
  * @param row_group_offsets Host span of input row group offsets
  * @param row_group_num_rows Host span of input row group row counts
  * @param input_table_view Input table view
@@ -227,7 +228,7 @@ std::unique_ptr<cudf::table> build_expected_table(
  */
 void test_read_parquet_and_apply_deletion_vector(
   cudf::host_span<char const> parquet_buffer,
-  cudf::host_span<cuda::std::byte const> serialized_roaring64_bitmap,
+  cudf::host_span<cuda::std::byte const> serialized_roaring64,
   cudf::host_span<size_t const> row_group_offsets,
   cudf::host_span<cudf::size_type const> row_group_num_rows,
   cudf::table_view const& input_table_view,
@@ -246,8 +247,8 @@ void test_read_parquet_and_apply_deletion_vector(
       .build();
 
   auto const table_with_deletion_vector =
-    cudf::io::parquet::experimental::read_parquet_and_apply_deletion_vector(
-      in_opts, serialized_roaring64_bitmap, row_group_offsets, row_group_num_rows, stream, mr)
+    cudf::io::parquet::experimental::read_parquet(
+      in_opts, serialized_roaring64, row_group_offsets, row_group_num_rows, stream, mr)
       .tbl;
   CUDF_TEST_EXPECT_TABLES_EQUAL(table_with_deletion_vector->view(), expected_table->view());
 
@@ -256,12 +257,11 @@ void test_read_parquet_and_apply_deletion_vector(
     size_t constexpr chunk_read_limit = 1024;
     size_t constexpr pass_read_limit  = 10240;
 
-    auto const reader = std::make_unique<
-      cudf::io::parquet::experimental::chunked_parquet_reader_with_deletion_vector>(
+    auto const reader = std::make_unique<cudf::io::parquet::experimental::chunked_parquet_reader>(
       chunk_read_limit,
       pass_read_limit,
       in_opts,
-      serialized_roaring64_bitmap,
+      serialized_roaring64,
       row_group_offsets,
       row_group_num_rows,
       stream);

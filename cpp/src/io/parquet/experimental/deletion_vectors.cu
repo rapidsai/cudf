@@ -38,9 +38,6 @@
 
 namespace cudf::io::parquet::experimental {
 
-using roaring_bitmap_type =
-  cuco::experimental::roaring_bitmap<cuda::std::uint64_t, cudf::detail::cuco_allocator<char>>;
-
 namespace {
 
 /**
@@ -257,15 +254,25 @@ std::unique_ptr<cudf::column> build_row_mask_column(cudf::column_view const& row
 }  // namespace
 
 /**
- * @copydoc cudf::io::parquet::experimental::read_parquet_and_apply_deletion_vector
+ * @copydoc
+ * cudf::io::parquet::experimental::chunked_parquet_reader::chunked_parquet_reader
  */
-table_with_metadata read_parquet_and_apply_deletion_vector(
+chunked_parquet_reader::chunked_parquet_reader(
+  std::size_t chunk_read_limit,
+  std::size_t pass_read_limit,
   parquet_reader_options const& options,
   cudf::host_span<cuda::std::byte const> serialized_roaring64,
   cudf::host_span<size_t const> row_group_offsets,
   cudf::host_span<size_type const> row_group_num_rows,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
+  : _start_row{0},
+    _is_unspecified_row_group_data{row_group_offsets.empty()},
+    _stream{stream},
+    _mr{mr},
+    // Use default mr for the internal chunked reader and row index column if we will
+    // be applying the deletion vector to produce the output table
+    _table_mr{serialized_roaring64.empty() ? mr : rmm::mr::get_current_device_resource_ref()}
 {
   CUDF_EXPECTS(
     row_group_offsets.size() == row_group_num_rows.size(),
@@ -275,7 +282,118 @@ table_with_metadata read_parquet_and_apply_deletion_vector(
     "Encountered a non-empty AST filter expression. Use a roaring64 bitmap deletion vector to "
     "filter the table instead");
   CUDF_EXPECTS(options.get_source().num_sources() == 1,
-               "The read_parquet_and_apply_deletion_vector currently only supports single "
+               "The chunked_parquet_reader currently only supports single "
+               "parquet source");
+
+  // Initialize the internal chunked parquet reader
+  _reader = std::make_unique<cudf::io::chunked_parquet_reader>(
+    chunk_read_limit, pass_read_limit, options, _stream, _table_mr);
+
+  auto iter = thrust::make_zip_iterator(row_group_offsets.begin(), row_group_num_rows.begin());
+  std::for_each(iter, iter + row_group_offsets.size(), [&](auto const& elem) {
+    _row_group_row_offsets.push(thrust::get<0>(elem));
+    _row_group_row_counts.push(thrust::get<1>(elem));
+  });
+
+  if (not serialized_roaring64.empty()) {
+    _deletion_vector = std::make_unique<roaring_bitmap_type>(
+      serialized_roaring64.data(),
+      cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, _stream.value()},
+      _stream);
+  }
+}
+
+/**
+ * @copydoc
+ * cudf::io::parquet::experimental::chunked_parquet_reader::chunked_parquet_reader
+ */
+chunked_parquet_reader::chunked_parquet_reader(
+  std::size_t chunk_read_limit,
+  parquet_reader_options const& options,
+  cudf::host_span<cuda::std::byte const> serialized_roaring64,
+  cudf::host_span<size_t const> row_group_offsets,
+  cudf::host_span<size_type const> row_group_num_rows,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+  : chunked_parquet_reader(chunk_read_limit,
+                           std::size_t{0},
+                           options,
+                           serialized_roaring64,
+                           row_group_offsets,
+                           row_group_num_rows,
+                           stream,
+                           mr)
+{
+}
+
+/**
+ * @copydoc cudf::io::parquet::experimental::chunked_parquet_reader::has_next
+ */
+bool chunked_parquet_reader::has_next() const { return _reader->has_next(); }
+
+/**
+ * @copydoc cudf::io::parquet::experimental::chunked_parquet_reader::read_chunk
+ */
+table_with_metadata chunked_parquet_reader::read_chunk()
+{
+  // Read a chunk of the parquet table
+  auto [table, metadata] = _reader->read_chunk();
+  auto const num_rows    = table->num_rows();
+
+  // Compute a chunk of the row index column from the specified row group offsets and counts
+  auto row_index_column = compute_partial_row_index_column(_row_group_row_offsets,
+                                                           _row_group_row_counts,
+                                                           _start_row,
+                                                           num_rows,
+                                                           _is_unspecified_row_group_data,
+                                                           _stream,
+                                                           _table_mr);
+  // Update the start row index for the next chunk
+  _start_row += num_rows;
+
+  // Prepend row index column to the table columns
+  auto table_with_index =
+    prepend_index_column_to_table(std::move(table), std::move(row_index_column));
+
+  // Also prepend the row index column's metadata to the table schema
+  prepend_index_column_to_table_metadata(metadata);
+
+  // Return early if deletion vector is not present
+  if (not _deletion_vector) {
+    return table_with_metadata{std::move(table_with_index), std::move(metadata)};
+  }
+
+  // Filter the table using the deletion vector
+  auto row_mask = build_row_mask_column(table_with_index->get_column(0).view(),
+                                        *_deletion_vector,
+                                        num_rows,
+                                        _stream,
+                                        cudf::get_current_device_resource_ref());
+  return table_with_metadata{
+    // Supply user-provided mr to apply_boolean_mask to allocate output table's memory
+    cudf::apply_boolean_mask(table_with_index->view(), row_mask->view(), _stream, _mr),
+    std::move(metadata)};
+}
+
+/**
+ * @copydoc cudf::io::parquet::experimental::read_parquet
+ */
+table_with_metadata read_parquet(parquet_reader_options const& options,
+                                 cudf::host_span<cuda::std::byte const> serialized_roaring64,
+                                 cudf::host_span<size_t const> row_group_offsets,
+                                 cudf::host_span<size_type const> row_group_num_rows,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::device_async_resource_ref mr)
+{
+  CUDF_EXPECTS(
+    row_group_offsets.size() == row_group_num_rows.size(),
+    "Encountered a mismatch in the number of row group offsets and row group row counts");
+  CUDF_EXPECTS(
+    not options.get_filter().has_value(),
+    "Encountered a non-empty AST filter expression. Use a roaring64 bitmap deletion vector to "
+    "filter the table instead");
+  CUDF_EXPECTS(options.get_source().num_sources() == 1,
+               "The read_parquet currently only supports single "
                "parquet source");
 
   // Use default mr to read parquet table and build row index column if we will be applying the
@@ -316,142 +434,6 @@ table_with_metadata read_parquet_and_apply_deletion_vector(
     stream);
   auto row_mask = build_row_mask_column(table_with_index->get_column(0).view(),
                                         deletion_vector,
-                                        num_rows,
-                                        stream,
-                                        cudf::get_current_device_resource_ref());
-  return table_with_metadata{
-    // Supply user-provided mr to apply_boolean_mask to allocate output table's memory
-    cudf::apply_boolean_mask(table_with_index->view(), row_mask->view(), stream, mr),
-    std::move(metadata)};
-}
-
-/**
- * @copydoc
- * cudf::io::parquet::experimental::chunked_parquet_reader_with_deletion_vector::chunked_parquet_reader_with_deletion_vector
- */
-chunked_parquet_reader_with_deletion_vector::chunked_parquet_reader_with_deletion_vector(
-  std::size_t chunk_read_limit,
-  std::size_t pass_read_limit,
-  parquet_reader_options const& options,
-  cudf::host_span<cuda::std::byte const> serialized_roaring64,
-  cudf::host_span<size_t const> row_group_offsets,
-  cudf::host_span<size_type const> row_group_num_rows,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-  : reader{std::make_unique<chunked_parquet_reader>(
-      chunk_read_limit,
-      pass_read_limit,
-      options,
-      stream,
-      serialized_roaring64.empty()
-        ? mr
-        : rmm::mr::get_current_device_resource_ref()  // Use default mr for the chunked reader if we
-                                                      // will be applying the deletion vector later
-      )},
-    start_row{0},
-    is_unspecified_row_group_data{row_group_offsets.empty()},
-    stream{stream},
-    mr{mr}
-{
-  CUDF_EXPECTS(
-    row_group_offsets.size() == row_group_num_rows.size(),
-    "Encountered a mismatch in the number of row group offsets and row group row counts");
-  CUDF_EXPECTS(
-    not options.get_filter().has_value(),
-    "Encountered a non-empty AST filter expression. Use a roaring64 bitmap deletion vector to "
-    "filter the table instead");
-  CUDF_EXPECTS(options.get_source().num_sources() == 1,
-               "The chunked_parquet_reader_with_deletion_vector currently only supports single "
-               "parquet source");
-
-  auto iter = thrust::make_zip_iterator(row_group_offsets.begin(), row_group_num_rows.begin());
-  std::for_each(iter, iter + row_group_offsets.size(), [&](auto const& elem) {
-    row_group_row_offsets.push(thrust::get<0>(elem));
-    row_group_row_counts.push(thrust::get<1>(elem));
-  });
-
-  if (not serialized_roaring64.empty()) {
-    deletion_vector = std::make_unique<roaring_bitmap_type>(
-      serialized_roaring64.data(),
-      cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream.value()},
-      stream);
-  }
-}
-
-/**
- * @copydoc
- * cudf::io::parquet::experimental::chunked_parquet_reader_with_deletion_vector::chunked_parquet_reader_with_deletion_vector
- */
-chunked_parquet_reader_with_deletion_vector::chunked_parquet_reader_with_deletion_vector(
-  std::size_t chunk_read_limit,
-  parquet_reader_options const& options,
-  cudf::host_span<cuda::std::byte const> serialized_roaring64,
-  cudf::host_span<size_t const> row_group_offsets,
-  cudf::host_span<size_type const> row_group_num_rows,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-  : chunked_parquet_reader_with_deletion_vector(chunk_read_limit,
-                                                std::size_t{0},
-                                                options,
-                                                serialized_roaring64,
-                                                row_group_offsets,
-                                                row_group_num_rows,
-                                                stream,
-                                                mr)
-{
-}
-
-/**
- * @copydoc
- * cudf::io::parquet::experimental::chunked_parquet_reader_with_deletion_vector::~chunked_parquet_reader_with_deletion_vector
- */
-chunked_parquet_reader_with_deletion_vector::~chunked_parquet_reader_with_deletion_vector() =
-  default;
-
-/**
- * @copydoc cudf::io::parquet::experimental::chunked_parquet_reader_with_deletion_vector::has_next
- */
-bool chunked_parquet_reader_with_deletion_vector::has_next() const { return reader->has_next(); }
-
-/**
- * @copydoc cudf::io::parquet::experimental::chunked_parquet_reader_with_deletion_vector::read_chunk
- */
-table_with_metadata chunked_parquet_reader_with_deletion_vector::read_chunk()
-{
-  // Read a chunk of the parquet table
-  auto [table, metadata] = reader->read_chunk();
-  auto const num_rows    = table->num_rows();
-
-  // Use default mr to build row index column if we will be applying the deletion vector to produce
-  // the output table
-  auto const row_index_mr = deletion_vector ? rmm::mr::get_current_device_resource_ref() : mr;
-
-  // Compute a chunk of the row index column from the specified row group offsets and counts
-  auto row_index_column = compute_partial_row_index_column(row_group_row_offsets,
-                                                           row_group_row_counts,
-                                                           start_row,
-                                                           num_rows,
-                                                           is_unspecified_row_group_data,
-                                                           stream,
-                                                           row_index_mr);
-  // Update the start row index for the next chunk
-  start_row += num_rows;
-
-  // Prepend row index column to the table columns
-  auto table_with_index =
-    prepend_index_column_to_table(std::move(table), std::move(row_index_column));
-
-  // Also prepend the row index column's metadata to the table schema
-  prepend_index_column_to_table_metadata(metadata);
-
-  // Return early if deletion vector is not present
-  if (not deletion_vector) {
-    return table_with_metadata{std::move(table_with_index), std::move(metadata)};
-  }
-
-  // Filter the table using the deletion vector
-  auto row_mask = build_row_mask_column(table_with_index->get_column(0).view(),
-                                        *deletion_vector,
                                         num_rows,
                                         stream,
                                         cudf::get_current_device_resource_ref());
