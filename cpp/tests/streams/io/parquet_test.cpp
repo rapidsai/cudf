@@ -116,7 +116,7 @@ TEST_F(ParquetTest, ParquetReaderPredicatePushdown)
   cudf::io::write_parquet(out_opts, cudf::test::get_default_stream());
 
   auto col3_ref      = cudf::ast::column_reference(3);
-  auto literal_value = cudf::numeric_scalar<int32_t>(0);
+  auto literal_value = cudf::numeric_scalar<int32_t>(0, true, cudf::test::get_default_stream());
   auto literal       = cudf::ast::literal(literal_value);
   auto expr1 = cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col3_ref, literal);
 
