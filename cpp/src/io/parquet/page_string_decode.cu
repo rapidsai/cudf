@@ -298,7 +298,6 @@ __device__ thrust::pair<int, int> page_bounds(
       pp->num_nulls  = null_count;
       pp->num_valids = pp->num_input_values - null_count;
     }
-
     end_value -= pp->num_nulls;
   }
 
@@ -588,11 +587,16 @@ __device__ thrust::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const* d
  * @param chunks All chunks to be decoded
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
+ * @param all_rows If true, all rows will be read, regardless of `min_row` and `num_rows`
  * @tparam level_t Type used to store decoded repetition and definition levels
  */
 template <typename level_t>
-CUDF_KERNEL void __launch_bounds__(preprocess_block_size) compute_string_page_bounds_kernel(
-  PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
+CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
+  compute_string_page_bounds_kernel(PageInfo* pages,
+                                    device_span<ColumnChunkDesc const> chunks,
+                                    size_t min_row,
+                                    size_t num_rows,
+                                    bool all_rows)
 {
   __shared__ __align__(16) page_state_s state_g;
 
@@ -609,6 +613,13 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size) compute_string_page_bo
     }
     // reset str_bytes to 0 in case it's already been calculated (esp needed for chunked reads).
     pp->str_bytes = 0;
+    pp->start_val = 0;
+    pp->end_val   = 0;
+  }
+
+  if (all_rows) {
+    min_row  = chunks[pp->chunk_idx].start_row + pp->chunk_row;
+    num_rows = pp->num_rows;
   }
 
   // whether or not we have repetition levels (lists)
@@ -665,6 +676,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size) compute_string_page_bo
  * @param page_mask Page mask indicating if this column needs to be decoded
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
+ * other settings and records the result in the PageInfo::str_bytes_all field
  */
 CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size)
   compute_delta_page_string_sizes_kernel(PageInfo* pages,
@@ -694,7 +706,7 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size)
     return;
   }
   // Return early if the page is pruned
-  if (not page_mask[page_idx]) {
+  if (page_mask.size() > 0 && not page_mask[page_idx]) {
     pp->str_bytes = 0;
     return;
   }
@@ -721,7 +733,9 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size)
     // if we have size info, then we only need to do this for bounds pages
     if (pp->has_page_index && !is_bounds_pg) {
       // check if we need to store values from the index
-      if (is_page_contained(s, min_row, num_rows)) { pp->str_bytes = pp->str_bytes_from_index; }
+      if (t == 0 && is_page_contained(s, min_row, num_rows)) {
+        pp->str_bytes = pp->str_bytes_from_index;
+      }
       return;
     }
 
@@ -756,6 +770,7 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size)
  * @param page_mask Page mask indicating if this column needs to be decoded
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
+ * other settings
  */
 CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
   compute_delta_length_page_string_sizes_kernel(PageInfo* pages,
@@ -790,7 +805,7 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
   }
 
   // Return early if the page is pruned
-  if (not page_mask[page_idx]) {
+  if (page_mask.size() > 0 && not page_mask[page_idx]) {
     pp->str_bytes = 0;
     return;
   }
@@ -800,7 +815,9 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
   // if we have size info, then we only need to do this for bounds pages
   if (pp->has_page_index && !is_bounds_pg) {
     // check if we need to store values from the index
-    if (is_page_contained(s, min_row, num_rows)) { pp->str_bytes = pp->str_bytes_from_index; }
+    if (t == 0 && is_page_contained(s, min_row, num_rows)) {
+      pp->str_bytes = pp->str_bytes_from_index;
+    }
     return;
   }
 
@@ -899,7 +916,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   }
 
   // Return early if the page is pruned
-  if (not page_mask[page_idx]) {
+  if (page_mask.size() > 0 && not page_mask[page_idx]) {
     pp->str_bytes = 0;
     return;
   }
@@ -909,7 +926,9 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   // if we have size info, then we only need to do this for bounds pages
   if (pp->has_page_index && !is_bounds_pg) {
     // check if we need to store values from the index
-    if (is_page_contained(s, min_row, num_rows)) { pp->str_bytes = pp->str_bytes_from_index; }
+    if (t == 0 && is_page_contained(s, min_row, num_rows)) {
+      pp->str_bytes = pp->str_bytes_from_index;
+    }
     return;
   }
 
@@ -982,26 +1001,27 @@ struct page_tform_functor {
 }  // anonymous namespace
 
 /**
- * @copydoc cudf::io::parquet::detail::compute_page_string_sizes
+ * @copydoc cudf::io::parquet::detail::compute_page_string_sizes_pass1
  */
-void compute_page_string_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
-                               cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                               cudf::device_span<bool const> page_mask,
-                               rmm::device_uvector<uint8_t>& temp_string_buf,
-                               size_t min_row,
-                               size_t num_rows,
-                               int level_type_size,
-                               uint32_t kernel_mask,
-                               rmm::cuda_stream_view stream)
+void compute_page_string_sizes_pass1(cudf::detail::hostdevice_span<PageInfo> pages,
+                                     cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                                     cudf::device_span<bool const> page_mask,
+                                     size_t min_row,
+                                     size_t num_rows,
+                                     uint32_t kernel_mask,
+                                     bool all_rows,
+                                     int level_type_size,
+                                     rmm::cuda_stream_view stream)
 {
   dim3 const dim_block(preprocess_block_size, 1);
   dim3 const dim_grid(pages.size(), 1);  // 1 threadblock per page
+
   if (level_type_size == 1) {
-    compute_string_page_bounds_kernel<uint8_t>
-      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+    compute_string_page_bounds_kernel<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
+      pages.device_ptr(), chunks, min_row, num_rows, all_rows);
   } else {
-    compute_string_page_bounds_kernel<uint16_t>
-      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+    compute_string_page_bounds_kernel<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
+      pages.device_ptr(), chunks, min_row, num_rows, all_rows);
   }
 
   // kernel mask may contain other kernels we don't need to count
@@ -1030,7 +1050,16 @@ void compute_page_string_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
 
   // synchronize the streams
   cudf::detail::join_streams(streams, stream);
+}
 
+/**
+ * @copydoc cudf::io::parquet::detail::compute_page_string_sizes_pass2
+ */
+void compute_page_string_sizes_pass2(cudf::detail::hostdevice_span<PageInfo> pages,
+                                     cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                                     rmm::device_uvector<uint8_t>& temp_string_buf,
+                                     rmm::cuda_stream_view stream)
+{
   // check for needed temp space for DELTA_BYTE_ARRAY
   auto const need_sizes =
     thrust::any_of(rmm::exec_policy(stream),
