@@ -26,9 +26,11 @@ from typing_extensions import assert_never
 import polars as pl
 
 import pylibcudf as plc
+from pylibcudf import expressions as plc_expr
 
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import Column, DataFrame, DataType
+from cudf_polars.containers.dataframe import NamedColumn
 from cudf_polars.dsl.expressions import rolling, unary
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
@@ -79,6 +81,23 @@ __all__ = [
     "Sort",
     "Union",
 ]
+
+
+_BINOPS = {
+    plc.binaryop.BinaryOperator.EQUAL,
+    plc.binaryop.BinaryOperator.NOT_EQUAL,
+    plc.binaryop.BinaryOperator.LESS,
+    plc.binaryop.BinaryOperator.LESS_EQUAL,
+    plc.binaryop.BinaryOperator.GREATER,
+    plc.binaryop.BinaryOperator.GREATER_EQUAL,
+    # TODO: Handle other binary operations as needed
+}
+
+
+_DECIMAL_TYPES = {plc.TypeId.DECIMAL32, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL128}
+
+
+_FLOAT_TYPES = {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
 
 
 class IR(Node["IR"]):
@@ -280,20 +299,16 @@ def _cast_literals_to_physical_types(
 
 def _align_parquet_schema(df: DataFrame, schema: Schema) -> DataFrame:
     # TODO: Alternatively set the schema of the parquet reader to decimal128
-    plc_decimals_ids = {
-        plc.TypeId.DECIMAL32,
-        plc.TypeId.DECIMAL64,
-        plc.TypeId.DECIMAL128,
-    }
     cast_list = []
 
     for name, col in df.column_map.items():
         src = col.obj.type()
         dst = schema[name].plc_type
+
         if (
-            src.id() in plc_decimals_ids
-            and dst.id() in plc_decimals_ids
-            and ((src.id() != dst.id()) or (src.scale != dst.scale))
+            plc.traits.is_fixed_point(src)
+            and plc.traits.is_fixed_point(dst)
+            and ((src.id() != dst.id()) or (src.scale() != dst.scale()))
         ):
             cast_list.append(
                 Column(plc.unary.cast(col.obj, dst), name=name, dtype=schema[name])
@@ -1659,6 +1674,108 @@ class GroupBy(IR):
         return DataFrame(broadcasted).slice(zlice)
 
 
+def _strip_predicate_casts(node: expr.Expr) -> expr.Expr:
+    if isinstance(node, expr.Cast):
+        (child,) = node.children
+        child = _strip_predicate_casts(child)
+
+        src = child.dtype
+        dst = node.dtype
+
+        if plc.traits.is_fixed_point(src.plc_type) or plc.traits.is_fixed_point(
+            dst.plc_type
+        ):
+            return child
+
+    if not node.children:
+        return node
+    return node.reconstruct([_strip_predicate_casts(child) for child in node.children])
+
+
+def _add_cast(
+    target: DataType,
+    side: expr.ColRef,
+    left_casts: dict[str, DataType],
+    right_casts: dict[str, DataType],
+) -> None:
+    (col,) = side.children
+    assert isinstance(col, expr.Col)
+    casts = (
+        left_casts if side.table_ref == plc_expr.TableReference.LEFT else right_casts
+    )
+    casts[col.name] = target
+
+
+def _align_decimal_binop_types(
+    left_expr: expr.ColRef,
+    right_expr: expr.ColRef,
+    left_casts: dict[str, DataType],
+    right_casts: dict[str, DataType],
+) -> None:
+    left_type, right_type = left_expr.dtype, right_expr.dtype
+
+    if plc.traits.is_fixed_point(left_type.plc_type) and plc.traits.is_fixed_point(
+        right_type.plc_type
+    ):
+        target = DataType.common_decimal_dtype(left_type, right_type)
+
+        if left_type.id() != target.id() or left_type.scale() != target.scale():
+            _add_cast(target, left_expr, left_casts, right_casts)
+
+        if right_type.id() != target.id() or right_type.scale() != target.scale():
+            _add_cast(target, right_expr, left_casts, right_casts)
+
+    elif (
+        plc.traits.is_fixed_point(left_type.plc_type)
+        and plc.traits.is_floating_point(right_type.plc_type)
+    ) or (
+        plc.traits.is_fixed_point(right_type.plc_type)
+        and plc.traits.is_floating_point(left_type.plc_type)
+    ):
+        is_decimal_left = plc.traits.is_fixed_point(left_type.plc_type)
+        decimal_expr, float_expr = (
+            (left_expr, right_expr) if is_decimal_left else (right_expr, left_expr)
+        )
+        _add_cast(decimal_expr.dtype, float_expr, left_casts, right_casts)
+
+
+def _collect_decimal_binop_casts(
+    predicate: expr.Expr,
+) -> tuple[dict[str, DataType], dict[str, DataType]]:
+    left_casts: dict[str, DataType] = {}
+    right_casts: dict[str, DataType] = {}
+
+    def _walk(node: expr.Expr) -> None:
+        if isinstance(node, expr.BinOp) and node.op in _BINOPS:
+            left_expr, right_expr = node.children
+            if isinstance(left_expr, expr.ColRef) and isinstance(
+                right_expr, expr.ColRef
+            ):
+                _align_decimal_binop_types(
+                    left_expr, right_expr, left_casts, right_casts
+                )
+        for child in node.children:
+            _walk(child)
+
+    _walk(predicate)
+    return left_casts, right_casts
+
+
+def _apply_casts(df: DataFrame, casts: dict[str, DataType]) -> DataFrame:
+    if not casts:
+        return df
+
+    columns = []
+    for col in df.columns:
+        target = casts.get(col.name)
+        if target is None:
+            columns.append(Column(col.obj, dtype=col.dtype, name=col.name))
+        else:
+            casted = col.astype(target)
+            columns.append(Column(casted.obj, dtype=casted.dtype, name=col.name))
+    return DataFrame(columns)
+
+
 class ConditionalJoin(IR):
     """A conditional inner join of two dataframes on a predicate."""
 
@@ -1706,6 +1823,7 @@ class ConditionalJoin(IR):
         self, schema: Schema, predicate: expr.Expr, options: tuple, left: IR, right: IR
     ) -> None:
         self.schema = schema
+        predicate = _strip_predicate_casts(predicate)
         self.predicate = predicate
         # options[0] is a tuple[str, Operator, ...]
         # The Operator class can't be pickled, but we don't use it anyway so
@@ -1738,11 +1856,14 @@ class ConditionalJoin(IR):
         right: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
+        left_casts, right_casts = _collect_decimal_binop_casts(
+            predicate_wrapper.predicate
+        )
         _, _, zlice, suffix, _, _ = options
 
         lg, rg = plc.join.conditional_inner_join(
-            left.table,
-            right.table,
+            _apply_casts(left, left_casts).table,
+            _apply_casts(right, right_casts).table,
             predicate_wrapper.ast,
         )
         left = DataFrame.from_table(
