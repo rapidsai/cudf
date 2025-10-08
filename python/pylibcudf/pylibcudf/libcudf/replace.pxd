@@ -18,7 +18,6 @@ cdef extern from "cudf/replace.hpp" namespace "cudf" nogil:
         PRECEDING
         FOLLOWING
 
-    # All functions below include memory resource parameter
     cdef unique_ptr[column] replace_nulls(
         column_view source_column,
         column_view replacement_column,
