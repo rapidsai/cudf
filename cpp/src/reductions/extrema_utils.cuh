@@ -47,9 +47,9 @@ class make_scalar_fn {
 
  public:
   template <typename OutputType>
-  std::unique_ptr<scalar> operator()(InputType input,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr) const
+  [[nodiscard]] std::unique_ptr<scalar> operator()(InputType input,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::device_async_resource_ref mr) const
     requires(is_supported<OutputType>())
   {
     using ScalarType = scalar_type_t<OutputType>;
@@ -78,7 +78,7 @@ struct non_inline_adapter_fn {
   Functor f;
   non_inline_adapter_fn(Functor&& f_) : f{std::forward<Functor>(f_)} {}
   template <typename... Args>
-  __attribute__((noinline)) __device__ auto operator()(Args&&... args) const
+  [[nodiscard]] __attribute__((noinline)) __device__ auto operator()(Args&&... args) const
   {
     return f(std::forward<Args>(args)...);
   }
@@ -102,10 +102,12 @@ class arg_minmax_dispatcher {
   }
 
   template <typename Comparator>
-  static size_type find_minmax_idx(size_type size, Comparator comp, rmm::cuda_stream_view stream)
+  [[nodiscard]] size_type find_minmax_idx(size_type size,
+                                          Comparator comp,
+                                          rmm::cuda_stream_view stream) const
   {
-    auto const input_it = thrust::make_counting_iterator<size_type>(0);
-    auto const iter     = [&] {
+    auto const input_it     = thrust::make_counting_iterator<size_type>(0);
+    auto const extremum_pos = [&] {
       if constexpr (K == aggregation::ARGMIN) {
         return thrust::min_element(rmm::exec_policy_nosync(stream),
                                    input_it,
@@ -118,13 +120,14 @@ class arg_minmax_dispatcher {
                                    non_inline_adapter_fn<Comparator>{std::move(comp)});
       }
     }();
-    return static_cast<size_type>(cuda::std::distance(input_it, iter));
+    return static_cast<size_type>(cuda::std::distance(input_it, extremum_pos));
   }
 
   template <typename ElementType>
-  static size_type find_minmax_idx_numeric(column_view const& input, rmm::cuda_stream_view stream)
+  [[nodiscard]] size_type find_minmax_idx_numeric(column_view const& input,
+                                                  rmm::cuda_stream_view stream) const
   {
-    auto const extremum_iter = [&](auto const& it) {
+    auto const find_extremum = [&](auto const& it) {
       if constexpr (K == aggregation::ARGMIN) {
         return thrust::min_element(rmm::exec_policy_nosync(stream), it, it + input.size());
       } else {
@@ -140,10 +143,10 @@ class arg_minmax_dispatcher {
       auto const transformer = Op{}.template get_null_replacing_element_transformer<ElementType>();
       auto const it =
         thrust::make_transform_iterator(d_input->pair_begin<ElementType, true>(), transformer);
-      return static_cast<size_type>(cuda::std::distance(it, extremum_iter(it)));
+      return static_cast<size_type>(cuda::std::distance(it, find_extremum(it)));
     } else {
       auto const it = input.template begin<ElementType>();
-      return static_cast<size_type>(cuda::std::distance(it, extremum_iter(it)));
+      return static_cast<size_type>(cuda::std::distance(it, find_extremum(it)));
     }
   }
 
@@ -158,26 +161,21 @@ class arg_minmax_dispatcher {
    * @param mr Device memory resource used to allocate the returned scalar's device memory
    */
   template <typename ElementType>
-  std::unique_ptr<scalar> operator()(column_view const& input,
-                                     data_type const output_type,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr) const
+  [[nodiscard]] std::unique_ptr<scalar> operator()(column_view const& input,
+                                                   data_type const output_type,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::device_async_resource_ref mr) const
     requires(is_supported<ElementType>())
   {
     CUDF_EXPECTS(cudf::is_index_type(output_type), "Output type must be an index type.");
-
     auto const& values =
       is_dictionary(input.type()) ? dictionary_column_view(input).get_indices_annotated() : input;
-
-    if (values.is_empty() || values.size() == values.null_count()) {
-      return make_numeric_scalar(output_type, stream, mr);
-    }
 
     auto const idx = [&] {
       if constexpr (not cudf::is_nested<ElementType>()) {
         if constexpr (cudf::is_numeric<ElementType>() and not cudf::is_fixed_point<ElementType>()) {
           return find_minmax_idx_numeric<ElementType>(values, stream);
-        } else {  // fixed-point or strings, which is not supported by null replacement transformer
+        } else {  // fixed-point or strings, which are not supported by null replacement transformer
           // Nulls are considered "greater" (ARGMIN), or "less" (ARGMAX) than non-null values.
           auto const null_orders = std::vector<null_order>{
             K == aggregation::ARGMIN ? null_order::AFTER : null_order::BEFORE};
