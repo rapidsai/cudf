@@ -1614,8 +1614,6 @@ def _strip_predicate_casts(node: expr.Expr) -> expr.Expr:
         ):
             return child
 
-        return node.reconstruct([child])
-
     if not node.children:
         return node
     return node.reconstruct([_strip_predicate_casts(child) for child in node.children])
