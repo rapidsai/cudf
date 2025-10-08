@@ -113,14 +113,14 @@ std::unique_ptr<scalar> max(column_view const& col,
                             rmm::device_async_resource_ref mr);
 
 /**
- * @brief Computes index of the minimum element in input column.
+ * @brief Computes index of the minimum element in the input column.
  *
- * If all elements in input column are null, the output scalar will have value `-1`.
+ * If all elements in input column are null, output scalar is null.
  *
  * @throw cudf::logic_error if `output_dtype` is not an index type
  *
- * @param col input column to compute argmin
- * @param output_dtype data type of return scalar
+ * @param col input column to compute reduction
+ * @param output_dtype data type of the output scalar
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Index of the minimum element as scalar of type `output_dtype`
@@ -131,14 +131,14 @@ std::unique_ptr<scalar> argmin(column_view const& col,
                                rmm::device_async_resource_ref mr);
 
 /**
- * @brief Computes index of the maximum element in input column.
+ * @brief Computes index of the maximum element in the input column.
  *
- * If all elements in input column are null, the output scalar will have value `-1`.
+ * If all elements in input column are null, output scalar is null.
  *
  * @throw cudf::logic_error if `output_dtype` is not an index type
  *
- * @param col input column to compute argmax
- * @param output_dtype data type of return scalar
+ * @param col input column to compute reduction
+ * @param output_dtype data type of the output scalar
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Index of the maximum element as scalar of type `output_dtype`

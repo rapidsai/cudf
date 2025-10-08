@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include "cuda/std/__expected/expected.h"
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>

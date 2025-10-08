@@ -385,7 +385,7 @@ struct same_element_type_dispatcher {
 template <typename Op>
 struct element_type_dispatcher {
   /**
-   * @brief Specialization for reducing numeric column types to the same output types.
+   * @brief Specialization for reducing numeric column types to any output type.
    */
   template <typename ElementType, typename OutputType>
   std::unique_ptr<scalar> reduce(column_view const& col,
@@ -460,14 +460,16 @@ struct element_type_dispatcher {
 };
 
 /**
- * @brief A type-dispatcher functor for creating a scalar with a given value.
+ * @brief A type-dispatcher functor to create a scalar with a given value.
  */
 template <typename InputType>
 class make_scalar_fn {
-  template <typename ElementType>
+  static_assert(cudf::is_numeric<InputType>(), "InputType must be numeric");
+
+  template <typename OutputType>
   static constexpr bool is_supported()
   {
-    return cuda::std::is_integral_v<ElementType>;
+    return cudf::is_numeric<OutputType>();
   }
 
  public:
@@ -493,16 +495,15 @@ class make_scalar_fn {
 
 /**
  * @brief An adapter to make a functor's operator() non-inlinable.
- * This is to reduce compile time issue when compiling heavy binary comparators with
- * thrust algorithms.
+ *
+ * This is to reduce compile time when compiling heavy binary comparators with thrust algorithms,
+ * especially `thrust::reduce` and `thrust::min/max_element`.
  * @tparam Functor The functor to prevent inlining.
  */
 template <typename Functor>
-struct non_inline_adapter {
+struct non_inline_adapter_fn {
   Functor f;
-
-  non_inline_adapter(Functor&& f_) : f(std::forward<Functor>(f_)) {}
-
+  non_inline_adapter_fn(Functor&& f_) : f{std::forward<Functor>(f_)} {}
   template <typename... Args>
   __attribute__((noinline)) __device__ auto operator()(Args&&... args) const
   {
@@ -511,7 +512,7 @@ struct non_inline_adapter {
 };
 
 /**
- * @brief Call reduce and return a scalar of the type specified, specialized for ARGMIN and
+ * @brief Call reduce and return a scalar of the specified type, specialized for ARGMIN and
  * ARGMAX aggregations.
  *
  * @tparam K The aggregation to execute on the column, must be either ARGMIN or ARGMAX.
@@ -532,17 +533,17 @@ class arg_minmax_dispatcher {
   {
     auto const input_it = thrust::make_counting_iterator<size_type>(0);
     auto const iter     = [&] {
-      // TODO: Use `cub::DeviceReduce::ArgMin`/`ArgMax` when they support custom comparators.
+      // TODO: Consider `cub::DeviceReduce::ArgMin`/`ArgMax` when they support custom comparators.
       if constexpr (K == aggregation::ARGMIN) {
         return thrust::min_element(rmm::exec_policy_nosync(stream),
                                    input_it,
                                    input_it + size,
-                                   non_inline_adapter<Comparator>{std::move(comp)});
+                                   non_inline_adapter_fn<Comparator>{std::move(comp)});
       } else {
         return thrust::max_element(rmm::exec_policy_nosync(stream),
                                    input_it,
                                    input_it + size,
-                                   non_inline_adapter<Comparator>{std::move(comp)});
+                                   non_inline_adapter_fn<Comparator>{std::move(comp)});
       }
     }();
     return static_cast<size_type>(cuda::std::distance(input_it, iter));
@@ -565,6 +566,8 @@ class arg_minmax_dispatcher {
                                      rmm::device_async_resource_ref mr) const
     requires(is_supported<ElementType>())
   {
+    CUDF_EXPECTS(cudf::is_index_type(output_type), "Output type must be an index type.");
+
     auto const& values =
       is_dictionary(input.type()) ? dictionary_column_view(input).get_indices_annotated() : input;
 
@@ -574,7 +577,7 @@ class arg_minmax_dispatcher {
 
     auto const idx = [&] {
       if constexpr (not cudf::is_nested<ElementType>()) {
-        // Nulls are considered "greater" (ARGMIN), and "less" (ARGMAX) than non-null values.
+        // Nulls are considered "greater" (ARGMIN), or "less" (ARGMAX) than non-null values.
         auto const null_orders = std::vector<null_order>{
           K == aggregation::ARGMIN ? null_order::AFTER : null_order::BEFORE};
         auto const comparator = cudf::detail::row::lexicographic::self_comparator{
