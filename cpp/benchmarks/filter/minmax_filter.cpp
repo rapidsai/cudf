@@ -34,31 +34,6 @@
 
 namespace {
 
-template <typename T>
-struct benchmark_data;
-
-template <std::floating_point T>
-struct benchmark_data<T> {
-  static T dist_min() { return 0; }
-
-  static T dist_max() { return 1; }
-
-  static T filter_min() { return 0.05; }
-
-  static T filter_max() { return 0.07; }
-};
-
-template <std::integral T>
-struct benchmark_data<T> {
-  static T dist_min() { return -128; }
-
-  static T dist_max() { return 127; }
-
-  static T filter_min() { return -64; }
-
-  static T filter_max() { return 64; }
-};
-
 enum class engine_type : uint8_t { AST = 0, JIT = 1 };
 
 engine_type engine_from_string(std::string_view str)
@@ -91,11 +66,15 @@ void BM_filter_min_max(nvbench::state& state)
   auto const nullable    = boolean_from_string(state.get_string("nullable"));
   auto const engine      = engine_from_string(engine_name);
 
+  auto const input_min   = static_cast<key_type>(0);
+  auto const input_max   = static_cast<key_type>(100);
+  auto const filter_min  = input_min;
+  auto const selectivity = state.get_float64("selectivity");
+  auto const filter_max  = static_cast<key_type>(input_min + (input_max - input_min) * selectivity);
+
   auto profile = data_profile{};
-  profile.set_distribution_params(cudf::type_to_id<key_type>(),
-                                  distribution_id::NORMAL,
-                                  benchmark_data<key_type>::dist_min(),
-                                  benchmark_data<key_type>::dist_max());
+  profile.set_distribution_params(
+    cudf::type_to_id<key_type>(), distribution_id::UNIFORM, input_min, input_max);
   profile.set_null_probability(nullable ? std::optional{0.3} : std::nullopt);
 
   auto const column =
@@ -112,8 +91,8 @@ void BM_filter_min_max(nvbench::state& state)
     type_name);
 
   auto tree              = cudf::ast::tree{};
-  auto min_scalar        = cudf::numeric_scalar<key_type>{benchmark_data<key_type>::filter_min()};
-  auto max_scalar        = cudf::numeric_scalar<key_type>{benchmark_data<key_type>::filter_max()};
+  auto min_scalar        = cudf::numeric_scalar<key_type>{filter_min};
+  auto max_scalar        = cudf::numeric_scalar<key_type>{filter_max};
   auto min_scalar_column = cudf::make_column_from_scalar(min_scalar, 1);
   auto max_scalar_column = cudf::make_column_from_scalar(max_scalar, 1);
 
@@ -172,7 +151,14 @@ void BM_filter_min_max(nvbench::state& state)
     .add_string_axis("nullable", {"true", "false"})
 }  // namespace
 
-FILTER_BENCHMARK_DEFINE(filter_min_max_int32, int32_t);
-FILTER_BENCHMARK_DEFINE(filter_min_max_int64, int64_t);
-FILTER_BENCHMARK_DEFINE(filter_min_max_float32, float);
-FILTER_BENCHMARK_DEFINE(filter_min_max_float64, double);
+FILTER_BENCHMARK_DEFINE(filter_min_max_int32, int32_t)
+  .add_float64_axis("selectivity", {0.001, 0.01, 0.1, 0.5, 0.8});
+
+FILTER_BENCHMARK_DEFINE(filter_min_max_int64, int64_t)
+  .add_float64_axis("selectivity", {0.001, 0.01, 0.1, 0.5, 0.8});
+
+FILTER_BENCHMARK_DEFINE(filter_min_max_float32, float)
+  .add_float64_axis("selectivity", {0.001, 0.01, 0.1, 0.5, 0.8});
+
+FILTER_BENCHMARK_DEFINE(filter_min_max_float64, double)
+  .add_float64_axis("selectivity", {0.001, 0.01, 0.1, 0.5, 0.8});
