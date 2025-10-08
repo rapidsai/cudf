@@ -231,6 +231,72 @@ class PythonScan(IR):
         raise NotImplementedError("PythonScan not implemented")
 
 
+_DECIMAL_IDS = {plc.TypeId.DECIMAL32, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL128}
+
+_COMPARISON_BINOPS = {
+    plc.binaryop.BinaryOperator.EQUAL,
+    plc.binaryop.BinaryOperator.NOT_EQUAL,
+    plc.binaryop.BinaryOperator.LESS,
+    plc.binaryop.BinaryOperator.LESS_EQUAL,
+    plc.binaryop.BinaryOperator.GREATER,
+    plc.binaryop.BinaryOperator.GREATER_EQUAL,
+}
+
+
+def _parquet_physical_types(
+    schema: Schema, paths: list[str], columns: list[str] | None
+) -> dict[str, plc.DataType]:
+    # TODO: Read the physical types as cudf::data_type's using
+    # read_parquet_metadata or another parquet API
+    options = plc.io.parquet.ParquetReaderOptions.builder(
+        plc.io.SourceInfo(paths)
+    ).build()
+    if columns is not None:
+        options.set_columns(columns)
+    options.set_num_rows(0)
+    df = plc.io.parquet.read_parquet(options)
+    return dict(zip(schema.keys(), [c.type() for c in df.tbl.columns()], strict=True))
+
+
+def _cast_literals_to_physical_types(
+    node: expr.Expr, phys_type_map: dict[str, plc.DataType]
+) -> expr.Expr:
+    if isinstance(node, expr.BinOp):
+        left, right = node.children
+        left = _cast_literals_to_physical_types(left, phys_type_map)
+        right = _cast_literals_to_physical_types(right, phys_type_map)
+        if node.op in _COMPARISON_BINOPS:
+            if (
+                isinstance(left, expr.Col)
+                and isinstance(right, expr.Literal)
+                and phys_type_map[left.name].id() in _DECIMAL_IDS
+            ):
+                right = expr.Cast(
+                    left.dtype,
+                    expr.Cast(
+                        DataType(pl.Decimal(38, abs(phys_type_map[left.name].scale()))),
+                        right,
+                    ),
+                )
+            elif (
+                isinstance(right, expr.Col)
+                and isinstance(left, expr.Literal)
+                and phys_type_map[right.name].id() in _DECIMAL_IDS
+            ):
+                left = expr.Cast(
+                    right.dtype,
+                    expr.Cast(
+                        DataType(
+                            pl.Decimal(38, abs(phys_type_map[right.name].scale()))
+                        ),
+                        left,
+                    ),
+                )
+
+        return node.reconstruct([left, right])
+    return node
+
+
 def _align_parquet_schema(df: DataFrame, schema: Schema) -> DataFrame:
     # TODO: Alternatively set the schema of the parquet reader to decimal128
     cast_list = []
@@ -622,7 +688,14 @@ class Scan(IR):
             filters = None
             if predicate is not None and row_index is None:
                 # Can't apply filters during read if we have a row index.
-                filters = to_parquet_filter(predicate.value)
+                filters = to_parquet_filter(
+                    _cast_literals_to_physical_types(
+                        predicate.value,
+                        _parquet_physical_types(
+                            schema, paths, with_columns or list(schema.keys())
+                        ),
+                    )
+                )
             options = plc.io.parquet.ParquetReaderOptions.builder(
                 plc.io.SourceInfo(paths)
             ).build()
