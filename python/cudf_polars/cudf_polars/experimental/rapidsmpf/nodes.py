@@ -78,7 +78,6 @@ async def default_node_single(
     Chunks are processed in the order they are received.
     """
     async with shutdown_on_error(ctx, ch_in, ch_out):
-        sends = []
         while (msg := await ch_in.recv(ctx)) is not None:
             chunk = TableChunk.from_message(msg)
             seq_num = chunk.sequence_number
@@ -91,8 +90,8 @@ async def default_node_single(
                 ),
             )
             chunk = TableChunk.from_pylibcudf_table(seq_num, df.table, chunk.stream)
-            sends.append(ch_out.send(ctx, Message(chunk)))
-        await asyncio.gather(*sends)
+            await ch_out.send(ctx, Message(chunk))
+
         await ch_out.drain(ctx)
 
 
@@ -133,7 +132,7 @@ async def default_node_multi(
         staged_chunks: dict[int, dict[int, DataFrame]] = {
             c: {} for c in range(n_children)
         }
-        sends = []
+
         while True:
             if accepting_data:
                 for ch_idx, (ch_in, child) in enumerate(
@@ -170,27 +169,25 @@ async def default_node_multi(
             ):
                 # Ready to produce the output chunk for seq_num.
                 # Evaluate and send.
-                sends.append(
-                    ch_out.send(
-                        ctx,
-                        Message(
-                            TableChunk.from_pylibcudf_table(
-                                seq_num,
-                                ir.do_evaluate(
-                                    *ir._non_child_args,
-                                    *[
-                                        (
-                                            staged_chunks[ch_idx][0]
-                                            if ch_idx in bcast_indices
-                                            else staged_chunks[ch_idx].pop(seq_num)
-                                        )
-                                        for ch_idx in range(n_children)
-                                    ],
-                                ).table,
-                                DEFAULT_STREAM,
-                            )
-                        ),
-                    )
+                await ch_out.send(
+                    ctx,
+                    Message(
+                        TableChunk.from_pylibcudf_table(
+                            seq_num,
+                            ir.do_evaluate(
+                                *ir._non_child_args,
+                                *[
+                                    (
+                                        staged_chunks[ch_idx][0]
+                                        if ch_idx in bcast_indices
+                                        else staged_chunks[ch_idx].pop(seq_num)
+                                    )
+                                    for ch_idx in range(n_children)
+                                ],
+                            ).table,
+                            DEFAULT_STREAM,
+                        )
+                    ),
                 )
                 seq_num += 1
             elif not accepting_data:
@@ -204,8 +201,7 @@ async def default_node_multi(
                     )
                 break  # All channels have finished
 
-        # Await all sends and drain the output channel
-        await asyncio.gather(*sends)
+        # Drain the output channel
         await ch_out.drain(ctx)
 
 

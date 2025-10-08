@@ -122,7 +122,6 @@ async def broadcast_join_node(
         get_small_table_fut = get_small_table(ctx, small_child, small_ch)
 
         # Stream through large side, joining with broadcast data
-        sends = []
         while (msg := await large_ch.recv(ctx)) is not None:
             large_chunk = TableChunk.from_message(msg)
             large_df = DataFrame.from_table(
@@ -149,21 +148,18 @@ async def broadcast_join_node(
                 )
 
             # Send output chunk
-            sends.append(
-                ch_out.send(
-                    ctx,
-                    Message(
-                        TableChunk.from_pylibcudf_table(
-                            large_chunk.sequence_number,
-                            result.table,
-                            DEFAULT_STREAM,
-                        )
-                    ),
-                )
+            await ch_out.send(
+                ctx,
+                Message(
+                    TableChunk.from_pylibcudf_table(
+                        large_chunk.sequence_number,
+                        result.table,
+                        DEFAULT_STREAM,
+                    )
+                ),
             )
 
-        # Await all sends and drain the output channel
-        await asyncio.gather(*sends)
+        # Drain the output channel
         await ch_out.drain(ctx)
 
 
