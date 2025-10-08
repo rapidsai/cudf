@@ -136,9 +136,7 @@ class DataType:
             and plc.traits.is_fixed_point(right.plc_type)
         ):
             raise ValueError("Both inputs required to be decimal types.")
-        target_scale = min(left.scale(), right.scale())
-        polars_scale = -target_scale if target_scale < 0 else target_scale
-        return DataType(pl.Decimal(38, polars_scale))
+        return DataType(pl.Decimal(38, abs(min(left.scale(), right.scale()))))
 
     def __eq__(self, other: object) -> bool:
         """Equality of DataTypes."""

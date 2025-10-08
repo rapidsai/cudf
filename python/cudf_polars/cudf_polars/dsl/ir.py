@@ -242,8 +242,8 @@ def _align_parquet_schema(df: DataFrame, schema: Schema) -> DataFrame:
         if (
             plc.traits.is_fixed_point(src)
             and plc.traits.is_fixed_point(dst)
-            and (src.id() != dst.id())
-        ) or (src.scale() != dst.scale()):
+            and ((src.id() != dst.id()) or (src.scale() != dst.scale()))
+        ):
             cast_list.append(
                 Column(plc.unary.cast(col.obj, dst), name=name, dtype=schema[name])
             )
