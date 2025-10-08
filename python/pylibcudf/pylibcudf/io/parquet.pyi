@@ -4,6 +4,7 @@ from collections.abc import Mapping
 
 from typing_extensions import Self
 
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.expressions import Expression
@@ -51,6 +52,7 @@ class ChunkedParquetReader:
 def read_parquet(
     options: ParquetReaderOptions,
     stream: Stream = None,
+    mr: DeviceMemoryResource = None,
 ) -> TableWithMetadata: ...
 
 class ParquetWriterOptions:
@@ -96,7 +98,7 @@ class ChunkedParquetWriter:
     @staticmethod
     def from_options(
         options: ChunkedParquetWriterOptions, stream: Stream = None
-    ) -> Self: ...
+    ) -> ChunkedParquetWriter: ...
 
 class ChunkedParquetWriterOptions:
     def __init__(self): ...

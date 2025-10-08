@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import decimal
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 import pytest
@@ -52,14 +52,15 @@ def df():
             "b": ["ẅ", "x", "y", "z", "123", "abcd"],
             "c": [None, None, 4, 5, -1, 0],
             "d": [
-                decimal.Decimal("1.23"),
+                Decimal("1.23"),
                 None,
-                decimal.Decimal("0.00"),
+                Decimal("0.00"),
                 None,
-                decimal.Decimal("-5.67"),
+                Decimal("-5.67"),
                 None,
             ],
-        }
+        },
+        schema={"a": pl.Int64, "b": pl.String, "c": pl.Int32, "d": pl.Decimal(15, 2)},
     )
 
 
@@ -556,7 +557,10 @@ def test_scan_parquet_remote(
 
 
 def test_scan_ndjson_remote(
-    request, tmp_path: Path, df: pl.LazyFrame, httpserver: HTTPServer
+    request: pytest.FixtureRequest,
+    tmp_path: Path,
+    df: pl.DataFrame,
+    httpserver: HTTPServer,
 ) -> None:
     request.applymarker(
         pytest.mark.xfail(

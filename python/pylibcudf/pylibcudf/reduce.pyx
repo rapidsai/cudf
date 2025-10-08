@@ -1,31 +1,36 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move, pair
 from pylibcudf.libcudf cimport reduce as cpp_reduce
 from pylibcudf.libcudf.aggregation cimport reduce_aggregation, scan_aggregation
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.reduce cimport scan_type
+from pylibcudf.libcudf.reduce cimport is_valid_aggregation as cpp_is_valid_aggregation
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.types cimport null_policy
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from .aggregation cimport Aggregation
 from .column cimport Column
 from .scalar cimport Scalar
 from .types cimport DataType
-from .utils cimport _get_stream
+from .utils cimport _get_stream, _get_memory_resource
 
 from pylibcudf.libcudf.reduce import scan_type as ScanType  # no-cython-lint
 
-__all__ = ["ScanType", "minmax", "reduce", "scan"]
+__all__ = ["ScanType", "minmax", "reduce", "scan", "is_valid_reduce_aggregation"]
 
 cpdef Scalar reduce(
     Column col,
     Aggregation agg,
     DataType data_type,
-    Stream stream=None
+    Scalar init=None,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Perform a reduction on a column
 
@@ -41,6 +46,8 @@ cpdef Scalar reduce(
         The data type of the result.
     stream : Stream | None
         CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned scalar's device memory.
 
     Returns
     -------
@@ -51,18 +58,36 @@ cpdef Scalar reduce(
     cdef const reduce_aggregation *c_agg = agg.view_underlying_as_reduce()
 
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_reduce.cpp_reduce(
-            col.view(),
-            dereference(c_agg),
-            data_type.c_obj,
-            stream.view()
-        )
-    return Scalar.from_libcudf(move(result), stream)
+        if init is not None:
+            result = cpp_reduce.cpp_reduce_with_init(
+                col.view(),
+                dereference(c_agg),
+                data_type.c_obj,
+                dereference(init.get()),
+                stream.view(),
+                mr.get_mr()
+            )
+        else:
+            result = cpp_reduce.cpp_reduce(
+                col.view(),
+                dereference(c_agg),
+                data_type.c_obj,
+                stream.view(),
+                mr.get_mr()
+            )
+    return Scalar.from_libcudf(move(result))
 
 
-cpdef Column scan(Column col, Aggregation agg, scan_type inclusive, Stream stream=None):
+cpdef Column scan(
+    Column col,
+    Aggregation agg,
+    scan_type inclusive,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
+):
     """Perform a scan on a column
 
     For details, see ``cudf::scan`` documentation.
@@ -77,6 +102,8 @@ cpdef Column scan(Column col, Aggregation agg, scan_type inclusive, Stream strea
         The type of scan to perform.
     stream : Stream | None
         CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned column's device memory.
 
     Returns
     -------
@@ -87,6 +114,7 @@ cpdef Column scan(Column col, Aggregation agg, scan_type inclusive, Stream strea
     cdef const scan_aggregation *c_agg = agg.view_underlying_as_scan()
 
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         result = cpp_reduce.cpp_scan(
@@ -95,11 +123,12 @@ cpdef Column scan(Column col, Aggregation agg, scan_type inclusive, Stream strea
             inclusive,
             null_policy.EXCLUDE,
             stream.view(),
+            mr.get_mr()
         )
-    return Column.from_libcudf(move(result), stream)
+    return Column.from_libcudf(move(result), stream, mr)
 
 
-cpdef tuple minmax(Column col, Stream stream=None):
+cpdef tuple minmax(Column col, Stream stream=None, DeviceMemoryResource mr=None):
     """Compute the minimum and maximum of a column
 
     For details, see ``cudf::minmax`` documentation.
@@ -110,6 +139,8 @@ cpdef tuple minmax(Column col, Stream stream=None):
         The column to compute the minimum and maximum of.
     stream : Stream | None
         CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned scalars' device memory.
 
     Returns
     -------
@@ -120,13 +151,33 @@ cpdef tuple minmax(Column col, Stream stream=None):
     cdef pair[unique_ptr[scalar], unique_ptr[scalar]] result
 
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_reduce.cpp_minmax(col.view(), stream.view())
+        result = cpp_reduce.cpp_minmax(col.view(), stream.view(), mr.get_mr())
 
     return (
-        Scalar.from_libcudf(move(result.first), stream),
-        Scalar.from_libcudf(move(result.second), stream),
+        Scalar.from_libcudf(move(result.first)),
+        Scalar.from_libcudf(move(result.second)),
     )
+
+
+cpdef bool is_valid_reduce_aggregation(DataType source, Aggregation agg):
+    """
+    Return if an aggregation is supported for a given datatype.
+
+    Parameters
+    ----------
+    source
+        The type of the column the aggregation is being performed on.
+    agg
+        The aggregation.
+
+    Returns
+    -------
+    True if the aggregation is supported.
+    """
+    return cpp_is_valid_aggregation(source.c_obj, agg.kind())
+
 
 ScanType.__str__ = ScanType.__repr__

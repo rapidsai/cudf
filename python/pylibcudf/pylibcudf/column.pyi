@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from typing import Any, Protocol, TypedDict
 
 from rmm.pylibrmm.device_buffer import DeviceBuffer
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
 from pylibcudf._interop_helpers import ArrowLike
@@ -51,7 +52,11 @@ class Column:
     def data(self) -> gpumemoryview | None: ...
     def null_mask(self) -> gpumemoryview | None: ...
     def children(self) -> list[Column]: ...
-    def copy(self, stream: Stream | None = None) -> Column: ...
+    def copy(
+        self,
+        stream: Stream | None = None,
+        mr: DeviceMemoryResource | None = None,
+    ) -> Column: ...
     def device_buffer_size(self) -> int: ...
     def with_mask(
         self, mask: gpumemoryview | None, null_count: int
@@ -59,12 +64,22 @@ class Column:
     def list_view(self) -> ListColumnView: ...
     @staticmethod
     def from_scalar(
-        scalar: Scalar, size: int, stream: Stream | None = None
+        scalar: Scalar,
+        size: int,
+        stream: Stream | None = None,
+        mr: DeviceMemoryResource | None = None,
     ) -> Column: ...
-    def to_scalar(self, stream: Stream | None = None) -> Scalar: ...
+    def to_scalar(
+        self,
+        stream: Stream | None = None,
+        mr: DeviceMemoryResource | None = None,
+    ) -> Scalar: ...
     @staticmethod
     def all_null_like(
-        like: Column, size: int, stream: Stream | None = None
+        like: Column,
+        size: int,
+        stream: Stream | None = None,
+        mr: DeviceMemoryResource | None = None,
     ) -> Column: ...
     @staticmethod
     def from_rmm_buffer(
