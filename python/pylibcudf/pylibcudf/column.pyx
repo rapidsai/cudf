@@ -135,7 +135,7 @@ cdef class OwnerMaskWithCAI:
         obj.owner = owner
 
         obj.cai = {
-            "shape": (bitmask_allocation_size_bytes(cv.size()),),
+            "shape": (bitmask_allocation_size_bytes(cv.size(), 64),),
             "strides": None,
             # For the purposes in this function, just treat all of the types as byte
             # streams of the appropriate size. This matches what we currently get from
@@ -834,10 +834,10 @@ cdef class Column:
         Column
             An all-null column of `size` rows and type matching `like`.
         """
-        cdef Scalar slr = Scalar.empty_like(like)
-        cdef unique_ptr[column] c_result
         stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
+        cdef Scalar slr = Scalar.empty_like(like, stream, mr)
+        cdef unique_ptr[column] c_result
         with nogil:
             c_result = make_column_from_scalar(
                 dereference(slr.get()),
@@ -1268,7 +1268,7 @@ cdef class Column:
         stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
         with nogil:
-            c_result = make_unique[column](self.view(), stream.view())
+            c_result = make_unique[column](self.view(), stream.view(), mr.get_mr())
         return Column.from_libcudf(move(c_result), stream, mr)
 
     cpdef uint64_t device_buffer_size(self):
