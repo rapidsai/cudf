@@ -117,7 +117,7 @@ std::unique_ptr<scalar> max(column_view const& col,
  *
  * If all elements in input column are null, output scalar is null.
  *
- * @throw cudf::logic_error if `output_dtype` is not an index type
+ * @throw cudf::data_type_error if `output_dtype` is not an index type
  *
  * @param col input column to compute reduction
  * @param output_dtype data type of the output scalar
@@ -135,7 +135,7 @@ std::unique_ptr<scalar> argmin(column_view const& col,
  *
  * If all elements in input column are null, output scalar is null.
  *
- * @throw cudf::logic_error if `output_dtype` is not an index type
+ * @throw cudf::data_type_error if `output_dtype` is not an index type
  *
  * @param col input column to compute reduction
  * @param output_dtype data type of the output scalar

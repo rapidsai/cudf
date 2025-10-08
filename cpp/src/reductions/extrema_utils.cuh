@@ -167,7 +167,9 @@ class arg_minmax_dispatcher {
                                                    rmm::device_async_resource_ref mr) const
     requires(is_supported<ElementType>())
   {
-    CUDF_EXPECTS(cudf::is_index_type(output_type), "Output type must be an index type.");
+    CUDF_EXPECTS(cudf::is_index_type(output_type),
+                 "Output type must be an index type.",
+                 cudf::data_type_error);
     auto const& values =
       is_dictionary(input.type()) ? dictionary_column_view(input).get_indices_annotated() : input;
 
