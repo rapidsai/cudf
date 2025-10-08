@@ -158,8 +158,8 @@ class comparison_binop_generator {
   auto less() const { return row_comparator.less<true>(cudf::nullate::DYNAMIC{has_nulls}); }
 
   /**
-   * @brief Generate the binary operator for ArgMin/ArgMax with index values into the input table.
-   * @return The binary operator for ArgMin/ArgMax
+   * @brief Generate the binary operator for ARGMIN/ARGMAX with index values into the input table.
+   * @return The binary operator for ARGMIN/ARGMAX
    */
   auto binop() const { return row_arg_minmax_fn(input_tview.num_rows(), less(), is_min_op); }
 
