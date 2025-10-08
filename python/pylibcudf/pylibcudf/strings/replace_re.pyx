@@ -69,7 +69,7 @@ cpdef Column replace_re(
     if Patterns is RegexProgram and Replacement is Scalar:
         if replacement is None:
             replacement = Scalar.from_libcudf(
-                cpp_make_string_scalar("".encode(), stream.view())
+                cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
             )
         with nogil:
             c_result = move(
