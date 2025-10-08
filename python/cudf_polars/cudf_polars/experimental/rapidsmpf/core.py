@@ -94,8 +94,7 @@ def evaluate_logical_plan(ir: IR, config_options: ConfigOptions) -> DataFrame:
     comm = new_communicator(options)
     # NOTE: Maybe use rmm.mr.CudaAsyncMemoryResource() by default
     # in callback.py instead of UVM (by default)?
-    # mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
-    mr = RmmResourceAdaptor(rmm.mr.CudaAsyncMemoryResource())
+    mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
     br = BufferResource(mr)
     rmm.mr.set_current_device_resource(mr)
     ctx = Context(comm, br, options)
