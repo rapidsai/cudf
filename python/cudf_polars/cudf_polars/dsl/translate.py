@@ -333,6 +333,32 @@ def _(node: pl_ir.GroupBy, translator: Translator, schema: Schema) -> ir.IR:
         return rewrite_groupby(node, schema, keys, original_aggs, inp)
 
 
+_DECIMAL_TYPES = {plc.TypeId.DECIMAL32, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL128}
+
+
+def _align_decimal_scales(
+    left: expr.Expr, right: expr.Expr
+) -> tuple[expr.Expr, expr.Expr]:
+    left_type, right_type = left.dtype, right.dtype
+
+    if plc.traits.is_fixed_point(left_type.plc_type) and plc.traits.is_fixed_point(
+        right_type.plc_type
+    ):
+        target = DataType.common_decimal_dtype(left_type, right_type)
+
+        if (
+            left_type.id() != target.id() or left_type.scale() != target.scale()
+        ):  # pragma: no cover; no test yet
+            left = expr.Cast(target, left)
+
+        if (
+            right_type.id() != target.id() or right_type.scale() != target.scale()
+        ):  # pragma: no cover; no test yet
+            right = expr.Cast(target, right)
+
+    return left, right
+
+
 @_translate_ir.register
 def _(node: pl_ir.Join, translator: Translator, schema: Schema) -> ir.IR:
     # Join key dtypes are dependent on the schema of the left and
@@ -388,22 +414,24 @@ def _(node: pl_ir.Join, translator: Translator, schema: Schema) -> ir.IR:
                 expr.BinOp(
                     dtype,
                     expr.BinOp._MAPPING[op],
-                    insert_colrefs(
-                        left.value,
-                        table_ref=plc.expressions.TableReference.LEFT,
-                        name_to_index={
-                            name: i for i, name in enumerate(inp_left.schema)
-                        },
-                    ),
-                    insert_colrefs(
-                        right.value,
-                        table_ref=plc.expressions.TableReference.RIGHT,
-                        name_to_index={
-                            name: i for i, name in enumerate(inp_right.schema)
-                        },
+                    *_align_decimal_scales(
+                        insert_colrefs(
+                            left_ne.value,
+                            table_ref=plc.expressions.TableReference.LEFT,
+                            name_to_index={
+                                name: i for i, name in enumerate(inp_left.schema)
+                            },
+                        ),
+                        insert_colrefs(
+                            right_ne.value,
+                            table_ref=plc.expressions.TableReference.RIGHT,
+                            name_to_index={
+                                name: i for i, name in enumerate(inp_right.schema)
+                            },
+                        ),
                     ),
                 )
-                for op, left, right in zip(ops, left_on, right_on, strict=True)
+                for op, left_ne, right_ne in zip(ops, left_on, right_on, strict=True)
             ),
         )
 
@@ -889,13 +917,21 @@ def _(
 def _(
     node: pl_expr.Agg, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
-    value = expr.Agg(
-        dtype,
-        node.name,
-        node.options,
-        *(translator.translate_expr(n=n, schema=schema) for n in node.arguments),
-    )
-    if value.name in ("count", "n_unique") and value.dtype.id() != plc.TypeId.INT32:
+    agg_name = node.name
+    args = [translator.translate_expr(n=arg, schema=schema) for arg in node.arguments]
+
+    if agg_name not in ("count", "n_unique", "mean", "median", "quantile"):
+        args = [
+            expr.Cast(dtype, arg)
+            if plc.traits.is_fixed_point(arg.dtype.plc_type)
+            and arg.dtype.plc_type != dtype.plc_type
+            else arg
+            for arg in args
+        ]
+
+    value = expr.Agg(dtype, agg_name, node.options, *args)
+
+    if agg_name in ("count", "n_unique") and value.dtype.id() != plc.TypeId.INT32:
         return expr.Cast(value.dtype, value)
     return value
 
@@ -919,13 +955,30 @@ def _(
     dtype: DataType,
     schema: Schema,
 ) -> expr.Expr:
+    left = translator.translate_expr(n=node.left, schema=schema)
+    right = translator.translate_expr(n=node.right, schema=schema)
     if plc.traits.is_boolean(dtype.plc_type) and node.op == pl_expr.Operator.TrueDivide:
         dtype = DataType(pl.Float64())
+    if node.op == pl_expr.Operator.TrueDivide and (
+        plc.traits.is_fixed_point(left.dtype.plc_type)
+        or plc.traits.is_fixed_point(right.dtype.plc_type)
+    ):
+        f64 = DataType(pl.Float64())
+        return expr.Cast(
+            dtype,
+            expr.BinOp(
+                f64,
+                expr.BinOp._MAPPING[node.op],
+                expr.Cast(f64, left),
+                expr.Cast(f64, right),
+            ),
+        )
+
     return expr.BinOp(
         dtype,
         expr.BinOp._MAPPING[node.op],
-        translator.translate_expr(n=node.left, schema=schema),
-        translator.translate_expr(n=node.right, schema=schema),
+        left,
+        right,
     )
 
 

@@ -138,10 +138,15 @@ class Agg(Expr):
     def _reduce(
         self, column: Column, *, request: plc.aggregation.Aggregation
     ) -> Column:
+        if (
+            self.name in {"mean", "median"}
+            and plc.traits.is_fixed_point(column.dtype.plc_type)
+            and self.dtype.plc_type.id() in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
+        ):
+            column = column.astype(self.dtype)
         return Column(
             plc.Column.from_scalar(
-                plc.reduce.reduce(column.obj, request, self.dtype.plc_type),
-                1,
+                plc.reduce.reduce(column.obj, request, self.dtype.plc_type), 1
             ),
             name=column.name,
             dtype=self.dtype,

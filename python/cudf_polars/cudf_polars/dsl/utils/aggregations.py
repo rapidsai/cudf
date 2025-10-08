@@ -91,10 +91,17 @@ def decompose_single_agg(
     name = named_expr.name
     if isinstance(agg, expr.UnaryFunction) and agg.name in {
         "rank",
+        "fill_null_with_strategy",
     }:
         if context != ExecutionContext.WINDOW:
             raise NotImplementedError(
                 f"{agg.name} is not supported in groupby or rolling context"
+            )
+        if agg.name == "fill_null_with_strategy" and (
+            strategy := agg.options[0]
+        ) not in {"forward", "backward"}:
+            raise NotImplementedError(
+                f"fill_null({strategy=}) not supported in a groupy or rolling context"
             )
         # Ensure Polars semantics for dtype:
         # - average -> Float64
@@ -146,15 +153,6 @@ def decompose_single_agg(
         return [(named_expr, True)], named_expr.reconstruct(expr.Col(agg.dtype, name))
     if isinstance(agg, (expr.Literal, expr.LiteralColumn)):
         return [], named_expr
-    if (
-        is_top
-        and isinstance(agg, expr.UnaryFunction)
-        and agg.name == "fill_null_with_strategy"
-    ):
-        strategy, _ = agg.options
-        raise NotImplementedError(
-            f"fill_null_with_strategy({strategy!r}) is not supported in groupby aggregations"
-        )
     if isinstance(agg, expr.Agg):
         if agg.name == "quantile":
             # Second child the requested quantile (which is asserted
@@ -192,9 +190,9 @@ def decompose_single_agg(
                 tid = agg.dtype.plc_type.id()
                 if tid in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}:
                     cast_to = (
-                        DataType(pl.Float64)
+                        DataType(pl.Float64())
                         if tid == plc.TypeId.FLOAT64
-                        else DataType(pl.Float32)
+                        else DataType(pl.Float32())
                     )
                     child = expr.Cast(cast_to, child)
                     child_dtype = child.dtype.plc_type
