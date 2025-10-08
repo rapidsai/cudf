@@ -7,7 +7,7 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
 from cudf_polars.utils.config import ConfigOptions
 
 
@@ -18,8 +18,7 @@ def test_join_rapidsmpf(
     rapidsmpf_spill: bool,  # noqa: FBT001
 ) -> None:
     # Check that we have a distributed cluster running.
-    # This tests must be run with:
-    # --executor='streaming' --scheduler='distributed'
+    # This tests must be run with: --scheduler='distributed'
     distributed = pytest.importorskip("distributed")
     try:
         client = distributed.get_client()
@@ -137,3 +136,59 @@ def test_rapidsmpf_spill_synchronous_unsupported() -> None:
     )
     with pytest.raises(ValueError, match="rapidsmpf_spill.*not supported.*synchronous"):
         ConfigOptions.from_polars_engine(engine)
+
+
+@pytest.mark.parametrize("max_rows_per_partition", [1, 5])
+def test_sort_rapidsmpf(max_rows_per_partition: int) -> None:
+    # Require rapidsmpf, but don't require a distributed cluster,
+    # because single-worker shuffle can be used.
+    pytest.importorskip("rapidsmpf")
+
+    # Setup the GPUEngine config
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": max_rows_per_partition,
+            "shuffle_method": "rapidsmpf",
+            "scheduler": DEFAULT_SCHEDULER,
+        },
+    )
+
+    df = pl.LazyFrame(
+        {
+            "x": range(15),
+            "y": [1, 2, 3] * 5,
+            "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 3,
+        }
+    )
+    q = df.sort(by=["y", "z"])
+
+    assert_gpu_result_equal(q, engine=engine, check_row_order=True)
+
+
+def test_sort_stable_rapidsmpf_warns():
+    pytest.importorskip("rapidsmpf")
+
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 3,
+            "scheduler": DEFAULT_SCHEDULER,
+            "shuffle_method": "rapidsmpf",
+            "fallback_mode": "warn",
+        },
+    )
+
+    df = pl.LazyFrame(
+        {
+            "x": range(15),
+            "y": [1, 2, 3] * 5,
+            "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 3,
+        }
+    )
+
+    q = df.sort(by=["y", "z"], maintain_order=True)
+    with pytest.warns(UserWarning, match="Falling back to shuffle_method='tasks'."):
+        assert_gpu_result_equal(q, engine=engine, check_row_order=True)

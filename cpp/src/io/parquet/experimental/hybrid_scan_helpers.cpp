@@ -87,7 +87,7 @@ aggregate_reader_metadata::aggregate_reader_metadata(FileMetaData const& parquet
   : aggregate_reader_metadata_base({}, false, false)
 {
   // Just copy over the FileMetaData struct to the internal metadata struct
-  per_file_metadata = std::vector<metadata_base>{metadata{parquet_metadata}.get_file_metadata()};
+  per_file_metadata.emplace_back(metadata{parquet_metadata}.get_file_metadata());
   initialize_internals(use_arrow_schema, has_cols_from_mismatched_srcs);
 }
 
@@ -97,7 +97,7 @@ aggregate_reader_metadata::aggregate_reader_metadata(cudf::host_span<uint8_t con
   : aggregate_reader_metadata_base({}, false, false)
 {
   // Re-initialize internal variables here as base class was initialized without a source
-  per_file_metadata = std::vector<metadata_base>{metadata{footer_bytes}.get_file_metadata()};
+  per_file_metadata.emplace_back(metadata{footer_bytes}.get_file_metadata());
   initialize_internals(use_arrow_schema, has_cols_from_mismatched_srcs);
 }
 
@@ -109,13 +109,15 @@ void aggregate_reader_metadata::initialize_internals(bool use_arrow_schema,
   num_rows        = calc_num_rows();
   num_row_groups  = calc_num_row_groups();
 
-  // Force all leaf columns to be nullable
+  // Force all non-nullable (REQUIRED) columns to be nullable without modifying REPEATED columns to
+  // preserve list structures
   auto& schema = per_file_metadata.front().schema;
-  std::for_each(schema.begin(), schema.end(), [](auto& col) {
-    // Modifying the repetition type of lists converts them to structs, so we must skip that
-    auto const is_leaf_col =
-      not(col.type == Type::UNDEFINED or col.is_stub() or col.is_list() or col.is_struct());
-    if (is_leaf_col) { col.repetition_type = FieldRepetitionType::OPTIONAL; }
+  std::for_each(schema.begin() + 1, schema.end(), [](auto& col) {
+    // TODO: Store information of whichever column schema we modified here and restore it to
+    // `REQUIRED` if we end up not pruning any pages out of it
+    if (col.repetition_type == FieldRepetitionType::REQUIRED) {
+      col.repetition_type = FieldRepetitionType::OPTIONAL;
+    }
   });
 
   // Collect and apply arrow:schema from Parquet's key value metadata section
@@ -421,9 +423,17 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
             auto dictionary_offset = int64_t{0};
             auto dictionary_size   = int64_t{0};
 
-            // If any columns lack the page indexes then just return without modifying the
-            // row_group_info.
-            if (col_chunk.offset_index.has_value() and col_chunk.column_index.has_value()) {
+            // Make sure that we have page index and the column chunk doesn't have any
+            // non-dictionary encoded pages
+            auto const has_page_index_and_only_dict_encoded_pages =
+              col_chunk.offset_index.has_value() and col_chunk.column_index.has_value() and
+              std::all_of(
+                col_meta.encodings.cbegin(), col_meta.encodings.cend(), [](auto const& encoding) {
+                  return encoding == Encoding::PLAIN_DICTIONARY or
+                         encoding == Encoding::RLE_DICTIONARY;
+                });
+
+            if (has_page_index_and_only_dict_encoded_pages) {
               auto const& offset_index = col_chunk.offset_index.value();
               auto const num_pages     = offset_index.page_locations.size();
 

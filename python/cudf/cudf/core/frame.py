@@ -9,7 +9,6 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Literal
 
 import cupy
-import numpy
 import numpy as np
 import pyarrow as pa
 from typing_extensions import Self
@@ -227,6 +226,8 @@ class Frame(BinaryOperand, Scannable, Serializable):
     def _mimic_inplace(
         self, result: Self, inplace: bool = False
     ) -> Self | None:
+        if not isinstance(inplace, bool):
+            raise TypeError("inplace must be a boolean")
         if inplace:
             for col in self._column_names:
                 if col in result._data:
@@ -492,7 +493,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         Akin to cudf.DataFrame(...).loc[:, labels]
         """
-        return self._from_data_like_self(self._data.select_by_label(labels))
+        return self._from_data(self._data.select_by_label(labels))
 
     @property
     @_performance_tracking
@@ -550,13 +551,13 @@ class Frame(BinaryOperand, Scannable, Serializable):
         copy: bool,
         dtype: Dtype | None = None,
         na_value=no_default,
-    ) -> cupy.ndarray | numpy.ndarray:
+    ) -> cupy.ndarray | np.ndarray:
         # Internal function to implement to_cupy and to_numpy, which are nearly
         # identical except for the attribute they access to generate values.
 
         def to_array(
             col: ColumnBase, to_dtype: np.dtype
-        ) -> cupy.ndarray | numpy.ndarray:
+        ) -> cupy.ndarray | np.ndarray:
             if (
                 col.has_nulls()
                 and dtype is not None
@@ -608,7 +609,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         if ncol == 0:
             return module.empty(
                 shape=(len(self), ncol),
-                dtype=numpy.dtype("float64"),
+                dtype=np.dtype("float64"),
                 order="F",
             )
 
@@ -619,6 +620,21 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 to_dtype = find_common_type(
                     [dtype for _, dtype in self._dtypes]
                 )
+                if to_dtype is not None and any(
+                    col.has_nulls() for col in self._columns
+                ):
+                    if to_dtype.kind == "b" or any(
+                        dtype.kind == "b"  # type: ignore[union-attr]
+                        for _, dtype in self._dtypes
+                    ):
+                        if module == cupy:
+                            raise ValueError(
+                                "Cannot convert to cupy bool array with nulls."
+                            )
+                        else:
+                            to_dtype = np.dtype("object")
+                    elif to_dtype.kind in "ui":
+                        to_dtype = np.dtype("float64")
 
             if cudf.get_option(
                 "mode.pandas_compatible"
@@ -629,7 +645,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             if isinstance(to_dtype, cudf.CategoricalDtype):
                 to_dtype = to_dtype.categories.dtype
 
-            if not isinstance(to_dtype, numpy.dtype):
+            if not isinstance(to_dtype, np.dtype):
                 raise NotImplementedError(
                     f"{to_dtype} cannot be exposed as an array"
                 )
@@ -783,7 +799,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         dtype: Dtype | None = None,
         copy: bool = True,
         na_value=no_default,
-    ) -> numpy.ndarray:
+    ) -> np.ndarray:
         """Convert the Frame to a NumPy array.
 
         Parameters
@@ -809,7 +825,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             )
 
         return self._to_array(
-            lambda col: col.values_host, numpy, copy, dtype, na_value
+            lambda col: col.values_host, np, copy, dtype, na_value
         )
 
     @_performance_tracking

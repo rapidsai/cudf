@@ -169,9 +169,12 @@ __device__ void update_string_offsets_for_pruned_pages(
   namespace cg = cooperative_groups;
 
   // Initial string offset
-  auto const initial_value = state->page.str_offset;
-  auto value_count         = state->page.num_input_values;
-  auto const tid           = cg::this_thread_block().thread_rank();
+  auto const initial_value = page.str_offset;
+  // The value count is either the leaf-level batch size in case of lists or the number of
+  // effective rows being read by this page
+  auto const value_count =
+    has_lists ? page.nesting[state->col.max_nesting_depth - 1].batch_size : state->num_rows;
+  auto const tid = cg::this_thread_block().thread_rank();
 
   // Offsets pointer contains string sizes in case of large strings and actual offsets
   // otherwise
@@ -189,10 +192,6 @@ __device__ void update_string_offsets_for_pruned_pages(
     auto const input_col_idx       = page.chunk_idx % chunks_per_rowgroup;
     compute_initial_large_strings_offset<has_lists>(state, initial_str_offsets[input_col_idx]);
   } else {
-    // if no repetition we haven't calculated start/end bounds and instead just skipped
-    // values until we reach first_row. account for that here.
-    if constexpr (not has_lists) { value_count -= state->first_row; }
-
     // Write the initial offset at all positions to indicate zero sized strings
     for (int idx = tid; idx < value_count; idx += block_size) {
       offptr[idx] = initial_value;

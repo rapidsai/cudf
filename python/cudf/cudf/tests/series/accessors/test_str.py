@@ -1530,14 +1530,14 @@ def test_string_replace_multi():
     assert_eq(expect, got)
 
     ps = pd.Series(["foo", "fuz", np.nan])
-    gs = cudf.Series.from_pandas(ps)
+    gs = cudf.Series(ps)
 
     expect = ps.str.replace("f.", "ba", regex=True)
     got = gs.str.replace(["f."], ["ba"], regex=True)
     assert_eq(expect, got)
 
     ps = pd.Series(["f.o", "fuz", np.nan])
-    gs = cudf.Series.from_pandas(ps)
+    gs = cudf.Series(ps)
 
     expect = ps.str.replace("f.", "ba", regex=False)
     got = gs.str.replace(["f."], ["ba"], regex=False)

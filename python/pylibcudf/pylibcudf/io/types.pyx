@@ -29,9 +29,9 @@ from pylibcudf.libcudf.io.types cimport (
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.libcudf.utilities.span cimport host_span, device_span
 
-from pylibcudf.utils cimport _get_stream
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 import codecs
 import errno
@@ -301,6 +301,7 @@ cdef class TableInputMetadata:
             for i in range(self.c_obj.column_metadata.size())
         ]
 
+
 cdef class TableWithMetadata:
     """A container holding a table and its associated metadata
     (e.g. column names)
@@ -392,12 +393,13 @@ cdef class TableWithMetadata:
 
     @staticmethod
     cdef TableWithMetadata from_libcudf(
-        table_with_metadata& tbl_with_meta, Stream stream = None
+        table_with_metadata& tbl_with_meta,
+        Stream stream,
+        DeviceMemoryResource mr
     ):
         """Create a Python TableWithMetadata from a libcudf table_with_metadata"""
         cdef TableWithMetadata out = TableWithMetadata.__new__(TableWithMetadata)
-        stream = _get_stream(stream)
-        out.tbl = Table.from_libcudf(move(tbl_with_meta.tbl), stream)
+        out.tbl = Table.from_libcudf(move(tbl_with_meta.tbl), stream, mr)
         out.metadata = tbl_with_meta.metadata
         return out
 
@@ -467,8 +469,6 @@ cdef class SourceInfo:
         A homogeneous list of sources to read from. Mixing
         different types of sources will raise a `ValueError`.
     """
-    # Regular expression that match remote file paths supported by libcudf
-    _is_remote_file_pattern = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", re.IGNORECASE)
 
     def __init__(self, list sources):
         if not sources:
@@ -483,7 +483,7 @@ cdef class SourceInfo:
             for src in sources:
                 if not isinstance(src, (os.PathLike, str)):
                     raise ValueError("All sources must be of the same type!")
-                if not (os.path.isfile(src) or self._is_remote_file_pattern.match(src)):
+                if not (os.path.isfile(src) or SourceInfo._is_remote_uri(src)):
                     raise FileNotFoundError(
                         errno.ENOENT, os.strerror(errno.ENOENT), src
                     )
@@ -537,6 +537,13 @@ cdef class SourceInfo:
                              "bytes, io.BytesIO, io.StringIO, or a Datasource")
 
         self.c_obj = source_info(host_span[host_span[const_byte]](self._hspans))
+
+    @staticmethod
+    def _is_remote_uri(path: str | os.PathLike) -> bool:
+        # Regular expression that match remote file paths supported by libcudf
+        return re.compile(
+            r"^[a-zA-Z][a-zA-Z0-9+.\-]*://", re.IGNORECASE
+        ).match(str(path)) is not None
 
     def _init_byte_like_sources(self, list sources, type expected_type):
         cdef const unsigned char[::1] c_buffer

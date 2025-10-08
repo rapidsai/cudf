@@ -8,7 +8,10 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import importlib
+import io
+import itertools
 import json
+import logging
 import os
 import statistics
 import sys
@@ -22,6 +25,8 @@ from typing import TYPE_CHECKING, Any, Literal, assert_never
 import nvtx
 
 import polars as pl
+
+import rmm.statistics
 
 try:
     import pynvml
@@ -44,6 +49,17 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+try:
+    import structlog
+    import structlog.contextvars
+    import structlog.processors
+    import structlog.stdlib
+except ImportError:
+    _HAS_STRUCTLOG = False
+else:
+    _HAS_STRUCTLOG = True
+
+
 ExecutorType = Literal["in-memory", "streaming", "cpu"]
 
 
@@ -52,8 +68,28 @@ class Record:
     """Results for a single run of a single PDS-H query."""
 
     query: int
+    iteration: int
     duration: float
     shuffle_stats: dict[str, dict[str, int | float]] | None = None
+    traces: list[dict[str, Any]] | None = None
+
+    @classmethod
+    def new(
+        cls,
+        query: int,
+        iteration: int,
+        duration: float,
+        shuffle_stats: dict[str, dict[str, int | float]] | None = None,
+        traces: list[dict[str, Any]] | None = None,
+    ) -> Record:
+        """Create a Record from plain data."""
+        return cls(
+            query=query,
+            iteration=iteration,
+            duration=duration,
+            shuffle_stats=shuffle_stats,
+            traces=traces,
+        )
 
 
 @dataclasses.dataclass
@@ -205,6 +241,8 @@ class RunConfig:
     rapidsmpf_spill: bool
     spill_device: float
     query_set: str
+    collect_traces: bool = False
+    stats_planning: bool
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.gather_shuffle_stats and self.shuffle != "rapidsmpf":
@@ -239,12 +277,17 @@ class RunConfig:
             scale_factor = _infer_scale_factor(name, path, args.suffix)
         if path is None:
             path = f"{args.root}/scale-{scale_factor}"
-        try:
-            scale_factor = int(scale_factor)
-        except ValueError:
-            scale_factor = float(scale_factor)
 
-        if args.scale is not None:
+        scale_factor = float(scale_factor)
+        try:
+            scale_factor_int = int(scale_factor)
+        except ValueError:
+            pass
+        else:
+            if scale_factor_int == scale_factor:
+                scale_factor = scale_factor_int
+
+        if "pdsh" in name and args.scale is not None:
             # Validate the user-supplied scale factor
             sf_inf = _infer_scale_factor(name, path, args.suffix)
             rel_error = abs((scale_factor - sf_inf) / sf_inf)
@@ -274,6 +317,8 @@ class RunConfig:
             rapidsmpf_spill=args.rapidsmpf_spill,
             max_rows_per_partition=args.max_rows_per_partition,
             query_set=args.query_set,
+            collect_traces=args.collect_traces,
+            stats_planning=args.stats_planning,
         )
 
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
@@ -300,6 +345,7 @@ class RunConfig:
                 print(f"blocksize: {self.blocksize}")
                 print(f"shuffle_method: {self.shuffle}")
                 print(f"broadcast_join_limit: {self.broadcast_join_limit}")
+                print(f"stats_planning: {self.stats_planning}")
                 if self.scheduler == "distributed":
                     print(f"n_workers: {self.n_workers}")
                     print(f"threads: {self.threads}")
@@ -347,11 +393,15 @@ def get_executor_options(
         executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
     if run_config.scheduler == "distributed":
         executor_options["scheduler"] = "distributed"
+    if run_config.stats_planning:
+        executor_options["stats_planning"] = {"use_reduction_planning": True}
 
     if (
         benchmark
         and benchmark.__name__ == "PDSHQueries"
         and run_config.executor == "streaming"
+        # Only use the unique_fraction config if stats_planning is disabled
+        and not run_config.stats_planning
     ):
         executor_options["unique_fraction"] = {
             "c_custkey": 0.05,
@@ -375,7 +425,7 @@ def print_query_plan(
         if args.explain_logical:
             print(f"\nQuery {q_id} - Logical plan\n")
             print(q.explain())
-        elif args.explain:
+        if args.explain:
             print(f"\nQuery {q_id} - Physical plan\n")
             print(q.show_graph(engine="streaming", plan_stage="physical"))
     elif CUDF_POLARS_AVAILABLE:
@@ -383,7 +433,7 @@ def print_query_plan(
         if args.explain_logical:
             print(f"\nQuery {q_id} - Logical plan\n")
             print(explain_query(q, engine, physical=False))
-        elif args.explain:
+        if args.explain:
             print(f"\nQuery {q_id} - Physical plan\n")
             print(explain_query(q, engine))
     else:
@@ -406,6 +456,7 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
         "protocol": args.protocol,
         "rmm_pool_size": args.rmm_pool_size,
         "rmm_async": args.rmm_async,
+        "rmm_release_threshold": args.rmm_release_threshold,
         "threads_per_worker": run_config.threads,
     }
 
@@ -429,6 +480,10 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
                     }
                 ),
             )
+            # Setting this globally makes the peak statistics not meaningful
+            # across queries / iterations. But doing it per query isn't worth
+            # the effort right now.
+            client.run(rmm.statistics.enable_statistics)
         except ImportError as err:
             if run_config.shuffle == "rapidsmpf":
                 raise ImportError(
@@ -595,8 +650,8 @@ def parse_args(
         "--protocol",
         default="ucx",
         type=str,
-        choices=["ucx-old", "ucx"],
-        help="Communication protocol to use for Dask: ucx (uses ucxx) or ucx-old (uses ucx-py)",
+        choices=["ucx"],
+        help="Communication protocol to use for Dask: ucx (uses ucxx)",
     )
     parser.add_argument(
         "--shuffle",
@@ -619,17 +674,27 @@ def parse_args(
     )
     parser.add_argument(
         "--rmm-pool-size",
-        default=0.5,
+        default=None,
         type=float,
         help=textwrap.dedent("""\
             Fraction of total GPU memory to allocate for RMM pool.
-            Default: 0.5 (50%% of GPU memory)"""),
+            Default: 0.5 (50%% of GPU memory) when --no-rmm-async,
+                     None when --rmm-async"""),
+    )
+    parser.add_argument(
+        "--rmm-release-threshold",
+        default=None,
+        type=float,
+        help=textwrap.dedent("""\
+            Passed to dask_cuda.LocalCUDACluster to control the release
+            threshold for RMM pool memory.
+            Default: None (no release threshold)"""),
     )
     parser.add_argument(
         "--rmm-async",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Use RMM async memory resource.",
+        help="Use RMM async memory resource. Note: only affects distributed scheduler!",
     )
     parser.add_argument(
         "--rapidsmpf-oom-protection",
@@ -704,7 +769,28 @@ def parse_args(
         default="duckdb",
         help="Which engine to use as the baseline for validation.",
     )
-    return parser.parse_args(args)
+
+    parser.add_argument(
+        "--collect-traces",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Collect data tracing cudf-polars execution.",
+    )
+
+    parser.add_argument(
+        "--stats-planning",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Enable statistics planning.",
+    )
+
+    parsed_args = parser.parse_args(args)
+
+    if parsed_args.rmm_pool_size is None and not parsed_args.rmm_async:
+        # The default rmm pool size depends on the rmm_async flag
+        parsed_args.rmm_pool_size = 0.5
+
+    return parsed_args
 
 
 def run_polars(
@@ -741,8 +827,12 @@ def run_polars(
         print_query_plan(q_id, q, args, run_config, engine)
 
         records[q_id] = []
-
         for i in range(args.iterations):
+            if _HAS_STRUCTLOG and run_config.collect_traces:
+                setup_logging(q_id, i)
+                if client is not None:
+                    client.run(setup_logging, q_id, i)
+
             t0 = time.monotonic()
 
             try:
@@ -777,7 +867,9 @@ def run_polars(
                     print(f"❌ Query {q_id} failed validation!\n{e}")
 
             t1 = time.monotonic()
-            record = Record(query=q_id, duration=t1 - t0, shuffle_stats=shuffle_stats)
+            record = Record(
+                query=q_id, iteration=i, duration=t1 - t0, shuffle_stats=shuffle_stats
+            )
             if args.print_results:
                 print(result)
 
@@ -785,6 +877,51 @@ def run_polars(
             records[q_id].append(record)
 
     run_config = dataclasses.replace(run_config, records=dict(records))
+
+    # consolidate logs
+    if _HAS_STRUCTLOG and run_config.collect_traces:
+
+        def gather_logs() -> str:
+            logger = logging.getLogger()
+            return logger.handlers[0].stream.getvalue()  # type: ignore[attr-defined]
+
+        if client is not None:
+            all_logs = "\n".join(client.run(gather_logs).values())
+        else:
+            all_logs = gather_logs()
+
+        parsed_logs = [json.loads(log) for log in all_logs.splitlines() if log]
+        # Some other log records can end up in here. Filter those out.
+        parsed_logs = [log for log in parsed_logs if log["event"] == "Execute IR"]
+        # Now we want to augment the existing Records with the trace data.
+
+        def group_key(x: dict) -> int:
+            return x["query_id"]
+
+        def sort_key(x: dict) -> tuple[int, int]:
+            return x["query_id"], x["iteration"]
+
+        grouped = itertools.groupby(
+            sorted(parsed_logs, key=sort_key),
+            key=group_key,
+        )
+
+        for query_id, run_logs_group in grouped:
+            run_logs = list(run_logs_group)
+            by_iteration = [
+                list(x)
+                for _, x in itertools.groupby(run_logs, key=lambda x: x["iteration"])
+            ]
+            run_records = run_config.records[query_id]
+            assert len(by_iteration) == len(run_records)  # same number of iterations
+            all_traces = [list(iteration) for iteration in by_iteration]
+
+            new_records = [
+                dataclasses.replace(record, traces=traces)
+                for record, traces in zip(run_records, all_traces, strict=True)
+            ]
+
+            run_config.records[query_id] = new_records
 
     if args.summarize:
         run_config.summarize()
@@ -807,3 +944,78 @@ def run_polars(
 
     if query_failures or validation_failures:
         sys.exit(1)
+
+
+def setup_logging(query_id: int, iteration: int) -> None:  # noqa: D103
+    import cudf_polars.dsl.tracing
+
+    if not cudf_polars.dsl.tracing.LOG_TRACES:
+        msg = (
+            "Tracing requested via --collect-traces, but tracking is not enabled. "
+            "Verify that 'CUDF_POLARS_LOG_TRACES' is set and structlog is installed."
+        )
+        raise RuntimeError(msg)
+
+    if _HAS_STRUCTLOG:
+        # structlog uses contextvars to propagate context down to where log records
+        # are emitted. Ideally, we'd just set the contextvars here using
+        # structlog.bind_contextvars; for the distributed scheduler we would need
+        # to use something like client.run to set the contextvars on the worker.
+        # However, there's an unfortunate conflict between structlog's use of
+        # context vars and how Dask Workers actually execute tasks, such that
+        # the contextvars set via `client.run` aren't visible to the actual
+        # tasks.
+        #
+        # So instead we make a new logger each time we need a new context,
+        # i.e. for each query/iteration pair.
+
+        def make_injector(
+            query_id: int, iteration: int
+        ) -> Callable[[logging.Logger, str, dict[str, Any]], dict[str, Any]]:
+            def inject(
+                logger: Any, method_name: Any, event_dict: Any
+            ) -> dict[str, Any]:
+                event_dict["query_id"] = query_id
+                event_dict["iteration"] = iteration
+                return event_dict
+
+            return inject
+
+        shared_processors = [
+            structlog.contextvars.merge_contextvars,
+            make_injector(query_id, iteration),
+            structlog.processors.add_log_level,
+            structlog.processors.CallsiteParameterAdder(
+                parameters=[
+                    structlog.processors.CallsiteParameter.PROCESS,
+                    structlog.processors.CallsiteParameter.THREAD,
+                ],
+            ),
+            structlog.processors.StackInfoRenderer(),
+            structlog.dev.set_exc_info,
+            structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S.%f", utc=False),
+        ]
+
+        # For logging to a file
+        json_renderer = structlog.processors.JSONRenderer()
+
+        stream = io.StringIO()
+        json_file_handler = logging.StreamHandler(stream)
+        json_file_handler.setFormatter(
+            structlog.stdlib.ProcessorFormatter(
+                processor=json_renderer,
+                foreign_pre_chain=shared_processors,
+            )
+        )
+
+        logging.basicConfig(level=logging.INFO, handlers=[json_file_handler])
+
+        structlog.configure(
+            processors=[
+                *shared_processors,
+                structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+            ],
+            logger_factory=structlog.stdlib.LoggerFactory(),
+            wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
+            cache_logger_on_first_use=True,
+        )

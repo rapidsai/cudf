@@ -264,13 +264,17 @@ def test_split_exact_inclusive_unsupported(ldf_split):
 @pytest.mark.parametrize(
     "values, has_invalid_row",
     [
+        (["2024-01-01", "2023-12-31", "2023-06-15"], False),
         (["2024-01-01", "2023-12-31", None], False),
+        (["2024-13-01", "2023-12-31", "2023-06-15"], True),
         (["2024-01-01", "foo", None], True),
+        (["foo", "2023-06-15"], True),
+        ([None, None, None], False),
     ],
-    ids=["valid", "invalid"],
+    ids=["valid", "valid", "invalid", "invalid", "invalid", "valid"],
 )
 def test_to_datetime(values, has_invalid_row, cache, strict, format, exact):
-    df = pl.DataFrame({"a": values})
+    df = pl.DataFrame({"a": pl.Series(values, dtype=pl.String())})
     q = df.lazy().select(
         pl.col("a").str.strptime(
             pl.Datetime("ns"),
@@ -280,15 +284,27 @@ def test_to_datetime(values, has_invalid_row, cache, strict, format, exact):
             exact=exact,
         )
     )
-    if cache or format is None or not exact:
+    if cache or not exact or (not strict and format is None):
+        outcome = "translation_error"
+    elif (values[0] == "foo" and format is None and strict) or (
+        strict and has_invalid_row
+    ):
+        outcome = "collect_error"
+    else:
+        outcome = "success"
+
+    if outcome == "translation_error":
         assert_ir_translation_raises(q, NotImplementedError)
-    elif strict and has_invalid_row:
+    elif outcome == "collect_error":
+        cudf_exc = (
+            pl.exceptions.ComputeError
+            if POLARS_VERSION_LT_130
+            else pl.exceptions.InvalidOperationError
+        )
         assert_collect_raises(
             q,
             polars_except=pl.exceptions.InvalidOperationError,
-            cudf_except=pl.exceptions.ComputeError
-            if POLARS_VERSION_LT_130
-            else pl.exceptions.InvalidOperationError,
+            cudf_except=cudf_exc,
         )
     else:
         assert_gpu_result_equal(q)

@@ -23,7 +23,7 @@ from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import offsets_to_windows, range_window_bounds
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Generator, Sequence
 
     from cudf_polars.typing import ClosedInterval, Duration
 
@@ -89,13 +89,15 @@ def to_request(
     return plc.rolling.RollingRequest(col.obj, min_periods, value.agg_request)
 
 
-def _by_exprs(b: Expr | tuple) -> list[Expr]:
+def _by_exprs(b: Expr | tuple) -> Generator[Expr]:
     if isinstance(b, Expr):
-        return [b]
-    if isinstance(b, tuple):  # pragma: no cover; tests cover this path when
+        yield b
+    elif isinstance(b, tuple):  # pragma: no cover; tests cover this path when
         # run with the distributed scheduler only
-        return [e for item in b for e in _by_exprs(item)]
-    return [expr.Literal(DataType(pl.Int64()), b)]  # pragma: no cover
+        for item in b:
+            yield from _by_exprs(item)
+    else:
+        yield expr.Literal(DataType(pl.Int64()), b)  # pragma: no cover
 
 
 class RollingWindow(Expr):
@@ -146,7 +148,9 @@ class RollingWindow(Expr):
             raise NotImplementedError(
                 "Incorrect handling of empty groups for list collection"
             )
-        if not plc.rolling.is_valid_rolling_aggregation(agg.dtype.plc, agg.agg_request):
+        if not plc.rolling.is_valid_rolling_aggregation(
+            agg.dtype.plc_type, agg.agg_request
+        ):
             raise NotImplementedError(f"Unsupported rolling aggregation {agg}")
 
     def do_evaluate(  # noqa: D102
@@ -203,7 +207,13 @@ class GroupedRollingWindow(Expr):
       when polars supports that expression.
     """
 
-    __slots__ = ("_order_by_expr", "by_count", "named_aggs", "options", "post")
+    __slots__ = (
+        "_order_by_expr",
+        "by_count",
+        "named_aggs",
+        "options",
+        "post",
+    )
     _non_child = (
         "dtype",
         "options",
@@ -273,7 +283,8 @@ class GroupedRollingWindow(Expr):
             )
         )
 
-    def _sorted_grouper(self, by_cols_for_scan: list[Column]) -> plc.groupby.GroupBy:
+    @staticmethod
+    def _sorted_grouper(by_cols_for_scan: list[Column]) -> plc.groupby.GroupBy:
         return plc.groupby.GroupBy(
             plc.Table([c.obj for c in by_cols_for_scan]),
             null_handling=plc.types.NullPolicy.INCLUDE,
@@ -364,34 +375,26 @@ class GroupedRollingWindow(Expr):
         df: DataFrame,
         _: plc.groupby.GroupBy,
     ) -> tuple[list[str], list[DataType], list[plc.Table]]:
-        by_cols_for_scan = op.by_cols_for_scan
         named_exprs = op.named_exprs
-        order_index = op.order_index
-        policy = op.policy
 
         val_cols = self._gather_columns(
             [
                 ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
                 for ne in named_exprs
             ],
-            order_index,
+            op.order_index,
             cudf_polars_column=False,
         )
-
-        assert by_cols_for_scan is not None
 
         vals_tbl = plc.Table(val_cols)
         lg = op.local_grouper
         assert isinstance(lg, plc.groupby.GroupBy)
         _, filled_tbl = lg.replace_nulls(
             vals_tbl,
-            [policy] * len(val_cols),
+            [op.policy] * len(val_cols),
         )
 
-        tables = [
-            plc.Table([filled_tbl.columns()[i]])
-            for i in range(filled_tbl.num_columns())
-        ]
+        tables = [plc.Table([column]) for column in filled_tbl.columns()]
         names = [ne.name for ne in named_exprs]
         dtypes = [ne.value.dtype for ne in named_exprs]
         return names, dtypes, tables
@@ -563,99 +566,7 @@ class GroupedRollingWindow(Expr):
                 for i, c in enumerate(cols)
             ]
         else:
-            return [
-                gathered_tbl.columns()[i] for i in range(gathered_tbl.num_columns())
-            ]
-
-    def _rank_group_by_scan(
-        self,
-        df: DataFrame,
-        grouper: plc.groupby.GroupBy,
-        rank_named: list[expr.NamedExpr],
-    ) -> tuple[list[str], list[DataType], list[plc.Table]]:
-        rank_requests: list[plc.groupby.GroupByRequest] = []
-        rank_out_names: list[str] = []
-        rank_out_dtypes: list[DataType] = []
-
-        for ne in rank_named:
-            rank_expr = ne.value
-            (child_expr,) = rank_expr.children
-            val_col = child_expr.evaluate(df, context=ExecutionContext.FRAME).obj
-            assert isinstance(rank_expr, expr.UnaryFunction)
-            method_str, descending, _ = rank_expr.options
-
-            rank_method = {
-                "average": plc.aggregation.RankMethod.AVERAGE,
-                "min": plc.aggregation.RankMethod.MIN,
-                "max": plc.aggregation.RankMethod.MAX,
-                "dense": plc.aggregation.RankMethod.DENSE,
-                "ordinal": plc.aggregation.RankMethod.FIRST,
-            }[method_str]
-
-            order = (
-                plc.types.Order.DESCENDING if descending else plc.types.Order.ASCENDING
-            )
-            # Polars semantics: exclude nulls from domain; nulls get null ranks.
-            null_precedence = (
-                plc.types.NullOrder.BEFORE if descending else plc.types.NullOrder.AFTER
-            )
-            agg = plc.aggregation.rank(
-                rank_method,
-                column_order=order,
-                null_handling=plc.types.NullPolicy.EXCLUDE,
-                null_precedence=null_precedence,
-                percentage=plc.aggregation.RankPercentage.NONE,
-            )
-
-            rank_requests.append(plc.groupby.GroupByRequest(val_col, [agg]))
-            rank_out_names.append(ne.name)
-            rank_out_dtypes.append(rank_expr.dtype)
-
-        _, rank_tables = grouper.scan(rank_requests)
-        return rank_out_names, rank_out_dtypes, rank_tables
-
-    def _reorder_grouped_to_input(
-        self,
-        by_cols: list[Column],
-        n_rows: int,
-        rank_tables: list[plc.Table],
-        rank_out_names: list[str],
-        rank_out_dtypes: list[DataType],
-    ) -> list[Column]:
-        # Reorder scan results from grouped-order back to input row order
-        zero = plc.Scalar.from_py(0, plc.types.SIZE_TYPE)
-        one = plc.Scalar.from_py(1, plc.types.SIZE_TYPE)
-        row_id = plc.filling.sequence(n_rows, zero, one)
-
-        key_orders = [k.order for k in by_cols]
-        key_nulls = [k.null_order for k in by_cols]
-        grouped_order = plc.sorting.stable_sorted_order(
-            plc.Table([*(c.obj for c in by_cols), row_id]),
-            [*key_orders, plc.types.Order.ASCENDING],
-            [*key_nulls, plc.types.NullOrder.AFTER],
-        )
-
-        return [
-            Column(
-                plc.copying.scatter(
-                    plc.Table([tbl.columns()[0]]),
-                    grouped_order,
-                    plc.Table(
-                        [
-                            plc.Column.from_scalar(
-                                plc.Scalar.from_py(None, tbl.columns()[0].type()),
-                                n_rows,
-                            )
-                        ]
-                    ),
-                ).columns()[0],
-                name=name,
-                dtype=dtype,
-            )
-            for name, dtype, tbl in zip(
-                rank_out_names, rank_out_dtypes, rank_tables, strict=True
-            )
-        ]
+            return gathered_tbl.columns()
 
     def do_evaluate(  # noqa: D102
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -780,7 +691,7 @@ class GroupedRollingWindow(Expr):
                         value_desc=desc,
                     )
                     by_cols_for_scan = self._gather_columns(by_cols, order_index)
-                    local = self._sorted_grouper(by_cols_for_scan)
+                    local = GroupedRollingWindow._sorted_grouper(by_cols_for_scan)
                     names, dtypes, tables = self._apply_unary_op(
                         RankOp(
                             named_exprs=[ne],
@@ -829,21 +740,21 @@ class GroupedRollingWindow(Expr):
             by_cols_for_scan = self._gather_columns(by_cols, order_index)
             local = self._sorted_grouper(by_cols_for_scan)
 
-            strategy_sets: dict[str, list[expr.NamedExpr]] = defaultdict(list)
+            strategy_exprs: dict[str, list[expr.NamedExpr]] = defaultdict(list)
             for ne in fill_named:
                 fill_null_expr = ne.value
                 assert isinstance(fill_null_expr, expr.UnaryFunction)
-                strategy_sets[fill_null_expr.options[0]].append(ne)
+                strategy_exprs[fill_null_expr.options[0]].append(ne)
 
             replace_policy = {
                 "forward": plc.replace.ReplacePolicy.PRECEDING,
                 "backward": plc.replace.ReplacePolicy.FOLLOWING,
             }
 
-            for strategy, bucket in strategy_sets.items():
+            for strategy, fill_exprs in strategy_exprs.items():
                 names, dtypes, tables = self._apply_unary_op(
                     FillNullWithStrategyOp(
-                        named_exprs=bucket,
+                        named_exprs=fill_exprs,
                         order_index=order_index,
                         by_cols_for_scan=by_cols_for_scan,
                         local_grouper=local,
