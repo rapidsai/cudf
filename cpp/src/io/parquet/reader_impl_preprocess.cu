@@ -546,8 +546,6 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
     if (has_lists) { break; }
   }
 
-  auto const page_mask = cudf::detail::make_device_uvector_async(_subpass_page_mask, _stream, _mr);
-
   // in some cases we will need to do further preprocessing of pages.
   // - if we have lists, the num_rows field in PageInfo will be incorrect coming out of the file
   // - if we are doing a chunked read, we need to compute the size of all string data
@@ -563,7 +561,7 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
     // - we will be doing a chunked read
     compute_page_sizes(subpass.pages,
                        pass.chunks,
-                       page_mask,
+                       _subpass_page_mask,
                        0,  // 0-max size_t. process all possible rows
                        std::numeric_limits<size_t>::max(),
                        true,  // compute num_rows
@@ -616,7 +614,7 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
       constexpr bool compute_all_string_sizes = true;
       compute_page_string_sizes_pass1(subpass.pages,
                                       pass.chunks,
-                                      page_mask,
+                                      _subpass_page_mask,
                                       pass.skip_rows,
                                       pass.num_rows,
                                       subpass.kernel_mask,
@@ -690,10 +688,7 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
   compute_output_chunks_for_subpass();
 }
 
-void reader_impl::allocate_columns(read_mode mode,
-                                   size_t skip_rows,
-                                   size_t num_rows,
-                                   cudf::device_span<bool const> page_mask)
+void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_rows)
 {
   CUDF_FUNC_RANGE();
 
@@ -790,15 +785,13 @@ void reader_impl::allocate_columns(read_mode mode,
     while (key_start < num_keys) {
       // Number of keys processed in this iteration
       auto const num_keys_this_iter = std::min<size_t>(num_keys_per_iter, num_keys - key_start);
-      thrust::transform(rmm::exec_policy_nosync(_stream),
-                        thrust::make_counting_iterator<size_t>(key_start),
-                        thrust::make_counting_iterator<size_t>(key_start + num_keys_this_iter),
-                        size_input.begin(),
-                        get_page_nesting_size{d_cols_info.data(),
-                                              max_depth,
-                                              subpass.pages.size(),
-                                              subpass.pages.device_begin(),
-                                              page_mask.data()});
+      thrust::transform(
+        rmm::exec_policy_nosync(_stream),
+        thrust::make_counting_iterator<size_t>(key_start),
+        thrust::make_counting_iterator<size_t>(key_start + num_keys_this_iter),
+        size_input.begin(),
+        get_page_nesting_size{
+          d_cols_info.data(), max_depth, subpass.pages.size(), subpass.pages.device_begin()});
 
       // Manually create a size_t `key_start` compatible counting_transform_iterator.
       auto const reduction_keys =
