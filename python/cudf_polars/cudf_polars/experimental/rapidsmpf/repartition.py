@@ -56,6 +56,7 @@ async def concatenate_node(
     async with shutdown_on_error(ctx, ch_in, ch_out):
         build_stream = DEFAULT_STREAM
 
+        seq_num = 0
         while True:
             chunks: list[TableChunk] = []
             msg: TableChunk | None = None
@@ -79,8 +80,11 @@ async def concatenate_node(
                 )
                 await ch_out.send(
                     ctx,
-                    Message(TableChunk.from_pylibcudf_table(0, table, build_stream)),
+                    Message(
+                        TableChunk.from_pylibcudf_table(seq_num, table, build_stream)
+                    ),
                 )
+                seq_num += 1
 
             # Break if we reached end of stream
             if msg is None:

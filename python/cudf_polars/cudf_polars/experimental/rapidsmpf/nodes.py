@@ -79,63 +79,75 @@ async def default_node(
     # TODO: Use multiple streams
     async with shutdown_on_error(ctx, *chs_in, ch_out):
         seq_num = 0
-        bcast_data = {}
-
-        # First, collect broadcast data (if any)
-        for i in bcast_indices:
-            while (msg := await chs_in[i].recv(ctx)) is not None:
-                if i in bcast_data:
-                    raise RuntimeError(f"Broadcast channel {i} already has data")
-                chunk = DataFrame.from_table(
-                    TableChunk.from_message(msg).table_view(),
-                    list(ir.children[i].schema.keys()),
-                    list(ir.children[i].schema.values()),
-                )
-                bcast_data[i] = chunk
-
-        # Then, process streaming data from non-broadcast channels
+        n_children = len(chs_in)
+        accepting_data = True
+        finished_channels: set[int] = set()
+        staged_chunks: dict[int, dict[int, DataFrame]] = {
+            c: {} for c in range(n_children)
+        }
         while True:
-            chunks = {}
-            has_data = False
-            for i, (ch_in, child) in enumerate(zip(chs_in, ir.children, strict=True)):
-                if i not in bcast_indices:
-                    msg = await ch_in.recv(ctx)
-                    if msg is not None:
-                        chunk = DataFrame.from_table(
-                            TableChunk.from_message(msg).table_view(),
-                            list(child.schema.keys()),
-                            list(child.schema.values()),
+            if accepting_data:
+                for ch_idx, (ch_in, child) in enumerate(
+                    zip(chs_in, ir.children, strict=True)
+                ):
+                    if (ch_not_finished := ch_idx not in finished_channels) and (
+                        msg := await ch_in.recv(ctx)
+                    ) is not None:
+                        table_chunk = TableChunk.from_message(msg)
+                        staged_chunks[ch_idx][table_chunk.sequence_number] = (
+                            DataFrame.from_table(
+                                table_chunk.table_view(),
+                                list(child.schema.keys()),
+                                list(child.schema.values()),
+                            )
                         )
-                        chunks[i] = chunk
-                        has_data = True
+                    elif ch_not_finished:
+                        finished_channels.add(ch_idx)
+                        if all(
+                            ch_idx in finished_channels for ch_idx in range(n_children)
+                        ):
+                            accepting_data = False
 
-            if not has_data:
-                if seq_num == 0:
-                    # We are probably using default_node incorrectly
-                    # if we aren't sending any data. Perhaps we are
-                    # treating all children as broadcasted.
-                    raise RuntimeError("Not producing any output chunks.")
-                break
-
-            # Send output chunk
-            await ch_out.send(
-                ctx,
-                Message(
-                    TableChunk.from_pylibcudf_table(
-                        seq_num,
-                        # Evaluate the IR node
-                        ir.do_evaluate(
-                            *ir._non_child_args,
-                            *[
-                                chunks.pop(i, bcast_data.get(i))
-                                for i in range(len(chs_in))
-                            ],
-                        ).table,
-                        DEFAULT_STREAM,
+            if all(
+                (
+                    (seq_num in staged_chunks[ch_idx])
+                    or (ch_idx in bcast_indices and 0 in staged_chunks[ch_idx])
+                )
+                for ch_idx in range(n_children)
+            ):
+                # Ready to produce the output chunk for seq_num.
+                # Evaluate and send.
+                await ch_out.send(
+                    ctx,
+                    Message(
+                        TableChunk.from_pylibcudf_table(
+                            seq_num,
+                            ir.do_evaluate(
+                                *ir._non_child_args,
+                                *[
+                                    (
+                                        staged_chunks[ch_idx][0]
+                                        if ch_idx in bcast_indices
+                                        else staged_chunks[ch_idx].pop(seq_num)
+                                    )
+                                    for ch_idx in range(n_children)
+                                ],
+                            ).table,
+                            DEFAULT_STREAM,
+                        )
+                    ),
+                )
+                seq_num += 1
+            elif not accepting_data:
+                if any(
+                    staged_chunks[ch_idx]
+                    for ch_idx in range(n_children)
+                    if ch_idx not in bcast_indices
+                ):
+                    raise RuntimeError(
+                        f"Leftover data in staged chunks: {staged_chunks}."
                     )
-                ),
-            )
-            seq_num += 1
+                break  # All channels have finished
 
         # Drain the output channel
         await ch_out.drain(ctx)

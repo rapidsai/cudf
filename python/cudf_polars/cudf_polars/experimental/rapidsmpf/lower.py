@@ -7,11 +7,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import cudf_polars.experimental.rapidsmpf.io  # noqa: F401
-from cudf_polars.dsl.ir import (
-    IR,
-    Join,
-    Sort,
-)
+from cudf_polars.dsl.ir import IR, Sort
 from cudf_polars.experimental.io import StreamingSink
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     lower_ir_node,
@@ -36,7 +32,6 @@ def _lower_ir_node_task_engine(
     return base_lower_ir_node(ir, rec)
 
 
-@lower_ir_node.register(Join)
 @lower_ir_node.register(Sort)
 @lower_ir_node.register(ShuffleSorted)
 @lower_ir_node.register(StreamingSink)

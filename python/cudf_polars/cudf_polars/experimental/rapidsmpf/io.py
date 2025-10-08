@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import dataclasses
 import math
 from typing import TYPE_CHECKING, Any
@@ -27,6 +26,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 from cudf_polars.experimental.rapidsmpf.nodes import define_py_node, shutdown_on_error
 
 if TYPE_CHECKING:
+    import asyncio
     from collections.abc import MutableMapping
 
     from rapidsmpf.streaming.core.context import Context
@@ -98,7 +98,6 @@ async def dataframescan_node(
         local_offset = local_count * ctx.comm().rank
 
     async with shutdown_on_error(ctx, ch_out):
-        tasks = []
         for seq_num in range(local_count):
             offset = local_offset * rows_per_partition + seq_num * rows_per_partition
             if offset >= nrows:
@@ -109,11 +108,9 @@ async def dataframescan_node(
                 ir.df.slice(offset, rows_per_partition),
                 ir.projection,
             )
-            tasks.append(read_chunk(ctx, io_throttle, ir_slice, seq_num, ch_out))
+            await read_chunk(ctx, io_throttle, ir_slice, seq_num, ch_out)
 
-        # Wait for all read tasks to complete,
-        # and then drain the output channel.
-        await asyncio.gather(*tasks)
+        # Drain the output channel
         await ch_out.drain(ctx)
 
 

@@ -23,6 +23,7 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 import rmm
 
 import cudf_polars.experimental.rapidsmpf.io
+import cudf_polars.experimental.rapidsmpf.join
 import cudf_polars.experimental.rapidsmpf.lower
 import cudf_polars.experimental.rapidsmpf.shuffle
 import cudf_polars.experimental.rapidsmpf.union  # noqa: F401
@@ -196,7 +197,8 @@ def generate_network(
             output_ch_count[child] += 1
 
     # IO Throttling
-    max_io_threads = 1  # TODO: Make this configurable
+    max_io_threads = 3  # TODO: Make this configurable
+    # TODO: Debug hang with value <3
     io_throttle = asyncio.Semaphore(max_io_threads)
 
     # Generate the network
