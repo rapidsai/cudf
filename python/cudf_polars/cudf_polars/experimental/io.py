@@ -94,7 +94,10 @@ def scan_partition_plan(
         column_stats = stats.column_stats.get(ir, {})
         column_sizes: list[int] = []
         for cs in column_stats.values():
-            storage_size = cs.source_info.storage_size
+            element_size = 1
+            if cs.name in ir.schema and ir.schema[cs.name].id() == plc.TypeId.STRING:
+                element_size = 2
+            storage_size = cs.source_info.storage_size(element_size=element_size)
             if storage_size.value is not None:
                 column_sizes.append(storage_size.value)
 
@@ -778,9 +781,21 @@ class ParquetSourceInfo(DataSourceInfo):
         self._update_unique_stats(column)
         return self._unique_stats.get(column, UniqueStats())
 
-    def storage_size(self, column: str) -> ColumnStat[int]:
+    def storage_size(self, column: str, *, element_size: int = 1) -> ColumnStat[int]:
         """Return the average column size for a single file."""
-        return self.metadata.mean_size_per_file.get(column, ColumnStat[int]())
+        file_count = len(self.paths)
+        row_count = self.row_count.value
+        partial_mean_size = self.metadata.mean_size_per_file.get(
+            column, ColumnStat[int]()
+        ).value
+        if file_count and row_count and partial_mean_size:
+            # NOTE: We set a lower bound on the partial mean size using
+            # the product of the expected element size and the row count.
+            # Dictionary encoding can make the on-disk size much smaller
+            # than it will be in memory.
+            min_value = element_size * (row_count // file_count)
+            return ColumnStat[int](max(min_value, partial_mean_size))
+        return ColumnStat[int]()
 
     def add_unique_stats_column(self, column: str) -> None:
         """Add a column needing unique-value information."""

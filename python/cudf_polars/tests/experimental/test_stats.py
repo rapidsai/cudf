@@ -66,7 +66,7 @@ def test_base_stats_dataframescan(df, engine):
     assert source_info_x.row_count.exact
 
     # Storage stats should not be available
-    assert source_info_x.storage_size.value is None
+    assert source_info_x.storage_size().value is None
 
     # Check unique stats.
     # We need to use force=True to sample unique-value statistics,
@@ -150,11 +150,11 @@ def test_base_stats_parquet(
 
     # Storage stats should be available
     if max_footer_samples:
-        assert source_info_x.storage_size.value > 0
-        assert source_info_y.storage_size.value > 0
+        assert source_info_x.storage_size().value > 0
+        assert source_info_y.storage_size().value > 0
     else:
-        assert source_info_x.storage_size.value is None
-        assert source_info_y.storage_size.value is None
+        assert source_info_x.storage_size().value is None
+        assert source_info_y.storage_size().value is None
 
     # source._unique_stats should be empty
     assert set(table_source_info._unique_stats) == set()
