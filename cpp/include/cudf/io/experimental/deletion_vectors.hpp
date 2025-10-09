@@ -16,19 +16,12 @@
 
 #pragma once
 
-#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 
-#include <cuco/roaring_bitmap.cuh>
-
 #include <queue>
-
-//! Type alias for the cuco 64-bit roaring bitmap
-using roaring_bitmap_type =
-  cuco::experimental::roaring_bitmap<cuda::std::uint64_t, cudf::detail::cuco_allocator<char>>;
 
 namespace CUDF_EXPORT cudf {
 namespace io::parquet::experimental {
@@ -54,6 +47,9 @@ namespace io::parquet::experimental {
  */
 class chunked_parquet_reader {
  public:
+  //! Forward declaration of the opaque wrapper of cuco's 64-bit roaring bitmap
+  struct roaring_bitmap_impl;
+
   /**
    * @brief Constructor for the chunked reader
    *
@@ -113,7 +109,7 @@ class chunked_parquet_reader {
    * @brief Destructor, destroying the internal reader instance and the roaring bitmap deletion
    * vector
    */
-  ~chunked_parquet_reader() = default;
+  ~chunked_parquet_reader();
 
   /**
    * @brief Check if there is any data in the given source that has not yet been read
@@ -140,7 +136,7 @@ class chunked_parquet_reader {
   std::unique_ptr<cudf::io::chunked_parquet_reader> _reader;
   std::queue<size_t> _row_group_row_offsets;
   std::queue<size_type> _row_group_row_counts;
-  std::unique_ptr<roaring_bitmap_type> _deletion_vector;
+  std::unique_ptr<roaring_bitmap_impl> _deletion_vector;
   size_t _start_row;
   bool _is_unspecified_row_group_data;
   rmm::cuda_stream_view _stream;

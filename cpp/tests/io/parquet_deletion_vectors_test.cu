@@ -250,6 +250,8 @@ void test_read_parquet_and_apply_deletion_vector(
     cudf::io::parquet::experimental::read_parquet(
       in_opts, serialized_roaring64, row_group_offsets, row_group_num_rows, stream, mr)
       .tbl;
+
+  // Check
   CUDF_TEST_EXPECT_TABLES_EQUAL(table_with_deletion_vector->view(), expected_table->view());
 
   // Read using the chunked reader
@@ -274,7 +276,8 @@ void test_read_parquet_and_apply_deletion_vector(
     }
     return cudf::concatenate(table_chunk_views, stream, mr);
   }();
-
+  
+  // Check
   CUDF_TEST_EXPECT_TABLES_EQUAL(chunked_table_with_deletion_vector->view(), expected_table->view());
 }
 

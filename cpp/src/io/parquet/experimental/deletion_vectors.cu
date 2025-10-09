@@ -38,6 +38,10 @@
 
 namespace cudf::io::parquet::experimental {
 
+// Type alias for the cuco 64-bit roaring bitmap
+using roaring_bitmap_type =
+  cuco::experimental::roaring_bitmap<cuda::std::uint64_t, cudf::detail::cuco_allocator<char>>;
+
 namespace {
 
 /**
@@ -281,9 +285,6 @@ chunked_parquet_reader::chunked_parquet_reader(
     not options.get_filter().has_value(),
     "Encountered a non-empty AST filter expression. Use a roaring64 bitmap deletion vector to "
     "filter the table instead");
-  CUDF_EXPECTS(options.get_source().num_sources() == 1,
-               "The chunked_parquet_reader currently only supports single "
-               "parquet source");
 
   // Initialize the internal chunked parquet reader
   _reader = std::make_unique<cudf::io::chunked_parquet_reader>(
@@ -296,12 +297,26 @@ chunked_parquet_reader::chunked_parquet_reader(
   });
 
   if (not serialized_roaring64.empty()) {
-    _deletion_vector = std::make_unique<roaring_bitmap_type>(
+    _deletion_vector = std::make_unique<roaring_bitmap_impl>(
       serialized_roaring64.data(),
       cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, _stream.value()},
       _stream);
   }
 }
+
+/**
+ * @brief Opaque wrapper class for cuco's 64-bit roaring bitmap
+ */
+struct chunked_parquet_reader::roaring_bitmap_impl {
+  roaring_bitmap_type roaring_bitmap;
+
+  roaring_bitmap_impl(cuda::std::byte const* serialized_roaring64_data,
+                      cudf::detail::cuco_allocator<char> const& allocator,
+                      rmm::cuda_stream_view stream)
+    : roaring_bitmap(serialized_roaring64_data, allocator, stream)
+  {
+  }
+};
 
 /**
  * @copydoc
@@ -325,6 +340,11 @@ chunked_parquet_reader::chunked_parquet_reader(
                            mr)
 {
 }
+
+/**
+ * @copydoc cudf::io::parquet::experimental::chunked_parquet_reader::~chunked_parquet_reader
+ */
+chunked_parquet_reader::~chunked_parquet_reader() = default;
 
 /**
  * @copydoc cudf::io::parquet::experimental::chunked_parquet_reader::has_next
@@ -365,7 +385,7 @@ table_with_metadata chunked_parquet_reader::read_chunk()
 
   // Filter the table using the deletion vector
   auto row_mask = build_row_mask_column(table_with_index->get_column(0).view(),
-                                        *_deletion_vector,
+                                        _deletion_vector->roaring_bitmap,
                                         num_rows,
                                         _stream,
                                         cudf::get_current_device_resource_ref());
@@ -392,9 +412,6 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
     not options.get_filter().has_value(),
     "Encountered a non-empty AST filter expression. Use a roaring64 bitmap deletion vector to "
     "filter the table instead");
-  CUDF_EXPECTS(options.get_source().num_sources() == 1,
-               "The read_parquet currently only supports single "
-               "parquet source");
 
   // Use default mr to read parquet table and build row index column if we will be applying the
   // deletion vector to produce a new table later
