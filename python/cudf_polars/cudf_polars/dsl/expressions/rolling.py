@@ -122,7 +122,7 @@ class RollingWindow(Expr):
     def __init__(
         self,
         dtype: DataType,
-        orderby_dtype: DataType,
+        orderby_dtype: plc.DataType,
         offset: Duration,
         period: Duration,
         closed_window: ClosedInterval,
@@ -377,21 +377,26 @@ class GroupedRollingWindow(Expr):
     ) -> tuple[list[str], list[DataType], list[plc.Table]]:
         named_exprs = op.named_exprs
 
-        val_cols = self._gather_columns(
-            [
-                ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
-                for ne in named_exprs
-            ],
-            op.order_index,
-            cudf_polars_column=False,
-        )
-
-        vals_tbl = plc.Table(val_cols)
-        lg = op.local_grouper
-        assert isinstance(lg, plc.groupby.GroupBy)
-        _, filled_tbl = lg.replace_nulls(
+        plc_cols = [
+            ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
+            for ne in named_exprs
+        ]
+        # TODO: Now handling order_index being None, whereas before we were
+        # assuming it was always non-None via _gather_columns call
+        if op.order_index is not None:
+            gathered_tbl = plc.copying.gather(
+                plc.Table(plc_cols),
+                op.order_index,
+                plc.copying.OutOfBoundsPolicy.NULLIFY,
+            )
+            vals_tbl = gathered_tbl
+        else:
+            vals_tbl = plc.Table(plc_cols)
+        local_grouper = op.local_grouper
+        assert isinstance(local_grouper, plc.groupby.GroupBy)
+        _, filled_tbl = local_grouper.replace_nulls(  # type: ignore[assignment]
             vals_tbl,
-            [op.policy] * len(val_cols),
+            [op.policy] * len(plc_cols),
         )
 
         tables = [plc.Table([column]) for column in filled_tbl.columns()]
@@ -413,14 +418,25 @@ class GroupedRollingWindow(Expr):
         out_names: list[str] = []
         out_dtypes: list[DataType] = []
 
-        val_cols = self._gather_columns(
-            [
+        # Instead of calling self._gather_columns, let's call plc.copying.gather directly
+        # since we need plc.Column objects, not cudf_polars Column objects
+        if order_index is not None:
+            plc_cols = [
                 ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
                 for ne in cum_named
-            ],
-            order_index,
-            cudf_polars_column=False,
-        )
+            ]
+            gathered_tbl = plc.copying.gather(
+                plc.Table(plc_cols),
+                order_index,
+                plc.copying.OutOfBoundsPolicy.NULLIFY,
+            )
+            val_cols = gathered_tbl.columns()
+        else:
+            # TODO: Now handling order_index being None whereas before we were assuming it was always non-None
+            val_cols = [
+                ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
+                for ne in cum_named
+            ]
         agg = plc.aggregation.sum()
 
         for ne, val_col in zip(cum_named, val_cols, strict=True):
@@ -428,9 +444,9 @@ class GroupedRollingWindow(Expr):
             out_names.append(ne.name)
             out_dtypes.append(ne.value.dtype)
 
-        lg = op.local_grouper
-        assert isinstance(lg, plc.groupby.GroupBy)
-        _, tables = lg.scan(requests)
+        local_grouper = op.local_grouper
+        assert isinstance(local_grouper, plc.groupby.GroupBy)
+        _, tables = local_grouper.scan(requests)  # type: ignore[assignment]
 
         return out_names, out_dtypes, tables
 
@@ -542,31 +558,26 @@ class GroupedRollingWindow(Expr):
 
     def _gather_columns(
         self,
-        cols: list[plc.Column] | list[Column],
+        cols: list[Column],
         order_index: plc.Column,
-        *,
-        cudf_polars_column: bool = True,
-    ) -> list[plc.Column] | list[Column]:
+    ) -> list[Column]:
         gathered_tbl = plc.copying.gather(
-            plc.Table([c.obj if cudf_polars_column else c for c in cols]),
+            plc.Table([c.obj for c in cols]),
             order_index,
             plc.copying.OutOfBoundsPolicy.NULLIFY,
         )
 
-        if cudf_polars_column:
-            return [
-                Column(
-                    gathered_tbl.columns()[i],
-                    name=c.name,
-                    dtype=c.dtype,
-                    order=c.order,
-                    null_order=c.null_order,
-                    is_sorted=True,
-                )
-                for i, c in enumerate(cols)
-            ]
-        else:
-            return gathered_tbl.columns()
+        return [
+            Column(
+                gathered_tbl.columns()[i],
+                name=c.name,
+                dtype=c.dtype,
+                order=c.order,
+                null_order=c.null_order,
+                is_sorted=plc.types.Sorted.YES,
+            )
+            for i, c in enumerate(cols)
+        ]
 
     def do_evaluate(  # noqa: D102
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -678,7 +689,6 @@ class GroupedRollingWindow(Expr):
                     rank_expr = ne.value
                     assert isinstance(rank_expr, expr.UnaryFunction)
                     (child,) = rank_expr.children
-                    val = child.evaluate(df, context=ExecutionContext.FRAME).obj
                     desc = rank_expr.options[1]
 
                     order_index = self._build_window_order_index(
@@ -687,7 +697,9 @@ class GroupedRollingWindow(Expr):
                         order_by_col=order_by_col,
                         ob_desc=ob_desc,
                         ob_nulls_last=ob_nulls_last,
-                        value_col=val,
+                        value_col=child.evaluate(
+                            df, context=ExecutionContext.FRAME
+                        ).obj,
                         value_desc=desc,
                     )
                     by_cols_for_scan = self._gather_columns(by_cols, order_index)
