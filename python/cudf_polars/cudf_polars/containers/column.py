@@ -454,13 +454,12 @@ class Column:
     def nan_count(self) -> int:
         """Return the number of NaN values in the column."""
         if self.size > 0 and plc.traits.is_floating_point(self.obj.type()):
-            result = plc.reduce.reduce(
+            # See https://github.com/rapidsai/cudf/issues/20202 for we type ignore
+            return plc.reduce.reduce(
                 plc.unary.is_nan(self.obj),
                 plc.aggregation.sum(),
                 plc.types.SIZE_TYPE,
-            ).to_py()
-            assert isinstance(result, int), "NaN count should be an integer"
-            return result
+            ).to_py()  # type: ignore[return-value]
         return 0
 
     @property

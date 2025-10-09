@@ -791,6 +791,7 @@ class StringFunction(Expr):
                 else:
                     first_valid_data = plc.copying.get_element(plc_col, 0).to_py()
 
+                # See https://github.com/rapidsai/cudf/issues/20202 for we type ignore
                 format = _infer_datetime_format(first_valid_data)  # type: ignore[arg-type]
                 if not format:
                     raise InvalidOperationError(
@@ -851,6 +852,7 @@ class StringFunction(Expr):
                 (char,) = self.options
                 # TODO: Maybe accept a string scalar in
                 # cudf::strings::pad to avoid DtoH transfer
+                # See https://github.com/rapidsai/cudf/issues/20202 for we type ignore
                 width = width_col.obj.to_scalar().to_py()  # type: ignore[assignment]
             return Column(
                 plc.strings.padding.pad(

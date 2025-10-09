@@ -73,11 +73,13 @@ def register() -> None:
     @cuda_serialize.register((Column, DataFrame))
     def serialize_column_or_frame(
         x: DataFrame | Column,
-    ) -> tuple[DataFrameHeader | ColumnHeader, list[memoryview]]:
+    ) -> tuple[
+        DataFrameHeader | ColumnHeader, list[memoryview[bytes] | plc.gpumemoryview]
+    ]:
         with log_errors():
             header, frames = x.serialize()
             # Dask expect a list of frames
-            return header, list(frames)  # type: ignore[arg-type]
+            return header, list(frames)
 
     @cuda_deserialize.register(DataFrame)
     def _(
