@@ -53,7 +53,7 @@ cdef extern from "nvtext/tokenize.hpp" namespace "nvtext" nogil:
         device_memory_resource* mr
     ) except +libcudf_exception_handler
 
-    cdef struct tokenize_vocabulary "nvtext::tokenize_vocabulary":
+    cdef struct tokenize_vocabulary:
         pass
 
     cdef unique_ptr[tokenize_vocabulary] load_vocabulary(
