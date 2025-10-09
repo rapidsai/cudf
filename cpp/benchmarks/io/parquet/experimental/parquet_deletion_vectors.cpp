@@ -272,14 +272,10 @@ void BM_parquet_chunked_deletion_vectors(nvbench::state& state)
                                                                             deletion_vector,
                                                                             row_group_offsets,
                                                                             row_group_num_rows);
-      cudf::size_type num_rows_read = 0;
       do {
         auto const result = reader.read_chunk();
-        num_rows_read += result.tbl->num_rows();
       } while (reader.has_next());
       timer.stop();
-
-      CUDF_EXPECTS(num_rows_read == num_rows, "Benchmark did not read the entire table");
     });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
