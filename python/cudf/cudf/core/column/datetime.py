@@ -8,7 +8,7 @@ import locale
 import re
 import warnings
 from locale import nl_langinfo
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -283,11 +283,11 @@ class DatetimeColumn(TemporalBaseColumn):
             plc.datetime.days_in_month(self.to_pylibcudf(mode="read"))
         )
 
-    @property
+    @functools.cached_property
     def day_of_week(self) -> ColumnBase:
         raise NotImplementedError("day_of_week is currently not implemented.")
 
-    @property
+    @functools.cached_property
     def is_normalized(self) -> bool:
         raise NotImplementedError(
             "is_normalized is currently not implemented."
@@ -528,11 +528,11 @@ class DatetimeColumn(TemporalBaseColumn):
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
+        if isinstance(other, cudf.DateOffset):
+            return other._datetime_binop(self, op, reflect=reflect)  # type: ignore[attr-defined]
         other = self._normalize_binop_operand(other)
         if other is NotImplemented:
             return NotImplemented
-        elif isinstance(other, cudf.DateOffset):
-            return other._datetime_binop(self, op, reflect=reflect)  # type: ignore[attr-defined]
 
         if reflect:
             lhs = other
@@ -541,7 +541,7 @@ class DatetimeColumn(TemporalBaseColumn):
                 lhs_unit = lhs.type.unit
                 other_dtype = cudf_dtype_from_pa_type(lhs.type)
             else:
-                lhs_unit = lhs.time_unit  # type: ignore[union-attr]
+                lhs_unit = lhs.time_unit  # type: ignore[attr-defined]
                 other_dtype = lhs.dtype
             rhs_unit = rhs.time_unit
         else:
@@ -748,13 +748,7 @@ class DatetimeColumn(TemporalBaseColumn):
         )
         offsets_to_utc = offsets.take(indices, nullify=True)
         gmt_data = localized - offsets_to_utc
-        return DatetimeTZColumn(
-            data=gmt_data.base_data,
-            dtype=dtype,
-            mask=localized.base_mask,
-            size=gmt_data.size,
-            offset=gmt_data.offset,
-        )
+        return gmt_data._with_type_metadata(dtype)
 
     def tz_convert(self, tz: str | None):
         raise TypeError(
@@ -819,9 +813,9 @@ class DatetimeTZColumn(DatetimeColumn):
             )
 
     def to_arrow(self) -> pa.Array:
-        return pa.compute.assume_timezone(
-            self._local_time.to_arrow(), str(self.dtype.tz)
-        )
+        # Cast to expected timestamp array type for assume_timezone
+        local_array = cast(pa.TimestampArray, self._local_time.to_arrow())
+        return pa.compute.assume_timezone(local_array, str(self.dtype.tz))
 
     @functools.cached_property
     def time_unit(self) -> str:
@@ -908,10 +902,6 @@ class DatetimeTZColumn(DatetimeColumn):
         elif tz == str(self.dtype.tz):
             return self.copy()
         utc_time = self._utc_time
-        return type(self)(
-            data=utc_time.base_data,  # type: ignore[arg-type]
-            dtype=pd.DatetimeTZDtype(self.time_unit, tz),
-            mask=utc_time.base_mask,
-            size=utc_time.size,
-            offset=utc_time.offset,
+        return utc_time._with_type_metadata(
+            pd.DatetimeTZDtype(self.time_unit, tz)
         )

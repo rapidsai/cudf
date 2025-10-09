@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import itertools
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pandas as pd
@@ -18,10 +18,11 @@ from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column, column_empty
-from cudf.utils.docutils import copy_docstring
+from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
+    cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     get_dtype_of_same_kind,
     is_dtype_obj_string,
@@ -34,8 +35,7 @@ from cudf.utils.utils import is_na_like
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
-    import cupy
-    import numba.cuda
+    import cupy as cp
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -240,17 +240,24 @@ class StringColumn(ColumnBase):
 
         raise NotImplementedError("`any` not implemented for `StringColumn`")
 
-    def data_array_view(
-        self, *, mode="write"
-    ) -> numba.cuda.devicearray.DeviceNDArray:
-        raise ValueError("Cannot get an array view of a StringColumn")
-
     @property
     def __cuda_array_interface__(self):
         raise NotImplementedError(
             f"dtype {self.dtype} is not yet supported via "
             "`__cuda_array_interface__`"
         )
+
+    def _validate_fillna_value(
+        self, fill_value: ScalarLike | ColumnLike
+    ) -> plc.Scalar | ColumnBase:
+        """Align fill_value for .fillna based on column type."""
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and is_scalar(fill_value)
+            and fill_value is np.nan
+        ):
+            raise MixedTypeError("Cannot fill `np.nan` in string column")
+        return super()._validate_fillna_value(fill_value)
 
     def element_indexing(self, index: int):
         result = super().element_indexing(index)
@@ -436,18 +443,12 @@ class StringColumn(ColumnBase):
         return col
 
     @property
-    def values_host(self) -> np.ndarray:
+    def values(self) -> cp.ndarray:
         """
-        Return a numpy representation of the StringColumn.
+        Return a CuPy representation of the Column.
         """
-        return self.to_pandas().values
-
-    @property
-    def values(self) -> cupy.ndarray:
-        """
-        Return a CuPy representation of the StringColumn.
-        """
-        raise TypeError("String arrays are not supported by cupy")
+        # dask checks for a TypeError instead of NotImplementedError
+        raise TypeError(f"cupy does not support {self.dtype}")
 
     def to_pandas(
         self,
@@ -516,15 +517,6 @@ class StringColumn(ColumnBase):
             res = self
         return res.replace(df._data["old"], df._data["new"])
 
-    def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
-        if is_scalar(other):
-            if is_na_like(other):
-                return super()._normalize_binop_operand(other)
-            return pa.scalar(other)
-        elif isinstance(other, type(self)):
-            return other
-        return NotImplemented
-
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
         # Due to https://github.com/pandas-dev/pandas/issues/46332 we need to
@@ -550,8 +542,12 @@ class StringColumn(ColumnBase):
             elif op == "__ne__":
                 return self.isnull()
 
-        other = self._normalize_binop_operand(other)
-        if other is NotImplemented:
+        if is_scalar(other):
+            if is_na_like(other):
+                other = pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
+            else:
+                other = pa.scalar(other)  # type: ignore[arg-type]
+        elif not isinstance(other, type(self)):
             return NotImplemented
 
         if isinstance(other, (StringColumn, pa.Scalar)):
@@ -601,28 +597,6 @@ class StringColumn(ColumnBase):
                     ),
                 )
         return NotImplemented
-
-    @copy_docstring(ColumnBase.view)
-    def view(self, dtype: DtypeObj) -> ColumnBase:
-        if self.null_count > 0:
-            raise ValueError(
-                "Can not produce a view of a string column with nulls"
-            )
-        str_byte_offset = self.base_children[0].element_indexing(self.offset)
-        str_end_byte_offset = self.base_children[0].element_indexing(
-            self.offset + self.size
-        )
-
-        n_bytes_to_view = str_end_byte_offset - str_byte_offset
-
-        to_view = cudf.core.column.NumericalColumn(
-            self.base_data,  # type: ignore[arg-type]
-            dtype=np.dtype(np.int8),
-            offset=str_byte_offset,
-            size=n_bytes_to_view,
-        )
-
-        return to_view.view(dtype)
 
     @acquire_spill_lock()
     def minhash(
@@ -1279,11 +1253,14 @@ class StringColumn(ColumnBase):
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     @acquire_spill_lock()
-    def replace_str(self, pattern: str, replacement: pa.Scalar) -> Self:
+    def replace_str(
+        self, pattern: str, replacement: pa.Scalar, max_replace_count: int = -1
+    ) -> Self:
         plc_result = plc.strings.replace.replace(
             self.to_pylibcudf(mode="read"),
             pa_scalar_to_plc_scalar(pa.scalar(pattern)),
             pa_scalar_to_plc_scalar(replacement),
+            max_replace_count,
         )
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 

@@ -16,7 +16,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/tdigest_utilities.cuh>
+#include <cudf_test/tdigest_utilities.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -33,12 +33,15 @@
 
 #include <arrow/api.h>
 #include <arrow/compute/api.h>
+#include <arrow/compute/initialize.h>
 
 namespace {
 std::unique_ptr<cudf::column> arrow_percentile_approx(cudf::column_view const& _values,
                                                       int delta,
                                                       std::vector<double> const& percentages)
 {
+  static auto const _arrow_init_status = arrow::compute::Initialize();
+  EXPECT_TRUE(_arrow_init_status.ok());
   // sort the incoming values using the same settings that groupby does.
   // this is a little weak because null_order::AFTER is hardcoded internally to groupby.
   cudf::table_view t({_values});

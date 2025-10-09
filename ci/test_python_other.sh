@@ -40,14 +40,9 @@ rapids-logger "pytest custreamz"
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/custreamz-coverage.xml" \
   --cov-report=term
 
-# Note that cudf-polars uses rmm.mr.CudaAsyncMemoryResource() which allocates
-# half the available memory. This doesn't play well with multiple workers, so
-# we keep --numprocesses=1 for now. This should be resolved by
-# https://github.com/rapidsai/cudf/issues/16723.
 rapids-logger "pytest cudf-polars"
 ./ci/run_cudf_polars_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml" \
-  --numprocesses=1 \
   --dist=worksteal \
   --cov-config=./pyproject.toml \
   --cov=cudf_polars \

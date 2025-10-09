@@ -29,24 +29,33 @@ __all__: list[str] = ["DataFrame"]
 def _create_polars_column_metadata(
     name: str, dtype: PolarsDataType
 ) -> plc.interop.ColumnMetadata:
-    """Create ColumnMetadata preserving pl.Struct field names."""
+    """Create ColumnMetadata preserving dtype attributes not supported by libcudf."""
+    children_meta = []
+    timezone = ""
+    precision: int | None = None
+
     if isinstance(dtype, pl.Struct):
         children_meta = [
             _create_polars_column_metadata(field.name, field.dtype)
             for field in dtype.fields
         ]
-    else:
-        children_meta = []
-    timezone = dtype.time_zone if isinstance(dtype, pl.Datetime) else None
+    elif isinstance(dtype, pl.Datetime):
+        timezone = dtype.time_zone or timezone
+    elif isinstance(dtype, pl.Decimal):
+        precision = dtype.precision
+
     return plc.interop.ColumnMetadata(
-        name=name, timezone=timezone or "", children_meta=children_meta
+        name=name,
+        timezone=timezone,
+        precision=precision,
+        children_meta=children_meta,
     )
 
 
 # This is also defined in pylibcudf.interop
 class _ObjectWithArrowMetadata:
     def __init__(
-        self, obj: plc.Table, metadata: list[plc.interop.ColumnMetadata]
+        self, obj: plc.Table | plc.Column, metadata: list[plc.interop.ColumnMetadata]
     ) -> None:
         self.obj = obj
         self.metadata = metadata
@@ -93,7 +102,7 @@ class DataFrame:
         # serialise with names we control and rename with that map.
         name_map = {f"column_{i}": name for i, name in enumerate(self.column_map)}
         metadata = [
-            _create_polars_column_metadata(name, dtype.polars)
+            _create_polars_column_metadata(name, dtype.polars_type)
             for name, dtype in zip(name_map, self.dtypes, strict=True)
         ]
         table_with_metadata = _ObjectWithArrowMetadata(self.table, metadata)

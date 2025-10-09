@@ -55,6 +55,7 @@ from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
+    dtype_to_pylibcudf_type,
     find_common_type,
     is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
@@ -75,14 +76,14 @@ if TYPE_CHECKING:
     from cudf.core.tools.datetimes import DateOffset
 
 
-def ensure_index(index_like: Any) -> Index:
+def ensure_index(index_like: Any, nan_as_null=no_default) -> Index:
     """
     Ensure an Index is returned.
 
     Avoids a shallow copy compared to calling cudf.Index(...)
     """
     if not isinstance(index_like, Index):
-        return cudf.Index(index_like)
+        return Index(index_like, nan_as_null=nan_as_null)
     return index_like
 
 
@@ -449,6 +450,11 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
         >>> cudf.Index.from_pandas(pdi, nan_as_null=False)
         Index([10.0, 20.0, 30.0, nan], dtype='float64')
         """
+        warnings.warn(
+            "from_pandas is deprecated and will be removed in a future version. "
+            "Use the Index constructor instead.",
+            FutureWarning,
+        )
         if nan_as_null is no_default:
             nan_as_null = (
                 False if cudf.get_option("mode.pandas_compatible") else None
@@ -479,6 +485,7 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
 
     @property
     def has_duplicates(self) -> bool:
+        # .is_unique is already a cached_property
         return not self.is_unique
 
     @property
@@ -1838,11 +1845,6 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
             return ret.values
         return ret
 
-    @property  # type: ignore
-    @_performance_tracking
-    def _values(self) -> ColumnBase:
-        return self._column
-
     @classmethod
     @_performance_tracking
     def _concat(cls, objs):
@@ -2227,7 +2229,7 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
     def _is_interval(self) -> bool:
         return False
 
-    @property  # type: ignore
+    @cached_property
     @_performance_tracking
     def hasnans(self) -> bool:
         return self._column.has_nulls(include_nan=True)
@@ -3527,7 +3529,10 @@ class DatetimeIndex(Index):
 
         name = _getdefault_name(data, name=name)
         data = as_column(data)
-
+        if data.dtype.kind == "b":
+            raise ValueError(
+                "Boolean data cannot be converted to a DatetimeIndex"
+            )
         if dtype is not None:
             dtype = cudf.dtype(dtype)
             if dtype.kind != "M":
@@ -3643,7 +3648,7 @@ class DatetimeIndex(Index):
             self._column.strftime(date_format), name=self.name
         )
 
-    @property
+    @cached_property
     def asi8(self) -> cupy.ndarray:
         return self._column.astype(np.dtype(np.int64)).values
 
@@ -3684,7 +3689,9 @@ class DatetimeIndex(Index):
         datetime.tzinfo or None
             Returns None when the array is tz-naive.
         """
-        return getattr(self.dtype, "tz", None)
+        if isinstance(self.dtype, pd.DatetimeTZDtype):
+            return self.dtype.tz
+        return None
 
     @property
     def tzinfo(self) -> tzinfo | None:
@@ -3722,7 +3729,7 @@ class DatetimeIndex(Index):
             self._column.normalize(), name=self.name
         )
 
-    @property
+    @cached_property
     def time(self) -> np.ndarray:
         """
         Returns numpy array of ``datetime.time`` objects.
@@ -3731,7 +3738,7 @@ class DatetimeIndex(Index):
         """
         return self.to_pandas().time
 
-    @property
+    @cached_property
     def timetz(self) -> np.ndarray:
         """
         Returns numpy array of ``datetime.time`` objects with timezones.
@@ -3740,7 +3747,7 @@ class DatetimeIndex(Index):
         """
         return self.to_pandas().timetz
 
-    @property
+    @cached_property
     def date(self) -> np.ndarray:
         """
         Returns numpy array of python ``datetime.date`` objects.
@@ -3755,6 +3762,7 @@ class DatetimeIndex(Index):
         """
         Booleans indicating if dates are the first day of the month.
         """
+        # .is_month_start is already a cached_property
         return self._column.is_month_start.values
 
     @property
@@ -3762,6 +3770,7 @@ class DatetimeIndex(Index):
         """
         Booleans indicating if dates are the last day of the month.
         """
+        # .is_month_end is already a cached_property
         return self._column.is_month_end.values
 
     @property
@@ -3769,6 +3778,7 @@ class DatetimeIndex(Index):
         """
         Booleans indicating if dates are the last day of the quarter.
         """
+        # .is_quarter_end is already a cached_property
         return self._column.is_quarter_end.values
 
     @property
@@ -3776,6 +3786,7 @@ class DatetimeIndex(Index):
         """
         Booleans indicating if dates are the start day of the quarter.
         """
+        # .is_quarter_start is already a cached_property
         return self._column.is_quarter_start.values
 
     @property
@@ -3783,6 +3794,7 @@ class DatetimeIndex(Index):
         """
         Booleans indicating if dates are the last day of the year.
         """
+        # .is_year_end is already a cached_property
         return self._column.is_year_end.values
 
     @property
@@ -3790,6 +3802,7 @@ class DatetimeIndex(Index):
         """
         Booleans indicating if dates are the first day of the year.
         """
+        # .is_year_start is already a cached_property
         return self._column.is_year_start.values
 
     @property
@@ -3797,6 +3810,7 @@ class DatetimeIndex(Index):
         """
         Returns True if all of the dates are at midnight ("no time")
         """
+        # .is_normalized is already a cached_property
         return self._column.is_normalized
 
     @property
@@ -3804,6 +3818,7 @@ class DatetimeIndex(Index):
         """
         Get the total number of days in the month that the date falls on.
         """
+        # .days_in_month is already a cached_property
         return Index._from_column(self._column.days_in_month, name=self.name)
 
     daysinmonth = days_in_month
@@ -3813,9 +3828,10 @@ class DatetimeIndex(Index):
         """
         Get the day of week that the date falls on.
         """
+        # .day_of_week is already a cached_property
         return Index._from_column(self._column.day_of_week, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def year(self) -> Index:
         """
@@ -3832,9 +3848,10 @@ class DatetimeIndex(Index):
         >>> datetime_index.year
         Index([2000, 2001, 2002], dtype='int16')
         """
+        # .year is already a cached_property
         return Index._from_column(self._column.year, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def month(self) -> Index:
         """
@@ -3851,9 +3868,10 @@ class DatetimeIndex(Index):
         >>> datetime_index.month
         Index([1, 2, 3], dtype='int16')
         """
+        # .month is already a cached_property
         return Index._from_column(self._column.month, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def day(self) -> Index:
         """
@@ -3870,9 +3888,10 @@ class DatetimeIndex(Index):
         >>> datetime_index.day
         Index([1, 2, 3], dtype='int16')
         """
+        # .day is already a cached_property
         return Index._from_column(self._column.day, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def hour(self) -> Index:
         """
@@ -3891,9 +3910,10 @@ class DatetimeIndex(Index):
         >>> datetime_index.hour
         Index([0, 1, 2], dtype='int16')
         """
+        # .hour is already a cached_property
         return Index._from_column(self._column.hour, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def minute(self) -> Index:
         """
@@ -3912,9 +3932,10 @@ class DatetimeIndex(Index):
         >>> datetime_index.minute
         Index([0, 1, 2], dtype='int16')
         """
+        # .minute is already a cached_property
         return Index._from_column(self._column.minute, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def second(self) -> Index:
         """
@@ -3933,9 +3954,10 @@ class DatetimeIndex(Index):
         >>> datetime_index.second
         Index([0, 1, 2], dtype='int16')
         """
+        # .second is already a cached_property
         return Index._from_column(self._column.second, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def microsecond(self) -> Index:
         """
@@ -3952,21 +3974,12 @@ class DatetimeIndex(Index):
                '2000-01-01 00:00:00.000002'],
               dtype='datetime64[ns]')
         >>> datetime_index.microsecond
-        Index([0, 1, 2], dtype='int32')
+        Index([0, 1, 2], dtype='int16')
         """
-        return Index._from_column(
-            (
-                # Need to manually promote column to int32 because
-                # pandas-matching binop behaviour requires that this
-                # __mul__ returns an int16 column.
-                self._column.millisecond.astype(np.dtype(np.int32))
-                * np.int32(1000)
-            )
-            + self._column.microsecond,
-            name=self.name,
-        )
+        # .microsecond is already a cached_property
+        return Index._from_column(self._column.microsecond, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def nanosecond(self) -> Index:
         """
@@ -3986,9 +3999,10 @@ class DatetimeIndex(Index):
         >>> datetime_index.nanosecond
         Index([0, 1, 2], dtype='int16')
         """
+        # .nanosecond is already a cached_property
         return Index._from_column(self._column.nanosecond, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def weekday(self) -> Index:
         """
@@ -4008,9 +4022,10 @@ class DatetimeIndex(Index):
         >>> datetime_index.weekday
         Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
         """
+        # .weekday is already a cached_property
         return Index._from_column(self._column.weekday, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def dayofweek(self) -> Index:
         """
@@ -4030,9 +4045,10 @@ class DatetimeIndex(Index):
         >>> datetime_index.dayofweek
         Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
         """
+        # .weekday is already a cached_property
         return Index._from_column(self._column.weekday, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def dayofyear(self) -> Index:
         """
@@ -4053,9 +4069,10 @@ class DatetimeIndex(Index):
         >>> datetime_index.dayofyear
         Index([366, 1, 2, 3, 4, 5, 6, 7, 8], dtype='int16')
         """
+        # .day_of_year is already a cached_property
         return Index._from_column(self._column.day_of_year, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def day_of_year(self) -> Index:
         """
@@ -4076,9 +4093,10 @@ class DatetimeIndex(Index):
         >>> datetime_index.day_of_year
         Index([366, 1, 2, 3, 4, 5, 6, 7, 8], dtype='int16')
         """
+        # .day_of_year is already a cached_property
         return Index._from_column(self._column.day_of_year, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def is_leap_year(self) -> cupy.ndarray:
         """
@@ -4094,10 +4112,11 @@ class DatetimeIndex(Index):
         ndarray
         Booleans indicating if dates belong to a leap year.
         """
+        # .is_leap_year is already a cached_property
         res = self._column.is_leap_year.fillna(False)
         return cupy.asarray(res)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def quarter(self) -> Index:
         """
@@ -4120,6 +4139,7 @@ class DatetimeIndex(Index):
         >>> gIndex.quarter
         Index([2, 4], dtype='int8')
         """
+        # .quarter is already a cached_property
         return Index._from_column(
             self._column.quarter.astype(np.dtype(np.int8))
         )
@@ -4570,7 +4590,7 @@ class TimedeltaIndex(Index):
         """
         return self.to_pandas().to_pytimedelta()
 
-    @property
+    @cached_property
     def asi8(self) -> cupy.ndarray:
         return self._column.astype(np.dtype(np.int64)).values
 
@@ -4622,57 +4642,62 @@ class TimedeltaIndex(Index):
             self._column.round(freq), name=self.name
         )
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def days(self) -> Index:
         """
         Number of days for each element.
         """
+        # .days is already a cached_property
         # Need to specifically return `int64` to avoid overflow.
         return Index._from_column(
             self._column.days.astype(np.dtype(np.int64)), name=self.name
         )
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def seconds(self) -> Index:
         """
         Number of seconds (>= 0 and less than 1 day) for each element.
         """
+        # .seconds is already a cached_property
         return Index._from_column(
             self._column.seconds.astype(np.dtype(np.int32)), name=self.name
         )
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def microseconds(self) -> Index:
         """
         Number of microseconds (>= 0 and less than 1 second) for each element.
         """
+        # .microseconds is already a cached_property
         return Index._from_column(
             self._column.microseconds.astype(np.dtype(np.int32)),
             name=self.name,
         )
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def nanoseconds(self) -> Index:
         """
         Number of nanoseconds (>= 0 and less than 1 microsecond) for each
         element.
         """
+        # .nanoseconds is already a cached_property
         return Index._from_column(
             self._column.nanoseconds.astype(np.dtype(np.int32)), name=self.name
         )
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def components(self) -> DataFrame:
         """
         Return a dataframe of the components (days, hours, minutes,
         seconds, milliseconds, microseconds, nanoseconds) of the Timedeltas.
         """
-        ca = ColumnAccessor(self._column.components(), verify=False)
+        # .components is already a cached_property
+        ca = ColumnAccessor(self._column.components, verify=False)
         return cudf.DataFrame._from_data(ca)
 
     @property
@@ -4824,15 +4849,8 @@ class CategoricalIndex(Index):
         """
         codes = as_column(codes, dtype=np.dtype(np.int32))
         categories = as_column(categories)
-        cat_col = CategoricalColumn(
-            data=None,
-            size=len(codes),
-            dtype=cudf.CategoricalDtype(
-                categories=categories, ordered=ordered
-            ),
-            offset=0,
-            null_count=0,
-            children=(codes,),
+        cat_col = codes._with_type_metadata(
+            cudf.CategoricalDtype(categories=categories, ordered=ordered)
         )
         return cls._from_column(cat_col, name=name)
 
@@ -4840,7 +4858,7 @@ class CategoricalIndex(Index):
     def ordered(self) -> bool:
         return self._column.ordered
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def codes(self) -> Index:
         """
@@ -4848,7 +4866,7 @@ class CategoricalIndex(Index):
         """
         return Index._from_column(self._column.codes)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def categories(self) -> Index:
         """
@@ -5154,29 +5172,34 @@ class IntervalIndex(Index):
 
         if len(data) == 0:
             if not hasattr(data, "dtype"):
-                data = np.array([], dtype=np.int64)
+                child_type = np.dtype(np.int64)
             elif isinstance(data.dtype, (pd.IntervalDtype, IntervalDtype)):
-                data = np.array([], dtype=data.dtype.subtype)
-            interval_col = IntervalColumn(
+                child_type = data.dtype.subtype
+            else:
+                child_type = data.dtype
+            child_plc_type = dtype_to_pylibcudf_type(child_type)
+            left = plc.column_factories.make_empty_column(child_plc_type)
+            right = plc.column_factories.make_empty_column(child_plc_type)
+            plc_column = plc.Column(
+                plc.DataType(plc.TypeId.STRUCT),
+                0,
                 None,
-                dtype=IntervalDtype(data.dtype, closed),
-                size=len(data),
-                children=(as_column(data), as_column(data)),
+                None,
+                0,
+                0,
+                [left, right],
             )
+            interval_col = ColumnBase.from_pylibcudf(
+                plc_column
+            )._with_type_metadata(IntervalDtype(child_type, closed))
         else:
             col = as_column(data)
             if not isinstance(col, IntervalColumn):
                 raise TypeError("data must be an iterable of Interval data")
             if copy:
                 col = col.copy()
-            interval_col = IntervalColumn(
-                data=None,
-                dtype=IntervalDtype(col.dtype.subtype, closed),
-                mask=col.mask,
-                size=col.size,
-                offset=col.offset,
-                null_count=col.null_count,
-                children=col.children,  # type: ignore[arg-type]
+            interval_col = col._with_type_metadata(
+                IntervalDtype(col.dtype.subtype, closed)
             )
 
         if dtype:
@@ -5246,25 +5269,33 @@ class IntervalIndex(Index):
             breaks = breaks.astype(np.dtype(np.int64))
         if copy:
             breaks = breaks.copy()
-        left_col = breaks.slice(0, len(breaks) - 1)
-        right_col = breaks.slice(1, len(breaks))
+        left_col = breaks.slice(0, len(breaks) - 1).to_pylibcudf(mode="read")
+        right_col = (
+            breaks.slice(1, len(breaks)).copy().to_pylibcudf(mode="read")
+        )
         # For indexing, children should both have 0 offset
-        right_col = type(right_col)(
-            data=right_col.data,
-            dtype=right_col.dtype,
-            size=right_col.size,
-            mask=right_col.mask,
-            offset=0,
-            null_count=right_col.null_count,
-            children=right_col.children,
+        right_col = plc.Column(
+            right_col.type(),
+            right_col.size(),
+            right_col.data(),
+            right_col.null_mask(),
+            right_col.null_count(),
+            0,
+            right_col.children(),
         )
-
-        interval_col = IntervalColumn(
-            data=None,
-            dtype=IntervalDtype(left_col.dtype, closed),
-            size=len(left_col),
-            children=(left_col, right_col),
+        plc_column = plc.Column(
+            plc.DataType(plc.TypeId.STRUCT),
+            left_col.size(),
+            None,
+            None,
+            0,
+            0,
+            [left_col, right_col],
         )
+        dtype = IntervalDtype(breaks.dtype, closed)
+        interval_col = ColumnBase.from_pylibcudf(
+            plc_column
+        )._with_type_metadata(dtype)
         return IntervalIndex._from_column(interval_col, name=name)
 
     @classmethod
@@ -5287,10 +5318,10 @@ class IntervalIndex(Index):
         copy: bool = False,
         dtype=None,
     ) -> Self:
-        piidx = pd.IntervalIndex.from_tuples(
+        pidx = pd.IntervalIndex.from_tuples(
             data, closed=closed, name=name, copy=copy, dtype=dtype
         )
-        return cls.from_pandas(piidx)  # type: ignore[return-value]
+        return cls(pidx, name=name)  # type: ignore[return-value]
 
     def __getitem__(self, index):
         raise NotImplementedError(
@@ -5311,6 +5342,7 @@ class IntervalIndex(Index):
         """
         Indicates if an interval is empty, meaning it contains no points.
         """
+        # .is_empty is already a cached_property
         return self._column.is_empty.values
 
     @property
@@ -5318,6 +5350,7 @@ class IntervalIndex(Index):
         """
         Return a True if the IntervalIndex is non-overlapping and monotonic.
         """
+        # .is_non_overlapping_monotonic is already a cached_property
         return self._column.is_non_overlapping_monotonic
 
     @property
@@ -5327,6 +5360,7 @@ class IntervalIndex(Index):
 
         Currently not implemented
         """
+        # .is_overlapping is already a cached_property
         return self._column.is_overlapping
 
     @property
@@ -5334,6 +5368,7 @@ class IntervalIndex(Index):
         """
         Return an Index with entries denoting the length of each Interval.
         """
+        # .length is already a cached_property
         return _index_from_data({None: self._column.length})
 
     @property
@@ -5355,6 +5390,7 @@ class IntervalIndex(Index):
         Each midpoint is calculated as the average of the left and right bounds
         of each interval.
         """
+        # .mid is already a cached_property
         return _index_from_data({None: self._column.mid})
 
     @property
@@ -5499,8 +5535,11 @@ def _as_index(
                 "dtype must be `None` for inputs of type: "
                 f"{type(data).__name__}, found {dtype=} "
             )
-        return cudf.MultiIndex.from_pandas(
-            data.copy(deep=copy), nan_as_null=nan_as_null
+        return cudf.MultiIndex(
+            levels=data.levels,
+            codes=data.codes,
+            names=data.names,
+            nan_as_null=nan_as_null,
         )
     elif isinstance(data, cudf.DataFrame) or is_scalar(data):
         raise TypeError("Index data must be 1-dimensional and list-like")

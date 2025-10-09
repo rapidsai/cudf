@@ -22,6 +22,7 @@ import pylibcudf
 import rmm
 from rmm._cuda import gpu
 
+import cudf_polars.dsl.tracing
 from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.utils.config import _env_get_int, get_total_device_memory
@@ -38,14 +39,6 @@ if TYPE_CHECKING:
     from cudf_polars.utils.config import ConfigOptions
 
 __all__: list[str] = ["execute_with_cudf"]
-
-
-_SUPPORTED_PREFETCHES = {
-    "column_view::get_data",
-    "mutable_column_view::get_data",
-    "gather",
-    "hash_join",
-}
 
 
 @cache
@@ -80,8 +73,7 @@ def default_memory_resource(
             # Leaving a 20% headroom to avoid OOM errors.
             free_memory, _ = rmm.mr.available_device_memory()
             free_memory = int(round(float(free_memory) * 0.80 / 256) * 256)
-            for key in _SUPPORTED_PREFETCHES:
-                pylibcudf.experimental.enable_prefetching(key)
+            pylibcudf.prefetch.enable()
             mr = rmm.mr.PrefetchResourceAdaptor(
                 rmm.mr.PoolMemoryResource(
                     rmm.mr.ManagedMemoryResource(),
@@ -142,6 +134,12 @@ def set_memory_resource(
                 != 0
             ),
         )
+
+    if (
+        cudf_polars.dsl.tracing.LOG_TRACES
+    ):  # pragma: no cover; requires CUDF_POLARS_LOG_TRACES=1
+        mr = rmm.mr.StatisticsResourceAdaptor(mr)
+
     rmm.mr.set_current_device_resource(mr)
     try:
         yield mr

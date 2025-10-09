@@ -444,11 +444,13 @@ public final class Table implements AutoCloseable {
   private static native long[] readORC(String[] filterColumnNames,
                                        String filePath, long address, long length,
                                        boolean usingNumPyTypes, int timeUnit,
-                                       String[] decimal128Columns) throws CudfException;
+                                       String[] decimal128Columns,
+                                       boolean ignoreTimezoneInStripeFooter) throws CudfException;
 
   private static native long[] readORCFromDataSource(String[] filterColumnNames,
                                                      boolean usingNumPyTypes, int timeUnit,
                                                      String[] decimal128Columns,
+                                                     boolean ignoreTimezoneInStripeFooter,
                                                      long dataSourceHandle) throws CudfException;
 
   /**
@@ -758,9 +760,9 @@ public final class Table implements AutoCloseable {
                                                         long condition, boolean compareNullsEqual);
 
   private static native long[] mixedInnerJoinGatherMapsWithSize(long leftKeysTable, long rightKeysTable,
-                                                                long leftConditionTable, long rightConditionTable,
-                                                                long condition, boolean compareNullsEqual,
-                                                                long outputRowCount, long matchesColumnView);
+                                                               long leftConditionTable, long rightConditionTable,
+                                                               long condition, boolean compareNullsEqual,
+                                                               long outputRowCount, long matchesColumnView);
 
   private static native long[] mixedFullJoinGatherMaps(long leftKeysTable, long rightKeysTable,
                                                        long leftConditionTable, long rightConditionTable,
@@ -1583,7 +1585,7 @@ public final class Table implements AutoCloseable {
     return new Table(readORC(opts.getIncludeColumnNames(),
         path.getAbsolutePath(), 0, 0,
         opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
-        opts.getDecimal128Columns()));
+        opts.getDecimal128Columns(), opts.ignoreTimezoneInStripeFooter()));
   }
 
   /**
@@ -1652,7 +1654,7 @@ public final class Table implements AutoCloseable {
     return new Table(readORC(opts.getIncludeColumnNames(),
         null, buffer.getAddress() + offset, len,
         opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
-        opts.getDecimal128Columns()));
+        opts.getDecimal128Columns(), opts.ignoreTimezoneInStripeFooter()));
   }
 
   public static Table readORC(ORCOptions opts, DataSource ds) {
@@ -1660,7 +1662,8 @@ public final class Table implements AutoCloseable {
     try {
       return new Table(readORCFromDataSource(opts.getIncludeColumnNames(),
               opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
-              opts.getDecimal128Columns(), dataSourceHandle));
+              opts.getDecimal128Columns(), opts.ignoreTimezoneInStripeFooter(),
+              dataSourceHandle));
     } finally {
       DataSourceHelper.destroyWrapperDataSource(dataSourceHandle);
     }

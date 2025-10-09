@@ -159,7 +159,7 @@ class Column:
             "order": self.order,
             "null_order": self.null_order,
             "name": self.name,
-            "dtype": pl.polars.dtype_str_repr(self.dtype.polars),
+            "dtype": pl.polars.dtype_str_repr(self.dtype.polars_type),
         }
 
     @functools.cached_property
@@ -284,7 +284,7 @@ class Column:
         This only produces a copy if the requested dtype doesn't match
         the current one.
         """
-        plc_dtype = dtype.plc
+        plc_dtype = dtype.plc_type
         if self.obj.type() == plc_dtype:
             return self
 
@@ -307,6 +307,21 @@ class Column:
                 upcasted.children(),
             )
             return Column(result, dtype=dtype).sorted_like(self)
+        elif plc.traits.is_integral_not_bool(plc_dtype) and plc.traits.is_timestamp(
+            self.obj.type()
+        ):
+            result = plc.column.Column(
+                plc.DataType(plc.TypeId.INT64),
+                self.obj.size(),
+                self.obj.data(),
+                self.obj.null_mask(),
+                self.obj.null_count(),
+                self.obj.offset(),
+                self.obj.children(),
+            )
+            return Column(plc.unary.cast(result, plc_dtype), dtype=dtype).sorted_like(
+                self
+            )
         else:
             result = Column(plc.unary.cast(self.obj, plc_dtype), dtype=dtype)
             if is_order_preserving_cast(self.obj.type(), plc_dtype):

@@ -139,8 +139,8 @@ std::unique_ptr<cudf::column> make_parquet_list_list_col(
 
   // child values
   std::vector<T> child_values(num_rows * lists_per_row * list_size);
-  T first_child_value_index = skip_rows * lists_per_row * list_size;
-  int child_value_count     = 0;
+  auto first_child_value_index = skip_rows * lists_per_row * list_size;
+  int child_value_count        = 0;
   {
     for (int idx = 0; idx < (num_rows * lists_per_row * list_size); idx++) {
       int row_index = idx / (lists_per_row * list_size);
@@ -177,6 +177,8 @@ std::unique_ptr<cudf::column> make_parquet_list_list_col(
 }
 
 template std::unique_ptr<cudf::column> make_parquet_list_list_col<int>(
+  int skip_rows, int num_rows, int lists_per_row, int list_size, bool include_validity);
+template std::unique_ptr<cudf::column> make_parquet_list_list_col<bool>(
   int skip_rows, int num_rows, int lists_per_row, int list_size, bool include_validity);
 
 template <typename T>
@@ -249,8 +251,8 @@ int read_dict_bits(std::unique_ptr<cudf::io::datasource> const& source,
                    cudf::io::parquet::PageLocation const& page_loc)
 {
   using namespace cudf::io::parquet;
-  CUDF_EXPECTS(page_loc.offset > 0, "Cannot find page header");
-  CUDF_EXPECTS(page_loc.compressed_page_size > 0, "Invalid page header length");
+  CUDF_EXPECTS(page_loc.offset > 0, "Cannot find data page header");
+  CUDF_EXPECTS(page_loc.compressed_page_size > 0, "Invalid data page header length");
 
   PageHeader page_hdr;
   auto const page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
@@ -665,7 +667,7 @@ std::pair<cudf::table, std::string> create_parquet_typed_with_stats(std::string 
   auto col2 = testdata::unordered<T>();
 
   auto const written_table = table_view{{col0, col1, col2}};
-  auto const filepath      = temp_env->get_temp_filepath("FilterTyped.parquet");
+  auto const filepath      = temp_env->get_temp_filepath(filename);
   {
     cudf::io::table_input_metadata expected_metadata(written_table);
     expected_metadata.column_metadata[0].set_name("col0");

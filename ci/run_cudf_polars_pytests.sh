@@ -25,8 +25,7 @@ rapids-logger "Test the in-memory executor"
 python -m pytest --cache-clear "$@" "${PYTEST_XDIST_ARGS[@]}" tests --executor in-memory
 
 # Test the default "streaming" executor
-rapids-logger "Test the streaming executor"
-python -m pytest --cache-clear "$@" "${PYTEST_XDIST_ARGS[@]}" tests
+python -m pytest --cache-clear "$@" "${PYTEST_XDIST_ARGS[@]}" tests --executor streaming
 
 # Test the "streaming" executor with small blocksize
 rapids-logger "Test the streaming executor with a small blocksize"

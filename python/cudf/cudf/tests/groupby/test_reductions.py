@@ -5,7 +5,11 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing import assert_groupby_results_equal
+from cudf.core._compat import (
+    PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_VERSION,
+)
+from cudf.testing import assert_eq, assert_groupby_results_equal, assert_neq
 from cudf.testing._utils import assert_exceptions_equal
 
 
@@ -101,7 +105,7 @@ def test_groupby_level_zero(groupby_reduction_methods, request):
         )
     )
     pdf = pd.DataFrame({"x": [1, 2, 3]}, index=[2, 5, 5])
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     pdg = pdf.groupby(level=0)
     gdg = gdf.groupby(level=0)
     pdresult = getattr(pdg, groupby_reduction_methods)()
@@ -120,7 +124,7 @@ def test_groupby_series_level_zero(groupby_reduction_methods, request):
         )
     )
     pdf = pd.Series([1, 2, 3], index=[2, 5, 5])
-    gdf = cudf.Series.from_pandas(pdf)
+    gdf = cudf.Series(pdf)
     pdg = pdf.groupby(level=0)
     gdg = gdf.groupby(level=0)
     pdresult = getattr(pdg, groupby_reduction_methods)()
@@ -130,7 +134,7 @@ def test_groupby_series_level_zero(groupby_reduction_methods, request):
 
 def test_groupby_column_name():
     pdf = pd.DataFrame({"xx": [1.0, 2.0, 3.0], "yy": [1, 2, 3]})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     g = gdf.groupby("yy")
     p = pdf.groupby("yy")
     gxx = g["xx"].sum()
@@ -164,7 +168,7 @@ def test_groupby_column_name():
 
 def test_groupby_column_numeral():
     pdf = pd.DataFrame({0: [1.0, 2.0, 3.0], 1: [1, 2, 3]})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     p = pdf.groupby(1)
     g = gdf.groupby(1)
     pxx = p[0].sum()
@@ -172,7 +176,7 @@ def test_groupby_column_numeral():
     assert_groupby_results_equal(pxx, gxx)
 
     pdf = pd.DataFrame({0.5: [1.0, 2.0, 3.0], 1.5: [1, 2, 3]})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     p = pdf.groupby(1.5)
     g = gdf.groupby(1.5)
     pxx = p[0.5].sum()
@@ -195,7 +199,7 @@ def test_groupby_column_numeral():
 )
 def test_groupby_external_series(series):
     pdf = pd.DataFrame({"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     pxx = pdf.groupby(pd.Series(series)).x.sum()
     gxx = gdf.groupby(cudf.Series(series)).x.sum()
     assert_groupby_results_equal(pxx, gxx)
@@ -204,7 +208,7 @@ def test_groupby_external_series(series):
 @pytest.mark.parametrize("series", [[0.0, 1.0], [1.0, 1.0, 1.0, 1.0]])
 def test_groupby_external_series_incorrect_length(series):
     pdf = pd.DataFrame({"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     pxx = pdf.groupby(pd.Series(series)).x.sum()
     gxx = gdf.groupby(cudf.Series(series)).x.sum()
     assert_groupby_results_equal(pxx, gxx)
@@ -455,7 +459,7 @@ def test_groupby_quantile(request, interpolation, q):
     # Pandas>0.25 now casts NaN in quantile operations as a float64
     # # so we are filling with zeros.
     pdf = pd.DataFrame(raw_data).fillna(0)
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     pdg = pdf.groupby("x")
     gdg = gdf.groupby("x")
@@ -472,7 +476,7 @@ def test_groupby_std():
         "y": [None, 1, 2, 3, 4, None, 6, 7, 8, 9],
     }
     pdf = pd.DataFrame(raw_data)
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     pdg = pdf.groupby("x")
     gdg = gdf.groupby("x")
     pdresult = pdg.std()
@@ -676,3 +680,518 @@ def test_groupby_no_keys(pdf):
         check_index_type=False,  # Int64 v/s Float64
         **kwargs,
     )
+
+
+@pytest.mark.parametrize("label", [None, "left", "right"])
+@pytest.mark.parametrize("closed", [None, "left", "right"])
+def test_groupby_freq_week(label, closed):
+    pdf = pd.DataFrame(
+        {
+            "Publish date": [
+                pd.Timestamp("2000-01-03"),
+                pd.Timestamp("2000-01-01"),
+                pd.Timestamp("2000-01-09"),
+                pd.Timestamp("2000-01-02"),
+                pd.Timestamp("2000-01-07"),
+                pd.Timestamp("2000-01-16"),
+            ],
+            "ID": [0, 1, 2, 3, 4, 5],
+            "Price": [10, 20, 30, 40, 50, 60],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    expect = pdf.groupby(
+        pd.Grouper(key="Publish date", freq="1W", label=label, closed=closed)
+    ).mean()
+    got = gdf.groupby(
+        cudf.Grouper(key="Publish date", freq="1W", label=label, closed=closed)
+    ).mean()
+    assert_eq(
+        expect,
+        got,
+        check_like=True,
+        check_dtype=False,
+        check_index_type=False,
+    )
+
+
+@pytest.mark.parametrize("label", [None, "left", "right"])
+@pytest.mark.parametrize("closed", [None, "left", "right"])
+def test_groupby_freq_day(label, closed):
+    pdf = pd.DataFrame(
+        {
+            "Publish date": [
+                pd.Timestamp("2000-01-03"),
+                pd.Timestamp("2000-01-01"),
+                pd.Timestamp("2000-01-09"),
+                pd.Timestamp("2000-01-02"),
+                pd.Timestamp("2000-01-07"),
+                pd.Timestamp("2000-01-16"),
+            ],
+            "ID": [0, 1, 2, 3, 4, 5],
+            "Price": [10, 20, 30, 40, 50, 60],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    expect = pdf.groupby(
+        pd.Grouper(key="Publish date", freq="3D", label=label, closed=closed)
+    ).mean()
+    got = gdf.groupby(
+        cudf.Grouper(key="Publish date", freq="3D", label=label, closed=closed)
+    ).mean()
+    assert_eq(
+        expect,
+        got,
+        check_like=True,
+        check_dtype=False,
+        check_index_type=False,
+    )
+
+
+@pytest.mark.parametrize("label", [None, "left", "right"])
+@pytest.mark.parametrize("closed", [None, "left", "right"])
+def test_groupby_freq_min(label, closed):
+    pdf = pd.DataFrame(
+        {
+            "Publish date": [
+                pd.Timestamp("2000-01-01 12:01:00"),
+                pd.Timestamp("2000-01-01 12:05:00"),
+                pd.Timestamp("2000-01-01 15:30:00"),
+                pd.Timestamp("2000-01-02 00:00:00"),
+                pd.Timestamp("2000-01-01 23:47:00"),
+                pd.Timestamp("2000-01-02 00:05:00"),
+            ],
+            "ID": [0, 1, 2, 3, 4, 5],
+            "Price": [10, 20, 30, 40, 50, 60],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    expect = pdf.groupby(
+        pd.Grouper(key="Publish date", freq="1h", label=label, closed=closed)
+    ).mean()
+    got = gdf.groupby(
+        cudf.Grouper(key="Publish date", freq="1h", label=label, closed=closed)
+    ).mean()
+    assert_eq(
+        expect,
+        got,
+        check_like=True,
+        check_dtype=False,
+        check_index_type=False,
+    )
+
+
+@pytest.mark.parametrize("label", [None, "left", "right"])
+@pytest.mark.parametrize("closed", [None, "left", "right"])
+def test_groupby_freq_s(label, closed):
+    pdf = pd.DataFrame(
+        {
+            "Publish date": [
+                pd.Timestamp("2000-01-01 00:00:02"),
+                pd.Timestamp("2000-01-01 00:00:07"),
+                pd.Timestamp("2000-01-01 00:00:02"),
+                pd.Timestamp("2000-01-02 00:00:15"),
+                pd.Timestamp("2000-01-01 00:00:05"),
+                pd.Timestamp("2000-01-02 00:00:09"),
+            ],
+            "ID": [0, 1, 2, 3, 4, 5],
+            "Price": [10, 20, 30, 40, 50, 60],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    expect = pdf.groupby(
+        pd.Grouper(key="Publish date", freq="3s", label=label, closed=closed)
+    ).mean()
+    got = gdf.groupby(
+        cudf.Grouper(key="Publish date", freq="3s", label=label, closed=closed)
+    ).mean()
+    assert_eq(
+        expect,
+        got,
+        check_like=True,
+        check_dtype=False,
+        check_index_type=False,
+    )
+
+
+@pytest.mark.parametrize("index_names", ["a", "b", "c", ["b", "c"]])
+def test_groupby_by_index_names(index_names):
+    gdf = cudf.DataFrame(
+        {"a": [1, 2, 3, 4], "b": ["a", "b", "a", "a"], "c": [1, 1, 2, 1]}
+    ).set_index(index_names)
+    pdf = gdf.to_pandas()
+
+    assert_groupby_results_equal(
+        pdf.groupby(index_names).min(), gdf.groupby(index_names).min()
+    )
+
+
+@pytest.mark.parametrize(
+    "groups", ["a", "b", "c", ["a", "c"], ["a", "b", "c"]]
+)
+def test_group_by_pandas_compat(groups):
+    with cudf.option_context("mode.pandas_compatible", True):
+        df = cudf.DataFrame(
+            {
+                "a": [1, 3, 2, 3, 3],
+                "b": ["x", "a", "y", "z", "a"],
+                "c": [10, 13, 11, 12, 12],
+            }
+        )
+        pdf = df.to_pandas()
+
+        assert_eq(pdf.groupby(groups).max(), df.groupby(groups).max())
+
+
+@pytest.mark.parametrize(
+    "groups", ["a", "b", "c", ["a", "c"], ["a", "b", "c"]]
+)
+@pytest.mark.parametrize("sort", [True, False])
+def test_group_by_pandas_sort_order(groups, sort):
+    with cudf.option_context("mode.pandas_compatible", True):
+        df = cudf.DataFrame(
+            {
+                "a": [10, 1, 10, 3, 2, 1, 3, 3],
+                "b": [5, 6, 7, 1, 2, 3, 4, 9],
+                "c": [20, 20, 10, 11, 13, 11, 12, 12],
+            }
+        )
+        pdf = df.to_pandas()
+
+        assert_eq(
+            pdf.groupby(groups, sort=sort).sum(),
+            df.groupby(groups, sort=sort).sum(),
+        )
+
+
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
+def test_group_by_empty_reduction(
+    all_supported_types_as_str, groupby_reduction_methods, request
+):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=all_supported_types_as_str == "category"
+            and groupby_reduction_methods
+            in {"min", "max", "idxmin", "idxmax", "first", "last"},
+            reason=f"cuDF doesn't support {groupby_reduction_methods} on {all_supported_types_as_str}",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=all_supported_types_as_str == "str"
+            and groupby_reduction_methods in {"idxmin", "idxmax"},
+            reason=f"cuDF doesn't support {groupby_reduction_methods} on {all_supported_types_as_str}",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition="int" in all_supported_types_as_str
+            and groupby_reduction_methods == "mean",
+            reason=f"{all_supported_types_as_str} returns incorrect result type with {groupby_reduction_methods}",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition="timedelta" in all_supported_types_as_str
+            and groupby_reduction_methods == "prod",
+            raises=RuntimeError,
+            reason=f"{all_supported_types_as_str} raises libcudf error with {groupby_reduction_methods}",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition="datetime" in all_supported_types_as_str
+            and groupby_reduction_methods in {"mean", "prod", "sum"},
+            raises=RuntimeError,
+            reason=f"{all_supported_types_as_str} raises libcudf error with {groupby_reduction_methods}",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=all_supported_types_as_str in {"str", "category"}
+            and groupby_reduction_methods in {"sum", "prod", "mean"},
+            raises=TypeError,
+            reason=f"{all_supported_types_as_str} raises TypeError with {groupby_reduction_methods}",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=all_supported_types_as_str == "bool"
+            and groupby_reduction_methods in {"sum", "prod", "mean"},
+            reason=f"{all_supported_types_as_str} returns incorrect result type with {groupby_reduction_methods}",
+        )
+    )
+    gdf = cudf.DataFrame(
+        {"a": [], "b": [], "c": []}, dtype=all_supported_types_as_str
+    )
+    pdf = gdf.to_pandas()
+
+    gg = gdf.groupby("a")["c"]
+    pg = pdf.groupby("a", observed=True)["c"]
+
+    assert_eq(
+        getattr(gg, groupby_reduction_methods)(),
+        getattr(pg, groupby_reduction_methods)(),
+        check_dtype=True,
+    )
+
+
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Warning only given on newer versions.",
+)
+def test_categorical_grouping_pandas_compatibility():
+    gdf = cudf.DataFrame(
+        {
+            "key": cudf.Series([2, 1, 3, 1, 1], dtype="category"),
+            "a": [0, 1, 3, 2, 3],
+        }
+    )
+    pdf = gdf.to_pandas()
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        actual = gdf.groupby("key", sort=False).sum()
+    with pytest.warns(FutureWarning):
+        # observed param deprecation.
+        expected = pdf.groupby("key", sort=False).sum()
+    assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "by,data",
+    [
+        ("a", {"a": [1, 2, 3]}),
+        (["a", "id"], {"id": [0, 0, 1], "a": [1, 2, 3]}),
+        ("a", {"a": [1, 2, 3], "b": ["A", "B", "C"]}),
+        ("id", {"id": [0, 0, 1], "a": [1, 2, 3], "b": ["A", "B", "C"]}),
+        (["b", "id"], {"id": [0, 0, 1], "b": ["A", "B", "C"]}),
+        ("b", {"b": ["A", "B", "C"]}),
+    ],
+)
+def test_group_by_reduce_numeric_only(by, data, groupby_reduction_methods):
+    # Test that simple groupby reductions support numeric_only=True
+    if groupby_reduction_methods == "count":
+        pytest.skip(
+            f"{groupby_reduction_methods} doesn't support numeric_only"
+        )
+    df = cudf.DataFrame(data)
+    expected = getattr(
+        df.to_pandas().groupby(by, sort=True), groupby_reduction_methods
+    )(numeric_only=True)
+    result = getattr(df.groupby(by, sort=True), groupby_reduction_methods)(
+        numeric_only=True
+    )
+    assert_eq(expected, result)
+
+
+def test_multiindex_multiple_groupby():
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(
+        {
+            "a": [4, 17, 4, 9, 5],
+            "b": [1, 4, 4, 3, 2],
+            "x": rng.normal(size=5),
+        }
+    )
+    gdf = cudf.DataFrame(pdf)
+    pdg = pdf.groupby(["a", "b"], sort=True).sum()
+    gdg = gdf.groupby(["a", "b"], sort=True).sum()
+    assert_eq(pdg, gdg)
+    pdg = pdf.groupby(["a", "b"], sort=True).x.sum()
+    gdg = gdf.groupby(["a", "b"], sort=True).x.sum()
+    assert_eq(pdg, gdg)
+
+
+def test_multiindex_equality():
+    # mi made from groupby
+    # mi made manually to be identical
+    # are they equal?
+    gdf = cudf.DataFrame(
+        {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [0, 1, 0, 1, 0]}
+    )
+    mi1 = gdf.groupby(["x", "y"], sort=True).mean().index
+    mi2 = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    assert_eq(mi1, mi2)
+
+    # mi made from two groupbys, are they equal?
+    mi2 = gdf.groupby(["x", "y"], sort=True).max().index
+    assert_eq(mi1, mi2)
+
+    # mi made manually twice are they equal?
+    mi1 = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    mi2 = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    assert_eq(mi1, mi2)
+
+    # mi made from different groupbys are they not equal?
+    mi1 = gdf.groupby(["x", "y"]).mean().index
+    mi2 = gdf.groupby(["x", "z"]).mean().index
+    assert_neq(mi1, mi2)
+
+    # mi made from different manuals are they not equal?
+    mi1 = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    mi2 = cudf.MultiIndex(
+        levels=[[0, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    assert_neq(mi1, mi2)
+
+
+def test_multiindex_equals():
+    # mi made from groupby
+    # mi made manually to be identical
+    # are they equal?
+    gdf = cudf.DataFrame(
+        {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [0, 1, 0, 1, 0]}
+    )
+    mi1 = gdf.groupby(["x", "y"], sort=True).mean().index
+    mi2 = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    assert_eq(mi1.equals(mi2), True)
+
+    # mi made from two groupbys, are they equal?
+    mi2 = gdf.groupby(["x", "y"], sort=True).max().index
+    assert_eq(mi1.equals(mi2), True)
+
+    # mi made manually twice are they equal?
+    mi1 = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    mi2 = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    assert_eq(mi1.equals(mi2), True)
+
+    # mi made from different groupbys are they not equal?
+    mi1 = gdf.groupby(["x", "y"], sort=True).mean().index
+    mi2 = gdf.groupby(["x", "z"], sort=True).mean().index
+    assert_eq(mi1.equals(mi2), False)
+
+    # mi made from different manuals are they not equal?
+    mi1 = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    mi2 = cudf.MultiIndex(
+        levels=[[0, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    assert_eq(mi1.equals(mi2), False)
+
+
+@pytest.mark.parametrize(
+    "str_data", [[], ["a", "b", "c", "d", "e"], [None, None, None, None, None]]
+)
+def test_string_groupby_key(str_data):
+    num_keys = 2
+    other_data = [1, 2, 3, 4, 5][: len(str_data)]
+
+    pdf = pd.DataFrame(
+        {
+            0: pd.Series(str_data, dtype="str"),
+            1: pd.Series(str_data, dtype="str"),
+            "a": other_data,
+        }
+    )
+    gdf = cudf.DataFrame(
+        {
+            0: cudf.Series(str_data, dtype="str"),
+            1: cudf.Series(str_data, dtype="str"),
+            "a": other_data,
+        }
+    )
+
+    expect = pdf.groupby(list(range(num_keys)), as_index=False).count()
+    got = gdf.groupby(list(range(num_keys)), as_index=False).count()
+
+    expect = expect.sort_values([0]).reset_index(drop=True)
+    got = got.sort_values([0]).reset_index(drop=True)
+
+    assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "str_data", [[], ["a", "b", "c", "d", "e"], [None, None, None, None, None]]
+)
+@pytest.mark.parametrize("agg", ["count", "max", "min"])
+def test_string_groupby_non_key(str_data, agg):
+    num_cols = 2
+    other_data = [1, 2, 3, 4, 5][: len(str_data)]
+
+    pdf = pd.DataFrame(
+        {
+            0: pd.Series(str_data, dtype="str"),
+            1: pd.Series(str_data, dtype="str"),
+            "a": other_data,
+        }
+    )
+    gdf = cudf.DataFrame(
+        {
+            0: cudf.Series(str_data, dtype="str"),
+            1: cudf.Series(str_data, dtype="str"),
+            "a": other_data,
+        }
+    )
+
+    expect = getattr(pdf.groupby("a", as_index=False), agg)()
+    got = getattr(gdf.groupby("a", as_index=False), agg)()
+
+    expect = expect.sort_values(["a"]).reset_index(drop=True)
+    got = got.sort_values(["a"]).reset_index(drop=True)
+
+    if agg in ["min", "max"] and len(expect) == 0 and len(got) == 0:
+        for i in range(num_cols):
+            expect[i] = expect[i].astype("str")
+
+    assert_eq(expect, got, check_dtype=False)
+
+
+def test_string_groupby_key_index():
+    str_data = ["a", "b", "c", "d", "e"]
+    other_data = [1, 2, 3, 4, 5]
+
+    pdf = pd.DataFrame(
+        {
+            "a": pd.Series(str_data, dtype="str"),
+            "b": other_data,
+        }
+    )
+    gdf = cudf.DataFrame(
+        {
+            "a": cudf.Series(str_data, dtype="str"),
+            "b": other_data,
+        }
+    )
+
+    expect = pdf.groupby("a", sort=True).count()
+    got = gdf.groupby("a", sort=True).count()
+
+    assert_eq(expect, got, check_dtype=False)

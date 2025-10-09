@@ -1,6 +1,7 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 import re
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -149,6 +150,27 @@ def test_series_iter_error():
         iter(gs._column)
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        lambda: cudf.Series([1, 2, 3, -12, 12, 44]),
+        lambda: cudf.Series([1, 2, 3, -12, 12, 44], dtype="str"),
+        lambda: cudf.DataFrame(
+            {"a": [1, 2, 3, -1234], "b": [0.1, 0.2222, 0.4, -3.14]}
+        ),
+    ],
+)
+@pytest.mark.parametrize("dtype", [None, "float", "int", "str"])
+def test_series_dataframe__array__(data, dtype):
+    gs = data()
+
+    with pytest.raises(TypeError):
+        gs.__array__(dtype=dtype)
+
+    with pytest.raises(TypeError):
+        gs.index.__array__(dtype=dtype)
+
+
 @pytest.mark.parametrize("data", [[], [None, None], ["a", None]])
 def test_series_size(data):
     psr = pd.Series(data)
@@ -186,6 +208,23 @@ def test_axes(data):
 
 
 @pytest.mark.parametrize(
+    "ps",
+    [
+        pd.Series(dtype="float64"),
+        pd.Series(index=[100, 10, 1, 0], dtype="float64"),
+        pd.Series([], dtype="float64"),
+        pd.Series(["a", "b", "c", "d"]),
+        pd.Series(["a", "b", "c", "d"], index=[0, 1, 10, 11]),
+    ],
+)
+def test_series_empty(ps):
+    ps = ps
+    gs = cudf.from_pandas(ps)
+
+    assert_eq(ps.empty, gs.empty)
+
+
+@pytest.mark.parametrize(
     "data",
     [
         [1, 2, 3],
@@ -208,6 +247,13 @@ def test_series_hasnans(data):
     # Check type to avoid mixing Python bool and NumPy bool
     assert isinstance(gs.hasnans, bool)
     assert gs.hasnans == ps.hasnans
+
+
+def test_category_dtype_attribute():
+    psr = pd.Series(["a", "b", "a", "c"], dtype="category")
+    sr = cudf.Series(["a", "b", "a", "c"], dtype="category")
+    assert isinstance(sr.dtype, cudf.CategoricalDtype)
+    assert_eq(sr.dtype.categories, psr.dtype.categories)
 
 
 def test_dtype_dtypes_equal():
@@ -242,6 +288,14 @@ def test_timedelta_contains(data, timedelta_types_as_str, scalar):
     actual = scalar in psr
 
     assert_eq(expected, actual)
+
+
+def test_cai_after_indexing():
+    df = cudf.DataFrame({"a": [1, 2, 3]})
+    cai1 = df["a"].__cuda_array_interface__
+    df[["a"]]
+    cai2 = df["a"].__cuda_array_interface__
+    assert cai1 == cai2
 
 
 @pytest.mark.parametrize(
@@ -291,5 +345,87 @@ def test_datetime_has_null_test_pyarrow():
 
 def test_error_values_datetime():
     s = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
-    with pytest.raises(NotImplementedError, match="cupy does not support"):
-        s.values
+    result = s.values
+    expected = cp.array([1, 2, 3]).view("datetime64[ns]")
+    assert_eq(result, expected)
+
+
+def test_ndim():
+    s = pd.Series(dtype="float64")
+    gs = cudf.Series()
+    assert s.ndim == gs.ndim
+
+
+def test_multiindex_series_assignment():
+    ps = pd.Series([1, 2, 3])
+    gs = cudf.from_pandas(ps)
+    ps.index = pd.MultiIndex([["a", "b"], ["c", "d"]], [[0, 1, 0], [1, 0, 1]])
+    gs.index = cudf.MultiIndex(
+        levels=[["a", "b"], ["c", "d"]], codes=[[0, 1, 0], [1, 0, 1]]
+    )
+    assert_eq(ps, gs)
+
+
+def test_series_multiindex():
+    pdfIndex = pd.MultiIndex.from_arrays([range(7)])
+    rng = np.random.default_rng(seed=0)
+    ps = pd.Series(rng.random(7))
+    gs = cudf.from_pandas(ps)
+    ps.index = pdfIndex
+    gs.index = cudf.from_pandas(pdfIndex)
+    assert_eq(ps, gs)
+
+
+def test_series_shape():
+    ps = pd.Series([1, 2, 3, 4])
+    cs = cudf.Series([1, 2, 3, 4])
+
+    assert ps.shape == cs.shape
+
+
+def test_series_shape_empty():
+    ps = pd.Series([], dtype="float64")
+    cs = cudf.Series([], dtype="float64")
+
+    assert ps.shape == cs.shape
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 4],
+        [],
+        [5.0, 7.0, 8.0],
+        pd.Categorical(["a", "b", "c"]),
+        ["m", "a", "d", "v"],
+    ],
+)
+def test_series_values_host_property(data):
+    pds = pd.Series(data=data, dtype=None if data else float)
+    gds = cudf.Series(data=data, dtype=None if data else float)
+
+    np.testing.assert_array_equal(pds.values, gds.values_host)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 4],
+        [],
+        [5.0, 7.0, 8.0],
+        pytest.param(
+            pd.Categorical(["a", "b", "c"]),
+            marks=pytest.mark.xfail(raises=NotImplementedError),
+        ),
+        pytest.param(
+            ["m", "a", "d", "v"],
+            marks=pytest.mark.xfail(raises=TypeError),
+        ),
+    ],
+)
+def test_series_values_property(data):
+    pds = pd.Series(data=data, dtype=None if data else float)
+    gds = cudf.from_pandas(pds)
+    gds_vals = gds.values
+    assert isinstance(gds_vals, cp.ndarray)
+    np.testing.assert_array_equal(gds_vals.get(), pds.values)

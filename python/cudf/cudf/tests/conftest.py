@@ -1,18 +1,20 @@
 # Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import itertools
+import math
 import operator
 import os
 import pathlib
+import zoneinfo
 
 import cupy as cp
 import numpy as np
+import pandas as pd
 import pytest
 
 import rmm  # noqa: F401
 
 import cudf
-from cudf.testing import assert_eq
 
 _CURRENT_DIRECTORY = str(pathlib.Path(__file__).resolve().parent)
 
@@ -20,103 +22,6 @@ _CURRENT_DIRECTORY = str(pathlib.Path(__file__).resolve().parent)
 @pytest.fixture(scope="session")
 def datadir():
     return pathlib.Path(__file__).parent / "data"
-
-
-@pytest.fixture(
-    params=itertools.product([0, 2, None], [0.3, None]),
-    ids=lambda arg: f"n={arg[0]}-frac={arg[1]}",
-)
-def sample_n_frac(request):
-    """
-    Specific to `test_sample*` tests.
-    """
-    n, frac = request.param
-    if n is not None and frac is not None:
-        pytest.skip("Cannot specify both n and frac.")
-    return n, frac
-
-
-def shape_checker(expected, got):
-    assert expected.shape == got.shape
-
-
-def exact_checker(expected, got):
-    assert_eq(expected, got)
-
-
-@pytest.fixture(
-    params=[
-        (None, None, shape_checker),
-        (42, 42, shape_checker),
-        (np.random.RandomState(42), np.random.RandomState(42), exact_checker),
-    ],
-    ids=["None", "IntSeed", "NumpyRandomState"],
-)
-def random_state_tuple_axis_1(request):
-    """
-    Specific to `test_sample*_axis_1` tests.
-    A pytest fixture of valid `random_state` parameter pairs for pandas
-    and cudf. Valid parameter combinations, and what to check for each pair
-    are listed below:
-
-    pandas:   None,   seed(int),  np.random.RandomState
-    cudf:     None,   seed(int),  np.random.RandomState
-    ------
-    check:    shape,  shape,      exact result
-
-    Each column above stands for one valid parameter combination and check.
-    """
-
-    return request.param
-
-
-@pytest.fixture(
-    params=[
-        (None, None, shape_checker),
-        (42, 42, shape_checker),
-        (np.random.RandomState(42), np.random.RandomState(42), exact_checker),
-        (np.random.RandomState(42), cp.random.RandomState(42), shape_checker),
-    ],
-    ids=["None", "IntSeed", "NumpyRandomState", "CupyRandomState"],
-)
-def random_state_tuple_axis_0(request):
-    """
-    Specific to `test_sample*_axis_0` tests.
-    A pytest fixture of valid `random_state` parameter pairs for pandas
-    and cudf. Valid parameter combinations, and what to check for each pair
-    are listed below:
-
-    pandas:   None,   seed(int),  np.random.RandomState,  np.random.RandomState
-    cudf:     None,   seed(int),  np.random.RandomState,  cp.random.RandomState
-    ------
-    check:    shape,  shape,      exact result,           shape
-
-    Each column above stands for one valid parameter combination and check.
-    """
-
-    return request.param
-
-
-@pytest.fixture(params=[None, "builtin_list", "ndarray"])
-def make_weights_axis_0(request):
-    """Specific to `test_sample*_axis_0` tests.
-    Only testing weights array that matches type with random state.
-    """
-
-    if request.param is None:
-        return lambda *_: (None, None)
-    elif request.param == "builtin-list":
-        return lambda size, _: ([1] * size, [1] * size)
-    else:
-
-        def wrapped(size, numpy_weights_for_cudf):
-            # Uniform distribution, non-normalized
-            if numpy_weights_for_cudf:
-                return np.ones(size), np.ones(size)
-            else:
-                return np.ones(size), cp.ones(size)
-
-        return wrapped
 
 
 # To set and remove the NO_EXTERNAL_ONLY_APIS environment variable we must use
@@ -175,6 +80,37 @@ def pytest_runtest_makereport(item, call):
     setattr(item, "report", {rep.when: rep})
 
 
+def _get_all_zones():
+    zones = []
+    for zone in zoneinfo.available_timezones():
+        # TODO: pandas 3.0 defaults to zoneinfo,
+        # so all_zone_names can use zoneinfo.available_timezones()
+        try:
+            pd.DatetimeTZDtype("ns", zone)
+        except KeyError:
+            continue
+        else:
+            zones.append(zone)
+    return sorted(zones)
+
+
+# NOTE: _get_all_zones is a very large list; we likely do NOT want to
+# use it for more than a handful of tests
+@pytest.fixture(params=_get_all_zones())
+def all_timezones(request):
+    return request.param
+
+
+@pytest.fixture(
+    params=["America/New_York", "Asia/Tokyo", "CET", "Etc/GMT+1", "UTC"]
+)
+def limited_timezones(request):
+    """
+    Small representative set of timezones for testing.
+    """
+    return request.param
+
+
 @pytest.fixture(
     params=[
         {
@@ -210,6 +146,44 @@ comparison_ops = [
     operator.gt,
     operator.ge,
 ]
+bitwise_ops = [
+    operator.and_,
+    operator.or_,
+    operator.xor,
+]
+unary_ops = [
+    math.acos,
+    math.acosh,
+    math.asin,
+    math.asinh,
+    math.atan,
+    math.atanh,
+    math.ceil,
+    math.cos,
+    math.degrees,
+    math.erf,
+    math.erfc,
+    math.exp,
+    math.expm1,
+    math.fabs,
+    math.floor,
+    math.gamma,
+    math.lgamma,
+    math.log,
+    math.log10,
+    math.log1p,
+    math.log2,
+    math.radians,
+    math.sin,
+    math.sinh,
+    math.sqrt,
+    math.tan,
+    math.tanh,
+    operator.pos,
+    operator.neg,
+    operator.not_,
+    operator.invert,
+]
 
 
 @pytest.fixture(params=arithmetic_ops)
@@ -236,6 +210,16 @@ def comparison_op(request):
 def comparison_op_method(comparison_op):
     """Comparison methods defined on Series/DataFrame"""
     return comparison_op.__name__
+
+
+@pytest.fixture(params=bitwise_ops)
+def bitwise_op(request):
+    return request.param
+
+
+@pytest.fixture(params=unary_ops)
+def unary_op(request):
+    return request.param
 
 
 @pytest.fixture(params=arithmetic_ops + comparison_ops)
@@ -276,6 +260,16 @@ def reduction_methods(request):
     return request.param
 
 
+@pytest.fixture(params=["linear", "lower", "higher", "midpoint", "nearest"])
+def quantile_interpolation(request):
+    return request.param
+
+
+@pytest.fixture(params=["spearman", "pearson"])
+def corr_method(request):
+    return request.param
+
+
 signed_integer_types = ["int8", "int16", "int32", "int64"]
 unsigned_integer_types = ["uint8", "uint16", "uint32", "uint64"]
 float_types = ["float32", "float64"]
@@ -300,6 +294,13 @@ category_types = ["category"]
 def signed_integer_types_as_str(request):
     """
     - "int8", "int16", "int32", "int64"
+    """
+    return request.param
+
+
+@pytest.fixture(params=unsigned_integer_types)
+def unsigned_integer_types_as_str(request):
+    """
     - "uint8", "uint16", "uint32", "uint64"
     """
     return request.param
@@ -370,6 +371,12 @@ def datetime_types_as_str(request):
     return request.param
 
 
+@pytest.fixture
+def datetime_types_as_str2(datetime_types_as_str):
+    """Used for testing cartesian product of datetime_types_as_str"""
+    return datetime_types_as_str
+
+
 @pytest.fixture(params=timedelta_types)
 def timedelta_types_as_str(request):
     """
@@ -407,6 +414,12 @@ def numeric_and_temporal_types_as_str(request):
     return request.param
 
 
+@pytest.fixture
+def numeric_and_temporal_types_as_str2(numeric_and_temporal_types_as_str):
+    """Used for testing cartesian product of numeric_and_temporal_types_as_str"""
+    return numeric_and_temporal_types_as_str
+
+
 @pytest.fixture(
     params=signed_integer_types
     + unsigned_integer_types
@@ -428,6 +441,12 @@ def all_supported_types_as_str(request):
     - "category"
     - "bool"
     """
+    return request.param
+
+
+@pytest.fixture(params=[list, np.array])
+def one_dimensional_array_types(request):
+    """1D array containers commonly accepted by cuDF and pandas"""
     return request.param
 
 
@@ -461,9 +480,14 @@ for name in dir(np):
             np.bitwise_or,
             np.bitwise_xor,
         }:
-            marks = pytest.mark.filterwarnings(
-                "ignore:Operation between non boolean Series:FutureWarning"
-            )
+            marks = [
+                pytest.mark.filterwarnings(
+                    "ignore:Operation between non boolean Series:FutureWarning"
+                ),
+                pytest.mark.filterwarnings(
+                    "ignore:Operation between Series with different indexes that are not of numpy boolean:FutureWarning"
+                ),
+            ]
             numpy_ufuncs.append(pytest.param(func, marks=marks))
         else:
             numpy_ufuncs.append(func)
@@ -476,8 +500,26 @@ def numpy_ufunc(request):
 
 
 @pytest.fixture(params=[True, False])
+def copy(request):
+    """Param for `copy` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def deep(request):
+    """Param for `deep` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
 def dropna(request):
     """Param for `dropna` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def skipna(request):
+    """Param for `skipna` argument"""
     return request.param
 
 
@@ -494,6 +536,12 @@ def inplace(request):
 
 
 @pytest.fixture(params=[True, False])
+def drop(request):
+    """Param for `drop` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
 def ignore_index(request):
     """Param for `ignore_index` argument"""
     return request.param
@@ -502,4 +550,56 @@ def ignore_index(request):
 @pytest.fixture(params=[True, False])
 def ascending(request):
     """Param for `ascending` argument"""
+    return request.param
+
+
+axis_0s = [0, "index"]
+axis_1s = [1, "columns"]
+
+
+@pytest.fixture(params=axis_0s)
+def axis_0(request):
+    """Param for `axis=0` argument"""
+    return request.param
+
+
+@pytest.fixture(params=axis_1s)
+def axis_1(request):
+    """Param for `axis=1` argument"""
+    return request.param
+
+
+@pytest.fixture(params=axis_0s + axis_1s)
+def axis(request):
+    """Param for `axis` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def sort(request):
+    """Param for `sort` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def numeric_only(request):
+    """Param for `numeric_only` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False, None])
+def categorical_ordered(request):
+    """Param for `ordered` argument for categorical types"""
+    return request.param
+
+
+@pytest.fixture(params=["left", "right", "both", "neither"])
+def interval_closed(request):
+    """Param for `closed` argument for interval types"""
+    return request.param
+
+
+@pytest.fixture(params=["all", "any"])
+def dropna_how(request):
+    """Param for `how` argument"""
     return request.param

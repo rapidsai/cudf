@@ -24,7 +24,6 @@ from pylibcudf import expressions as plc_expr
 from cudf.api.types import is_list_like
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import ColumnBase, as_column, column_empty
-from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.core.dataframe import DataFrame
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -1277,17 +1276,10 @@ def _parquet_to_frame(
                     partition_categories[name].index(value),
                     length=_len,
                 )
-                codes = as_unsigned_codes(
-                    len(partition_categories[name]), codes
-                )
-                col = CategoricalColumn(
-                    data=None,
-                    size=codes.size,
-                    dtype=CategoricalDtype(
+                col = codes._with_type_metadata(
+                    CategoricalDtype(
                         categories=partition_categories[name], ordered=False
-                    ),
-                    offset=codes.offset,
-                    children=(codes,),
+                    )
                 )
             else:
                 # Not building categorical columns, so
@@ -1460,7 +1452,7 @@ def _read_parquet(
         ):
             filepaths_or_buffers = filepaths_or_buffers[0]
 
-        return DataFrame.from_pandas(
+        return DataFrame(
             pd.read_parquet(
                 filepaths_or_buffers,
                 columns=columns,
@@ -1613,7 +1605,18 @@ def to_parquet(
             index = True
 
         pa_table = df.to_arrow(preserve_index=index)
-        return pq.write_to_dataset(
+        # Check for conflicting arguments in kwargs
+        if "root_path" in kwargs:
+            raise ValueError(
+                "'root_path' should be passed as 'path' argument to to_parquet(), not in kwargs"
+            )
+        if "partition_cols" in kwargs:
+            raise ValueError(
+                "'partition_cols' should be passed directly to to_parquet(), not in kwargs"
+            )
+        # Type ignore: mypy complains about potential duplicate arguments from *args
+        # but our API design allows passing additional args/kwargs to pyarrow
+        return pq.write_to_dataset(  # type: ignore[misc]
             pa_table,
             root_path=path,
             partition_cols=partition_cols,
@@ -2488,7 +2491,7 @@ def _process_metadata(
                     idx = Index._from_column(column_empty(0))
             else:
                 start = range_index_meta["start"] + skip_rows  # type: ignore[operator]
-                stop = range_index_meta["stop"]
+                stop = int(range_index_meta["stop"])  # type: ignore[arg-type]
                 if nrows > -1:
                     stop = start + nrows
                 idx = RangeIndex(

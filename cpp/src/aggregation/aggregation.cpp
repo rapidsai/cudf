@@ -480,6 +480,10 @@ template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
 make_sum_with_overflow_aggregation<groupby_aggregation>();
 template CUDF_EXPORT std::unique_ptr<groupby_scan_aggregation>
 make_sum_with_overflow_aggregation<groupby_scan_aggregation>();
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_sum_with_overflow_aggregation<reduce_aggregation>();
+template CUDF_EXPORT std::unique_ptr<segmented_reduce_aggregation>
+make_sum_with_overflow_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a PRODUCT aggregation
 template <typename Base>
@@ -550,6 +554,8 @@ template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
 make_count_aggregation<groupby_aggregation>(null_policy null_handling);
 template CUDF_EXPORT std::unique_ptr<groupby_scan_aggregation>
 make_count_aggregation<groupby_scan_aggregation>(null_policy null_handling);
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation> make_count_aggregation<reduce_aggregation>(
+  null_policy null_handling);
 
 /// Factory to create a HISTOGRAM aggregation
 template <typename Base>

@@ -1530,14 +1530,14 @@ def test_string_replace_multi():
     assert_eq(expect, got)
 
     ps = pd.Series(["foo", "fuz", np.nan])
-    gs = cudf.Series.from_pandas(ps)
+    gs = cudf.Series(ps)
 
     expect = ps.str.replace("f.", "ba", regex=True)
     got = gs.str.replace(["f."], ["ba"], regex=True)
     assert_eq(expect, got)
 
     ps = pd.Series(["f.o", "fuz", np.nan])
-    gs = cudf.Series.from_pandas(ps)
+    gs = cudf.Series(ps)
 
     expect = ps.str.replace("f.", "ba", regex=False)
     got = gs.str.replace(["f."], ["ba"], regex=False)
@@ -2293,6 +2293,14 @@ def test_string_replace_zero_length(ps_gs, pat):
     expect = ps.str.replace(pat, "_", regex=True)
     got = gs.str.replace(pat, "_", regex=True)
 
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("n", [-1, 0, 1])
+def test_string_replace_n(n):
+    data = ["a,b,c", "d,e,f,g"]
+    expect = pd.Series(data).str.replace(pat=",", repl="_", n=n)
+    got = cudf.Series(data).str.replace(pat=",", repl="_", n=n)
     assert_eq(expect, got)
 
 

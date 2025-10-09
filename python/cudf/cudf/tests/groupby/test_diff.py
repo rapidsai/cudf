@@ -192,3 +192,15 @@ def test_groupby_fillna_multi_value_df():
         got = gdf.groupby(key_col).fillna(value=fill_values)
 
     assert_groupby_results_equal(expect[value_cols], got[value_cols])
+
+
+def test_groupby_select_then_diff():
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 1, 2, 2], "b": [1, 2, 3, 4, 5], "c": [3, 4, 5, 6, 7]}
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    expected = pdf.groupby("a")["c"].diff(1)
+    actual = gdf.groupby("a")["c"].diff(1)
+
+    assert_groupby_results_equal(expected, actual)

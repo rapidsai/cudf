@@ -25,7 +25,7 @@ rapids_test_init()
 function(ConfigureTest CMAKE_TEST_NAME)
   set(options)
   set(one_value GPUS PERCENT STREAM_MODE)
-  set(multi_value EXTRA_LIBS)
+  set(multi_value EXTRA_LIBS EXTRA_COMPILE_DEFINITIONS)
   cmake_parse_arguments(_CUDF_TEST "${options}" "${one_value}" "${multi_value}" ${ARGN})
 
   if(NOT DEFINED _CUDF_TEST_GPUS AND NOT DEFINED _CUDF_TEST_PERCENT)
@@ -60,6 +60,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
 
   target_compile_definitions(
     ${CMAKE_TEST_NAME} PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1
+                               ${_CUDF_TEST_EXTRA_COMPILE_DEFINITIONS}
   )
 
   target_link_libraries(
@@ -91,6 +92,7 @@ endfunction()
 
 # No need to install Arrow libs when only the final test executables are shipped.
 set(CUDF_EXCLUDE_ARROW_FROM_ALL ON)
+set(CUDF_ENABLE_ARROW_COMPUTE ON)
 include(../cmake/thirdparty/get_arrow.cmake)
 
 # ##################################################################################################
@@ -160,7 +162,7 @@ ConfigureTest(
   groupby/sum_of_squares_tests.cpp
   groupby/sum_scan_tests.cpp
   groupby/sum_tests.cpp
-  groupby/tdigest_tests.cu
+  groupby/tdigest_tests.cpp
   groupby/var_tests.cpp
   GPUS 1
   PERCENT 100
@@ -228,7 +230,7 @@ ConfigureTest(
   reductions/reduction_tests.cpp
   reductions/scan_tests.cpp
   reductions/segmented_reduction_tests.cpp
-  reductions/tdigest_tests.cu
+  reductions/tdigest_tests.cpp
   GPUS 1
   PERCENT 70
 )
@@ -341,6 +343,19 @@ ConfigureTest(
   io/parquet_test.cpp
 )
 ConfigureTest(
+  PARQUET_DELETION_VECTORS_TEST
+  io/parquet_deletion_vectors_test.cu
+  io/parquet_common.cpp
+  io/parquet_test.cpp
+  EXTRA_LIBS
+  roaring
+  EXTRA_COMPILE_DEFINITIONS
+  DISABLENEON=1
+  ROARING_DISABLE_X64=1
+  ROARING_DISABLE_AVX=1
+  CROARING_COMPILER_SUPPORTS_AVX512=0
+)
+ConfigureTest(
   JSON_TEST io/json/json_test.cpp io/json/json_chunked_reader.cu
   GPUS 1
   PERCENT 30 EXTRA_LIBS ${ARROW_LIBRARIES}
@@ -365,8 +380,8 @@ ConfigureTest(TYPE_INFERENCE_TEST io/type_inference_test.cu)
 # ##################################################################################################
 # * sort tests ------------------------------------------------------------------------------------
 ConfigureTest(
-  SORT_TEST sort/segmented_sort_tests.cpp sort/sort_nested_types_tests.cpp sort/sort_test.cpp
-  sort/stable_sort_tests.cpp sort/rank_test.cpp
+  SORT_TEST sort/rank_test.cpp sort/segmented_sort_tests.cpp sort/sort_nested_types_tests.cpp
+  sort/sort_test.cpp sort/stable_sort_tests.cpp sort/top_k_tests.cpp
   GPUS 1
   PERCENT 70
 )
@@ -400,7 +415,7 @@ ConfigureTest(
   copying/utility_tests.cpp
   copying/reverse_tests.cpp
   GPUS 1
-  PERCENT 70
+  PERCENT 100
 )
 
 # ##################################################################################################
@@ -412,6 +427,7 @@ ConfigureTest(
   utilities_tests/column_debug_tests.cpp
   utilities_tests/column_utilities_tests.cpp
   utilities_tests/column_wrapper_tests.cpp
+  utilities_tests/context_tests.cpp
   utilities_tests/default_stream_tests.cpp
   utilities_tests/io_utilities_tests.cpp
   utilities_tests/lists_column_wrapper_tests.cpp
@@ -471,14 +487,17 @@ ConfigureTest(
 
 # ##################################################################################################
 # * table tests -----------------------------------------------------------------------------------
+ConfigureTest(TABLE_TEST table/table_tests.cpp table/table_view_tests.cu)
+
+# ##################################################################################################
+# * row operator tests ----------------------------------------------------------------------------
 ConfigureTest(
-  TABLE_TEST
-  table/table_tests.cpp
-  table/table_view_tests.cu
-  table/row_operators_tests.cpp
-  table/experimental_row_operator_tests.cu
-  table/row_operator_tests_utilities.cu
-  table/row_operator_tests_utilities2.cu
+  ROW_OPERATOR_TEST
+  row_operator/row_operator_tests.cu
+  row_operator/nan_tests.cpp
+  row_operator/self_comparison_utilities.cu
+  row_operator/two_table_comparison_utilities.cu
+  row_operator/two_table_equality_utilities.cu
 )
 
 # ##################################################################################################
@@ -699,6 +718,8 @@ ConfigureTest(LABEL_BINS_TEST labeling/label_bins_tests.cpp)
 # * jit tests ----------------------------------------------------------------------------------
 ConfigureTest(JIT_PARSER_TEST jit/parse_ptx_function.cpp)
 target_include_directories(JIT_PARSER_TEST PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
+
+ConfigureTest(ROW_IR_TEST jit/row_ir.cpp)
 
 # ##################################################################################################
 # * stream testing ---------------------------------------------------------------------------------

@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing import assert_groupby_results_equal
+from cudf.testing import assert_eq, assert_groupby_results_equal
 from cudf.testing.dataset_generator import rand_dataframe
 
 
@@ -202,3 +202,25 @@ def test_groupby_shift_row_zero_shift(fill_value):
     assert_groupby_results_equal(
         expected[["1", "2", "3", "4"]], got[["1", "2", "3", "4"]]
     )
+
+
+def test_groupby_select_then_shift():
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 1, 2, 2], "b": [1, 2, 3, 4, 5], "c": [3, 4, 5, 6, 7]}
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    expected = pdf.groupby("a")["c"].shift(1)
+    actual = gdf.groupby("a")["c"].shift(1)
+
+    assert_groupby_results_equal(expected, actual)
+
+
+def test_groupby_shift_series_multiindex():
+    idx = cudf.MultiIndex.from_tuples(
+        [("a", 1), ("a", 2), ("b", 1), ("b", 2)], names=["f", "s"]
+    )
+    ser = cudf.Series(range(4), index=idx)
+    result = ser.groupby(level=0).shift(1)
+    expected = ser.to_pandas().groupby(level=0).shift(1)
+    assert_eq(expected, result)

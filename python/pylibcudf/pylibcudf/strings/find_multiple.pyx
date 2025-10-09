@@ -7,10 +7,18 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings cimport find_multiple as cpp_find_multiple
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.table cimport Table
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 __all__ = ["find_multiple", "contains_multiple"]
 
-cpdef Column find_multiple(Column input, Column targets):
+cpdef Column find_multiple(
+    Column input,
+    Column targets,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
+):
     """
     Returns a lists column with character position values where each
     of the target strings are found in each string.
@@ -23,6 +31,8 @@ cpdef Column find_multiple(Column input, Column targets):
         Strings instance for this operation
     targets : Column
         Strings to search for in each string
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -30,17 +40,26 @@ cpdef Column find_multiple(Column input, Column targets):
         Lists column with character position values
     """
     cdef unique_ptr[column] c_result
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_find_multiple.find_multiple(
             input.view(),
-            targets.view()
+            targets.view(),
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
-cpdef Table contains_multiple(Column input, Column targets):
+cpdef Table contains_multiple(
+    Column input,
+    Column targets,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
+):
     """
     Returns a table of boolean values where each column indicates
     whether the corresponding target is found at that row.
@@ -53,6 +72,8 @@ cpdef Table contains_multiple(Column input, Column targets):
         Strings instance for this operation
     targets : Column
         Strings to search for in each string
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -60,11 +81,15 @@ cpdef Table contains_multiple(Column input, Column targets):
         Columns of booleans
     """
     cdef unique_ptr[table] c_result
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_find_multiple.contains_multiple(
             input.view(),
-            targets.view()
+            targets.view(),
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Table.from_libcudf(move(c_result))
+    return Table.from_libcudf(move(c_result), stream, mr)

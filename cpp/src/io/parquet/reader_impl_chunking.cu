@@ -19,6 +19,7 @@
 #include "reader_impl_chunking_utils.cuh"
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -276,7 +277,11 @@ void reader_impl::setup_next_subpass(read_mode mode)
 
     // include scratch space needed for decompression. for certain codecs (eg ZSTD) this
     // can be considerable.
-    include_decompression_scratch_size(pass.chunks, pass.pages, c_info, _stream);
+    if (is_first_subpass) {
+      pass.decomp_scratch_sizes =
+        compute_decompression_scratch_sizes(pass.chunks, pass.pages, _stream);
+    }
+    include_decompression_scratch_size(pass.decomp_scratch_sizes, c_info, _stream);
 
     auto iter               = thrust::make_counting_iterator(0);
     auto const pass_max_row = pass.skip_rows + pass.num_rows;
@@ -630,6 +635,8 @@ void reader_impl::compute_input_passes(read_mode mode)
 
 void reader_impl::compute_output_chunks_for_subpass()
 {
+  CUDF_FUNC_RANGE();
+
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 

@@ -775,7 +775,7 @@ def date_range(
         ``U``, ``us``, ``N``, ``ns``.
 
     tz : str or tzinfo, optional
-        Not Supported
+        Time zone name for returning localized DatetimeIndex.
 
     normalize : bool, default False
         Not Supported
@@ -905,8 +905,8 @@ def date_range(
         # may contain extra elements that exceeds `end`, they are trimmed
         # as a post processing step. [1]
         _periods_not_specified = True
-        start = dtype.type(start, unit)
-        end = dtype.type(end, unit)
+        start = pd.Timestamp(start).as_unit("ns").to_numpy()
+        end = pd.Timestamp(end).as_unit("ns").to_numpy()
         _is_increment_sequence = end >= start
 
         periods = math.floor(
