@@ -259,6 +259,7 @@ void BM_parquet_chunked_deletion_vectors(nvbench::state& state)
   cudf::io::parquet_reader_options read_opts =
     cudf::io::parquet_reader_options::builder(source_sink.make_source_info());
 
+  auto num_chunks       = 0;
   auto mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(
@@ -274,14 +275,16 @@ void BM_parquet_chunked_deletion_vectors(nvbench::state& state)
                                                                             row_group_num_rows);
       do {
         auto const result = reader.read_chunk();
+        num_chunks++;
       } while (reader.has_next());
       timer.stop();
     });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
-  state.add_element_count(static_cast<double>(num_rows) / time, "bytes_per_second");
+  state.add_element_count(num_chunks, "num_table_chunks");
+  state.add_element_count(static_cast<double>(num_rows) / time, "bytes_per_sec");
   state.add_buffer_size(
-    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_mem_usage");
   state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
 }
 
@@ -300,7 +303,7 @@ NVBENCH_BENCH(BM_parquet_chunked_deletion_vectors)
   .add_int64_power_of_two_axis("num_row_groups", nvbench::range(4, 14, 2))
   .add_int64_axis("rows_per_row_group", {5'000, 10'000})
   .add_string_axis("io_type", {"DEVICE_BUFFER"})
-  .add_int64_axis("chunk_read_limit", {1'024'000})
+  .add_int64_axis("chunk_read_limit", {4'096'000})
   .add_int64_axis("pass_read_limit", {10'240'000, 102'400'000})
-  .add_float64_axis("deletion_probability", {0.25, 0.65})
+  .add_float64_axis("deletion_probability", {0.50})
   .add_int64_axis("num_cols", {4});
