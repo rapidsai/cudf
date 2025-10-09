@@ -20,6 +20,29 @@ enable_testing()
 include(rapids-test)
 rapids_test_init()
 
+# ##################################################################################################
+# **Note about test memory usage:**
+#
+# We design the test suite to run in CI with max parallelism on GPUs with 16 GB of memory or more.
+# Tests are assigned GPU memory percentages to enable safe parallel execution. We draw an arbitrary
+# line that tests are allowed to run in parallel if they consume less than 1 GB of peak GPU memory,
+# and are run serially otherwise. This allows up to 14 tests in parallel on a 16 GB GPU with a bit
+# of room for overhead. (14 * 7% is 98%, and we are required to use integer percentages.) Therefore,
+# tests are assigned 7% of the GPU by default, and 100% if they use >=1 GB of memory. ctest won't
+# schedule more than 100% of the GPU, so at most 14 tests in parallel. This means on a 16 GB GPU, we
+# can safely run `ctest -jN` with N>=14.
+#
+# **Guidelines:**
+#
+# * Tests using <=1 GB: Use default (no GPUS/PERCENT parameters, defaults to 7%)
+# * Tests using >1 GB: Mark as "GPUS 1 PERCENT 100" to reserve the entire GPU
+#
+# Marking large tests with PERCENT 100 prevents memory oversubscription and ensures only one large
+# test runs at a time, while smaller tests can still run in parallel.
+#
+# The peak memory usage of all tests can be determined with cpp/scripts/gtest_memory_usage.sh.
+# ##################################################################################################
+
 # This function takes in a test name and test source and handles setting all of the associated
 # properties and linking to build the test
 function(ConfigureTest CMAKE_TEST_NAME)
