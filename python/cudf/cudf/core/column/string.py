@@ -1234,12 +1234,12 @@ class StringColumn(ColumnBase):
     @acquire_spill_lock()
     def str_contains(self, pattern: str | Self) -> Self:
         if isinstance(pattern, str):
-            pattern = pa_scalar_to_plc_scalar(pa.scalar(pattern))
+            plc_pattern = pa_scalar_to_plc_scalar(pa.scalar(pattern))
         else:
-            pattern = pattern.to_pylibcudf(mode="read")
+            plc_pattern = pattern.to_pylibcudf(mode="read")
         plc_column = plc.strings.find.contains(
             self.to_pylibcudf(mode="read"),
-            pattern,
+            plc_pattern,
         )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
@@ -1255,10 +1255,12 @@ class StringColumn(ColumnBase):
     @acquire_spill_lock()
     def repeat_strings(self, repeats: int | ColumnBase) -> Self:
         if isinstance(repeats, ColumnBase):
-            repeats = repeats.to_pylibcudf(mode="read")
+            plc_repeats = repeats.to_pylibcudf(mode="read")
+        else:
+            plc_repeats = repeats
         plc_column = plc.strings.repeat.repeat_strings(
             self.to_pylibcudf(mode="read"),
-            repeats,
+            plc_repeats,
         )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
@@ -1270,19 +1272,20 @@ class StringColumn(ColumnBase):
         max_replace_count: int = -1,
     ) -> Self:
         if isinstance(pattern, list) and isinstance(replacement, type(self)):
-            replacement = replacement.to_pylibcudf(mode="read")
+            plc_replacement = replacement.to_pylibcudf(mode="read")
+            plc_pattern = pattern
         elif isinstance(pattern, str) and isinstance(replacement, pa.Scalar):
-            pattern = plc.strings.regex_program.RegexProgram.create(
+            plc_pattern = plc.strings.regex_program.RegexProgram.create(
                 pattern,
                 plc.strings.regex_flags.RegexFlags.DEFAULT,
             )
-            replacement = pa_scalar_to_plc_scalar(replacement)
+            plc_replacement = pa_scalar_to_plc_scalar(replacement)
         else:
             raise ValueError("Invalid pattern and replacement types")
         plc_column = plc.strings.replace_re.replace_re(
             self.to_pylibcudf(mode="read"),
-            pattern,
-            replacement,
+            plc_pattern,
+            plc_replacement,
             max_replace_count,
         )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
