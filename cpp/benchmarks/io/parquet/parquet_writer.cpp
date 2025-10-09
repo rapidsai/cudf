@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "cudf/io/types.hpp"
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/io/cuio_common.hpp>
@@ -23,6 +24,8 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <nvbench/nvbench.cuh>
+
+#include <fstream>
 
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   cudf::io::statistics_freq,
@@ -130,6 +133,57 @@ void BM_parq_write_io_compression(nvbench::state& state)
   state.add_buffer_size(encoded_file_size, "encoded_file_size", "encoded_file_size");
 }
 
+void BM_parq_write_to_file(nvbench::state& state)
+{
+  cudf::size_type const cardinality = state.get_int64("cardinality");
+  cudf::size_type const run_length  = state.get_int64("run_length");
+  cudf::size_type const num_cols = state.get_int64("num_cols");
+  size_t const data_size = state.get_int64("data_size");
+  auto const file_path    = state.get_string("file_path");
+  if (file_path.empty()) {
+    state.skip("Invalid path");
+  }
+
+  auto const data_types = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
+                                             static_cast<int32_t>(data_type::FLOAT),
+                                             static_cast<int32_t>(data_type::BOOL8),
+                                             static_cast<int32_t>(data_type::DECIMAL),
+                                             static_cast<int32_t>(data_type::TIMESTAMP),
+                                             static_cast<int32_t>(data_type::DURATION),
+                                             static_cast<int32_t>(data_type::STRING),
+                                             static_cast<int32_t>(data_type::LIST),
+                                             static_cast<int32_t>(data_type::STRUCT)});
+
+  auto const tbl =
+    create_random_table(cycle_dtypes(data_types, num_cols),
+                        table_size_bytes{data_size},
+                        data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
+  auto const view = tbl->view();
+
+  std::size_t encoded_file_size = 0;
+
+  auto const mem_stats_logger = cudf::memory_stats_logger();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+  state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch, auto& timer) {
+               timer.start();
+               cudf::io::parquet_writer_options opts =
+                 cudf::io::parquet_writer_options::builder(cudf::io::sink_info(file_path), view)
+                   .compression(cudf::io::compression_type::NONE);
+               cudf::io::write_parquet(opts);
+               timer.stop();
+
+               encoded_file_size = static_cast<size_t>(
+                  std::ifstream(file_path, std::ifstream::ate | std::ifstream::binary).tellg());
+            });
+
+  auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
+  state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
+  state.add_buffer_size(encoded_file_size, "encoded_file_size", "encoded_file_size");
+}
+
 template <cudf::io::statistics_freq Statistics>
 void BM_parq_write_varying_options(nvbench::state& state,
                                    nvbench::type_list<nvbench::enum_type<Statistics>>)
@@ -213,3 +267,12 @@ NVBENCH_BENCH_TYPES(BM_parq_write_varying_options, NVBENCH_TYPE_AXES(stats_list)
   .add_string_axis("compression_type", {"SNAPPY", "ZSTD", "NONE"})
   .set_min_samples(4)
   .add_string_axis("file_path", {"unused_path.parquet", ""});
+
+NVBENCH_BENCH(BM_parq_write_to_file)
+  .set_name("parquet_write_to_file")
+  .set_min_samples(4)
+  .add_int64_axis("cardinality", {0})
+  .add_int64_axis("run_length", {1})
+  .add_int64_power_of_two_axis("data_size", {30})
+  .add_int64_axis("num_cols", {13})
+  .add_string_axis("file_path", {""});
