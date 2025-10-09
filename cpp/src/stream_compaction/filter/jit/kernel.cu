@@ -37,7 +37,7 @@ namespace cudf {
 namespace filtering {
 namespace jit {
 
-template <bool is_indexed, bool has_user_data, bool is_null_aware, typename Out, typename... In>
+template <bool has_user_data, bool is_null_aware, typename Out, typename... In>
 CUDF_KERNEL void kernel(cudf::jit::device_optional_span<typename Out::type> const* outputs,
                         cudf::column_device_view_core const* inputs,
                         void* user_data)
@@ -68,11 +68,7 @@ CUDF_KERNEL void kernel(cudf::jit::device_optional_span<typename Out::type> cons
       }
     }
 
-    if constexpr (is_indexed) {
-      output[i] = applies ? i : -1;
-    } else {
-      output[i] = applies;
-    }
+    output[i] = applies;
   }
 }
 

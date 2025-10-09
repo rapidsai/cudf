@@ -53,28 +53,11 @@ namespace cudf {
 
 namespace {
 
-struct filter_predicate {
-  static constexpr cudf::size_type NOT_APPLIED = -1;
-
-  constexpr __device__ bool operator()(cudf::size_type flag) const { return flag != NOT_APPLIED; }
-};
-
-/// @brief counts the number of items that are not marked as NOT_APPLIED
-struct filter_histogram {
-  constexpr __device__ cudf::size_type operator()(cudf::size_type flag) const
-  {
-    return (flag == filter_predicate::NOT_APPLIED) ? 0 : 1;
-  }
-};
-
-static constexpr bool LOW_SELECTIVITY = true;
-
-template <typename InputIterator, typename FilterIndexIterator, typename CompactedMapIterator>
+template <typename InputIterator, typename MapIterator>
 auto filter_fixed_width(InputIterator input_begin,
                         InputIterator input_end,
                         cudf::size_type num_selected,
-                        FilterIndexIterator filter_index_iterator,
-                        CompactedMapIterator compacted_map_iterator,
+                        MapIterator map_iterator,
                         rmm::cuda_stream_view stream,
                         rmm::device_async_resource_ref mr)
 {
@@ -83,38 +66,22 @@ auto filter_fixed_width(InputIterator input_begin,
   auto output = rmm::device_uvector<typename std::iterator_traits<InputIterator>::value_type>(
     static_cast<size_t>(num_selected), stream, mr);
 
-  if (LOW_SELECTIVITY) {
-    thrust::gather(rmm::exec_policy(stream),
-                   compacted_map_iterator,
-                   compacted_map_iterator + num_selected,
-                   input_begin,
-                   output.begin());
-  } else {
-    auto end         = thrust::copy_if(rmm::exec_policy(stream),
-                               input_begin,
-                               input_end,
-                               filter_index_iterator,
-                               output.begin(),
-                               filter_predicate{});
-    auto output_size = cuda::std::distance(output.begin(), end);
-    CUDF_EXPECTS(
-      output_size == num_selected,
-      "The number of selected items does not match the expected count.",  // < This should
-                                                                          // never happen
-      std::runtime_error);
-  }
+  thrust::gather(rmm::exec_policy(stream),
+                 map_iterator,
+                 map_iterator + num_selected,
+                 input_begin,
+                 output.begin());
 
   return output;
 }
 
-template <typename CompactedMapIterator>
-std::pair<rmm::device_buffer, cudf::size_type> null_mask_filter(
-  cudf::column_device_view col,
-  cudf::size_type null_count,
-  cudf::size_type num_selected,
-  CompactedMapIterator compacted_map_iterator,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+template <typename MapIterator>
+std::pair<rmm::device_buffer, cudf::size_type> null_mask_filter(cudf::column_device_view col,
+                                                                cudf::size_type null_count,
+                                                                cudf::size_type num_selected,
+                                                                MapIterator map_iterator,
+                                                                rmm::cuda_stream_view stream,
+                                                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -124,8 +91,8 @@ std::pair<rmm::device_buffer, cudf::size_type> null_mask_filter(
   auto offset    = col.offset();
 
   auto [compacted_null_mask, compacted_null_count] = cudf::detail::valid_if(
-    compacted_map_iterator,
-    compacted_map_iterator + num_selected,
+    map_iterator,
+    map_iterator + num_selected,
     [null_mask, offset] __device__(cudf::size_type i) -> bool {
       return cudf::bit_is_set(null_mask, i + offset);
     },
@@ -139,40 +106,33 @@ std::pair<rmm::device_buffer, cudf::size_type> null_mask_filter(
 }
 
 struct filter_dispatcher {
-  template <typename T, typename FilterIndexIterator, typename CompactedMapIterator>
+  template <typename T, typename MapIterator>
     requires(cudf::is_rep_layout_compatible<T>() && cudf::is_fixed_width<T>())
   std::unique_ptr<cudf::column> operator()(cudf::column_view col,
                                            cudf::size_type num_selected,
-                                           FilterIndexIterator filter_index_iterator,
-                                           CompactedMapIterator compacted_map_iterator,
+                                           MapIterator map_iterator,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr) const
   {
     CUDF_FUNC_RANGE();
 
-    auto d_col         = cudf::column_device_view::create(col, stream);
-    auto filtered      = filter_fixed_width(d_col->data<T>(),
-                                       d_col->data<T>() + d_col->size(),
-                                       num_selected,
-                                       filter_index_iterator,
-                                       compacted_map_iterator,
-                                       stream,
-                                       mr);
+    auto d_col    = cudf::column_device_view::create(col, stream);
+    auto filtered = filter_fixed_width(
+      d_col->data<T>(), d_col->data<T>() + d_col->size(), num_selected, map_iterator, stream, mr);
     auto filtered_size = filtered.size();
     auto [null_mask, null_count] =
-      null_mask_filter(*d_col, col.null_count(), num_selected, compacted_map_iterator, stream, mr);
+      null_mask_filter(*d_col, col.null_count(), num_selected, map_iterator, stream, mr);
 
     auto out = cudf::column(
       d_col->type(), filtered_size, filtered.release(), std::move(null_mask), null_count, {});
     return std::make_unique<cudf::column>(std::move(out));
   }
 
-  template <typename T, typename FilterIndexIterator, typename CompactedMapIterator>
+  template <typename T, typename MapIterator>
     requires(cudf::is_fixed_point<T>())
   std::unique_ptr<cudf::column> operator()(cudf::column_view col,
                                            cudf::size_type num_selected,
-                                           FilterIndexIterator filter_index_iterator,
-                                           CompactedMapIterator compacted_map_iterator,
+                                           MapIterator map_iterator,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr) const
   {
@@ -183,39 +143,36 @@ struct filter_dispatcher {
     auto filtered      = filter_fixed_width(d_col->data<Rep>(),
                                        d_col->data<Rep>() + d_col->size(),
                                        num_selected,
-                                       filter_index_iterator,
-                                       compacted_map_iterator,
+                                       map_iterator,
                                        stream,
                                        mr);
     auto filtered_size = filtered.size();
     auto [null_mask, null_count] =
-      null_mask_filter(*d_col, col.null_count(), num_selected, compacted_map_iterator, stream, mr);
+      null_mask_filter(*d_col, col.null_count(), num_selected, map_iterator, stream, mr);
 
     auto out = cudf::column(
       d_col->type(), filtered_size, filtered.release(), std::move(null_mask), null_count, {});
     return std::make_unique<cudf::column>(std::move(out));
   }
 
-  template <typename T, typename FilterIndexIterator, typename CompactedMapIterator>
+  template <typename T, typename MapIterator>
     requires(std::is_same_v<T, cudf::string_view>)
   std::unique_ptr<cudf::column> operator()(cudf::column_view col,
                                            cudf::size_type num_selected,
-                                           FilterIndexIterator filter_index_iterator,
-                                           CompactedMapIterator compacted_map_iterator,
+                                           MapIterator map_iterator,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr) const
   {
     CUDF_FUNC_RANGE();
 
     return cudf::strings::detail::gather(
-      col, compacted_map_iterator, compacted_map_iterator + num_selected, false, stream, mr);
+      col, map_iterator, map_iterator + num_selected, false, stream, mr);
   }
 
-  template <typename T, typename FilterIndexIterator, typename CompactedMapIterator>
+  template <typename T, typename MapIterator>
   std::unique_ptr<cudf::column> operator()(cudf::column_view col,
                                            cudf::size_type num_selected,
-                                           FilterIndexIterator filter_index_iterator,
-                                           CompactedMapIterator compacted_map_iterator,
+                                           MapIterator map_iterator,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr) const
   {
@@ -225,42 +182,35 @@ struct filter_dispatcher {
   }
 };
 
-template <typename FilterIndexIterator, typename CompactedMapIterator>
+template <typename MapIterator>
 std::unique_ptr<cudf::column> filter_column(cudf::column_view col,
                                             cudf::size_type num_selected,
-                                            FilterIndexIterator filter_index_iterator,
-                                            CompactedMapIterator compacted_map_iterator,
+                                            MapIterator map_iterator,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
-  return cudf::type_dispatcher(col.type(),
-                               filter_dispatcher{},
-                               col,
-                               num_selected,
-                               filter_index_iterator,
-                               compacted_map_iterator,
-                               stream,
-                               mr);
+  return cudf::type_dispatcher(
+    col.type(), filter_dispatcher{}, col, num_selected, map_iterator, stream, mr);
 }
 
 void launch_filter_kernel(jitify2::ConfiguredKernel& kernel,
-                          cudf::jit::device_span<int32_t> output,
+                          cudf::jit::device_span<bool> output,
                           std::vector<column_view> const& input_columns,
                           std::optional<void*> user_data,
                           rmm::cuda_stream_view stream,
                           rmm::device_async_resource_ref mr)
 {
   auto outputs = cudf::jit::to_device_vector(
-    std::vector{cudf::jit::device_optional_span<cudf::size_type>{output, nullptr}}, stream, mr);
+    std::vector{cudf::jit::device_optional_span<bool>{output, nullptr}}, stream, mr);
 
   auto [input_handles, inputs] =
     cudf::jit::column_views_to_device<column_device_view, column_view>(input_columns, stream, mr);
 
-  cudf::jit::device_optional_span<cudf::size_type> const* outputs_ptr = outputs.data();
-  column_device_view const* inputs_ptr                                = inputs.data();
-  void* p_user_data                                                   = user_data.value_or(nullptr);
+  cudf::jit::device_optional_span<bool> const* outputs_ptr = outputs.data();
+  column_device_view const* inputs_ptr                     = inputs.data();
+  void* p_user_data                                        = user_data.value_or(nullptr);
 
   std::array<void*, 3> args{&outputs_ptr, &inputs_ptr, &p_user_data};
 
@@ -297,6 +247,8 @@ void perform_checks(column_view base_column,
 
 jitify2::Kernel get_kernel(std::string const& kernel_name, std::string const& cuda_source)
 {
+  CUDF_FUNC_RANGE();
+
   return cudf::jit::get_program_cache(*stream_compaction_filter_jit_kernel_cu_jit)
     .get_kernel(kernel_name, {}, {{"cudf/detail/operation-udf.hpp", cuda_source}}, {"-arch=sm_."});
 }
@@ -312,6 +264,8 @@ jitify2::ConfiguredKernel build_kernel(std::string const& kernel_name,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
+
   CUDF_EXPECTS(!(is_null_aware == null_aware::YES && is_ptx),
                "Optional types are not supported in PTX UDFs",
                std::invalid_argument);
@@ -334,19 +288,9 @@ jitify2::ConfiguredKernel build_kernel(std::string const& kernel_name,
     ->configure_1d_max_occupancy(0, 0, nullptr, stream.value());
 }
 
-// strings and bitmasks need a compacted index map for gathering
-bool needs_compacted_indices(column_view base_column,
-                             std::vector<column_view> const& filter_columns)
-{
-  return std::any_of(filter_columns.begin(), filter_columns.end(), [&](auto const& col) {
-    return !cudf::jit::is_scalar(base_column.size(), col.size()) &&
-           (col.type().id() == type_id::STRING || col.nullable());
-  });
-}
-
-std::tuple<rmm::device_uvector<cudf::size_type>, cudf::size_type> compact_filter_indices(
+std::tuple<rmm::device_uvector<cudf::size_type>, cudf::size_type> create_gather_map(
   column_view base_column,
-  cudf::jit::device_span<cudf::size_type const> filter_indices,
+  cudf::jit::device_span<bool const> filters,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
@@ -355,12 +299,12 @@ std::tuple<rmm::device_uvector<cudf::size_type>, cudf::size_type> compact_filter
   // this is a scratch buffer, it doesn't have to be exact-sized
   auto compacted_indices =
     rmm::device_uvector<cudf::size_type>{static_cast<size_t>(base_column.size()), stream, mr};
-  auto selection_end = thrust::copy_if(rmm::exec_policy(stream),
-                                       thrust::make_counting_iterator<cudf::size_type>(0),
-                                       thrust::make_counting_iterator(base_column.size()),
-                                       filter_indices.begin(),
-                                       compacted_indices.begin(),
-                                       filter_predicate{});
+  auto selection_end = thrust::copy_if(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator<cudf::size_type>(0),
+    thrust::make_counting_iterator(base_column.size()),
+    compacted_indices.begin(),
+    [p_filters = filters.data()] __device__(cudf::size_type i) -> bool { return p_filters[i]; });
   auto num_selected =
     static_cast<cudf::size_type>(cuda::std::distance(compacted_indices.begin(), selection_end));
   return {std::move(compacted_indices), num_selected};
@@ -377,12 +321,12 @@ std::vector<std::unique_ptr<column>> filter_operation(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  auto filter_indices =
-    rmm::device_uvector<cudf::size_type>{static_cast<size_t>(base_column.size()), stream, mr};
+  auto filter_bools =
+    rmm::device_uvector<uint8_t>{static_cast<size_t>(base_column.size()), stream, mr};
 
   auto kernel = build_kernel("cudf::filtering::jit::kernel",
                              base_column.size(),
-                             {"cudf::size_type"},
+                             {"bool"},
                              predicate_columns,
                              user_data.has_value(),
                              is_null_aware,
@@ -391,29 +335,13 @@ std::vector<std::unique_ptr<column>> filter_operation(
                              stream,
                              mr);
 
-  auto filter_indices_span =
-    cudf::jit::device_span<cudf::size_type>{filter_indices.data(), filter_indices.size()};
+  auto filter_bools_span =
+    cudf::jit::device_span<bool>{reinterpret_cast<bool*>(filter_bools.data()), filter_bools.size()};
 
-  launch_filter_kernel(kernel, filter_indices_span, predicate_columns, user_data, stream, mr);
+  launch_filter_kernel(kernel, filter_bools_span, predicate_columns, user_data, stream, mr);
 
-  auto compacted_filter_indices = rmm::device_uvector<cudf::size_type>{0, stream, mr};
-  cudf::size_type num_selected  = 0;
-
-  auto should_compact = LOW_SELECTIVITY || needs_compacted_indices(base_column, filter_columns);
-
-  if (should_compact) {
-    std::tie(compacted_filter_indices, num_selected) =
-      compact_filter_indices(base_column, filter_indices_span.as_const(), stream, mr);
-  } else {
-    cudf::scoped_range compaction{"filter_operation::selection_count"};
-    // simple types don't need a compacted index map, just count the number selected
-    num_selected = thrust::transform_reduce(rmm::exec_policy(stream),
-                                            filter_indices.cbegin(),
-                                            filter_indices.cend(),
-                                            filter_histogram{},
-                                            cudf::size_type{0},
-                                            cuda::std::plus<cudf::size_type>{});
-  }
+  auto [gather_map, num_selected] =
+    create_gather_map(base_column, filter_bools_span.as_const(), stream, mr);
 
   std::vector<std::unique_ptr<column>> filtered;
 
@@ -427,12 +355,7 @@ std::vector<std::unique_ptr<column>> filter_operation(
                      auto tiled_columns = tiled->release();
                      return std::move(tiled_columns.front());
                    } else {
-                     return filter_column(column,
-                                          num_selected,
-                                          filter_indices.cbegin(),
-                                          compacted_filter_indices.cbegin(),
-                                          stream,
-                                          mr);
+                     return filter_column(column, num_selected, gather_map.cbegin(), stream, mr);
                    }
                  });
 
