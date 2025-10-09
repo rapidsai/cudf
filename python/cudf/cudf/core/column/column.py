@@ -1348,7 +1348,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         with acquire_spill_lock():
             plc_replace: plc.replace.ReplacePolicy | plc.Scalar
             if method:
-                plc_replace = (
+                plc_replace: plc.replace.ReplacePolicy | plc.Scalar = (
                     plc.replace.ReplacePolicy.PRECEDING
                     if method == "ffill"
                     else plc.replace.ReplacePolicy.FOLLOWING
