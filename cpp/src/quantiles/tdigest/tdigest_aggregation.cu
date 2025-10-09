@@ -41,6 +41,7 @@
 
 #include <cuda/functional>
 #include <cuda/std/iterator>
+#include <cuda/std/span>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
@@ -270,7 +271,8 @@ struct cumulative_centroid_weight {
   double const* cumulative_weights;  // cumulative weights of non-empty clusters
   GroupLabelsIter group_labels;      // group labels for each tdigest including empty ones
   GroupOffsetsIter group_offsets;    // groups
-  cudf::device_span<size_type const> tdigest_offsets;  // tdigests with a group
+  // Host-device span, as the offsets may reside in either device memory or pinned host memory
+  cuda::std::span<size_type const> tdigest_offsets;  // tdigests with a group
 
   /**
    * @brief Returns the cumulative weight for a given value index. The index `n` is the index of
@@ -1563,7 +1565,10 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
         centroid_group_info{
           p_cumulative_weights.begin(), p_group_offsets, p_tdigest_offsets.begin()},
         cumulative_centroid_weight{
-          p_cumulative_weights.begin(), p_group_labels, p_group_offsets, p_tdigest_offsets},
+          p_cumulative_weights.begin(),
+          p_group_labels,
+          p_group_offsets,
+          cuda::std::span<size_type const>{p_tdigest_offsets.begin(), p_tdigest_offsets.size()}},
         has_nulls,
         stream,
         mr);
@@ -1581,7 +1586,8 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
         cumulative_weights.begin(),
         group_labels,
         group_offsets,
-        {tdigest_offsets.begin<size_type>(), static_cast<size_t>(tdigest_offsets.size())}},
+        cuda::std::span<size_type const>{tdigest_offsets.begin<size_type>(),
+                                         static_cast<size_t>(tdigest_offsets.size())}},
       has_nulls,
       stream,
       mr);
@@ -1592,20 +1598,22 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
     0, make_weighted_centroid{merged_means.begin(), merged_weights.begin()});
 
   // compute the tdigest
-  return compute_tdigests(delta,
-                          centroids,
-                          centroids + merged_means.size(),
-                          cumulative_centroid_weight{cumulative_weights.begin(),
-                                                     group_labels,
-                                                     group_offsets,
-                                                     {tdigest_offsets.begin<size_type>(),
-                                                      static_cast<size_t>(tdigest_offsets.size())}},
-                          std::move(merged_min_col),
-                          std::move(merged_max_col),
-                          cinfo,
-                          has_nulls,
-                          stream,
-                          mr);
+  return compute_tdigests(
+    delta,
+    centroids,
+    centroids + merged_means.size(),
+    cumulative_centroid_weight{
+      cumulative_weights.begin(),
+      group_labels,
+      group_offsets,
+      cuda::std::span<size_type const>{tdigest_offsets.begin<size_type>(),
+                                       static_cast<size_t>(tdigest_offsets.size())}},
+    std::move(merged_min_col),
+    std::move(merged_max_col),
+    cinfo,
+    has_nulls,
+    stream,
+    mr);
 }
 
 }  // anonymous namespace
