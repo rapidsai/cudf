@@ -21,6 +21,9 @@ from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
+if TYPE_CHECKING:
+    import os
+
 from typing_extensions import assert_never
 
 import polars as pl
@@ -629,8 +632,9 @@ class Scan(IR):
                 with path.open() as f:
                     while f.readline() == "\n":
                         skiprows += 1
+                path_list: list[os.PathLike[Any]] = [path]
                 options = (
-                    plc.io.csv.CsvReaderOptions.builder(plc.io.SourceInfo([path]))
+                    plc.io.csv.CsvReaderOptions.builder(plc.io.SourceInfo(path_list))
                     .nrows(n_rows)
                     .skiprows(skiprows + skip_rows)
                     .lineterminator(str(eol))
@@ -696,20 +700,20 @@ class Scan(IR):
                         ),
                     )
                 )
-            options = plc.io.parquet.ParquetReaderOptions.builder(
+            parquet_reader_options = plc.io.parquet.ParquetReaderOptions.builder(
                 plc.io.SourceInfo(paths)
             ).build()
             if with_columns is not None:
-                options.set_columns(with_columns)
+                parquet_reader_options.set_columns(with_columns)
             if filters is not None:
-                options.set_filter(filters)
+                parquet_reader_options.set_filter(filters)
             if n_rows != -1:
-                options.set_num_rows(n_rows)
+                parquet_reader_options.set_num_rows(n_rows)
             if skip_rows != 0:
-                options.set_skip_rows(skip_rows)
+                parquet_reader_options.set_skip_rows(skip_rows)
             if parquet_options.chunked:
                 reader = plc.io.parquet.ChunkedParquetReader(
-                    options,
+                    parquet_reader_options,
                     chunk_read_limit=parquet_options.chunk_read_limit,
                     pass_read_limit=parquet_options.pass_read_limit,
                 )
@@ -721,12 +725,13 @@ class Scan(IR):
                 while reader.has_next():
                     chunk = reader.read_chunk()
                     tbl = chunk.tbl
+                    tbl_columns: list[plc.Column | None] = tbl.columns()
                     for i in range(tbl.num_columns()):
                         concatenated_columns[i] = plc.concatenate.concatenate(
-                            [concatenated_columns[i], tbl._columns[i]]
+                            [concatenated_columns[i], tbl_columns[i]]
                         )
                         # Drop residual columns to save memory
-                        tbl._columns[i] = None
+                        tbl_columns[i] = None
                 df = DataFrame.from_table(
                     plc.Table(concatenated_columns),
                     names=names,
@@ -738,7 +743,7 @@ class Scan(IR):
                         include_file_paths, paths, chunk.num_rows_per_source, df
                     )
             else:
-                tbl_w_meta = plc.io.parquet.read_parquet(options)
+                tbl_w_meta = plc.io.parquet.read_parquet(parquet_reader_options)
                 # TODO: consider nested column names?
                 col_names = tbl_w_meta.column_names(include_children=False)
                 df = DataFrame.from_table(
@@ -758,14 +763,14 @@ class Scan(IR):
             json_schema: list[plc.io.json.NameAndType] = [
                 (name, typ.plc_type, []) for name, typ in schema.items()
             ]
-            plc_tbl_w_meta = plc.io.json.read_json(
-                plc.io.json._setup_json_reader_options(
-                    plc.io.SourceInfo(paths),
-                    lines=True,
-                    dtypes=json_schema,
-                    prune_columns=True,
-                )
+            json_reader_options = (
+                plc.io.json.JsonReaderOptions.builder(plc.io.SourceInfo(paths))
+                .lines(val=True)
+                .dtypes(json_schema)
+                .prune_columns(val=True)
+                .build()
             )
+            plc_tbl_w_meta = plc.io.json.read_json(json_reader_options)
             # TODO: I don't think cudf-polars supports nested types in general right now
             # (but when it does, we should pass child column names from nested columns in)
             col_names = plc_tbl_w_meta.column_names(include_children=False)
@@ -956,7 +961,7 @@ class Sink(IR):
     ) -> None:
         """Write CSV data to a sink."""
         serialize = options["serialize_options"]
-        options = (
+        csv_writer_options = (
             plc.io.csv.CsvWriterOptions.builder(target, df.table)
             .include_header(options["include_header"])
             .names(df.column_names if options["include_header"] else [])
@@ -965,7 +970,7 @@ class Sink(IR):
             .inter_column_delimiter(chr(serialize["separator"]))
             .build()
         )
-        plc.io.csv.write_csv(options)
+        plc.io.csv.write_csv(csv_writer_options)
 
     @classmethod
     def _write_json(cls, target: plc.io.SinkInfo, df: DataFrame) -> None:

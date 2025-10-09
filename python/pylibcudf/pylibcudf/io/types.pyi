@@ -114,6 +114,8 @@ class SourceInfo:
     def __init__(
         self, sources: list[str] | list[os.PathLike[Any]] | list[Datasource]
     ) -> None: ...
+    @staticmethod
+    def _is_remote_uri(path: str | os.PathLike[Any]) -> bool: ...
 
 class SinkInfo:
     def __init__(
