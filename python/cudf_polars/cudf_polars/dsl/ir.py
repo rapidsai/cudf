@@ -19,7 +19,7 @@ import random
 import time
 from functools import cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, overload
 
 if TYPE_CHECKING:
     import os
@@ -725,13 +725,17 @@ class Scan(IR):
                 while reader.has_next():
                     chunk = reader.read_chunk()
                     tbl = chunk.tbl
-                    tbl_columns: list[plc.Column | None] = tbl.columns()
+                    tbl_columns = tbl.columns()
                     for i in range(tbl.num_columns()):
-                        concatenated_columns[i] = plc.concatenate.concatenate(
-                            [concatenated_columns[i], tbl_columns[i]]
-                        )
+                        if (
+                            concatenated_columns[i] is not None
+                            and tbl_columns[i] is not None
+                        ):
+                            concatenated_columns[i] = plc.concatenate.concatenate(
+                                [concatenated_columns[i], tbl_columns[i]]
+                            )
                         # Drop residual columns to save memory
-                        tbl_columns[i] = None
+                        tbl_columns[i] = None  # type: ignore[call-overload]
                 df = DataFrame.from_table(
                     plc.Table(concatenated_columns),
                     names=names,
@@ -998,6 +1002,20 @@ class Sink(IR):
         return metadata
 
     @staticmethod
+    @overload
+    def _apply_parquet_writer_options(
+        builder: plc.io.parquet.ChunkedParquetWriterOptionsBuilder,
+        options: dict[str, Any],
+    ) -> plc.io.parquet.ChunkedParquetWriterOptionsBuilder: ...
+
+    @staticmethod
+    @overload
+    def _apply_parquet_writer_options(
+        builder: plc.io.parquet.ParquetWriterOptionsBuilder,
+        options: dict[str, Any],
+    ) -> plc.io.parquet.ParquetWriterOptionsBuilder: ...
+
+    @staticmethod
     def _apply_parquet_writer_options(
         builder: plc.io.parquet.ChunkedParquetWriterOptionsBuilder
         | plc.io.parquet.ParquetWriterOptionsBuilder,
@@ -1042,12 +1060,16 @@ class Sink(IR):
             and parquet_options.n_output_chunks != 1
             and df.table.num_rows() != 0
         ):
-            builder = plc.io.parquet.ChunkedParquetWriterOptions.builder(
+            chunked_builder = plc.io.parquet.ChunkedParquetWriterOptions.builder(
                 target
             ).metadata(metadata)
-            builder = cls._apply_parquet_writer_options(builder, options)
-            writer_options = builder.build()
-            writer = plc.io.parquet.ChunkedParquetWriter.from_options(writer_options)
+            chunked_builder = cls._apply_parquet_writer_options(
+                chunked_builder, options
+            )
+            chunked_writer_options = chunked_builder.build()
+            writer = plc.io.parquet.ChunkedParquetWriter.from_options(
+                chunked_writer_options
+            )
 
             # TODO: Can be based on a heuristic that estimates chunk size
             # from the input table size and available GPU memory.
@@ -1792,7 +1814,12 @@ class ConditionalJoin(IR):
 
         def __init__(self, predicate: expr.Expr):
             self.predicate = predicate
-            self.ast = to_ast(predicate)
+            ast_result = to_ast(predicate)
+            if ast_result is None:
+                raise NotImplementedError(
+                    f"Conditional join with predicate {predicate}"
+                )  # pragma: no cover; polars never delivers expressions we can't handle
+            self.ast = ast_result
 
         def __reduce__(self) -> tuple[Any, ...]:
             """Pickle a Predicate object."""
@@ -1844,10 +1871,6 @@ class ConditionalJoin(IR):
         assert not nulls_equal
         assert not coalesce
         assert maintain_order == "none"
-        if predicate_wrapper.ast is None:
-            raise NotImplementedError(
-                f"Conditional join with predicate {predicate}"
-            )  # pragma: no cover; polars never delivers expressions we can't handle
         self._non_child_args = (predicate_wrapper, options)
 
     @classmethod
@@ -2076,18 +2099,18 @@ class Join(IR):
                 for col in template
             ]
 
-        columns = [
+        result_columns = [
             Column(new, col.dtype, name=rename(col.name))
             for new, col in zip(columns, template, strict=True)
         ]
 
         if left:
-            columns = [
+            result_columns = [
                 col.sorted_like(orig)
-                for col, orig in zip(columns, template, strict=True)
+                for col, orig in zip(result_columns, template, strict=True)
             ]
 
-        return columns
+        return result_columns
 
     @classmethod
     @log_do_evaluate
