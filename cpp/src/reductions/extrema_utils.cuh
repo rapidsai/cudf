@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "nested_type_minmax_util.cuh"
+#include "nested_types_extrema_utils.cuh"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -128,7 +128,7 @@ class arg_minmax_dispatcher {
                                   reduction::detail::op::min,
                                   reduction::detail::op::max>;
     auto const binop_generator =
-      reduction::detail::comparison_binop_generator::create<Op>(input, stream);
+      reduction::detail::arg_minmax_binop_generator::create<Op>(input, stream);
     return find_extremum_idx(thrust::make_counting_iterator(0),
                              input.size(),
                              stream,
