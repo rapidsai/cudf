@@ -124,7 +124,7 @@ def run_duckdb(benchmark: Any, options: Sequence[str] | None = None) -> None:
             result = execute_duckdb_query(duckdb_query, run_config.dataset_path)
 
             t1 = time.time()
-            record = Record(query=q_id, duration=t1 - t0)
+            record = Record(query=q_id, iteration=i, duration=t1 - t0)
             if args.print_results:
                 print(result)
 

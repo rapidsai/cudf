@@ -28,7 +28,6 @@
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/sorting.hpp>
 #include <cudf/structs/structs_column_device_view.cuh>
-#include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>

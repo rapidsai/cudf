@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "reductions/nested_type_minmax_util.cuh"
+#include "reductions/nested_types_extrema_utils.cuh"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -204,7 +204,7 @@ struct group_scan_functor<K,
     auto gather_map = rmm::device_uvector<size_type>(values.size(), stream);
 
     auto const binop_generator =
-      cudf::reduction::detail::comparison_binop_generator::create<K>(values, stream);
+      cudf::reduction::detail::arg_minmax_binop_generator::create<K>(values, stream);
     thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                   group_labels.begin(),
                                   group_labels.end(),

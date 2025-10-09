@@ -251,8 +251,8 @@ int read_dict_bits(std::unique_ptr<cudf::io::datasource> const& source,
                    cudf::io::parquet::PageLocation const& page_loc)
 {
   using namespace cudf::io::parquet;
-  CUDF_EXPECTS(page_loc.offset > 0, "Cannot find page header");
-  CUDF_EXPECTS(page_loc.compressed_page_size > 0, "Invalid page header length");
+  CUDF_EXPECTS(page_loc.offset > 0, "Cannot find data page header");
+  CUDF_EXPECTS(page_loc.compressed_page_size > 0, "Invalid data page header length");
 
   PageHeader page_hdr;
   auto const page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);

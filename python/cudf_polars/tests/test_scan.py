@@ -602,3 +602,14 @@ def test_scan_ndjson_remote(
 
     q = pl.scan_ndjson(httpserver.url_for(server_path))
     assert_gpu_result_equal(q)
+
+
+def test_scan_parquet_with_decimal_literal_in_predicate(df, tmp_path):
+    make_partitioned_source(df, tmp_path / "file", "parquet")
+
+    q = pl.scan_parquet(tmp_path / "file").filter(
+        (pl.col("d") > Decimal("1.23"))
+        & (pl.lit(Decimal("2.00")).cast(pl.Decimal(15, 2)) < pl.col("d"))
+    )
+
+    assert_gpu_result_equal(q)

@@ -26,7 +26,7 @@ cdef class Scalar:
     cpdef bool is_valid(self)
 
     @staticmethod
-    cdef Scalar empty_like(Column column, Stream stream=*)
+    cdef Scalar empty_like(Column column, Stream stream, DeviceMemoryResource mr)
 
     @staticmethod
     cdef Scalar from_libcudf(unique_ptr[scalar] libcudf_scalar, dtype=*)

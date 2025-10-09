@@ -12,15 +12,17 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+import pylibcudf as plc
+
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core.buffer.buffer import Buffer
 from cudf.core.column.column import ColumnBase, as_column, column_empty
-from cudf.core.column.numerical import NumericalColumn
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
+    dtype_to_pylibcudf_type,
     find_common_type,
     is_pandas_nullable_extension_dtype,
 )
@@ -31,9 +33,8 @@ if TYPE_CHECKING:
 
     from typing_extensions import Self
 
-    import pylibcudf as plc
-
     from cudf._typing import ColumnLike, DtypeObj, ScalarLike
+    from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.string import StringColumn
 
 
@@ -251,14 +252,18 @@ class TemporalBaseColumn(ColumnBase):
             )
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
-        col = NumericalColumn(
-            data=self.base_data,  # type: ignore[arg-type]
-            dtype=self._UNDERLYING_DTYPE,
-            mask=self.base_mask,
-            offset=self.offset,
+        new_plc_column = plc.Column(
+            data_type=dtype_to_pylibcudf_type(self._UNDERLYING_DTYPE),
             size=self.size,
+            data=plc.gpumemoryview(self.base_data),
+            mask=plc.gpumemoryview(self.base_mask)
+            if self.base_mask is not None
+            else None,
+            null_count=self.null_count,
+            offset=self.offset,
+            children=[],
         )
-        return col.astype(dtype)  # type:ignore[return-value]
+        return type(self).from_pylibcudf(new_plc_column).astype(dtype)  # type:ignore[return-value]
 
     def ceil(self, freq: str) -> ColumnBase:
         raise NotImplementedError("ceil is currently not implemented")

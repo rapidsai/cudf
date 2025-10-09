@@ -85,7 +85,7 @@ cdef class TableWithMetadata:
 
     @staticmethod
     cdef TableWithMetadata from_libcudf(
-        table_with_metadata& tbl, Stream stream=*, DeviceMemoryResource mr=*
+        table_with_metadata& tbl, Stream stream, DeviceMemoryResource mr
     )
 
 cdef class SourceInfo:

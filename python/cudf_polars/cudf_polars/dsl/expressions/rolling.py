@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import itertools
+from collections import defaultdict
 from dataclasses import dataclass
 from functools import singledispatchmethod
 from typing import TYPE_CHECKING, Any
@@ -40,6 +41,11 @@ class UnaryOp:
 @dataclass(frozen=True)
 class RankOp(UnaryOp):
     pass
+
+
+@dataclass(frozen=True)
+class FillNullWithStrategyOp(UnaryOp):
+    policy: plc.replace.ReplacePolicy = plc.replace.ReplacePolicy.PRECEDING
 
 
 def to_request(
@@ -235,7 +241,7 @@ class GroupedRollingWindow(Expr):
                 isinstance(named_expr.value, (expr.Len, expr.Agg))
                 or (
                     isinstance(named_expr.value, expr.UnaryFunction)
-                    and named_expr.value.name in {"rank"}
+                    and named_expr.value.name in {"rank", "fill_null_with_strategy"}
                 )
             )
         ]
@@ -257,7 +263,10 @@ class GroupedRollingWindow(Expr):
             for ne in self.named_aggs
             for v in (ne.value,)
             if isinstance(v, expr.Agg)
-            or (isinstance(v, expr.UnaryFunction) and v.name in {"rank"})
+            or (
+                isinstance(v, expr.UnaryFunction)
+                and v.name in {"rank", "fill_null_with_strategy"}
+            )
         ]
         self.by_count = len(by_expr)
         self.children = tuple(
@@ -353,6 +362,37 @@ class GroupedRollingWindow(Expr):
             _, rank_tables = grouper.scan(rank_requests)
         return rank_out_names, rank_out_dtypes, rank_tables
 
+    @_apply_unary_op.register
+    def _(
+        self,
+        op: FillNullWithStrategyOp,
+        df: DataFrame,
+        _: plc.groupby.GroupBy,
+    ) -> tuple[list[str], list[DataType], list[plc.Table]]:
+        named_exprs = op.named_exprs
+
+        val_cols = self._gather_columns(
+            [
+                ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
+                for ne in named_exprs
+            ],
+            op.order_index,
+            cudf_polars_column=False,
+        )
+
+        vals_tbl = plc.Table(val_cols)
+        lg = op.local_grouper
+        assert isinstance(lg, plc.groupby.GroupBy)
+        _, filled_tbl = lg.replace_nulls(
+            vals_tbl,
+            [op.policy] * len(val_cols),
+        )
+
+        tables = [plc.Table([column]) for column in filled_tbl.columns()]
+        names = [ne.name for ne in named_exprs]
+        dtypes = [ne.value.dtype for ne in named_exprs]
+        return names, dtypes, tables
+
     def _reorder_to_input(
         self,
         row_id: plc.Column,
@@ -403,6 +443,7 @@ class GroupedRollingWindow(Expr):
         reductions: list[expr.NamedExpr] = []
         unary_window_ops: dict[str, list[expr.NamedExpr]] = {
             "rank": [],
+            "fill_null_with_strategy": [],
         }
 
         for ne in self.named_aggs:
@@ -459,26 +500,31 @@ class GroupedRollingWindow(Expr):
 
     def _gather_columns(
         self,
-        cols: list[Column],
+        cols: list[plc.Column] | list[Column],
         order_index: plc.Column,
+        *,
+        cudf_polars_column: bool = True,
     ) -> list[plc.Column] | list[Column]:
         gathered_tbl = plc.copying.gather(
-            plc.Table([c.obj for c in cols]),
+            plc.Table([c.obj if cudf_polars_column else c for c in cols]),
             order_index,
             plc.copying.OutOfBoundsPolicy.NULLIFY,
         )
 
-        return [
-            Column(
-                gathered_tbl.columns()[i],
-                name=c.name,
-                dtype=c.dtype,
-                order=c.order,
-                null_order=c.null_order,
-                is_sorted=True,
-            )
-            for i, c in enumerate(cols)
-        ]
+        if cudf_polars_column:
+            return [
+                Column(
+                    gathered_tbl.columns()[i],
+                    name=c.name,
+                    dtype=c.dtype,
+                    order=c.order,
+                    null_order=c.null_order,
+                    is_sorted=True,
+                )
+                for i, c in enumerate(cols)
+            ]
+        else:
+            return gathered_tbl.columns()
 
     def do_evaluate(  # noqa: D102
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -636,6 +682,54 @@ class GroupedRollingWindow(Expr):
                 broadcasted_cols.extend(
                     self._reorder_to_input(
                         row_id, by_cols, df.num_rows, tables, names, dtypes
+                    )
+                )
+
+        if fill_named := unary_window_ops["fill_null_with_strategy"]:
+            order_index = self._build_window_order_index(
+                by_cols,
+                row_id=row_id,
+                order_by_col=order_by_col if self._order_by_expr is not None else None,
+                ob_desc=self.options[2] if self._order_by_expr is not None else False,
+                ob_nulls_last=self.options[3]
+                if self._order_by_expr is not None
+                else False,
+            )
+            by_cols_for_scan = self._gather_columns(by_cols, order_index)
+            local = self._sorted_grouper(by_cols_for_scan)
+
+            strategy_exprs: dict[str, list[expr.NamedExpr]] = defaultdict(list)
+            for ne in fill_named:
+                fill_null_expr = ne.value
+                assert isinstance(fill_null_expr, expr.UnaryFunction)
+                strategy_exprs[fill_null_expr.options[0]].append(ne)
+
+            replace_policy = {
+                "forward": plc.replace.ReplacePolicy.PRECEDING,
+                "backward": plc.replace.ReplacePolicy.FOLLOWING,
+            }
+
+            for strategy, fill_exprs in strategy_exprs.items():
+                names, dtypes, tables = self._apply_unary_op(
+                    FillNullWithStrategyOp(
+                        named_exprs=fill_exprs,
+                        order_index=order_index,
+                        by_cols_for_scan=by_cols_for_scan,
+                        local_grouper=local,
+                        policy=replace_policy[strategy],
+                    ),
+                    df,
+                    grouper,
+                )
+                broadcasted_cols.extend(
+                    self._reorder_to_input(
+                        row_id,
+                        by_cols,
+                        df.num_rows,
+                        tables,
+                        names,
+                        dtypes,
+                        order_index=order_index,
                     )
                 )
 

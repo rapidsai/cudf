@@ -398,14 +398,22 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 dbuf.copy_from_host(value)
                 mask = as_buffer(dbuf)
 
-        return build_column(  # type: ignore[return-value]
-            data=self.data,
-            dtype=self.dtype,
-            mask=mask,
-            size=self.size,
-            offset=0,
-            children=self.children,
-        )
+        if mask is not None:
+            new_mask: plc.gpumemoryview | None = plc.gpumemoryview(mask)
+            new_null_count = plc.null_mask.null_count(
+                new_mask,
+                0,
+                self.size,
+            )
+        else:
+            new_mask = None
+            new_null_count = 0
+        new_plc_column = self.to_pylibcudf(
+            mode="read", use_base=False
+        ).with_mask(new_mask, new_null_count)
+        return self.from_pylibcudf(  # type: ignore[return-value]
+            new_plc_column,
+        )._with_type_metadata(self.dtype)
 
     @property
     def null_count(self) -> int:
@@ -488,7 +496,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     # underlying buffers as exposed before this function can itself be exposed
     # publicly.  User requests to convert to pylibcudf must assume that the
     # data may be modified afterwards.
-    def to_pylibcudf(self, mode: Literal["read", "write"]) -> plc.Column:
+    def to_pylibcudf(
+        self, mode: Literal["read", "write"], *, use_base: bool = True
+    ) -> plc.Column:
         """Convert this Column to a pylibcudf.Column.
 
         This function will generate a pylibcudf Column pointing to the same
@@ -501,6 +511,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             to may be modified by the caller. If "read", the data pointed to
             must not be modified by the caller.  Failure to fulfill this
             contract will cause incorrect behavior.
+        use_base : bool, default True
+            Whether to use the column's base data, mask, and children,
+            or data, mask, and children relative to a 0 offset.
 
         Returns
         -------
@@ -522,10 +535,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         data = None
         if col.base_data is not None:
+            if use_base:
+                data_buff = col.base_data
+            else:
+                data_buff = col.data  # type: ignore[assignment]
             cai = cuda_array_interface_wrapper(
-                ptr=col.base_data.get_ptr(mode=mode),
-                size=col.base_data.size,
-                owner=col.base_data,
+                ptr=data_buff.get_ptr(mode=mode),
+                size=data_buff.size,
+                owner=data_buff,
             )
             data = plc.gpumemoryview(cai)
 
@@ -533,18 +550,24 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if self.nullable:
             # TODO: Are we intentionally use self's mask instead of col's?
             # Where is the mask stored for categoricals?
+            if use_base:
+                mask_buff = self.base_mask
+            else:
+                mask_buff = self.mask
             cai = cuda_array_interface_wrapper(
-                ptr=self.base_mask.get_ptr(mode=mode),  # type: ignore[union-attr]
-                size=self.base_mask.size,  # type: ignore[union-attr]
-                owner=self.base_mask,
+                ptr=mask_buff.get_ptr(mode=mode),  # type: ignore[union-attr]
+                size=mask_buff.size,  # type: ignore[union-attr]
+                owner=mask_buff,
             )
             mask = plc.gpumemoryview(cai)
 
         children = []
         if col.base_children:
             children = [
-                child_column.to_pylibcudf(mode=mode)
-                for child_column in col.base_children
+                child_column.to_pylibcudf(mode=mode, use_base=use_base)
+                for child_column in (
+                    col.base_children if use_base else col.children
+                )
             ]
 
         return plc.Column(
@@ -553,7 +576,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             data,
             mask,
             self.null_count,
-            self.offset,
+            self.offset if use_base else 0,
             children,
         )
 

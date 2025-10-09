@@ -25,6 +25,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <algorithm>
 #include <memory>
 #include <tuple>
 #include <unordered_set>
@@ -58,7 +59,6 @@ class groupby_simple_aggregations_collector final
   std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                   cudf::detail::mean_aggregation const&) override
   {
-    (void)col_type;
     CUDF_EXPECTS(is_fixed_width(col_type), "MEAN aggregation expects fixed width type");
     std::vector<std::unique_ptr<aggregation>> aggs;
     aggs.push_back(make_sum_aggregation());
@@ -152,6 +152,17 @@ flatten_single_pass_aggs(host_span<aggregation_request const> requests,
   }
 
   return std::make_tuple(table_view(columns), std::move(agg_kinds), std::move(aggs));
+}
+
+std::vector<aggregation::Kind> get_simple_aggregations(groupby_aggregation const& agg,
+                                                       data_type values_type)
+{
+  groupby_simple_aggregations_collector collector;
+  auto aggs = agg.get_simple_aggregations(values_type, collector);
+  std::vector<aggregation::Kind> agg_kinds;
+  std::transform(
+    aggs.begin(), aggs.end(), std::back_inserter(agg_kinds), [](auto const& a) { return a->kind; });
+  return agg_kinds;
 }
 
 }  // namespace cudf::groupby::detail::hash

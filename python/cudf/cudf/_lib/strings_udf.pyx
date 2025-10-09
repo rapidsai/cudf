@@ -17,6 +17,7 @@ from pylibcudf.libcudf.strings_udf cimport (
 from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.stream import DEFAULT_STREAM
+from rmm.mr import get_current_device_resource
 
 import numpy as np
 
@@ -38,7 +39,11 @@ def column_from_managed_udf_string_array(DeviceBuffer d_buffer):
     with nogil:
         c_result = move(cpp_column_from_managed_udf_string_array(data, size))
 
-    return plc_Column.from_libcudf(move(c_result), DEFAULT_STREAM)
+    return plc_Column.from_libcudf(
+        move(c_result),
+        DEFAULT_STREAM,
+        get_current_device_resource(),
+    )
 
 
 def get_character_flags_table_ptr():

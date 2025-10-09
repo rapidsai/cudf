@@ -49,7 +49,7 @@ cpdef Column capitalize(
 
     if delimiters is None:
         delimiters = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view())
+            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
         )
 
     cdef const string_scalar* cpp_delimiters = <const string_scalar*>(

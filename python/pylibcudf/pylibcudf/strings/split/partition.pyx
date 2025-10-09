@@ -50,7 +50,7 @@ cpdef Table partition(
 
     if delimiter is None:
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view())
+            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
         )
 
     cdef const string_scalar* c_delimiter = <const string_scalar*>(
@@ -99,7 +99,7 @@ cpdef Table rpartition(
 
     if delimiter is None:
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view())
+            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
         )
 
     cdef const string_scalar* c_delimiter = <const string_scalar*>(

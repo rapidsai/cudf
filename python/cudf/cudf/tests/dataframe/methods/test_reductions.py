@@ -198,7 +198,10 @@ def test_dataframe_reduction_error():
 
 
 def test_mean_timeseries(numeric_only):
-    gdf = cudf.datasets.timeseries()
+    gdf = cudf.DataFrame(
+        {"a": ["a", "b", "c"], "b": range(3), "c": [-1.0, 12.2, 0.0]},
+        index=pd.date_range("2020-01-01", periods=3, name="timestamp"),
+    )
     if not numeric_only:
         gdf = gdf.select_dtypes(include="number")
     pdf = gdf.to_pandas()

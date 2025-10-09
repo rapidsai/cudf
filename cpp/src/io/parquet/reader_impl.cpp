@@ -709,7 +709,7 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
   preprocess_chunk_strings(mode, read_info, page_mask);
 
   // Allocate memory buffers for the output columns.
-  allocate_columns(mode, read_info.skip_rows, read_info.num_rows);
+  allocate_columns(mode, read_info.skip_rows, read_info.num_rows, page_mask);
 
   // Parse data into the output buffers.
   decode_page_data(mode, read_info.skip_rows, read_info.num_rows, page_mask);
@@ -1038,7 +1038,8 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
   constexpr auto has_column_projection = false;
 
   // Open and parse the source dataset metadata
-  auto metadata = aggregate_reader_metadata(sources, use_arrow_schema, has_column_projection);
+  auto metadata =
+    aggregate_reader_metadata(sources, use_arrow_schema, has_column_projection, false);
 
   return parquet_metadata{parquet_schema{walk_schema(&metadata, 0)},
                           metadata.get_num_rows(),

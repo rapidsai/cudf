@@ -362,3 +362,39 @@ def test_rank_over_with_null_group_keys(
         .over("g_null", order_by=order_by)
     )
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("strategy", ["forward", "backward"])
+@pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
+@pytest.mark.parametrize(
+    "group_key,expr",
+    [
+        pytest.param(
+            "g",
+            pl.when((pl.col("x") % 3) == 0).then(None).otherwise(pl.col("x")),
+            id="fill_over",
+        ),
+        pytest.param(
+            "g_null",
+            pl.when((pl.col("x") % 2) == 0).then(None).otherwise(pl.col("x")),
+            id="fill_over_with_null_group_keys",
+        ),
+    ],
+)
+def test_fill_over(
+    df: pl.LazyFrame,
+    strategy: str,
+    order_by: None | list[str | pl.Expr],
+    group_key: str,
+    expr: pl.Expr,
+) -> None:
+    q = df.select(expr.fill_null(strategy=strategy).over(group_key, order_by=order_by))
+    if POLARS_VERSION_LT_132:
+        assert_ir_translation_raises(q, NotImplementedError)
+    else:
+        assert_gpu_result_equal(q)
+
+
+def test_fill_null_with_mean_over_unsupported(df: pl.LazyFrame) -> None:
+    q = df.select(pl.col("x").fill_null(strategy="mean").over("g"))
+    assert_ir_translation_raises(q, NotImplementedError)

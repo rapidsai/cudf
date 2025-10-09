@@ -25,6 +25,8 @@ namespace CUDF_EXPORT cudf {
 
 /// @brief Flags for controlling initialization steps
 enum class init_flags : std::uint32_t {
+  /// @brief No initialization steps
+  NONE = 0,
   /// @brief Load the nvCOMP library during initialization
   LOAD_NVCOMP = 1 << 0,
   /// @brief Initialize the JIT program cache during initialization
@@ -43,6 +45,27 @@ constexpr init_flags operator|(init_flags lhs, init_flags rhs) noexcept
   return static_cast<init_flags>(static_cast<underlying_t>(lhs) | static_cast<underlying_t>(rhs));
 }
 
+/// @brief Bitwise AND operator for init_flags
+/// @param lhs The left-hand side of the operator
+/// @param rhs The right-hand side of the operator
+/// @return The result of the bitwise AND operation
+constexpr init_flags operator&(init_flags lhs, init_flags rhs) noexcept
+{
+  using underlying_t = std::underlying_type_t<init_flags>;
+  return static_cast<init_flags>(static_cast<underlying_t>(lhs) & static_cast<underlying_t>(rhs));
+}
+
+/// @brief Bitwise NOT operator for init_flags
+/// @param flags The flags to negate
+/// @return The result of the bitwise NOT operation, only flipping bits that are part of
+/// init_flags::ALL
+constexpr init_flags operator~(init_flags flags) noexcept
+{
+  using underlying_t = std::underlying_type_t<init_flags>;
+  return static_cast<init_flags>(static_cast<underlying_t>(init_flags::ALL) &
+                                 ~static_cast<underlying_t>(flags));
+}
+
 /// @brief Check if a flag is set
 /// @param flags The flags to check against
 /// @param flag The specific flag to check for
@@ -54,7 +77,8 @@ constexpr bool has_flag(init_flags flags, init_flags flag) noexcept
 
 /// @brief Initialize the cudf global context
 /// @param flags Optional flags to control which initialization steps to perform.
-/// @throws std::runtime_error if the context is already initialized
+/// Can be called multiple times to initialize additional components. If all selected
+/// steps are already performed, the call has no effect.
 void initialize(init_flags flags = init_flags::INIT_JIT_CACHE);
 
 /// @brief de-initialize the cudf global context

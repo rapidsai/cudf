@@ -29,24 +29,6 @@
 #include <cuda/std/type_traits>
 
 namespace cudf::detail {
-/// Checks if an aggregation kind needs to operate on the underlying storage type
-template <aggregation::Kind k>
-__device__ constexpr bool uses_underlying_type()
-{
-  return k == aggregation::MIN or k == aggregation::MAX or k == aggregation::SUM;
-}
-
-/// Gets the underlying target type for the given source type and aggregation kind
-template <typename Source, aggregation::Kind k>
-using underlying_target_t =
-  cuda::std::conditional_t<uses_underlying_type<k>(),
-                           cudf::device_storage_type_t<cudf::detail::target_type_t<Source, k>>,
-                           cudf::detail::target_type_t<Source, k>>;
-
-/// Gets the underlying source type for the given source type and aggregation kind
-template <typename Source, aggregation::Kind k>
-using underlying_source_t =
-  cuda::std::conditional_t<uses_underlying_type<k>(), cudf::device_storage_type_t<Source>, Source>;
 
 template <typename Source, aggregation::Kind k>
 struct update_target_element {

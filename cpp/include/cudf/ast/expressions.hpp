@@ -193,6 +193,16 @@ class generic_scalar_device_view : public cudf::detail::scalar_device_view_base 
   {
   }
 
+  /** @brief Construct a new generic scalar device view object from a fixed-point scalar
+   *
+   * @param s The fixed-point scalar to construct from
+   */
+  template <typename T>
+  generic_scalar_device_view(cudf::fixed_point_scalar<T>& s)
+    : generic_scalar_device_view{s.type(), s.data(), s.validity_data()}
+  {
+  }
+
  protected:
   void const* _data{};      ///< Pointer to device memory containing the value
   size_type const _size{};  ///< Size of the string in bytes for string scalar
@@ -268,6 +278,16 @@ class literal : public expression {
    * @param value A string scalar value
    */
   literal(cudf::string_scalar& value) : scalar(value), value(value) {}
+
+  /**
+   * @brief Construct a new literal object.
+   *
+   * @param value A fixed-point scalar value
+   */
+  template <typename T>
+  literal(cudf::fixed_point_scalar<T>& value) : scalar(value), value(value)
+  {
+  }
 
   /**
    * @brief Get the data type.

@@ -33,8 +33,9 @@ class program_cache;
 class context {
  private:
   std::unique_ptr<jit::program_cache> _program_cache;
-  bool _dump_codegen = false;
-  bool _use_jit      = false;
+  init_flags _initialized_flags = init_flags::NONE;
+  bool _dump_codegen            = false;
+  bool _use_jit                 = false;
 
  public:
   context(init_flags flags = init_flags::INIT_JIT_CACHE);
@@ -47,6 +48,10 @@ class context {
   jit::program_cache& program_cache();
 
   [[nodiscard]] bool dump_codegen() const;
+
+  /// @brief Initialize additional components based on the provided flags
+  /// @param flags The initialization flags to process
+  void initialize_components(init_flags flags);
 
   [[nodiscard]] bool use_jit() const;
 };

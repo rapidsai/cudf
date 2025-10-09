@@ -18,7 +18,7 @@
 
 #include "lead_lag_nested.cuh"
 #include "nth_element.cuh"
-#include "reductions/nested_type_minmax_util.cuh"
+#include "reductions/nested_types_extrema_utils.cuh"
 #include "rolling.hpp"
 #include "rolling_collect_list.cuh"
 #include "rolling_operators.cuh"
@@ -497,7 +497,7 @@ struct rolling_window_launcher {
     if constexpr (is_arg_minmax && std::is_same_v<InputType, cudf::struct_view>) {
       // Using comp_generator to create a LESS operator for finding ARGMIN/ARGMAX of structs.
       auto const comp_generator =
-        cudf::reduction::detail::comparison_binop_generator::create<op>(input, stream);
+        cudf::reduction::detail::arg_minmax_binop_generator::create<op>(input, stream);
       auto const device_op =
         create_rolling_operator<InputType, op>{}(min_periods, comp_generator.binop());
       return do_rolling(device_op);
