@@ -1,6 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from typing import Any, Protocol, TypedDict
 
 from rmm.pylibrmm.device_buffer import DeviceBuffer
@@ -111,6 +111,12 @@ class Column:
     ) -> Column: ...
     @staticmethod
     def struct_from_children(children: Sequence[Column]) -> Column: ...
+    @staticmethod
+    def from_iterable_of_py(
+        obj: Iterable,
+        dtype: DataType | None = None,
+        stream: Stream | None = None,
+    ) -> Column: ...
 
 class ListColumnView:
     def __init__(self, column: Column): ...
