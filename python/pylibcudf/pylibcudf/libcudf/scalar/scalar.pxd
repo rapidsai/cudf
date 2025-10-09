@@ -40,3 +40,12 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
 
     cdef cppclass struct_scalar(scalar):
         pass
+
+    cdef cppclass fixed_point_scalar[T](scalar):
+        fixed_point_scalar() except +libcudf_exception_handler
+        fixed_point_scalar(
+            T value,
+            scale_type scale,
+            bool is_valid
+        ) except +libcudf_exception_handler
+        T value() except +libcudf_exception_handler
