@@ -151,7 +151,10 @@ template <typename Source>
 struct reduction_function<Source, cudf::aggregation::ARGMIN> : public base_reduction_function {
   [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
-    return argmin(params.col, params.output_dtype, params.stream, params.mr);
+    CUDF_EXPECTS(params.output_dtype.id() == type_to_id<size_type>(),
+                 "ARGMIN aggregation expects output type to be cudf::size_type",
+                 cudf::data_type_error);
+    return argmin(params.col, params.stream, params.mr);
   }
 };
 
@@ -159,7 +162,10 @@ template <typename Source>
 struct reduction_function<Source, cudf::aggregation::ARGMAX> : public base_reduction_function {
   [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
-    return argmax(params.col, params.output_dtype, params.stream, params.mr);
+    CUDF_EXPECTS(params.output_dtype.id() == type_to_id<size_type>(),
+                 "ARGMAX aggregation expects output type to be cudf::size_type",
+                 cudf::data_type_error);
+    return argmax(params.col, params.stream, params.mr);
   }
 };
 

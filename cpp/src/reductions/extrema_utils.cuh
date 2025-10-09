@@ -33,40 +33,6 @@
 namespace cudf::reduction::simple::detail {
 
 /**
- * @brief A type-dispatcher functor to create a scalar with a given value.
- */
-template <typename InputType>
-class make_scalar_fn {
-  static_assert(cudf::is_numeric<InputType>(), "InputType must be numeric");
-
-  template <typename OutputType>
-  static constexpr bool is_supported()
-  {
-    return cudf::is_numeric<OutputType>();
-  }
-
- public:
-  template <typename OutputType>
-  [[nodiscard]] std::unique_ptr<scalar> operator()(InputType input,
-                                                   rmm::cuda_stream_view stream,
-                                                   rmm::device_async_resource_ref mr) const
-    requires(is_supported<OutputType>())
-  {
-    using ScalarType = scalar_type_t<OutputType>;
-    return std::make_unique<ScalarType>(static_cast<OutputType>(input), true, stream, mr);
-  }
-
-  template <typename OutputType>
-  std::unique_ptr<scalar> operator()(InputType,
-                                     rmm::cuda_stream_view,
-                                     rmm::device_async_resource_ref) const
-    requires(not is_supported<OutputType>())
-  {
-    CUDF_FAIL("make_scalar_fn is not supported for this type");
-  }
-};
-
-/**
  * @brief An adapter to make a functor's operator() non-inlinable.
  *
  * This is to reduce compile time when compiling heavy binary comparators with thrust algorithms,
@@ -179,29 +145,23 @@ class arg_minmax_dispatcher {
    *
    * @tparam ElementType The input column type
    * @param input Input column (must be numeric)
-   * @param output_type Requested type of the scalar result
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned scalar's device memory
    */
   template <typename ElementType>
   [[nodiscard]] std::unique_ptr<scalar> operator()(column_view const& input,
-                                                   data_type const output_type,
                                                    rmm::cuda_stream_view stream,
                                                    rmm::device_async_resource_ref mr) const
     requires(is_supported<ElementType>())
   {
-    CUDF_EXPECTS(cudf::is_index_type(output_type),
-                 "Output type must be an index type.",
-                 cudf::data_type_error);
     auto const& values =
       is_dictionary(input.type()) ? dictionary_column_view(input).get_indices_annotated() : input;
     auto const idx = find_arg_minmax<ElementType>(values, stream);
-    return type_dispatcher(output_type, make_scalar_fn<size_type>{}, idx, stream, mr);
+    return make_fixed_width_scalar<size_type>(idx, stream, mr);
   }
 
   template <typename ElementType>
   std::unique_ptr<scalar> operator()(column_view const&,
-                                     data_type const,
                                      rmm::cuda_stream_view,
                                      rmm::device_async_resource_ref) const
     requires(not is_supported<ElementType>())
