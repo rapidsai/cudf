@@ -1001,16 +1001,18 @@ class Sink(IR):
             metadata.column_metadata[i].set_name(name)
         return metadata
 
-    @staticmethod
     @overload
+    @staticmethod
     def _apply_parquet_writer_options(
         builder: plc.io.parquet.ChunkedParquetWriterOptionsBuilder,
         options: dict[str, Any],
     ) -> plc.io.parquet.ChunkedParquetWriterOptionsBuilder: ...
 
-    @staticmethod
+    # TODO: Remove the type ignore once we actually include pylibcudf type stubs in
+    # checking. Without those these types resolve to Any and the overloads collide.
     @overload
-    def _apply_parquet_writer_options(
+    @staticmethod
+    def _apply_parquet_writer_options(  # type: ignore[overload-cannot-match]
         builder: plc.io.parquet.ParquetWriterOptionsBuilder,
         options: dict[str, Any],
     ) -> plc.io.parquet.ParquetWriterOptionsBuilder: ...
