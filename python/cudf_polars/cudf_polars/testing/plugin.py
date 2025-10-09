@@ -32,7 +32,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     group.addoption(
         "--executor",
         action="store",
-        default="in-memory",
+        default="streaming",
         choices=("in-memory", "streaming"),
         help="Executor to use for GPUEngine.",
     )
@@ -55,7 +55,7 @@ def pytest_configure(config: pytest.Config) -> None:
     blocksize_mode = config.getoption("--blocksize-mode")
     if no_fallback:
         collect = polars.LazyFrame.collect
-        engine = polars.GPUEngine(raise_on_fail=no_fallback)
+        engine = polars.GPUEngine(raise_on_fail=no_fallback, executor=executor)
         # https://github.com/python/mypy/issues/2427
         polars.LazyFrame.collect = partialmethod(collect, engine=engine)  # type: ignore[method-assign,assignment]
     elif executor == "in-memory":
@@ -148,11 +148,6 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_parquet.py::test_allow_missing_columns[projection0-True-columns]": "Mismatching column read cudf#16394",
     "tests/unit/io/test_parquet.py::test_allow_missing_columns[projection1-True-columns]": "Mismatching column read cudf#16394",
     "tests/unit/io/test_parquet.py::test_scan_parquet_filter_statistics_load_missing_column_21391": "Mismatching column read cudf#16394",
-    "tests/unit/io/test_parquet.py::test_field_overwrites_metadata": "cannot serialize in-memory sink target.",
-    "tests/unit/io/test_parquet_field_overwrites.py::test_required_flat": "cannot serialize in-memory sink target.",
-    "tests/unit/io/test_parquet_field_overwrites.py::test_required_list[dtype0]": "cannot serialize in-memory sink target.",
-    "tests/unit/io/test_parquet_field_overwrites.py::test_required_list[dtype1]": "cannot serialize in-memory sink target.",
-    "tests/unit/io/test_parquet_field_overwrites.py::test_required_struct": "cannot serialize in-memory sink target.",
     "tests/unit/lazyframe/test_engine_selection.py::test_engine_import_error_raises[gpu]": "Expect this to pass because cudf-polars is installed",
     "tests/unit/lazyframe/test_engine_selection.py::test_engine_import_error_raises[engine1]": "Expect this to pass because cudf-polars is installed",
     "tests/unit/lazyframe/test_lazyframe.py::test_round[dtype1-123.55-1-123.6]": "Rounding midpoints is handled incorrectly",
@@ -252,6 +247,15 @@ TESTS_TO_SKIP: Mapping[str, str] = {
 }
 
 
+STREAMING_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
+    "tests/unit/io/test_parquet.py::test_field_overwrites_metadata": "cannot serialize in-memory sink target.",
+    "tests/unit/io/test_parquet_field_overwrites.py::test_required_flat": "cannot serialize in-memory sink target.",
+    "tests/unit/io/test_parquet_field_overwrites.py::test_required_list[dtype0]": "cannot serialize in-memory sink target.",
+    "tests/unit/io/test_parquet_field_overwrites.py::test_required_list[dtype1]": "cannot serialize in-memory sink target.",
+    "tests/unit/io/test_parquet_field_overwrites.py::test_required_struct": "cannot serialize in-memory sink target.",
+}
+
+
 def pytest_collection_modifyitems(
     session: pytest.Session, config: pytest.Config, items: list[pytest.Item]
 ) -> None:
@@ -259,9 +263,16 @@ def pytest_collection_modifyitems(
     if config.getoption("--cudf-polars-no-fallback"):
         # Don't xfail tests if running without fallback
         return
+    executor = config.getoption("--executor")
     for item in items:
         if (reason := TESTS_TO_SKIP.get(item.nodeid, None)) is not None:
             item.add_marker(pytest.mark.skip(reason=reason))
+        elif (
+            executor == "streaming"
+            and (reason := STREAMING_ONLY_EXPECTED_FAILURES.get(item.nodeid, None))
+            is not None
+        ):
+            item.add_marker(pytest.mark.xfail(reason=reason))
         elif (entry := EXPECTED_FAILURES.get(item.nodeid, None)) is not None:
             if isinstance(entry, tuple):
                 # the second entry in the tuple is the condition to xfail on
