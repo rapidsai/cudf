@@ -16,7 +16,7 @@ cdef extern from "nvtext/normalize.hpp" namespace "nvtext" nogil:
         device_memory_resource* mr
     ) except +libcudf_exception_handler
 
-    cdef struct character_normalizer "nvtext::character_normalizer":
+    cdef struct character_normalizer:
         pass
 
     cdef unique_ptr[character_normalizer] create_character_normalizer(
