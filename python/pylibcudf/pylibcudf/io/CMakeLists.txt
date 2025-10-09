@@ -5,7 +5,7 @@
 # cmake-format: on
 # =============================================================================
 
-set(cython_sources avro.pyx csv.pyx datasource.pyx json.pyx orc.pyx parquet.pyx
+set(cython_sources avro.pyx csv.pyx datasource.pyx hybrid_scan.pyx json.pyx orc.pyx parquet.pyx
                    parquet_metadata.pyx text.pyx timezone.pyx types.pyx
 )
 
