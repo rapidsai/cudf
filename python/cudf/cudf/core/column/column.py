@@ -399,7 +399,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 mask = as_buffer(dbuf)
 
         if mask is not None:
-            new_mask: plc.gpumemoryview | None = plc.gpumemoryview(mask)
+            new_mask = plc.gpumemoryview(mask)
             new_null_count = plc.null_mask.null_count(
                 new_mask,
                 0,
@@ -1346,6 +1346,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         input_col = self.nans_to_nulls()
 
         with acquire_spill_lock():
+            plc_replace: plc.replace.ReplacePolicy | plc.Scalar
             if method:
                 plc_replace = (
                     plc.replace.ReplacePolicy.PRECEDING
@@ -2237,7 +2238,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         f"{reduction_op} not implemented for decimal types."
                     )
                 precision = max(min(new_p, col_dtype.MAX_PRECISION), 0)  # type: ignore[union-attr]
-                new_dtype = type(col_dtype)(precision, scale)
+                # TODO: col_dtype is a Dtype which can be a string, but here we know it's a decimal type
+                # In the long run we should clean this up and make sure the type is well-defined here
+                new_dtype = type(col_dtype)(precision, scale)  # type: ignore[call-overload]
                 result_col = result_col.astype(new_dtype)
             elif isinstance(col_dtype, IntervalDtype):
                 result_col = result_col._with_type_metadata(col_dtype)
@@ -2353,6 +2356,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         f"Type-casting from {other_col.dtype} "
                         f"to {self.dtype}, there could be potential data loss"
                     )
+            other_out: plc.Scalar | ColumnBase
             if other_is_scalar:
                 other_out = pa_scalar_to_plc_scalar(
                     pa.scalar(other, type=cudf_dtype_to_pa_type(self.dtype))
