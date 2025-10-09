@@ -19,8 +19,8 @@ cdef class Table:
     @staticmethod
     cdef Table from_libcudf(
         unique_ptr[table] libcudf_tbl,
-        Stream stream=*,
-        DeviceMemoryResource mr=*
+        Stream stream,
+        DeviceMemoryResource mr
     )
 
     @staticmethod

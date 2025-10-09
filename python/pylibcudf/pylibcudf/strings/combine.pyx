@@ -72,7 +72,7 @@ cpdef Column concatenate(
 
     if narep is None:
         narep = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view())
+            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
         )
     cdef const string_scalar* c_narep = <const string_scalar*>(
         narep.c_obj.get()
@@ -81,7 +81,7 @@ cpdef Column concatenate(
     if ColumnOrScalar is Column:
         if col_narep is None:
             col_narep = Scalar.from_libcudf(
-                cpp_make_string_scalar("".encode(), stream.view())
+                cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
             )
         c_col_narep = <const string_scalar*>(
             col_narep.c_obj.get()
