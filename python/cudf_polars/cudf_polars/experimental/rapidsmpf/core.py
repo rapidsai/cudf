@@ -97,7 +97,7 @@ def evaluate_logical_plan(ir: IR, config_options: ConfigOptions) -> DataFrame:
     rmm.mr.set_current_device_resource(mr)
     ctx = Context(comm, br, options)
     # TODO: Make this configurable.
-    executor = ThreadPoolExecutor(max_workers=1)
+    executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cpse")
 
     # Generate network nodes
     nodes, output = generate_network(ctx, ir, partition_info, config_options)

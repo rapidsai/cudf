@@ -14,7 +14,7 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 from rmm.pylibrmm.stream import DEFAULT_STREAM
 
-from cudf_polars.dsl.ir import DataFrameScan, Scan
+from cudf_polars.dsl.ir import IR, DataFrameScan, Scan
 from cudf_polars.experimental.base import (
     IOPartitionFlavor,
     PartitionInfo,
@@ -176,7 +176,7 @@ def _(
 async def read_chunk(
     ctx: Context,
     io_throttle: asyncio.Semaphore,
-    scan: Scan | SplitScan | DataFrameScan,
+    scan: IR,
     seq_num: int,
     ch_out: Channel[TableChunk],
 ) -> None:
@@ -198,12 +198,16 @@ async def read_chunk(
     """
     async with io_throttle:
         # Evaluate and send the Scan-node result
+        df = await asyncio.to_thread(
+            scan.do_evaluate,
+            *scan._non_child_args,
+        )
         await ch_out.send(
             ctx,
             Message(
                 TableChunk.from_pylibcudf_table(
                     seq_num,
-                    scan.do_evaluate(*scan._non_child_args).table,
+                    df.table,
                     DEFAULT_STREAM,
                 )
             ),
@@ -310,10 +314,12 @@ async def scan_node(
         # sequentially for now, because some tests assume
         # chunks are read in order.
         io_throttle = asyncio.Semaphore(max_io_threads)
+        tasks = []
         for seq_num, scan in enumerate(scans):
-            await read_chunk(ctx, io_throttle, scan, seq_num, ch_out)
+            tasks.append(read_chunk(ctx, io_throttle, scan, seq_num, ch_out))
 
         # Erain the output channel
+        await asyncio.gather(*tasks)
         await ch_out.drain(ctx)
 
 

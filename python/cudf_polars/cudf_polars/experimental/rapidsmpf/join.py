@@ -139,24 +139,20 @@ async def broadcast_join_node(
                     small_dfs = [_concat(*small_dfs)]
 
             # Perform the join
-            results = []
-            for small_df in small_dfs:
-                if broadcast_side == "right":
-                    results.append(
-                        ir.do_evaluate(
-                            *ir._non_child_args,
-                            large_df,
-                            small_df,
-                        ).table
+            results = [
+                (
+                    await asyncio.to_thread(
+                        ir.do_evaluate,
+                        *ir._non_child_args,
+                        *(
+                            [large_df, small_df]
+                            if broadcast_side == "right"
+                            else [small_df, large_df]
+                        ),
                     )
-                else:
-                    results.append(
-                        ir.do_evaluate(
-                            *ir._non_child_args,
-                            small_df,
-                            large_df,
-                        ).table
-                    )
+                ).table
+                for small_df in small_dfs
+            ]
 
             # Send output chunk
             build_stream = DEFAULT_STREAM
