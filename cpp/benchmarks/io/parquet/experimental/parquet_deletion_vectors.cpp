@@ -301,6 +301,6 @@ NVBENCH_BENCH(BM_parquet_chunked_deletion_vectors)
   .add_int64_axis("rows_per_row_group", {5'000, 10'000})
   .add_string_axis("io_type", {"DEVICE_BUFFER"})
   .add_int64_axis("chunk_read_limit", {1'024'000})
-  .add_int64_axis("pass_read_limit", {0, 10'240'000})
+  .add_int64_axis("pass_read_limit", {10'240'000, 102'400'000})
   .add_float64_axis("deletion_probability", {0.25, 0.65})
   .add_int64_axis("num_cols", {4});
