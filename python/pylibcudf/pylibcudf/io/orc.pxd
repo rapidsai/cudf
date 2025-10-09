@@ -86,7 +86,8 @@ cdef class ParsedOrcStatistics:
 
 
 cpdef ParsedOrcStatistics read_parsed_orc_statistics(
-    SourceInfo source_info
+    SourceInfo source_info,
+    Stream stream=*
 )
 
 cdef class OrcWriterOptions:

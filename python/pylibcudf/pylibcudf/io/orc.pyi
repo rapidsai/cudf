@@ -57,6 +57,7 @@ class ParsedOrcStatistics:
 
 def read_parsed_orc_statistics(
     source_info: SourceInfo,
+    stream: Stream | None = None,
 ) -> ParsedOrcStatistics: ...
 
 class OrcWriterOptions:

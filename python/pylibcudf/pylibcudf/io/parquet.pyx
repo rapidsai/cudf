@@ -430,15 +430,12 @@ cdef class ChunkedParquetWriter:
         -------
         None
         """
-        if partitions_info is None:
-            with nogil:
-                self.c_obj.get()[0].write(table.view())
-            return
         cdef vector[partition_info] partitions
-        for part in partitions_info:
-            partitions.push_back(
-                partition_info(part[0], part[1])
-            )
+        if partitions_info is not None:
+            for part in partitions_info:
+                partitions.push_back(
+                    partition_info(part[0], part[1])
+                )
         with nogil:
             self.c_obj.get()[0].write(table.view(), partitions)
 

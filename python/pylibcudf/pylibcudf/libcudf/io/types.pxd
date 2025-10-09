@@ -52,15 +52,15 @@ cdef extern from "cudf/io/types.hpp" \
         USER_IMPLEMENTED
 
     cpdef enum class statistics_freq(int32_t):
-        STATISTICS_NONE,
-        STATISTICS_ROWGROUP,
-        STATISTICS_PAGE,
-        STATISTICS_COLUMN,
+        STATISTICS_NONE
+        STATISTICS_ROWGROUP
+        STATISTICS_PAGE
+        STATISTICS_COLUMN
 
     cpdef enum class dictionary_policy(int32_t):
-        NEVER,
-        ADAPTIVE,
-        ALWAYS,
+        NEVER
+        ADAPTIVE
+        ALWAYS
 
     cpdef enum class column_encoding(int32_t):
         USE_DEFAULT

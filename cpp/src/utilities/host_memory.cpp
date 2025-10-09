@@ -96,7 +96,7 @@ class fixed_pinned_pool_memory_resource {
   void deallocate_async(void* ptr,
                         std::size_t bytes,
                         std::size_t alignment,
-                        cuda::stream_ref stream)
+                        cuda::stream_ref stream) noexcept
   {
     if (bytes <= pool_size_ && ptr >= pool_begin_ && ptr < pool_end_) {
       pool_->deallocate_async(ptr, bytes, alignment, stream);
@@ -105,14 +105,14 @@ class fixed_pinned_pool_memory_resource {
     }
   }
 
-  void deallocate_async(void* ptr, std::size_t bytes, cuda::stream_ref stream)
+  void deallocate_async(void* ptr, std::size_t bytes, cuda::stream_ref stream) noexcept
   {
     return deallocate_async(ptr, bytes, rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream);
   }
 
   void deallocate(void* ptr,
                   std::size_t bytes,
-                  std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
+                  std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT) noexcept
   {
     deallocate_async(ptr, bytes, alignment, stream_);
 #if CCCL_MAJOR_VERSION > 3 || (CCCL_MAJOR_VERSION == 3 && CCCL_MINOR_VERSION >= 1)
@@ -156,7 +156,7 @@ class fixed_pinned_pool_memory_resource {
     return this->allocate(bytes, alignment);
   }
 
-  void deallocate_sync(void* ptr, std::size_t bytes, std::size_t alignment)
+  void deallocate_sync(void* ptr, std::size_t bytes, std::size_t alignment) noexcept
   {
     return this->deallocate(ptr, bytes, alignment);
   }
@@ -166,7 +166,10 @@ class fixed_pinned_pool_memory_resource {
     return this->allocate_async(bytes, alignment, stream);
   }
 
-  void deallocate(rmm::cuda_stream_view stream, void* ptr, std::size_t bytes, std::size_t alignment)
+  void deallocate(rmm::cuda_stream_view stream,
+                  void* ptr,
+                  std::size_t bytes,
+                  std::size_t alignment) noexcept
   {
     return this->deallocate_async(ptr, bytes, alignment, stream);
   }
@@ -260,7 +263,7 @@ class new_delete_memory_resource {
 
   void deallocate(void* ptr,
                   std::size_t bytes,
-                  std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
+                  std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT) noexcept
   {
     rmm::detail::aligned_host_deallocate(
       ptr, bytes, alignment, [](void* ptr) { ::operator delete(ptr); });
@@ -269,12 +272,12 @@ class new_delete_memory_resource {
   void deallocate_async(void* ptr,
                         std::size_t bytes,
                         std::size_t alignment,
-                        [[maybe_unused]] cuda::stream_ref stream)
+                        [[maybe_unused]] cuda::stream_ref stream) noexcept
   {
     deallocate(ptr, bytes, alignment);
   }
 
-  void deallocate_async(void* ptr, std::size_t bytes, cuda::stream_ref stream)
+  void deallocate_async(void* ptr, std::size_t bytes, cuda::stream_ref stream) noexcept
   {
     deallocate(ptr, bytes, rmm::RMM_DEFAULT_HOST_ALIGNMENT);
   }
@@ -294,7 +297,7 @@ class new_delete_memory_resource {
     return this->allocate(bytes, alignment);
   }
 
-  void deallocate_sync(void* ptr, std::size_t bytes, std::size_t alignment)
+  void deallocate_sync(void* ptr, std::size_t bytes, std::size_t alignment) noexcept
   {
     return this->deallocate(ptr, bytes, alignment);
   }
@@ -304,7 +307,10 @@ class new_delete_memory_resource {
     return this->allocate_async(bytes, alignment, stream);
   }
 
-  void deallocate(rmm::cuda_stream_view stream, void* ptr, std::size_t bytes, std::size_t alignment)
+  void deallocate(rmm::cuda_stream_view stream,
+                  void* ptr,
+                  std::size_t bytes,
+                  std::size_t alignment) noexcept
   {
     return this->deallocate_async(ptr, bytes, alignment, stream);
   }

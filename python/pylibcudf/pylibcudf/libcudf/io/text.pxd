@@ -59,13 +59,6 @@ cdef extern from "cudf/io/text/multibyte_split.hpp" \
         data_chunk_source source,
         string delimiter,
         parse_options options,
-        cuda_stream_view stream
-    ) except +libcudf_exception_handler
-
-    unique_ptr[column] multibyte_split(
-        data_chunk_source source,
-        string delimiter,
-        parse_options options,
         cuda_stream_view stream,
         device_memory_resource* mr
     ) except +libcudf_exception_handler

@@ -154,7 +154,7 @@ class rmm_host_allocator {
    *        It is the responsibility of the caller to destroy
    *        the objects stored at \p p.
    */
-  inline void deallocate(pointer p, size_type cnt)
+  inline void deallocate(pointer p, size_type cnt) noexcept
   {
     mr.deallocate_async(p, cnt * sizeof(value_type), rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream);
   }

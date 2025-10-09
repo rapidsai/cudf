@@ -10,7 +10,7 @@ from rmm.librmm.memory_resource cimport device_memory_resource
 
 cdef extern from "nvtext/wordpiece_tokenize.hpp" namespace "nvtext" nogil:
 
-    cdef struct wordpiece_vocabulary "nvtext::wordpiece_vocabulary":
+    cdef struct wordpiece_vocabulary:
         pass
 
     cdef unique_ptr[wordpiece_vocabulary] load_wordpiece_vocabulary(

@@ -14,8 +14,7 @@ from rmm.librmm.cuda_stream_view cimport cuda_stream_view
 from rmm.librmm.memory_resource cimport device_memory_resource
 
 
-cdef extern from "cudf/io/orc.hpp" \
-        namespace "cudf::io" nogil:
+cdef extern from "cudf/io/orc.hpp" namespace "cudf::io" nogil:
 
     cdef cppclass orc_reader_options:
         orc_reader_options() except +libcudf_exception_handler
@@ -76,15 +75,6 @@ cdef extern from "cudf/io/orc.hpp" \
         ) except +libcudf_exception_handler
 
         orc_reader_options build() except +libcudf_exception_handler
-
-    cdef cudf_io_types.table_with_metadata read_orc(
-        orc_reader_options opts
-    ) except +libcudf_exception_handler
-
-    cdef cudf_io_types.table_with_metadata read_orc(
-        orc_reader_options opts,
-        cuda_stream_view stream,
-    ) except +libcudf_exception_handler
 
     cdef cudf_io_types.table_with_metadata read_orc(
         orc_reader_options opts,
@@ -157,10 +147,6 @@ cdef extern from "cudf/io/orc.hpp" \
         orc_writer_options build() except +libcudf_exception_handler
 
     cdef void write_orc(
-        orc_writer_options options
-    ) except +libcudf_exception_handler
-
-    cdef void write_orc(
         orc_writer_options options,
         cuda_stream_view stream,
     ) except +libcudf_exception_handler
@@ -231,11 +217,8 @@ cdef extern from "cudf/io/orc.hpp" \
     cdef cppclass orc_chunked_writer:
         orc_chunked_writer() except +libcudf_exception_handler
         orc_chunked_writer(
-            chunked_orc_writer_options args
-        ) except +libcudf_exception_handler
-        orc_chunked_writer(
             chunked_orc_writer_options args,
-            cuda_stream_view stream,
+            cuda_stream_view stream
         ) except +libcudf_exception_handler
         orc_chunked_writer& write(
             cudf_table_view.table_view table_,

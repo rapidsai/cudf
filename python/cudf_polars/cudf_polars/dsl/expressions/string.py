@@ -436,14 +436,14 @@ class StringFunction(Expr):
         elif self.name is StringFunction.Name.ContainsAny:
             (ascii_case_insensitive,) = self.options
             child, arg = self.children
-            column = child.evaluate(df, context=context).obj
-            targets = arg.evaluate(df, context=context).obj
+            plc_column = child.evaluate(df, context=context).obj
+            plc_targets = arg.evaluate(df, context=context).obj
             if ascii_case_insensitive:
-                column = plc.strings.case.to_lower(column)
-                targets = plc.strings.case.to_lower(targets)
+                plc_column = plc.strings.case.to_lower(plc_column)
+                plc_targets = plc.strings.case.to_lower(plc_targets)
             contains = plc.strings.find_multiple.contains_multiple(
-                column,
-                targets,
+                plc_column,
+                plc_targets,
             )
             binary_or = functools.partial(
                 plc.binaryop.binary_operation,
@@ -456,27 +456,27 @@ class StringFunction(Expr):
             )
         elif self.name is StringFunction.Name.CountMatches:
             (child, _) = self.children
-            column = child.evaluate(df, context=context).obj
+            plc_column = child.evaluate(df, context=context).obj
             return Column(
                 plc.unary.cast(
-                    plc.strings.contains.count_re(column, self._regex_program),
+                    plc.strings.contains.count_re(plc_column, self._regex_program),
                     self.dtype.plc_type,
                 ),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.Extract:
             (group_index,) = self.options
-            column = self.children[0].evaluate(df, context=context).obj
+            plc_column = self.children[0].evaluate(df, context=context).obj
             return Column(
                 plc.strings.extract.extract_single(
-                    column, self._regex_program, group_index - 1
+                    plc_column, self._regex_program, group_index - 1
                 ),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.ExtractGroups:
-            column = self.children[0].evaluate(df, context=context).obj
+            plc_column = self.children[0].evaluate(df, context=context).obj
             plc_table = plc.strings.extract.extract(
-                column,
+                plc_column,
                 self._regex_program,
             )
             return Column(
@@ -486,16 +486,16 @@ class StringFunction(Expr):
         elif self.name is StringFunction.Name.Find:
             literal, _ = self.options
             (child, expr) = self.children
-            column = child.evaluate(df, context=context).obj
+            plc_column = child.evaluate(df, context=context).obj
             if literal:
                 assert isinstance(expr, Literal)
                 plc_column = plc.strings.find.find(
-                    column,
+                    plc_column,
                     plc.Scalar.from_py(expr.value, expr.dtype.plc_type),
                 )
             else:
                 plc_column = plc.strings.findall.find_re(
-                    column,
+                    plc_column,
                     self._regex_program,
                 )
             # Polars returns None for not found, libcudf returns -1
@@ -525,26 +525,27 @@ class StringFunction(Expr):
             )
         elif self.name is StringFunction.Name.JsonPathMatch:
             (child, expr) = self.children
-            column = child.evaluate(df, context=context).obj
+            plc_column = child.evaluate(df, context=context).obj
             assert isinstance(expr, Literal)
             json_path = plc.Scalar.from_py(expr.value, expr.dtype.plc_type)
             return Column(
-                plc.json.get_json_object(column, json_path),
+                plc.json.get_json_object(plc_column, json_path),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.LenBytes:
-            column = self.children[0].evaluate(df, context=context).obj
+            plc_column = self.children[0].evaluate(df, context=context).obj
             return Column(
                 plc.unary.cast(
-                    plc.strings.attributes.count_bytes(column), self.dtype.plc_type
+                    plc.strings.attributes.count_bytes(plc_column), self.dtype.plc_type
                 ),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.LenChars:
-            column = self.children[0].evaluate(df, context=context).obj
+            plc_column = self.children[0].evaluate(df, context=context).obj
             return Column(
                 plc.unary.cast(
-                    plc.strings.attributes.count_characters(column), self.dtype.plc_type
+                    plc.strings.attributes.count_characters(plc_column),
+                    self.dtype.plc_type,
                 ),
                 dtype=self.dtype,
             )
@@ -635,7 +636,7 @@ class StringFunction(Expr):
             StringFunction.Name.StripSuffix,
         }:
             child, expr = self.children
-            column = child.evaluate(df, context=context).obj
+            plc_column = child.evaluate(df, context=context).obj
             assert isinstance(expr, Literal)
             target = plc.Scalar.from_py(expr.value, expr.dtype.plc_type)
             if self.name == StringFunction.Name.StripPrefix:
@@ -647,16 +648,16 @@ class StringFunction(Expr):
                 start = 0
                 end = -len(expr.value)
 
-            mask = find(column, target)
+            mask = find(plc_column, target)
             sliced = plc.strings.slice.slice_strings(
-                column,
+                plc_column,
                 plc.Scalar.from_py(start, plc.DataType(plc.TypeId.INT32)),
                 plc.Scalar.from_py(end, plc.DataType(plc.TypeId.INT32)),
             )
             return Column(
                 plc.copying.copy_if_else(
                     sliced,
-                    column,
+                    plc_column,
                     mask,
                 ),
                 dtype=self.dtype,
@@ -790,7 +791,8 @@ class StringFunction(Expr):
                 else:
                     first_valid_data = plc.copying.get_element(plc_col, 0).to_py()
 
-                format = _infer_datetime_format(first_valid_data)
+                # See https://github.com/rapidsai/cudf/issues/20202 for we type ignore
+                format = _infer_datetime_format(first_valid_data)  # type: ignore[arg-type]
                 if not format:
                     raise InvalidOperationError(
                         "Unable to infer datetime format from data"
@@ -822,18 +824,23 @@ class StringFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.Replace:
-            column, target, repl = columns
+            col_column, col_target, col_repl = columns
             n, _ = self.options
             return Column(
                 plc.strings.replace.replace(
-                    column.obj, target.obj_scalar, repl.obj_scalar, maxrepl=n
+                    col_column.obj,
+                    col_target.obj_scalar,
+                    col_repl.obj_scalar,
+                    maxrepl=n,
                 ),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.ReplaceMany:
-            column, target, repl = columns
+            col_column, col_target, col_repl = columns
             return Column(
-                plc.strings.replace.replace_multiple(column.obj, target.obj, repl.obj),
+                plc.strings.replace.replace_multiple(
+                    col_column.obj, col_target.obj, col_repl.obj
+                ),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.PadStart:
@@ -845,10 +852,14 @@ class StringFunction(Expr):
                 (char,) = self.options
                 # TODO: Maybe accept a string scalar in
                 # cudf::strings::pad to avoid DtoH transfer
-                width = width_col.obj.to_scalar().to_py()
+                # See https://github.com/rapidsai/cudf/issues/20202 for we type ignore
+                width = width_col.obj.to_scalar().to_py()  # type: ignore[assignment]
             return Column(
                 plc.strings.padding.pad(
-                    column.obj, width, plc.strings.SideType.LEFT, char
+                    column.obj,
+                    width,
+                    plc.strings.SideType.LEFT,
+                    char,  # type: ignore[arg-type]
                 ),
                 dtype=self.dtype,
             )
@@ -861,10 +872,13 @@ class StringFunction(Expr):
                 (char,) = self.options
                 # TODO: Maybe accept a string scalar in
                 # cudf::strings::pad to avoid DtoH transfer
-                width = width_col.obj.to_scalar().to_py()
+                width = width_col.obj.to_scalar().to_py()  # type: ignore[assignment]
             return Column(
                 plc.strings.padding.pad(
-                    column.obj, width, plc.strings.SideType.RIGHT, char
+                    column.obj,
+                    width,
+                    plc.strings.SideType.RIGHT,
+                    char,  # type: ignore[arg-type]
                 ),
                 dtype=self.dtype,
             )

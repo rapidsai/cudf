@@ -11,7 +11,7 @@ from rmm.librmm.memory_resource cimport device_memory_resource
 
 cdef extern from "nvtext/byte_pair_encoding.hpp" namespace "nvtext" nogil:
 
-    cdef struct bpe_merge_pairs "nvtext::bpe_merge_pairs":
+    cdef struct bpe_merge_pairs:
         pass
 
     cdef unique_ptr[bpe_merge_pairs] load_merge_pairs(
