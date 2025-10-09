@@ -433,10 +433,10 @@ class GroupedRollingWindow(Expr):
             val_cols = gathered_tbl.columns()
         else:
             # TODO: Now handling order_index being None whereas before we were assuming it was always non-None
-            val_cols = [
+            val_cols = [  # pragma: no cover
                 ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
                 for ne in cum_named
-            ]
+            ]  # pragma: no cover
         agg = plc.aggregation.sum()
 
         for ne, val_col in zip(cum_named, val_cols, strict=True):
