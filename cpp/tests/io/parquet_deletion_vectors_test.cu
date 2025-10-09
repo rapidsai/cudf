@@ -276,7 +276,7 @@ void test_read_parquet_and_apply_deletion_vector(
     }
     return cudf::concatenate(table_chunk_views, stream, mr);
   }();
-  
+
   // Check
   CUDF_TEST_EXPECT_TABLES_EQUAL(chunked_table_with_deletion_vector->view(), expected_table->view());
 }
