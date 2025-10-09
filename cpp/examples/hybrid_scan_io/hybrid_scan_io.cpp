@@ -63,31 +63,6 @@ cudf::io::table_with_metadata read_parquet(io_source const& io_source,
 }
 
 /**
- * @brief Write parquet output to file
- *
- * @param input table to write
- * @param metadata metadata of input table read by parquet reader
- * @param filepath path to output parquet file
- */
-void write_parquet(cudf::table_view input,
-                   cudf::io::table_metadata const& metadata,
-                   std::string const& filepath,
-                   rmm::cuda_stream_view stream)
-{
-  // Write the data for inspection
-  auto sink_info      = cudf::io::sink_info(filepath);
-  auto table_metadata = cudf::io::table_input_metadata(metadata);
-  auto options        = cudf::io::parquet_writer_options::builder(sink_info, input)
-                   .metadata(table_metadata)
-                   .compression(cudf::io::compression_type::AUTO)
-                   .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
-                   .build();
-
-  // write parquet data
-  cudf::io::write_parquet(options, stream);
-}
-
-/**
  * @brief Enum to represent the available parquet filters
  */
 enum class parquet_filter_type : uint8_t {
@@ -300,13 +275,11 @@ void inline print_usage()
 {
   std::cout
     << std::endl
-    << "Usage: hybrid_scan <input parquet file> <column name> <literal> <io source type> "
-       "<output parquet file>\n\n"
+    << "Usage: hybrid_scan <input parquet file> <column name> <literal> <io source type>\n\n"
     << "Available IO source types: HOST_BUFFER, PINNED_BUFFER (Default) \n\n"
     << "Note: Both the column name and literal must be of `string` type. The constructed filter "
        "expression\n      will be of the form <column name> == <literal>\n\n"
-    << "Example usage: hybrid_scan example.parquet string_col 0000001 PINNED_BUFFER output.parquet "
-       "\n\n";
+    << "Example usage: hybrid_scan example.parquet string_col 0000001 PINNED_BUFFER \n\n";
 }
 
 }  // namespace
@@ -319,24 +292,21 @@ void inline print_usage()
  * 2. column name for filter expression (default: "string_col")
  * 3. literal for filter expression (default: "0000001")
  * 4. io source type (default: "PINNED_BUFFER")
- * 5. parquet output file name/path (default: "output.parquet")
  *
  * The filter expression will be of the form col_name == literal (default: string_col == 0000001)
  *
  * Example invocation from directory `cudf/cpp/examples/hybrid_scan`:
- * ./build/hybrid_scan example.parquet string_col 0000001 PINNED_BUFFER output.parquet
+ * ./build/hybrid_scan example.parquet string_col 0000001 PINNED_BUFFER
  *
  */
 int main(int argc, char const** argv)
 {
-  auto input_filepath  = std::string{"example.parquet"};
-  auto output_filepath = std::string{"output.parquet"};
-  auto column_name     = std::string{"string_col"};
-  auto literal_value   = std::string{"0000001"};
-  auto io_source_type  = io_source_type::PINNED_BUFFER;
+  auto input_filepath = std::string{"example.parquet"};
+  auto column_name    = std::string{"string_col"};
+  auto literal_value  = std::string{"0000001"};
+  auto io_source_type = io_source_type::PINNED_BUFFER;
 
   switch (argc) {
-    case 6: output_filepath = argv[5]; [[fallthrough]];
     case 5: io_source_type = get_io_source_type(argv[4]); [[fallthrough]];
     case 4: literal_value = argv[3]; [[fallthrough]];
     case 3: column_name = argv[2]; [[fallthrough]];
@@ -402,10 +372,6 @@ int main(int argc, char const** argv)
   timer.reset();
   auto [table_main_reader, metadata] = read_parquet(data_source, filter_expression, stream);
   timer.print_elapsed_millis();
-
-  std::cout << "Writing " << output_filepath << "...\n";
-  write_parquet(table_main_reader->view(), metadata, "main_" + output_filepath, stream);
-  write_parquet(table_next_gen_reader->view(), metadata, "next_gen_" + output_filepath, stream);
 
   // Check for validity
   check_tables_equal(table_next_gen_reader->view(), table_main_reader->view());

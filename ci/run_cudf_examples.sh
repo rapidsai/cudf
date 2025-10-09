@@ -14,7 +14,7 @@ compute-sanitizer --tool memcheck basic_example
 popd || exit
 
 pushd hybrid_scan_io || exit
-compute-sanitizer --tool memcheck hybrid_scan_io example.parquet string_col 0000001  PINNED_BUFFER output.parquet
+compute-sanitizer --tool memcheck hybrid_scan_io example.parquet string_col 0000001  PINNED_BUFFER
 popd || exit
 
 pushd nested_types || exit
