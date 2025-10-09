@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import itertools
 import re
-from collections.abc import Callable
 from functools import cached_property, lru_cache
 from typing import TYPE_CHECKING, cast
 
@@ -35,7 +34,7 @@ from cudf.utils.temporal import infer_format
 from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable, Iterable, Mapping
 
     import cupy as cp
 
@@ -1233,10 +1232,11 @@ class StringColumn(ColumnBase):
 
     @acquire_spill_lock()
     def str_contains(self, pattern: str | Self) -> Self:
-        if isinstance(pattern, str):
-            plc_pattern = pa_scalar_to_plc_scalar(pa.scalar(pattern))
-        else:
-            plc_pattern = pattern.to_pylibcudf(mode="read")
+        plc_pattern = (
+            pa_scalar_to_plc_scalar(pa.scalar(pattern))
+            if isinstance(pattern, str)
+            else pattern.to_pylibcudf(mode="read")
+        )
         plc_column = plc.strings.find.contains(
             self.to_pylibcudf(mode="read"),
             plc_pattern,
@@ -1254,10 +1254,11 @@ class StringColumn(ColumnBase):
 
     @acquire_spill_lock()
     def repeat_strings(self, repeats: int | ColumnBase) -> Self:
-        if isinstance(repeats, ColumnBase):
-            plc_repeats = repeats.to_pylibcudf(mode="read")
-        else:
-            plc_repeats = repeats
+        plc_repeats = (
+            repeats.to_pylibcudf(mode="read")
+            if isinstance(repeats, ColumnBase)
+            else repeats
+        )
         plc_column = plc.strings.repeat.repeat_strings(
             self.to_pylibcudf(mode="read"),
             plc_repeats,
@@ -1272,8 +1273,12 @@ class StringColumn(ColumnBase):
         max_replace_count: int = -1,
     ) -> Self:
         if isinstance(pattern, list) and isinstance(replacement, type(self)):
-            plc_replacement = replacement.to_pylibcudf(mode="read")
-            plc_pattern = pattern
+            plc_replacement: plc.Column | plc.Scalar = (
+                replacement.to_pylibcudf(mode="read")
+            )
+            plc_pattern: list[str] | plc.strings.regex_program.RegexProgram = (
+                pattern
+            )
         elif isinstance(pattern, str) and isinstance(replacement, pa.Scalar):
             plc_pattern = plc.strings.regex_program.RegexProgram.create(
                 pattern,
@@ -1321,17 +1326,24 @@ class StringColumn(ColumnBase):
         step: int | None = None,
     ) -> Self:
         if isinstance(start, ColumnBase) and isinstance(stop, ColumnBase):
-            start = start.to_pylibcudf(mode="read")
-            stop = stop.to_pylibcudf(mode="read")
+            plc_start = start.to_pylibcudf(mode="read")
+            plc_stop = stop.to_pylibcudf(mode="read")
+            plc_step = None
         elif all(isinstance(x, int) or x is None for x in (start, stop)):
             param_dtype = pa.int32()
-            start = pa_scalar_to_plc_scalar(pa.scalar(start, type=param_dtype))
-            stop = pa_scalar_to_plc_scalar(pa.scalar(stop, type=param_dtype))
-            step = pa_scalar_to_plc_scalar(pa.scalar(step, type=param_dtype))
+            plc_start = pa_scalar_to_plc_scalar(
+                pa.scalar(start, type=param_dtype)
+            )
+            plc_stop = pa_scalar_to_plc_scalar(
+                pa.scalar(stop, type=param_dtype)
+            )
+            plc_step = pa_scalar_to_plc_scalar(
+                pa.scalar(step, type=param_dtype)
+            )
         else:
             raise ValueError("Invalid start and stop types")
         plc_result = plc.strings.slice.slice_strings(
-            self.to_pylibcudf(mode="read"), start, stop, step
+            self.to_pylibcudf(mode="read"), plc_start, plc_stop, plc_step
         )
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 
@@ -1520,7 +1532,7 @@ class StringColumn(ColumnBase):
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 
     @acquire_spill_lock()
-    def translate(self, table: dict) -> Self:
+    def translate(self, table: Mapping[int | str, int | str]) -> Self:
         plc_result = plc.strings.translate.translate(
             self.to_pylibcudf(mode="read"),
             str.maketrans(table),
@@ -1529,7 +1541,10 @@ class StringColumn(ColumnBase):
 
     @acquire_spill_lock()
     def filter_characters(
-        self, table: dict, keep: bool = True, repl: str | None = None
+        self,
+        table: Mapping[int | str, int | str],
+        keep: bool = True,
+        repl: str | None = None,
     ) -> Self:
         plc_result = plc.strings.translate.filter_characters(
             self.to_pylibcudf(mode="read"),
