@@ -2046,7 +2046,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 return _get_nan_for_dtype(self.dtype)
         return col
 
-    def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
+    def _reduction_result_dtype(self, reduction_op: str) -> DtypeObj:
         """
         Determine the correct dtype to pass to libcudf based on
         the input dtype, data dtype, and specific reduction op
@@ -2238,9 +2238,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         f"{reduction_op} not implemented for decimal types."
                     )
                 precision = max(min(new_p, col_dtype.MAX_PRECISION), 0)  # type: ignore[union-attr]
-                # TODO: col_dtype is a Dtype which can be a string, but here we know it's a decimal type
-                # In the long run we should clean this up and make sure the type is well-defined here
-                new_dtype = type(col_dtype)(precision, scale)  # type: ignore[call-overload]
+                new_dtype = type(col_dtype)(precision, scale)
                 result_col = result_col.astype(new_dtype)
             elif isinstance(col_dtype, IntervalDtype):
                 result_col = result_col._with_type_metadata(col_dtype)
