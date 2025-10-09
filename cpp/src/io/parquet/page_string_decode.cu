@@ -647,20 +647,21 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
     return;
   }
 
-  if (page_mask.size() and not page_mask[page_idx]) {
+  bool const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
+
+  // if we have size info, then we only need to do this for bounds pages
+  if (pp->has_page_index && !is_bounds_pg) { return; }
+
+  // Return early if the page is pruned
+  if (not page_mask.empty() and not page_mask[page_idx]) {
     if (t == 0) {
-      pp->num_nulls  = 0;
-      pp->num_valids = s->num_input_values;
+      pp->num_nulls  = s->num_input_values;
+      pp->num_valids = 0;
       pp->start_val  = 0;
       pp->end_val    = s->num_input_values;
     }
     return;
   }
-
-  bool const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
-
-  // if we have size info, then we only need to do this for bounds pages
-  if (pp->has_page_index && !is_bounds_pg) { return; }
 
   // find start/end value indices
   auto const [start_value, end_value] =

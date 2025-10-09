@@ -218,7 +218,8 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
     return;
   }
 
-  if (page_mask.size() and not page_mask[page_idx]) {
+  // Check if this page is pruned
+  if (not page_mask.empty() and not page_mask[page_idx]) {
     auto const max_depth = pp->num_output_nesting_levels;
     // Return early if no repetition and max depth is 1
     if (not has_repetition and max_depth == 1) {
