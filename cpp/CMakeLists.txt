@@ -435,10 +435,10 @@ add_library(
   src/groupby/hash/compute_shared_memory_aggs.cu
   src/groupby/hash/compute_single_pass_aggs.cu
   src/groupby/hash/compute_single_pass_aggs_null.cu
-  src/groupby/hash/create_output.cu
   src/groupby/hash/extract_single_pass_aggs.cpp
   src/groupby/hash/groupby.cu
   src/groupby/hash/hash_compound_agg_finalizer.cu
+  src/groupby/hash/output_utils.cu
   src/groupby/sort/aggregate.cpp
   src/groupby/sort/group_argmax.cu
   src/groupby/sort/group_argmin.cu

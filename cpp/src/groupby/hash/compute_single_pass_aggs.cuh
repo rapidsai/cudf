@@ -20,9 +20,9 @@
 #include "compute_mapping_indices.hpp"
 #include "compute_shared_memory_aggs.hpp"
 #include "compute_single_pass_aggs.hpp"
-#include "create_output.hpp"
 #include "extract_single_pass_aggs.hpp"
 #include "helpers.cuh"
+#include "output_utils.hpp"
 #include "single_pass_functors.cuh"
 
 #include <cudf/detail/utilities/cuda.hpp>

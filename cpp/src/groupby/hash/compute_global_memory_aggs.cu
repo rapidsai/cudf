@@ -15,7 +15,7 @@
  */
 
 #include "compute_global_memory_aggs.hpp"
-#include "create_output.hpp"
+#include "output_utils.hpp"
 #include "single_pass_functors.cuh"
 
 #include <cudf/types.hpp>
@@ -24,8 +24,47 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
+#include <thrust/tabulate.h>
 
 namespace cudf::groupby::detail::hash {
+
+namespace {
+
+/**
+ * @brief Compute and return an array mapping each input row to its corresponding key index in
+ * the input keys table.
+ *
+ * @tparam SetType Type of the key hash set
+ * @param row_bitmask Bitmask indicating which rows in the input keys table are valid
+ * @param set_ref Key hash set
+ * @param num_rows Number of rows in the input keys table
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return A device vector mapping each input row to its key index
+ */
+template <typename SetRef>
+rmm::device_uvector<size_type> compute_matching_keys(bitmask_type const* row_bitmask,
+                                                     SetRef set_ref,
+                                                     size_type num_rows,
+                                                     rmm::cuda_stream_view stream)
+{
+  // Mapping from each row in the input key/value into the indices of the key.
+  rmm::device_uvector<size_type> key_indices(num_rows, stream);
+
+  // Need to set to sentinel value for rows that are null (if any).
+  // The sentinel value will then be used to identify null rows instead of using the bitmask.
+  thrust::tabulate(rmm::exec_policy_nosync(stream),
+                   key_indices.begin(),
+                   key_indices.end(),
+                   [set_ref, row_bitmask] __device__(size_type const idx) mutable {
+                     if (!row_bitmask || cudf::bit_is_set(row_bitmask, idx)) {
+                       return *set_ref.insert_and_find(idx).first;
+                     }
+                     return cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
+                   });
+  return key_indices;
+}
+
+}  // namespace
 
 template <typename SetType>
 std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_global_memory_aggs(

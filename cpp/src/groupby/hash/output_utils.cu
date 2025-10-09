@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "create_output.hpp"
 #include "helpers.cuh"
+#include "output_utils.hpp"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -31,24 +31,23 @@
 
 #include <cuco/static_set.cuh>
 #include <thrust/scatter.h>
-#include <thrust/tabulate.h>
 #include <thrust/transform.h>
 
 namespace cudf::groupby::detail::hash {
 namespace {
 
 /**
- * @brief Functor to create sparse result columns for hash-based groupby aggregations
+ * @brief Functor to create the result columns for hash-based groupby aggregations
  *
  * This functor handles the creation of appropriately typed and sized columns for each
  * aggregation, including special handling for SUM_WITH_OVERFLOW which requires a struct column.
  */
-struct sparse_column_creator {
+struct result_column_creator {
   size_type output_size;
   rmm::cuda_stream_view stream;
   rmm::device_async_resource_ref mr;
 
-  explicit sparse_column_creator(size_type output_size,
+  explicit result_column_creator(size_type output_size,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr)
     : output_size{output_size}, stream{stream}, mr{mr}
@@ -66,13 +65,12 @@ struct sparse_column_creator {
         is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
       auto const mask_flag = nullable ? mask_state::ALL_NULL : mask_state::UNALLOCATED;
       return make_fixed_width_column(
-        cudf::detail::target_type(col_type, agg), output_size, mask_flag, stream);
+        cudf::detail::target_type(col_type, agg), output_size, mask_flag, stream, mr);
     }
 
     // Lambda to create empty columns for better readability
-    auto const make_empty_column = [stream = this->stream](
-                                     type_id type_id, size_type size, mask_state mask_state) {
-      return make_fixed_width_column(data_type{type_id}, size, mask_state, stream);
+    auto const make_empty_column = [&](type_id type_id, size_type size, mask_state mask_state) {
+      return make_fixed_width_column(data_type{type_id}, size, mask_state, stream, mr);
     };
 
     // Lambda to create children for SUM_WITH_OVERFLOW struct column
@@ -99,7 +97,7 @@ struct sparse_column_creator {
       return create_structs_hierarchy(output_size, std::move(children), 0, {}, stream);
     }
     // Start with ALL_NULL, results will be marked valid during aggregation
-    auto null_mask  = create_null_mask(output_size, mask_state::ALL_NULL, stream);
+    auto null_mask  = create_null_mask(output_size, mask_state::ALL_NULL, stream, mr);
     auto null_count = output_size;  // All null initially
     return create_structs_hierarchy(
       output_size, std::move(children), null_count, std::move(null_mask), stream);
@@ -119,7 +117,7 @@ std::unique_ptr<table> create_results_table(size_type output_size,
                  values.end(),
                  agg_kinds.begin(),
                  std::back_inserter(output_cols),
-                 sparse_column_creator{output_size, stream, mr});
+                 result_column_creator{output_size, stream, mr});
   auto result_table                    = std::make_unique<table>(std::move(output_cols));
   mutable_table_view result_table_view = result_table->mutable_view();
   cudf::detail::initialize_with_identity(result_table_view, agg_kinds, stream);
@@ -161,42 +159,6 @@ extract_populated_keys<nullable_global_set_t>(nullable_global_set_t const& key_s
                                               size_type num_keys,
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr);
-
-template <typename SetRef>
-rmm::device_uvector<size_type> compute_matching_keys(bitmask_type const* row_bitmask,
-                                                     SetRef set_ref,
-                                                     size_type num_rows,
-                                                     rmm::cuda_stream_view stream)
-{
-  // Mapping from each row in the input key/value into the indices of the key.
-  rmm::device_uvector<size_type> key_indices(num_rows, stream);
-
-  // Need to set to sentinel value for rows that are null (if any).
-  // The sentinel value will then be used to identify null rows instead of using the bitmask.
-  thrust::tabulate(rmm::exec_policy_nosync(stream),
-                   key_indices.begin(),
-                   key_indices.end(),
-                   [set_ref, row_bitmask] __device__(size_type const idx) mutable {
-                     if (!row_bitmask || cudf::bit_is_set(row_bitmask, idx)) {
-                       return *set_ref.insert_and_find(idx).first;
-                     }
-                     return cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
-                   });
-  return key_indices;
-}
-
-template rmm::device_uvector<size_type> compute_matching_keys<
-  hash_set_ref_t<cuco::insert_and_find_tag>>(bitmask_type const* row_bitmask,
-                                             hash_set_ref_t<cuco::insert_and_find_tag> set_ref,
-                                             size_type num_rows,
-                                             rmm::cuda_stream_view stream);
-
-template rmm::device_uvector<size_type>
-compute_matching_keys<nullable_hash_set_ref_t<cuco::insert_and_find_tag>>(
-  bitmask_type const* row_bitmask,
-  nullable_hash_set_ref_t<cuco::insert_and_find_tag> set_ref,
-  size_type num_rows,
-  rmm::cuda_stream_view stream);
 
 rmm::device_uvector<size_type> compute_target_indices(device_span<size_type const> input,
                                                       device_span<size_type const> transform_map,

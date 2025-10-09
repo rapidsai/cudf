@@ -70,23 +70,6 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> extrac
   rmm::device_async_resource_ref mr);
 
 /**
- * @brief Compute and return an array mapping each input row to its corresponding key index in
- * the input keys table.
- *
- * @tparam SetType Type of the key hash set
- * @param row_bitmask Bitmask indicating which rows in the input keys table are valid
- * @param key_set Key hash set
- * @param num_rows Number of rows in the input keys table
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @return A device vector mapping each input row to its key index
- */
-template <typename SetRef>
-rmm::device_uvector<size_type> compute_matching_keys(bitmask_type const* row_bitmask,
-                                                     SetRef set_ref,
-                                                     size_type num_rows,
-                                                     rmm::cuda_stream_view stream);
-
-/**
  * @brief Transform from row indices of the keys in the input keys table into indices of these keys
  * in the output unique keys table.
  *

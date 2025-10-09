@@ -16,9 +16,9 @@
 
 #include "compute_groupby.hpp"
 #include "compute_single_pass_aggs.hpp"
-#include "create_output.hpp"
 #include "hash_compound_agg_finalizer.hpp"
 #include "helpers.cuh"
+#include "output_utils.hpp"
 
 #include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/detail/cuco_helpers.hpp>
@@ -148,7 +148,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
   }
 
   // Compute all single pass aggs first.
-  auto [key_gather_map, has_compound_aggs] =
+  auto const [key_gather_map, has_compound_aggs] =
     compute_single_pass_aggs(set, row_bitmask, requests, cache, stream, mr);
 
   if (has_compound_aggs) {
