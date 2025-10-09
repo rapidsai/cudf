@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
@@ -211,19 +210,12 @@ def generate_network(
         for child in node.children:
             output_ch_count[child] += 1
 
-    # IO Throttling
-    # TODO: Make this configurable.
-    # TODO: Does it make sense to hang when this is <2?
-    max_io_threads = 2
-    io_throttle = asyncio.Semaphore(max_io_threads)
-
     # Generate the network
     state: GenState = {
         "ctx": ctx,
         "config_options": config_options,
         "partition_info": partition_info,
         "output_ch_count": output_ch_count,
-        "io_throttle": io_throttle,
     }
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state

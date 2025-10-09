@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import math
 from typing import TYPE_CHECKING, Any
@@ -26,7 +27,6 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 from cudf_polars.experimental.rapidsmpf.nodes import define_py_node, shutdown_on_error
 
 if TYPE_CHECKING:
-    import asyncio
     from collections.abc import MutableMapping
 
     from rapidsmpf.streaming.core.context import Context
@@ -65,7 +65,7 @@ async def dataframescan_node(
     ir: DataFrameScan,
     ch_out: Channel[TableChunk],
     *,
-    io_throttle: asyncio.Semaphore,
+    max_io_threads: int,
     rows_per_partition: int,
 ) -> None:
     """
@@ -79,8 +79,9 @@ async def dataframescan_node(
         The DataFrameScan node.
     ch_out
         The output channel.
-    io_throttle
-        The IO throttle.
+    max_io_threads
+        The maximum number of IO threads to use
+        concurrently for a single DataFrameScan node.
     rows_per_partition
         The number of rows per partition.
     """
@@ -97,6 +98,7 @@ async def dataframescan_node(
         local_offset = local_count * ctx.comm().rank
 
     async with shutdown_on_error(ctx, ch_out):
+        io_throttle = asyncio.Semaphore(max_io_threads)
         for seq_num in range(local_count):
             offset = local_offset * rows_per_partition + seq_num * rows_per_partition
             if offset >= nrows:
@@ -122,6 +124,7 @@ def _(
         "'in-memory' executor not supported in 'generate_ir_sub_network'"
     )
     rows_per_partition = config_options.executor.max_rows_per_partition
+    max_io_threads = 1  # TODO: Make this configurable.
 
     ctx = rec.state["ctx"]
     ch_out = Channel()
@@ -131,7 +134,7 @@ def _(
                 ctx,
                 ir,
                 ch_out,
-                io_throttle=rec.state["io_throttle"],
+                max_io_threads=max_io_threads,
                 rows_per_partition=rows_per_partition,
             )
         ]
@@ -213,7 +216,7 @@ async def scan_node(
     ir: Scan,
     ch_out: Channel[TableChunk],
     *,
-    io_throttle: asyncio.Semaphore,
+    max_io_threads: int,
     plan: IOPartitionPlan,
     parquet_options: ParquetOptions,
 ) -> None:
@@ -228,8 +231,9 @@ async def scan_node(
         The Scan node.
     ch_out
         The output channel.
-    io_throttle
-        The IO throttle.
+    max_io_threads
+        The maximum number of IO threads to use
+        concurrently for a single Scan node.
     plan
         The partitioning plan.
     parquet_options
@@ -305,6 +309,7 @@ async def scan_node(
         # concurrently. We are reading the chunks
         # sequentially for now, because some tests assume
         # chunks are read in order.
+        io_throttle = asyncio.Semaphore(max_io_threads)
         for seq_num, scan in enumerate(scans):
             await read_chunk(ctx, io_throttle, scan, seq_num, ch_out)
 
@@ -320,6 +325,7 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any
     )
     parquet_options = config_options.parquet_options
     partition_info = rec.state["partition_info"][ir]
+    max_io_threads = 1  # TODO: Make this configurable.
 
     assert partition_info.io_plan is not None, "Scan node must have a partition plan"
     plan: IOPartitionPlan = partition_info.io_plan
@@ -333,7 +339,7 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any
                 rec.state["ctx"],
                 ir,
                 ch_out,
-                io_throttle=rec.state["io_throttle"],
+                max_io_threads=max_io_threads,
                 plan=plan,
                 parquet_options=parquet_options,
             )
