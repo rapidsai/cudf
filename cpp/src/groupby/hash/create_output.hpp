@@ -57,13 +57,17 @@ std::unique_ptr<table> create_results_table(size_type output_size,
  * @param key_set Key hash set
  * @param num_keys Number of total keys
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned unique key indices
  * @return A pair of arrays, the first one contains indices of unique keys retrieved from `key_set`
  *         and the second one maps each of these unique keys from the input keys table to its
  *         corresponding position in first output array
  */
 template <typename SetType>
 std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> extract_populated_keys(
-  SetType const& key_set, size_type num_keys, rmm::cuda_stream_view stream);
+  SetType const& key_set,
+  size_type num_keys,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Compute and return an array mapping each input row to its corresponding key index in

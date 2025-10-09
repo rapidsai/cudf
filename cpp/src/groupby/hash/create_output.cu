@@ -128,9 +128,12 @@ std::unique_ptr<table> create_results_table(size_type output_size,
 
 template <typename SetType>
 std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> extract_populated_keys(
-  SetType const& key_set, size_type num_keys, rmm::cuda_stream_view stream)
+  SetType const& key_set,
+  size_type num_keys,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
-  rmm::device_uvector<size_type> unique_key_indices(num_keys, stream);
+  rmm::device_uvector<size_type> unique_key_indices(num_keys, stream, mr);
   auto const keys_end = key_set.retrieve_all(unique_key_indices.begin(), stream.value());
   unique_key_indices.resize(std::distance(unique_key_indices.begin(), keys_end), stream);
 
@@ -150,12 +153,14 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> extrac
 template std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
 extract_populated_keys<global_set_t>(global_set_t const& key_set,
                                      size_type num_keys,
-                                     rmm::cuda_stream_view stream);
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr);
 
 template std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
 extract_populated_keys<nullable_global_set_t>(nullable_global_set_t const& key_set,
                                               size_type num_keys,
-                                              rmm::cuda_stream_view stream);
+                                              rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr);
 
 template <typename SetRef>
 rmm::device_uvector<size_type> compute_matching_keys(bitmask_type const* row_bitmask,

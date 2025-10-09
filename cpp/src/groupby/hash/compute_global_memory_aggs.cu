@@ -40,7 +40,7 @@ std::tuple<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_globa
   auto const num_rows = values.num_rows();
   auto matching_keys =
     compute_matching_keys(row_bitmask, key_set.ref(cuco::op::insert_and_find), num_rows, stream);
-  auto [unique_keys, key_transform_map] = extract_populated_keys(key_set, num_rows, stream);
+  auto [unique_keys, key_transform_map] = extract_populated_keys(key_set, num_rows, stream, mr);
   auto const target_indices = compute_target_indices(matching_keys, key_transform_map, stream);
   matching_keys     = rmm::device_uvector<size_type>{0, stream};  // done, free up memory early
   key_transform_map = rmm::device_uvector<size_type>{0, stream};  // done, free up memory early

@@ -191,7 +191,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
                        });
   }
 
-  auto [unique_keys, key_transform_map] = extract_populated_keys(global_set, num_rows, stream);
+  auto [unique_keys, key_transform_map] = extract_populated_keys(global_set, num_rows, stream, mr);
 
   // Now, update the target indices for computing aggregations using the shared memory kernel.
   thrust::for_each_n(
