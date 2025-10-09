@@ -95,8 +95,18 @@ def scan_partition_plan(
         column_sizes: list[int] = []
         for cs in column_stats.values():
             storage_size = cs.source_info.storage_size
+            min_storage_size = 0
+            if (
+                config_options.executor.engine == "rapidsmpf"
+                and cs.name in ir.schema
+                and ir.schema[cs.name].id() == plc.TypeId.STRING
+                and (row_count := cs.source_info.row_count.value) is not None
+            ):
+                # Make sure our string-column estimate isn't too low
+                # (e.g. if there is dictionary encoding)
+                min_storage_size = row_count * 4
             if storage_size.value is not None:
-                column_sizes.append(storage_size.value)
+                column_sizes.append(max(storage_size.value, min_storage_size))
 
         if (file_size := sum(column_sizes)) > 0:
             if file_size > blocksize:
