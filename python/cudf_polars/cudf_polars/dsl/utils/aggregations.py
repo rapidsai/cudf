@@ -124,7 +124,7 @@ def decompose_single_agg(
         sum_name = next(name_generator)
         sum_agg = expr.NamedExpr(
             sum_name,
-            expr.Agg(u32, "sum", (), expr.Cast(u32, is_null_bool)),
+            expr.Agg(u32, "sum", (), context, expr.Cast(u32, is_null_bool)),
         )
         return [(sum_agg, True)], named_expr.reconstruct(
             expr.Cast(u32, expr.Col(u32, sum_name))

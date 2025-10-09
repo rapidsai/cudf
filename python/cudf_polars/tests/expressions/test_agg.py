@@ -188,3 +188,9 @@ def test_decimal_aggs(decimal_df: pl.LazyFrame) -> None:
         median=pl.col("a").median(),
     )
     assert_gpu_result_equal(q)
+
+
+def test_invalid_agg():
+    df = pl.LazyFrame({"s": pl.Series(["a", "b", "c"], dtype=pl.String())})
+    q = df.select(pl.col("s").sum())
+    assert_ir_translation_raises(q, NotImplementedError)

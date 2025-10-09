@@ -15,7 +15,6 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.utils import dtypes
-from cudf_polars.utils.versions import POLARS_VERSION_LT_129
 
 if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame, DataType
@@ -185,15 +184,10 @@ class UnaryFunction(Expr):
                 dtype=self.dtype,
             )
         if self.name == "round":
-            round_mode = "half_away_from_zero"
-            if POLARS_VERSION_LT_129:
-                (decimal_places,) = self.options  # pragma: no cover
-            else:
-                # pragma: no cover
-                (
-                    decimal_places,
-                    round_mode,
-                ) = self.options
+            (
+                decimal_places,
+                round_mode,
+            ) = self.options
             (values,) = (child.evaluate(df, context=context) for child in self.children)
             return Column(
                 plc.round.round(

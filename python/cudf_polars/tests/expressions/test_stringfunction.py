@@ -15,10 +15,10 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_129,
     POLARS_VERSION_LT_130,
     POLARS_VERSION_LT_131,
     POLARS_VERSION_LT_132,
+    POLARS_VERSION_LT_133,
 )
 
 
@@ -347,7 +347,7 @@ def test_replace_re(ldf):
 def test_replace_many(ldf, target, repl):
     q = ldf.select(pl.col("a").str.replace_many(target, repl))
     _need_support_for_implode_agg = isinstance(repl, list)
-    if POLARS_VERSION_LT_129 or _need_support_for_implode_agg:
+    if _need_support_for_implode_agg:
         assert_gpu_result_equal(q)
     elif POLARS_VERSION_LT_131:
         assert_ir_translation_raises(q, NotImplementedError)
@@ -804,8 +804,9 @@ def test_json_decode(ldf_jsonlike):
     q = ldf_jsonlike.select(pl.col("a").str.json_decode(pl.Struct({"a": pl.String()})))
     assert_gpu_result_equal(q)
 
-    q = ldf_jsonlike.select(pl.col("a").str.json_decode(None))
-    assert_ir_translation_raises(q, NotImplementedError)
+    if POLARS_VERSION_LT_133:
+        q = ldf_jsonlike.select(pl.col("a").str.json_decode(None))
+        assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.mark.parametrize("dtype", [pl.Int64(), pl.Float64()])

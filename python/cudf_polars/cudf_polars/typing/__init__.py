@@ -222,3 +222,5 @@ class DataFrameHeader(TypedDict):
 
 # Not public in polars yet
 RankMethod = Literal["ordinal", "dense", "min", "max", "average"]
+
+RoundMethod = Literal["half_away_from_zero", "half_to_even"]

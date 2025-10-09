@@ -35,10 +35,10 @@ class Gather(Expr):
         values, indices = (
             child.evaluate(df, context=context) for child in self.children
         )
+        n = values.size
         lo, hi = plc.reduce.minmax(indices.obj)
         lo = lo.to_py()
         hi = hi.to_py()
-        n = df.num_rows
         if hi >= n or lo < -n:
             raise ValueError("gather indices are out of bounds")
         if indices.null_count:
