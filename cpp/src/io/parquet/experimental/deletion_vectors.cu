@@ -309,8 +309,7 @@ chunked_parquet_reader::chunked_parquet_reader(
  */
 struct chunked_parquet_reader::roaring_bitmap_impl {
   roaring_bitmap_type roaring_bitmap;
-
-  roaring_bitmap_impl(cuda::std::byte const* serialized_roaring64_data,
+  roaring_bitmap_impl(cuda::std::byte const* const serialized_roaring64_data,
                       cudf::detail::cuco_allocator<char> const& allocator,
                       rmm::cuda_stream_view stream)
     : roaring_bitmap(serialized_roaring64_data, allocator, stream)
