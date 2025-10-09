@@ -157,9 +157,11 @@ def log_do_evaluate(
                 list(args) + list(kwargs.values())
             )[len(cls._non_child) :]  # type: ignore[assignment]
 
+            before_start = time.monotonic_ns()
             before = make_snapshot(
                 cls, frames, phase="input", device_handle=maybe_handle, pid=pid
             )
+            before_end = time.monotonic_ns()
 
             # The decorator preserves the exact signature of the original do_evaluate method.
             # Each IR.do_evaluate method is a classmethod that takes the IR class as first
@@ -169,6 +171,7 @@ def log_do_evaluate(
             result = func(cls, *args, **kwargs)
             stop = time.monotonic_ns()
 
+            after_start = time.monotonic_ns()
             after = make_snapshot(
                 cls,
                 [result],
@@ -177,7 +180,15 @@ def log_do_evaluate(
                 device_handle=maybe_handle,
                 pid=pid,
             )
-            record = before | after
+            after_end = time.monotonic_ns()
+            record = (
+                before
+                | after
+                | {
+                    "overhead_duration": (before_end - before_start)
+                    + (after_end - after_start)
+                }
+            )
             log.info("Execute IR", **record)
 
             return result
