@@ -280,7 +280,7 @@ async def scan_node(
             local_count = math.ceil(count / ctx.comm().nranks)
             local_offset = local_count * ctx.comm().rank
             paths_offset_start = local_offset * plan.factor
-            paths_offset_end = paths_offset_start + plan.factor
+            paths_offset_end = paths_offset_start + plan.factor * local_count
             for offset in range(paths_offset_start, paths_offset_end, plan.factor):
                 local_paths = ir.paths[offset : offset + plan.factor]
                 scans.append(
