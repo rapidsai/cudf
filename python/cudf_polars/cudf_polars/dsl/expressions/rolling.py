@@ -391,7 +391,7 @@ class GroupedRollingWindow(Expr):
             )
             vals_tbl = gathered_tbl
         else:
-            vals_tbl = plc.Table(plc_cols)
+            vals_tbl = plc.Table(plc_cols)  # pragma: no cover
         local_grouper = op.local_grouper
         assert isinstance(local_grouper, plc.groupby.GroupBy)
         _, filled_tbl = local_grouper.replace_nulls(  # type: ignore[assignment]
