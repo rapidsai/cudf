@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 
 #include <cudf_test/default_stream.hpp>
 
-#include <cudf/detail/utilities/stacktrace.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/mr/device/device_memory_resource.hpp>
@@ -95,7 +94,7 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
    * @param bytes Size of the allocation
    * @param stream Stream on which to perform the deallocation
    */
-  void do_deallocate(void* ptr, std::size_t bytes, rmm::cuda_stream_view stream) override
+  void do_deallocate(void* ptr, std::size_t bytes, rmm::cuda_stream_view stream) noexcept override
   {
     verify_stream(stream);
     upstream_.deallocate_async(ptr, bytes, rmm::CUDA_ALLOCATION_ALIGNMENT, stream);
@@ -135,10 +134,6 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
                             : (cstream != cudf::test::get_default_stream().value());
 
     if (invalid_stream) {
-      // Exclude the current function from stacktrace.
-      std::cout << cudf::detail::get_stacktrace(cudf::detail::capture_last_stackframe::NO)
-                << std::endl;
-
       if (error_on_invalid_stream_) {
         throw std::runtime_error("Attempted to perform an operation on an unexpected stream!");
       } else {

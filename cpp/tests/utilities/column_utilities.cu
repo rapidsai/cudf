@@ -25,10 +25,10 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/list_view.hpp>
 #include <cudf/structs/struct_view.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_checks.hpp>
@@ -272,24 +272,24 @@ struct column_property_comparator {
     return result;
   }
 
-  template <typename T,
-            std::enable_if_t<!std::is_same_v<T, cudf::list_view> &&
-                             !std::is_same_v<T, cudf::struct_view>>* = nullptr>
+  template <typename T>
   bool operator()(cudf::column_view const& lhs,
                   cudf::column_view const& rhs,
                   cudf::column_view const& lhs_row_indices,
                   cudf::column_view const& rhs_row_indices,
                   debug_output_level verbosity)
+    requires(!std::is_same_v<T, cudf::list_view> && !std::is_same_v<T, cudf::struct_view>)
   {
     return compare_common(lhs, rhs, lhs_row_indices, rhs_row_indices, verbosity);
   }
 
-  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::list_view>>* = nullptr>
+  template <typename T>
   bool operator()(cudf::column_view const& lhs,
                   cudf::column_view const& rhs,
                   cudf::column_view const& lhs_row_indices,
                   cudf::column_view const& rhs_row_indices,
                   debug_output_level verbosity)
+    requires(std::is_same_v<T, cudf::list_view>)
   {
     if (!compare_common(lhs, rhs, lhs_row_indices, rhs_row_indices, verbosity)) { return false; }
 
@@ -318,12 +318,13 @@ struct column_property_comparator {
     return true;
   }
 
-  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::struct_view>>* = nullptr>
+  template <typename T>
   bool operator()(cudf::column_view const& lhs,
                   cudf::column_view const& rhs,
                   cudf::column_view const& lhs_row_indices,
                   cudf::column_view const& rhs_row_indices,
                   debug_output_level verbosity)
+    requires(std::is_same_v<T, cudf::struct_view>)
   {
     if (!compare_common(lhs, rhs, lhs_row_indices, rhs_row_indices, verbosity)) { return false; }
 
@@ -363,8 +364,8 @@ class corresponding_rows_unequal {
 
   __device__ bool operator()(size_type index)
   {
-    using cudf::experimental::row::lhs_index_type;
-    using cudf::experimental::row::rhs_index_type;
+    using cudf::detail::row::lhs_index_type;
+    using cudf::detail::row::rhs_index_type;
 
     return !comp(lhs_index_type{lhs_row_indices.element<size_type>(index)},
                  rhs_index_type{rhs_row_indices.element<size_type>(index)});
@@ -402,12 +403,12 @@ class corresponding_rows_not_equivalent {
 
   struct typed_element_not_equivalent {
     template <typename T>
-    __device__ std::enable_if_t<std::is_floating_point_v<T>, bool> operator()(
-      column_device_view const& lhs,
-      column_device_view const& rhs,
-      size_type lhs_index,
-      size_type rhs_index,
-      size_type fp_ulps)
+    __device__ bool operator()(column_device_view const& lhs,
+                               column_device_view const& rhs,
+                               size_type lhs_index,
+                               size_type rhs_index,
+                               size_type fp_ulps)
+      requires(std::is_floating_point_v<T>)
     {
       if (lhs.is_valid(lhs_index) and rhs.is_valid(rhs_index)) {
         T const x = lhs.element<T>(lhs_index);
@@ -432,7 +433,8 @@ class corresponding_rows_not_equivalent {
     }
 
     template <typename T, typename... Args>
-    __device__ std::enable_if_t<not std::is_floating_point_v<T>, bool> operator()(Args...)
+    __device__ bool operator()(Args...)
+      requires(not std::is_floating_point_v<T>)
     {
       // Non-floating point inequality is checked already
       return true;
@@ -441,8 +443,8 @@ class corresponding_rows_not_equivalent {
 
   __device__ bool operator()(size_type index)
   {
-    using cudf::experimental::row::lhs_index_type;
-    using cudf::experimental::row::rhs_index_type;
+    using cudf::detail::row::lhs_index_type;
+    using cudf::detail::row::rhs_index_type;
 
     auto const lhs_index = lhs_row_indices.element<size_type>(index);
     auto const rhs_index = rhs_row_indices.element<size_type>(index);
@@ -522,7 +524,7 @@ struct column_comparator_impl {
     auto lhs_tview = table_view{{lhs}};
     auto rhs_tview = table_view{{rhs}};
 
-    auto const comparator = cudf::experimental::row::equality::two_table_comparator{
+    auto const comparator = cudf::detail::row::equality::two_table_comparator{
       lhs_tview, rhs_tview, cudf::test::get_default_stream()};
     auto const has_nulls = cudf::has_nulls(lhs_tview) or cudf::has_nulls(rhs_tview);
 
@@ -963,13 +965,12 @@ template std::pair<thrust::host_vector<numeric::decimal128>, std::vector<bitmask
 
 namespace {
 struct strings_to_host_fn {
-  template <typename OffsetType,
-            std::enable_if_t<std::is_same_v<OffsetType, int32_t> ||
-                             std::is_same_v<OffsetType, int64_t>>* = nullptr>
+  template <typename OffsetType>
   void operator()(thrust::host_vector<std::string>& host_data,
                   char const* chars,
                   cudf::column_view const& offsets,
                   rmm::cuda_stream_view stream)
+    requires(std::is_same_v<OffsetType, int32_t> || std::is_same_v<OffsetType, int64_t>)
   {
     auto const h_offsets = cudf::detail::make_std_vector(
       cudf::device_span<OffsetType const>(offsets.data<OffsetType>(), offsets.size()), stream);
@@ -981,13 +982,12 @@ struct strings_to_host_fn {
                    [&](auto start, auto end) { return std::string(chars + start, end - start); });
   }
 
-  template <typename OffsetType,
-            std::enable_if_t<!std::is_same_v<OffsetType, int32_t> &&
-                             !std::is_same_v<OffsetType, int64_t>>* = nullptr>
+  template <typename OffsetType>
   void operator()(thrust::host_vector<std::string>&,
                   char const*,
                   cudf::column_view const&,
                   rmm::cuda_stream_view)
+    requires(!std::is_same_v<OffsetType, int32_t> && !std::is_same_v<OffsetType, int64_t>)
   {
     CUDF_FAIL("invalid offsets type");
   }

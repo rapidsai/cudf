@@ -7,6 +7,7 @@ from libcpp.vector cimport vector
 import datetime
 
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from pylibcudf.io.types cimport SourceInfo, TableWithMetadata, SinkInfo
 
@@ -49,7 +50,7 @@ from pylibcudf.types cimport DataType
 
 from pylibcudf.variant cimport get_if, holds_alternative
 
-from pylibcudf.utils cimport _get_stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
 
 
 __all__ = [
@@ -417,7 +418,9 @@ cdef class OrcReaderOptionsBuilder:
         return orc_options
 
 
-cpdef TableWithMetadata read_orc(OrcReaderOptions options, Stream stream = None):
+cpdef TableWithMetadata read_orc(
+    OrcReaderOptions options, Stream stream = None, DeviceMemoryResource mr=None
+):
     """
     Read from ORC format.
 
@@ -430,24 +433,44 @@ cpdef TableWithMetadata read_orc(OrcReaderOptions options, Stream stream = None)
     ----------
     options: OrcReaderOptions
         Settings for controlling reading behavior
-    stream: Stream
+    stream : Stream | None
         CUDA stream used for device memory operations and kernel launches
+    mr : DeviceMemoryResource, optional
+        Device memory resource used to allocate the returned table's device memory.
     """
     cdef table_with_metadata c_result
     cdef Stream s = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = move(cpp_read_orc(options.c_obj, s.view()))
+        c_result = move(cpp_read_orc(options.c_obj, s.view(), mr.get_mr()))
 
-    return TableWithMetadata.from_libcudf(c_result, s)
+    return TableWithMetadata.from_libcudf(c_result, s, mr)
 
 
 cpdef ParsedOrcStatistics read_parsed_orc_statistics(
-    SourceInfo source_info
+    SourceInfo source_info,
+    Stream stream=None
 ):
-    cdef parsed_orc_statistics parsed = (
-        cpp_read_parsed_orc_statistics(source_info.c_obj)
-    )
+    """
+    Read ORC statistics from a source.
+
+    Parameters
+    ----------
+    source_info : SourceInfo
+        The source to read statistics from.
+    stream : Stream | None
+        CUDA stream used for device memory operations and kernel launches.
+
+    Returns
+    -------
+    ParsedOrcStatistics
+        The parsed ORC statistics.
+    """
+    cdef Stream s = _get_stream(stream)
+    cdef parsed_orc_statistics parsed
+    with nogil:
+        parsed = cpp_read_parsed_orc_statistics(source_info.c_obj, s.view())
     return ParsedOrcStatistics.from_libcudf(parsed)
 
 
@@ -632,7 +655,7 @@ cpdef void write_orc(OrcWriterOptions options, Stream stream = None):
     ----------
     options: OrcWriterOptions
         Settings for controlling writing behavior
-    stream: Stream
+    stream : Stream | None
         CUDA stream used for device memory operations and kernel launches
 
     Returns
@@ -681,7 +704,7 @@ cdef class OrcChunkedWriter:
         ----------
         options: ChunkedOrcWriterOptions
             Settings for controlling writing behavior
-        stream: Stream
+        stream : Stream | None
             CUDA stream used for device memory operations and kernel launches
 
         Returns

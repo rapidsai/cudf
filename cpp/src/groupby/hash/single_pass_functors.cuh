@@ -48,16 +48,16 @@ __device__ constexpr bool is_supported()
 }
 
 template <typename T, cudf::aggregation::Kind k>
-__device__ std::enable_if_t<not std::is_same_v<cudf::detail::corresponding_operator_t<k>, void>, T>
-identity_from_operator()
+__device__ T identity_from_operator()
+  requires(not std::is_same_v<cudf::detail::corresponding_operator_t<k>, void>)
 {
   using DeviceType = cudf::device_storage_type_t<T>;
   return cudf::detail::corresponding_operator_t<k>::template identity<DeviceType>();
 }
 
 template <typename T, cudf::aggregation::Kind k, typename Enable = void>
-__device__ std::enable_if_t<std::is_same_v<cudf::detail::corresponding_operator_t<k>, void>, T>
-identity_from_operator()
+__device__ T identity_from_operator()
+  requires(std::is_same_v<cudf::detail::corresponding_operator_t<k>, void>)
 {
   CUDF_UNREACHABLE("Unable to get identity/sentinel from device operator");
 }
@@ -191,7 +191,6 @@ struct global_memory_fallback_fn {
   cudf::size_type* block_cardinality;
   cudf::size_type stride;
   bitmask_type const* __restrict__ row_bitmask;
-  bool skip_rows_with_nulls;
 
   global_memory_fallback_fn(SetType set,
                             cudf::table_device_view input_values,
@@ -199,16 +198,14 @@ struct global_memory_fallback_fn {
                             cudf::aggregation::Kind const* aggs,
                             cudf::size_type* block_cardinality,
                             cudf::size_type stride,
-                            bitmask_type const* row_bitmask,
-                            bool skip_rows_with_nulls)
+                            bitmask_type const* row_bitmask)
     : set(set),
       input_values(input_values),
       output_values(output_values),
       aggs(aggs),
       block_cardinality(block_cardinality),
       stride(stride),
-      row_bitmask(row_bitmask),
-      skip_rows_with_nulls(skip_rows_with_nulls)
+      row_bitmask(row_bitmask)
   {
   }
 
@@ -216,7 +213,7 @@ struct global_memory_fallback_fn {
   {
     auto const block_id = (i % stride) / GROUPBY_BLOCK_SIZE;
     if (block_cardinality[block_id] >= GROUPBY_CARDINALITY_THRESHOLD and
-        (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, i))) {
+        (not row_bitmask or cudf::bit_is_set(row_bitmask, i))) {
       auto const result = set.insert_and_find(i);
       cudf::detail::aggregate_row(output_values, *result.first, input_values, i, aggs);
     }
@@ -256,7 +253,6 @@ struct compute_single_pass_aggs_fn {
   mutable_table_device_view output_values;
   aggregation::Kind const* __restrict__ aggs;
   bitmask_type const* __restrict__ row_bitmask;
-  bool skip_rows_with_nulls;
 
   /**
    * @brief Construct a new compute_single_pass_aggs_fn functor object
@@ -270,28 +266,23 @@ struct compute_single_pass_aggs_fn {
    * columns of the `input_values` rows
    * @param row_bitmask Bitmask where bit `i` indicates the presence of a null
    * value in row `i` of input keys. Only used if `skip_rows_with_nulls` is `true`
-   * @param skip_rows_with_nulls Indicates if rows in `input_keys` containing
-   * null values should be skipped. It `true`, it is assumed `row_bitmask` is a
-   * bitmask where bit `i` indicates the presence of a null value in row `i`.
    */
   compute_single_pass_aggs_fn(SetType set,
                               table_device_view input_values,
                               mutable_table_device_view output_values,
                               aggregation::Kind const* aggs,
-                              bitmask_type const* row_bitmask,
-                              bool skip_rows_with_nulls)
+                              bitmask_type const* row_bitmask)
     : set(set),
       input_values(input_values),
       output_values(output_values),
       aggs(aggs),
-      row_bitmask(row_bitmask),
-      skip_rows_with_nulls(skip_rows_with_nulls)
+      row_bitmask(row_bitmask)
   {
   }
 
   __device__ void operator()(size_type i)
   {
-    if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, i)) {
+    if (not row_bitmask or cudf::bit_is_set(row_bitmask, i)) {
       auto const result = set.insert_and_find(i);
 
       cudf::detail::aggregate_row(output_values, *result.first, input_values, i, aggs);

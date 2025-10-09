@@ -14,9 +14,7 @@ from cudf_polars.dsl.expressions.base import (
 )
 
 if TYPE_CHECKING:
-    import pylibcudf as plc
-
-    from cudf_polars.containers import Column, DataFrame
+    from cudf_polars.containers import Column, DataFrame, DataType
 
 
 __all__ = ["Slice"]
@@ -28,15 +26,16 @@ class Slice(Expr):
 
     def __init__(
         self,
-        dtype: plc.DataType,
+        dtype: DataType,
         offset: int,
-        length: int,
+        length: int | None,
         column: Expr,
     ) -> None:
         self.dtype = dtype
         self.offset = offset
         self.length = length
         self.children = (column,)
+        self.is_pointwise = False
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME

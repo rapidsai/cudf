@@ -4,6 +4,7 @@ from typing import TypeAlias
 
 from typing_extensions import Self
 
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.column import Column
@@ -14,6 +15,7 @@ from pylibcudf.io.types import (
     SourceInfo,
     TableWithMetadata,
 )
+from pylibcudf.scalar import Scalar
 from pylibcudf.table import Table
 from pylibcudf.types import DataType
 
@@ -70,7 +72,19 @@ class JsonReaderOptionsBuilder:
     def build(self) -> JsonReaderOptions: ...
 
 def read_json(
-    options: JsonReaderOptions, stream: Stream = None
+    options: JsonReaderOptions,
+    stream: Stream = None,
+    mr: DeviceMemoryResource = None,
+) -> TableWithMetadata: ...
+def read_json_from_string_column(
+    input: Column,
+    separator: Scalar,
+    narep: Scalar,
+    dtypes: list | None = None,
+    compression: CompressionType = CompressionType.NONE,
+    recovery_mode: JSONRecoveryMode = JSONRecoveryMode.RECOVER_WITH_NULL,
+    stream: Stream = None,
+    mr: DeviceMemoryResource = None,
 ) -> TableWithMetadata: ...
 
 class JsonWriterOptions:
@@ -94,4 +108,6 @@ def chunked_read_json(
     options: JsonReaderOptions,
     chunk_size: int = 100_000_000,
     stream: Stream = None,
+    mr: DeviceMemoryResource = None,
 ) -> tuple[list[Column], list[str], ChildNameToTypeMap]: ...
+def is_supported_write_json(type: DataType) -> bool: ...

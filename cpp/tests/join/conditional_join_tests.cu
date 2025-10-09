@@ -22,6 +22,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/join/conditional_join.hpp>
+#include <cudf/join/filtered_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -44,7 +45,7 @@
 
 namespace {
 using PairJoinReturn   = std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
-                                 std::unique_ptr<rmm::device_uvector<cudf::size_type>>>;
+                                   std::unique_ptr<rmm::device_uvector<cudf::size_type>>>;
 using SingleJoinReturn = std::unique_ptr<rmm::device_uvector<cudf::size_type>>;
 using NullMaskVector   = std::vector<bool>;
 
@@ -136,9 +137,9 @@ gen_random_nullable_repeated_columns(unsigned int N = 10000, unsigned int num_re
 struct index_pair {
   cudf::size_type first{};
   cudf::size_type second{};
-  __device__ index_pair(){};
+  __device__ index_pair() {};
   __device__ index_pair(cudf::size_type const& first, cudf::size_type const& second)
-    : first(first), second(second){};
+    : first(first), second(second) {};
 };
 
 __device__ inline bool operator<(index_pair const& lhs, index_pair const& rhs)
@@ -235,9 +236,7 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
                    lhs_result.end(),
                    rhs_result.begin(),
                    result_pairs.begin(),
-                   [](cudf::size_type lhs, cudf::size_type rhs) {
-                     return std::pair{lhs, rhs};
-                   });
+                   [](cudf::size_type lhs, cudf::size_type rhs) { return std::pair{lhs, rhs}; });
     std::sort(result_pairs.begin(), result_pairs.end());
     std::sort(expected_outputs.begin(), expected_outputs.end());
 
@@ -843,7 +842,9 @@ struct ConditionalLeftSemiJoinTest : public ConditionalJoinSingleReturnTest<T> {
     cudf::table_view right,
     cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
   {
-    return cudf::left_semi_join(left, right, compare_nulls);
+    cudf::filtered_join obj(
+      right, compare_nulls, cudf::set_as_build_table::RIGHT, cudf::get_default_stream());
+    return obj.semi_join(left);
   }
 };
 
@@ -900,7 +901,9 @@ struct ConditionalLeftAntiJoinTest : public ConditionalJoinSingleReturnTest<T> {
     cudf::table_view right,
     cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
   {
-    return cudf::left_anti_join(left, right, compare_nulls);
+    cudf::filtered_join obj(
+      right, compare_nulls, cudf::set_as_build_table::RIGHT, cudf::get_default_stream());
+    return obj.anti_join(left);
   }
 };
 

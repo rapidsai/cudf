@@ -16,13 +16,13 @@
 
 #include "utilities.hpp"
 
-#include "common/ndsh_data_generator/ndsh_data_generator.hpp"
-#include "common/table_utilities.hpp"
-#include "cudf/detail/utilities/integer_utils.hpp"
+#include <benchmarks/common/ndsh_data_generator/ndsh_data_generator.hpp>
+#include <benchmarks/common/nvtx_ranges.hpp>
+#include <benchmarks/common/table_utilities.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/reduction.hpp>
@@ -136,7 +136,7 @@ table_with_names& table_with_names::append(std::unique_ptr<cudf::column>& col,
 
 cudf::table_view table_with_names::select(std::vector<std::string> const& col_names) const
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   std::vector<cudf::size_type> col_indices;
   for (auto const& col_name : col_names) {
     col_indices.push_back(column_id(col_name));
@@ -146,7 +146,7 @@ cudf::table_view table_with_names::select(std::vector<std::string> const& col_na
 
 void table_with_names::to_parquet(std::string const& filepath) const
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   auto const sink_info = cudf::io::sink_info(filepath);
   cudf::io::table_metadata metadata;
   metadata.schema_info =
@@ -164,7 +164,7 @@ std::unique_ptr<cudf::table> join_and_gather(cudf::table_view const& left_input,
                                              std::vector<cudf::size_type> const& right_on,
                                              cudf::null_equality compare_nulls)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   constexpr auto oob_policy = cudf::out_of_bounds_policy::DONT_CHECK;
   auto const left_selected  = left_input.select(left_on);
   auto const right_selected = right_input.select(right_on);
@@ -199,7 +199,7 @@ std::unique_ptr<table_with_names> apply_inner_join(
   std::vector<std::string> const& right_on,
   cudf::null_equality compare_nulls)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   std::vector<cudf::size_type> left_on_indices;
   std::vector<cudf::size_type> right_on_indices;
   std::transform(
@@ -229,7 +229,7 @@ std::unique_ptr<table_with_names> apply_inner_join(
 std::unique_ptr<table_with_names> apply_filter(std::unique_ptr<table_with_names> const& table,
                                                cudf::ast::operation const& predicate)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   auto const boolean_mask = cudf::compute_column(table->table(), predicate);
   auto result_table       = cudf::apply_boolean_mask(table->table(), boolean_mask->view());
   return std::make_unique<table_with_names>(std::move(result_table), table->column_names());
@@ -238,7 +238,7 @@ std::unique_ptr<table_with_names> apply_filter(std::unique_ptr<table_with_names>
 std::unique_ptr<table_with_names> apply_mask(std::unique_ptr<table_with_names> const& table,
                                              std::unique_ptr<cudf::column> const& mask)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   auto result_table = cudf::apply_boolean_mask(table->table(), mask->view());
   return std::make_unique<table_with_names>(std::move(result_table), table->column_names());
 }
@@ -246,7 +246,7 @@ std::unique_ptr<table_with_names> apply_mask(std::unique_ptr<table_with_names> c
 std::unique_ptr<table_with_names> apply_groupby(std::unique_ptr<table_with_names> const& table,
                                                 groupby_context_t const& ctx)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   auto const keys = table->select(ctx.keys);
   cudf::groupby::groupby groupby_obj(keys);
   std::vector<std::string> result_column_names;
@@ -290,7 +290,7 @@ std::unique_ptr<table_with_names> apply_orderby(std::unique_ptr<table_with_names
                                                 std::vector<std::string> const& sort_keys,
                                                 std::vector<cudf::order> const& sort_key_orders)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   std::vector<cudf::column_view> column_views;
   for (auto& key : sort_keys) {
     column_views.push_back(table->column(key));
@@ -304,7 +304,7 @@ std::unique_ptr<table_with_names> apply_reduction(cudf::column_view const& colum
                                                   cudf::aggregation::Kind const& agg_kind,
                                                   std::string const& col_name)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   auto const agg            = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
   auto const result         = cudf::reduce(column, *agg, column.type());
   cudf::size_type const len = 1;
@@ -321,7 +321,7 @@ std::unique_ptr<table_with_names> read_parquet(
   std::vector<std::string> const& columns,
   std::unique_ptr<cudf::ast::operation> const& predicate)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   auto builder = cudf::io::parquet_reader_options_builder(source_info);
   if (!columns.empty()) { builder.columns(columns); }
   if (predicate) { builder.filter(*predicate); }
@@ -357,7 +357,7 @@ void write_to_parquet_device_buffer(std::unique_ptr<cudf::table> const& table,
                                     std::vector<std::string> const& col_names,
                                     cuio_source_sink_pair& source)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   auto const stream = cudf::get_default_stream();
 
   // Prepare the table metadata
@@ -385,7 +385,7 @@ void write_to_parquet_device_buffer(std::unique_ptr<cudf::table> const& table,
       return (i += num_row_per_chunk);
     });
     std::vector<cudf::table_view> split_tables = cudf::split(table->view(), splits, stream);
-    auto writer                                = cudf::io::parquet_chunked_writer(options, stream);
+    auto writer                                = cudf::io::chunked_parquet_writer(options, stream);
     for (auto const& chunk_table : split_tables) {
       writer.write(chunk_table);
     }
@@ -409,7 +409,7 @@ void generate_parquet_data_sources(double scale_factor,
                                    std::vector<std::string> const& table_names,
                                    std::unordered_map<std::string, cuio_source_sink_pair>& sources)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
 
   // Set the memory resource to the managed pool
   auto old_mr = cudf::get_current_device_resource();

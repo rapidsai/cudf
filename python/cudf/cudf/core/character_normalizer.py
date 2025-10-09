@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pylibcudf as plc
 
-import cudf
+from cudf.core.series import Series
 
 
 class CharacterNormalizer:
@@ -23,13 +23,15 @@ class CharacterNormalizer:
     def __init__(
         self,
         do_lower: bool,
-        special_tokens: cudf.Series = cudf.Series([], dtype="object"),
+        special_tokens: Series | None = None,
     ) -> None:
+        if special_tokens is None:
+            special_tokens = Series([], dtype="object")
         self.normalizer = plc.nvtext.normalize.CharacterNormalizer(
             do_lower, special_tokens._column.to_pylibcudf(mode="read")
         )
 
-    def normalize(self, text: cudf.Series) -> cudf.Series:
+    def normalize(self, text: Series) -> Series:
         """
         Parameters
         ----------
@@ -43,4 +45,4 @@ class CharacterNormalizer:
         """
         result = text._column.normalize_characters(self.normalizer)
 
-        return cudf.Series._from_column(result)
+        return Series._from_column(result)

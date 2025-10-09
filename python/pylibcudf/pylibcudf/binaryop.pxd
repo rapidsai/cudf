@@ -1,7 +1,9 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from pylibcudf.libcudf.binaryop cimport binary_operator
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .scalar cimport Scalar
@@ -21,7 +23,9 @@ cpdef Column binary_operation(
     LeftBinaryOperand lhs,
     RightBinaryOperand rhs,
     binary_operator op,
-    DataType output_type
+    DataType output_type,
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef bool is_supported_operation(

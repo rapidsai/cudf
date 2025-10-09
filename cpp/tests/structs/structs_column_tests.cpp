@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/types.hpp>
@@ -136,11 +137,11 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestColumnWrapperConstruction)
   expected_children.emplace_back(
     cudf::test::strings_column_wrapper{names, {true, true, true, false, true, true}}.release());
   expected_children.emplace_back(cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>{
-    {48, 27, 25, 31, 351, 351},
-    {1, 1, 1, 0, 1, 0}}.release());
+    {48, 27, 25, 31, 351, 351}, {1, 1, 1, 0, 1, 0}}
+                                   .release());
   expected_children.emplace_back(cudf::test::fixed_width_column_wrapper<bool>{
-    {true, true, false, false, false, false},
-    {1, 1, 0, 0, 1, 0}}.release());
+    {true, true, false, false, false, false}, {1, 1, 0, 0, 1, 0}}
+                                   .release());
 
   std::for_each(thrust::make_counting_iterator(0),
                 thrust::make_counting_iterator(0) + expected_children.size(),
@@ -253,14 +254,15 @@ TYPED_TEST(TypedStructColumnWrapperTest, StructOfStructs)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected_names_col, struct_2->child(1).child(0));
 
-  auto expected_ages_col = cudf::test::fixed_width_column_wrapper<int32_t>{
-    {48, 27, 25, 31, 351, 351},
-    {0, 1, 1, 1, 0, 0}}.release();
+  auto expected_ages_col =
+    cudf::test::fixed_width_column_wrapper<int32_t>{{48, 27, 25, 31, 351, 351}, {0, 1, 1, 1, 0, 0}}
+      .release();
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected_ages_col, struct_2->child(1).child(1));
 
-  auto expected_bool_col = cudf::test::fixed_width_column_wrapper<bool>{
-    {true, true, false, false, false, false},
-    {0, 1, 0, 1, 1, 0}}.release();
+  auto expected_bool_col =
+    cudf::test::fixed_width_column_wrapper<bool>{{true, true, false, false, false, false},
+                                                 {0, 1, 0, 1, 1, 0}}
+      .release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected_bool_col, struct_2->child(0));
 
@@ -332,14 +334,15 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestNullMaskPropagationForNonNullStruct
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected_names_col, struct_2->child(1).child(0));
 
-  auto expected_ages_col = cudf::test::fixed_width_column_wrapper<int32_t>{
-    {48, 27, 25, 31, 351, 351},
-    {0, 1, 1, 1, 1, 1}}.release();
+  auto expected_ages_col =
+    cudf::test::fixed_width_column_wrapper<int32_t>{{48, 27, 25, 31, 351, 351}, {0, 1, 1, 1, 1, 1}}
+      .release();
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected_ages_col, struct_2->child(1).child(1));
 
-  auto expected_bool_col = cudf::test::fixed_width_column_wrapper<bool>{
-    {true, true, false, false, false, false},
-    {0, 1, 0, 1, 1, 0}}.release();
+  auto expected_bool_col =
+    cudf::test::fixed_width_column_wrapper<bool>{{true, true, false, false, false, false},
+                                                 {0, 1, 0, 1, 1, 0}}
+      .release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected_bool_col, struct_2->child(0));
 
@@ -444,6 +447,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, ListOfStructOfList)
                             std::move(struct_of_lists_col),
                             null_count,
                             std::move(null_mask));
+  list_of_struct_of_list = cudf::purge_nonempty_nulls(list_of_struct_of_list->view());
 
   // Compare with expected values.
 
@@ -464,6 +468,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, ListOfStructOfList)
                             std::move(expected_level2_struct),
                             null_count,
                             std::move(null_mask));
+  expected_level3_list = cudf::purge_nonempty_nulls(expected_level3_list->view());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*list_of_struct_of_list, *expected_level3_list);
 }
@@ -494,6 +499,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, StructOfListOfStruct)
                             std::move(structs_col),
                             null_count,
                             std::move(null_mask));
+  lists_col = cudf::purge_nonempty_nulls(lists_col->view());
 
   std::vector<std::unique_ptr<cudf::column>> cols;
   cols.push_back(std::move(lists_col));
@@ -515,6 +521,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, StructOfListOfStruct)
                             std::move(expected_structs_col),
                             null_count,
                             std::move(null_mask));
+  expected_lists_col = cudf::purge_nonempty_nulls(expected_lists_col->view());
 
   // Test that the lists child column is as expected.
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected_lists_col, struct_of_list_of_struct->child(0));

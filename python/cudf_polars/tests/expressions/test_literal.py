@@ -1,6 +1,8 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
+
+import datetime
 
 import pytest
 
@@ -8,11 +10,11 @@ import polars as pl
 
 import pylibcudf as plc
 
+from cudf_polars.containers import DataType
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils import dtypes
 
 
 @pytest.fixture(
@@ -66,7 +68,7 @@ def test_timelike_literal(timestamp, timedelta):
         adjusted=timestamp + timedelta,
         two_delta=timedelta + timedelta,
     )
-    schema = {k: dtypes.from_polars(v) for k, v in q.collect_schema().items()}
+    schema = {k: DataType(v).plc_type for k, v in q.collect_schema().items()}
     if plc.binaryop.is_supported_operation(
         schema["adjusted"],
         schema["time"],
@@ -95,7 +97,9 @@ def test_select_literal_series():
     assert_gpu_result_equal(q)
 
 
-@pytest.mark.parametrize("expr", [pl.lit(None), pl.lit(10, dtype=pl.Decimal())])
+@pytest.mark.parametrize(
+    "expr", [pl.lit(None), pl.lit(datetime.time(12, 0), dtype=pl.Time())]
+)
 def test_unsupported_literal_raises(expr):
     df = pl.LazyFrame({})
 

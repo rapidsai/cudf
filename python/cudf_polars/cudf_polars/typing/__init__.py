@@ -5,33 +5,50 @@
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Hashable, MutableMapping
-from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeVar, TypedDict, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    NewType,
+    Protocol,
+    TypeVar,
+    Union,
+)
 
+import polars as pl
+import polars.datatypes
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
-import pylibcudf as plc
-
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable
     from typing import TypeAlias
 
-    import polars as pl
+    import pylibcudf as plc
 
-    from cudf_polars.containers import DataFrame
-    from cudf_polars.dsl import expr, ir, nodebase
+    from cudf_polars.containers import DataFrame, DataType
+    from cudf_polars.dsl import nodebase
+
+
+if sys.version_info >= (3, 11):
+    # Inheriting from TypeDict + Generic added in python 3.11
+    from typing import TypedDict  # pragma: no cover
+else:
+    from typing_extensions import TypedDict  # pragma: no cover
+
 
 __all__: list[str] = [
+    "ClosedInterval",
     "ColumnHeader",
     "ColumnOptions",
     "DataFrameHeader",
-    "ExprTransformer",
     "GenericTransformer",
-    "IRTransformer",
     "NodeTraverser",
     "OptimizationArgs",
     "PolarsExpr",
     "PolarsIR",
+    "RankMethod",
     "Schema",
     "Slice",
 ]
@@ -72,11 +89,18 @@ PolarsExpr: TypeAlias = Union[
     pl_expr.PyExprIR,
 ]
 
-Schema: TypeAlias = dict[str, plc.DataType]
+PolarsSchema: TypeAlias = dict[str, pl.DataType]
+Schema: TypeAlias = dict[str, "DataType"]
+
+PolarsDataType: TypeAlias = polars.datatypes.DataTypeClass | polars.datatypes.DataType
 
 Slice: TypeAlias = tuple[int, int | None]
 
 CSECache: TypeAlias = MutableMapping[int, tuple["DataFrame", int]]
+
+ClosedInterval: TypeAlias = Literal["left", "right", "both", "none"]
+
+Duration = NewType("Duration", tuple[int, int, int, int, bool, bool])
 
 
 class NodeTraverser(Protocol):
@@ -94,7 +118,7 @@ class NodeTraverser(Protocol):
         """Convert current plan node to python rep."""
         ...
 
-    def get_schema(self) -> Schema:
+    def get_schema(self) -> PolarsSchema:
         """Get the schema of the current plan node."""
         ...
 
@@ -133,10 +157,11 @@ OptimizationArgs: TypeAlias = Literal[
 
 U_contra = TypeVar("U_contra", bound=Hashable, contravariant=True)
 V_co = TypeVar("V_co", covariant=True)
+StateT_co = TypeVar("StateT_co", covariant=True)
 NodeT = TypeVar("NodeT", bound="nodebase.Node[Any]")
 
 
-class GenericTransformer(Protocol[U_contra, V_co]):
+class GenericTransformer(Protocol[U_contra, V_co, StateT_co]):
     """Abstract protocol for recursive visitors."""
 
     def __call__(self, __value: U_contra) -> V_co:
@@ -144,17 +169,9 @@ class GenericTransformer(Protocol[U_contra, V_co]):
         ...
 
     @property
-    def state(self) -> Mapping[str, Any]:
-        """Arbitrary immutable state."""
+    def state(self) -> StateT_co:
+        """Transform-specific immutable state."""
         ...
-
-
-# Quotes to avoid circular import
-ExprTransformer: TypeAlias = GenericTransformer["expr.Expr", "expr.Expr"]
-"""Protocol for transformation of Expr nodes."""
-
-IRTransformer: TypeAlias = GenericTransformer["ir.IR", "ir.IR"]
-"""Protocol for transformation of IR nodes."""
 
 
 class ColumnOptions(TypedDict):
@@ -170,6 +187,23 @@ class ColumnOptions(TypedDict):
     order: plc.types.Order
     null_order: plc.types.NullOrder
     name: str | None
+    dtype: str
+
+
+class DeserializedColumnOptions(TypedDict):
+    """
+    Deserialized Column constructor options.
+
+    Notes
+    -----
+    Used to deserialize Column and DataFrame containers.
+    """
+
+    is_sorted: plc.types.Sorted
+    order: plc.types.Order
+    null_order: plc.types.NullOrder
+    name: str | None
+    dtype: DataType
 
 
 class ColumnHeader(TypedDict):
@@ -184,3 +218,9 @@ class DataFrameHeader(TypedDict):
 
     columns_kwargs: list[ColumnOptions]
     frame_count: int
+
+
+# Not public in polars yet
+RankMethod = Literal["ordinal", "dense", "min", "max", "average"]
+
+RoundMethod = Literal["half_away_from_zero", "half_to_even"]

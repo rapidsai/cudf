@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 
-#include "common_sort_impl.cuh"
+#include "sort.hpp"
 #include "sort_column_impl.cuh"
+#include "sort_radix.hpp"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-
-#include <thrust/sequence.h>
 
 namespace cudf {
 namespace detail {
@@ -41,15 +40,17 @@ std::unique_ptr<column> sorted_order<sort_method::UNSTABLE>(column_view const& i
   auto sorted_indices = cudf::make_numeric_column(
     data_type(type_to_id<size_type>()), input.size(), mask_state::UNALLOCATED, stream, mr);
   mutable_column_view indices_view = sorted_indices->mutable_view();
-  thrust::sequence(
-    rmm::exec_policy(stream), indices_view.begin<size_type>(), indices_view.end<size_type>(), 0);
-  cudf::type_dispatcher<dispatch_storage_type>(input.type(),
-                                               column_sorted_order_fn<sort_method::UNSTABLE>{},
-                                               input,
-                                               indices_view,
-                                               column_order == order::ASCENDING,
-                                               null_precedence,
-                                               stream);
+  if (is_radix_sortable(input)) {
+    sorted_order_radix(input, indices_view, column_order == order::ASCENDING, stream);
+  } else {
+    cudf::type_dispatcher<dispatch_storage_type>(input.type(),
+                                                 column_sorted_order_fn<sort_method::UNSTABLE>{},
+                                                 input,
+                                                 indices_view,
+                                                 column_order == order::ASCENDING,
+                                                 null_precedence,
+                                                 stream);
+  }
   return sorted_indices;
 }
 

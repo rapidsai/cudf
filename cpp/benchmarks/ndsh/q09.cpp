@@ -16,6 +16,8 @@
 
 #include "utilities.hpp"
 
+#include <benchmarks/common/nvtx_ranges.hpp>
+
 #include <cudf/ast/expressions.hpp>
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column.hpp>
@@ -115,7 +117,7 @@ struct q9_data {
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
 
   auto const one = cudf::numeric_scalar<double>(1);
   auto const one_minus_discount =
@@ -147,7 +149,7 @@ struct q9_data {
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
 
   std::string udf =
     R"***(
@@ -160,6 +162,8 @@ struct q9_data {
                          udf,
                          cudf::data_type{cudf::type_id::FLOAT64},
                          false,
+                         std::nullopt,
+                         cudf::null_aware::NO,
                          stream,
                          mr);
 }
@@ -172,7 +176,7 @@ struct q9_data {
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
 
   cudf::ast::tree tree;
   cudf::table_view table{std::vector{discount, extendedprice, supplycost, quantity}};
@@ -243,7 +247,7 @@ q9_data load_data(std::unordered_map<std::string, cuio_source_sink_pair>& source
 
 std::unique_ptr<table_with_names> join_data(q9_data const& data)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
 
   // Generating the `profit` table
   // Filter the part table using `p_name like '%green%'`

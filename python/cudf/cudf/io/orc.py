@@ -9,9 +9,18 @@ import pyarrow as pa
 
 import pylibcudf as plc
 
-import cudf
 from cudf.api.types import is_list_like
 from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column import column_empty
+from cudf.core.dataframe import DataFrame
+from cudf.core.dtypes import (
+    CategoricalDtype,
+    ListDtype,
+    StructDtype,
+    dtype as cudf_dtype,
+)
+from cudf.core.index import CategoricalIndex, RangeIndex
+from cudf.core.multiindex import MultiIndex
 from cudf.utils import ioutils
 from cudf.utils.dtypes import cudf_dtype_from_pa_type, dtype_to_pylibcudf_type
 
@@ -66,7 +75,7 @@ def read_orc_statistics(
         file_statistics = {
             column_name: column_stats
             for column_name, column_stats in zip(
-                column_names, parsed_file_statistics
+                column_names, parsed_file_statistics, strict=True
             )
             if columns is None or column_name in columns
         }
@@ -77,7 +86,7 @@ def read_orc_statistics(
             stripe_statistics = {
                 column_name: column_stats
                 for column_name, column_stats in zip(
-                    column_names, parsed_stripe_statistics
+                    column_names, parsed_stripe_statistics, strict=True
                 )
                 if columns is None or column_name in columns
             }
@@ -213,9 +222,9 @@ def read_orc(
             orc_file = orc.ORCFile(filepaths_or_buffers[0])
             schema = orc_file.schema
             col_names = schema.names if columns is None else columns
-            return cudf.DataFrame._from_data(
+            return DataFrame._from_data(
                 data={
-                    col_name: cudf.core.column.column_empty(
+                    col_name: column_empty(
                         row_count=0,
                         dtype=cudf_dtype_from_pa_type(
                             schema.field(col_name).type
@@ -256,13 +265,13 @@ def read_orc(
             options.set_stripes(stripes)
         if timestamp_type is not None:
             options.set_timestamp_type(
-                dtype_to_pylibcudf_type(cudf.dtype(timestamp_type))
+                dtype_to_pylibcudf_type(cudf_dtype(timestamp_type))
             )
         if columns is not None and len(columns) > 0:
             options.set_columns(columns)
 
         tbl_w_meta = plc.io.orc.read_orc(options)
-        df = cudf.DataFrame.from_pylibcudf(tbl_w_meta)
+        df = DataFrame.from_pylibcudf(tbl_w_meta)
 
         if isinstance(columns, list) and len(columns) == 0:
             # Index to deselect all columns
@@ -305,7 +314,7 @@ def read_orc(
             if index_col is not None and len(index_col) > 0:
                 if is_range_index:
                     range_index_meta = index_col[0]
-                    range_idx = cudf.RangeIndex(
+                    range_idx = RangeIndex(
                         start=range_index_meta["start"],
                         stop=range_index_meta["stop"],
                         step=range_index_meta["step"],
@@ -320,7 +329,7 @@ def read_orc(
                     df = df.set_index(list(index_col_names.values()))
 
             if reset_index_name:
-                df.index.names = [None] * len(df.index.names)
+                df.index.names = [None] * df.index.nlevels
         return df
     else:
         from pyarrow import orc
@@ -349,14 +358,14 @@ def read_orc(
                 )
         else:
             pa_table = orc_file.read(columns=columns)
-        df = cudf.DataFrame.from_arrow(pa_table)
+        df = DataFrame.from_arrow(pa_table)
 
     return df
 
 
 @ioutils.doc_to_orc()
 def to_orc(
-    df: cudf.DataFrame,
+    df: DataFrame,
     fname,
     compression: Literal[
         False, None, "SNAPPY", "ZLIB", "ZSTD", "LZ4"
@@ -372,13 +381,13 @@ def to_orc(
     """{docstring}"""
 
     for _, dtype in df._dtypes:
-        if isinstance(dtype, cudf.CategoricalDtype):
+        if isinstance(dtype, CategoricalDtype):
             raise NotImplementedError(
                 "Writing to ORC format is not yet supported with "
                 "Categorical columns."
             )
 
-    if isinstance(df.index, cudf.CategoricalIndex):
+    if isinstance(df.index, CategoricalIndex):
         raise NotImplementedError(
             "Writing to ORC format is not yet supported with "
             "Categorical columns."
@@ -420,7 +429,7 @@ def to_orc(
 
 @acquire_spill_lock()
 def _plc_write_orc(
-    table: cudf.DataFrame,
+    table: DataFrame,
     path_or_buf,
     compression: Literal[
         False, None, "SNAPPY", "ZLIB", "ZSTD", "LZ4"
@@ -441,7 +450,7 @@ def _plc_write_orc(
     """
     user_data = {"pandas": ioutils.generate_pandas_metadata(table, index)}
     if index is True or (
-        index is None and not isinstance(table.index, cudf.RangeIndex)
+        index is None and not isinstance(table.index, RangeIndex)
     ):
         columns = (
             table._columns
@@ -456,7 +465,7 @@ def _plc_write_orc(
             tbl_meta.column_metadata[level].set_name(
                 ioutils._index_level_name(idx_name, level, table._column_names)  # type: ignore[arg-type]
             )
-        num_index_cols_meta = len(table.index.names)
+        num_index_cols_meta = table.index.nlevels
     else:
         plc_table = plc.Table(
             [col.to_pylibcudf(mode="read") for col in table._columns]
@@ -535,6 +544,13 @@ class ORCWriter:
         self.stripe_size_rows = stripe_size_rows
         self.row_index_stride = row_index_stride
         self.initialized = False
+        self.writer = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
 
     def write_table(self, table):
         """Writes a single table to the file"""
@@ -542,8 +558,7 @@ class ORCWriter:
             self._initialize_chunked_state(table)
 
         keep_index = self.index is not False and (
-            table.index.name is not None
-            or isinstance(table.index, cudf.MultiIndex)
+            table.index.name is not None or isinstance(table.index, MultiIndex)
         )
         if keep_index:
             cols_to_write = itertools.chain(
@@ -573,7 +588,7 @@ class ORCWriter:
         )
         self.tbl_meta = plc.io.types.TableInputMetadata(plc_table)
         if self.index is not False:
-            if isinstance(table.index, cudf.MultiIndex):
+            if isinstance(table.index, MultiIndex):
                 plc_table = plc.Table(
                     [
                         col.to_pylibcudf(mode="read")
@@ -585,7 +600,7 @@ class ORCWriter:
                 self.tbl_meta = plc.io.types.TableInputMetadata(plc_table)
                 for level, idx_name in enumerate(table.index.names):
                     self.tbl_meta.column_metadata[level].set_name(idx_name)
-                num_index_cols_meta = len(table.index.names)
+                num_index_cols_meta = table.index.nlevels
             else:
                 if table.index.name is not None:
                     plc_table = plc.Table(
@@ -678,15 +693,15 @@ def _set_col_children_metadata(
     col_meta: plc.io.types.ColumnInMetadata,
     list_column_as_map: bool = False,
 ) -> None:
-    if isinstance(col.dtype, cudf.StructDtype):
+    if isinstance(col.dtype, StructDtype):
         for i, (child_col, name) in enumerate(
-            zip(col.children, list(col.dtype.fields))
+            zip(col.children, list(col.dtype.fields), strict=True)
         ):
             col_meta.child(i).set_name(name)
             _set_col_children_metadata(
                 child_col, col_meta.child(i), list_column_as_map
             )
-    elif isinstance(col.dtype, cudf.ListDtype):
+    elif isinstance(col.dtype, ListDtype):
         if list_column_as_map:
             col_meta.set_list_column_as_map()
         _set_col_children_metadata(

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -135,7 +135,7 @@ struct format_compiler {
         items.push_back(format_item::new_literal(ch));
         continue;
       }
-      CUDF_EXPECTS(length > 0, "Unfinished specifier in timestamp format");
+      CUDF_EXPECTS(length > 0, "Unfinished specifier in timestamp format", std::invalid_argument);
 
       ch = *str++;
       length--;
@@ -145,7 +145,9 @@ struct format_compiler {
         continue;
       }
       if (ch >= '0' && ch <= '9') {
-        CUDF_EXPECTS(*str == 'f', "precision not supported for specifier: " + std::string(1, *str));
+        CUDF_EXPECTS(*str == 'f',
+                     "precision not supported for specifier: " + std::string(1, *str),
+                     std::invalid_argument);
         specifiers[*str] = static_cast<int8_t>(ch - '0');
         ch               = *str++;
         length--;
@@ -153,7 +155,8 @@ struct format_compiler {
 
       // check if the specifier found is supported
       CUDF_EXPECTS(specifiers.find(ch) != specifiers.end(),
-                   "invalid format specifier: " + std::string(1, ch));
+                   "invalid format specifier: " + std::string(1, ch),
+                   std::invalid_argument);
 
       // create the format item for this specifier
       items.push_back(format_item::new_specifier(ch, specifiers[ch]));
@@ -406,11 +409,12 @@ struct parse_datetime {
  * @brief Type-dispatch operator to convert timestamp strings to native fixed-width-type
  */
 struct dispatch_to_timestamps_fn {
-  template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+  template <typename T>
   void operator()(column_device_view const& d_strings,
                   std::string_view format,
                   mutable_column_view& results_view,
                   rmm::cuda_stream_view stream) const
+    requires(cudf::is_timestamp<T>())
   {
     format_compiler compiler(format, stream);
     parse_datetime<T> pfn{d_strings, compiler.format_items(), compiler.subsecond_precision()};
@@ -420,13 +424,14 @@ struct dispatch_to_timestamps_fn {
                       results_view.data<T>(),
                       pfn);
   }
-  template <typename T, std::enable_if_t<not cudf::is_timestamp<T>()>* = nullptr>
+  template <typename T>
   void operator()(column_device_view const&,
                   std::string_view,
                   mutable_column_view&,
                   rmm::cuda_stream_view) const
+    requires(not cudf::is_timestamp<T>())
   {
-    CUDF_FAIL("Only timestamps type are expected");
+    CUDF_FAIL("Only timestamps type are expected", std::invalid_argument);
   }
 };
 
@@ -439,10 +444,9 @@ std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& input,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
-  if (input.is_empty())
-    return make_empty_column(timestamp_type);  // make_timestamp_column(timestamp_type, 0);
+  if (input.is_empty()) { return make_empty_column(timestamp_type); }
 
-  CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
+  CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.", std::invalid_argument);
 
   auto d_strings = column_device_view::create(input.parent(), stream);
 
@@ -545,7 +549,7 @@ struct check_datetime_format {
       switch (item.value) {
         case 'Y': {
           auto const [year, left] = parse_int(ptr, item.length);
-          result                  = (left < item.length);
+          result                  = (left < item.length) && (year <= 9999);
           dateparts.year          = static_cast<int16_t>(year);
           bytes_read -= left;
           break;
@@ -680,7 +684,7 @@ std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& input,
   size_type strings_count = input.size();
   if (strings_count == 0) return make_empty_column(type_id::BOOL8);
 
-  CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
+  CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.", std::invalid_argument);
 
   auto d_strings = column_device_view::create(input.parent(), stream);
 
@@ -1041,7 +1045,7 @@ struct datetime_formatter_fn {
           copy_value = day_of_week == 0 && item.value == 'u' ? 7 : day_of_week;
           break;
         }
-        // clang-format off
+          // clang-format off
         case 'U': {  // week of year: first week includes the first Sunday of the year
           copy_value = get_week_of_year(days, cuda::std::chrono::sys_days{
             cuda::std::chrono::Sunday[1]/cuda::std::chrono::January/ymd.year()});
@@ -1102,12 +1106,13 @@ struct datetime_formatter_fn {
 //
 using strings_children = std::pair<std::unique_ptr<cudf::column>, rmm::device_uvector<char>>;
 struct dispatch_from_timestamps_fn {
-  template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+  template <typename T>
   strings_children operator()(column_device_view const& d_timestamps,
                               column_device_view const& d_format_names,
                               device_span<format_item const> d_format_items,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr) const
+    requires(cudf::is_timestamp<T>())
   {
     return make_strings_children(
       datetime_formatter_fn<T>{d_timestamps, d_format_names, d_format_items},
@@ -1117,9 +1122,10 @@ struct dispatch_from_timestamps_fn {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_timestamp<T>(), strings_children> operator()(Args&&...) const
+  strings_children operator()(Args&&...) const
+    requires(not cudf::is_timestamp<T>())
   {
-    CUDF_FAIL("Only timestamps type are expected");
+    CUDF_FAIL("Only timestamps type are expected", std::invalid_argument);
   }
 };
 
@@ -1134,9 +1140,10 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
 {
   if (timestamps.is_empty()) return make_empty_column(type_id::STRING);
 
-  CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
+  CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.", std::invalid_argument);
   CUDF_EXPECTS(names.is_empty() || names.size() == format_names_size,
-               "Invalid size for format names.");
+               "Invalid size for format names.",
+               std::invalid_argument);
 
   auto const d_names = column_device_view::create(names.parent(), stream);
 

@@ -1,5 +1,7 @@
 # Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
+import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -10,7 +12,6 @@ from dask.utils_test import hlg_layer
 
 import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
-from cudf.testing._utils import expect_warning_if
 
 import dask_cudf
 from dask_cudf._expr.groupby import OPTIMIZED_AGGS, _aggs_optimized
@@ -53,11 +54,11 @@ def pdf(request):
 # deprecation check for "collect".
 @pytest.mark.parametrize(
     "aggregation",
-    sorted((*tuple(set(OPTIMIZED_AGGS) - {list}), "collect")),
+    sorted(set(OPTIMIZED_AGGS) - {list}),
 )
 @pytest.mark.parametrize("series", [False, True])
 def test_groupby_basic(series, aggregation, pdf):
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     gdf_grouped = gdf.groupby("xx", dropna=True)
     ddf_grouped = dask_cudf.from_cudf(gdf, npartitions=5).groupby(
         "xx", dropna=True
@@ -69,9 +70,8 @@ def test_groupby_basic(series, aggregation, pdf):
 
     check_dtype = aggregation != "count"
 
-    with expect_warning_if(aggregation == "collect"):
-        expect = getattr(gdf_grouped, aggregation)()
-        actual = getattr(ddf_grouped, aggregation)()
+    expect = getattr(gdf_grouped, aggregation)()
+    actual = getattr(ddf_grouped, aggregation)()
 
     dd.assert_eq(expect, actual, check_dtype=check_dtype)
 
@@ -86,7 +86,7 @@ def test_groupby_basic(series, aggregation, pdf):
 @pytest.mark.parametrize("series", [True, False])
 @pytest.mark.parametrize("aggregation", ["cumsum", "cumcount"])
 def test_groupby_cumulative(aggregation, pdf, series):
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     ddf = dask_cudf.from_cudf(gdf, npartitions=5)
 
     gdf_grouped = gdf.groupby("xx")
@@ -115,7 +115,7 @@ def test_groupby_cumulative(aggregation, pdf, series):
     ],
 )
 def test_groupby_agg(func, aggregation, pdf):
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     ddf = dask_cudf.from_cudf(gdf, npartitions=5)
 
     actual = func(ddf, aggregation)
@@ -168,7 +168,7 @@ def test_groupby_multi_column(func):
         }
     )
 
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     ddf = dask_cudf.from_cudf(gdf, npartitions=5)
 
@@ -625,9 +625,14 @@ def test_groupby_agg_params(
         1 if split_out == "use_dask_default" else split_out
     )
 
-    # Compute for easier multiindex handling
-    gf = gr.compute()
-    pf = pr.compute()
+    with warnings.catch_warnings():
+        # dask<=2025.7.0 uses a deprecated "grouper" attribute
+        # in some of these computations. We'll silence the warning
+        # here and fix it upstream.
+        warnings.filterwarnings("ignore", category=FutureWarning)
+        # Compute for easier multiindex handling
+        gf = gr.compute()
+        pf = pr.compute()
 
     # Reset index and sort by groupby columns
     if as_index:
@@ -655,7 +660,7 @@ def test_groupby_agg_redirect(aggregations):
         }
     )
 
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     ddf = dask_cudf.from_cudf(gdf, npartitions=5)
 
@@ -705,7 +710,7 @@ def test_groupby_unique_lists():
 @pytest.mark.parametrize("agg", ["first", "last"])
 def test_groupby_first_last(data, agg):
     pdf = pd.DataFrame(data)
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     ddf = dd.from_pandas(pdf, npartitions=2)
     gddf = dask_cudf.from_cudf(gdf, npartitions=2)

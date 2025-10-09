@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Hashable
 
     from cudf.core.column import ColumnBase
+    from cudf.core.dataframe import DataFrame
 
 
 PARQUET_META_TYPE_MAP = {
@@ -1087,28 +1088,6 @@ cudf.read_feather
 """
 doc_to_feather = docfmt_partial(docstring=_docstring_to_feather)
 
-_docstring_to_dlpack = """
-Converts a cuDF object into a DLPack tensor.
-
-DLPack is an open-source memory tensor structure:
-`dmlc/dlpack <https://github.com/dmlc/dlpack>`_.
-
-This function takes a cuDF object and converts it to a PyCapsule object
-which contains a pointer to a DLPack tensor. This function deep copies the
-data into the DLPack tensor from the cuDF object.
-
-Parameters
-----------
-cudf_obj : DataFrame, Series, Index, or Column
-
-Returns
--------
-pycapsule_obj : PyCapsule
-    Output DLPack tensor pointer which is encapsulated in a PyCapsule
-    object.
-"""
-doc_to_dlpack = docfmt_partial(docstring=_docstring_to_dlpack)
-
 _docstring_read_csv = """
 Load a comma-separated-values (CSV) dataset into a DataFrame
 
@@ -1525,9 +1504,9 @@ def _index_level_name(
         return f"__index_level_{level}__"
 
 
-def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
+def generate_pandas_metadata(table: DataFrame, index: bool | None) -> str:
     col_names: list[Hashable] = []
-    types = []
+    types: list[pa.DataType] = []
     index_levels = []
     index_descriptors = []
     df_meta = table.head(0)
@@ -1598,7 +1577,7 @@ def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
                 index_levels.append(idx)
             index_descriptors.append(descr)
 
-    metadata = pa.pandas_compat.construct_metadata(
+    metadata = pa.pandas_compat.construct_metadata(  # type: ignore[attr-defined]
         columns_to_convert=columns_to_convert,
         # It is OKAY to do `.to_pandas()` because
         # this method will extract `.columns` metadata only
@@ -1616,7 +1595,7 @@ def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
 
 
 def _update_pandas_metadata_types_inplace(
-    df: cudf.DataFrame, md_dict: dict
+    df: DataFrame, md_dict: dict
 ) -> None:
     # correct metadata for list and struct and nullable numeric types
     for col_meta in md_dict["columns"]:
@@ -2316,9 +2295,10 @@ def _get_remote_bytes_all(
             zip(
                 *(
                     (r, j, min(j + blocksize, s))
-                    for r, s in zip(remote_paths, sizes)
+                    for r, s in zip(remote_paths, sizes, strict=True)
                     for j in range(0, s, blocksize)
-                )
+                ),
+                strict=True,
             ),
         )
 
@@ -2327,7 +2307,9 @@ def _get_remote_bytes_all(
 
         # Construct local byte buffers
         # (Need to make sure path offsets are ordered correctly)
-        unique_count = dict(zip(*np.unique(paths, return_counts=True)))
+        unique_count = dict(
+            zip(*np.unique(paths, return_counts=True), strict=True)
+        )
         offset = np.cumsum([0] + [unique_count[p] for p in remote_paths])
         buffers = [
             functools.reduce(operator.add, chunks[offset[i] : offset[i + 1]])
@@ -2361,7 +2343,7 @@ def _get_remote_bytes_parquet(
     )
 
     buffers = []
-    for size, path in zip(sizes, remote_paths):
+    for size, path in zip(sizes, remote_paths, strict=True):
         path_data = data[path]
         buf = np.empty(size, dtype="b")
         for range_offset in path_data.keys():
@@ -2402,9 +2384,7 @@ def _prefetch_remote_buffers(
         return paths
 
 
-def _add_df_col_struct_names(
-    df: cudf.DataFrame, child_names_dict: dict
-) -> None:
+def _add_df_col_struct_names(df: DataFrame, child_names_dict: dict) -> None:
     for name, child_names in child_names_dict.items():
         col = df._data[name]
         df._data[name] = _update_col_struct_field_names(col, child_names)
@@ -2416,7 +2396,7 @@ def _update_col_struct_field_names(
     if col.children:
         children = list(col.children)
         for i, (child, names) in enumerate(
-            zip(children, child_names.values())
+            zip(children, child_names.values(), strict=True)
         ):
             children[i] = _update_col_struct_field_names(child, names)
         col.set_base_children(tuple(children))

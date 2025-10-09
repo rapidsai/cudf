@@ -41,9 +41,9 @@ TEST_F(StringsLikeTests, Basic)
      "bcdefghijklmnopqrstuvwxyz01234567890ABCDEFGHIJKLMNOPQRSTUVWXYZáéêú",
      "01234567890123456789012345678901234567890123456789012345678901234567890123456789"
      "01234567890123456789012345678901234567890123456789012345678901234567890123456789"});
-  sv = cudf::strings_column_view(input);
+  sv      = cudf::strings_column_view(input);
   pattern = std::string_view("abcdefghijklmnopqrstuvwxyz01234567890ABCDEFGHIJKLMNOPQRSTUVWXYZáéêú");
-  results  = cudf::strings::like(sv, pattern);
+  results = cudf::strings::like(sv, pattern);
   expected = cudf::test::fixed_width_column_wrapper<bool>({true, false, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }

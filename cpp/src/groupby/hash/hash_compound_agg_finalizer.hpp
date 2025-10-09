@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,13 +21,12 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
 
 namespace cudf::groupby::detail::hash {
 template <typename SetType>
 class hash_compound_agg_finalizer final : public cudf::detail::aggregation_finalizer {
   column_view col;
-  data_type result_type;
+  data_type input_type;
   cudf::detail::result_cache* sparse_results;
   cudf::detail::result_cache* dense_results;
   device_span<size_type const> gather_map;
@@ -39,7 +38,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
  public:
   using cudf::detail::aggregation_finalizer::visit;
 
-  hash_compound_agg_finalizer(column_view col,
+  hash_compound_agg_finalizer(column_view const& col,
                               cudf::detail::result_cache* sparse_results,
                               cudf::detail::result_cache* dense_results,
                               device_span<size_type const> gather_map,
@@ -61,6 +60,8 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
   void visit(cudf::detail::max_aggregation const& agg) override;
 
   void visit(cudf::detail::mean_aggregation const& agg) override;
+
+  void visit(cudf::detail::m2_aggregation const& agg) override;
 
   void visit(cudf::detail::var_aggregation const& agg) override;
 

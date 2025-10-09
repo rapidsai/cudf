@@ -1,11 +1,9 @@
 # Copyright (c) 2018-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
-import errno
 import itertools
-import os
 import warnings
-from collections import abc
+from collections.abc import Collection, Mapping
 from io import BytesIO, StringIO
 from typing import TYPE_CHECKING, cast
 
@@ -14,9 +12,18 @@ import pandas as pd
 
 import pylibcudf as plc
 
-import cudf
 from cudf.api.types import is_scalar
 from cudf.core.buffer import acquire_spill_lock
+from cudf.core.dataframe import DataFrame
+from cudf.core.dtypes import (
+    CategoricalDtype,
+    ListDtype,
+    StructDtype,
+    _BaseDtype,
+    dtype as cudf_dtype,
+)
+from cudf.core.index import CategoricalIndex
+from cudf.options import get_option
 from cudf.utils import ioutils
 from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
@@ -25,6 +32,8 @@ from cudf.utils.dtypes import (
 from cudf.utils.performance_tracking import _performance_tracking
 
 if TYPE_CHECKING:
+    from collections.abc import Hashable
+
     from cudf._typing import DtypeObj
 
 
@@ -72,7 +81,7 @@ def read_csv(
     byte_range: list[int] | tuple[int, int] | None = None,
     storage_options=None,
     bytes_per_thread: int | None = None,
-) -> cudf.DataFrame:
+) -> DataFrame:
     """{docstring}"""
 
     if delim_whitespace is not False:
@@ -97,19 +106,6 @@ def read_csv(
 
     if na_values is not None and is_scalar(na_values):
         na_values = [na_values]
-
-    if not isinstance(filepath_or_buffer, (BytesIO, StringIO, bytes)):
-        if not os.path.isfile(filepath_or_buffer):
-            raise FileNotFoundError(
-                errno.ENOENT, os.strerror(errno.ENOENT), filepath_or_buffer
-            )
-
-    if isinstance(filepath_or_buffer, StringIO):
-        filepath_or_buffer = filepath_or_buffer.read().encode()
-    elif isinstance(filepath_or_buffer, str) and not os.path.isfile(
-        filepath_or_buffer
-    ):
-        filepath_or_buffer = filepath_or_buffer.encode()
 
     _validate_args(
         delimiter,
@@ -159,11 +155,11 @@ def read_csv(
         elif header == "infer":
             header = 0
 
-    hex_cols: list[abc.Hashable] = []
-    cudf_dtypes: list[DtypeObj] | dict[abc.Hashable, DtypeObj] | DtypeObj = []
-    plc_dtypes: list[plc.DataType] | dict[abc.Hashable, plc.DataType] = []
+    hex_cols: list[Hashable] = []
+    cudf_dtypes: list[DtypeObj] | dict[Hashable, DtypeObj] | DtypeObj = []
+    plc_dtypes: list[plc.DataType] | dict[Hashable, plc.DataType] = []
     if dtype is not None:
-        if isinstance(dtype, abc.Mapping):
+        if isinstance(dtype, Mapping):
             plc_dtypes = {}
             cudf_dtypes = {}
             for k, col_type in dtype.items():
@@ -171,16 +167,16 @@ def read_csv(
                     col_type = _CSV_HEX_TYPE_MAP[col_type]
                     hex_cols.append(str(k))
 
-                cudf_dtype = cudf.dtype(col_type)
-                cudf_dtypes[k] = cudf_dtype
-                plc_dtypes[k] = _get_plc_data_type_from_dtype(cudf_dtype)
+                typ = cudf_dtype(col_type)
+                cudf_dtypes[k] = typ
+                plc_dtypes[k] = _get_plc_data_type_from_dtype(typ)
         elif isinstance(
             dtype,
             (
                 str,
                 np.dtype,
                 pd.api.extensions.ExtensionDtype,
-                cudf.core.dtypes._BaseDtype,
+                _BaseDtype,
                 type,
             ),
         ):
@@ -188,10 +184,10 @@ def read_csv(
                 dtype = _CSV_HEX_TYPE_MAP[dtype]
                 hex_cols.append(0)
             else:
-                dtype = cudf.dtype(dtype)
+                dtype = cudf_dtype(dtype)
             cudf_dtypes = dtype
             cast(list, plc_dtypes).append(_get_plc_data_type_from_dtype(dtype))
-        elif isinstance(dtype, abc.Collection):
+        elif isinstance(dtype, Collection):
             for index, col_dtype in enumerate(dtype):
                 if (
                     isinstance(col_dtype, str)
@@ -200,7 +196,7 @@ def read_csv(
                     col_dtype = _CSV_HEX_TYPE_MAP[col_dtype]
                     hex_cols.append(index)
                 else:
-                    col_dtype = cudf.dtype(col_dtype)
+                    col_dtype = cudf_dtype(col_dtype)
                 cudf_dtypes.append(col_dtype)
                 plc_dtypes.append(_get_plc_data_type_from_dtype(col_dtype))
         else:
@@ -273,7 +269,10 @@ def read_csv(
         options.set_na_values([str(val) for val in na_values])
 
     table_w_meta = plc.io.csv.read_csv(options)
-    df = cudf.DataFrame.from_pylibcudf(table_w_meta)
+    df = DataFrame.from_pylibcudf(table_w_meta)
+
+    if get_option("mode.pandas_compatible") and df.empty:
+        raise pd.errors.EmptyDataError("No columns to parse from file")
 
     # Cast result to categorical if specified in dtype=
     # since categorical is not handled in pylibcudf
@@ -281,24 +280,22 @@ def read_csv(
         to_category = {
             k: v
             for k, v in cudf_dtypes.items()
-            if isinstance(v, cudf.CategoricalDtype)
+            if isinstance(v, CategoricalDtype)
         }
         if to_category:
             df = df.astype(to_category)
-    elif isinstance(cudf_dtypes, cudf.CategoricalDtype):
+    elif isinstance(cudf_dtypes, CategoricalDtype):
         df = df.astype(dtype)
     elif isinstance(cudf_dtypes, list):
         for index, col_dtype in enumerate(cudf_dtypes):
-            if isinstance(col_dtype, cudf.CategoricalDtype):
+            if isinstance(col_dtype, CategoricalDtype):
                 col_name = df._column_names[index]
                 df._data[col_name] = df._data[col_name].astype(col_dtype)
 
     if names is not None and len(names) and isinstance(names[0], int):
         df.columns = [int(x) for x in df._data]
     elif (
-        names is None
-        and header == -1
-        and cudf.get_option("mode.pandas_compatible")
+        names is None and header == -1 and get_option("mode.pandas_compatible")
     ):
         df.columns = [int(x) for x in df._column_names]
 
@@ -321,7 +318,7 @@ def read_csv(
         else:
             df = df.set_index(index_col)
 
-    if dtype is None or isinstance(dtype, abc.Mapping):
+    if dtype is None or isinstance(dtype, Mapping):
         # There exists some dtypes in the result columns that is inferred.
         # Find them and map them to the default dtypes.
         specified_dtypes = {} if dtype is None else dtype
@@ -345,7 +342,7 @@ def read_csv(
 @_performance_tracking
 @ioutils.doc_to_csv()
 def to_csv(
-    df: cudf.DataFrame,
+    df: DataFrame,
     path_or_buf=None,
     sep: str = ",",
     na_rep: str = "",
@@ -394,7 +391,7 @@ def to_csv(
             )
 
     for _, dtype in df._dtypes:
-        if isinstance(dtype, (cudf.ListDtype, cudf.StructDtype)):
+        if isinstance(dtype, (ListDtype, StructDtype)):
             raise NotImplementedError(
                 "Writing to csv format is not yet supported with "
                 f"{dtype} columns."
@@ -405,14 +402,14 @@ def to_csv(
     # workaround once following issue is fixed:
     # https://github.com/rapidsai/cudf/issues/6661
     if any(
-        isinstance(dtype, cudf.CategoricalDtype) for _, dtype in df._dtypes
-    ) or isinstance(df.index, cudf.CategoricalIndex):
+        isinstance(dtype, CategoricalDtype) for _, dtype in df._dtypes
+    ) or isinstance(df.index, CategoricalIndex):
         df = df.copy(deep=False)
         for col_name, col in df._column_labels_and_values:
-            if isinstance(col.dtype, cudf.CategoricalDtype):
+            if isinstance(col.dtype, CategoricalDtype):
                 df._data[col_name] = col.astype(col.dtype.categories.dtype)
 
-        if isinstance(df.index, cudf.CategoricalIndex):
+        if isinstance(df.index, CategoricalIndex):
             df.index = df.index.astype(df.index.categories.dtype)
 
     rows_per_chunk = chunksize if chunksize else len(df)
@@ -449,7 +446,7 @@ def to_csv(
 
 @acquire_spill_lock()
 def _plc_write_csv(
-    table: cudf.DataFrame,
+    table: DataFrame,
     path_or_buf=None,
     sep: str = ",",
     na_rep: str = "",
@@ -546,7 +543,7 @@ def _get_plc_data_type_from_dtype(dtype: DtypeObj) -> plc.DataType:
     # TODO: Remove this work-around Dictionary types
     # in libcudf are fully mapped to categorical columns:
     # https://github.com/rapidsai/cudf/issues/3960
-    if isinstance(dtype, cudf.CategoricalDtype):
+    if isinstance(dtype, CategoricalDtype):
         # TODO: should we do this generally in dtype_to_pylibcudf_type?
         dtype = dtype.categories.dtype
     return dtype_to_pylibcudf_type(dtype)

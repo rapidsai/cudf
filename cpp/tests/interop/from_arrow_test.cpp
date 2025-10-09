@@ -444,7 +444,7 @@ TEST_P(FromArrowTestSlice, SliceTest)
   if (got_cudf_table.value()->num_rows() == 0 and expected_cudf_table.num_rows() == 0) {
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_cudf_table.view(), got_cudf_table.value()->view());
   } else {
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_cudf_table.view(), got_cudf_table.value()->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_cudf_table.view(), got_cudf_table.value()->view());
   }
 }
 
@@ -514,7 +514,7 @@ TYPED_TEST(FromArrowTestDecimalsTest, FixedPointTableNulls)
     auto const data     = std::vector<T>{1, 2, 3, 4, 5, 6, 0, 0};
     auto const validity = std::vector<uint8_t>{1, 1, 1, 1, 1, 1, 0, 0};
     auto const col      = fp_wrapper<T>({1, 2, 3, 4, 5, 6, 0, 0},
-                                   {true, true, true, true, true, true, false, false},
+                                        {true, true, true, true, true, true, false, false},
                                    scale_type{scale});
     auto const expected = cudf::table_view({col});
 

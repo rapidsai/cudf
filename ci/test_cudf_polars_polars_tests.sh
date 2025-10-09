@@ -1,7 +1,9 @@
 #!/bin/bash
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
-set -eou pipefail
+set -euo pipefail
+
+source rapids-init-pip
 
 rapids-logger "Download wheels"
 
@@ -26,8 +28,14 @@ git clone https://github.com/pola-rs/polars.git --branch "${TAG}" --depth 1
 
 # Install requirements for running polars tests
 rapids-logger "Install polars test requirements"
-# TODO: Remove sed command when polars-cloud supports 1.23
+# We don't need to pick up dependencies from polars-cloud, so we remove it.
 sed -i '/^polars-cloud$/d' polars/py-polars/requirements-dev.txt
+# Deltalake release 1.0.0 contains breaking changes for Polars. So we're adding an upper pinning temporarily
+# until things get resolved. Tracking Issue: https://github.com/pola-rs/polars/issues/22999
+sed -i 's/^deltalake>=0.15.0.*/deltalake>=0.15.0,<1.0.0/' polars/py-polars/requirements-dev.txt
+# pyiceberg depends on a non-documented attribute of pydantic.
+# AttributeError: 'pydantic_core._pydantic_core.ValidationInfo' object has no attribute 'current_schema_id'
+sed -i 's/^pydantic>=2.0.0.*/pydantic>=2.0.0,<2.12.0/' polars/py-polars/requirements-dev.txt
 rapids-pip-retry install -r polars/py-polars/requirements-dev.txt -r polars/py-polars/requirements-ci.txt
 
 # shellcheck disable=SC2317

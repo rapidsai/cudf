@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import pyarrow as pa
 import pytest
 
 import polars as pl
@@ -11,17 +10,19 @@ from polars.testing.asserts import assert_frame_equal
 
 import pylibcudf as plc
 
-from cudf_polars.containers import Column, DataFrame
+from cudf_polars.containers import Column, DataFrame, DataType
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
 def test_select_missing_raises():
+    dtype = DataType(pl.Int8())
     df = DataFrame(
         [
             Column(
                 plc.column_factories.make_numeric_column(
-                    plc.DataType(plc.TypeId.INT8), 2, plc.MaskState.ALL_VALID
+                    dtype.plc_type, 2, plc.MaskState.ALL_VALID
                 ),
+                dtype=dtype,
                 name="a",
             )
         ]
@@ -31,12 +32,14 @@ def test_select_missing_raises():
 
 
 def test_replace_missing_raises():
+    dtype = DataType(pl.Int8())
     df = DataFrame(
         [
             Column(
                 plc.column_factories.make_numeric_column(
-                    plc.DataType(plc.TypeId.INT8), 2, plc.MaskState.ALL_VALID
+                    dtype.plc_type, 2, plc.MaskState.ALL_VALID
                 ),
+                dtype=dtype,
                 name="a",
             )
         ]
@@ -55,25 +58,30 @@ def test_from_table_wrong_names():
         ]
     )
     with pytest.raises(ValueError):
-        DataFrame.from_table(table, ["a", "b"])
+        DataFrame.from_table(table, ["a", "b"], [DataType(pl.Int8())])
 
 
 def test_unnamed_column_raise():
+    dtype = DataType(pl.Int8())
     payload = plc.column_factories.make_numeric_column(
-        plc.DataType(plc.TypeId.INT8), 0, plc.MaskState.ALL_VALID
+        dtype.plc_type, 0, plc.MaskState.ALL_VALID
     )
 
     with pytest.raises(ValueError):
-        DataFrame([Column(payload, name="a"), Column(payload)])
+        DataFrame(
+            [Column(payload, name="a", dtype=dtype), Column(payload, dtype=dtype)]
+        )
 
 
 def test_sorted_like_raises_mismatching_names():
+    dtype = DataType(pl.Int8())
     df = DataFrame(
         [
             Column(
                 plc.column_factories.make_numeric_column(
-                    plc.DataType(plc.TypeId.INT8), 2, plc.MaskState.ALL_VALID
+                    dtype.plc_type, 2, plc.MaskState.ALL_VALID
                 ),
+                dtype=dtype,
                 name="a",
             )
         ]
@@ -84,10 +92,12 @@ def test_sorted_like_raises_mismatching_names():
 
 
 def test_shallow_copy():
+    dtype = DataType(pl.Int8())
     column = Column(
         plc.column_factories.make_numeric_column(
-            plc.DataType(plc.TypeId.INT8), 2, plc.MaskState.ALL_VALID
+            dtype.plc_type, 2, plc.MaskState.ALL_VALID
         ),
+        dtype=dtype,
         name="a",
     )
     column.set_sorted(
@@ -166,19 +176,18 @@ def test_empty_name_roundtrips_no_overlap():
 
 
 @pytest.mark.parametrize(
-    "arrow_tbl",
+    "polars_tbl",
     [
-        pa.table([]),
-        pa.table({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}),
-        pa.table({"a": [1, 2, 3]}),
-        pa.table({"a": [1], "b": [2], "c": [3]}),
-        pa.table({"a": ["a", "bb", "ccc"]}),
-        pa.table({"a": [1, 2, None], "b": [None, 3, 4]}),
+        pl.DataFrame(),
+        pl.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}),
+        pl.DataFrame({"a": [1, 2, 3]}),
+        pl.DataFrame({"a": [1], "b": [2], "c": [3]}),
+        pl.DataFrame({"a": ["a", "bb", "ccc"]}),
+        pl.DataFrame({"a": [1, 2, None], "b": [None, 3, 4]}),
     ],
 )
-def test_serialization_roundtrip(arrow_tbl):
-    plc_tbl = plc.Table(arrow_tbl)
-    df = DataFrame.from_table(plc_tbl, names=arrow_tbl.column_names)
+def test_serialization_roundtrip(polars_tbl):
+    df = DataFrame.from_polars(polars_tbl)
 
     header, frames = df.serialize()
     res = DataFrame.deserialize(header, frames)

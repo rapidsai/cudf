@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cudf/ast/detail/operators.cuh>
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -47,21 +48,17 @@ struct return_type_functor {
    * @tparam RHS Right input type.
    * @param result Pointer whose value is assigned to the result data type.
    */
-  template <typename OperatorFunctor,
-            typename LHS,
-            typename RHS,
-            std::enable_if_t<is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
+  template <typename OperatorFunctor, typename LHS, typename RHS>
   void operator()(cudf::data_type& result)
+    requires(is_valid_binary_op<OperatorFunctor, LHS, RHS>)
   {
     using Out = cuda::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
     result    = cudf::data_type{cudf::type_to_id<Out>()};
   }
 
-  template <typename OperatorFunctor,
-            typename LHS,
-            typename RHS,
-            std::enable_if_t<!is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
+  template <typename OperatorFunctor, typename LHS, typename RHS>
   void operator()(cudf::data_type& result)
+    requires(!is_valid_binary_op<OperatorFunctor, LHS, RHS>)
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid binary operation. Return type cannot be determined.");
@@ -78,19 +75,17 @@ struct return_type_functor {
    * @tparam T Input type.
    * @param result Pointer whose value is assigned to the result data type.
    */
-  template <typename OperatorFunctor,
-            typename T,
-            std::enable_if_t<is_valid_unary_op<OperatorFunctor, T>>* = nullptr>
+  template <typename OperatorFunctor, typename T>
   void operator()(cudf::data_type& result)
+    requires(is_valid_unary_op<OperatorFunctor, T>)
   {
     using Out = cuda::std::invoke_result_t<OperatorFunctor, T>;
     result    = cudf::data_type{cudf::type_to_id<Out>()};
   }
 
-  template <typename OperatorFunctor,
-            typename T,
-            std::enable_if_t<!is_valid_unary_op<OperatorFunctor, T>>* = nullptr>
+  template <typename OperatorFunctor, typename T>
   void operator()(cudf::data_type& result)
+    requires(!is_valid_unary_op<OperatorFunctor, T>)
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid unary operation. Return type cannot be determined.");
@@ -112,20 +107,16 @@ struct return_type_functor {
  */
 template <typename OperatorFunctor>
 struct single_dispatch_binary_operator_types {
-  template <typename LHS,
-            typename F,
-            typename... Ts,
-            std::enable_if_t<is_valid_binary_op<OperatorFunctor, LHS, LHS>>* = nullptr>
+  template <typename LHS, typename F, typename... Ts>
   inline void operator()(F&& f, Ts&&... args)
+    requires(is_valid_binary_op<OperatorFunctor, LHS, LHS>)
   {
     f.template operator()<OperatorFunctor, LHS, LHS>(std::forward<Ts>(args)...);
   }
 
-  template <typename LHS,
-            typename F,
-            typename... Ts,
-            std::enable_if_t<!is_valid_binary_op<OperatorFunctor, LHS, LHS>>* = nullptr>
+  template <typename LHS, typename F, typename... Ts>
   inline void operator()(F&& f, Ts&&... args)
+    requires(!is_valid_binary_op<OperatorFunctor, LHS, LHS>)
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid binary operation.");
@@ -198,20 +189,16 @@ inline constexpr void binary_operator_dispatcher(
  */
 template <typename OperatorFunctor>
 struct dispatch_unary_operator_types {
-  template <typename InputT,
-            typename F,
-            typename... Ts,
-            std::enable_if_t<is_valid_unary_op<OperatorFunctor, InputT>>* = nullptr>
+  template <typename InputT, typename F, typename... Ts>
   inline void operator()(F&& f, Ts&&... args)
+    requires(is_valid_unary_op<OperatorFunctor, InputT>)
   {
     f.template operator()<OperatorFunctor, InputT>(std::forward<Ts>(args)...);
   }
 
-  template <typename InputT,
-            typename F,
-            typename... Ts,
-            std::enable_if_t<!is_valid_unary_op<OperatorFunctor, InputT>>* = nullptr>
+  template <typename InputT, typename F, typename... Ts>
   inline void operator()(F&& f, Ts&&... args)
+    requires(!is_valid_unary_op<OperatorFunctor, InputT>)
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid unary operation.");
@@ -283,6 +270,63 @@ cudf::size_type ast_operator_arity(ast_operator op)
   cudf::size_type result{};
   ast_operator_dispatcher(op, arity_functor{}, result);
   return result;
+}
+
+std::string_view ast_operator_string(ast_operator op)
+{
+  switch (op) {
+    case ast_operator::ADD: return "ADD";
+    case ast_operator::SUB: return "SUB";
+    case ast_operator::MUL: return "MUL";
+    case ast_operator::DIV: return "DIV";
+    case ast_operator::TRUE_DIV: return "TRUE_DIV";
+    case ast_operator::FLOOR_DIV: return "FLOOR_DIV";
+    case ast_operator::MOD: return "MOD";
+    case ast_operator::PYMOD: return "PYMOD";
+    case ast_operator::POW: return "POW";
+    case ast_operator::EQUAL: return "EQUAL";
+    case ast_operator::NULL_EQUAL: return "NULL_EQUAL";
+    case ast_operator::NOT_EQUAL: return "NOT_EQUAL";
+    case ast_operator::LESS: return "LESS";
+    case ast_operator::GREATER: return "GREATER";
+    case ast_operator::LESS_EQUAL: return "LESS_EQUAL";
+    case ast_operator::GREATER_EQUAL: return "GREATER_EQUAL";
+    case ast_operator::BITWISE_AND: return "BITWISE_AND";
+    case ast_operator::BITWISE_OR: return "BITWISE_OR";
+    case ast_operator::BITWISE_XOR: return "BITWISE_XOR";
+    case ast_operator::LOGICAL_AND: return "LOGICAL_AND";
+    case ast_operator::NULL_LOGICAL_AND: return "NULL_LOGICAL_AND";
+    case ast_operator::LOGICAL_OR: return "LOGICAL_OR";
+    case ast_operator::NULL_LOGICAL_OR: return "NULL_LOGICAL_OR";
+    case ast_operator::IDENTITY: return "IDENTITY";
+    case ast_operator::IS_NULL: return "IS_NULL";
+    case ast_operator::SIN: return "SIN";
+    case ast_operator::COS: return "COS";
+    case ast_operator::TAN: return "TAN";
+    case ast_operator::ARCSIN: return "ARCSIN";
+    case ast_operator::ARCCOS: return "ARCCOS";
+    case ast_operator::ARCTAN: return "ARCTAN";
+    case ast_operator::SINH: return "SINH";
+    case ast_operator::COSH: return "COSH";
+    case ast_operator::TANH: return "TANH";
+    case ast_operator::ARCSINH: return "ARCSINH";
+    case ast_operator::ARCCOSH: return "ARCCOSH";
+    case ast_operator::ARCTANH: return "ARCTANH";
+    case ast_operator::EXP: return "EXP";
+    case ast_operator::LOG: return "LOG";
+    case ast_operator::SQRT: return "SQRT";
+    case ast_operator::CBRT: return "CBRT";
+    case ast_operator::CEIL: return "CEIL";
+    case ast_operator::FLOOR: return "FLOOR";
+    case ast_operator::ABS: return "ABS";
+    case ast_operator::RINT: return "RINT";
+    case ast_operator::BIT_INVERT: return "BIT_INVERT";
+    case ast_operator::NOT: return "NOT";
+    case ast_operator::CAST_TO_INT64: return "CAST_TO_INT64";
+    case ast_operator::CAST_TO_UINT64: return "CAST_TO_UINT64";
+    case ast_operator::CAST_TO_FLOAT64: return "CAST_TO_FLOAT64";
+    default: CUDF_FAIL("Unrecognized operator type.");
+  }
 }
 
 }  // namespace detail

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,8 +26,9 @@
 #include <cudf/scalar/scalar_factories.hpp>
 
 namespace {
-template <typename T, std::enable_if_t<cudf::is_numeric<T>(), void>* = nullptr>
+template <typename T>
 auto create_scalar_search_key(T const& value)
+  requires(cudf::is_numeric<T>())
 {
   auto search_key = cudf::make_numeric_scalar(cudf::data_type{cudf::type_to_id<T>()});
   search_key->set_valid_async(true);
@@ -35,14 +36,16 @@ auto create_scalar_search_key(T const& value)
   return search_key;
 }
 
-template <typename T, std::enable_if_t<std::is_same_v<T, std::string>, void>* = nullptr>
+template <typename T>
 auto create_scalar_search_key(std::string const& value)
+  requires(std::is_same_v<T, std::string>)
 {
   return cudf::make_string_scalar(value);
 }
 
-template <typename T, std::enable_if_t<cudf::is_timestamp<T>(), void>* = nullptr>
+template <typename T>
 auto create_scalar_search_key(typename T::rep const& value)
+  requires(cudf::is_timestamp<T>())
 {
   auto search_key = cudf::make_timestamp_scalar(cudf::data_type{cudf::type_to_id<T>()});
   search_key->set_valid_async(true);
@@ -50,8 +53,9 @@ auto create_scalar_search_key(typename T::rep const& value)
   return search_key;
 }
 
-template <typename T, std::enable_if_t<cudf::is_duration<T>(), void>* = nullptr>
+template <typename T>
 auto create_scalar_search_key(typename T::rep const& value)
+  requires(cudf::is_duration<T>())
 {
   auto search_key = cudf::make_duration_scalar(cudf::data_type{cudf::type_to_id<T>()});
   search_key->set_valid_async(true);
@@ -65,24 +69,27 @@ auto make_struct_scalar(Args&&... args)
   return cudf::struct_scalar(std::vector<cudf::column_view>{std::forward<Args>(args)...});
 }
 
-template <typename T, std::enable_if_t<cudf::is_numeric<T>(), void>* = nullptr>
+template <typename T>
 auto create_null_search_key()
+  requires(cudf::is_numeric<T>())
 {
   auto search_key = cudf::make_numeric_scalar(cudf::data_type{cudf::type_to_id<T>()});
   search_key->set_valid_async(false);
   return search_key;
 }
 
-template <typename T, std::enable_if_t<cudf::is_timestamp<T>(), void>* = nullptr>
+template <typename T>
 auto create_null_search_key()
+  requires(cudf::is_timestamp<T>())
 {
   auto search_key = cudf::make_timestamp_scalar(cudf::data_type{cudf::type_to_id<T>()});
   search_key->set_valid_async(false);
   return search_key;
 }
 
-template <typename T, std::enable_if_t<cudf::is_duration<T>(), void>* = nullptr>
+template <typename T>
 auto create_null_search_key()
+  requires(cudf::is_duration<T>())
 {
   auto search_key = cudf::make_duration_scalar(cudf::data_type{cudf::type_to_id<T>()});
   search_key->set_valid_async(false);
@@ -1050,10 +1057,10 @@ TYPED_TEST(TypedContainsDecimalsTest, VectorKey)
     return cudf::make_lists_column(10, list_offsets.release(), decimals.release(), 0, {});
   }();
 
-  auto search_key = cudf::test::fixed_point_column_wrapper<typename T::rep>{
-    {1, 2, 3, 1, 2, 3, 1, 2, 3, 1},
-    numeric::scale_type{
-      0}}.release();
+  auto search_key =
+    cudf::test::fixed_point_column_wrapper<typename T::rep>{{1, 2, 3, 1, 2, 3, 1, 2, 3, 1},
+                                                            numeric::scale_type{0}}
+      .release();
 
   // Search space: [ [0,1,2], [3,4,5], [6,7,8], [9,0,1], [2,3,4], [5,6,7], [8,9,0], [], [1,2,3], []
   // ] Search keys:  [  1,       2,       3,       1,       2,       3,       1,       2,  3, 1 ]

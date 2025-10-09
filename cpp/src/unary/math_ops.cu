@@ -189,12 +189,14 @@ struct DeviceFloor {
 
 struct DeviceAbs {
   template <typename T>
-  std::enable_if_t<std::is_signed_v<T>, T> __device__ operator()(T data)
+  T __device__ operator()(T data)
+    requires(std::is_signed_v<T>)
   {
     return cuda::std::abs(data);
   }
   template <typename T>
-  std::enable_if_t<!std::is_signed_v<T>, T> __device__ operator()(T data)
+  T __device__ operator()(T data)
+    requires(!std::is_signed_v<T>)
   {
     return data;
   }
@@ -427,10 +429,11 @@ struct FloatOnlyOps {
  */
 template <typename UFN, template <typename> typename Supported>
 struct MathOpDispatcher {
-  template <typename T, std::enable_if_t<Supported<T>::is_supported()>* = nullptr>
+  template <typename T>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
+    requires(Supported<T>::is_supported())
   {
     return (input.type().id() == type_id::DICTIONARY32)
              ? transform_fn<T, UFN>(cudf::dictionary_column_view(input), stream, mr)
@@ -438,8 +441,8 @@ struct MathOpDispatcher {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!Supported<T>::is_supported(), std::unique_ptr<cudf::column>> operator()(
-    Args&&...)
+  std::unique_ptr<cudf::column> operator()(Args&&...)
+    requires(!Supported<T>::is_supported())
   {
     CUDF_FAIL("Unsupported data type for this operation");
   }
@@ -458,10 +461,11 @@ struct BitwiseCountDispatcher {
   using OutputType = int32_t;
 
  public:
-  template <typename T, std::enable_if_t<is_supported<T>()>* = nullptr>
+  template <typename T>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
+    requires(is_supported<T>())
   {
     if (input.type().id() == type_id::DICTIONARY32) {
       auto dictionary_view = cudf::column_device_view::create(input, stream);
@@ -482,7 +486,8 @@ struct BitwiseCountDispatcher {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!is_supported<T>(), std::unique_ptr<cudf::column>> operator()(Args&&...)
+  std::unique_ptr<cudf::column> operator()(Args&&...)
+    requires(!is_supported<T>())
   {
     CUDF_FAIL("Unsupported datatype for operation");
   }
@@ -498,10 +503,11 @@ struct LogicalOpDispatcher {
   }
 
  public:
-  template <typename T, std::enable_if_t<is_supported<T>()>* = nullptr>
+  template <typename T>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
+    requires(is_supported<T>())
   {
     if (input.type().id() == type_id::DICTIONARY32) {
       auto dictionary_view = cudf::column_device_view::create(input, stream);
@@ -522,7 +528,8 @@ struct LogicalOpDispatcher {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!is_supported<T>(), std::unique_ptr<cudf::column>> operator()(Args&&...)
+  std::unique_ptr<cudf::column> operator()(Args&&...)
+    requires(!is_supported<T>())
   {
     CUDF_FAIL("Unsupported datatype for operation");
   }
@@ -530,17 +537,18 @@ struct LogicalOpDispatcher {
 
 struct FixedPointOpDispatcher {
   template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_fixed_point<T>(), std::unique_ptr<column>> operator()(Args&&...)
+  std::unique_ptr<column> operator()(Args&&...)
+    requires(not cudf::is_fixed_point<T>())
   {
     CUDF_FAIL("FixedPointOpDispatcher only for fixed_point");
   }
 
   template <typename T>
-  std::enable_if_t<cudf::is_fixed_point<T>(), std::unique_ptr<column>> operator()(
-    column_view const& input,
-    cudf::unary_operator op,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr)
+  std::unique_ptr<column> operator()(column_view const& input,
+                                     cudf::unary_operator op,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+    requires(cudf::is_fixed_point<T>())
   {
     // clang-format off
     switch (op) {

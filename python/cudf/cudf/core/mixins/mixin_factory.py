@@ -1,4 +1,5 @@
 # Copyright (c) 2022-2025, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import inspect
 
@@ -74,8 +75,10 @@ class Operation:
             return getattr(obj, self._name)
 
 
-def _should_define_operation(cls, operation, base_operation_name):
-    if operation not in dir(cls):
+def _should_define_operation(
+    cls, operation: str, base_operation_name: str, cls_attributes: set[str]
+) -> bool:
+    if operation not in cls_attributes:
         return True
 
     # If the class doesn't override the base operation we stick to whatever
@@ -108,11 +111,11 @@ def _should_define_operation(cls, operation, base_operation_name):
 
 
 def _create_delegating_mixin(
-    mixin_name,
-    docstring,
-    category_name,
-    base_operation_name,
-    supported_operations,
+    mixin_name: str,
+    docstring: str,
+    category_name: str,
+    base_operation_name: str,
+    supported_operations: set[str],
 ):
     """Factory for mixins defining collections of delegated operations.
 
@@ -156,7 +159,7 @@ def _create_delegating_mixin(
         The name given to the core function implementing this category of
         operations.  The corresponding function is the entrypoint for child
         classes.
-    supported_ops : List[str]
+    supported_ops : set[str]
         The list of valid operations that subclasses of the resulting mixin may
         request to be implemented.
 
@@ -210,7 +213,7 @@ def _create_delegating_mixin(
 
     class OperationMixin:
         @classmethod
-        def __init_subclass__(cls):
+        def __init_subclass__(cls) -> None:
             # Support composition of various OperationMixins. Note that since
             # this __init_subclass__ is defined on mixins, it does not prohibit
             # classes that inherit it from implementing this method as well as
@@ -218,7 +221,7 @@ def _create_delegating_mixin(
             super().__init_subclass__()
 
             # Only add the valid set of operations for a particular class.
-            valid_operations = set()
+            valid_operations: set[str] = set()
             for base_cls in cls.__mro__:
                 # Check for sentinel indicating that all operations are valid.
                 valid_operations |= getattr(base_cls, validity_attr, set())
@@ -229,9 +232,10 @@ def _create_delegating_mixin(
             )
 
             base_operation = getattr(cls, base_operation_name)
+            cls_attributes = set(dir(cls))
             for operation in valid_operations:
                 if _should_define_operation(
-                    cls, operation, base_operation_name
+                    cls, operation, base_operation_name, cls_attributes
                 ):
                     docstring_format_args = getattr(
                         cls, docstring_attr, {}

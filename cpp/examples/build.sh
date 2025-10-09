@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 # libcudf examples build script
 
@@ -14,6 +14,7 @@ INSTALL_EXAMPLES=false
 # Check for -i or --install flags to enable installation
 ARGS=$(getopt -o i --long install -- "$@")
 eval set -- "$ARGS"
+# shellcheck disable=2078
 while [ : ]; do
   case "$1" in
     -i | --install)
@@ -47,18 +48,19 @@ build_example() {
   build_dir="${example_dir}/build"
 
   # Configure
-  cmake -S ${example_dir} -B ${build_dir} -Dcudf_ROOT="${LIB_BUILD_DIR}"
+  cmake -S "${example_dir}" -B "${build_dir}" -Dcudf_ROOT="${LIB_BUILD_DIR}"
   # Build
-  cmake --build ${build_dir} -j${PARALLEL_LEVEL}
+  cmake --build "${build_dir}" -j"${PARALLEL_LEVEL}"
   # Install if needed
   if [ "$INSTALL_EXAMPLES" = true ]; then
-    cmake --install ${build_dir} --prefix ${INSTALL_PREFIX:-${example_dir}/install}
+    cmake --install "${build_dir}" --prefix "${INSTALL_PREFIX:-${example_dir}/install}"
   fi
 }
 
 build_example basic
 build_example strings
+build_example string_transforms
 build_example nested_types
+build_example parquet_inspect
 build_example parquet_io
 build_example billion_rows
-build_example interop

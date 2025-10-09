@@ -108,14 +108,14 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
 }
 
 template <typename T, typename OptionalScalarIterator, typename ReplaceScalarIterator>
-std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamper(
-  column_view const& input,
-  OptionalScalarIterator lo_itr,
-  ReplaceScalarIterator lo_replace_itr,
-  OptionalScalarIterator hi_itr,
-  ReplaceScalarIterator hi_replace_itr,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+std::unique_ptr<cudf::column> clamper(column_view const& input,
+                                      OptionalScalarIterator lo_itr,
+                                      ReplaceScalarIterator lo_replace_itr,
+                                      OptionalScalarIterator hi_itr,
+                                      ReplaceScalarIterator hi_replace_itr,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::device_async_resource_ref mr)
+  requires(cudf::is_fixed_width<T>())
 {
   auto output =
     detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, stream, mr);
@@ -158,14 +158,14 @@ std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamp
 }
 
 template <typename T, typename OptionalScalarIterator, typename ReplaceScalarIterator>
-std::enable_if_t<std::is_same_v<T, string_view>, std::unique_ptr<cudf::column>> clamper(
-  column_view const& input,
-  OptionalScalarIterator lo_itr,
-  ReplaceScalarIterator lo_replace_itr,
-  OptionalScalarIterator hi_itr,
-  ReplaceScalarIterator hi_replace_itr,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+std::unique_ptr<cudf::column> clamper(column_view const& input,
+                                      OptionalScalarIterator lo_itr,
+                                      ReplaceScalarIterator lo_replace_itr,
+                                      OptionalScalarIterator hi_itr,
+                                      ReplaceScalarIterator hi_replace_itr,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::device_async_resource_ref mr)
+  requires(std::is_same_v<T, string_view>)
 {
   return clamp_string_column(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, stream, mr);
 }

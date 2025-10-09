@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import datetime
+import itertools
 import operator
 import warnings
 from collections.abc import Hashable, MutableMapping
@@ -20,15 +22,14 @@ import pylibcudf as plc
 import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
-    is_dtype_equal,
     is_hashable,
     is_integer,
     is_list_like,
     is_scalar,
 )
-from cudf.core._base_index import BaseIndex, _return_get_indexer_result
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import search
+from cudf.core._internals import copying, sorting, stream_compaction
+from cudf.core.accessors import StringMethods
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
@@ -41,13 +42,12 @@ from cudf.core.column import (
     TimeDeltaColumn,
 )
 from cudf.core.column.column import as_column, column_empty, concat_columns
-from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.dtypes import IntervalDtype
+from cudf.core.copy_types import GatherMap
+from cudf.core.dtypes import IntervalDtype, dtype as cudf_dtype
 from cudf.core.join._join_helpers import _match_join_keys
-from cudf.core.mixins import BinaryOperand
-from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.core.single_column_frame import SingleColumnFrame
+from cudf.errors import MixedTypeError
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
@@ -55,11 +55,13 @@ from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
+    dtype_to_pylibcudf_type,
     find_common_type,
     is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
+from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import _is_same_name, _warn_no_dask_cudf
 
 if TYPE_CHECKING:
@@ -67,52 +69,32 @@ if TYPE_CHECKING:
     from datetime import tzinfo
 
     from cudf._typing import ColumnLike, Dtype
+    from cudf.core.dataframe import DataFrame
     from cudf.core.frame import Frame
+    from cudf.core.multiindex import MultiIndex
+    from cudf.core.series import Series
+    from cudf.core.tools.datetimes import DateOffset
 
 
-def ensure_index(index_like: Any) -> BaseIndex:
+def ensure_index(index_like: Any, nan_as_null=no_default) -> Index:
     """
     Ensure an Index is returned.
 
     Avoids a shallow copy compared to calling cudf.Index(...)
     """
-    if not isinstance(index_like, BaseIndex):
-        return cudf.Index(index_like)
+    if not isinstance(index_like, Index):
+        return Index(index_like, nan_as_null=nan_as_null)
     return index_like
 
 
-class IndexMeta(type):
-    """Custom metaclass for Index that overrides instance/subclass tests."""
-
-    def __call__(cls, data, *args, **kwargs):
-        if kwargs.get("tupleize_cols", True) is not True:
-            raise NotImplementedError(
-                "tupleize_cols is currently not supported."
-            )
-
-        if cls is Index:
-            return as_index(
-                arbitrary=data,
-                *args,
-                **kwargs,
-            )
-        return super().__call__(data, *args, **kwargs)
-
-    def __instancecheck__(self, instance):
-        if self is cudf.Index:
-            return isinstance(instance, BaseIndex)
-        else:
-            return type.__instancecheck__(self, instance)
-
-    def __subclasscheck__(self, subclass):
-        if self is cudf.Index:
-            return issubclass(subclass, BaseIndex)
-        else:
-            return type.__subclasscheck__(self, subclass)
+def _get_result_name(
+    left_name: Hashable, right_name: Hashable
+) -> Hashable | None:
+    return left_name if _is_same_name(left_name, right_name) else None
 
 
 def _lexsorted_equal_range(
-    idx: Index | cudf.MultiIndex,
+    idx: Index | MultiIndex,
     keys: list[ColumnBase],
     is_sorted: bool,
 ) -> tuple[int, int, ColumnBase | None]:
@@ -126,20 +108,28 @@ def _lexsorted_equal_range(
     else:
         sort_inds = None
         sort_vals = idx
+    sources = sort_vals._columns
+    len_sources = len(sources)
     lower_bound = ColumnBase.from_pylibcudf(
-        search.search_sorted(
-            list(sort_vals._columns),
+        sorting.search_sorted(
+            sort_vals._columns,
             keys,
             side="left",
-            ascending=sort_vals.is_monotonic_increasing,
+            ascending=itertools.repeat(
+                sort_vals.is_monotonic_increasing, times=len_sources
+            ),
+            na_position=itertools.repeat("last", times=len_sources),
         )
     ).element_indexing(0)
     upper_bound = ColumnBase.from_pylibcudf(
-        search.search_sorted(
-            list(sort_vals._columns),
+        sorting.search_sorted(
+            sources,
             keys,
             side="right",
-            ascending=sort_vals.is_monotonic_increasing,
+            ascending=itertools.repeat(
+                sort_vals.is_monotonic_increasing, times=len_sources
+            ),
+            na_position=itertools.repeat("last", times=len_sources),
         )
     ).element_indexing(0)
 
@@ -185,7 +175,7 @@ def validate_range_arg(arg, arg_name: Literal["start", "stop", "step"]) -> int:
     return int(arg)
 
 
-class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
+class Index(SingleColumnFrame):  # type: ignore[misc]
     """
     Immutable sequence used for indexing and alignment.
 
@@ -206,10 +196,70 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         Currently not supported.
     """
 
+    _accessors: set[Any] = set()
+
     @_performance_tracking
-    def __init__(self, data, **kwargs):
-        name = _getdefault_name(data, name=kwargs.get("name"))
-        super().__init__({name: data})
+    def __new__(cls, *args, **kwargs) -> Self:
+        if cls is Index:
+            return _as_index(*args, **kwargs)
+        return object.__new__(cls)
+
+    @_performance_tracking
+    def __init__(
+        self,
+        data=None,
+        dtype=None,
+        copy: bool = False,
+        name=None,
+        tupleize_cols: bool = True,
+        nan_as_null=no_default,
+    ) -> None:
+        # Constructed in __new__
+        # Subclasses should initialize with
+        # SingleColumnFrame.__init__(self, {name: column})
+        return None
+
+    @property
+    def _constructor_expanddim(self):
+        return cudf.MultiIndex
+
+    @_performance_tracking
+    def __array_function__(self, func, types, args, kwargs):
+        # check if the function is implemented for the current type
+        cudf_index_module = type(self)
+        for submodule in func.__module__.split(".")[1:]:
+            # point cudf_index_module to the correct submodule
+            if hasattr(cudf_index_module, submodule):
+                cudf_index_module = getattr(cudf_index_module, submodule)
+            else:
+                return NotImplemented
+
+        fname = func.__name__
+
+        handled_types = [Index, cudf.Series]
+
+        # check if  we don't handle any of the types (including sub-class)
+        for t in types:
+            if not any(
+                issubclass(t, handled_type) for handled_type in handled_types
+            ):
+                return NotImplemented
+
+        if hasattr(cudf_index_module, fname):
+            cudf_func = getattr(cudf_index_module, fname)
+            # Handle case if cudf_func is same as numpy function
+            if cudf_func is func:
+                return NotImplemented
+            else:
+                result = cudf_func(*args, **kwargs)
+                if fname == "unique":
+                    # NumPy expects a sorted result for `unique`, which is not
+                    # guaranteed by cudf.Index.unique.
+                    result = result.sort_values()
+                return result
+
+        else:
+            return NotImplemented
 
     @_performance_tracking
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
@@ -270,9 +320,77 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     def _from_data_like_self(self, data: MutableMapping) -> Self:
         return _index_from_data(data, self.name)
 
+    @_performance_tracking
+    def to_pylibcudf(self, copy=False) -> tuple[plc.Column, dict]:
+        """
+        Convert this Index to a pylibcudf.Column.
+
+        Parameters
+        ----------
+        copy : bool
+            Whether or not to generate a new copy of the underlying device data
+
+        Returns
+        -------
+        pylibcudf.Column
+            A new pylibcudf.Column referencing the same data.
+        dict
+            Dict of metadata (includes name)
+
+        Notes
+        -----
+        User requests to convert to pylibcudf must assume that the
+        data may be modified afterwards.
+        """
+        if copy:
+            raise NotImplementedError("copy=True is not supported")
+        metadata = {"name": self.name}
+        return self._column.to_pylibcudf(mode="write"), metadata
+
     @classmethod
     @_performance_tracking
-    def from_arrow(cls, obj: pa.Array) -> Index | cudf.MultiIndex:
+    def from_pylibcudf(
+        cls, col: plc.Column, metadata: dict | None = None
+    ) -> Self:
+        """
+        Create a Index from a pylibcudf.Column.
+
+        Parameters
+        ----------
+        col : pylibcudf.Column
+            The input Column.
+
+        Returns
+        -------
+        pylibcudf.Column
+            A new pylibcudf.Column referencing the same data.
+        metadata : dict | None
+            The Index metadata.
+
+        Notes
+        -----
+        This function will generate an Index which contains a Column
+        pointing to the provided pylibcudf Column.  It will directly access
+        the data and mask buffers of the pylibcudf Column, so the newly created
+        object is not tied to the lifetime of the original pylibcudf.Column.
+        """
+        name = None
+        if metadata is not None:
+            if not (
+                isinstance(metadata, dict)
+                and len(metadata) == 1
+                and set(metadata) == {"name"}
+            ):
+                raise ValueError("Metadata dict must only contain a name")
+            name = metadata.get("name")
+        return cls._from_column(
+            ColumnBase.from_pylibcudf(col, data_ptr_exposed=True),
+            name=name,
+        )
+
+    @classmethod
+    @_performance_tracking
+    def from_arrow(cls, obj: pa.Array) -> Index | MultiIndex:
         """Create from PyArrow Array/ChunkedArray.
 
         Parameters
@@ -301,6 +419,62 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             # Try interpreting object as a MultiIndex before failing.
             return cudf.MultiIndex.from_arrow(obj)
 
+    @classmethod
+    def from_pandas(cls, index: pd.Index, nan_as_null=no_default) -> Index:
+        """
+        Convert from a Pandas Index.
+
+        Parameters
+        ----------
+        index : Pandas Index object
+            A Pandas Index object which has to be converted
+            to cuDF Index.
+        nan_as_null : bool, Default None
+            If ``None``/``True``, converts ``np.nan`` values
+            to ``null`` values.
+            If ``False``, leaves ``np.nan`` values as is.
+
+        Raises
+        ------
+        TypeError for invalid input type.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> import numpy as np
+        >>> data = [10, 20, 30, np.nan]
+        >>> pdi = pd.Index(data)
+        >>> cudf.Index.from_pandas(pdi)
+        Index([10.0, 20.0, 30.0, <NA>], dtype='float64')
+        >>> cudf.Index.from_pandas(pdi, nan_as_null=False)
+        Index([10.0, 20.0, 30.0, nan], dtype='float64')
+        """
+        warnings.warn(
+            "from_pandas is deprecated and will be removed in a future version. "
+            "Use the Index constructor instead.",
+            FutureWarning,
+        )
+        if nan_as_null is no_default:
+            nan_as_null = (
+                False if cudf.get_option("mode.pandas_compatible") else None
+            )
+
+        if not isinstance(index, pd.Index):
+            raise TypeError("Expected a pandas.Index, got {type(index)}")
+        if isinstance(index, pd.RangeIndex):
+            return cudf.RangeIndex(
+                start=index.start,
+                stop=index.stop,
+                step=index.step,
+                name=index.name,
+            )
+        else:
+            return cudf.Index._from_column(
+                as_column(index, nan_as_null=nan_as_null),
+                name=index.name,
+            )
+
     @cached_property
     def is_monotonic_increasing(self) -> bool:
         return super().is_monotonic_increasing
@@ -308,6 +482,1335 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     @cached_property
     def is_monotonic_decreasing(self) -> bool:
         return super().is_monotonic_decreasing
+
+    @property
+    def has_duplicates(self) -> bool:
+        # .is_unique is already a cached_property
+        return not self.is_unique
+
+    @property
+    def nlevels(self) -> int:
+        """
+        Number of levels.
+        """
+        return self._num_columns
+
+    @property
+    def names(self) -> pd.core.indexes.frozen.FrozenList:
+        """
+        Returns a FrozenList containing the name of the Index.
+        """
+        return pd.core.indexes.frozen.FrozenList([self.name])
+
+    @names.setter
+    def names(self, values: list[Hashable]) -> None:
+        if not is_list_like(values):
+            raise ValueError("Names must be a list-like")
+
+        num_values = len(values)
+        if num_values > 1:
+            raise ValueError(
+                f"Length of new names must be 1, got {num_values}"
+            )
+
+        self.name = values[0]
+
+    def _set_names(self, names, inplace: bool = False) -> Self | None:
+        if inplace:
+            idx = self
+        else:
+            idx = self.copy(deep=False)
+
+        idx.names = names
+        if not inplace:
+            return idx
+        return None
+
+    def set_names(
+        self, names, level=None, inplace: bool = False
+    ) -> Self | None:
+        """
+        Set Index or MultiIndex name.
+        Able to set new names partially and by level.
+
+        Parameters
+        ----------
+        names : label or list of label
+            Name(s) to set.
+        level : int, label or list of int or label, optional
+            If the index is a MultiIndex, level(s) to set (None for all
+            levels). Otherwise level must be None.
+        inplace : bool, default False
+            Modifies the object directly, instead of creating a new Index or
+            MultiIndex.
+
+        Returns
+        -------
+        Index
+            The same type as the caller or None if inplace is True.
+
+        See Also
+        --------
+        cudf.Index.rename : Able to set new names without level.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index([1, 2, 3, 4])
+        >>> idx
+        Index([1, 2, 3, 4], dtype='int64')
+        >>> idx.set_names('quarter')
+        Index([1, 2, 3, 4], dtype='int64', name='quarter')
+        >>> idx = cudf.MultiIndex.from_product([['python', 'cobra'],
+        ... [2018, 2019]])
+        >>> idx
+        MultiIndex([('python', 2018),
+                    ('python', 2019),
+                    ( 'cobra', 2018),
+                    ( 'cobra', 2019)],
+                   )
+        >>> idx.names
+        FrozenList([None, None])
+        >>> idx.set_names(['kind', 'year'], inplace=True)
+        >>> idx.names
+        FrozenList(['kind', 'year'])
+        >>> idx.set_names('species', level=0, inplace=True)
+        >>> idx.names
+        FrozenList(['species', 'year'])
+        """
+        if level is not None:
+            raise ValueError("Level must be None for non-MultiIndex")
+
+        if not is_list_like(names):
+            names = [names]
+
+        return self._set_names(names=names, inplace=inplace)
+
+    def rename(self, name: Hashable, inplace: bool = False) -> Index | None:
+        """
+        Alter Index name.
+
+        Defaults to returning new index.
+
+        Parameters
+        ----------
+        name : label
+            Name(s) to set.
+
+        Returns
+        -------
+        Index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.Index([1, 2, 3], name='one')
+        >>> index
+        Index([1, 2, 3], dtype='int64', name='one')
+        >>> index.name
+        'one'
+        >>> renamed_index = index.rename('two')
+        >>> renamed_index
+        Index([1, 2, 3], dtype='int64', name='two')
+        >>> renamed_index.name
+        'two'
+        """
+        if inplace is True:
+            self.name = name
+            return None
+        else:
+            out = self.copy(deep=False)
+            out.name = name
+            return out
+
+    def find_label_range(self, loc: slice) -> slice:
+        """
+        Translate a label-based slice to an index-based slice
+
+        Parameters
+        ----------
+        loc
+            slice to search for.
+
+        Notes
+        -----
+        As with all label-based searches, the slice is right-closed.
+
+        Returns
+        -------
+        New slice translated into integer indices of the index (right-open).
+        """
+        # pandas doesn't have this method, deprecate?
+        start = loc.start
+        stop = loc.stop
+        step = 1 if loc.step is None else loc.step
+        start_side: Literal["left", "right"]
+        stop_side: Literal["left", "right"]
+        if step < 0:
+            start_side, stop_side = "right", "left"
+        else:
+            start_side, stop_side = "left", "right"
+        istart = (
+            None
+            if start is None
+            else self.get_slice_bound(start, side=start_side)
+        )
+        istop = (
+            None
+            if stop is None
+            else self.get_slice_bound(stop, side=stop_side)
+        )
+        if step < 0:
+            # Fencepost
+            istart = None if istart is None else max(istart - 1, 0)
+            istop = None if (istop is None or istop == 0) else istop - 1
+        return slice(istart, istop, step)
+
+    def get_slice_bound(
+        self,
+        label: Hashable,
+        side: Literal["left", "right"],
+    ) -> int:
+        """
+        Calculate slice bound that corresponds to given label.
+        Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
+        of given label.
+
+        Parameters
+        ----------
+        label : object
+        side : {'left', 'right'}
+
+        Returns
+        -------
+        int
+            Index of label.
+        """
+        if side not in {"left", "right"}:
+            raise ValueError(f"Invalid side argument {side}")
+        if self.is_monotonic_increasing or self.is_monotonic_decreasing:
+            return self.searchsorted(
+                label, side=side, ascending=self.is_monotonic_increasing
+            )
+        else:
+            try:
+                left, right = self._column._find_first_and_last(label)
+            except ValueError:
+                raise KeyError(f"{label=} not in index")
+            if left != right:
+                raise KeyError(
+                    f"Cannot get slice bound for non-unique label {label=}"
+                )
+            if side == "left":
+                return left
+            else:
+                return right + 1
+
+    def shift(self, periods: int = 1, freq=None) -> Self:
+        """
+        Shift index by desired number of time frequency increments.
+        """
+        raise NotImplementedError(
+            f"Shift is not implemented yet for {type(self).__name__}"
+        )
+
+    def _union(self, other, sort: bool | None = None) -> Index:
+        # TODO: As a future optimization we should explore
+        # not doing `to_frame`
+        self_df = self.to_frame(index=False, name=0)
+        other_df = other.to_frame(index=False, name=0)
+        self_df["order"] = self_df.index
+        other_df["order"] = other_df.index
+        res = self_df.merge(other_df, on=[0], how="outer")
+        res = res.sort_values(
+            by=res._data.to_pandas_index[1:], ignore_index=True
+        )
+        union_result = _index_from_data({0: res._data[0]})
+
+        if sort in {None, True} and len(other):
+            return union_result.sort_values()
+        return union_result
+
+    def union(self, other, sort: bool | None = None) -> Index:
+        """
+        Form the union of two Index objects.
+
+        Parameters
+        ----------
+        other : Index or array-like
+        sort : bool or None, default None
+            Whether to sort the resulting Index.
+
+            * None : Sort the result, except when
+
+              1. `self` and `other` are equal.
+              2. `self` or `other` has length 0.
+
+            * False : do not sort the result.
+            * True : Sort the result (which may raise TypeError).
+
+        Returns
+        -------
+        union : Index
+
+        Examples
+        --------
+        Union of an Index
+        >>> import cudf
+        >>> import pandas as pd
+        >>> idx1 = cudf.Index([1, 2, 3, 4])
+        >>> idx2 = cudf.Index([3, 4, 5, 6])
+        >>> idx1.union(idx2)
+        Index([1, 2, 3, 4, 5, 6], dtype='int64')
+
+        MultiIndex case
+
+        >>> idx1 = cudf.MultiIndex.from_pandas(
+        ...    pd.MultiIndex.from_arrays(
+        ...         [[1, 1, 2, 2], ["Red", "Blue", "Red", "Blue"]]
+        ...    )
+        ... )
+        >>> idx1
+        MultiIndex([(1,  'Red'),
+                    (1, 'Blue'),
+                    (2,  'Red'),
+                    (2, 'Blue')],
+                   )
+        >>> idx2 = cudf.MultiIndex.from_pandas(
+        ...    pd.MultiIndex.from_arrays(
+        ...         [[3, 3, 2, 2], ["Red", "Green", "Red", "Green"]]
+        ...    )
+        ... )
+        >>> idx2
+        MultiIndex([(3,   'Red'),
+                    (3, 'Green'),
+                    (2,   'Red'),
+                    (2, 'Green')],
+                   )
+        >>> idx1.union(idx2)
+        MultiIndex([(1,  'Blue'),
+                    (1,   'Red'),
+                    (2,  'Blue'),
+                    (2, 'Green'),
+                    (2,   'Red'),
+                    (3, 'Green'),
+                    (3,   'Red')],
+                   )
+        >>> idx1.union(idx2, sort=False)
+        MultiIndex([(1,   'Red'),
+                    (1,  'Blue'),
+                    (2,   'Red'),
+                    (2,  'Blue'),
+                    (3,   'Red'),
+                    (3, 'Green'),
+                    (2, 'Green')],
+                   )
+        """
+        if not isinstance(other, Index):
+            other = Index(other, name=getattr(other, "name", self.name))
+
+        if sort not in {None, False, True}:
+            raise ValueError(
+                f"The 'sort' keyword only takes the values of "
+                f"[None, False, True]; {sort} was passed."
+            )
+
+        if cudf.get_option("mode.pandas_compatible"):
+            if (self.dtype.kind == "b" and other.dtype.kind != "b") or (
+                self.dtype.kind != "b" and other.dtype.kind == "b"
+            ):
+                # Bools + other types will result in mixed type.
+                # This is not yet consistent in pandas and specific to APIs.
+                raise MixedTypeError("Cannot perform union with mixed types")
+            if (self.dtype.kind == "i" and other.dtype.kind == "u") or (
+                self.dtype.kind == "u" and other.dtype.kind == "i"
+            ):
+                # signed + unsigned types will result in
+                # mixed type for union in pandas.
+                raise MixedTypeError("Cannot perform union with mixed types")
+
+        if not len(other) or self.equals(other):
+            common_dtype = find_common_type([self.dtype, other.dtype])
+            res = self._get_reconciled_name_object(other).astype(common_dtype)
+            if sort:
+                return res.sort_values()
+            return res
+        elif not len(self):
+            common_dtype = find_common_type([self.dtype, other.dtype])
+            res = other._get_reconciled_name_object(self).astype(common_dtype)
+            if sort:
+                return res.sort_values()
+            return res
+
+        result = self._union(other, sort=sort)
+        result.name = _get_result_name(self.name, other.name)
+        return result
+
+    def _intersection(self, other, sort: bool | None = None) -> Index:
+        intersection_result = _index_from_data(
+            cudf.DataFrame._from_data({"None": self.unique()._column})
+            .merge(
+                cudf.DataFrame._from_data({"None": other.unique()._column}),
+                how="inner",
+                on="None",
+            )
+            ._data
+        )
+
+        if sort in {None, True} and len(other):
+            return intersection_result.sort_values()
+        return intersection_result
+
+    def intersection(self, other, sort: bool | None = False) -> Index:
+        """
+        Form the intersection of two Index objects.
+
+        This returns a new Index with elements common to the index and `other`.
+
+        Parameters
+        ----------
+        other : Index or array-like
+        sort : False or None, default False
+            Whether to sort the resulting index.
+
+            * False : do not sort the result.
+            * None : sort the result, except when `self` and `other` are equal
+              or when the values cannot be compared.
+            * True : Sort the result (which may raise TypeError).
+
+        Returns
+        -------
+        intersection : Index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> idx1 = cudf.Index([1, 2, 3, 4])
+        >>> idx2 = cudf.Index([3, 4, 5, 6])
+        >>> idx1.intersection(idx2)
+        Index([3, 4], dtype='int64')
+
+        MultiIndex case
+
+        >>> idx1 = cudf.MultiIndex.from_pandas(
+        ...    pd.MultiIndex.from_arrays(
+        ...         [[1, 1, 3, 4], ["Red", "Blue", "Red", "Blue"]]
+        ...    )
+        ... )
+        >>> idx2 = cudf.MultiIndex.from_pandas(
+        ...    pd.MultiIndex.from_arrays(
+        ...         [[1, 1, 2, 2], ["Red", "Blue", "Red", "Blue"]]
+        ...    )
+        ... )
+        >>> idx1
+        MultiIndex([(1,  'Red'),
+                    (1, 'Blue'),
+                    (3,  'Red'),
+                    (4, 'Blue')],
+                )
+        >>> idx2
+        MultiIndex([(1,  'Red'),
+                    (1, 'Blue'),
+                    (2,  'Red'),
+                    (2, 'Blue')],
+                )
+        >>> idx1.intersection(idx2)
+        MultiIndex([(1,  'Red'),
+                    (1, 'Blue')],
+                )
+        >>> idx1.intersection(idx2, sort=False)
+        MultiIndex([(1,  'Red'),
+                    (1, 'Blue')],
+                )
+        """
+
+        if not isinstance(other, Index):
+            other = Index(
+                other,
+                name=getattr(other, "name", self.name),
+            )
+
+        if sort not in {None, False, True}:
+            raise ValueError(
+                f"The 'sort' keyword only takes the values of "
+                f"[None, False, True]; {sort} was passed."
+            )
+
+        if self.equals(other):
+            if self.has_duplicates:
+                result = self.unique()._get_reconciled_name_object(other)
+            else:
+                result = self._get_reconciled_name_object(other)
+            if sort is True:
+                result = result.sort_values()  # type: ignore[assignment]
+            return result
+        if not len(self) or not len(other):
+            common_dtype = find_common_type([self.dtype, other.dtype])
+
+            lhs = self.unique() if self.has_duplicates else self
+            rhs = other
+            if not len(other):
+                lhs, rhs = rhs, lhs
+
+            return lhs._get_reconciled_name_object(rhs).astype(common_dtype)
+
+        res_name = _get_result_name(self.name, other.name)
+
+        if (self._is_boolean() and other._is_numeric()) or (
+            self._is_numeric() and other._is_boolean()
+        ):
+            if isinstance(self, cudf.MultiIndex):
+                return self[:0].rename(res_name)
+            else:
+                return Index([], name=res_name)
+
+        if self.has_duplicates:
+            lhs = self.unique()
+        else:
+            lhs = self
+        if other.has_duplicates:
+            rhs = other.unique()
+        else:
+            rhs = other
+        result = lhs._intersection(rhs, sort=sort)
+        result.name = res_name
+        return result
+
+    def difference(self, other, sort: bool | None = None) -> Index:
+        """
+        Return a new Index with elements from the index that are not in
+        `other`.
+
+        This is the set difference of two Index objects.
+
+        Parameters
+        ----------
+        other : Index or array-like
+        sort : False or None, default None
+            Whether to sort the resulting index. By default, the
+            values are attempted to be sorted, but any TypeError from
+            incomparable elements is caught by cudf.
+
+            * None : Attempt to sort the result, but catch any TypeErrors
+              from comparing incomparable elements.
+            * False : Do not sort the result.
+            * True : Sort the result (which may raise TypeError).
+
+        Returns
+        -------
+        difference : Index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx1 = cudf.Index([2, 1, 3, 4])
+        >>> idx1
+        Index([2, 1, 3, 4], dtype='int64')
+        >>> idx2 = cudf.Index([3, 4, 5, 6])
+        >>> idx2
+        Index([3, 4, 5, 6], dtype='int64')
+        >>> idx1.difference(idx2)
+        Index([1, 2], dtype='int64')
+        >>> idx1.difference(idx2, sort=False)
+        Index([2, 1], dtype='int64')
+        """
+        if not isinstance(other, Index):
+            other = cudf.Index(
+                other,
+                name=getattr(other, "name", self.name),
+            )
+
+        if sort not in {None, False, True}:
+            raise ValueError(
+                f"The 'sort' keyword only takes the values "
+                f"of [None, False, True]; {sort} was passed."
+            )
+
+        if not len(other):
+            res = self._get_reconciled_name_object(other).unique()
+            if sort:
+                return res.sort_values()  # type: ignore[return-value]
+            return res
+        elif self.equals(other):
+            res = self[:0]._get_reconciled_name_object(other).unique()
+            if sort:
+                return res.sort_values()  # type: ignore[return-value]
+            return res
+
+        res_name = _get_result_name(self.name, other.name)
+
+        if is_mixed_with_object_dtype(self, other) or len(other) == 0:
+            difference = self.unique()
+            difference.name = res_name
+            if sort is True:
+                return difference.sort_values()  # type: ignore[return-value]
+        else:
+            other = other.copy(deep=False)
+            difference = _index_from_data(
+                cudf.DataFrame._from_data({"None": self._column.unique()})
+                .merge(
+                    cudf.DataFrame._from_data({"None": other._column}),
+                    how="leftanti",
+                    on="None",
+                )
+                ._data
+            )
+            difference.name = res_name
+
+            if self.dtype != other.dtype:
+                difference = difference.astype(self.dtype)
+
+        if sort in {None, True} and len(other):
+            return difference.sort_values()  # type: ignore[return-value]
+
+        return difference
+
+    def _get_reconciled_name_object(self, other: Index) -> Index:
+        """
+        If the result of a set operation will be self,
+        return self, unless the name changes, in which
+        case make a shallow copy of self.
+        """
+        name = _get_result_name(self.name, other.name)
+        if not _is_same_name(self.name, name):
+            return self.rename(name)  # type: ignore[return-value]
+        return self
+
+    def sort_values(
+        self,
+        return_indexer: bool = False,
+        ascending: bool = True,
+        na_position: Literal["first", "last"] = "last",
+        key=None,
+    ) -> Self | tuple[Self, cupy.ndarray]:
+        """
+        Return a sorted copy of the index, and optionally return the indices
+        that sorted the index itself.
+
+        Parameters
+        ----------
+        return_indexer : bool, default False
+            Should the indices that would sort the index be returned.
+        ascending : bool, default True
+            Should the index values be sorted in an ascending order.
+        na_position : {'first' or 'last'}, default 'last'
+            Argument 'first' puts NaNs at the beginning, 'last' puts NaNs at
+            the end.
+        key : None, optional
+            This parameter is NON-FUNCTIONAL.
+
+        Returns
+        -------
+        sorted_index : Index
+            Sorted copy of the index.
+        indexer : cupy.ndarray, optional
+            The indices that the index itself was sorted by.
+
+        See Also
+        --------
+        cudf.Series.min : Sort values of a Series.
+        cudf.DataFrame.sort_values : Sort values in a DataFrame.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index([10, 100, 1, 1000])
+        >>> idx
+        Index([10, 100, 1, 1000], dtype='int64')
+
+        Sort values in ascending order (default behavior).
+
+        >>> idx.sort_values()
+        Index([1, 10, 100, 1000], dtype='int64')
+
+        Sort values in descending order, and also get the indices `idx` was
+        sorted by.
+
+        >>> idx.sort_values(ascending=False, return_indexer=True)
+        (Index([1000, 100, 10, 1], dtype='int64'), array([3, 1, 0, 2],
+                                                            dtype=int32))
+
+        Sorting values in a MultiIndex:
+
+        >>> midx = cudf.MultiIndex(
+        ...      levels=[[1, 3, 4, -10], [1, 11, 5]],
+        ...      codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        ...      names=["x", "y"],
+        ... )
+        >>> midx
+        MultiIndex([(  1,  1),
+                    (  1,  5),
+                    (  3, 11),
+                    (  4, 11),
+                    (-10,  1)],
+                   names=['x', 'y'])
+        >>> midx.sort_values()
+        MultiIndex([(-10,  1),
+                    (  1,  1),
+                    (  1,  5),
+                    (  3, 11),
+                    (  4, 11)],
+                   names=['x', 'y'])
+        >>> midx.sort_values(ascending=False)
+        MultiIndex([(  4, 11),
+                    (  3, 11),
+                    (  1,  5),
+                    (  1,  1),
+                    (-10,  1)],
+                   names=['x', 'y'])
+        """
+        if key is not None:
+            raise NotImplementedError("key parameter is not yet implemented.")
+        if na_position not in {"first", "last"}:
+            raise ValueError(f"invalid na_position: {na_position}")
+
+        indices = self.argsort(ascending=ascending, na_position=na_position)
+        index_sorted = self.take(indices)
+
+        if return_indexer:
+            return index_sorted, indices
+        else:
+            return index_sorted
+
+    def join(
+        self,
+        other,
+        how: str = "left",
+        level=None,
+        return_indexers: bool = False,
+        sort: bool = False,
+    ) -> Index:
+        """
+        Compute join_index and indexers to conform data structures
+        to the new index.
+
+        Parameters
+        ----------
+        other : Index.
+        how : {'left', 'right', 'inner', 'outer'}
+        return_indexers : bool, default False
+        sort : bool, default False
+            Sort the join keys lexicographically in the result Index. If False,
+            the order of the join keys depends on the join type (how keyword).
+
+        Returns: index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> lhs = cudf.DataFrame({
+        ...     "a": [2, 3, 1],
+        ...     "b": [3, 4, 2],
+        ... }).set_index(['a', 'b']).index
+        >>> lhs
+        MultiIndex([(2, 3),
+                    (3, 4),
+                    (1, 2)],
+                   names=['a', 'b'])
+        >>> rhs = cudf.DataFrame({"a": [1, 4, 3]}).set_index('a').index
+        >>> rhs
+        Index([1, 4, 3], dtype='int64', name='a')
+        >>> lhs.join(rhs, how='inner')
+        MultiIndex([(3, 4),
+                    (1, 2)],
+                   names=['a', 'b'])
+        """
+        if return_indexers is not False:
+            raise NotImplementedError("return_indexers is not implemented")
+        self_is_multi = isinstance(self, cudf.MultiIndex)
+        other_is_multi = isinstance(other, cudf.MultiIndex)
+        if level is not None:
+            if self_is_multi and other_is_multi:
+                raise TypeError(
+                    "Join on level between two MultiIndex objects is ambiguous"
+                )
+
+            if not is_scalar(level):
+                raise ValueError("level should be an int or a label only")
+
+        if other_is_multi:
+            if how == "left":
+                how = "right"
+            elif how == "right":
+                how = "left"
+            rhs = self.copy(deep=False)
+            lhs = other.copy(deep=False)
+        else:
+            lhs = self.copy(deep=False)
+            rhs = other.copy(deep=False)
+        same_names = lhs.names == rhs.names
+        # There should be no `None` values in Joined indices,
+        # so essentially it would be `left/right` or 'inner'
+        # in case of MultiIndex
+        if isinstance(lhs, cudf.MultiIndex):
+            on = (
+                lhs._data.get_labels_by_index(level)[0]
+                if isinstance(level, int)
+                else level
+            )
+
+            if on is not None:
+                rhs.names = (on,)
+            on = rhs.names[0]
+            if how == "outer":
+                how = "left"
+            elif how == "right":
+                how = "inner"
+        else:
+            # Both are normal indices
+            on = lhs.names[0]
+            rhs.names = lhs.names
+
+        lhs = lhs.to_frame()
+        rhs = rhs.to_frame()
+
+        output = lhs.merge(rhs, how=how, on=on, sort=sort)
+
+        # If both inputs were MultiIndexes, the output is a MultiIndex.
+        # Otherwise, the output is only a MultiIndex if there are multiple
+        # columns
+        if self_is_multi and other_is_multi:
+            return cudf.MultiIndex._from_data(output._data)
+        else:
+            idx = _index_from_data(output._data)
+            idx.name = self.name if same_names else None
+            return idx
+
+    def drop_duplicates(
+        self,
+        keep: Literal["first", "last", False] = "first",
+        nulls_are_equal: bool = True,
+    ) -> Self:
+        """
+        Drop duplicate rows in index.
+
+        keep : {"first", "last", False}, default "first"
+            - 'first' : Drop duplicates except for the first occurrence.
+            - 'last' : Drop duplicates except for the last occurrence.
+            - ``False`` : Drop all duplicates.
+        nulls_are_equal: bool, default True
+            Null elements are considered equal to other null elements.
+        """
+        return self._from_columns_like_self(
+            [
+                ColumnBase.from_pylibcudf(col)
+                for col in stream_compaction.drop_duplicates(
+                    list(self._columns),
+                    keep=keep,
+                    nulls_are_equal=nulls_are_equal,
+                )
+            ],
+            self._column_names,
+        )
+
+    def duplicated(
+        self, keep: Literal["first", "last", False] = "first"
+    ) -> cupy.ndarray:
+        """
+        Indicate duplicate index values.
+
+        Duplicated values are indicated as ``True`` values in the resulting
+        array. Either all duplicates, all except the first, or all except the
+        last occurrence of duplicates can be indicated.
+
+        Parameters
+        ----------
+        keep : {'first', 'last', False}, default 'first'
+            The value or values in a set of duplicates to mark as missing.
+
+            - ``'first'`` : Mark duplicates as ``True`` except for the first
+              occurrence.
+            - ``'last'`` : Mark duplicates as ``True`` except for the last
+              occurrence.
+            - ``False`` : Mark all duplicates as ``True``.
+
+        Returns
+        -------
+        cupy.ndarray[bool]
+
+        See Also
+        --------
+        Series.duplicated : Equivalent method on cudf.Series.
+        DataFrame.duplicated : Equivalent method on cudf.DataFrame.
+        Index.drop_duplicates : Remove duplicate values from Index.
+
+        Examples
+        --------
+        By default, for each set of duplicated values, the first occurrence is
+        set to False and all others to True:
+
+        >>> import cudf
+        >>> idx = cudf.Index(['lama', 'cow', 'lama', 'beetle', 'lama'])
+        >>> idx.duplicated()
+        array([False, False,  True, False,  True])
+
+        which is equivalent to
+
+        >>> idx.duplicated(keep='first')
+        array([False, False,  True, False,  True])
+
+        By using 'last', the last occurrence of each set of duplicated values
+        is set to False and all others to True:
+
+        >>> idx.duplicated(keep='last')
+        array([ True, False,  True, False, False])
+
+        By setting keep to ``False``, all duplicates are True:
+
+        >>> idx.duplicated(keep=False)
+        array([ True, False,  True, False,  True])
+        """
+        return self.to_series().duplicated(keep=keep).to_cupy()
+
+    def dropna(self, how: Literal["any", "all"] = "any") -> Self:
+        """
+        Drop null rows from Index.
+
+        how : {"any", "all"}, default "any"
+            Specifies how to decide whether to drop a row.
+            "any" (default) drops rows containing at least
+            one null value. "all" drops only rows containing
+            *all* null values.
+        """
+        if how not in {"any", "all"}:
+            raise ValueError(f"{how=} must be 'any' or 'all'")
+        if not self.hasnans:
+            return self.copy(deep=False)
+
+        # This is to be consistent with IndexedFrame.dropna to handle nans
+        # as nulls by default
+        data_columns = [col.nans_to_nulls() for col in self._columns]
+
+        return self._from_columns_like_self(
+            [
+                ColumnBase.from_pylibcudf(col)
+                for col in stream_compaction.drop_nulls(
+                    data_columns,
+                    how=how,
+                )
+            ],
+            self._column_names,
+        )
+
+    def is_numeric(self):
+        """
+        Check if the Index only consists of numeric data.
+
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_any_real_numeric_dtype` instead.
+
+        Returns
+        -------
+        bool
+            Whether or not the Index only consists of numeric data.
+
+        See Also
+        --------
+        is_boolean : Check if the Index only consists of booleans.
+        is_integer : Check if the Index only consists of integers.
+        is_floating : Check if the Index is a floating type.
+        is_object : Check if the Index is of the object dtype.
+        is_categorical : Check if the Index holds categorical data.
+        is_interval : Check if the Index holds Interval objects.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index([1.0, 2.0, 3.0, 4.0])
+        >>> idx.is_numeric()
+        True
+        >>> idx = cudf.Index([1, 2, 3, 4.0])
+        >>> idx.is_numeric()
+        True
+        >>> idx = cudf.Index([1, 2, 3, 4])
+        >>> idx.is_numeric()
+        True
+        >>> idx = cudf.Index([1, 2, 3, 4.0, np.nan])
+        >>> idx.is_numeric()
+        True
+        >>> idx = cudf.Index(["Apple", "cold"])
+        >>> idx.is_numeric()
+        False
+        """
+        # Do not remove until pandas removes this.
+        warnings.warn(
+            f"{type(self).__name__}.is_numeric is deprecated. "
+            "Use cudf.api.types.is_any_real_numeric_dtype instead",
+            FutureWarning,
+        )
+        return self._is_numeric()
+
+    def is_boolean(self):
+        """
+        Check if the Index only consists of booleans.
+
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_bool_dtype` instead.
+
+        Returns
+        -------
+        bool
+            Whether or not the Index only consists of booleans.
+
+        See Also
+        --------
+        is_integer : Check if the Index only consists of integers.
+        is_floating : Check if the Index is a floating type.
+        is_numeric : Check if the Index only consists of numeric data.
+        is_object : Check if the Index is of the object dtype.
+        is_categorical : Check if the Index holds categorical data.
+        is_interval : Check if the Index holds Interval objects.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index([True, False, True])
+        >>> idx.is_boolean()
+        True
+        >>> idx = cudf.Index(["True", "False", "True"])
+        >>> idx.is_boolean()
+        False
+        >>> idx = cudf.Index([1, 2, 3])
+        >>> idx.is_boolean()
+        False
+        """
+        # Do not remove until pandas removes this.
+        warnings.warn(
+            f"{type(self).__name__}.is_boolean is deprecated. "
+            "Use cudf.api.types.is_bool_dtype instead",
+            FutureWarning,
+        )
+        return self._is_boolean()
+
+    def is_integer(self):
+        """
+        Check if the Index only consists of integers.
+
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_integer_dtype` instead.
+
+        Returns
+        -------
+        bool
+            Whether or not the Index only consists of integers.
+
+        See Also
+        --------
+        is_boolean : Check if the Index only consists of booleans.
+        is_floating : Check if the Index is a floating type.
+        is_numeric : Check if the Index only consists of numeric data.
+        is_object : Check if the Index is of the object dtype.
+        is_categorical : Check if the Index holds categorical data.
+        is_interval : Check if the Index holds Interval objects.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index([1, 2, 3, 4])
+        >>> idx.is_integer()
+        True
+        >>> idx = cudf.Index([1.0, 2.0, 3.0, 4.0])
+        >>> idx.is_integer()
+        False
+        >>> idx = cudf.Index(["Apple", "Mango", "Watermelon"])
+        >>> idx.is_integer()
+        False
+        """
+        # Do not remove until pandas removes this.
+        warnings.warn(
+            f"{type(self).__name__}.is_integer is deprecated. "
+            "Use cudf.api.types.is_integer_dtype instead",
+            FutureWarning,
+        )
+        return self._is_integer()
+
+    def is_floating(self):
+        """
+        Check if the Index is a floating type.
+
+        The Index may consist of only floats, NaNs, or a mix of floats,
+        integers, or NaNs.
+
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_float_dtype` instead.
+
+        Returns
+        -------
+        bool
+            Whether or not the Index only consists of only consists
+            of floats, NaNs, or a mix of floats, integers, or NaNs.
+
+        See Also
+        --------
+        is_boolean : Check if the Index only consists of booleans.
+        is_integer : Check if the Index only consists of integers.
+        is_numeric : Check if the Index only consists of numeric data.
+        is_object : Check if the Index is of the object dtype.
+        is_categorical : Check if the Index holds categorical data.
+        is_interval : Check if the Index holds Interval objects.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index([1.0, 2.0, 3.0, 4.0])
+        >>> idx.is_floating()
+        True
+        >>> idx = cudf.Index([1.0, 2.0, np.nan, 4.0])
+        >>> idx.is_floating()
+        True
+        >>> idx = cudf.Index([1, 2, 3, 4, np.nan], nan_as_null=False)
+        >>> idx.is_floating()
+        True
+        >>> idx = cudf.Index([1, 2, 3, 4])
+        >>> idx.is_floating()
+        False
+        """
+        # Do not remove until pandas removes this.
+        warnings.warn(
+            f"{type(self).__name__}.is_floating is deprecated. "
+            "Use cudf.api.types.is_float_dtype instead",
+            FutureWarning,
+        )
+        return self._is_floating()
+
+    def is_object(self):
+        """
+        Check if the Index is of the object dtype.
+
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_object_dtype` instead.
+
+        Returns
+        -------
+        bool
+            Whether or not the Index is of the object dtype.
+
+        See Also
+        --------
+        is_boolean : Check if the Index only consists of booleans.
+        is_integer : Check if the Index only consists of integers.
+        is_floating : Check if the Index is a floating type.
+        is_numeric : Check if the Index only consists of numeric data.
+        is_categorical : Check if the Index holds categorical data.
+        is_interval : Check if the Index holds Interval objects.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index(["Apple", "Mango", "Watermelon"])
+        >>> idx.is_object()
+        True
+        >>> idx = cudf.Index(["Watermelon", "Orange", "Apple",
+        ...                 "Watermelon"]).astype("category")
+        >>> idx.is_object()
+        False
+        >>> idx = cudf.Index([1.0, 2.0, 3.0, 4.0])
+        >>> idx.is_object()
+        False
+        """
+        # Do not remove until pandas removes this.
+        warnings.warn(
+            f"{type(self).__name__}.is_object is deprecated. "
+            "Use cudf.api.types.is_object_dtype instead",
+            FutureWarning,
+        )
+        return self._is_object()
+
+    def is_categorical(self):
+        """
+        Check if the Index holds categorical data.
+
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_categorical_dtype` instead.
+
+        Returns
+        -------
+        bool
+            True if the Index is categorical.
+
+        See Also
+        --------
+        CategoricalIndex : Index for categorical data.
+        is_boolean : Check if the Index only consists of booleans.
+        is_integer : Check if the Index only consists of integers.
+        is_floating : Check if the Index is a floating type.
+        is_numeric : Check if the Index only consists of numeric data.
+        is_object : Check if the Index is of the object dtype.
+        is_interval : Check if the Index holds Interval objects.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index(["Watermelon", "Orange", "Apple",
+        ...                 "Watermelon"]).astype("category")
+        >>> idx.is_categorical()
+        True
+        >>> idx = cudf.Index([1, 3, 5, 7])
+        >>> idx.is_categorical()
+        False
+        >>> s = cudf.Series(["Peter", "Victor", "Elisabeth", "Mar"])
+        >>> s
+        0        Peter
+        1       Victor
+        2    Elisabeth
+        3          Mar
+        dtype: object
+        >>> s.index.is_categorical()
+        False
+        """
+        # Do not remove until pandas removes this.
+        warnings.warn(
+            f"{type(self).__name__}.is_categorical is deprecated. "
+            "Use cudf.api.types.is_categorical_dtype instead",
+            FutureWarning,
+        )
+        return self._is_categorical()
+
+    def is_interval(self):
+        """
+        Check if the Index holds Interval objects.
+
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_interval_dtype` instead.
+
+        Returns
+        -------
+        bool
+            Whether or not the Index holds Interval objects.
+
+        See Also
+        --------
+        IntervalIndex : Index for Interval objects.
+        is_boolean : Check if the Index only consists of booleans.
+        is_integer : Check if the Index only consists of integers.
+        is_floating : Check if the Index is a floating type.
+        is_numeric : Check if the Index only consists of numeric data.
+        is_object : Check if the Index is of the object dtype.
+        is_categorical : Check if the Index holds categorical data.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> idx = cudf.from_pandas(
+        ...     pd.Index([pd.Interval(left=0, right=5),
+        ...               pd.Interval(left=5, right=10)])
+        ... )
+        >>> idx.is_interval()
+        True
+        >>> idx = cudf.Index([1, 3, 5, 7])
+        >>> idx.is_interval()
+        False
+        """
+        # Do not remove until pandas removes this.
+        warnings.warn(
+            f"{type(self).__name__}.is_interval is deprecated. "
+            "Use cudf.api.types.is_interval_dtype instead",
+            FutureWarning,
+        )
+        return self._is_interval()
+
+    def _gather(
+        self, gather_map, nullify: bool = False, check_bounds: bool = True
+    ) -> Self:
+        """Gather rows of index specified by indices in `gather_map`.
+
+        Skip bounds checking if check_bounds is False.
+        Set rows to null for all out of bound indices if nullify is `True`.
+        """
+        gather_map = as_column(gather_map)
+
+        # TODO: For performance, the check and conversion of gather map should
+        # be done by the caller. This check will be removed in future release.
+        if gather_map.dtype.kind not in "iu":
+            gather_map = gather_map.astype(SIZE_TYPE_DTYPE)
+
+        # TODO: This call is purely to validate the bounds if
+        # check_bounds is True, require instead that the caller
+        # provides a GatherMap.
+        GatherMap(gather_map, len(self), nullify=not check_bounds or nullify)
+        return self._from_columns_like_self(
+            [
+                ColumnBase.from_pylibcudf(col)
+                for col in copying.gather(
+                    self._columns, gather_map, nullify=nullify
+                )
+            ],
+            self._column_names,
+        )
+
+    def take(
+        self, indices, axis=0, allow_fill: bool = True, fill_value=None
+    ) -> Self:
+        """Return a new index containing the rows specified by *indices*
+
+        Parameters
+        ----------
+        indices : array-like
+            Array of ints indicating which positions to take.
+        axis : int
+            The axis over which to select values, always 0.
+        allow_fill : Unsupported
+        fill_value : Unsupported
+
+        Returns
+        -------
+        out : Index
+            New object with desired subset of rows.
+
+        Examples
+        --------
+        >>> idx = cudf.Index(['a', 'b', 'c', 'd', 'e'])
+        >>> idx.take([2, 0, 4, 3])
+        Index(['c', 'a', 'e', 'd'], dtype='object')
+        """
+
+        if axis not in {0, "index"}:
+            raise NotImplementedError(
+                "Gather along column axis is not yet supported."
+            )
+        if not allow_fill or fill_value is not None:
+            raise NotImplementedError(
+                "`allow_fill` and `fill_value` are unsupported."
+            )
+
+        return self._gather(indices)
+
+    def _apply_boolean_mask(self, boolean_mask) -> Self:
+        """Apply boolean mask to each row of `self`.
+
+        Rows corresponding to `False` is dropped.
+        """
+        boolean_mask = as_column(boolean_mask)
+        if boolean_mask.dtype.kind != "b":
+            raise ValueError("boolean_mask is not boolean type.")
+
+        return self._from_columns_like_self(
+            [
+                ColumnBase.from_pylibcudf(col)
+                for col in stream_compaction.apply_boolean_mask(
+                    list(self._columns), boolean_mask
+                )
+            ],
+            column_names=self._column_names,
+        )
+
+    def _new_index_for_reset_index(
+        self, levels: tuple | None, name
+    ) -> None | Index:
+        """Return the new index after .reset_index"""
+        # None is caught later to return RangeIndex
+        return None
+
+    def _columns_for_reset_index(
+        self, levels: tuple | None
+    ) -> Generator[tuple[Any, ColumnBase], None, None]:
+        """Return the columns and column names for .reset_index"""
+        yield (
+            "index" if self.name is None else self.name,
+            next(iter(self._columns)),
+        )
 
     def _binaryop(
         self,
@@ -342,11 +1845,6 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             return ret.values
         return ret
 
-    @property  # type: ignore
-    @_performance_tracking
-    def _values(self) -> ColumnBase:
-        return self._column
-
     @classmethod
     @_performance_tracking
     def _concat(cls, objs):
@@ -380,6 +1878,8 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             result = _concat_range_index(non_empties)
         else:
             data = concat_columns([o._column for o in non_empties])
+            if cls is IntervalIndex:
+                data = data._with_type_metadata(non_empties[0]._column.dtype)
             result = Index._from_column(data)
 
         names = {obj.name for obj in objs}
@@ -402,7 +1902,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @_performance_tracking
     def equals(self, other) -> bool:
-        if not isinstance(other, BaseIndex) or len(self) != len(other):
+        if not isinstance(other, Index) or len(self) != len(other):
             return False
 
         check_dtypes = False
@@ -457,6 +1957,12 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     def astype(self, dtype: Dtype, copy: bool = True) -> Index:
         return super().astype({self.name: cudf.dtype(dtype)}, copy)
 
+    @staticmethod
+    def _return_get_indexer_result(result: cupy.ndarray) -> cupy.ndarray:
+        if cudf.get_option("mode.pandas_compatible"):
+            return result.astype(np.int64)
+        return result
+
     @_performance_tracking
     def get_indexer(self, target, method=None, limit=None, tolerance=None):
         if is_scalar(target):
@@ -496,11 +2002,11 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         )
 
         if not len(self):
-            return _return_get_indexer_result(result.values)
+            return self._return_get_indexer_result(result.values)
         try:
             lcol, rcol = _match_join_keys(needle, self._column, "inner")
         except ValueError:
-            return _return_get_indexer_result(result.values)
+            return self._return_get_indexer_result(result.values)
 
         with acquire_spill_lock():
             left_plc, right_plc = plc.join.inner_join(
@@ -534,7 +2040,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 "{['ffill'/'pad', 'bfill'/'backfill', 'nearest', None]}"
             )
 
-        return _return_get_indexer_result(result_series.to_cupy())
+        return self._return_get_indexer_result(result_series.to_cupy())
 
     @_performance_tracking
     def get_loc(self, key) -> int | slice | cupy.ndarray:
@@ -628,7 +2134,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 output = "\n".join(data_repr[:-1] + cats_repr[-1:])
 
             output = output.replace("nan", str(cudf.NA))
-        elif preprocess._values.nullable:
+        elif preprocess._column.nullable:
             if self.dtype == CUDF_STRING_DTYPE:
                 output = repr(self.to_pandas(nullable=True))
             else:
@@ -723,7 +2229,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     def _is_interval(self) -> bool:
         return False
 
-    @property  # type: ignore
+    @cached_property
     @_performance_tracking
     def hasnans(self) -> bool:
         return self._column.has_nulls(include_nan=True)
@@ -768,13 +2274,9 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         )
 
     def repeat(self, repeats, axis=None) -> Self:
-        result = super()._repeat([self._column], repeats, axis)[0]
+        result = self._repeat([self._column], repeats, axis)[0]
         result = result._with_type_metadata(self.dtype)
         return type(self)._from_column(result, name=self.name)
-
-    @property
-    def values(self) -> cupy.ndarray:
-        return self._column.values
 
     def __contains__(self, item) -> bool:
         hash(item)
@@ -794,7 +2296,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     def to_frame(
         self, index: bool = True, name: Hashable = no_default
-    ) -> cudf.DataFrame:
+    ) -> DataFrame:
         """Create a DataFrame with a column containing this Index
 
         Parameters
@@ -844,11 +2346,39 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         """
         return self._to_frame(name=name, index=self if index else None)
 
+    def to_series(
+        self, index: Index | None = None, name: Hashable | None = None
+    ) -> Series:
+        """
+        Create a Series with both index and values equal to the index keys.
+        Useful with map for returning an indexer based on an index.
+
+        Parameters
+        ----------
+        index : Index, optional
+            Index of resulting Series. If None, defaults to original index.
+        name : Hashable, optional
+            Name of resulting Series. If None, defaults to name of original
+            index.
+
+        Returns
+        -------
+        Series
+            The dtype will be based on the type of the Index values.
+        """
+        from cudf.core.series import Series
+
+        return Series._from_column(
+            self._column,
+            index=self.copy(deep=False) if index is None else index,
+            name=self.name if name is None else name,
+        )
+
     def append(self, other):
         if is_list_like(other):
             to_concat = [self]
             for obj in other:
-                if not isinstance(obj, BaseIndex):
+                if not isinstance(obj, Index):
                     raise TypeError("all inputs must be Index")
                 to_concat.append(obj)
         else:
@@ -927,8 +2457,52 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
         return self._column.isin(values).values
 
-    @copy_docstring(StringMethods)  # type: ignore
+    def get_level_values(self, level: Hashable) -> Self:
+        """
+        Return an Index of values for requested level.
+
+        This is primarily useful to get an individual level of values from a
+        MultiIndex, but is provided on Index as well for compatibility.
+
+        Parameters
+        ----------
+        level : int or str
+            It is either the integer position or the name of the level.
+
+        Returns
+        -------
+        Index
+            Calling object, as there is only one level in the Index.
+
+        See Also
+        --------
+        cudf.MultiIndex.get_level_values : Get values for
+            a level of a MultiIndex.
+
+        Notes
+        -----
+        For Index, level should be 0, since there are no multiple levels.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index(["a", "b", "c"])
+        >>> idx.get_level_values(0)
+        Index(['a', 'b', 'c'], dtype='object')
+        """
+        if level == self.name:
+            return self
+        elif is_integer(level):
+            if level != 0:
+                raise IndexError(
+                    f"Cannot get level: {level} for index with 1 level"
+                )
+            return self
+        else:
+            raise KeyError(f"Requested level with name {level} not found")
+
     @property
+    @copy_docstring(StringMethods)
     @_performance_tracking
     def str(self):
         if self.dtype == CUDF_STRING_DTYPE:
@@ -945,7 +2519,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return super().__dask_tokenize__()
 
 
-class RangeIndex(BaseIndex, BinaryOperand):
+class RangeIndex(Index):
     """
     Immutable Index implementing a monotonic integer range.
 
@@ -985,13 +2559,18 @@ class RangeIndex(BaseIndex, BinaryOperand):
     RangeIndex(start=1, stop=10, step=1, name='a')
     """
 
-    _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
-
     _range: range
 
     @_performance_tracking
     def __init__(
-        self, start, stop=None, step=1, dtype=None, copy=False, name=None
+        self,
+        start,
+        stop=None,
+        step=1,
+        dtype=None,
+        copy=False,
+        name=None,
+        nan_as_null=no_default,
     ):
         if not is_hashable(name):
             raise ValueError("Name must be a hashable value.")
@@ -1001,6 +2580,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
         if isinstance(start, range):
             self._range = start
+        elif isinstance(start, (pd.RangeIndex, RangeIndex)):
+            self._range = range(start.start, start.stop, start.step)
+            if name is None:
+                self._name = start.name
         else:
             if stop is None:
                 start, stop = 0, start
@@ -1050,15 +2633,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
         else:
             return column_empty(0, dtype=self.dtype)
 
-    # TODO: Remove once BaseIndex is removed
-    @cached_property
-    @_performance_tracking
-    def _values(self) -> ColumnBase:
-        if len(self) > 0:
-            return as_column(self._range, dtype=self.dtype)
-        else:
-            return column_empty(0, dtype=self.dtype)
-
     @property
     @_performance_tracking
     def _columns(self) -> tuple[ColumnBase]:
@@ -1070,14 +2644,23 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return ColumnAccessor({self.name: self._column}, verify=False)
 
     @property
-    def _column_labels_and_values(self) -> Iterable:
-        return zip(self._column_names, self._columns)
+    def _column_labels_and_values(
+        self,
+    ) -> Iterable[tuple[Hashable, ColumnBase]]:
+        return zip(self._column_names, self._columns, strict=True)
 
     @_performance_tracking
     def _as_int_index(self) -> Index:
         # Convert self to an integer index. This method is used to perform ops
         # that are not defined directly on RangeIndex.
         return Index._from_column(self._column, name=self.name)
+
+    @property
+    def nlevels(self) -> int:
+        """
+        Number of levels.
+        """
+        return 1
 
     @property
     @_performance_tracking
@@ -1167,9 +2750,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return RangeIndex(self._range, name=name)
 
     @_performance_tracking
-    def astype(self, dtype, copy: bool = True):
-        if is_dtype_equal(dtype, self.dtype):
-            return self
+    def astype(self, dtype: Dtype, copy: bool = True) -> Self:
+        dtype = cudf_dtype(dtype)
+        if self.dtype == dtype:
+            return self if not copy else self.copy()
         return self._as_int_index().astype(dtype, copy=copy)
 
     def fillna(self, value, downcast=None) -> Self:
@@ -1217,7 +2801,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             lo = self.start + sl_start * self.step
             hi = self.start + sl_stop * self.step
             st = self.step * sl_step
-            return RangeIndex(start=lo, stop=hi, step=st, name=self._name)
+            return RangeIndex(start=lo, stop=hi, step=st, name=self.name)
 
         elif isinstance(index, Number):
             len_self = len(self)
@@ -1242,7 +2826,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def equals(self, other) -> bool:
         if isinstance(other, RangeIndex):
             return self._range == other._range
-        elif not isinstance(other, BaseIndex) or len(self) != len(other):
+        elif not isinstance(other, Index) or len(self) != len(other):
             return False
         elif not (
             is_dtype_obj_numeric(other.dtype)
@@ -1342,7 +2926,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     def to_frame(
         self, index: bool = True, name: Hashable = no_default
-    ) -> cudf.DataFrame:
+    ) -> DataFrame:
         return self._as_int_index().to_frame(index=index, name=name)
 
     @property
@@ -1580,9 +3164,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             super().difference(other, sort=sort)
         )
 
-    def _try_reconstruct_range_index(
-        self, index: BaseIndex
-    ) -> Self | BaseIndex:
+    def _try_reconstruct_range_index(self, index: Index) -> Self | Index:
         if isinstance(index, RangeIndex) or index.dtype.kind not in "iu":
             return index
         # Evenly spaced values can return a
@@ -1633,7 +3215,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     @_performance_tracking
-    def _apply_boolean_mask(self, boolean_mask):
+    def _apply_boolean_mask(self, boolean_mask) -> Index:
         return Index._from_column(
             self._column.apply_boolean_mask(boolean_mask), name=self.name
         )
@@ -1641,12 +3223,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def repeat(self, repeats, axis=None):
         return self._as_int_index().repeat(repeats, axis)
 
-    def _split(self, splits):
-        return Index._from_column(
-            self._as_int_index()._split(splits), name=self.name
-        )
+    def _split(self, splits: list[int]) -> list[Index]:
+        return self._as_int_index()._split(splits)
 
-    def _binaryop(self, other, op: str):
+    def _binaryop(self, other, op: str):  # type: ignore[override]
         # TODO: certain binops don't require materializing range index and
         # could use some optimization.
         return self._as_int_index()._binaryop(other, op=op)
@@ -1730,14 +3310,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_performance_tracking
     def where(self, cond, other=None, inplace: bool = False) -> Self | None:
         return self._as_int_index().where(cond, other, inplace)
-
-    def __array__(self, dtype=None):
-        raise TypeError(
-            "Implicit conversion to a host NumPy array via __array__ is not "
-            "allowed, To explicitly construct a GPU matrix, consider using "
-            ".to_cupy()\nTo explicitly construct a host matrix, consider "
-            "using .to_numpy()."
-        )
 
     @_performance_tracking
     def nunique(self, dropna: bool = True) -> int:
@@ -1823,12 +3395,18 @@ class RangeIndex(BaseIndex, BinaryOperand):
         else:
             return abs(self._as_int_index())
 
+    def __invert__(self) -> Self:
+        if len(self) == 0:
+            return self.copy()
+        rng = range(~self.start, ~self.stop, -self.step)
+        return type(self)(rng, name=self.name)
+
     def _columns_for_reset_index(
         self, levels: tuple | None
     ) -> Generator[tuple[Any, ColumnBase], None, None]:
         """Return the columns and column names for .reset_index"""
         # We need to explicitly materialize the RangeIndex to a column
-        yield "index" if self.name is None else self.name, as_column(self)
+        yield "index" if self.name is None else self.name, self._column
 
     @_warn_no_dask_cudf
     def __dask_tokenize__(self):
@@ -1916,6 +3494,7 @@ class DatetimeIndex(Index):
         dtype=None,
         copy: bool = False,
         name=None,
+        nan_as_null=no_default,
     ):
         # we should be more strict on what we accept here but
         # we'd have to go and figure out all the semantics around
@@ -1945,28 +3524,32 @@ class DatetimeIndex(Index):
         if yearfirst is not False:
             raise NotImplementedError("yearfirst == True is not yet supported")
 
-        self._freq = _validate_freq(freq)
-
-        if dtype is None:
-            # nanosecond default matches pandas
-            dtype = "datetime64[ns]"
-        dtype = cudf.dtype(dtype)
-        if dtype.kind != "M":
-            raise TypeError("dtype must be a datetime type")
+        if freq is None and isinstance(data, type(self)):
+            freq = data.freq
 
         name = _getdefault_name(data, name=name)
         data = as_column(data)
-
-        # TODO: if data.dtype.kind == "M" (i.e. data is already datetime type)
-        # We probably shouldn't always astype to datetime64[ns]
-        if not isinstance(data.dtype, pd.DatetimeTZDtype):
-            data = data.astype(dtype)
+        if data.dtype.kind == "b":
+            raise ValueError(
+                "Boolean data cannot be converted to a DatetimeIndex"
+            )
+        if dtype is not None:
+            dtype = cudf.dtype(dtype)
+            if dtype.kind != "M":
+                raise TypeError("dtype must be a datetime type")
+            elif not isinstance(data.dtype, pd.DatetimeTZDtype):
+                data = data.astype(dtype)
+        elif data.dtype.kind != "M":
+            # nanosecond default matches pandas
+            data = data.astype(np.dtype("datetime64[ns]"))
 
         if copy:
             data = data.copy()
 
-        super().__init__(data, name=name)
-
+        SingleColumnFrame.__init__(
+            self, ColumnAccessor({name: data}, verify=False)
+        )
+        self._freq = _validate_freq(freq)
         if self._freq is not None:
             unique_vals = self.to_series().diff().unique()
             if len(unique_vals) > 2 or (
@@ -2008,22 +3591,26 @@ class DatetimeIndex(Index):
             return pd.Timestamp(value)
         return value
 
+    def find_label_range(self, loc: slice) -> slice:
+        # For indexing, try to interpret slice arguments as datetime-convertible
+        if any(
+            not (val is None or isinstance(val, (str, datetime.datetime)))
+            for val in (loc.start, loc.stop)
+        ):
+            raise TypeError(
+                "Can only slice DatetimeIndex with a string or datetime objects"
+            )
+        new_slice = slice(
+            pd.to_datetime(loc.start) if loc.start is not None else None,
+            pd.to_datetime(loc.stop) if loc.stop is not None else None,
+            loc.step,
+        )
+        return super().find_label_range(new_slice)
+
     @_performance_tracking
     def copy(self, name=None, deep=False):
         idx_copy = super().copy(name=name, deep=deep)
         return idx_copy._copy_type_metadata(self)
-
-    def searchsorted(
-        self,
-        value,
-        side: Literal["left", "right"] = "left",
-        ascending: bool = True,
-        na_position: Literal["first", "last"] = "last",
-    ):
-        value = self.dtype.type(value)
-        return super().searchsorted(
-            value, side=side, ascending=ascending, na_position=na_position
-        )
 
     def as_unit(self, unit: str, round_ok: bool = True) -> Self:
         """
@@ -2061,16 +3648,16 @@ class DatetimeIndex(Index):
             self._column.strftime(date_format), name=self.name
         )
 
-    @property
+    @cached_property
     def asi8(self) -> cupy.ndarray:
         return self._column.astype(np.dtype(np.int64)).values
 
     @property
-    def inferred_freq(self) -> cudf.DateOffset | None:
+    def inferred_freq(self) -> DateOffset | None:
         raise NotImplementedError("inferred_freq is currently not implemented")
 
     @property
-    def freq(self) -> cudf.DateOffset | None:
+    def freq(self) -> DateOffset | None:
         return self._freq
 
     @freq.setter
@@ -2102,7 +3689,9 @@ class DatetimeIndex(Index):
         datetime.tzinfo or None
             Returns None when the array is tz-naive.
         """
-        return getattr(self.dtype, "tz", None)
+        if isinstance(self.dtype, pd.DatetimeTZDtype):
+            return self.dtype.tz
+        return None
 
     @property
     def tzinfo(self) -> tzinfo | None:
@@ -2140,7 +3729,7 @@ class DatetimeIndex(Index):
             self._column.normalize(), name=self.name
         )
 
-    @property
+    @cached_property
     def time(self) -> np.ndarray:
         """
         Returns numpy array of ``datetime.time`` objects.
@@ -2149,7 +3738,7 @@ class DatetimeIndex(Index):
         """
         return self.to_pandas().time
 
-    @property
+    @cached_property
     def timetz(self) -> np.ndarray:
         """
         Returns numpy array of ``datetime.time`` objects with timezones.
@@ -2158,7 +3747,7 @@ class DatetimeIndex(Index):
         """
         return self.to_pandas().timetz
 
-    @property
+    @cached_property
     def date(self) -> np.ndarray:
         """
         Returns numpy array of python ``datetime.date`` objects.
@@ -2173,6 +3762,7 @@ class DatetimeIndex(Index):
         """
         Booleans indicating if dates are the first day of the month.
         """
+        # .is_month_start is already a cached_property
         return self._column.is_month_start.values
 
     @property
@@ -2180,6 +3770,7 @@ class DatetimeIndex(Index):
         """
         Booleans indicating if dates are the last day of the month.
         """
+        # .is_month_end is already a cached_property
         return self._column.is_month_end.values
 
     @property
@@ -2187,6 +3778,7 @@ class DatetimeIndex(Index):
         """
         Booleans indicating if dates are the last day of the quarter.
         """
+        # .is_quarter_end is already a cached_property
         return self._column.is_quarter_end.values
 
     @property
@@ -2194,6 +3786,7 @@ class DatetimeIndex(Index):
         """
         Booleans indicating if dates are the start day of the quarter.
         """
+        # .is_quarter_start is already a cached_property
         return self._column.is_quarter_start.values
 
     @property
@@ -2201,6 +3794,7 @@ class DatetimeIndex(Index):
         """
         Booleans indicating if dates are the last day of the year.
         """
+        # .is_year_end is already a cached_property
         return self._column.is_year_end.values
 
     @property
@@ -2208,6 +3802,7 @@ class DatetimeIndex(Index):
         """
         Booleans indicating if dates are the first day of the year.
         """
+        # .is_year_start is already a cached_property
         return self._column.is_year_start.values
 
     @property
@@ -2215,6 +3810,7 @@ class DatetimeIndex(Index):
         """
         Returns True if all of the dates are at midnight ("no time")
         """
+        # .is_normalized is already a cached_property
         return self._column.is_normalized
 
     @property
@@ -2222,6 +3818,7 @@ class DatetimeIndex(Index):
         """
         Get the total number of days in the month that the date falls on.
         """
+        # .days_in_month is already a cached_property
         return Index._from_column(self._column.days_in_month, name=self.name)
 
     daysinmonth = days_in_month
@@ -2231,9 +3828,10 @@ class DatetimeIndex(Index):
         """
         Get the day of week that the date falls on.
         """
+        # .day_of_week is already a cached_property
         return Index._from_column(self._column.day_of_week, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def year(self) -> Index:
         """
@@ -2250,9 +3848,10 @@ class DatetimeIndex(Index):
         >>> datetime_index.year
         Index([2000, 2001, 2002], dtype='int16')
         """
+        # .year is already a cached_property
         return Index._from_column(self._column.year, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def month(self) -> Index:
         """
@@ -2269,9 +3868,10 @@ class DatetimeIndex(Index):
         >>> datetime_index.month
         Index([1, 2, 3], dtype='int16')
         """
+        # .month is already a cached_property
         return Index._from_column(self._column.month, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def day(self) -> Index:
         """
@@ -2288,9 +3888,10 @@ class DatetimeIndex(Index):
         >>> datetime_index.day
         Index([1, 2, 3], dtype='int16')
         """
+        # .day is already a cached_property
         return Index._from_column(self._column.day, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def hour(self) -> Index:
         """
@@ -2309,9 +3910,10 @@ class DatetimeIndex(Index):
         >>> datetime_index.hour
         Index([0, 1, 2], dtype='int16')
         """
+        # .hour is already a cached_property
         return Index._from_column(self._column.hour, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def minute(self) -> Index:
         """
@@ -2330,9 +3932,10 @@ class DatetimeIndex(Index):
         >>> datetime_index.minute
         Index([0, 1, 2], dtype='int16')
         """
+        # .minute is already a cached_property
         return Index._from_column(self._column.minute, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def second(self) -> Index:
         """
@@ -2351,9 +3954,10 @@ class DatetimeIndex(Index):
         >>> datetime_index.second
         Index([0, 1, 2], dtype='int16')
         """
+        # .second is already a cached_property
         return Index._from_column(self._column.second, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def microsecond(self) -> Index:
         """
@@ -2370,21 +3974,12 @@ class DatetimeIndex(Index):
                '2000-01-01 00:00:00.000002'],
               dtype='datetime64[ns]')
         >>> datetime_index.microsecond
-        Index([0, 1, 2], dtype='int32')
+        Index([0, 1, 2], dtype='int16')
         """
-        return Index._from_column(
-            (
-                # Need to manually promote column to int32 because
-                # pandas-matching binop behaviour requires that this
-                # __mul__ returns an int16 column.
-                self._column.millisecond.astype(np.dtype(np.int32))
-                * np.int32(1000)
-            )
-            + self._column.microsecond,
-            name=self.name,
-        )
+        # .microsecond is already a cached_property
+        return Index._from_column(self._column.microsecond, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def nanosecond(self) -> Index:
         """
@@ -2404,9 +3999,10 @@ class DatetimeIndex(Index):
         >>> datetime_index.nanosecond
         Index([0, 1, 2], dtype='int16')
         """
+        # .nanosecond is already a cached_property
         return Index._from_column(self._column.nanosecond, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def weekday(self) -> Index:
         """
@@ -2426,9 +4022,10 @@ class DatetimeIndex(Index):
         >>> datetime_index.weekday
         Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
         """
+        # .weekday is already a cached_property
         return Index._from_column(self._column.weekday, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def dayofweek(self) -> Index:
         """
@@ -2448,9 +4045,10 @@ class DatetimeIndex(Index):
         >>> datetime_index.dayofweek
         Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
         """
+        # .weekday is already a cached_property
         return Index._from_column(self._column.weekday, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def dayofyear(self) -> Index:
         """
@@ -2471,9 +4069,10 @@ class DatetimeIndex(Index):
         >>> datetime_index.dayofyear
         Index([366, 1, 2, 3, 4, 5, 6, 7, 8], dtype='int16')
         """
+        # .day_of_year is already a cached_property
         return Index._from_column(self._column.day_of_year, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def day_of_year(self) -> Index:
         """
@@ -2494,9 +4093,10 @@ class DatetimeIndex(Index):
         >>> datetime_index.day_of_year
         Index([366, 1, 2, 3, 4, 5, 6, 7, 8], dtype='int16')
         """
+        # .day_of_year is already a cached_property
         return Index._from_column(self._column.day_of_year, name=self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def is_leap_year(self) -> cupy.ndarray:
         """
@@ -2512,10 +4112,11 @@ class DatetimeIndex(Index):
         ndarray
         Booleans indicating if dates belong to a leap year.
         """
+        # .is_leap_year is already a cached_property
         res = self._column.is_leap_year.fillna(False)
         return cupy.asarray(res)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def quarter(self) -> Index:
         """
@@ -2538,6 +4139,7 @@ class DatetimeIndex(Index):
         >>> gIndex.quarter
         Index([2, 4], dtype='int8')
         """
+        # .quarter is already a cached_property
         return Index._from_column(
             self._column.quarter.astype(np.dtype(np.int8))
         )
@@ -2584,7 +4186,7 @@ class DatetimeIndex(Index):
         return Index._from_column(month_names, name=self.name)
 
     @_performance_tracking
-    def isocalendar(self) -> cudf.DataFrame:
+    def isocalendar(self) -> DataFrame:
         """
         Returns a DataFrame with the year, week, and day
         calculated according to the ISO 8601 standard.
@@ -2880,6 +4482,7 @@ class TimedeltaIndex(Index):
         dtype=None,
         copy: bool = False,
         name=None,
+        nan_as_null=no_default,
     ):
         if freq is not None:
             raise NotImplementedError("freq is not yet supported")
@@ -2903,19 +4506,28 @@ class TimedeltaIndex(Index):
                 "dtype parameter is supported"
             )
 
-        if dtype is None:
-            dtype = "timedelta64[ns]"
-        dtype = cudf.dtype(dtype)
-        if dtype.kind != "m":
-            raise TypeError("dtype must be a timedelta type")
-
         name = _getdefault_name(data, name=name)
-        data = as_column(data, dtype=dtype)
+        col = as_column(data)
+        if col.dtype == CUDF_STRING_DTYPE:
+            # String -> Timedelta parsing via astype isn't rigorous enough yet
+            # to cover cudf.pandas test cases, go through pandas instead.
+            col = as_column(pd.to_timedelta(data))
+
+        if dtype is not None:
+            dtype = cudf.dtype(dtype)
+            if dtype.kind != "m":
+                raise TypeError("dtype must be a timedelta type")
+            col = col.astype(dtype)
+        elif col.dtype.kind != "m":
+            # nanosecond default matches pandas
+            col = col.astype(np.dtype("timedelta64[ns]"))
 
         if copy:
-            data = data.copy()
+            col = col.copy()
 
-        super().__init__(data, name=name)
+        SingleColumnFrame.__init__(
+            self, ColumnAccessor({name: col}, verify=False)
+        )
 
     @classmethod
     @_performance_tracking
@@ -2949,7 +4561,7 @@ class TimedeltaIndex(Index):
         raise NotImplementedError("as_unit is currently not implemented")
 
     @property
-    def freq(self) -> cudf.DateOffset | None:
+    def freq(self) -> DateOffset | None:
         raise NotImplementedError("freq is currently not implemented")
 
     @property
@@ -2978,7 +4590,7 @@ class TimedeltaIndex(Index):
         """
         return self.to_pandas().to_pytimedelta()
 
-    @property
+    @cached_property
     def asi8(self) -> cupy.ndarray:
         return self._column.astype(np.dtype(np.int64)).values
 
@@ -3030,57 +4642,62 @@ class TimedeltaIndex(Index):
             self._column.round(freq), name=self.name
         )
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
-    def days(self) -> cudf.Index:
+    def days(self) -> Index:
         """
         Number of days for each element.
         """
+        # .days is already a cached_property
         # Need to specifically return `int64` to avoid overflow.
         return Index._from_column(
             self._column.days.astype(np.dtype(np.int64)), name=self.name
         )
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
-    def seconds(self) -> cudf.Index:
+    def seconds(self) -> Index:
         """
         Number of seconds (>= 0 and less than 1 day) for each element.
         """
+        # .seconds is already a cached_property
         return Index._from_column(
             self._column.seconds.astype(np.dtype(np.int32)), name=self.name
         )
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
-    def microseconds(self) -> cudf.Index:
+    def microseconds(self) -> Index:
         """
         Number of microseconds (>= 0 and less than 1 second) for each element.
         """
+        # .microseconds is already a cached_property
         return Index._from_column(
             self._column.microseconds.astype(np.dtype(np.int32)),
             name=self.name,
         )
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
-    def nanoseconds(self) -> cudf.Index:
+    def nanoseconds(self) -> Index:
         """
         Number of nanoseconds (>= 0 and less than 1 microsecond) for each
         element.
         """
+        # .nanoseconds is already a cached_property
         return Index._from_column(
             self._column.nanoseconds.astype(np.dtype(np.int32)), name=self.name
         )
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
-    def components(self) -> cudf.DataFrame:
+    def components(self) -> DataFrame:
         """
         Return a dataframe of the components (days, hours, minutes,
         seconds, milliseconds, microseconds, nanoseconds) of the Timedeltas.
         """
-        ca = ColumnAccessor(self._column.components(), verify=False)
+        # .components is already a cached_property
+        ca = ColumnAccessor(self._column.components, verify=False)
         return cudf.DataFrame._from_data(ca)
 
     @property
@@ -3159,6 +4776,7 @@ class CategoricalIndex(Index):
         dtype=None,
         copy=False,
         name=None,
+        nan_as_null=no_default,
     ):
         if isinstance(dtype, (pd.CategoricalDtype, cudf.CategoricalDtype)):
             if categories is not None or ordered is not None:
@@ -3173,6 +4791,10 @@ class CategoricalIndex(Index):
             data = data
         elif isinstance(getattr(data, "dtype", None), pd.CategoricalDtype):
             data = as_column(data)
+        elif isinstance(data, (cudf.Series, Index)) and isinstance(
+            data.dtype, cudf.CategoricalDtype
+        ):
+            data = data._column
         else:
             data = as_column(
                 data, dtype=cudf.CategoricalDtype() if dtype is None else dtype
@@ -3188,7 +4810,9 @@ class CategoricalIndex(Index):
             data = data.as_ordered(ordered=True)
         elif ordered is False and data.ordered is True:
             data = data.as_ordered(ordered=False)
-        super().__init__(data, name=name)
+        SingleColumnFrame.__init__(
+            self, ColumnAccessor({name: data}, verify=False)
+        )
 
     @classmethod
     @_performance_tracking
@@ -3225,15 +4849,8 @@ class CategoricalIndex(Index):
         """
         codes = as_column(codes, dtype=np.dtype(np.int32))
         categories = as_column(categories)
-        cat_col = CategoricalColumn(
-            data=None,
-            size=len(codes),
-            dtype=cudf.CategoricalDtype(
-                categories=categories, ordered=ordered
-            ),
-            offset=0,
-            null_count=0,
-            children=(codes,),
+        cat_col = codes._with_type_metadata(
+            cudf.CategoricalDtype(categories=categories, ordered=ordered)
         )
         return cls._from_column(cat_col, name=name)
 
@@ -3241,17 +4858,17 @@ class CategoricalIndex(Index):
     def ordered(self) -> bool:
         return self._column.ordered
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
-    def codes(self) -> cudf.Index:
+    def codes(self) -> Index:
         """
         The category codes of this categorical.
         """
         return Index._from_column(self._column.codes)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
-    def categories(self) -> cudf.Index:
+    def categories(self) -> Index:
         """
         The categories of this categorical.
         """
@@ -3531,6 +5148,7 @@ class IntervalIndex(Index):
         copy: bool = False,
         name=None,
         verify_integrity: bool = True,
+        nan_as_null=no_default,
     ):
         name = _getdefault_name(data, name=name)
 
@@ -3542,42 +5160,54 @@ class IntervalIndex(Index):
                 raise ValueError("closed keyword does not match dtype.closed")
             closed = dtype.closed
 
-        if closed is None and isinstance(dtype, IntervalDtype):
-            closed = dtype.closed
+        if closed is None:
+            if isinstance(dtype, IntervalDtype):
+                closed = dtype.closed
+            elif hasattr(data, "dtype") and isinstance(
+                data.dtype, (pd.IntervalDtype, IntervalDtype)
+            ):
+                closed = data.dtype.closed
 
         closed = closed or "right"
 
         if len(data) == 0:
             if not hasattr(data, "dtype"):
-                data = np.array([], dtype=np.int64)
+                child_type = np.dtype(np.int64)
             elif isinstance(data.dtype, (pd.IntervalDtype, IntervalDtype)):
-                data = np.array([], dtype=data.dtype.subtype)
-            interval_col = IntervalColumn(
+                child_type = data.dtype.subtype
+            else:
+                child_type = data.dtype
+            child_plc_type = dtype_to_pylibcudf_type(child_type)
+            left = plc.column_factories.make_empty_column(child_plc_type)
+            right = plc.column_factories.make_empty_column(child_plc_type)
+            plc_column = plc.Column(
+                plc.DataType(plc.TypeId.STRUCT),
+                0,
                 None,
-                dtype=IntervalDtype(data.dtype, closed),
-                size=len(data),
-                children=(as_column(data), as_column(data)),
+                None,
+                0,
+                0,
+                [left, right],
             )
+            interval_col = ColumnBase.from_pylibcudf(
+                plc_column
+            )._with_type_metadata(IntervalDtype(child_type, closed))
         else:
             col = as_column(data)
             if not isinstance(col, IntervalColumn):
                 raise TypeError("data must be an iterable of Interval data")
             if copy:
                 col = col.copy()
-            interval_col = IntervalColumn(
-                data=None,
-                dtype=IntervalDtype(col.dtype.subtype, closed),
-                mask=col.mask,
-                size=col.size,
-                offset=col.offset,
-                null_count=col.null_count,
-                children=col.children,  # type: ignore[arg-type]
+            interval_col = col._with_type_metadata(
+                IntervalDtype(col.dtype.subtype, closed)
             )
 
         if dtype:
             interval_col = interval_col.astype(dtype)  # type: ignore[assignment]
 
-        super().__init__(interval_col, name=name)
+        SingleColumnFrame.__init__(
+            self, ColumnAccessor({name: interval_col}, verify=False)
+        )
 
     @property
     def closed(self) -> Literal["left", "right", "neither", "both"]:
@@ -3631,27 +5261,41 @@ class IntervalIndex(Index):
         IntervalIndex([(0, 1], (1, 2], (2, 3]], dtype='interval[int64, right]')
         """
         breaks = as_column(breaks, dtype=dtype)
+        if (
+            len(breaks) == 0
+            and dtype is None
+            and breaks.dtype == CUDF_STRING_DTYPE
+        ):
+            breaks = breaks.astype(np.dtype(np.int64))
         if copy:
             breaks = breaks.copy()
-        left_col = breaks.slice(0, len(breaks) - 1)
-        right_col = breaks.slice(1, len(breaks))
+        left_col = breaks.slice(0, len(breaks) - 1).to_pylibcudf(mode="read")
+        right_col = (
+            breaks.slice(1, len(breaks)).copy().to_pylibcudf(mode="read")
+        )
         # For indexing, children should both have 0 offset
-        right_col = type(right_col)(
-            data=right_col.data,
-            dtype=right_col.dtype,
-            size=right_col.size,
-            mask=right_col.mask,
-            offset=0,
-            null_count=right_col.null_count,
-            children=right_col.children,
+        right_col = plc.Column(
+            right_col.type(),
+            right_col.size(),
+            right_col.data(),
+            right_col.null_mask(),
+            right_col.null_count(),
+            0,
+            right_col.children(),
         )
-
-        interval_col = IntervalColumn(
-            data=None,
-            dtype=IntervalDtype(left_col.dtype, closed),
-            size=len(left_col),
-            children=(left_col, right_col),
+        plc_column = plc.Column(
+            plc.DataType(plc.TypeId.STRUCT),
+            left_col.size(),
+            None,
+            None,
+            0,
+            0,
+            [left_col, right_col],
         )
+        dtype = IntervalDtype(breaks.dtype, closed)
+        interval_col = ColumnBase.from_pylibcudf(
+            plc_column
+        )._with_type_metadata(dtype)
         return IntervalIndex._from_column(interval_col, name=name)
 
     @classmethod
@@ -3674,10 +5318,10 @@ class IntervalIndex(Index):
         copy: bool = False,
         dtype=None,
     ) -> Self:
-        piidx = pd.IntervalIndex.from_tuples(
+        pidx = pd.IntervalIndex.from_tuples(
             data, closed=closed, name=name, copy=copy, dtype=dtype
         )
-        return cls.from_pandas(piidx)
+        return cls(pidx, name=name)  # type: ignore[return-value]
 
     def __getitem__(self, index):
         raise NotImplementedError(
@@ -3698,6 +5342,7 @@ class IntervalIndex(Index):
         """
         Indicates if an interval is empty, meaning it contains no points.
         """
+        # .is_empty is already a cached_property
         return self._column.is_empty.values
 
     @property
@@ -3705,6 +5350,7 @@ class IntervalIndex(Index):
         """
         Return a True if the IntervalIndex is non-overlapping and monotonic.
         """
+        # .is_non_overlapping_monotonic is already a cached_property
         return self._column.is_non_overlapping_monotonic
 
     @property
@@ -3714,6 +5360,7 @@ class IntervalIndex(Index):
 
         Currently not implemented
         """
+        # .is_overlapping is already a cached_property
         return self._column.is_overlapping
 
     @property
@@ -3721,6 +5368,7 @@ class IntervalIndex(Index):
         """
         Return an Index with entries denoting the length of each Interval.
         """
+        # .length is already a cached_property
         return _index_from_data({None: self._column.length})
 
     @property
@@ -3742,6 +5390,7 @@ class IntervalIndex(Index):
         Each midpoint is calculated as the average of the left and right bounds
         of each interval.
         """
+        # .mid is already a cached_property
         return _index_from_data({None: self._column.mid})
 
     @property
@@ -3793,19 +5442,24 @@ class IntervalIndex(Index):
 
 
 @_performance_tracking
-def as_index(
-    arbitrary, nan_as_null=no_default, copy=False, name=no_default, dtype=None
-) -> BaseIndex:
+def _as_index(
+    data=None,
+    dtype=None,
+    copy: bool = False,
+    name=no_default,
+    tupleize_cols: bool = True,
+    nan_as_null=no_default,
+    **kwargs,
+) -> Index:
     """Create an Index from an arbitrary object
 
     Parameters
     ----------
-    arbitrary : object
+    data : object
         Object to construct the Index from. See *Notes*.
-    nan_as_null : bool, optional, default None
-        If None (default), treats NaN values in arbitrary as null.
-        If True, combines the mask and NaNs to
-        form a new validity mask. If False, leaves NaN values as is.
+    dtype : optional
+        Optionally typecast the constructed Index to the given
+        dtype.
     copy : bool, default False
         If True, Make copies of `arbitrary` if possible and create an
         Index out of it.
@@ -3813,9 +5467,10 @@ def as_index(
         device-object to construct an Index.
     name : object, optional
         Name of the index being created, by default it is `None`.
-    dtype : optional
-        Optionally typecast the constructed Index to the given
-        dtype.
+    nan_as_null : bool, optional, default None
+        If None (default), treats NaN values in arbitrary as null.
+        If True, combines the mask and NaNs to
+        form a new validity mask. If False, leaves NaN values as is.
 
     Returns
     -------
@@ -3844,48 +5499,53 @@ def as_index(
         - DatetimeIndex for Datetime input.
         - Index for all other inputs.
     """
+    if tupleize_cols is not True:
+        raise NotImplementedError("tupleize_cols is currently not supported.")
     if nan_as_null is no_default:
         nan_as_null = (
             False if cudf.get_option("mode.pandas_compatible") else None
         )
 
     if name is no_default:
-        name = getattr(arbitrary, "name", None)
+        name = getattr(data, "name", None)
     if dtype is not None:
         dtype = cudf.dtype(dtype)
 
-    if isinstance(arbitrary, cudf.MultiIndex):
+    if isinstance(data, cudf.MultiIndex):
         if dtype is not None:
             raise TypeError(
                 "dtype must be `None` for inputs of type: "
-                f"{type(arbitrary).__name__}, found {dtype=} "
+                f"{type(data).__name__}, found {dtype=} "
             )
-        return arbitrary.copy(deep=copy)
-    elif isinstance(arbitrary, BaseIndex):
-        idx = arbitrary.copy(deep=copy).rename(name)
-    elif isinstance(arbitrary, ColumnBase):
+        return data.copy(deep=copy)
+    elif isinstance(data, Index):
+        idx = data.copy(deep=copy).rename(name)
+    elif isinstance(data, ColumnBase):
         raise ValueError("Use cudf.Index._from_column instead.")
-    elif isinstance(arbitrary, (pd.RangeIndex, range)):
+    elif isinstance(data, (pd.RangeIndex, range)):
         idx = RangeIndex(
-            start=arbitrary.start,
-            stop=arbitrary.stop,
-            step=arbitrary.step,
+            start=data.start,
+            stop=data.stop,
+            step=data.step,
             name=name,
         )
-    elif isinstance(arbitrary, pd.MultiIndex):
+    elif isinstance(data, pd.MultiIndex):
         if dtype is not None:
             raise TypeError(
                 "dtype must be `None` for inputs of type: "
-                f"{type(arbitrary).__name__}, found {dtype=} "
+                f"{type(data).__name__}, found {dtype=} "
             )
-        return cudf.MultiIndex.from_pandas(
-            arbitrary.copy(deep=copy), nan_as_null=nan_as_null
+        return cudf.MultiIndex(
+            levels=data.levels,
+            codes=data.codes,
+            names=data.names,
+            nan_as_null=nan_as_null,
         )
-    elif isinstance(arbitrary, cudf.DataFrame) or is_scalar(arbitrary):
-        raise ValueError("Index data must be 1-dimensional and list-like")
+    elif isinstance(data, cudf.DataFrame) or is_scalar(data):
+        raise TypeError("Index data must be 1-dimensional and list-like")
     else:
         return Index._from_column(
-            as_column(arbitrary, dtype=dtype, nan_as_null=nan_as_null),
+            as_column(data, dtype=dtype, nan_as_null=nan_as_null),
             name=name,
         )
     if dtype is not None:
@@ -3900,7 +5560,7 @@ def _getdefault_name(values, name):
 
 
 @_performance_tracking
-def _concat_range_index(indexes: list[RangeIndex]) -> BaseIndex:
+def _concat_range_index(indexes: list[RangeIndex]) -> Index:
     """
     An internal Utility function to concat RangeIndex objects.
     """
@@ -3993,7 +5653,7 @@ def _get_indexer_basic(index, positions, method, target_col, tolerance):
 
 def _get_nearest_indexer(
     index: Index,
-    positions: cudf.Series,
+    positions: Series,
     target_col: ColumnBase,
     tolerance: int | float,
 ):
@@ -4032,7 +5692,7 @@ def _get_nearest_indexer(
     return indexer
 
 
-def _validate_freq(freq: Any) -> cudf.DateOffset | None:
+def _validate_freq(freq: Any) -> DateOffset | None:
     if isinstance(freq, str):
         return cudf.DateOffset._from_freqstr(freq)
     elif freq is None:

@@ -11,6 +11,8 @@ from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport data_type, null_order, order, size_type
+from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.memory_resource cimport device_memory_resource
 
 
 cdef extern from "cudf/rolling.hpp" namespace "cudf" nogil:
@@ -33,14 +35,16 @@ cdef extern from "cudf/rolling.hpp" namespace "cudf" nogil:
     cdef cppclass current_row(range_window_type):
         current_row() noexcept
 
-    unique_ptr[table] grouped_range_rolling_window(
+    cdef unique_ptr[table] grouped_range_rolling_window(
         const table_view& group_keys,
         const column_view& orderby,
         order order,
         null_order null_order,
         range_window_type preceding,
         range_window_type following,
-        vector[rolling_request]& requests
+        vector[rolling_request]& requests,
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] rolling_window(
@@ -48,14 +52,29 @@ cdef extern from "cudf/rolling.hpp" namespace "cudf" nogil:
         column_view preceding_window,
         column_view following_window,
         size_type min_periods,
-        rolling_aggregation& agg) except +libcudf_exception_handler
+        rolling_aggregation& agg,
+        cuda_stream_view stream,
+        device_memory_resource* mr) except +libcudf_exception_handler
 
     cdef unique_ptr[column] rolling_window(
         column_view source,
         size_type preceding_window,
         size_type following_window,
         size_type min_periods,
-        rolling_aggregation& agg) except +libcudf_exception_handler
+        rolling_aggregation& agg,
+        cuda_stream_view stream,
+        device_memory_resource* mr) except +libcudf_exception_handler
+
+    cdef pair[unique_ptr[column], unique_ptr[column]] make_range_windows(
+        const table_view& group_keys,
+        const column_view& orderby,
+        order order,
+        null_order null_order,
+        range_window_type preceding,
+        range_window_type following,
+        cuda_stream_view stream,
+        device_memory_resource* mr
+    ) except +libcudf_exception_handler
 
     bool is_valid_rolling_aggregation(
         data_type source, Kind kind

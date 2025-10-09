@@ -101,7 +101,7 @@ class data_sink {
   /**
    * @brief Base class destructor
    */
-  virtual ~data_sink(){};
+  virtual ~data_sink() {};
 
   /**
    * @pure @brief Append the buffer content to the sink

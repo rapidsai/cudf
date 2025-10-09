@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ namespace kafka {
 
 python_oauth_refresh_callback::python_oauth_refresh_callback(
   kafka_oauth_callback_wrapper_type callback_wrapper, python_callable_type python_callable)
-  : callback_wrapper_(callback_wrapper), python_callable_(python_callable){};
+  : callback_wrapper_(callback_wrapper), python_callable_(python_callable) {};
 
 void python_oauth_refresh_callback::oauthbearer_token_refresh_cb(
   RdKafka::Handle* handle, std::string const& oauthbearer_config)

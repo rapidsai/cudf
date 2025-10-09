@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,23 +17,24 @@
 ###
 # Build the image for cudf development environment.
 #
-# Arguments: CUDA_VERSION=[11.X.Y, 12.X.Y], OS_RELEASE=[8, 9], TARGETPLATFORM=[linux/amd64, linux/amd64]
+# Arguments: CUDA_VERSION=[12.X.Y], OS_RELEASE=[8, 9], TARGETPLATFORM=[linux/amd64, linux/arm64]
 #
 ###
-ARG CUDA_VERSION=11.8.0
+ARG CUDA_VERSION=12.9.1
 ARG OS_RELEASE=8
 ARG TARGETPLATFORM=linux/amd64
 # multi-platform build with: docker buildx build --platform linux/arm64,linux/amd64 <ARGS> on either amd64 or arm64 host
 # check available official arm-based docker images at https://hub.docker.com/r/nvidia/cuda/tags (OS/ARCH)
 FROM --platform=$TARGETPLATFORM nvidia/cuda:$CUDA_VERSION-devel-rockylinux$OS_RELEASE
-ARG TOOLSET_VERSION=11
+ARG TOOLSET_VERSION=14
+ARG CMAKE_VERSION=3.30.7
+ARG CCACHE_VERSION=4.11.2
 ### Install basic requirements
-RUN dnf --enablerepo=powertools install -y  scl-utils gcc-toolset-${TOOLSET_VERSION} git zlib-devel maven tar wget patch ninja-build boost-devel
+RUN dnf --enablerepo=powertools install -y  scl-utils gcc-toolset-11 gcc-toolset-${TOOLSET_VERSION} git zlib-devel maven tar wget patch ninja-build
 ## pre-create the CMAKE_INSTALL_PREFIX folder, set writable by any user for Jenkins
 RUN mkdir /usr/local/rapids /rapids && chmod 777 /usr/local/rapids /rapids
 
 # 3.22.3+: CUDA architecture 'native' support + flexible CMAKE_<LANG>_*_LAUNCHER for ccache
-ARG CMAKE_VERSION=3.30.7
 # default x86_64 from x86 build, aarch64 cmake for arm build
 ARG CMAKE_ARCH=x86_64
 RUN cd /usr/local && wget --quiet https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-${CMAKE_ARCH}.tar.gz && \
@@ -42,7 +43,6 @@ RUN cd /usr/local && wget --quiet https://github.com/Kitware/CMake/releases/down
 ENV PATH /usr/local/cmake-${CMAKE_VERSION}-linux-${CMAKE_ARCH}/bin:$PATH
 
 # ccache for interactive builds
-ARG CCACHE_VERSION=4.6
 RUN cd /tmp && wget --quiet https://github.com/ccache/ccache/releases/download/v${CCACHE_VERSION}/ccache-${CCACHE_VERSION}.tar.gz && \
    tar zxf ccache-${CCACHE_VERSION}.tar.gz && \
    rm ccache-${CCACHE_VERSION}.tar.gz && \
@@ -57,6 +57,16 @@ RUN cd /tmp && wget --quiet https://github.com/ccache/ccache/releases/download/v
       cmake --build . --parallel 4 --target install" && \
    cd ../.. && \
    rm -rf ccache-${CCACHE_VERSION}
+
+## install a version of boost that is needed for arrow/parquet to work
+RUN cd /usr/local && wget --quiet https://archives.boost.io/release/1.79.0/source/boost_1_79_0.tar.gz && \
+  tar -xzf boost_1_79_0.tar.gz && \
+  rm boost_1_79_0.tar.gz && \
+  cd boost_1_79_0 && \
+  ./bootstrap.sh --prefix=/usr/local && \
+  ./b2 install --prefix=/usr/local --with-filesystem --with-system && \
+   cd /usr/local && \
+   rm -rf boost_1_79_0
 
 # disable cuda container constraints to allow running w/ elder drivers on data-center GPUs
 ENV NVIDIA_DISABLE_REQUIRE="true"

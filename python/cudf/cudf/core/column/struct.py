@@ -9,9 +9,15 @@ import pyarrow as pa
 
 import cudf
 from cudf.core.column.column import ColumnBase
-from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
-from cudf.core.scalar import pa_scalar_to_plc_scalar
+from cudf.utils.dtypes import (
+    is_dtype_obj_struct,
+    pyarrow_dtype_to_cudf_dtype,
+)
+from cudf.utils.scalar import (
+    maybe_nested_pa_scalar_to_py,
+    pa_scalar_to_plc_scalar,
+)
 from cudf.utils.utils import _is_null_host_scalar
 
 if TYPE_CHECKING:
@@ -78,7 +84,13 @@ class StructColumn(ColumnBase):
     @staticmethod
     def _validate_dtype_instance(dtype: StructDtype) -> StructDtype:
         # IntervalDtype is a subclass of StructDtype, so compare types exactly
-        if type(dtype) is not StructDtype:
+        if (
+            not cudf.get_option("mode.pandas_compatible")
+            and type(dtype) is not StructDtype
+        ) or (
+            cudf.get_option("mode.pandas_compatible")
+            and not is_dtype_obj_struct(dtype)
+        ):
             raise ValueError(
                 f"{type(dtype).__name__} must be a StructDtype exactly."
             )
@@ -93,18 +105,23 @@ class StructColumn(ColumnBase):
 
     def to_arrow(self) -> pa.Array:
         children = [child.to_arrow() for child in self.children]
-
+        dtype = (
+            pyarrow_dtype_to_cudf_dtype(self.dtype)
+            if isinstance(self.dtype, pd.ArrowDtype)
+            else self.dtype
+        )
         pa_type = pa.struct(
             {
                 field: child.type
-                for field, child in zip(self.dtype.fields, children)
+                for field, child in zip(dtype.fields, children, strict=True)
             }
         )
 
         if self.mask is not None:
-            buffers = (pa.py_buffer(self.mask.memoryview()),)
+            buffers = [pa.py_buffer(self.mask.memoryview())]
         else:
-            buffers = (None,)
+            # PyArrow stubs are too strict - from_buffers should accept None for missing buffers
+            buffers = [None]  # type: ignore[list-item]
 
         return pa.StructArray.from_buffers(
             pa_type, len(self), buffers, children=children
@@ -118,7 +135,14 @@ class StructColumn(ColumnBase):
     ) -> pd.Index:
         # We cannot go via Arrow's `to_pandas` because of the following issue:
         # https://issues.apache.org/jira/browse/ARROW-12680
-        if arrow_type or nullable:
+        if (
+            arrow_type
+            or nullable
+            or (
+                cudf.get_option("mode.pandas_compatible")
+                and isinstance(self.dtype, pd.ArrowDtype)
+            )
+        ):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         else:
             return pd.Index(self.to_arrow().tolist(), dtype="object")
@@ -133,7 +157,10 @@ class StructColumn(ColumnBase):
 
     def element_indexing(self, index: int) -> dict:
         result = super().element_indexing(index)
-        return self.dtype._recursively_replace_fields(result)
+        if isinstance(result, pa.Scalar):
+            py_element = maybe_nested_pa_scalar_to_py(result)
+            return self.dtype._recursively_replace_fields(py_element)
+        return result
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar:
         if isinstance(value, dict):
@@ -167,17 +194,12 @@ class StructColumn(ColumnBase):
         but with the field names equal to `names`.
         """
         dtype = StructDtype(
-            {name: col.dtype for name, col in zip(names, self.children)}
+            {
+                name: col.dtype
+                for name, col in zip(names, self.children, strict=True)
+            }
         )
-        return StructColumn(  # type: ignore[return-value]
-            data=None,
-            size=self.size,
-            dtype=dtype,
-            mask=self.base_mask,
-            offset=self.offset,
-            null_count=self.null_count,
-            children=self.base_children,
-        )
+        return self._with_type_metadata(dtype)  # type: ignore[return-value]
 
     @property
     def __cuda_array_interface__(self):
@@ -191,7 +213,17 @@ class StructColumn(ColumnBase):
 
         # Check IntervalDtype first because it's a subclass of StructDtype
         if isinstance(dtype, IntervalDtype):
-            return IntervalColumn.from_struct_column(self, closed=dtype.closed)
+            return IntervalColumn(
+                data=None,
+                size=self.size,
+                dtype=dtype,
+                mask=self.base_mask,
+                offset=self.offset,
+                null_count=self.null_count,
+                children=tuple(  # type: ignore[arg-type]
+                    child.astype(dtype.subtype) for child in self.base_children
+                ),  # type: ignore[arg-type]
+            )
         elif isinstance(dtype, StructDtype):
             return StructColumn(
                 data=None,
@@ -205,99 +237,10 @@ class StructColumn(ColumnBase):
                 offset=self.offset,
                 null_count=self.null_count,
             )
+        # For pandas dtypes, store them directly in the column's dtype property
+        elif isinstance(dtype, pd.ArrowDtype) and isinstance(
+            dtype.pyarrow_dtype, pa.StructType
+        ):
+            self._dtype = dtype
 
         return self
-
-
-class StructMethods(ColumnMethods):
-    """
-    Struct methods for Series
-    """
-
-    _column: StructColumn
-
-    def __init__(self, parent=None):
-        if not isinstance(parent.dtype, StructDtype):
-            raise AttributeError(
-                "Can only use .struct accessor with a 'struct' dtype"
-            )
-        super().__init__(parent=parent)
-
-    def field(self, key):
-        """
-        Extract children of the specified struct column
-        in the Series
-
-        Parameters
-        ----------
-        key: int or str
-            index/position or field name of the respective
-            struct column
-
-        Returns
-        -------
-        Series
-
-        Examples
-        --------
-        >>> s = cudf.Series([{'a': 1, 'b': 2}, {'a': 3, 'b': 4}])
-        >>> s.struct.field(0)
-        0    1
-        1    3
-        dtype: int64
-        >>> s.struct.field('a')
-        0    1
-        1    3
-        dtype: int64
-        """
-        fields = list(self._column.dtype.fields.keys())
-        if key in fields:
-            pos = fields.index(key)
-            return self._return_or_inplace(self._column.children[pos])
-        else:
-            if isinstance(key, int):
-                try:
-                    return self._return_or_inplace(self._column.children[key])
-                except IndexError:
-                    raise IndexError(f"Index {key} out of range")
-            else:
-                raise KeyError(
-                    f"Field '{key}' is not found in the set of existing keys."
-                )
-
-    def explode(self):
-        """
-        Return a DataFrame whose columns are the fields of this struct Series.
-
-        Notes
-        -----
-        Note that a copy of the columns is made.
-
-        Examples
-        --------
-        >>> s
-        0    {'a': 1, 'b': 'x'}
-        1    {'a': 2, 'b': 'y'}
-        2    {'a': 3, 'b': 'z'}
-        3    {'a': 4, 'b': 'a'}
-        dtype: struct
-
-        >>> s.struct.explode()
-           a  b
-        0  1  x
-        1  2  y
-        2  3  z
-        3  4  a
-        """
-        data = {
-            name: col.copy(deep=True)
-            for name, col in zip(
-                self._column.dtype.fields, self._column.children
-            )
-        }
-        rangeindex = len(data) == 0
-        return cudf.DataFrame._from_data(
-            cudf.core.column_accessor.ColumnAccessor(
-                data, rangeindex=rangeindex
-            )
-        )

@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "rolling.cuh"
 #include "rolling.hpp"
+#include "rolling_operators.cuh"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
@@ -30,7 +30,7 @@ struct is_supported_rolling_aggregation_impl {
   constexpr bool operator()() const noexcept
   {
     return (kind == aggregation::Kind::LEAD || kind == aggregation::Kind::LAG ||
-            kind == aggregation::Kind::COLLECT_LIST || aggregation::Kind::COLLECT_SET) ||
+            kind == aggregation::Kind::COLLECT_LIST || kind == aggregation::Kind::COLLECT_SET) ||
            corresponding_rolling_operator<T, kind>::type::is_supported();
   }
 };

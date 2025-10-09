@@ -4,7 +4,7 @@ from io import BytesIO, StringIO, TextIOBase
 
 import pylibcudf as plc
 
-import cudf
+from cudf.core.series import Series
 from cudf.utils import ioutils
 from cudf.utils.performance_tracking import _performance_tracking
 
@@ -19,7 +19,7 @@ def read_text(
     compression=None,
     compression_offsets=None,
     storage_options=None,
-):
+) -> Series:
     """{docstring}"""
 
     if delimiter is None:
@@ -63,4 +63,4 @@ def read_text(
         byte_range=byte_range, strip_delimiters=strip_delimiters
     )
     plc_column = plc.io.text.multibyte_split(datasource, delimiter, options)
-    return cudf.Series.from_pylibcudf(plc_column)
+    return Series.from_pylibcudf(plc_column)

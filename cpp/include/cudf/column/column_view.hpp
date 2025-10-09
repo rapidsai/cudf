@@ -16,8 +16,8 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/prefetch.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -478,7 +478,7 @@ class column_view : public detail::column_view_base {
 
   std::vector<column_view> _children{};  ///< Based on element type, children
                                          ///< may contain additional data
-};                                       // namespace cudf
+};  // namespace cudf
 
 /**
  * @brief A non-owning, mutable view of device data as a column of elements,
@@ -504,7 +504,7 @@ class mutable_column_view : public detail::column_view_base {
  public:
   mutable_column_view() = default;
 
-  ~mutable_column_view() override{
+  ~mutable_column_view() override {
     // Needed so that the first instance of the implicit destructor for any TU isn't 'constructed'
     // from a host+device function marking the implicit version also as host+device
   };

@@ -5,9 +5,9 @@ import abc
 import copyreg
 import functools
 import importlib
+import inspect
 import os
 import pickle
-import sys
 
 import pandas as pd
 
@@ -16,6 +16,7 @@ import pandas as pd
 # I suspect it relates to pyarrow's pandas-shim that gets imported
 # with this module https://github.com/rapidsai/cudf/issues/14521#issue-2015198786
 import pyarrow.dataset as ds  # noqa: F401
+from pandas._testing import at, getitem, iat, iloc, loc, setitem
 from pandas.tseries.holiday import (
     AbstractHolidayCalendar as pd_AbstractHolidayCalendar,
     EasterMonday as pd_EasterMonday,
@@ -126,6 +127,20 @@ def make_intermediate_proxy_type(name, fast_type, slow_type):
     )
 
 
+try:
+    # List Accessor in pandas was introduced in 2.2.0 only
+    pd_ListAccessor = pd.core.arrays.arrow.accessors.ListAccessor
+except AttributeError:
+    pd_ListAccessor = _Unusable
+
+
+try:
+    # Struct Accessor in pandas was introduced in 2.2.0 only
+    pd_StructAccessor = pd.core.arrays.arrow.accessors.StructAccessor
+except AttributeError:
+    pd_StructAccessor = _Unusable
+
+
 class _AccessorAttr:
     """
     Descriptor that ensures that accessors like `.dt` and `.str`
@@ -212,13 +227,24 @@ CombinedDatetimelikeProperties = make_intermediate_proxy_type(
 
 StringMethods = make_intermediate_proxy_type(
     "StringMethods",
-    cudf.core.column.string.StringMethods,
+    cudf.core.accessors.string.StringMethods,
     pd.core.strings.accessor.StringMethods,
 )
 
+ListMethods = make_intermediate_proxy_type(
+    "ListMethods",
+    cudf.core.accessors.lists.ListMethods,
+    pd_ListAccessor,
+)
+
+StructAccessor = make_intermediate_proxy_type(
+    "StructAccessor",
+    cudf.core.accessors.struct.StructMethods,
+    pd_StructAccessor,
+)
 _CategoricalAccessor = make_intermediate_proxy_type(
     "CategoricalAccessor",
-    cudf.core.column.categorical.CategoricalAccessor,
+    cudf.core.accessors.categorical.CategoricalAccessor,
     pd.core.arrays.categorical.CategoricalAccessor,
 )
 
@@ -241,6 +267,23 @@ def ignore_ipython_canary_check(self, **kwargs):
     )
 
 
+def _DataFrame_dtypes_apply_func(value):
+    if isinstance(value, (cudf.CategoricalDtype, cudf.IntervalDtype)):
+        return value.to_pandas()
+    return value
+
+
+def _DataFrame__dtypes(self):
+    result = _fast_slow_function_call(
+        lambda self: self.dtypes,
+        self,
+    )[0]
+    result = _maybe_wrap_result(
+        result._fsproxy_slow.apply(_DataFrame_dtypes_apply_func), None
+    )
+    return result
+
+
 DataFrame = make_final_proxy_type(
     "DataFrame",
     cudf.DataFrame,
@@ -250,10 +293,15 @@ DataFrame = make_final_proxy_type(
     additional_attributes={
         "__array__": array_method,
         "__dir__": _DataFrame__dir__,
+        "__arrow_c_stream__": _FastSlowAttribute("__arrow_c_stream__"),
         "_constructor": _FastSlowAttribute("_constructor"),
         "_constructor_sliced": _FastSlowAttribute("_constructor_sliced"),
         "_accessors": set(),
         "_ipython_canary_method_should_not_exist_": ignore_ipython_canary_check,
+        "dtypes": property(_DataFrame__dtypes),
+        "__iter__": custom_iter,
+        "attrs": _FastSlowAttribute("attrs"),
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
 )
 
@@ -294,11 +342,14 @@ Series = make_final_proxy_type(
         "__iter__": custom_iter,
         "dt": _AccessorAttr(CombinedDatetimelikeProperties),
         "str": _AccessorAttr(StringMethods),
+        "list": _AccessorAttr(ListMethods),
+        "struct": _AccessorAttr(StructAccessor),
         "cat": _AccessorAttr(_CategoricalAccessor),
         "_constructor": _FastSlowAttribute("_constructor"),
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
         "_accessors": set(),
         "dtype": property(_Series_dtype),
+        "attrs": _FastSlowAttribute("attrs"),
     },
 )
 
@@ -379,6 +430,22 @@ SparseDtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
+    },
+)
+
+# Special caseing `ArrowDtype` as it is not yet added to `cudf` namespace
+# both fast and slow paths are `pd.ArrowDtype`
+ArrowDtype = make_final_proxy_type(
+    "ArrowDtype",
+    pd.ArrowDtype,
+    pd.ArrowDtype,
+    bases=(pd.api.extensions.ExtensionDtype,),
+    fast_to_slow=lambda fast: fast,
+    slow_to_fast=lambda slow: slow,
+    additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
+        "__hash__": _FastSlowAttribute("__hash__"),
+        "pyarrow_dtype": _FastSlowAttribute("pyarrow_dtype"),
     },
 )
 
@@ -555,6 +622,9 @@ PeriodDtype = make_final_proxy_type(
     pd.PeriodDtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+    },
 )
 
 Period = make_final_proxy_type(
@@ -618,6 +688,8 @@ StringArray = make_final_proxy_type(
     additional_attributes={
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "__array__": _FastSlowAttribute("__array__"),
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
 )
 
@@ -628,12 +700,46 @@ if cudf.core._compat.PANDAS_GE_210:
         pd.core.arrays.string_arrow.ArrowStringArrayNumpySemantics,
         fast_to_slow=_Unusable(),
         slow_to_fast=_Unusable(),
+        additional_attributes={
+            "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+            "__array__": _FastSlowAttribute("__array__", private=True),
+        },
     )
+
+if cudf.core._compat.PANDAS_GE_230:
+    StringArrayNumpySemantics = make_final_proxy_type(
+        "StringArrayNumpySemantics",
+        _Unusable,
+        pd.core.arrays.string_.StringArrayNumpySemantics,
+        bases=(StringArray,),
+        fast_to_slow=_Unusable(),
+        slow_to_fast=_Unusable(),
+    )
+
 
 ArrowStringArray = make_final_proxy_type(
     "ArrowStringArray",
     _Unusable,
     pd.core.arrays.string_arrow.ArrowStringArray,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+        "__array__": _FastSlowAttribute("__array__", private=True),
+        "__invert__": _FastSlowAttribute("__invert__"),
+        "__neg__": _FastSlowAttribute("__neg__"),
+        "__pos__": _FastSlowAttribute("__pos__", private=True),
+        "__abs__": _FastSlowAttribute("__abs__"),
+        "__contains__": _FastSlowAttribute("__contains__"),
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+    },
+)
+
+
+StorageExtensionDtype = make_final_proxy_type(
+    "StorageExtensionDtype",
+    _Unusable,
+    pd.core.dtypes.base.StorageExtensionDtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
 )
@@ -1031,25 +1137,63 @@ ExcelWriter = make_final_proxy_type(
 
 try:
     from pandas.io.formats.style import Styler as pd_Styler  # isort: skip
+    from pandas.io.formats.style import StylerRenderer as pd_StylerRenderer
+
+    StylerRenderer = make_final_proxy_type(
+        "StylerRenderer",
+        _Unusable,
+        pd_StylerRenderer,
+        fast_to_slow=_Unusable(),
+        slow_to_fast=_Unusable(),
+    )
 
     Styler = make_final_proxy_type(
         "Styler",
         _Unusable,
         pd_Styler,
+        bases=(StylerRenderer,),
         fast_to_slow=_Unusable(),
         slow_to_fast=_Unusable(),
         additional_attributes={
             "css": _FastSlowAttribute("css"),
             "ctx": _FastSlowAttribute("ctx"),
-            "index": _FastSlowAttribute("ctx"),
+            "index": _FastSlowAttribute("index"),
             "data": _FastSlowAttribute("data"),
-            "_display_funcs": _FastSlowAttribute("_display_funcs"),
+            "_display_funcs": _FastSlowAttribute(
+                "_display_funcs", private=True
+            ),
             "table_styles": _FastSlowAttribute("table_styles"),
+            "columns": _FastSlowAttribute("columns"),
+            "caption": _FastSlowAttribute("caption"),
+            "_todo": _FastSlowAttribute("_todo", private=True),
+            "ctx_columns": _FastSlowAttribute("ctx_columns"),
+            "ctx_index": _FastSlowAttribute("ctx_index"),
+            "_display_funcs_index": _FastSlowAttribute(
+                "_display_funcs_index", private=True
+            ),
+            "uuid": _FastSlowAttribute("uuid"),
+            "hide_index_": _FastSlowAttribute("hide_index_"),
+            "hide_index_names": _FastSlowAttribute("hide_index_names"),
+            "hide_columns_": _FastSlowAttribute("hide_columns_"),
+            "hide_column_names": _FastSlowAttribute("hide_column_names"),
+            "table_attributes": _FastSlowAttribute("table_attributes"),
         },
     )
 except ImportError:
     # Styler requires Jinja to be installed
     pass
+
+
+def _find_user_frame():
+    frame = inspect.currentframe()
+    while frame:
+        modname = frame.f_globals.get("__name__", "")
+        # TODO: Remove "nvtx." entry once we cross nvtx-0.2.11 as minimum version
+        if modname == "__main__" or not modname.startswith(("cudf.", "nvtx.")):
+            return frame
+        frame = frame.f_back
+    raise RuntimeError("Could not find the user's frame.")
+
 
 _eval_func = _FunctionProxy(_Unusable(), pd.eval)
 
@@ -1058,12 +1202,21 @@ register_proxy_func(pd.read_pickle)(
 )
 
 register_proxy_func(pd.to_pickle)(_FunctionProxy(_Unusable(), pd.to_pickle))
+register_proxy_func(pd.api.types.is_list_like)(  # noqa: TID251
+    _FunctionProxy(_Unusable(), pd.api.types.is_list_like)  # noqa: TID251
+)
+register_proxy_func(loc)(loc)
+register_proxy_func(iloc)(iloc)
+register_proxy_func(at)(at)
+register_proxy_func(iat)(iat)
+register_proxy_func(setitem)(setitem)
+register_proxy_func(getitem)(getitem)
 
 
 def _get_eval_locals_and_globals(level, local_dict=None, global_dict=None):
-    frame = sys._getframe(level + 3)
-    local_dict = frame.f_locals if local_dict is None else local_dict
-    global_dict = frame.f_globals if global_dict is None else global_dict
+    frame = _find_user_frame()
+    local_dict = dict(frame.f_locals) if local_dict is None else local_dict
+    global_dict = dict(frame.f_globals) if global_dict is None else global_dict
     return local_dict, global_dict
 
 
@@ -1801,27 +1954,88 @@ NamedAgg = make_final_proxy_type(
 )
 
 ArrowExtensionArray = make_final_proxy_type(
-    "ExtensionArray",
+    "ArrowExtensionArray",
     _Unusable,
     pd.arrays.ArrowExtensionArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+        "__array__": _FastSlowAttribute("__array__", private=True),
+        "__invert__": _FastSlowAttribute("__invert__"),
+        "__neg__": _FastSlowAttribute("__neg__"),
+        "__pos__": _FastSlowAttribute("__pos__", private=True),
+        "__abs__": _FastSlowAttribute("__abs__"),
+        "__contains__": _FastSlowAttribute("__contains__"),
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+    },
 )
 
+FrozenList = make_final_proxy_type(
+    "FrozenList",
+    _Unusable,
+    pd.core.indexes.frozen.FrozenList,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+    },
+)
 
 # The following are subclasses of `pandas.core.base.PandasObj`,
 # excluding subclasses defined in `pandas.core.internals`.  These are
 # not strictly part of the Pandas public API, but they do appear as
 # return types.
 
-_PANDAS_OBJ_FINAL_TYPES = [
-    pd.core.arrays.sparse.array.SparseArray,
-    pd.core.indexes.frozen.FrozenList,
-    pd.core.indexes.category.CategoricalIndex,
-    pd.core.indexes.datetimelike.DatetimeTimedeltaMixin,
-    pd.core.indexes.datetimelike.DatetimeIndexOpsMixin,
-    pd.core.indexes.extension.NDArrayBackedExtensionIndex,
+NDFrame = make_final_proxy_type(
+    "NDFrame",
+    _Unusable,
     pd.core.generic.NDFrame,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__array__": array_method,
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+    },
+)
+
+DatetimeTimedeltaMixin = make_final_proxy_type(
+    "DatetimeTimedeltaMixin",
+    _Unusable,
+    pd.core.indexes.datetimelike.DatetimeTimedeltaMixin,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__array__": array_method,
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+    },
+)
+
+DatetimeIndexOpsMixin = make_final_proxy_type(
+    "DatetimeIndexOpsMixin",
+    _Unusable,
+    pd.core.indexes.datetimelike.DatetimeIndexOpsMixin,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__array__": array_method,
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+    },
+)
+
+NDArrayBackedExtensionIndex = make_final_proxy_type(
+    "NDArrayBackedExtensionIndex",
+    _Unusable,
+    pd.core.indexes.extension.NDArrayBackedExtensionIndex,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__array__": array_method,
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+    },
+)
+
+_PANDAS_OBJ_FINAL_TYPES = [
     pd.core.indexes.accessors.PeriodProperties,
     pd.core.indexes.accessors.Properties,
     pd.plotting._core.PlotAccessor,
@@ -1850,9 +2064,6 @@ for typ in _PANDAS_OBJ_FINAL_TYPES:
         fast_to_slow=_Unusable(),
         slow_to_fast=_Unusable(),
         additional_attributes={
-            "__array__": array_method,
-            "__array_function__": array_function_method,
-            "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
             "__hash__": _FastSlowAttribute("__hash__"),
         },
     )
@@ -1874,11 +2085,10 @@ for typ in _PANDAS_OBJ_INTERMEDIATE_TYPES:
 _original_Series_init = cudf.Series.__init__
 _original_DataFrame_init = cudf.DataFrame.__init__
 _original_Index_init = cudf.Index.__init__
-_original_IndexMeta_call = cudf.core.index.IndexMeta.__call__
 _original_from_pandas = cudf.from_pandas
 _original_DataFrame_from_pandas = cudf.DataFrame.from_pandas
 _original_Series_from_pandas = cudf.Series.from_pandas
-_original_Index_from_pandas = cudf.BaseIndex.from_pandas
+_original_Index_from_pandas = cudf.Index.from_pandas
 _original_MultiIndex_from_pandas = cudf.MultiIndex.from_pandas
 
 
@@ -1955,7 +2165,7 @@ def wrap_from_pandas_index(original_call):
     def wrapped_from_pandas_index(index, *args, **kwargs):
         if is_proxy_object(index):
             index = index.as_gpu_object()
-            if isinstance(index, cudf.core.index.BaseIndex):
+            if isinstance(index, cudf.Index):
                 return index
         return original_call(index, *args, **kwargs)
 
@@ -2010,7 +2220,6 @@ def initial_setup():
     cudf.Series.__init__ = wrap_init(_original_Series_init)
     cudf.Index.__init__ = wrap_init(_original_Index_init)
     cudf.DataFrame.__init__ = DataFrame_init_
-    cudf.core.index.IndexMeta.__call__ = wrap_call(_original_IndexMeta_call)
     cudf.from_pandas = wrap_from_pandas(_original_from_pandas)
     cudf.DataFrame.from_pandas = wrap_from_pandas_dataframe(
         _original_DataFrame_from_pandas
@@ -2018,7 +2227,7 @@ def initial_setup():
     cudf.Series.from_pandas = wrap_from_pandas_series(
         _original_Series_from_pandas
     )
-    cudf.BaseIndex.from_pandas = wrap_from_pandas_index(
+    cudf.Index.from_pandas = wrap_from_pandas_index(
         _original_Index_from_pandas
     )
     cudf.MultiIndex.from_pandas = wrap_from_pandas_multiindex(

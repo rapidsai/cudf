@@ -5,12 +5,13 @@ import ast
 import datetime
 from typing import Any
 
+import cupy as cp
 import numpy as np
 from numba import cuda
 
 import cudf
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import column_empty
+from cudf.core.column import as_column
 from cudf.utils import applyutils
 from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.dtypes import (
@@ -205,10 +206,10 @@ def query_execute(df, expr, callenv):
     ----------
     df : DataFrame
     expr : str
-        boolean expression
+        Boolean expression
     callenv : dict
-        Contains keys 'local_dict', 'locals' and 'globals' which are all dict.
-        They represent the arg, local and global dictionaries of the caller.
+        Contains keys 'local_dict', 'global_dict', 'locals', and 'globals',
+        each of which is a dict representing variable scopes in resolution order.
     """
     # compile
     compiled = query_compile(expr)
@@ -223,12 +224,14 @@ def query_execute(df, expr, callenv):
             "query only supports numeric, datetime, timedelta, or bool dtypes."
         )
 
-    colarrays = [col.data_array_view(mode="read") for col in colarrays]
+    colarrays = [col.values for col in colarrays]
 
     kernel = compiled["kernel"]
     # process env args
     envargs = []
+    envargs = []
     envdict = callenv["globals"].copy()
+    envdict.update(callenv["global_dict"])
     envdict.update(callenv["locals"])
     envdict.update(callenv["local_dict"])
     for name in compiled["refnames"]:
@@ -245,10 +248,10 @@ def query_execute(df, expr, callenv):
 
     # allocate output buffer
     nrows = len(df)
-    out = column_empty(nrows, dtype=np.dtype(np.bool_), for_numba=True)
+    out = cp.empty(nrows, dtype=np.dtype(np.bool_))
     # run kernel
     args = [out, *colarrays, *envargs]
     with _CUDFNumbaConfig():
         kernel.forall(nrows)(*args)
     out_mask = applyutils.make_aggregate_nullmask(df, columns=columns)
-    return out.set_mask(out_mask).fillna(False)
+    return as_column(out).set_mask(out_mask).fillna(False)

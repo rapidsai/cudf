@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import pytest
 
+import polars as pl
+
 import pylibcudf as plc
 
-from cudf_polars.containers import Column
+from cudf_polars.containers import Column, DataType
 from cudf_polars.dsl.ir import broadcast
 
 
@@ -19,6 +21,7 @@ def test_broadcast_all_scalar(target):
                 plc.DataType(plc.TypeId.INT8), 1, plc.MaskState.ALL_VALID
             ),
             name=f"col{i}",
+            dtype=DataType(pl.Int8()),
         )
         for i in range(3)
     ]
@@ -30,11 +33,13 @@ def test_broadcast_all_scalar(target):
 
 
 def test_invalid_target_length():
+    dtype = DataType(pl.Int8())
     columns = [
         Column(
             plc.column_factories.make_numeric_column(
-                plc.DataType(plc.TypeId.INT8), 4, plc.MaskState.ALL_VALID
+                dtype.plc_type, 4, plc.MaskState.ALL_VALID
             ),
+            dtype=dtype,
             name=f"col{i}",
         )
         for i in range(3)
@@ -44,11 +49,13 @@ def test_invalid_target_length():
 
 
 def test_broadcast_mismatching_column_lengths():
+    dtype = DataType(pl.Int8())
     columns = [
         Column(
             plc.column_factories.make_numeric_column(
-                plc.DataType(plc.TypeId.INT8), i + 1, plc.MaskState.ALL_VALID
+                dtype.plc_type, i + 1, plc.MaskState.ALL_VALID
             ),
+            dtype=dtype,
             name=f"col{i}",
         )
         for i in range(3)
@@ -59,13 +66,15 @@ def test_broadcast_mismatching_column_lengths():
 
 @pytest.mark.parametrize("nrows", [0, 5])
 def test_broadcast_with_scalars(nrows):
+    dtype = DataType(pl.Int8())
     columns = [
         Column(
             plc.column_factories.make_numeric_column(
-                plc.DataType(plc.TypeId.INT8),
+                dtype.plc_type,
                 nrows if i == 0 else 1,
                 plc.MaskState.ALL_VALID,
             ),
+            dtype=dtype,
             name=f"col{i}",
         )
         for i in range(3)

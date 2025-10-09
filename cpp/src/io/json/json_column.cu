@@ -19,6 +19,7 @@
 #include "nested_json.hpp"
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/functional.hpp>
@@ -449,10 +450,10 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
         }
       }
       auto [result_bitmask, null_count] = make_validity(json_col);
-      // The null_mask is set after creation of struct column is to skip the superimpose_nulls and
-      // null validation applied in make_structs_column factory, which is not needed for json
-      auto ret_col = make_structs_column(num_rows, std::move(child_columns), 0, {}, stream, mr);
-      if (null_count != 0) { ret_col->set_null_mask(std::move(result_bitmask), null_count); }
+      // We do not need to ensure null consistency i.e. for json, we can skip superimposing and
+      // sanitizing nulls in the descendant columns. Creating the struct hierarchy is sufficient.
+      auto ret_col = create_structs_hierarchy(
+        num_rows, std::move(child_columns), null_count, std::move(result_bitmask), stream, mr);
       return {std::move(ret_col), column_names};
     }
     case json_col_t::ListColumn: {
@@ -503,8 +504,12 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
         null_count == 0 ? rmm::device_buffer{0, stream, mr} : std::move(result_bitmask),
         stream,
         mr);
-      // Since some rows in child column may need to be nullified due to mixed types, we can not
-      // skip the purge_nonempty_nulls call in make_lists_column factory
+      // Since some rows in child column may need to be nullified due to mixed types, we cannot
+      // skip the purge_nonempty_nulls call.
+      if (auto const output_cv = ret_col->view();
+          cudf::detail::has_nonempty_nulls(output_cv, stream)) {
+        ret_col = cudf::detail::purge_nonempty_nulls(output_cv, stream, mr);
+      }
       return {std::move(ret_col), std::move(column_names)};
     }
     default: CUDF_FAIL("Unsupported column type"); break;

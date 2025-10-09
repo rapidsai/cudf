@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 
 import polars as pl
@@ -68,27 +70,28 @@ def df(dtype, with_nulls, is_sorted):
     return df
 
 
+@pytest.fixture
+def decimal_df() -> pl.LazyFrame:
+    return pl.LazyFrame(
+        {
+            "a": pl.Series(
+                "a",
+                [Decimal("0.10"), Decimal("1.10"), Decimal("100.10")],
+                dtype=pl.Decimal(precision=9, scale=2),
+            ),
+        }
+    )
+
+
 def test_agg(df, agg):
     expr = getattr(pl.col("a"), agg)()
     q = df.select(expr)
-
-    # https://github.com/rapidsai/cudf/issues/15852
-    check_dtypes = agg not in {"n_unique", "median"}
-    if not check_dtypes and q.collect_schema()["a"] != pl.Float64:
-        with pytest.raises(AssertionError):
-            assert_gpu_result_equal(q)
-    assert_gpu_result_equal(q, check_dtypes=check_dtypes, check_exact=False)
+    assert_gpu_result_equal(q, check_exact=False)
 
 
 def test_bool_agg(agg, request):
     if agg == "cum_min" or agg == "cum_max":
         pytest.skip("Does not apply")
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=agg == "n_unique",
-            reason="Wrong dtype we get Int32, polars gets UInt32",
-        )
-    )
     df = pl.LazyFrame({"a": [True, False, None, True]})
     expr = getattr(pl.col("a"), agg)()
     q = df.select(expr)
@@ -110,13 +113,7 @@ def test_cum_agg_reverse_unsupported(cum_agg):
 def test_quantile(df, q, interp):
     expr = pl.col("a").quantile(q, interp)
     q = df.select(expr)
-
-    # https://github.com/rapidsai/cudf/issues/15852
-    check_dtypes = q.collect_schema()["a"] == pl.Float64
-    if not check_dtypes:
-        with pytest.raises(AssertionError):
-            assert_gpu_result_equal(q)
-    assert_gpu_result_equal(q, check_dtypes=check_dtypes, check_exact=False)
+    assert_gpu_result_equal(q, check_exact=False)
 
 
 def test_quantile_invalid_q(df):
@@ -179,4 +176,21 @@ def test_implode_agg_unsupported():
         }
     )
     q = df.select(pl.col("b").implode())
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_decimal_aggs(decimal_df: pl.LazyFrame) -> None:
+    q = decimal_df.with_columns(
+        sum=pl.col("a").sum(),
+        min=pl.col("a").min(),
+        max=pl.col("a").max(),
+        mean=pl.col("a").mean(),
+        median=pl.col("a").median(),
+    )
+    assert_gpu_result_equal(q)
+
+
+def test_invalid_agg():
+    df = pl.LazyFrame({"s": pl.Series(["a", "b", "c"], dtype=pl.String())})
+    q = df.select(pl.col("s").sum())
     assert_ir_translation_raises(q, NotImplementedError)

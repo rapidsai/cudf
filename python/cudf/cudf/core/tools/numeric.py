@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING, Literal
 import numpy as np
 import pandas as pd
 
-import cudf
 from cudf.core.column import as_column
-from cudf.core.dtypes import CategoricalDtype
+from cudf.core.dtypes import CategoricalDtype, ListDtype, StructDtype
 from cudf.core.index import ensure_index
+from cudf.core.series import Series
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     can_convert_to_column,
@@ -145,7 +145,7 @@ def to_numeric(
                     return arg
                 else:
                     raise e
-    elif dtype == CUDF_STRING_DTYPE:
+    elif dtype == CUDF_STRING_DTYPE or isinstance(dtype, pd.StringDtype):
         try:
             col = _convert_str_col(col, errors, downcast)  # type: ignore[arg-type]
         except ValueError as e:
@@ -153,7 +153,7 @@ def to_numeric(
                 return arg
             else:
                 raise e
-    elif isinstance(dtype, (cudf.ListDtype, cudf.StructDtype)):
+    elif isinstance(dtype, (ListDtype, StructDtype)):
         raise ValueError("Input does not support nested datatypes")
     elif is_dtype_obj_numeric(dtype, include_decimal=False):
         pass
@@ -183,8 +183,8 @@ def to_numeric(
                     col = col.cast(downcast_dtype)
                     break
 
-    if isinstance(arg, (cudf.Series, pd.Series)):
-        return cudf.Series._from_column(
+    if isinstance(arg, (Series, pd.Series)):
+        return Series._from_column(
             col, name=arg.name, index=ensure_index(arg.index)
         )
     else:

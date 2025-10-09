@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,8 +50,8 @@ namespace CUDF_EXPORT nvtext {
  * The `targets.size()` must equal `input.size()` unless `targets.size()==1`.
  * In this case, all `input` will be computed against the single `targets[0]` string.
  *
- * @throw cudf::logic_error if `targets.size() != input.size()` and
- *                          if `targets.size() != 1`
+ * @throw std::invalid_argument if `targets.size() != input.size()` and if `targets.size() != 1`
+ * @throw std::invalid_argument if `targets.size() == 1` and `targets[0].is_null()`
  *
  * @param input Strings column of input strings
  * @param targets Strings to compute edit distance against `input`
@@ -91,7 +91,8 @@ std::unique_ptr<cudf::column> edit_distance(
  * The output is a lists column of size `input.size()` and where each list item
  * is `input.size()` elements.
  *
- * @throw cudf::logic_error if `strings.size() == 1`
+ * @throw std::invalid_argument if `input.size() == 1`
+ * @throw std::overflow_error if `input.size() * input.size()` greater than max size_type
  *
  * @param input Strings column of input strings
  * @param stream CUDA stream used for device memory operations and kernel launches

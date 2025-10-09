@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -164,7 +164,7 @@ std::unique_ptr<column> extract_list_element_impl(lists_column_view lists_column
   // In such cases, the extracted elements corresponding to these non-empty nulls may not be null.
   // Thus, we need to superimpose nulls from the input column into the output to make sure each
   // input null list always results in a null output row.
-  return cudf::structs::detail::superimpose_nulls(
+  return cudf::structs::detail::superimpose_and_sanitize_nulls(
     lists_column.null_mask(), lists_column.null_count(), std::move(output), stream, mr);
 }
 

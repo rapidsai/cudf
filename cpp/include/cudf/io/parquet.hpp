@@ -88,6 +88,11 @@ class parquet_reader_options {
   // Number of rows to read; `nullopt` is all
   std::optional<size_type> _num_rows;
 
+  // Read row groups that start at or after this byte offset into the source
+  size_t _skip_bytes = 0;
+  // Read row groups that start before _num_bytes bytes after _skip_bytes into the source
+  std::optional<size_t> _num_bytes;
+
   // Predicate filter as AST to filter output rows.
   std::optional<std::reference_wrapper<ast::expression const>> _filter;
 
@@ -101,6 +106,8 @@ class parquet_reader_options {
   bool _allow_mismatched_pq_schemas = false;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
+  // Whether to use JIT compilation for filtering
+  bool _use_jit_filter = false;
 
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
 
@@ -200,6 +207,22 @@ class parquet_reader_options {
   [[nodiscard]] std::optional<size_type> const& get_num_rows() const { return _num_rows; }
 
   /**
+   * @brief Returns bytes to skip before starting reading row groups
+   *
+   * @return Bytes to skip before starting reading row groups; only valid for single parquet source
+   * case
+   */
+  [[nodiscard]] size_t get_skip_bytes() const { return _skip_bytes; }
+
+  /**
+   * @brief Returns number of bytes after skipping to end reading row groups at
+   *
+   * @return Number of bytes after skipping to end reading row groups at; only valid for single
+   * parquet source case
+   */
+  [[nodiscard]] std::optional<size_t> const& get_num_bytes() const { return _num_bytes; }
+
+  /**
    * @brief Returns names of column to be read, if set.
    *
    * @return Names of column to be read; `nullopt` if the option is not set
@@ -226,6 +249,13 @@ class parquet_reader_options {
    * @return Timestamp type used to cast timestamp columns
    */
   [[nodiscard]] data_type get_timestamp_type() const { return _timestamp_type; }
+
+  /**
+   * @brief Returns whether to use JIT compilation for filtering.
+   *
+   * @return `true` if JIT compilation should be used for filtering
+   */
+  [[nodiscard]] bool is_enabled_use_jit_filter() const { return _use_jit_filter; }
 
   /**
    * @brief Sets the names of columns to be read from all input sources.
@@ -353,6 +383,20 @@ class parquet_reader_options {
    * @param val Number of rows to read after skip
    */
   void set_num_rows(size_type val);
+
+  /**
+   * @brief Sets bytes to skip before starting reading row groups.
+   *
+   * @param val Bytes to skip before starting reading row groups
+   */
+  void set_skip_bytes(size_t val);
+
+  /**
+   * @brief Sets number of bytes after skipping to end reading row groups at.
+   *
+   * @param val Number of bytes after skipping to end reading row groups at
+   */
+  void set_num_bytes(size_t val);
 
   /**
    * @brief Sets timestamp_type used to cast timestamp columns.
@@ -506,6 +550,30 @@ class parquet_reader_options_builder {
   }
 
   /**
+   * @brief Sets bytes to skip before starting reading row groups.
+   *
+   * @param val Bytes to skip before starting reading row groups
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& skip_bytes(size_t val)
+  {
+    options.set_skip_bytes(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets number of bytes after skipping to end reading row groups at.
+   *
+   * @param val Number of bytes after skipping to end reading row groups at
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& num_bytes(size_t val)
+  {
+    options.set_num_bytes(val);
+    return *this;
+  }
+
+  /**
    * @brief timestamp_type used to cast timestamp columns.
    *
    * @param type The timestamp data_type to which all timestamp columns need to be cast
@@ -514,6 +582,18 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& timestamp_type(data_type type)
   {
     options._timestamp_type = type;
+    return *this;
+  }
+
+  /**
+   * @brief Enable/disable use of JIT for filter step.
+   *
+   * @param use_jit_filter Boolean value whether to use JIT filter
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& use_jit_filter(bool use_jit_filter)
+  {
+    options._use_jit_filter = use_jit_filter;
     return *this;
   }
 
@@ -668,7 +748,7 @@ struct sorting_column {
 };
 
 /**
- * @brief Base settings for `write_parquet()` and `parquet_chunked_writer`.
+ * @brief Base settings for `write_parquet()` and `chunked_parquet_writer`.
  */
 class parquet_writer_options_base {
   // Specify the sink to use for writer output
@@ -1394,7 +1474,7 @@ std::unique_ptr<std::vector<uint8_t>> merge_row_group_metadata(
 class chunked_parquet_writer_options_builder;
 
 /**
- * @brief Settings for `parquet_chunked_writer`.
+ * @brief Settings for `chunked_parquet_writer`.
  */
 class chunked_parquet_writer_options : public parquet_writer_options_base {
   /**
@@ -1449,7 +1529,7 @@ class chunked_parquet_writer_options_builder
 /**
  * @brief chunked parquet writer class to handle options and write tables in chunks.
  *
- * The intent of the parquet_chunked_writer is to allow writing of an
+ * The intent of the chunked_parquet_writer is to allow writing of an
  * arbitrarily large / arbitrary number of rows to a parquet file in multiple passes.
  *
  * The following code snippet demonstrates how to write a single parquet file containing
@@ -1458,21 +1538,21 @@ class chunked_parquet_writer_options_builder
  * @code
  *  auto destination = cudf::io::sink_info("dataset.parquet");
  *  auto options = cudf::io::chunked_parquet_writer_options::builder(destination, table->view());
- *  auto writer  = cudf::io::parquet_chunked_writer(options);
+ *  auto writer  = cudf::io::chunked_parquet_writer(options);
  *
  *  writer.write(table0)
  *  writer.write(table1)
  *  writer.close()
  *  @endcode
  */
-class parquet_chunked_writer {
+class chunked_parquet_writer {
  public:
   /**
    * @brief Default constructor, this should never be used.
    *        This is added just to satisfy cython.
    *        This is added to not leak detail API
    */
-  parquet_chunked_writer();
+  chunked_parquet_writer();
 
   /**
    * @brief Constructor with chunked writer options
@@ -1480,13 +1560,13 @@ class parquet_chunked_writer {
    * @param[in] options options used to write table
    * @param[in] stream CUDA stream used for device memory operations and kernel launches
    */
-  parquet_chunked_writer(chunked_parquet_writer_options const& options,
+  chunked_parquet_writer(chunked_parquet_writer_options const& options,
                          rmm::cuda_stream_view stream = cudf::get_default_stream());
   /**
    * @brief Default destructor.
    *        This is added to not leak detail API
    */
-  ~parquet_chunked_writer();
+  ~chunked_parquet_writer();
 
   /**
    * @brief Writes table to output.
@@ -1499,7 +1579,7 @@ class parquet_chunked_writer {
    * @throws rmm::bad_alloc if there is insufficient space for temporary buffers
    * @return returns reference of the class object
    */
-  parquet_chunked_writer& write(table_view const& table,
+  chunked_parquet_writer& write(table_view const& table,
                                 std::vector<partition_info> const& partitions = {});
 
   /**
@@ -1516,6 +1596,14 @@ class parquet_chunked_writer {
   /// Unique pointer to impl writer class
   std::unique_ptr<parquet::detail::writer> writer;
 };
+
+/**
+ * @brief Deprecated type alias for the `chunked_parquet_writer`
+ *
+ * @deprecated Use chunked_parquet_writer instead. This alias will be removed in a future release.
+ */
+using parquet_chunked_writer [[deprecated("Use chunked_parquet_writer instead")]] =
+  chunked_parquet_writer;
 
 /** @} */  // end of group
 

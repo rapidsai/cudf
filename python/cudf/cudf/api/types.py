@@ -8,7 +8,7 @@ import warnings
 from collections import abc
 from functools import wraps
 from inspect import isclass
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import cupy as cp
 import numpy as np
@@ -35,6 +35,10 @@ from cudf.core.dtypes import (  # noqa: F401
     is_struct_dtype,
 )
 from cudf.utils.dtypes import CUDF_STRING_DTYPE
+
+if TYPE_CHECKING:
+    from cudf.core.index import CategoricalIndex
+    from cudf.core.series import Series
 
 
 def is_numeric_dtype(obj):
@@ -68,7 +72,7 @@ def is_numeric_dtype(obj):
             getattr(obj, "dtype", None), _BaseDtype
         ):
             return False
-    if isinstance(obj, cudf.BaseIndex):
+    if isinstance(obj, cudf.Index):
         return obj._is_numeric()
     return pd_types.is_numeric_dtype(obj)
 
@@ -80,8 +84,6 @@ def is_integer(obj):
     -------
     bool
     """
-    if isinstance(obj, cudf.Scalar):
-        return obj.dtype.kind in "iu"
     return pd.api.types.is_integer(obj)  # noqa: TID251
 
 
@@ -102,6 +104,14 @@ def is_string_dtype(obj):
         (
             isinstance(obj, (cudf.Index, cudf.Series))
             and obj.dtype == CUDF_STRING_DTYPE
+        )
+        or (isinstance(obj, pd.StringDtype))
+        or (
+            isinstance(obj, pd.ArrowDtype)
+            and (
+                pa.types.is_string(obj.pyarrow_dtype)
+                or pa.types.is_large_string(obj.pyarrow_dtype)
+            )
         )
         or (isinstance(obj, cudf.core.column.StringColumn))
         or (
@@ -132,7 +142,6 @@ def is_scalar(val):
     return isinstance(
         val,
         (
-            cudf.Scalar,
             cudf.core.tools.datetimes.DateOffset,
             plc.Scalar,
             pa.Scalar,
@@ -211,7 +220,7 @@ def _wrap_pandas_is_dtype_api(func):
 
 
 def _union_categoricals(
-    to_union: list[cudf.Series | cudf.CategoricalIndex],
+    to_union: list[Series | CategoricalIndex],
     sort_categories: bool = False,
     ignore_order: bool = False,
 ):
@@ -280,7 +289,7 @@ def is_bool_dtype(arr_or_dtype):
     >>> is_bool_dtype(cudf.Series([True, False], dtype='category'))
     True
     """
-    if isinstance(arr_or_dtype, cudf.BaseIndex):
+    if isinstance(arr_or_dtype, cudf.Index):
         return arr_or_dtype._is_boolean()
     elif isinstance(arr_or_dtype, cudf.Series):
         if isinstance(arr_or_dtype.dtype, cudf.CategoricalDtype):
@@ -324,7 +333,7 @@ def is_object_dtype(arr_or_dtype):
     >>> is_object_dtype([1, 2, 3])
     False
     """
-    if isinstance(arr_or_dtype, cudf.BaseIndex):
+    if isinstance(arr_or_dtype, cudf.Index):
         return arr_or_dtype._is_object()
     elif isinstance(arr_or_dtype, cudf.Series):
         return pd_types.is_object_dtype(arr_or_dtype=arr_or_dtype.dtype)
@@ -364,7 +373,7 @@ def is_float_dtype(arr_or_dtype) -> bool:
     >>> is_float_dtype(cudf.Index([1, 2.]))
     True
     """
-    if isinstance(arr_or_dtype, cudf.BaseIndex):
+    if isinstance(arr_or_dtype, cudf.Index):
         return arr_or_dtype._is_floating()
     return _wrap_pandas_is_dtype_api(pd_types.is_float_dtype)(arr_or_dtype)
 
@@ -415,7 +424,7 @@ def is_integer_dtype(arr_or_dtype) -> bool:
     >>> is_integer_dtype(cudf.Index([1, 2.]))  # float
     False
     """
-    if isinstance(arr_or_dtype, cudf.BaseIndex):
+    if isinstance(arr_or_dtype, cudf.Index):
         return arr_or_dtype._is_integer()
     return _wrap_pandas_is_dtype_api(pd_types.is_integer_dtype)(arr_or_dtype)
 

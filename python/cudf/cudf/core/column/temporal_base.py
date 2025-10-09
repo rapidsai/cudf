@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import functools
 import warnings
 from typing import TYPE_CHECKING, Any
@@ -11,16 +12,19 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+import pylibcudf as plc
+
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core.buffer.buffer import Buffer
 from cudf.core.column.column import ColumnBase, as_column, column_empty
-from cudf.core.column.numerical import NumericalColumn
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
+    dtype_to_pylibcudf_type,
     find_common_type,
+    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.utils import is_na_like
 
@@ -29,9 +33,8 @@ if TYPE_CHECKING:
 
     from typing_extensions import Self
 
-    import pylibcudf as plc
-
     from cudf._typing import ColumnLike, DtypeObj, ScalarLike
+    from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.string import StringColumn
 
 
@@ -40,7 +43,7 @@ class TemporalBaseColumn(ColumnBase):
     Base class for TimeDeltaColumn and DatetimeColumn.
     """
 
-    _PANDAS_NA_REPR = str(pd.NaT)
+    _PANDAS_NA_VALUE = pd.NaT
     _UNDERLYING_DTYPE = np.dtype(np.int64)
     _NP_SCALAR: np.datetime64 | np.timedelta64
     _PD_SCALAR: pd.Timestamp | pd.Timedelta
@@ -126,40 +129,15 @@ class TemporalBaseColumn(ColumnBase):
             rhs = rhs.astype(lhs.dtype)
         return lhs, rhs
 
-    def _all_bools_with_nulls(
-        self, other: ColumnBase, bool_fill_value: bool
-    ) -> ColumnBase:
-        # Might be able to remove if we share more of
-        # DatetimeColumn._binaryop & TimedeltaColumn._binaryop
-        if self.has_nulls() and other.has_nulls():
-            result_mask = (
-                self._get_mask_as_column() & other._get_mask_as_column()
-            )
-        elif self.has_nulls():
-            result_mask = self._get_mask_as_column()
-        elif other.has_nulls():
-            result_mask = other._get_mask_as_column()
-        else:
-            result_mask = None
-
-        result_col = as_column(
-            bool_fill_value, dtype=np.dtype(np.bool_), length=len(self)
-        )
-        if result_mask is not None:
-            result_col = result_col.set_mask(result_mask.as_mask())
-        return result_col
-
     def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if isinstance(other, ColumnBase):
-            return other
-        elif self.dtype.kind == "M" and isinstance(other, cudf.DateOffset):
             return other
         elif isinstance(other, (cp.ndarray, np.ndarray)) and other.ndim == 0:
             other = other[()]
 
         if is_scalar(other):
             if is_na_like(other):
-                return super()._normalize_binop_operand(other)
+                return pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
             elif self.dtype.kind == "M" and isinstance(other, pd.Timestamp):
                 if other.tz is not None:
                     raise NotImplementedError(
@@ -189,6 +167,10 @@ class TemporalBaseColumn(ColumnBase):
                         other = other.astype(
                             np.dtype(f"{other.dtype.kind}8[{to_unit}]")
                         )
+            elif isinstance(other, datetime.date) and not isinstance(
+                other, datetime.datetime
+            ):
+                other = datetime.datetime(other.year, other.month, other.day)
             scalar = pa.scalar(other)
             if pa.types.is_timestamp(scalar.type):
                 if scalar.type.tz is not None:
@@ -216,15 +198,30 @@ class TemporalBaseColumn(ColumnBase):
     @property
     def values(self) -> cp.ndarray:
         """
-        Return a CuPy representation of the DateTimeColumn.
+        Return a CuPy representation of the TemporalBaseColumn.
         """
-        raise NotImplementedError(f"cupy does not support {self.dtype}")
+        if is_pandas_nullable_extension_dtype(self.dtype):
+            dtype = getattr(self.dtype, "numpy_dtype", self.dtype)
+        else:
+            dtype = self.dtype
+
+        if len(self) == 0:
+            return cp.empty(0, dtype=self._UNDERLYING_DTYPE).view(dtype)
+
+        if self.has_nulls():
+            raise ValueError("cupy does not support NaT.")
+        return cp.asarray(self.data).view(dtype)
 
     def element_indexing(self, index: int) -> ScalarLike:
         result = super().element_indexing(index)
+        if result is self._PANDAS_NA_VALUE:
+            return result
+        result = result.as_py()
         if cudf.get_option("mode.pandas_compatible"):
             return self._PD_SCALAR(result)
-        return result
+        elif isinstance(result, self._PD_SCALAR):
+            return result.to_numpy()
+        return self.dtype.type(result).astype(self.dtype, copy=False)
 
     def to_pandas(
         self,
@@ -236,6 +233,12 @@ class TemporalBaseColumn(ColumnBase):
             raise ValueError(
                 f"{arrow_type=} and {nullable=} cannot both be set."
             )
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and isinstance(self.dtype, pd.ArrowDtype)
+        ) or arrow_type:
+            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+
         elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
         pa_array = self.to_arrow()
@@ -249,14 +252,18 @@ class TemporalBaseColumn(ColumnBase):
             )
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
-        col = NumericalColumn(
-            data=self.base_data,  # type: ignore[arg-type]
-            dtype=self._UNDERLYING_DTYPE,
-            mask=self.base_mask,
-            offset=self.offset,
+        new_plc_column = plc.Column(
+            data_type=dtype_to_pylibcudf_type(self._UNDERLYING_DTYPE),
             size=self.size,
+            data=plc.gpumemoryview(self.base_data),
+            mask=plc.gpumemoryview(self.base_mask)
+            if self.base_mask is not None
+            else None,
+            null_count=self.null_count,
+            offset=self.offset,
+            children=[],
         )
-        return col.astype(dtype)  # type:ignore[return-value]
+        return type(self).from_pylibcudf(new_plc_column).astype(dtype)  # type:ignore[return-value]
 
     def ceil(self, freq: str) -> ColumnBase:
         raise NotImplementedError("ceil is currently not implemented")

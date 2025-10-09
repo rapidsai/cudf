@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -144,14 +144,14 @@ JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void*)
     ss << "Libcudf is_ptds_enabled=" << cudf::is_ptds_enabled()
        << ", which does not match cudf jni is_ptds_enabled=" << cudf::jni::is_ptds_enabled
        << ". They need to be built with the same per-thread default stream flag.";
-    env->ThrowNew(env->FindClass("java/lang/RuntimeException"), ss.str().c_str());
+    env->ThrowNew(env->FindClass(cudf::jni::RUNTIME_EXCEPTION_CLASS), ss.str().c_str());
     return JNI_ERR;
   }
 
   // cache any class objects and method IDs here
   if (!cudf::jni::cache_contiguous_table_jni(env)) {
     if (!env->ExceptionCheck()) {
-      env->ThrowNew(env->FindClass("java/lang/RuntimeException"),
+      env->ThrowNew(env->FindClass(cudf::jni::RUNTIME_EXCEPTION_CLASS),
                     "Unable to locate contiguous table methods needed by JNI");
     }
     return JNI_ERR;
@@ -159,7 +159,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void*)
 
   if (!cudf::jni::cache_contig_split_group_by_result_jni(env)) {
     if (!env->ExceptionCheck()) {
-      env->ThrowNew(env->FindClass("java/lang/RuntimeException"),
+      env->ThrowNew(env->FindClass(cudf::jni::RUNTIME_EXCEPTION_CLASS),
                     "Unable to locate group by table result methods needed by JNI");
     }
     return JNI_ERR;
@@ -167,7 +167,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void*)
 
   if (!cudf::jni::cache_host_memory_buffer_jni(env)) {
     if (!env->ExceptionCheck()) {
-      env->ThrowNew(env->FindClass("java/lang/RuntimeException"),
+      env->ThrowNew(env->FindClass(cudf::jni::RUNTIME_EXCEPTION_CLASS),
                     "Unable to locate host memory buffer methods needed by JNI");
     }
     return JNI_ERR;
@@ -175,7 +175,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void*)
 
   if (!cudf::jni::cache_data_source_jni(env)) {
     if (!env->ExceptionCheck()) {
-      env->ThrowNew(env->FindClass("java/lang/RuntimeException"),
+      env->ThrowNew(env->FindClass(cudf::jni::RUNTIME_EXCEPTION_CLASS),
                     "Unable to locate data source helper methods needed by JNI");
     }
     return JNI_ERR;
@@ -206,24 +206,26 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cudf_setKernelPinnedCopyThreshold(JNI
                                                                              jclass clazz,
                                                                              jlong jthreshold)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto threshold = static_cast<std::size_t>(jthreshold);
     cudf::set_kernel_pinned_copy_threshold(threshold);
   }
-  CATCH_STD(env, )
+  JNI_CATCH(env, );
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cudf_setPinnedAllocationThreshold(JNIEnv* env,
                                                                              jclass clazz,
                                                                              jlong jthreshold)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto threshold = static_cast<std::size_t>(jthreshold);
     cudf::set_allocate_host_as_pinned_threshold(threshold);
   }
-  CATCH_STD(env, )
+  JNI_CATCH(env, );
 }
 
 }  // extern "C"

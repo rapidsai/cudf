@@ -4,6 +4,7 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from pylibcudf.io.types cimport SinkInfo, SourceInfo, TableWithMetadata
 
@@ -23,6 +24,8 @@ from pylibcudf.libcudf.io.types cimport (
 from pylibcudf.libcudf.types cimport size_type
 
 from pylibcudf.table cimport Table
+
+from pylibcudf.types cimport DataType
 
 
 cdef class CsvReaderOptions:
@@ -65,9 +68,12 @@ cdef class CsvReaderOptionsBuilder:
     cpdef CsvReaderOptionsBuilder keep_default_na(self, bool keep_default_na)
     cpdef CsvReaderOptionsBuilder na_filter(self, bool na_filter)
     cpdef CsvReaderOptionsBuilder dayfirst(self, bool dayfirst)
+    cpdef CsvReaderOptionsBuilder delimiter(self, str delimiter)
     cpdef CsvReaderOptions build(self)
 
-cpdef TableWithMetadata read_csv(CsvReaderOptions options, Stream stream = *)
+cpdef TableWithMetadata read_csv(
+    CsvReaderOptions options, Stream stream = *, DeviceMemoryResource mr=*
+)
 
 cdef class CsvWriterOptions:
     cdef csv_writer_options c_obj
@@ -91,3 +97,5 @@ cdef class CsvWriterOptionsBuilder:
 
 
 cpdef void write_csv(CsvWriterOptions options, Stream stream = *)
+
+cpdef bool is_supported_write_csv(DataType type)

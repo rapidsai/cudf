@@ -21,6 +21,7 @@
 #include <cudf/strings/detail/gather.cuh>
 
 #include <cuda/atomic>
+#include <cuda/std/bit>
 
 namespace cudf::io::parquet::detail {
 
@@ -83,17 +84,17 @@ __device__ inline void block_excl_sum(size_type* arr, size_type length, size_typ
 {
   using block_scan = cub::BlockScan<size_type, block_size>;
   __shared__ typename block_scan::TempStorage scan_storage;
-  int const t = threadIdx.x;
 
-  // do a series of block sums, storing results in arr as we go
-  for (int pos = 0; pos < length; pos += block_size) {
-    int const tidx = pos + t;
+  // Do a series of block sums, storing results in arr as we go
+  auto const block = cooperative_groups::this_thread_block();
+  for (int pos = 0; pos < length; pos += block.size()) {
+    int const tidx = pos + block.thread_rank();
     size_type tval = tidx < length ? arr[tidx] : 0;
 
     size_type block_sum;
     size_type new_tval;
     block_scan(scan_storage).ExclusiveSum(tval, new_tval, block_sum);
-    __syncthreads();
+    block.sync();
 
     if (tidx < length) { arr[tidx] = new_tval + initial_value; }
     initial_value += block_sum;
@@ -168,9 +169,12 @@ __device__ void update_string_offsets_for_pruned_pages(
   namespace cg = cooperative_groups;
 
   // Initial string offset
-  auto const initial_value = state->page.str_offset;
-  auto value_count         = state->page.num_input_values;
-  auto const tid           = cg::this_thread_block().thread_rank();
+  auto const initial_value = page.str_offset;
+  // The value count is either the leaf-level batch size in case of lists or the number of
+  // effective rows being read by this page
+  auto const value_count =
+    has_lists ? page.nesting[state->col.max_nesting_depth - 1].batch_size : state->num_rows;
+  auto const tid = cg::this_thread_block().thread_rank();
 
   // Offsets pointer contains string sizes in case of large strings and actual offsets
   // otherwise
@@ -188,10 +192,6 @@ __device__ void update_string_offsets_for_pruned_pages(
     auto const input_col_idx       = page.chunk_idx % chunks_per_rowgroup;
     compute_initial_large_strings_offset<has_lists>(state, initial_str_offsets[input_col_idx]);
   } else {
-    // if no repetition we haven't calculated start/end bounds and instead just skipped
-    // values until we reach first_row. account for that here.
-    if constexpr (not has_lists) { value_count -= state->first_row; }
-
     // Write the initial offset at all positions to indicate zero sized strings
     for (int idx = tid; idx < value_count; idx += block_size) {
       offptr[idx] = initial_value;
@@ -203,10 +203,7 @@ template <int value>
 inline constexpr int log2_int()
 {
   static_assert((value >= 1) && ((value & (value - 1)) == 0), "Only works for powers of 2!");
-  if constexpr (value == 1)
-    return 0;
-  else
-    return 1 + log2_int<value / 2>();
+  return 31 - cuda::std::countl_zero(static_cast<uint32_t>(value));
 }
 
 template <int block_size>
@@ -248,7 +245,7 @@ __device__ inline int calc_threads_per_string_log2(int avg_string_length)  // re
  * @param string_output_offset Starting offset into the output column data for writing
  */
 template <int block_size, bool has_lists_t, bool split_decode_t, typename state_buf>
-__device__ size_t gpuDecodeString(
+__device__ size_t decode_strings(
   page_state_s* s, state_buf* const sb, int start, int end, int t, size_t string_output_offset)
 {
   // nesting level that is storing actual leaf values

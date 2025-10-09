@@ -19,7 +19,7 @@
  * @brief cuDF-IO JSON writer implementation
  */
 
-#include "io/comp/comp.hpp"
+#include "io/comp/compression.hpp"
 #include "io/csv/durations.hpp"
 #include "io/utilities/parsing_utils.cuh"
 #include "lists/utilities.hpp"
@@ -33,6 +33,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/detail/json.hpp>
+#include <cudf/io/detail/utils.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/combine.hpp>
@@ -104,7 +105,7 @@ struct escape_strings_fn {
       d_buffer[2] = nibble_to_hex((codepoint >> 12) & 0x0F);
       d_buffer[3] = nibble_to_hex((codepoint >> 8) & 0x0F);
       d_buffer[4] = nibble_to_hex((codepoint >> 4) & 0x0F);
-      d_buffer[5] = nibble_to_hex((codepoint)&0x0F);
+      d_buffer[5] = nibble_to_hex((codepoint) & 0x0F);
       d_buffer += 6;
     } else {
       bytes += 6;
@@ -541,19 +542,6 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
  * @brief Functor to convert a column to string representation for JSON format.
  */
 struct column_to_strings_fn {
-  /**
-   * @brief Returns true if the specified type is not supported by the JSON writer.
-   */
-  template <typename column_type>
-  constexpr static bool is_not_handled()
-  {
-    // Note: the case (not std::is_same_v<column_type, bool>)  is already covered by is_integral)
-    return not((std::is_same_v<column_type, cudf::string_view>) ||
-               (std::is_integral_v<column_type>) || (std::is_floating_point_v<column_type>) ||
-               (cudf::is_fixed_point<column_type>()) || (cudf::is_timestamp<column_type>()) ||
-               (cudf::is_duration<column_type>()));
-  }
-
   explicit column_to_strings_fn(json_writer_options const& options,
                                 rmm::cuda_stream_view stream,
                                 rmm::device_async_resource_ref mr)
@@ -580,8 +568,8 @@ struct column_to_strings_fn {
 
   // unsupported type of column:
   template <typename column_type>
-  std::enable_if_t<is_not_handled<column_type>(), std::unique_ptr<column>> operator()(
-    column_view const&) const
+  std::unique_ptr<column> operator()(column_view const&) const
+    requires(!cudf::io::detail::is_convertible_to_string_column<column_type>())
   {
     CUDF_FAIL("Unsupported column type.");
   }
@@ -591,16 +579,16 @@ struct column_to_strings_fn {
 
   // bools:
   template <typename column_type>
-  std::enable_if_t<std::is_same_v<column_type, bool>, std::unique_ptr<column>> operator()(
-    column_view const& column) const
+  std::unique_ptr<column> operator()(column_view const& column) const
+    requires(std::is_same_v<column_type, bool>)
   {
     return cudf::strings::detail::from_booleans(column, true_value, false_value, stream_, mr_);
   }
 
   // strings:
   template <typename column_type>
-  std::enable_if_t<std::is_same_v<column_type, cudf::string_view>, std::unique_ptr<column>>
-  operator()(column_view const& column_v) const
+  std::unique_ptr<column> operator()(column_view const& column_v) const
+    requires(std::is_same_v<column_type, cudf::string_view>)
   {
     auto d_column = column_device_view::create(column_v, stream_);
     return escape_strings_fn{*d_column, false, options_.is_enabled_utf8_escaped()}
@@ -609,33 +597,32 @@ struct column_to_strings_fn {
 
   // ints:
   template <typename column_type>
-  std::enable_if_t<std::is_integral_v<column_type> && !std::is_same_v<column_type, bool>,
-                   std::unique_ptr<column>>
-  operator()(column_view const& column) const
+  std::unique_ptr<column> operator()(column_view const& column) const
+    requires(std::is_integral_v<column_type> && !std::is_same_v<column_type, bool>)
   {
     return cudf::strings::detail::from_integers(column, stream_, mr_);
   }
 
   // floats:
   template <typename column_type>
-  std::enable_if_t<std::is_floating_point_v<column_type>, std::unique_ptr<column>> operator()(
-    column_view const& column) const
+  std::unique_ptr<column> operator()(column_view const& column) const
+    requires(std::is_floating_point_v<column_type>)
   {
     return cudf::strings::detail::from_floats(column, stream_, mr_);
   }
 
   // fixed point:
   template <typename column_type>
-  std::enable_if_t<cudf::is_fixed_point<column_type>(), std::unique_ptr<column>> operator()(
-    column_view const& column) const
+  std::unique_ptr<column> operator()(column_view const& column) const
+    requires(cudf::is_fixed_point<column_type>())
   {
     return cudf::strings::detail::from_fixed_point(column, stream_, mr_);
   }
 
   // timestamps:
   template <typename column_type>
-  std::enable_if_t<cudf::is_timestamp<column_type>(), std::unique_ptr<column>> operator()(
-    column_view const& column) const
+  std::unique_ptr<column> operator()(column_view const& column) const
+    requires(cudf::is_timestamp<column_type>())
   {
     std::string format = [&]() {
       if (std::is_same_v<cudf::timestamp_s, column_type>) {
@@ -663,8 +650,8 @@ struct column_to_strings_fn {
   }
 
   template <typename column_type>
-  std::enable_if_t<cudf::is_duration<column_type>(), std::unique_ptr<column>> operator()(
-    column_view const& column) const
+  std::unique_ptr<column> operator()(column_view const& column) const
+    requires(cudf::is_duration<column_type>())
   {
     auto duration_string = cudf::io::detail::csv::pandas_format_durations(column, stream_, mr_);
     auto quotes =
@@ -680,8 +667,9 @@ struct column_to_strings_fn {
 
   // lists:
   template <typename column_type>
-  std::enable_if_t<std::is_same_v<column_type, cudf::list_view>, std::unique_ptr<column>>
-  operator()(column_view const& column, host_span<column_name_info const> children_names) const
+  std::unique_ptr<column> operator()(column_view const& column,
+                                     host_span<column_name_info const> children_names) const
+    requires(std::is_same_v<column_type, cudf::list_view>)
   {
     auto child_view            = lists_column_view(column).get_sliced_child(stream_);
     auto constexpr child_index = lists_column_view::child_column_index;
@@ -722,12 +710,14 @@ struct column_to_strings_fn {
 
   // structs:
   template <typename column_type>
-  std::enable_if_t<std::is_same_v<column_type, cudf::struct_view>, std::unique_ptr<column>>
-  operator()(column_view const& column, host_span<column_name_info const> children_names) const
+  std::unique_ptr<column> operator()(column_view const& column,
+                                     host_span<column_name_info const> children_names) const
+    requires(std::is_same_v<column_type, cudf::struct_view>)
   {
+    auto structs_view   = structs_column_view{column};
     auto const child_it = cudf::detail::make_counting_transform_iterator(
-      0, [&stream = stream_, structs_view = structs_column_view{column}](auto const child_idx) {
-        return structs_view.get_sliced_child(child_idx, stream);
+      0, [&stream = stream_, &s_v = structs_view](auto const child_idx) {
+        return s_v.get_sliced_child(child_idx, stream);
       });
     auto col_string = operator()(child_it,
                                  child_it + column.num_children(),

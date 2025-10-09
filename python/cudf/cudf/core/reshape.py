@@ -8,8 +8,6 @@ from typing import TYPE_CHECKING, Literal
 import numpy as np
 import pandas as pd
 
-import pylibcudf as plc
-
 import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import is_list_like, is_scalar
@@ -21,6 +19,7 @@ from cudf.core.column import (
     concat_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dtypes import CategoricalDtype, dtype as cudf_dtype
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
@@ -31,6 +30,10 @@ if TYPE_CHECKING:
     from collections.abc import Hashable
 
     from cudf._typing import DtypeObj
+    from cudf.core.dataframe import DataFrame
+    from cudf.core.index import Index
+    from cudf.core.multiindex import MultiIndex
+    from cudf.core.series import Series
 
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -114,7 +117,7 @@ def _get_combined_index(indexes, intersect: bool = False, sort=None):
 
 
 def _normalize_series_and_dataframe(
-    objs: list[cudf.Series | cudf.DataFrame], axis: Literal[0, 1]
+    objs: list[Series | DataFrame], axis: Literal[0, 1]
 ) -> None:
     """Convert any cudf.Series objects in objs to DataFrames in place."""
     # Default to naming series by a numerical id if they are not named.
@@ -307,7 +310,7 @@ def concat(
         objs = {k: obj for k, obj in objs.items() if obj is not None}
         keys_objs = list(objs)
         objs = list(objs.values())
-        if any(isinstance(o, cudf.BaseIndex) for o in objs):
+        if any(isinstance(o, cudf.Index) for o in objs):
             raise TypeError(
                 "cannot concatenate a dictionary containing indices"
             )
@@ -324,7 +327,7 @@ def concat(
     allowed_typs = {
         cudf.Series,
         cudf.DataFrame,
-        cudf.BaseIndex,
+        cudf.Index,
     }
     if not all(isinstance(o, tuple(allowed_typs)) for o in objs):
         raise TypeError(
@@ -332,8 +335,8 @@ def concat(
             f"{allowed_typs}, instead received {[type(o) for o in objs]}"
         )
 
-    if any(isinstance(o, cudf.BaseIndex) for o in objs):
-        if not all(isinstance(o, cudf.BaseIndex) for o in objs):
+    if any(isinstance(o, cudf.Index) for o in objs):
+        if not all(isinstance(o, cudf.Index) for o in objs):
             raise TypeError(
                 "when concatenating indices you must provide ONLY indices"
             )
@@ -349,7 +352,7 @@ def concat(
                     result = obj.to_frame()
                 else:
                     result = obj.copy(deep=True)
-                result.columns = cudf.RangeIndex(len(result._data))
+                result.columns = cudf.RangeIndex(result._num_columns)
             else:
                 result = type(obj)._from_data(
                     data=obj._data.copy(deep=True),
@@ -458,7 +461,7 @@ def concat(
                     "label types in cuDF at this time. You must convert "
                     "the labels to the same type."
                 )
-            for k, o in zip(keys_objs, objs):
+            for k, o in zip(keys_objs, objs, strict=True):
                 for name, col in o._column_labels_and_values:
                     # if only series, then only keep keys_objs as column labels
                     # if the existing column is multiindex, prepend it
@@ -545,14 +548,14 @@ def concat(
 
 
 def melt(
-    frame: cudf.DataFrame,
+    frame: DataFrame,
     id_vars=None,
     value_vars=None,
     var_name=None,
     value_name: Hashable = "value",
     col_level=None,
     ignore_index: bool = True,
-) -> cudf.DataFrame:
+) -> DataFrame:
     """Unpivots a DataFrame from wide format to long format,
     optionally leaving identifier variables set.
 
@@ -651,7 +654,7 @@ def melt(
 
     # Error for unimplemented support for datatype
     if any(
-        isinstance(frame[col].dtype, cudf.CategoricalDtype)
+        isinstance(frame[col].dtype, CategoricalDtype)
         for col in itertools.chain(id_vars, value_vars)
     ):
         raise NotImplementedError(
@@ -696,7 +699,7 @@ def melt(
     if not value_vars:
         # TODO: Use frame._data.label_dtype when it's more consistently set
         var_data = column_empty(
-            0, dtype=cudf.dtype(frame._data.to_pandas_index.dtype)
+            0, dtype=cudf_dtype(frame._data.to_pandas_index.dtype)
         )
     else:
         var_data = as_column(value_vars).take(
@@ -710,7 +713,7 @@ def melt(
         [frame[val]._column for val in value_vars]
     )
 
-    result = cudf.DataFrame._from_data(mdata)
+    result = cudf.DataFrame._from_data(mdata, attrs=frame.attrs)
     if not ignore_index:
         taker = np.tile(np.arange(len(frame)), frame.shape[1] - len(id_vars))
         result.index = frame.index.take(taker)
@@ -724,7 +727,6 @@ def get_dummies(
     prefix_sep="_",
     dummy_na=False,
     columns=None,
-    cats=None,
     sparse=False,
     drop_first=False,
     dtype="bool",
@@ -745,10 +747,6 @@ def get_dummies(
         Separator to use when appending prefixes
     dummy_na : boolean, optional
         Add a column to indicate Nones, if False Nones are ignored.
-    cats : dict, optional
-        Dictionary mapping column names to sequences of values representing
-        that column's category. If not supplied, it is computed as the unique
-        values of the column.
     sparse : boolean, optional
         Right now this is NON-FUNCTIONAL argument in rapids.
     drop_first : boolean, optional
@@ -810,18 +808,10 @@ def get_dummies(
     3  False  False   True  False
     4  False  False  False   True
     """
-
-    if cats is None:
-        cats = {}
-    else:
-        warnings.warn(
-            "cats is deprecated and will be removed in a future version.",
-            FutureWarning,
-        )
     if sparse:
         raise NotImplementedError("sparse is not supported yet")
 
-    dtype = cudf.dtype(dtype)
+    dtype = cudf_dtype(dtype)
 
     if isinstance(data, cudf.DataFrame):
         encode_fallback_dtypes = [CUDF_STRING_DTYPE, "category"]
@@ -842,14 +832,14 @@ def get_dummies(
         elif isinstance(prefix, dict):
             prefix_map = prefix
         else:
-            prefix_map = dict(zip(columns, prefix))
+            prefix_map = dict(zip(columns, prefix, strict=True))
 
         if isinstance(prefix_sep, str):
             prefix_sep_map = {}
         elif isinstance(prefix_sep, dict):
             prefix_sep_map = prefix_sep
         else:
-            prefix_sep_map = dict(zip(columns, prefix_sep))
+            prefix_sep_map = dict(zip(columns, prefix_sep, strict=True))
 
         # If we have no columns to encode, we need to drop
         # fallback columns(if any)
@@ -863,149 +853,34 @@ def get_dummies(
             }
 
             for name in columns:
-                if name not in cats:
-                    unique = _get_unique(
-                        column=data._data[name], dummy_na=dummy_na
-                    )
-                else:
-                    unique = as_column(cats[name])
-
                 col_enc_data = _one_hot_encode_column(
                     column=data._data[name],
-                    categories=unique,
                     prefix=prefix_map.get(name, prefix),
                     prefix_sep=prefix_sep_map.get(name, prefix_sep),
                     dtype=dtype,
                     drop_first=drop_first,
+                    dummy_na=dummy_na,
                 )
                 result_data.update(col_enc_data)
             return cudf.DataFrame._from_data(result_data, index=data.index)
     else:
         ser = cudf.Series(data)
-        unique = _get_unique(column=ser._column, dummy_na=dummy_na)
         data = _one_hot_encode_column(
             column=ser._column,
-            categories=unique,
             prefix=prefix,
             prefix_sep=prefix_sep,
             dtype=dtype,
             drop_first=drop_first,
+            dummy_na=dummy_na,
         )
         return cudf.DataFrame._from_data(data, index=ser.index)
 
 
-def _merge_sorted(
-    objs,
-    keys=None,
-    by_index=False,
-    ignore_index=False,
-    ascending=True,
-    na_position="last",
-):
-    """Merge a list of sorted DataFrame or Series objects.
-
-    Dataframes/Series in objs list MUST be pre-sorted by columns
-    listed in `keys`, or by the index (if `by_index=True`).
-
-    Parameters
-    ----------
-    objs : list of DataFrame or Series
-    keys : list, default None
-        List of Column names to sort by. If None, all columns used
-        (Ignored if `by_index=True`)
-    by_index : bool, default False
-        Use index for sorting. `keys` input will be ignored if True
-    ignore_index : bool, default False
-        Drop and ignore index during merge. Default range index will
-        be used in the output dataframe.
-    ascending : bool, default True
-        Sorting is in ascending order, otherwise it is descending
-    na_position : {'first', 'last'}, default 'last'
-        'first' nulls at the beginning, 'last' nulls at the end
-
-    Returns
-    -------
-    A new, lexicographically sorted, DataFrame/Series.
-    """
-    if is_scalar(objs):
-        raise TypeError("objs must be a list-like of Frame-like objects")
-
-    if len(objs) < 1:
-        raise ValueError("objs must be non-empty")
-
-    if not all(isinstance(table, cudf.core.frame.Frame) for table in objs):
-        raise TypeError("Elements of objs must be Frame-like")
-
-    if len(objs) == 1:
-        return objs[0]
-
-    if by_index and ignore_index:
-        raise ValueError("`by_index` and `ignore_index` cannot both be True")
-
-    if by_index:
-        key_columns_indices = list(range(0, objs[0].index.nlevels))
-    else:
-        if keys is None:
-            key_columns_indices = list(range(0, objs[0]._num_columns))
-        else:
-            key_columns_indices = [
-                objs[0]._column_names.index(key) for key in keys
-            ]
-        if not ignore_index:
-            key_columns_indices = [
-                idx + objs[0].index.nlevels for idx in key_columns_indices
-            ]
-
-    columns = (
-        itertools.chain(obj.index._columns, obj._columns)
-        if not ignore_index
-        else obj._columns
-        for obj in objs
-    )
-
-    input_tables = [
-        plc.Table([col.to_pylibcudf(mode="read") for col in source_columns])
-        for source_columns in columns
-    ]
-
-    num_keys = len(key_columns_indices)
-
-    column_order = (
-        plc.types.Order.ASCENDING if ascending else plc.types.Order.DESCENDING
-    )
-
-    if not ascending:
-        na_position = "last" if na_position == "first" else "first"
-
-    null_precedence = (
-        plc.types.NullOrder.BEFORE
-        if na_position == "first"
-        else plc.types.NullOrder.AFTER
-    )
-
-    plc_table = plc.merge.merge(
-        input_tables,
-        key_columns_indices,
-        [column_order] * num_keys,
-        [null_precedence] * num_keys,
-    )
-
-    result_columns = [
-        ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
-    ]
-
-    return objs[0]._from_columns_like_self(
-        result_columns,
-        column_names=objs[0]._column_names,
-        index_names=None if ignore_index else objs[0]._index_names,
-    )
-
-
 def _pivot(
     col_accessor: ColumnAccessor,
-    index: cudf.Index | cudf.MultiIndex,
-    columns: cudf.Index | cudf.MultiIndex,
-) -> cudf.DataFrame:
+    index: Index | MultiIndex,
+    columns: Index | MultiIndex,
+) -> DataFrame:
     """
     Reorganize the values of the DataFrame according to the given
     index and columns.
@@ -1013,9 +888,9 @@ def _pivot(
     Parameters
     ----------
     col_accessor : DataFrame
-    index : cudf.Index
+    index : Index
         Index labels of the result
-    columns : cudf.Index
+    columns : Index
         Column labels of the result
     """
     columns_labels, columns_idx = columns._encode()
@@ -1037,18 +912,19 @@ def _pivot(
             scatter_map = (columns_idx * np.int32(nrows)) + index_idx
             target_col = column_empty(row_count=new_size, dtype=col.dtype)
             target_col[scatter_map] = col
-            target = cudf.Index._from_column(target_col)
             result.update(
-                {
-                    name: idx._column
-                    for name, idx in zip(
+                dict(
+                    zip(
                         names,
-                        target._split(list(range(nrows, new_size, nrows))),
+                        target_col.split_by_offsets(
+                            list(range(nrows, new_size, nrows))
+                        ),
+                        strict=True,
                     )
-                }
+                )
             )
 
-    # the result of pivot always has a multicolumn
+    # the result of pivot always has a MultiIndex
     ca = ColumnAccessor(
         result,
         multiindex=True,
@@ -1059,8 +935,8 @@ def _pivot(
 
 
 def pivot(
-    data: cudf.DataFrame, columns=None, index=no_default, values=no_default
-) -> cudf.DataFrame:
+    data: DataFrame, columns=None, index=no_default, values=no_default
+) -> DataFrame:
     """
     Return reshaped DataFrame organized by the given index and column values.
 
@@ -1163,10 +1039,12 @@ def pivot(
     result = _pivot(
         data._data.select_by_label(cols_to_select), index_data, column_data
     )
+    result._attrs = data.attrs  # type: ignore[has-type]
 
     # MultiIndex to Index
     if not values_is_list:
         result._data.droplevel(0)
+        result._data.label_dtype = column_data.dtype
 
     return result
 
@@ -1288,6 +1166,7 @@ def unstack(df, level, fill_value=None, sort: bool = True):
         res.index.names = (
             tuple(df._data.to_pandas_index.names) + df.index.names
         )
+        res._attrs = df.attrs
         return res
     else:
         index = df.index.droplevel(level)
@@ -1305,39 +1184,33 @@ def unstack(df, level, fill_value=None, sort: bool = True):
             )
             columns.names = new_names
         result = _pivot(df, index, columns)
+        result._attrs = df.attrs  # type: ignore[has-type]
         if result.index.nlevels == 1:
             result.index = result.index.get_level_values(result.index.names[0])
         return result
 
 
-def _get_unique(column: ColumnBase, dummy_na: bool) -> ColumnBase:
-    """
-    Returns unique values in a column, if
-    dummy_na is False, nan's are also dropped.
-    """
-    if isinstance(column.dtype, cudf.CategoricalDtype):
-        unique = column.categories  # type: ignore[attr-defined]
-    else:
-        unique = column.unique().sort_values()
-    if not dummy_na:
-        unique = unique.nans_to_nulls().dropna()
-    return unique
-
-
 def _one_hot_encode_column(
     column: ColumnBase,
-    categories: ColumnBase,
     prefix: str | None,
     prefix_sep: str | None,
     dtype: DtypeObj,
     drop_first: bool,
+    dummy_na: bool,
 ) -> dict[str, ColumnBase]:
     """Encode a single column with one hot encoding. The return dictionary
     contains pairs of (category, encodings). The keys may be prefixed with
     `prefix`, separated with category name with `prefix_sep`. The encoding
     columns maybe coerced into `dtype`.
     """
-    if isinstance(column.dtype, cudf.CategoricalDtype):
+    if isinstance(column.dtype, CategoricalDtype):
+        categories = column.categories  # type: ignore[attr-defined]
+    else:
+        categories = column.unique().sort_values()
+    if not dummy_na:
+        categories = categories.nans_to_nulls().dropna()
+
+    if isinstance(column.dtype, CategoricalDtype):
         if column.size == column.null_count:
             column = column_empty(
                 row_count=column.size, dtype=categories.dtype
@@ -1355,7 +1228,9 @@ def _one_hot_encode_column(
         x if x is not None else "<NA>"
         for x in categories.to_arrow().to_pylist()
     )
-    data = dict(zip(result_labels, column.one_hot_encode(categories)))
+    data = dict(
+        zip(result_labels, column.one_hot_encode(categories), strict=True)
+    )
 
     if drop_first and len(data):
         data.pop(next(iter(data)))
@@ -1483,8 +1358,8 @@ def crosstab(
         raise ValueError("colnames must be unique")
 
     data = {
-        **dict(zip(rownames, map(as_column, index))),
-        **dict(zip(colnames, map(as_column, columns))),
+        **dict(zip(rownames, map(as_column, index), strict=True)),
+        **dict(zip(colnames, map(as_column, columns), strict=True)),
     }
 
     df = cudf.DataFrame._from_data(data)
@@ -1511,7 +1386,7 @@ def crosstab(
 
 
 def pivot_table(
-    data,
+    data: DataFrame,
     values=None,
     index=None,
     columns=None,
@@ -1595,7 +1470,7 @@ def pivot_table(
                     to_filter.append(x)
             except TypeError:
                 pass
-        if len(to_filter) < len(data._column_names):
+        if len(to_filter) < data._num_columns:
             data = data[to_filter]
 
     else:
@@ -1633,5 +1508,5 @@ def pivot_table(
         table.columns = table._data.to_pandas_index.droplevel(0)
     if len(index) == 0 and len(columns) > 0:
         table = table.T
-
+    table._attrs = data.attrs
     return table

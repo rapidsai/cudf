@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,9 +42,7 @@ TYPED_TEST(IteratorTest, scalar_iterator)
                  host_values.end(),
                  host_bools.begin(),
                  value_and_validity.begin(),
-                 [](auto v, auto b) {
-                   return thrust::pair<T, bool>{v, b};
-                 });
+                 [](auto v, auto b) { return thrust::pair<T, bool>{v, b}; });
 
   // GPU test
   auto it_dev = cudf::detail::make_scalar_iterator<T>(*s);
@@ -73,9 +71,7 @@ TYPED_TEST(IteratorTest, null_scalar_iterator)
                  host_values.end(),
                  host_bools.begin(),
                  value_and_validity.begin(),
-                 [](auto v, auto b) {
-                   return thrust::pair<T, bool>{v, b};
-                 });
+                 [](auto v, auto b) { return thrust::pair<T, bool>{v, b}; });
 
   // GPU test
   auto it_pair_dev = cudf::detail::make_pair_iterator<T>(*s);

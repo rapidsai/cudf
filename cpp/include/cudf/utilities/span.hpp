@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 
@@ -234,26 +233,6 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
                                  std::declval<C&>().data()))> (*)[],
                                T (*)[]>>* = nullptr>  // NOLINT
   constexpr host_span(C const& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
-  {
-  }
-
-  /// Constructor from a host_vector
-  /// @param in The host_vector to construct the span from
-  template <typename OtherT,
-            // Only supported containers of types convertible to T
-            std::enable_if_t<std::is_convertible_v<OtherT (*)[], T (*)[]>>* = nullptr>  // NOLINT
-  constexpr host_span(cudf::detail::host_vector<OtherT>& in)
-    : base(in.data(), in.size()), _is_device_accessible{in.get_allocator().is_device_accessible()}
-  {
-  }
-
-  /// Constructor from a const host_vector
-  /// @param in The host_vector to construct the span from
-  template <typename OtherT,
-            // Only supported containers of types convertible to T
-            std::enable_if_t<std::is_convertible_v<OtherT (*)[], T (*)[]>>* = nullptr>  // NOLINT
-  constexpr host_span(cudf::detail::host_vector<OtherT> const& in)
-    : base(in.data(), in.size()), _is_device_accessible{in.get_allocator().is_device_accessible()}
   {
   }
 
@@ -540,8 +519,7 @@ class base_2dspan {
    * @param other The other 2D span
    */
   template <typename OtherT,
-            template <typename, size_t>
-            typename OtherRowType,
+            template <typename, size_t> typename OtherRowType,
             std::enable_if_t<std::is_convertible_v<OtherRowType<OtherT, dynamic_extent>,
                                                    RowType<T, dynamic_extent>>,
                              void>* = nullptr>

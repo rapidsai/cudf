@@ -13,7 +13,7 @@ from libcpp.optional cimport optional
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.types cimport size_type
-from pylibcudf.libcudf.utilities.span cimport device_span, host_span
+from pylibcudf.libcudf.utilities.span cimport host_span, device_span
 
 cdef extern from "<cstddef>" namespace "std":
     cdef cppclass byte:
@@ -52,15 +52,15 @@ cdef extern from "cudf/io/types.hpp" \
         USER_IMPLEMENTED
 
     cpdef enum class statistics_freq(int32_t):
-        STATISTICS_NONE,
-        STATISTICS_ROWGROUP,
-        STATISTICS_PAGE,
-        STATISTICS_COLUMN,
+        STATISTICS_NONE
+        STATISTICS_ROWGROUP
+        STATISTICS_PAGE
+        STATISTICS_COLUMN
 
     cpdef enum class dictionary_policy(int32_t):
-        NEVER,
-        ADAPTIVE,
-        ALWAYS,
+        NEVER
+        ADAPTIVE
+        ALWAYS
 
     cpdef enum class column_encoding(int32_t):
         USE_DEFAULT
@@ -124,13 +124,6 @@ cdef extern from "cudf/io/types.hpp" \
             size_type start_row, size_type num_rows
         ) except +libcudf_exception_handler
 
-    cdef cppclass host_buffer:
-        const char* data
-        size_t size
-
-        host_buffer()
-        host_buffer(const char* data, size_t size)
-
     cdef cppclass source_info:
         const vector[string]& filepaths() except +libcudf_exception_handler
 
@@ -139,16 +132,19 @@ cdef extern from "cudf/io/types.hpp" \
             const vector[string] &filepaths
         ) except +libcudf_exception_handler
         source_info(
-            const vector[host_buffer] &host_buffers
-        ) except +libcudf_exception_handler
-        source_info(
             cudf_io_datasource.datasource *source
         ) except +libcudf_exception_handler
         source_info(
             const vector[cudf_io_datasource.datasource*] &datasources
         ) except +libcudf_exception_handler
         source_info(
-            device_span[byte] dspan
+            const host_span[const byte]& hspan
+        ) except +libcudf_exception_handler
+        source_info(
+            const host_span[host_span[const byte]]& hspans
+        ) except +libcudf_exception_handler
+        source_info(
+            device_span[const byte] dspan
         ) except +libcudf_exception_handler
         source_info(
             host_span[device_span[const byte]] dspan

@@ -1,6 +1,8 @@
 #!/bin/bash
 # Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
+set -euo pipefail
+
 # Support invoking test_python_cudf.sh outside the script directory
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../
 
@@ -38,14 +40,10 @@ rapids-logger "pytest custreamz"
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/custreamz-coverage.xml" \
   --cov-report=term
 
-# Note that cudf-polars uses rmm.mr.CudaAsyncMemoryResource() which allocates
-# half the available memory. This doesn't play well with multiple workers, so
-# we keep --numprocesses=1 for now. This should be resolved by
-# https://github.com/rapidsai/cudf/issues/16723.
 rapids-logger "pytest cudf-polars"
 ./ci/run_cudf_polars_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml" \
-  --numprocesses=1 \
+  --numprocesses=8 \
   --dist=worksteal \
   --cov-config=./pyproject.toml \
   --cov=cudf_polars \

@@ -114,7 +114,13 @@ struct row_group_info {
  */
 struct metadata : public FileMetaData {
   metadata() = default;
-  explicit metadata(datasource* source);
+  explicit metadata(datasource* source, bool read_page_indexes = true);
+  metadata(metadata const& other)            = delete;
+  metadata(metadata&& other)                 = default;
+  metadata& operator=(metadata const& other) = delete;
+  metadata& operator=(metadata&& other)      = default;
+  ~metadata()                                = default;
+
   void sanitize_schema();
 };
 
@@ -147,7 +153,7 @@ class aggregate_reader_metadata {
    * @brief Create a metadata object from each element in the source vector
    */
   static std::vector<metadata> metadatas_from_sources(
-    host_span<std::unique_ptr<datasource> const> sources);
+    host_span<std::unique_ptr<datasource> const> sources, bool read_page_indexes = true);
 
   /**
    * @brief Collect the keyvalue maps from each per-file metadata object into a vector of maps.
@@ -203,7 +209,7 @@ class aggregate_reader_metadata {
    * @param rg_info Struct used to summarize metadata for a single row group
    * @param chunk_start_row Global index of first row in the row group
    */
-  void column_info_for_row_group(row_group_info& rg_info, size_type chunk_start_row) const;
+  void column_info_for_row_group(row_group_info& rg_info, size_t chunk_start_row) const;
 
   /**
    * @brief Returns the required alignment for bloom filter buffers
@@ -245,6 +251,43 @@ class aggregate_reader_metadata {
     host_span<int const> column_schemas) const;
 
   /**
+   * @brief Filters the row groups using row bounds (`skip_rows` and `num_rows`)
+   *
+   * @param rows_to_skip Number of rows to skip
+   * @param rows_to_read Number of rows to read
+   *
+   * @return A tuple of number of rows to skip from the first surviving row group's row offset,
+   * a vector of surviving row group indices, and two vectors of effective (trimmed) row counts and
+   * offsets across surviving row group indices respectively
+   */
+  [[nodiscard]] std::tuple<int64_t,
+                           std::vector<std::vector<size_type>>,
+                           std::vector<std::vector<size_t>>,
+                           std::vector<std::vector<size_t>>>
+  apply_row_bounds_filter(cudf::host_span<std::vector<size_type> const> input_row_group_indices,
+                          int64_t rows_to_skip,
+                          int64_t rows_to_read) const;
+
+  /**
+   * @brief Filters the row groups using a byte range specified by [`skip_bytes`, `skip_bytes +
+   * num_bytes`)
+   *
+   * Filters the row groups such that only the row groups that start within the byte range are
+   * selected. Note that the last row group selected may end beyond the byte range. This is only
+   * applicable for single parquet source case.
+   *
+   * @param input_row_group_indices Lists of input row groups, one per source
+   * @param bytes_to_skip Bytes to skip before selecting row groups
+   * @param bytes_to_read Bytes to select row groups after skipping
+   *
+   * @return A vector of surviving row group indices
+   */
+  [[nodiscard]] std::vector<std::vector<size_type>> apply_byte_bounds_filter(
+    host_span<std::vector<size_type> const> input_row_group_indices,
+    size_t bytes_to_skip,
+    std::optional<size_t> const& bytes_to_read) const;
+
+  /**
    * @brief Filters the row groups using stats filter
    *
    * @param input_row_group_indices Lists of input row groups, one per source
@@ -272,7 +315,7 @@ class aggregate_reader_metadata {
    * @param literals Lists of equality literals, one per each input row group
    * @param total_row_groups Total number of row groups in `input_row_group_indices`
    * @param output_dtypes Datatypes of output columns
-   * @param equality_col_schemas schema indices of equality columns only
+   * @param bloom_filter_col_schemas Schema indices of bloom filter columns only
    * @param filter AST expression to filter row groups based on bloom filter membership
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
@@ -284,14 +327,15 @@ class aggregate_reader_metadata {
     host_span<std::vector<ast::literal*> const> literals,
     size_type total_row_groups,
     host_span<data_type const> output_dtypes,
-    host_span<int const> equality_col_schemas,
+    host_span<int const> bloom_filter_col_schemas,
     std::reference_wrapper<ast::expression const> filter,
     rmm::cuda_stream_view stream) const;
 
  public:
   aggregate_reader_metadata(host_span<std::unique_ptr<datasource> const> sources,
                             bool use_arrow_schema,
-                            bool has_cols_from_mismatched_srcs);
+                            bool has_cols_from_mismatched_srcs,
+                            bool read_page_indexes = true);
 
   [[nodiscard]] RowGroup const& get_row_group(size_type row_group_index, size_type src_idx) const;
 
@@ -386,7 +430,7 @@ class aggregate_reader_metadata {
   [[nodiscard]] auto const& get_schema(int schema_idx, int pfm_idx = 0) const
   {
     CUDF_EXPECTS(
-      schema_idx >= 0 and pfm_idx >= 0 and pfm_idx < static_cast<int>(per_file_metadata.size()),
+      schema_idx >= 0 and pfm_idx >= 0 and std::cmp_less(pfm_idx, per_file_metadata.size()),
       "Parquet reader encountered an invalid schema_idx or pfm_idx",
       std::out_of_range);
     return per_file_metadata[pfm_idx].schema[schema_idx];
@@ -473,6 +517,8 @@ class aggregate_reader_metadata {
    * @param row_group_indices Lists of row groups to read, one per source
    * @param row_start Starting row of the selection
    * @param row_count Total number of rows selected
+   * @param start_byte Byte offset to start selecting row groups from
+   * @param byte_count Number of bytes after the offset to end selecting row groups at
    * @param output_dtypes Datatypes of of output columns
    * @param output_column_schemas schema indices of output columns
    * @param filter Optional AST expression to filter row groups based on Column chunk statistics
@@ -482,7 +528,7 @@ class aggregate_reader_metadata {
    *         struct containing the number of row groups surviving each predicate pushdown filter
    */
   [[nodiscard]] std::tuple<int64_t,
-                           size_type,
+                           size_t,
                            std::vector<row_group_info>,
                            std::vector<size_t>,
                            size_type,
@@ -490,7 +536,9 @@ class aggregate_reader_metadata {
   select_row_groups(host_span<std::unique_ptr<datasource> const> sources,
                     host_span<std::vector<size_type> const> row_group_indices,
                     int64_t row_start,
-                    std::optional<size_type> const& row_count,
+                    std::optional<int64_t> const& row_count,
+                    size_t start_byte,
+                    std::optional<size_t> const& byte_count,
                     host_span<data_type const> output_dtypes,
                     host_span<int const> output_column_schemas,
                     std::optional<std::reference_wrapper<ast::expression const>> filter,
@@ -574,7 +622,7 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
  */
 class equality_literals_collector : public ast::detail::expression_transformer {
  public:
-  equality_literals_collector();
+  equality_literals_collector() = default;
 
   equality_literals_collector(ast::expression const& expr, cudf::size_type num_input_columns);
 

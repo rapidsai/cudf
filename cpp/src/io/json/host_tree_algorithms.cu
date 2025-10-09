@@ -590,27 +590,24 @@ std::
                  },
                  [&root_list_col_id, &adj, &mark_is_pruned, &column_names](
                    std::map<std::string, data_type> const& user_dtypes) -> void {
-                   for (size_t i = 0; i < adj[root_list_col_id].size(); i++) {
-                     auto const first_child_id = adj[root_list_col_id][i];
-                     auto const& name          = column_names[first_child_id];
+                   for (int first_child_id : adj[root_list_col_id]) {
+                     auto const& name = column_names[first_child_id];
                      if (user_dtypes.count(name))
                        mark_is_pruned(first_child_id, schema_element{user_dtypes.at(name)});
                    }
                  },
                  [&root_list_col_id, &adj, &mark_is_pruned, &column_names](
                    std::map<std::string, schema_element> const& user_dtypes) -> void {
-                   for (size_t i = 0; i < adj[root_list_col_id].size(); i++) {
-                     auto const first_child_id = adj[root_list_col_id][i];
-                     auto const& name          = column_names[first_child_id];
+                   for (int first_child_id : adj[root_list_col_id]) {
+                     auto const& name = column_names[first_child_id];
                      if (user_dtypes.count(name))
                        mark_is_pruned(first_child_id, user_dtypes.at(name));
                    }
                  },
                  [&root_list_col_id, &adj, &mark_is_pruned, &column_names](
                    schema_element const& user_dtypes) -> void {
-                   for (size_t i = 0; i < adj[root_list_col_id].size(); i++) {
-                     auto const first_child_id = adj[root_list_col_id][i];
-                     auto const& name          = column_names[first_child_id];
+                   for (int first_child_id : adj[root_list_col_id]) {
+                     auto const& name = column_names[first_child_id];
                      if (user_dtypes.child_types.count(name) != 0)
                        mark_is_pruned(first_child_id, user_dtypes.child_types.at(name));
                    }

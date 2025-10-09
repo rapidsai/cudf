@@ -12,7 +12,7 @@ import pandas as pd
 
 import pylibcudf as plc
 
-import cudf
+from cudf.options import get_option
 
 if TYPE_CHECKING:
     from cudf.core.column.datetime import DatetimeColumn
@@ -24,7 +24,7 @@ def get_compatible_timezone(dtype: pd.DatetimeTZDtype) -> pd.DatetimeTZDtype:
     tz = dtype.tz
     if isinstance(tz, zoneinfo.ZoneInfo):
         return dtype
-    if cudf.get_option("mode.pandas_compatible"):
+    if get_option("mode.pandas_compatible"):
         raise NotImplementedError(
             f"{tz} must be a zoneinfo.ZoneInfo object in pandas_compatible mode."
         )

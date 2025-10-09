@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,7 +84,7 @@ void PQ_write_chunked(nvbench::state& state)
       timer.start();
       cudf::io::chunked_parquet_writer_options opts =
         cudf::io::chunked_parquet_writer_options::builder(source_sink.make_sink_info());
-      cudf::io::parquet_chunked_writer writer(opts);
+      cudf::io::chunked_parquet_writer writer(opts);
       std::for_each(tables.begin(),
                     tables.end(),
                     [&writer](std::unique_ptr<cudf::table> const& tbl) { writer.write(*tbl); });

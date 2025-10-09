@@ -2,6 +2,9 @@
 
 from enum import IntEnum
 
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
+from rmm.pylibrmm.stream import Stream
+
 from pylibcudf.column import Column
 from pylibcudf.scalar import Scalar
 
@@ -10,12 +13,17 @@ class ReplacePolicy(IntEnum):
     FOLLOWING = ...
 
 def replace_nulls(
-    source_column: Column, replacement: Column | Scalar | ReplacePolicy
+    source_column: Column,
+    replacement: Column | Scalar | ReplacePolicy,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def find_and_replace_all(
     source_column: Column,
     values_to_replace: Column,
     replacement_values: Column,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def clamp(
     source_column: Column,
@@ -23,7 +31,12 @@ def clamp(
     hi: Scalar,
     lo_replace: Scalar | None = None,
     hi_replace: Scalar | None = None,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def normalize_nans_and_zeros(
-    source_column: Column, inplace: bool = False
+    source_column: Column,
+    inplace: bool = False,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...

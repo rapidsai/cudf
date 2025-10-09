@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "jit/row_ir.hpp"
+
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/detail/operators.hpp>
@@ -78,11 +80,48 @@ auto operation::accept(detail::expression_transformer& visitor) const
   return visitor.visit(*this);
 }
 
+bool operation::may_evaluate_null(table_view const& left,
+                                  table_view const& right,
+                                  rmm::cuda_stream_view stream) const
+{
+  return std::any_of(operands.cbegin(),
+                     operands.cend(),
+                     [&left, &right, &stream](std::reference_wrapper<expression const> subexpr) {
+                       return subexpr.get().may_evaluate_null(left, right, stream);
+                     });
+};
+
 auto column_name_reference::accept(detail::expression_transformer& visitor) const
   -> decltype(visitor.visit(*this))
 {
   return visitor.visit(*this);
 }
-}  // namespace ast
 
+std::unique_ptr<cudf::detail::row_ir::node> literal::accept(
+  cudf::detail::row_ir::ast_converter& converter) const
+{
+  return converter.add_ir_node(*this);
+}
+
+std::unique_ptr<cudf::detail::row_ir::node> column_reference::accept(
+  cudf::detail::row_ir::ast_converter& converter) const
+{
+  return converter.add_ir_node(*this);
+}
+
+std::unique_ptr<cudf::detail::row_ir::node> operation::accept(
+  cudf::detail::row_ir::ast_converter& converter) const
+{
+  return converter.add_ir_node(*this);
+}
+
+std::unique_ptr<cudf::detail::row_ir::node> column_name_reference::accept(
+  cudf::detail::row_ir::ast_converter&) const
+{
+  CUDF_FAIL(
+    "column_name_reference is not supported in row_ir. row_ir only supports resolved expressions",
+    std::invalid_argument);
+}
+
+}  // namespace ast
 }  // namespace cudf

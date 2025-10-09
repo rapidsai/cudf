@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "common_sort_impl.cuh"
 #include "sort_impl.cuh"
+#include "sort_radix.hpp"
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/gather.hpp>
@@ -45,12 +45,10 @@ std::unique_ptr<table> stable_sort(table_view const& input,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr)
 {
-  if (inplace_column_sort_fn<sort_method::STABLE>::is_usable(input)) {
-    auto output = std::make_unique<column>(input.column(0), stream, mr);
-    auto view   = output->mutable_view();
+  // fast-path sort conditions: single, fixed-width column with no nulls
+  if (input.num_columns() == 1 && is_radix_sortable(input.column(0))) {
     auto order  = (column_order.empty() ? order::ASCENDING : column_order.front());
-    cudf::type_dispatcher<dispatch_storage_type>(
-      output->type(), inplace_column_sort_fn<sort_method::STABLE>{}, view, order, stream);
+    auto output = sort_radix(input.column(0), order == order::ASCENDING, stream, mr);
     std::vector<std::unique_ptr<column>> columns;
     columns.emplace_back(std::move(output));
     return std::make_unique<table>(std::move(columns));

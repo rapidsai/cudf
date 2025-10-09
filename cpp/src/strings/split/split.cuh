@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include "strings/positions.hpp"
 
 #include <cudf/column/column.hpp>
@@ -23,6 +25,8 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/algorithm.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/detail/split_utils.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -52,6 +56,18 @@ struct string_delimiter_fn {
     return d_delimiter.compare(d_chars + idx, d_delimiter.size_bytes()) == 0;
   }
   cudf::string_view d_delimiter;
+  int64_t chars_bytes{};
+  char const* d_chars{};
+};
+
+/**
+ * @brief Returns `true` if the byte at `idx` is a whitespace character
+ */
+struct whitespace_delimiter_fn {
+  __device__ bool operator()(int64_t idx) const
+  {
+    return idx < chars_bytes && static_cast<u_char>(d_chars[idx]) <= ' ';
+  }
   int64_t chars_bytes{};
   char const* d_chars{};
 };
@@ -275,6 +291,172 @@ struct rsplit_tokenizer_fn : base_split_tokenizer<rsplit_tokenizer_fn> {
                       size_type delimiter_size,
                       size_type max_tokens)
     : base_split_tokenizer(d_strings, delimiter_size, max_tokens)
+  {
+  }
+};
+
+/**
+ * @brief Base class for whitespace-delimited tokenizing
+ *
+ * Generally, consecutive whitespace delimiters are treated as a single delimiter
+ * and so empty strings are not produced.
+ */
+template <typename Derived>
+struct base_ws_split_tokenizer {
+  __device__ size_type count_tokens(size_type idx,
+                                    int64_t const* d_positions,
+                                    cudf::detail::input_offsetalator d_delimiter_offsets) const
+  {
+    if (d_strings.is_null(idx)) { return 0; }
+
+    auto const d_str_offsets = get_string_offsets(d_strings, idx);
+
+    auto const delimiters =
+      cudf::device_span<int64_t const>(d_positions + d_delimiter_offsets[idx],
+                                       d_delimiter_offsets[idx + 1] - d_delimiter_offsets[idx]);
+    if (delimiters.size() == (d_str_offsets.second - d_str_offsets.first)) { return 0; }
+    if (delimiters.empty()) { return 1; }
+
+    size_type token_count = (delimiters.front() != d_str_offsets.first);
+    for (std::size_t i = 0; i < delimiters.size(); ++i) {
+      auto const d_pos  = delimiters[i];
+      auto const d_next = (i + 1 < delimiters.size()) ? delimiters[i + 1] : d_str_offsets.second;
+      token_count += (d_next - d_pos > 1);
+    }
+    // number of tokens is capped to max_tokens
+    return ((max_tokens > 0) && (token_count > max_tokens)) ? max_tokens : token_count;
+  }
+
+  __device__ void get_tokens(size_type idx,
+                             cudf::detail::input_offsetalator const d_tokens_offsets,
+                             int64_t const* d_positions,
+                             cudf::detail::input_offsetalator const d_delimiter_offsets,
+                             string_index_pair* d_all_tokens) const
+  {
+    if (d_strings.is_null(idx)) { return; }
+
+    auto const d_tokens =  // this string's tokens output
+      cudf::device_span<string_index_pair>(d_all_tokens + d_tokens_offsets[idx],
+                                           d_tokens_offsets[idx + 1] - d_tokens_offsets[idx]);
+    if (d_tokens.empty()) { return; }
+
+    auto const d_str_offsets = get_string_offsets(d_strings, idx);
+
+    auto const delimiters =
+      cudf::device_span<int64_t const>(d_positions + d_delimiter_offsets[idx],
+                                       d_delimiter_offsets[idx + 1] - d_delimiter_offsets[idx]);
+
+    auto const str_bytes = d_str_offsets.second - d_str_offsets.first;
+    if (delimiters.size() == str_bytes) {
+      d_tokens[0] = string_index_pair{nullptr, 0};
+      return;
+    }
+    if (delimiters.empty()) {
+      auto const base_ptr = d_strings.head<char>();
+      d_tokens[0]         = string_index_pair{base_ptr + d_str_offsets.first, str_bytes};
+      return;
+    }
+
+    auto& derived = static_cast<Derived const&>(*this);
+    derived.process_tokens(d_str_offsets.first, d_str_offsets.second, delimiters, d_tokens);
+  }
+
+  base_ws_split_tokenizer(column_device_view const& d_strings, size_type max_tokens)
+    : d_strings(d_strings), max_tokens(max_tokens)
+  {
+  }
+
+ protected:
+  column_device_view d_strings;  // strings to split
+  size_type max_tokens;          // maximum number of tokens to identify
+};
+
+/**
+ * @brief The forward splitting whitespace tokenizer
+ *
+ * Note that this processes only the delimiter positions already identified
+ * and so could technically handle identifying tokens between non-whitespace
+ * consecutive delimiters as well.
+ */
+struct split_ws_tokenizer_fn : base_ws_split_tokenizer<split_ws_tokenizer_fn> {
+  __device__ void process_tokens(int64_t pos_begin,
+                                 int64_t pos_end,
+                                 device_span<int64_t const> delimiters,
+                                 device_span<string_index_pair> d_tokens) const
+  {
+    auto const base_ptr = d_strings.head<char>();  // d_delimiters, pos_begin/end based on this ptr
+    auto const token_count = static_cast<size_type>(d_tokens.size());
+    auto const all_tokens =
+      (max_tokens == cuda::std::numeric_limits<size_type>::max()) || (token_count == 1);
+
+    // build the index-pair of each token for this string
+    size_type token_idx = 0;
+    auto last_pos       = pos_begin;
+    for (size_t di = 0; di < delimiters.size() && token_idx < token_count; ++di) {
+      auto const d_pos = delimiters[di];
+      if (last_pos == d_pos) {
+        ++last_pos;
+        continue;
+      }
+      auto const end_pos    = all_tokens || (token_idx + 1 < token_count) ? d_pos : pos_end;
+      d_tokens[token_idx++] = string_index_pair{base_ptr + last_pos, end_pos - last_pos};
+
+      last_pos = d_pos + 1;
+    }
+    // include anything leftover
+    if (token_idx < token_count) {
+      d_tokens[token_idx] = string_index_pair{base_ptr + last_pos, pos_end - last_pos};
+    }
+  }
+
+  split_ws_tokenizer_fn(column_device_view const& d_strings, size_type max_tokens)
+    : base_ws_split_tokenizer(d_strings, max_tokens)
+  {
+  }
+};
+
+/**
+ * @brief The backward splitting whitespace tokenizer
+ *
+ * Same as split_ws_tokenizer_fn except delimiters are searched from the end of each string.
+ */
+struct rsplit_ws_tokenizer_fn : base_ws_split_tokenizer<rsplit_ws_tokenizer_fn> {
+  __device__ void process_tokens(int64_t pos_begin,
+                                 int64_t pos_end,
+                                 device_span<int64_t const> delimiters,
+                                 device_span<string_index_pair> d_tokens) const
+  {
+    auto const base_ptr = d_strings.head<char>();  // d_delimiters, pos_begin/end based on this ptr
+    auto const token_count = static_cast<size_type>(d_tokens.size());
+    auto const delim_count = static_cast<size_type>(delimiters.size());
+    auto const all_tokens =
+      (max_tokens == cuda::std::numeric_limits<size_type>::max()) || (token_count == 1);
+
+    // build the index-pair of each token for this string
+    auto last_pos       = pos_end;
+    size_type token_idx = 0;
+    for (auto di = delim_count - 1; di >= 0 && token_idx < token_count; --di) {
+      auto const d_pos = delimiters[di];
+      if (last_pos == d_pos + 1) {
+        --last_pos;
+        continue;
+      }
+      // store the token into the output vector right-to-left
+      auto const start_pos = all_tokens || (token_idx + 1 < token_count) ? d_pos + 1 : pos_begin;
+      d_tokens[token_count - token_idx - 1] =
+        string_index_pair{base_ptr + start_pos, last_pos - start_pos};
+
+      last_pos = d_pos;
+      ++token_idx;
+    }
+    // include anything leftover (rightover?)
+    if (token_idx < token_count) {
+      d_tokens[0] = string_index_pair{base_ptr + pos_begin, last_pos - pos_begin};
+    }
+  }
+
+  rsplit_ws_tokenizer_fn(column_device_view const& d_strings, size_type max_tokens)
+    : base_ws_split_tokenizer(d_strings, max_tokens)
   {
   }
 };

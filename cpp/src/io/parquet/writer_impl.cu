@@ -22,7 +22,8 @@
 #include "arrow_schema_writer.hpp"
 #include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
-#include "io/comp/comp.hpp"
+#include "io/comp/common.hpp"
+#include "io/comp/compression.hpp"
 #include "io/parquet/parquet_gpu.hpp"
 #include "io/statistics/column_statistics.cuh"
 #include "io/utilities/column_utils.cuh"
@@ -37,6 +38,7 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/linked_column.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/detail/codec.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/lists_column_view.hpp>
@@ -104,9 +106,7 @@ struct aggregate_writer_metadata {
       std::transform(kv_md[p].begin(),
                      kv_md[p].end(),
                      std::back_inserter(this->files[p].key_value_metadata),
-                     [](auto const& kv) {
-                       return KeyValue{kv.first, kv.second};
-                     });
+                     [](auto const& kv) { return KeyValue{kv.first, kv.second}; });
     }
 
     // Append arrow schema to the key-value metadata
@@ -332,7 +332,8 @@ struct leaf_schema_fn {
   bool write_arrow_schema;
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, bool>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, bool>)
   {
     col_schema.type        = Type::BOOLEAN;
     col_schema.stats_dtype = statistics_dtype::dtype_bool;
@@ -340,7 +341,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, int8_t>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, int8_t>)
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::INT_8;
@@ -349,7 +351,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, int16_t>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, int16_t>)
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::INT_16;
@@ -358,7 +361,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, int32_t>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, int32_t>)
   {
     col_schema.type        = Type::INT32;
     col_schema.stats_dtype = statistics_dtype::dtype_int32;
@@ -366,7 +370,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, int64_t>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, int64_t>)
   {
     col_schema.type        = Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_int64;
@@ -374,7 +379,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, uint8_t>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, uint8_t>)
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::UINT_8;
@@ -383,7 +389,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, uint16_t>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, uint16_t>)
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::UINT_16;
@@ -392,7 +399,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, uint32_t>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, uint32_t>)
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::UINT_32;
@@ -401,7 +409,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, uint64_t>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, uint64_t>)
   {
     col_schema.type           = Type::INT64;
     col_schema.converted_type = ConvertedType::UINT_64;
@@ -410,7 +419,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, float>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, float>)
   {
     col_schema.type        = Type::FLOAT;
     col_schema.stats_dtype = statistics_dtype::dtype_float32;
@@ -418,7 +428,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, double>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, double>)
   {
     col_schema.type        = Type::DOUBLE;
     col_schema.stats_dtype = statistics_dtype::dtype_float64;
@@ -426,7 +437,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::string_view>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::string_view>)
   {
     col_schema.type = Type::BYTE_ARRAY;
     if (col_meta.is_enabled_output_as_binary()) {
@@ -440,7 +452,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::timestamp_D>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::timestamp_D>)
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::DATE;
@@ -449,7 +462,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::timestamp_s>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::timestamp_s>)
   {
     col_schema.type        = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
@@ -461,7 +475,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::timestamp_ms>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::timestamp_ms>)
   {
     col_schema.type        = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
@@ -472,7 +487,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::timestamp_us>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::timestamp_us>)
   {
     col_schema.type        = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
@@ -483,7 +499,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::timestamp_ns>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::timestamp_ns>)
   {
     col_schema.type           = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
     col_schema.converted_type = std::nullopt;
@@ -498,7 +515,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::duration_D>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::duration_D>)
   {
     // duration_D is based on int32_t and not a valid arrow duration type so simply convert to
     // time32(ms).
@@ -510,7 +528,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::duration_s>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::duration_s>)
   {
     // If writing arrow schema, no logical type nor converted type is necessary
     if (write_arrow_schema) {
@@ -527,7 +546,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::duration_ms>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::duration_ms>)
   {
     // If writing arrow schema, no logical type nor converted type is necessary
     if (write_arrow_schema) {
@@ -543,7 +563,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::duration_us>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::duration_us>)
   {
     col_schema.type        = Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_int64;
@@ -555,7 +576,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::duration_ns>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::duration_ns>)
   {
     col_schema.type        = Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_int64;
@@ -566,7 +588,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<cudf::is_fixed_point<T>(), void> operator()()
+  void operator()()
+    requires(cudf::is_fixed_point<T>())
   {
     if constexpr (std::is_same_v<T, numeric::decimal32>) {
       col_schema.type              = Type::INT32;
@@ -604,13 +627,15 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<cudf::is_nested<T>(), void> operator()()
+  void operator()()
+    requires(cudf::is_nested<T>())
   {
     CUDF_FAIL("This functor is only meant for physical data types");
   }
 
   template <typename T>
-  std::enable_if_t<cudf::is_dictionary<T>(), void> operator()()
+  void operator()()
+    requires(cudf::is_dictionary<T>())
   {
     CUDF_FAIL("Dictionary columns are not supported for writing");
   }
@@ -1310,7 +1335,7 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
     } else {
       chunk.use_dictionary = true;
       chunk.dict_map_size =
-        static_cast<cudf::size_type>(cuco::make_bucket_extent<map_cg_size, bucket_size>(
+        static_cast<cudf::size_type>(cuco::make_valid_extent<map_cg_size, bucket_size>(
           static_cast<cudf::size_type>(occupancy_factor * chunk.num_values)));
       chunk.dict_map_offset = total_map_storage_size;
       total_map_storage_size += chunk.dict_map_size;
@@ -1325,7 +1350,7 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
     total_map_storage_size,
     cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}};
   // Create a span of non-const map_storage as map_storage_ref takes in a non-const pointer.
-  device_span<bucket_type> const map_storage_data{map_storage.data(), total_map_storage_size};
+  device_span<slot_type> const map_storage_data{map_storage.data(), total_map_storage_size};
 
   // Synchronize
   chunks.host_to_device_async(stream);
@@ -1499,11 +1524,11 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
 
   rmm::device_uvector<device_span<uint8_t const>> comp_in(max_comp_pages, stream);
   rmm::device_uvector<device_span<uint8_t>> comp_out(max_comp_pages, stream);
-  rmm::device_uvector<compression_result> comp_res(max_comp_pages, stream);
+  rmm::device_uvector<codec_exec_result> comp_res(max_comp_pages, stream);
   thrust::fill(rmm::exec_policy(stream),
                comp_res.begin(),
                comp_res.end(),
-               compression_result{0, compression_status::FAILURE});
+               codec_exec_result{0, codec_status::FAILURE});
 
   EncodePages(pages, write_v2_headers, comp_in, comp_out, comp_res, stream);
   compress(compression, comp_in, comp_out, comp_res, stream);
@@ -1869,7 +1894,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         ck                   = {};
         ck.col_desc          = col_desc.device_ptr() + c;
         ck.col_desc_id       = c;
-        ck.fragments         = &row_group_fragments.device_view()[c][f];
+        ck.fragments         = row_group_fragments.device_view()[c].data() + f;
         ck.stats             = nullptr;
         ck.start_row         = start_row;
         ck.num_rows          = (uint32_t)row_group.num_rows;
@@ -1879,7 +1904,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         // In fragment struct, add a pointer to the chunk it belongs to
         // In each fragment in chunk_fragments, update the chunk pointer here.
         for (auto& frag : chunk_fragments) {
-          frag.chunk = &chunks.device_view()[r + first_rg_in_part[p]][c];
+          frag.chunk = chunks.device_view()[r + first_rg_in_part[p]].data() + c;
         }
         ck.num_values = std::accumulate(
           chunk_fragments.begin(), chunk_fragments.end(), 0, [](uint32_t l, auto r) {
@@ -1942,7 +1967,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
           // update the chunk pointer here for each fragment in chunk.fragments
           for (uint32_t i = 0; i < fragments_in_chunk; i++) {
             page_fragments[frag_offset + i].chunk =
-              &chunks.device_view()[r + first_rg_in_part[p]][c];
+              chunks.device_view()[r + first_rg_in_part[p]].data() + c;
           }
 
           if (not frag_stats.is_empty()) { ck.stats = frag_stats.data() + frag_offset; }
@@ -2135,7 +2160,14 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
       auto& row_group = agg_meta->file(p).row_groups[global_r];
 
       for (auto i = 0; i < num_columns; i++) {
-        auto const& ck          = chunks[r][i];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
+        auto const& ck = chunks[r][i];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
         auto const dev_bfr      = ck.is_compressed ? ck.compressed_bfr : ck.uncompressed_bfr;
         auto& column_chunk_meta = row_group.columns[i].meta_data;
 
@@ -2178,7 +2210,14 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         auto& row_group    = agg_meta->file(p).row_groups[global_r];
 
         for (auto i = 0; i < num_columns; i++) {
-          auto const& ck          = chunks[r][i];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
+          auto const& ck = chunks[r][i];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
           auto const& col         = col_desc[ck.col_desc_id];
           auto& column_chunk_meta = row_group.columns[i].meta_data;
 
@@ -2421,7 +2460,14 @@ void writer::impl::write_parquet_data_to_sink(
       auto& row_group    = _agg_meta->file(p).row_groups[global_r];
 
       for (std::size_t i = 0; i < num_columns; i++) {
-        auto const& ck     = chunks[r][i];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
+        auto const& ck = chunks[r][i];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
         auto const dev_bfr = ck.is_compressed ? ck.compressed_bfr : ck.uncompressed_bfr;
 
         // Skip the range [0, ck.ck_stat_size) since it has already been copied to host
@@ -2451,8 +2497,8 @@ void writer::impl::write_parquet_data_to_sink(
         if (i == 0) { row_group.file_offset = chunk_offset; }
       }
     }
-    for (auto const& task : write_tasks) {
-      task.wait();
+    for (auto& task : write_tasks) {
+      task.get();
     }
   }
 
@@ -2468,7 +2514,14 @@ void writer::impl::write_parquet_data_to_sink(
         int const global_r    = global_rowgroup_base[p] + r - first_rg_in_part[p];
         auto const& row_group = _agg_meta->file(p).row_groups[global_r];
         for (std::size_t i = 0; i < num_columns; i++) {
-          EncColumnChunk const& ck      = chunks[r][i];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
+          EncColumnChunk const& ck = chunks[r][i];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
           auto const& column_chunk_meta = row_group.columns[i].meta_data;
 
           // start transfer of the column index

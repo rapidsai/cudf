@@ -25,20 +25,21 @@
 
 namespace cudf::io::parquet::detail {
 
-stats_expression_converter::stats_expression_converter(ast::expression const& expr,
-                                                       size_type num_columns)
-  : _num_columns{num_columns}
+stats_columns_collector::stats_columns_collector(ast::expression const& expr,
+                                                 cudf::size_type num_columns)
+  : _num_columns(num_columns)
 {
+  _columns_mask.resize(num_columns, false);
   expr.accept(*this);
 }
 
-std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
+std::reference_wrapper<ast::expression const> stats_columns_collector::visit(
   ast::literal const& expr)
 {
   return expr;
 }
 
-std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
+std::reference_wrapper<ast::expression const> stats_columns_collector::visit(
   ast::column_reference const& expr)
 {
   CUDF_EXPECTS(expr.get_table_source() == ast::table_reference::LEFT,
@@ -48,10 +49,64 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
   return expr;
 }
 
-std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
+std::reference_wrapper<ast::expression const> stats_columns_collector::visit(
   ast::column_name_reference const& expr)
 {
   CUDF_FAIL("Column name reference is not supported in statistics AST");
+}
+
+std::reference_wrapper<ast::expression const> stats_columns_collector::visit(
+  ast::operation const& expr)
+{
+  using cudf::ast::ast_operator;
+  auto const operands = expr.get_operands();
+  auto const op       = expr.get_operator();
+
+  if (auto* v = dynamic_cast<ast::column_reference const*>(&operands[0].get())) {
+    // First operand should be column reference, second should be literal.
+    CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 2,
+                 "Only binary operations are supported on column reference");
+    CUDF_EXPECTS(dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
+                 "Second operand of binary operation with column reference must be a literal");
+    v->accept(*this);
+    // If this is a supported operation, mark the column as needed
+    if (op == ast_operator::EQUAL or op == ast_operator::NOT_EQUAL or op == ast_operator::LESS or
+        op == ast_operator::LESS_EQUAL or op == ast_operator::GREATER or
+        op == ast_operator::GREATER_EQUAL) {
+      _columns_mask[v->get_column_index()] = true;
+    } else {
+      CUDF_FAIL("Unsupported operation in Statistics AST");
+    }
+  } else {
+    // Visit the operands and ignore any output as we only want to build the column mask
+    std::ignore = visit_operands(operands);
+  }
+
+  return expr;
+}
+
+thrust::host_vector<bool> stats_columns_collector::get_stats_columns_mask() &&
+{
+  return std::move(_columns_mask);
+}
+
+std::vector<std::reference_wrapper<ast::expression const>> stats_columns_collector::visit_operands(
+  cudf::host_span<std::reference_wrapper<ast::expression const> const> operands)
+{
+  std::vector<std::reference_wrapper<ast::expression const>> transformed_operands;
+  std::transform(operands.begin(),
+                 operands.end(),
+                 std::back_inserter(transformed_operands),
+                 [t = this](auto& operand) { return operand.get().accept(*t); });
+
+  return transformed_operands;
+}
+
+stats_expression_converter::stats_expression_converter(ast::expression const& expr,
+                                                       size_type num_columns)
+{
+  _num_columns = num_columns;
+  expr.accept(*this);
 }
 
 std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
@@ -126,19 +181,6 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
 std::reference_wrapper<ast::expression const> stats_expression_converter::get_stats_expr() const
 {
   return _stats_expr.back();
-}
-
-std::vector<std::reference_wrapper<ast::expression const>>
-stats_expression_converter::visit_operands(
-  cudf::host_span<std::reference_wrapper<ast::expression const> const> operands)
-{
-  std::vector<std::reference_wrapper<ast::expression const>> transformed_operands;
-  std::transform(operands.begin(),
-                 operands.end(),
-                 std::back_inserter(transformed_operands),
-                 [t = this](auto& operand) { return operand.get().accept(*t); });
-
-  return transformed_operands;
 }
 
 }  // namespace cudf::io::parquet::detail

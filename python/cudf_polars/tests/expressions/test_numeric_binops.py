@@ -1,6 +1,8 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
+
+from decimal import Decimal
 
 import pytest
 
@@ -9,6 +11,7 @@ import polars as pl
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
 dtypes = [
     pl.Int8,
@@ -66,31 +69,6 @@ def df(request, ltype, rtype, with_nulls, binop):
         b[3] = None
         b[-1] = None
 
-    lkind = (
-        "i"
-        if ltype.is_signed_integer()
-        else ("u" if ltype.is_unsigned_integer() else "f")
-    )
-    rkind = (
-        "i"
-        if rtype.is_signed_integer()
-        else ("u" if rtype.is_unsigned_integer() else "f")
-    )
-    if (
-        not with_nulls
-        and binop.__name__ in {"floordiv", "mod"}
-        # This catches the case where the result is not promoted to float.
-        and (
-            (lkind == rkind and lkind in {"i", "u"})
-            or ({lkind, rkind} == {"i", "u"} and pl.UInt64 not in {ltype, rtype})
-        )
-    ):
-        request.applymarker(
-            pytest.mark.xfail(
-                reason="Polars nullifies division by zero for integral types"
-            )
-        )
-
     return pl.LazyFrame({"a": a, "b": b}, schema={"a": ltype, "b": rtype})
 
 
@@ -113,3 +91,33 @@ def test_binop_with_scalar(left_scalar, right_scalar):
     q = df.select(lop / rop)
 
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("zero", [0, pl.lit(0)])
+def test_floor_div_binop_by_zero(zero, ltype):
+    df = pl.LazyFrame({"a": [1, 0, 3]}, schema={"a": ltype})
+
+    q = df.select(pl.col("a") // zero)
+
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("divisor", [1, 2.0])
+def test_true_div_boolean_column(divisor):
+    df = pl.LazyFrame({"a": [True, False]})
+
+    q = df.select(pl.col("a") / divisor)
+
+    assert_gpu_result_equal(q)
+
+
+def test_true_div_with_decimals():
+    df = pl.LazyFrame(
+        {
+            "foo": [Decimal("1.00"), Decimal("2.00"), Decimal("3.00"), None],
+            "bar": [Decimal("4.00"), Decimal("5.00"), Decimal("6.00"), Decimal("1.00")],
+        },
+        schema={"foo": pl.Decimal(15, 2), "bar": pl.Decimal(15, 2)},
+    )
+    q = df.select(pl.col("bar") / pl.col("foo"))
+    assert_gpu_result_equal(q, check_dtypes=not POLARS_VERSION_LT_132)

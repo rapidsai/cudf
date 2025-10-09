@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#include "io/comp/comp.hpp"
-#include "io/comp/io_uncomp.hpp"
+#include "../io_test_utils.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -29,6 +28,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/io/detail/codec.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/repeat_strings.hpp>
@@ -243,7 +243,9 @@ struct JsonValidFixedPointReaderTest : public JsonFixedPointReaderTest<DecimalTy
                         return acc + (acc.empty() ? "" : "\n") + "{\"col0\":" + rhs + "}";
                       });
     cudf::io::json_reader_options const in_opts =
-      cudf::io::json_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{cudf::host_span<std::byte const>{
+          reinterpret_cast<std::byte const*>(buffer.c_str()), buffer.size()}})
         .dtypes(std::vector{data_type{type_to_id<DecimalType>(), scale}})
         .lines(true);
 
@@ -286,7 +288,9 @@ TEST_P(JsonReaderParamTest, BasicJsonLines)
   std::string data = is_row_orient_test(test_opt) ? row_orient : record_orient;
 
   cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(data.data()), data.size()}})
       .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<double>()})
       .lines(true);
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
@@ -352,7 +356,9 @@ TEST_P(JsonReaderParamTest, JsonLinesStrings)
   std::string data          = is_row_orient_test(test_opt) ? row_orient : record_orient;
 
   cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(data.data()), data.size()}})
       .dtypes(std::map<std::string, data_type>{
         {"2", dtype<cudf::string_view>()}, {"0", dtype<int32_t>()}, {"1", dtype<double>()}})
       .lines(true);
@@ -607,7 +613,9 @@ TEST_P(JsonReaderParamTest, JsonLinesDtypeInference)
   std::string data          = is_row_orient_test(test_opt) ? row_orient : record_orient;
 
   cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(data.data()), data.size()}})
       .lines(true);
 
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
@@ -891,7 +899,9 @@ TEST_P(JsonReaderRecordTest, JsonLinesObjectsStrings)
 {
   auto test_json_objects = [](std::string const& data) {
     cudf::io::json_reader_options in_options =
-      cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{cudf::host_span<std::byte const>{
+          reinterpret_cast<std::byte const*>(data.data()), data.size()}})
         .lines(true);
 
     cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
@@ -929,7 +939,9 @@ TEST_P(JsonReaderRecordTest, JsonLinesObjectsMissingData)
     "{              \"col2\":1.1, \"col3\":\"aaa\"}\n"
     "{\"col1\":200,               \"col3\":\"bbb\"}\n";
   cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(data.data()), data.size()}})
       .lines(true);
 
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
@@ -964,7 +976,9 @@ TEST_P(JsonReaderRecordTest, JsonLinesObjectsOutOfOrder)
     "{\"col3\":\"bbb\", \"col1\":200, \"col2\":2.2}\n";
 
   cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(data.data()), data.size()}})
       .lines(true);
 
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
@@ -1074,7 +1088,9 @@ TEST_P(JsonReaderParamTest, StringInference)
   std::string data          = is_row_orient_test(test_opt) ? row_orient : record_orient;
 
   cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{data.c_str(), data.size()})
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(data.data()), data.size()}})
       .lines(true);
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
@@ -1390,7 +1406,8 @@ TEST_F(JsonReaderTest, JsonLines)
   // Initialize parsing options (reading json lines)
   cudf::io::json_reader_options json_lines_options =
     cudf::io::json_reader_options::builder(
-      cudf::io::source_info{json_string.c_str(), json_string.size()})
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(json_string.c_str()), json_string.size()}})
       .lines(true);
 
   // Read test data via nested JSON reader
@@ -1465,7 +1482,8 @@ TEST_F(JsonReaderTest, JsonLongString)
   // Initialize parsing options (reading json lines)
   cudf::io::json_reader_options json_lines_options =
     cudf::io::json_reader_options::builder(
-      cudf::io::source_info{out_buffer.data(), out_buffer.size()})
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(out_buffer.data()), out_buffer.size()}})
       .lines(true)
       .dtypes(types);
 
@@ -1493,7 +1511,9 @@ TEST_F(JsonReaderTest, ErrorStrings)
   // Last one is not an error case, but shows that unicode in json is copied string column output.
 
   cudf::io::json_reader_options const in_opts =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.c_str()), buffer.size()}})
       .dtypes(std::vector{data_type{cudf::type_id::STRING}})
       .lines(true);
 
@@ -1532,7 +1552,8 @@ TEST_F(JsonReaderTest, TokenAllocation)
     // Initialize parsing options (reading json lines)
     cudf::io::json_reader_options json_lines_options =
       cudf::io::json_reader_options::builder(
-        cudf::io::source_info{json_string.c_str(), json_string.size()})
+        cudf::io::source_info{cudf::host_span<std::byte const>{
+          reinterpret_cast<std::byte const*>(json_string.c_str()), json_string.size()}})
         .lines(true);
 
     EXPECT_NO_THROW(cudf::io::read_json(json_lines_options));
@@ -1560,7 +1581,8 @@ TEST_F(JsonReaderTest, LinesNoOmissions)
     // Initialize parsing options (reading json lines)
     cudf::io::json_reader_options json_lines_options =
       cudf::io::json_reader_options::builder(
-        cudf::io::source_info{json_string.c_str(), json_string.size()})
+        cudf::io::source_info{cudf::host_span<std::byte const>{
+          reinterpret_cast<std::byte const*>(json_string.c_str()), json_string.size()}})
         .lines(true);
 
     // Read test data via nested JSON reader
@@ -1588,7 +1610,8 @@ TEST_F(JsonReaderTest, TestColumnOrder)
   // Initialize parsing options (reading json lines)
   cudf::io::json_reader_options json_lines_options =
     cudf::io::json_reader_options::builder(
-      cudf::io::source_info{json_string.c_str(), json_string.size()})
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(json_string.c_str()), json_string.size()}})
       .lines(true);
 
   // Read in data using nested JSON reader
@@ -1646,7 +1669,9 @@ TEST_P(JsonReaderParamTest, JsonDtypeSchema)
   std::map<std::string, cudf::io::schema_element> dtype_schema{
     {"2", {dtype<cudf::string_view>()}}, {"0", {dtype<int32_t>()}}, {"1", {dtype<double>()}}};
   cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(data.data()), data.size()}})
       .dtypes(dtype_schema)
       .lines(true);
 
@@ -1684,7 +1709,8 @@ TEST_F(JsonReaderTest, JsonNestedDtypeSchema)
 
   cudf::io::json_reader_options in_options =
     cudf::io::json_reader_options::builder(
-      cudf::io::source_info{json_string.data(), json_string.size()})
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(json_string.c_str()), json_string.size()}})
       .dtypes(dtype_schema)
       .lines(false);
 
@@ -1809,8 +1835,8 @@ TEST_P(JsonReaderParamTest, JsonDtypeParsing)
                                   double_ignore,
                                   double_ignore},
                                  make_validity(validity)};
-  auto str_col =
-    cudf::test::strings_column_wrapper{// clang-format off
+  auto str_col   = cudf::test::strings_column_wrapper{
+    // clang-format off
     {"0", "0", " 0", "1", "1", " 1", "a", "z", "", "true", "false", "null", "true", "false", "nan", "nan"},
      cudf::test::iterators::nulls_at(std::vector<int>{8})};
   // clang-format on
@@ -1842,7 +1868,9 @@ TEST_P(JsonReaderParamTest, JsonDtypeParsing)
   for (size_t col_type = 0; col_type < cols.size(); col_type++) {
     std::map<std::string, cudf::io::schema_element> dtype_schema{{"0", {dtypes[col_type]}}};
     cudf::io::json_reader_options in_options =
-      cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{cudf::host_span<std::byte const>{
+          reinterpret_cast<std::byte const*>(data.data()), data.size()}})
         .dtypes(dtype_schema)
         .lines(true);
 
@@ -1881,7 +1909,9 @@ TYPED_TEST(JsonFixedPointReaderTest, EmptyValues)
   auto const buffer = std::string{R"({"col0":""})"};
 
   cudf::io::json_reader_options const in_opts =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.c_str()), buffer.size()}})
       .dtypes(std::vector{data_type{type_to_id<TypeParam>(), 0}})
       .lines(true);
 
@@ -1897,8 +1927,10 @@ TYPED_TEST(JsonFixedPointReaderTest, EmptyValues)
 TEST_F(JsonReaderTest, UnsupportedMultipleFileInputs)
 {
   std::string const data = "{\"col\":0}";
-  auto const buffer      = cudf::io::host_buffer{data.data(), data.size()};
-  auto const src         = cudf::io::source_info{{buffer, buffer}};
+  auto const span =
+    cudf::host_span<std::byte const>(reinterpret_cast<std::byte const*>(data.data()), data.size());
+  std::vector<cudf::host_span<std::byte const>> spans{span, span};
+  auto const src = cudf::io::source_info(cudf::host_span<cudf::host_span<std::byte const>>(spans));
 
   cudf::io::json_reader_options const not_lines_opts = cudf::io::json_reader_options::builder(src);
   EXPECT_THROW(cudf::io::read_json(not_lines_opts), cudf::logic_error);
@@ -1928,7 +1960,8 @@ TEST_F(JsonReaderTest, TrailingCommas)
     // Initialize parsing options (reading json lines)
     cudf::io::json_reader_options json_parser_options =
       cudf::io::json_reader_options::builder(
-        cudf::io::source_info{json_string.c_str(), json_string.size()})
+        cudf::io::source_info{cudf::host_span<std::byte const>{
+          reinterpret_cast<std::byte const*>(json_string.c_str()), json_string.size()}})
         .lines(true);
     EXPECT_NO_THROW(cudf::io::read_json(json_parser_options)) << "Failed on test case " << i;
   }
@@ -1940,9 +1973,10 @@ TEST_F(JsonReaderTest, TrailingCommas)
     R"([{"a": 1,}, {"a": null, "b": [null,],}])",
   };
   for (size_t i = 0; i < json_valid.size(); i++) {
-    auto const& json_string                           = json_valid[i];
-    cudf::io::json_reader_options json_parser_options = cudf::io::json_reader_options::builder(
-      cudf::io::source_info{json_string.c_str(), json_string.size()});
+    auto const& json_string = json_valid[i];
+    cudf::io::json_reader_options json_parser_options =
+      cudf::io::json_reader_options::builder(cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(json_string.c_str()), json_string.size()}});
     EXPECT_NO_THROW(cudf::io::read_json(json_parser_options)) << "Failed on test case " << i;
   }
 
@@ -1957,9 +1991,10 @@ TEST_F(JsonReaderTest, TrailingCommas)
     R"([{,,}])",
   };
   for (size_t i = 0; i < json_invalid.size(); i++) {
-    auto const& json_string                           = json_invalid[i];
-    cudf::io::json_reader_options json_parser_options = cudf::io::json_reader_options::builder(
-      cudf::io::source_info{json_string.c_str(), json_string.size()});
+    auto const& json_string = json_invalid[i];
+    cudf::io::json_reader_options json_parser_options =
+      cudf::io::json_reader_options::builder(cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(json_string.c_str()), json_string.size()}});
     EXPECT_THROW(cudf::io::read_json(json_parser_options), cudf::logic_error)
       << "Failed on test case " << i;
   }
@@ -2244,7 +2279,9 @@ TEST_F(JsonReaderTest, ValueValidation)
   // na_values,
   {
     cudf::io::json_reader_options in_options =
-      cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{cudf::host_span<std::byte const>{
+          reinterpret_cast<std::byte const*>(data.data()), data.size()}})
         .lines(true)
         .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
         .strict_validation(true);
@@ -2266,7 +2303,9 @@ TEST_F(JsonReaderTest, ValueValidation)
   // leadingZeros not allowed, NaN allowed
   {
     cudf::io::json_reader_options in_options =
-      cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{cudf::host_span<std::byte const>{
+          reinterpret_cast<std::byte const*>(data.data()), data.size()}})
         .lines(true)
         .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
         .strict_validation(true)
@@ -2302,7 +2341,8 @@ TEST_F(JsonReaderTest, MixedTypes)
 
     cudf::io::json_reader_options in_options =
       cudf::io::json_reader_options::builder(
-        cudf::io::source_info{json_string.data(), json_string.size()})
+        cudf::io::source_info{cudf::host_span<std::byte const>{
+          reinterpret_cast<std::byte const*>(json_string.data()), json_string.size()}})
         .mixed_types_as_string(true)
         .lines(true);
 
@@ -2322,7 +2362,8 @@ TEST_F(JsonReaderTest, MixedTypes)
   auto test_fn = [](std::string_view json_string, cudf::column_view expected) {
     cudf::io::json_reader_options in_options =
       cudf::io::json_reader_options::builder(
-        cudf::io::source_info{json_string.data(), json_string.size()})
+        cudf::io::source_info{cudf::host_span<std::byte const>{
+          reinterpret_cast<std::byte const*>(json_string.data()), json_string.size()}})
         .mixed_types_as_string(true)
         .lines(true);
 
@@ -2491,7 +2532,8 @@ TEST_F(JsonReaderTest, MapTypes)
 
     cudf::io::json_reader_options in_options =
       cudf::io::json_reader_options::builder(
-        cudf::io::source_info{json_string.data(), json_string.size()})
+        cudf::io::source_info{cudf::host_span<std::byte const>{
+          reinterpret_cast<std::byte const*>(json_string.data()), json_string.size()}})
         .dtypes(dtype_schema)
         .mixed_types_as_string(true)
         .lines(lines);
@@ -2561,7 +2603,9 @@ TEST_P(JsonDelimiterParamTest, JsonLinesDelimiter)
   }
 
   cudf::io::json_reader_options json_parser_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{input.c_str(), input.size()})
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(input.c_str()), input.size()}})
       .lines(true)
       .delimiter(random_delimiter);
 
@@ -2596,7 +2640,9 @@ TEST_F(JsonReaderTest, ViableDelimiter)
   std::string input = R"({"col1":100, "col2":1.1, "col3":"aaa"})";
 
   cudf::io::json_reader_options json_parser_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{input.c_str(), input.size()})
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(input.c_str()), input.size()}})
       .lines(true);
 
   json_parser_options.set_delimiter('\f');
@@ -2612,7 +2658,9 @@ TEST_F(JsonReaderTest, ViableDelimiterNewlineWS)
   100})";
 
   cudf::io::json_reader_options json_parser_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{input.c_str(), input.size()})
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(input.c_str()), input.size()}})
       .lines(true)
       .delimiter('\0');
 
@@ -2650,7 +2698,8 @@ TEST_F(JsonReaderTest, JsonNestedDtypeFilter)
   for (auto& [json_string, lines] : {std::pair{json_stringl, true}, {json_string, false}}) {
     cudf::io::json_reader_options in_options =
       cudf::io::json_reader_options::builder(
-        cudf::io::source_info{json_string.data(), json_string.size()})
+        cudf::io::source_info{cudf::host_span<std::byte const>{
+          reinterpret_cast<std::byte const*>(json_string.data()), json_string.size()}})
         .prune_columns(true)
         .lines(lines);
 
@@ -2845,7 +2894,8 @@ TEST_F(JsonReaderTest, JSONMixedTypeChildren)
 
     cudf::io::json_reader_options options =
       cudf::io::json_reader_options::builder(
-        cudf::io::source_info{json_str.c_str(), json_str.size()})
+        cudf::io::source_info{cudf::host_span<std::byte const>{
+          reinterpret_cast<std::byte const*>(json_str.c_str()), json_str.size()}})
         .lines(true)
         .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
         .normalize_single_quotes(true)
@@ -2883,7 +2933,8 @@ TEST_F(JsonReaderTest, JSONMixedTypeChildren)
 
     cudf::io::json_reader_options options =
       cudf::io::json_reader_options::builder(
-        cudf::io::source_info{json_str.c_str(), json_str.size()})
+        cudf::io::source_info{cudf::host_span<std::byte const>{
+          reinterpret_cast<std::byte const*>(json_str.c_str()), json_str.size()}})
         .lines(true)
         .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
         .normalize_single_quotes(true)
@@ -2922,7 +2973,9 @@ TEST_F(JsonReaderTest, MixedTypesWithSchema)
     std::pair{"data", cudf::io::schema_element{cudf::data_type{cudf::type_id::LIST}, child_types}});
 
   cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(data.data()), data.size()}})
       .dtypes(data_types)
       .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
       .normalize_single_quotes(true)
@@ -2946,7 +2999,9 @@ TEST_F(JsonReaderTest, UnicodeFieldname)
   {"d\u0061ta": {"a": 4}})";
 
   cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(data.data()), data.size()}})
       .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
       .experimental(true)
       .lines(true);
@@ -2975,7 +3030,9 @@ TEST_F(JsonReaderTest, JsonDtypeSchema)
                                                                {"b", {data_type{type_id::STRING}}},
                                                                {"a", {dtype<double>()}}};
   cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(data.data()), data.size()}})
       .dtypes(dtype_schema)
       .prune_columns(true)
       .lines(true);
@@ -3011,12 +3068,13 @@ TEST_F(JsonReaderTest, LastRecordInvalid)
   std::string data = R"({"key": "1"}
     {"key": "})";
   std::map<std::string, cudf::io::schema_element> schema{{"key", {dtype<cudf::string_view>()}}};
-  auto opts =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
-      .dtypes(schema)
-      .lines(true)
-      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
-      .build();
+  auto opts = cudf::io::json_reader_options::builder(
+                cudf::io::source_info{cudf::host_span<std::byte const>{
+                  reinterpret_cast<std::byte const*>(data.data()), data.size()}})
+                .dtypes(schema)
+                .lines(true)
+                .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
+                .build();
   auto const result = cudf::io::read_json(opts);
 
   EXPECT_EQ(result.metadata.schema_info[0].name, "key");
@@ -3042,7 +3100,8 @@ TEST_F(JsonReaderTest, JsonNestedDtypeFilterWithOrder)
   for (auto& [json_string, lines] : {std::pair{json_stringl, true}, {json_string, false}}) {
     cudf::io::json_reader_options in_options =
       cudf::io::json_reader_options::builder(
-        cudf::io::source_info{json_string.data(), json_string.size()})
+        cudf::io::source_info{cudf::host_span<std::byte const>{
+          reinterpret_cast<std::byte const*>(json_string.data()), json_string.size()}})
         .prune_columns(true)
         .lines(lines);
 
@@ -3292,7 +3351,8 @@ TEST_F(JsonReaderTest, JsonNestedDtypeFilterWithOrder)
     auto lines               = true;
     cudf::io::json_reader_options in_options =
       cudf::io::json_reader_options::builder(
-        cudf::io::source_info{json_stringl.data(), json_stringl.size()})
+        cudf::io::source_info{cudf::host_span<std::byte const>{
+          reinterpret_cast<std::byte const*>(json_stringl.data()), json_stringl.size()}})
         .prune_columns(true)
         .experimental(true)
         .lines(lines);
@@ -3378,7 +3438,8 @@ TEST_F(JsonReaderTest, NullifyMixedList)
   // child  {null, null}, {null, null}, {1, null}
   cudf::io::json_reader_options in_options =
     cudf::io::json_reader_options::builder(
-      cudf::io::source_info{json_stringl.data(), json_stringl.size()})
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(json_stringl.data()), json_stringl.size()}})
       .prune_columns(true)
       .experimental(true)
       .lines(true);
@@ -3480,11 +3541,12 @@ TEST_P(JsonCompressedIOTest, BasicJsonLines)
 TEST_F(JsonReaderTest, MismatchedBeginEndTokens)
 {
   std::string data = R"({"not_valid": "json)";
-  auto opts =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
-      .lines(true)
-      .recovery_mode(cudf::io::json_recovery_mode_t::FAIL)
-      .build();
+  auto opts        = cudf::io::json_reader_options::builder(
+                cudf::io::source_info{cudf::host_span<std::byte const>{
+                  reinterpret_cast<std::byte const*>(data.data()), data.size()}})
+                .lines(true)
+                .recovery_mode(cudf::io::json_recovery_mode_t::FAIL)
+                .build();
   EXPECT_THROW(cudf::io::read_json(opts), cudf::logic_error);
 }
 
@@ -3516,10 +3578,11 @@ TEST_F(JsonBatchedReaderTest, EmptyLastBatch)
   // The JSON string corresponding to the second batch is
   // '"b"}\n'
   this->set_batch_size(data.size() - size_of_last_batch);
-  auto opts =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
-      .lines(true)
-      .build();
+  auto opts = cudf::io::json_reader_options::builder(
+                cudf::io::source_info{cudf::host_span<std::byte const>{
+                  reinterpret_cast<std::byte const*>(data.data()), data.size()}})
+                .lines(true)
+                .build();
   auto result = cudf::io::read_json(opts);
 
   EXPECT_EQ(result.tbl->num_columns(), 1);
@@ -3528,6 +3591,60 @@ TEST_F(JsonBatchedReaderTest, EmptyLastBatch)
   EXPECT_EQ(result.metadata.schema_info[0].name, "a");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
                                  cudf::test::strings_column_wrapper{{"b", "b", "b", "b"}});
+}
+
+TEST_F(JsonReaderTest, DeviceReadAsyncThrows)
+{
+  // Create simple JSON data
+  std::string json_string = R"({"a": 1}
+{"a": 2}
+{"a": 3}
+{"a": 4}
+{"a": 5})";
+
+  // Convert to char vector
+  std::vector<char> json_data(json_string.begin(), json_string.end());
+
+  // Create our throwing datasource
+  auto throwing_source = std::make_unique<cudf::test::ThrowingDeviceReadDatasource>(json_data);
+  cudf::io::source_info source_info(throwing_source.get());
+
+  // Try to read the JSON data - this should either succeed or propagate AsyncException
+  // from device_read_async.
+  cudf::io::json_reader_options read_args =
+    cudf::io::json_reader_options::builder(source_info).lines(true);
+  try {
+    cudf::io::read_json(read_args);
+    // Test passes if no exception is thrown
+  } catch (const cudf::test::AsyncException&) {
+    // Test passes if AsyncException is thrown (expected test exception)
+  } catch (const std::exception& e) {
+    // Test fails if any other exception is thrown
+    FAIL() << "Unexpected exception thrown: " << e.what();
+  }
+}
+
+TEST_F(JsonReaderTest, DeviceWriteAsyncThrows)
+{
+  // Create a simple table to write
+  auto col0           = cudf::test::fixed_width_column_wrapper<int>{{1, 2, 3, 4, 5}};
+  auto table_to_write = cudf::table_view{{col0}};
+
+  auto throwing_sink = std::make_unique<cudf::test::ThrowingDeviceWriteDataSink>();
+
+  cudf::io::json_writer_options write_args = cudf::io::json_writer_options::builder(
+    cudf::io::sink_info{throwing_sink.get()}, table_to_write);
+
+  // The write_json call should either succeed or throw AsyncException.
+  try {
+    cudf::io::write_json(write_args);
+    // Test passes if no exception is thrown
+  } catch (const cudf::test::AsyncException&) {
+    // Test passes if AsyncException is thrown (expected test exception)
+  } catch (const std::exception& e) {
+    // Test fails if any other exception is thrown
+    FAIL() << "Unexpected exception thrown: " << e.what();
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()
