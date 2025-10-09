@@ -214,7 +214,7 @@ std::unique_ptr<cudf::column> compute_partial_row_index_column(
       row_group_offsets.front()  = row_group_offsets.front() + row_count;
       row_group_num_rows.front() = row_group_num_rows.front() - row_count;
     } else {
-      // Row group is fully consumed, pop if from the queues
+      // Else if the row group is fully consumed, pop it from the queues
       row_group_offsets.pop();
       row_group_num_rows.pop();
     }
