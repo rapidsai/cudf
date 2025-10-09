@@ -29,13 +29,6 @@ cdef extern from "cudf/json/json.hpp" namespace "cudf" nogil:
         column_view col,
         string_scalar json_path,
         get_json_object_options options,
-        cuda_stream_view stream
-    ) except +libcudf_exception_handler
-
-    cdef unique_ptr[column] get_json_object(
-        column_view col,
-        string_scalar json_path,
-        get_json_object_options options,
         cuda_stream_view stream,
         device_memory_resource* mr
     ) except +libcudf_exception_handler

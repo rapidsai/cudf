@@ -80,9 +80,9 @@ def read_json_from_string_column(
     input: Column,
     separator: Scalar,
     narep: Scalar,
-    dtypes: list,
-    compression: CompressionType,
-    recovery_mode: JSONRecoveryMode,
+    dtypes: list | None = None,
+    compression: CompressionType = CompressionType.NONE,
+    recovery_mode: JSONRecoveryMode = JSONRecoveryMode.RECOVER_WITH_NULL,
     stream: Stream = None,
     mr: DeviceMemoryResource = None,
 ) -> TableWithMetadata: ...
