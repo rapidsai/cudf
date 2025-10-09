@@ -271,6 +271,7 @@ struct cumulative_centroid_weight {
   double const* cumulative_weights;  // cumulative weights of non-empty clusters
   GroupLabelsIter group_labels;      // group labels for each tdigest including empty ones
   GroupOffsetsIter group_offsets;    // groups
+  // Host-device span, as the offsets may reside in either device memory or pinned host memory
   cuda::std::span<size_type const> tdigest_offsets;  // tdigests with a group
 
   /**
