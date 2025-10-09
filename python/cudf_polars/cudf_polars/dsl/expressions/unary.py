@@ -183,6 +183,7 @@ class UnaryFunction(Expr):
                 ),
                 dtype=self.dtype,
             )
+        arg: plc.Column | plc.Scalar
         if self.name == "round":
             (
                 decimal_places,
@@ -228,11 +229,11 @@ class UnaryFunction(Expr):
                     plc.types.NullEquality.EQUAL,
                     plc.types.NanEquality.ALL_EQUAL,
                 )
-            (column,) = result.columns()
-            result = Column(column, dtype=self.dtype)
+            (plc_column,) = result.columns()
+            column_result = Column(plc_column, dtype=self.dtype)
             if maintain_order:
-                result = result.sorted_like(values)
-            return result
+                column_result = column_result.sorted_like(values)
+            return column_result
         elif self.name == "set_sorted":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             (asc,) = self.options
@@ -347,7 +348,9 @@ class UnaryFunction(Expr):
             ):
                 return column
             if strategy == "forward":
-                replacement = plc.replace.ReplacePolicy.PRECEDING
+                replacement: plc.replace.ReplacePolicy | plc.Scalar = (
+                    plc.replace.ReplacePolicy.PRECEDING
+                )
             elif strategy == "backward":
                 replacement = plc.replace.ReplacePolicy.FOLLOWING
             elif strategy == "min":
