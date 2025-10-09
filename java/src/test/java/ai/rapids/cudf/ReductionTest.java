@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ class ReductionTest extends CudfTestBase {
       Aggregation.Kind.VARIANCE,
       Aggregation.Kind.QUANTILE);
 
-  // reduction operations that produce a floating point value
+  // reduction operations that produce a bool value
   private static final EnumSet<Aggregation.Kind> BOOL_REDUCTIONS = EnumSet.of(
       Aggregation.Kind.ANY,
       Aggregation.Kind.ALL);
@@ -137,10 +137,13 @@ class ReductionTest extends CudfTestBase {
   private static Stream<Arguments> createBooleanParams() {
     Boolean[] vals = new Boolean[]{true, true, null, false, true, false, null};
     HostColumnVector.DataType bool = new HostColumnVector.BasicType(true, DType.BOOL8);
+    HostColumnVector.DataType int32 = new HostColumnVector.BasicType(true, DType.INT32);
     return Stream.of(
         Arguments.of(ReductionAggregation.sum(), new Boolean[0], bool, null, 0.),
         Arguments.of(ReductionAggregation.sum(), new Boolean[]{null, null, null}, bool, null, 0.),
         Arguments.of(ReductionAggregation.sum(), vals, bool, true, 0.),
+        Arguments.of(ReductionAggregation.argMin(), vals, int32, 3, 0.),
+        Arguments.of(ReductionAggregation.argMax(), vals, int32, 0, 0.),
         Arguments.of(ReductionAggregation.min(), vals, bool, false, 0.),
         Arguments.of(ReductionAggregation.max(), vals, bool, true, 0.),
         Arguments.of(ReductionAggregation.product(), vals, bool, false, 0.),
