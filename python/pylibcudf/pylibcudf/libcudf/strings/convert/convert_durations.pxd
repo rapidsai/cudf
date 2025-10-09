@@ -7,6 +7,7 @@ from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.types cimport data_type
 
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.memory_resource cimport device_memory_resource
 
 
 cdef extern from "cudf/strings/convert/convert_durations.hpp" namespace \
@@ -15,9 +16,11 @@ cdef extern from "cudf/strings/convert/convert_durations.hpp" namespace \
         const column_view & input,
         data_type duration_type,
         const string & format,
-        cuda_stream_view stream) except +libcudf_exception_handler
+        cuda_stream_view stream,
+        device_memory_resource* mr) except +libcudf_exception_handler
 
     cdef unique_ptr[column] from_durations(
         const column_view & durations,
         const string & format,
-        cuda_stream_view stream) except +libcudf_exception_handler
+        cuda_stream_view stream,
+        device_memory_resource* mr) except +libcudf_exception_handler

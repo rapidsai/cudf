@@ -12,16 +12,18 @@ from pylibcudf.gpumemoryview import gpumemoryview
 from pylibcudf.scalar import Scalar
 from pylibcudf.types import DataType
 
-class ArrayInterface(TypedDict):
+class ArrayInterfaceBase(TypedDict):
     shape: tuple[int, ...]
     typestr: str
     data: None | tuple[int, bool]
     version: int
     strides: None | tuple[int, ...]
     descr: None | list[tuple[Any, ...]]
+
+class ArrayInterface(ArrayInterfaceBase):
     mask: None | "SupportsArrayInterface"
 
-class CudaArrayInterface(ArrayInterface):
+class CudaArrayInterface(ArrayInterfaceBase):
     stream: None | int
     mask: None | "SupportsCudaArrayInterface"
 
@@ -52,7 +54,12 @@ class Column:
     def data(self) -> gpumemoryview | None: ...
     def null_mask(self) -> gpumemoryview | None: ...
     def children(self) -> list[Column]: ...
-    def copy(self, stream: Stream | None = None) -> Column: ...
+    def num_children(self) -> int: ...
+    def copy(
+        self,
+        stream: Stream | None = None,
+        mr: DeviceMemoryResource | None = None,
+    ) -> Column: ...
     def device_buffer_size(self) -> int: ...
     def with_mask(
         self, mask: gpumemoryview | None, null_count: int
@@ -60,7 +67,10 @@ class Column:
     def list_view(self) -> ListColumnView: ...
     @staticmethod
     def from_scalar(
-        scalar: Scalar, size: int, stream: Stream | None = None
+        scalar: Scalar,
+        size: int,
+        stream: Stream | None = None,
+        mr: DeviceMemoryResource | None = None,
     ) -> Column: ...
     def to_scalar(
         self,
@@ -69,13 +79,20 @@ class Column:
     ) -> Scalar: ...
     @staticmethod
     def all_null_like(
-        like: Column, size: int, stream: Stream | None = None
+        like: Column,
+        size: int,
+        stream: Stream | None = None,
+        mr: DeviceMemoryResource | None = None,
     ) -> Column: ...
     @staticmethod
     def from_rmm_buffer(
         buff: DeviceBuffer, dtype: DataType, size: int, children: list[Column]
     ) -> Column: ...
     def to_arrow(self, metadata: list | str | None = None) -> ArrowLike: ...
+    # Private methods below are included because polars is currently using them,
+    # but we want to remove stubs for these private methods eventually
+    def _to_schema(self, metadata: Any = None) -> Any: ...
+    def _to_host_array(self) -> Any: ...
     @staticmethod
     def from_arrow(
         obj: ArrowLike, dtype: DataType | None = None
@@ -92,6 +109,8 @@ class Column:
     def from_array(
         cls, obj: SupportsCudaArrayInterface | SupportsArrayInterface
     ) -> Column: ...
+    @staticmethod
+    def struct_from_children(children: Sequence[Column]) -> Column: ...
 
 class ListColumnView:
     def __init__(self, column: Column): ...

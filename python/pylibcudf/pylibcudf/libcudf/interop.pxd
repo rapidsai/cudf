@@ -63,24 +63,34 @@ cdef extern from "cudf/interop.hpp" namespace "cudf::interop" \
     cdef cppclass arrow_column:
         arrow_column(
             ArrowSchema&& schema,
-            ArrowArray&& array
+            ArrowArray&& array,
+            cuda_stream_view stream,
+            device_memory_resource* mr
         ) except +libcudf_exception_handler
         arrow_column(
             ArrowSchema&& schema,
-            ArrowDeviceArray&& array
+            ArrowDeviceArray&& array,
+            cuda_stream_view stream,
+            device_memory_resource* mr
         ) except +libcudf_exception_handler
         arrow_column(
             ArrowArrayStream&& stream,
+            cuda_stream_view cuda_stream,
+            device_memory_resource* mr
         ) except +libcudf_exception_handler
         column_view view() except +libcudf_exception_handler
 
     cdef cppclass arrow_table:
         arrow_table(
             ArrowArrayStream&& stream,
+            cuda_stream_view cuda_stream,
+            device_memory_resource* mr
         ) except +libcudf_exception_handler
         arrow_table(
             ArrowSchema&& schema,
             ArrowDeviceArray&& array,
+            cuda_stream_view stream,
+            device_memory_resource* mr
         ) except +libcudf_exception_handler
         table_view view() except +libcudf_exception_handler
 

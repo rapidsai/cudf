@@ -58,9 +58,13 @@ class IntervalColumn(StructColumn):
         return dtype
 
     @classmethod
-    def from_arrow(cls, data: pa.Array) -> Self:
-        new_col = super().from_arrow(data.storage)
-        return new_col._with_type_metadata(IntervalDtype.from_arrow(data.type))  # type: ignore[return-value]
+    def from_arrow(cls, array: pa.Array | pa.ChunkedArray) -> Self:
+        if not isinstance(array, pa.ExtensionArray):
+            raise ValueError("Expected ExtensionArray for interval data")
+        new_col = super().from_arrow(array.storage)
+        return new_col._with_type_metadata(
+            IntervalDtype.from_arrow(array.type)
+        )  # type: ignore[return-value]
 
     def to_arrow(self) -> pa.Array:
         typ = self.dtype.to_arrow()
@@ -120,29 +124,13 @@ class IntervalColumn(StructColumn):
     def set_closed(
         self, closed: Literal["left", "right", "both", "neither"]
     ) -> Self:
-        return IntervalColumn(  # type: ignore[return-value]
-            data=None,
-            size=self.size,
-            dtype=IntervalDtype(self.dtype.subtype, closed),
-            mask=self.base_mask,
-            offset=self.offset,
-            null_count=self.null_count,
-            children=self.base_children,  # type: ignore[arg-type]
+        return self._with_type_metadata(  # type: ignore[return-value]
+            IntervalDtype(self.dtype.subtype, closed)
         )
 
     def as_interval_column(self, dtype: IntervalDtype) -> Self:  # type: ignore[override]
         if isinstance(dtype, IntervalDtype):
-            return IntervalColumn(  # type: ignore[return-value]
-                data=None,
-                size=self.size,
-                dtype=dtype,
-                mask=self.mask,
-                offset=self.offset,
-                null_count=self.null_count,
-                children=tuple(  # type: ignore[arg-type]
-                    child.astype(dtype.subtype) for child in self.children
-                ),
-            )
+            return self._with_type_metadata(dtype)  # type: ignore[return-value]
         else:
             raise ValueError("dtype must be IntervalDtype")
 

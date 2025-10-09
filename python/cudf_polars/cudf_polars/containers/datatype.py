@@ -116,11 +116,27 @@ class DataType:
     @property
     def children(self) -> list[DataType]:
         """The children types of this DataType."""
+        # these type ignores are needed because the type checker doesn't
+        # see that these equality checks passing imply a specific type for each child field.
         if self.plc_type.id() == plc.TypeId.STRUCT:
-            return [DataType(field.dtype) for field in self.polars_type.fields]
+            return [DataType(field.dtype) for field in self.polars_type.fields]  # type: ignore[attr-defined]
         elif self.plc_type.id() == plc.TypeId.LIST:
-            return [DataType(self.polars_type.inner)]
+            return [DataType(self.polars_type.inner)]  # type: ignore[attr-defined]
         return []
+
+    def scale(self) -> int:
+        """The scale of this DataType."""
+        return self.plc_type.scale()
+
+    @staticmethod
+    def common_decimal_dtype(left: DataType, right: DataType) -> DataType:
+        """Return a common decimal DataType for the two inputs."""
+        if not (
+            plc.traits.is_fixed_point(left.plc_type)
+            and plc.traits.is_fixed_point(right.plc_type)
+        ):
+            raise ValueError("Both inputs required to be decimal types.")
+        return DataType(pl.Decimal(38, abs(min(left.scale(), right.scale()))))
 
     def __eq__(self, other: object) -> bool:
         """Equality of DataTypes."""

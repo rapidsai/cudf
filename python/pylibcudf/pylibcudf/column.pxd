@@ -60,7 +60,7 @@ cdef class Column:
     cdef Column from_libcudf(
         unique_ptr[column] libcudf_col,
         Stream stream,
-        DeviceMemoryResource mr=*
+        DeviceMemoryResource mr
     )
 
     @staticmethod
@@ -87,7 +87,7 @@ cdef class Column:
     cpdef gpumemoryview data(self)
     cpdef gpumemoryview null_mask(self)
     cpdef list children(self)
-    cpdef Column copy(self, Stream stream=*)
+    cpdef Column copy(self, Stream stream=*, DeviceMemoryResource mr=*)
     cpdef uint64_t device_buffer_size(self)
     cpdef Column with_mask(self, gpumemoryview, size_type)
 
