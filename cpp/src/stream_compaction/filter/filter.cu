@@ -38,6 +38,7 @@
 
 #include <cuda/std/iterator>
 #include <thrust/copy.h>
+#include <thrust/gather.h>
 
 #include <jit/cache.hpp>
 #include <jit/helpers.hpp>
@@ -66,11 +67,14 @@ struct filter_histogram {
   }
 };
 
-template <typename InputIterator, typename FilterIndexIterator>
+static constexpr bool LOW_SELECTIVITY = true;
+
+template <typename InputIterator, typename FilterIndexIterator, typename CompactedMapIterator>
 auto filter_fixed_width(InputIterator input_begin,
                         InputIterator input_end,
                         cudf::size_type num_selected,
                         FilterIndexIterator filter_index_iterator,
+                        CompactedMapIterator compacted_map_iterator,
                         rmm::cuda_stream_view stream,
                         rmm::device_async_resource_ref mr)
 {
@@ -79,17 +83,26 @@ auto filter_fixed_width(InputIterator input_begin,
   auto output = rmm::device_uvector<typename std::iterator_traits<InputIterator>::value_type>(
     static_cast<size_t>(num_selected), stream, mr);
 
-  auto end         = thrust::copy_if(rmm::exec_policy(stream),
-                             input_begin,
-                             input_end,
-                             filter_index_iterator,
-                             output.begin(),
-                             filter_predicate{});
-  auto output_size = cuda::std::distance(output.begin(), end);
-  CUDF_EXPECTS(output_size == num_selected,
-               "The number of selected items does not match the expected count.",  // < This should
-                                                                                   // never happen
-               std::runtime_error);
+  if (LOW_SELECTIVITY) {
+    thrust::gather(rmm::exec_policy(stream),
+                   compacted_map_iterator,
+                   compacted_map_iterator + num_selected,
+                   input_begin,
+                   output.begin());
+  } else {
+    auto end         = thrust::copy_if(rmm::exec_policy(stream),
+                               input_begin,
+                               input_end,
+                               filter_index_iterator,
+                               output.begin(),
+                               filter_predicate{});
+    auto output_size = cuda::std::distance(output.begin(), end);
+    CUDF_EXPECTS(
+      output_size == num_selected,
+      "The number of selected items does not match the expected count.",  // < This should
+                                                                          // never happen
+      std::runtime_error);
+  }
 
   return output;
 }
@@ -119,6 +132,7 @@ std::pair<rmm::device_buffer, cudf::size_type> null_mask_filter(
     stream,
     mr);
 
+  // drop null mask if there are no nulls
   if (compacted_null_count == 0) { return std::pair(rmm::device_buffer{}, 0); }
 
   return std::pair(std::move(compacted_null_mask), compacted_null_count);
@@ -141,6 +155,7 @@ struct filter_dispatcher {
                                        d_col->data<T>() + d_col->size(),
                                        num_selected,
                                        filter_index_iterator,
+                                       compacted_map_iterator,
                                        stream,
                                        mr);
     auto filtered_size = filtered.size();
@@ -169,6 +184,7 @@ struct filter_dispatcher {
                                        d_col->data<Rep>() + d_col->size(),
                                        num_selected,
                                        filter_index_iterator,
+                                       compacted_map_iterator,
                                        stream,
                                        mr);
     auto filtered_size = filtered.size();
@@ -383,7 +399,7 @@ std::vector<std::unique_ptr<column>> filter_operation(
   auto compacted_filter_indices = rmm::device_uvector<cudf::size_type>{0, stream, mr};
   cudf::size_type num_selected  = 0;
 
-  auto should_compact = needs_compacted_indices(base_column, filter_columns);
+  auto should_compact = LOW_SELECTIVITY || needs_compacted_indices(base_column, filter_columns);
 
   if (should_compact) {
     std::tie(compacted_filter_indices, num_selected) =
