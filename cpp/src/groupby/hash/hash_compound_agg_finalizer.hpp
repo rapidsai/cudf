@@ -38,7 +38,6 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
                               bitmask_type const* d_row_bitmask,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr);
-  virtual ~hash_compound_agg_finalizer() = default;
 
   // Enables conversion of ARGMIN/ARGMAX into MIN/MAX
   auto gather_argminmax(cudf::aggregation const& agg);
