@@ -372,7 +372,7 @@ int main(int argc, char const** argv)
   // Create io source
   auto const data_source = io_source{input_filepath, io_source_type, stream};
 
-  // Read with legacy reader without timing
+  // Read with the main reader without timing
   {
     std::cout << "\nReading " << input_filepath << "...\n";
     std::cout << "Note: Not timing this initial parquet read as it may include\n"
@@ -386,7 +386,7 @@ int main(int argc, char const** argv)
     filters.insert(parquet_filter_type::ROW_GROUPS_WITH_STATS);
     filters.insert(parquet_filter_type::ROW_GROUPS_WITH_DICT_PAGES);
     filters.insert(parquet_filter_type::ROW_GROUPS_WITH_BLOOM_FILTERS);
-    // Deliberately disabled as it has low cost to benefit ratio
+    // Deliberately disabled as it has a high cost to benefit ratio
     // filters.insert(parquet_filter_type::FILTER_COLUMN_PAGES_WITH_PAGE_INDEX);
     filters.insert(parquet_filter_type::PAYLOAD_COLUMN_PAGES_WITH_ROW_MASK);
   }
