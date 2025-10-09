@@ -19,10 +19,6 @@ from pylibcudf.libcudf.io.text cimport byte_range_info
 from rmm.librmm.device_buffer cimport device_buffer
 
 
-cdef class UseDataPageMask:
-    pass
-
-
 cdef class ByteRangeInfo:
     cdef byte_range_info c_obj
 

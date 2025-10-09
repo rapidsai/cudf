@@ -19,7 +19,7 @@ from pylibcudf.libcudf.io.hybrid_scan cimport (
     const_size_type,
     const_uint8_t,
     hybrid_scan_reader as cpp_hybrid_scan_reader,
-    use_data_page_mask,
+    use_data_page_mask as cpp_use_data_page_mask,
 )
 from pylibcudf.libcudf.io.parquet_schema cimport FileMetaData as cpp_FileMetaData
 from pylibcudf.libcudf.io.text cimport byte_range_info
@@ -28,6 +28,9 @@ from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.libcudf.utilities.span cimport host_span
 from pylibcudf.utils cimport _get_memory_resource, _get_stream
 
+import pylibcudf.libcudf.io.hybrid_scan
+
+UseDataPageMask = pylibcudf.libcudf.io.hybrid_scan.use_data_page_mask
 
 __all__ = [
     "HybridScanReader",
@@ -35,15 +38,6 @@ __all__ = [
     "FileMetaData",
     "ByteRangeInfo",
 ]
-
-
-cdef class UseDataPageMask:
-    """Whether to compute and use a page mask using the row mask.
-
-    For details, see :cpp:enum:`cudf::io::parquet::experimental::use_data_page_mask`
-    """
-    YES = use_data_page_mask.YES
-    NO = use_data_page_mask.NO
 
 
 cdef class ByteRangeInfo:
@@ -448,7 +442,7 @@ cdef class HybridScanReader:
         list row_group_indices,
         list column_chunk_buffers,
         Column row_mask,
-        use_data_page_mask mask_data_pages,
+        cpp_use_data_page_mask mask_data_pages,
         ParquetReaderOptions options,
         Stream stream=None,
         DeviceMemoryResource mr=None
@@ -525,7 +519,7 @@ cdef class HybridScanReader:
         list row_group_indices,
         list column_chunk_buffers,
         Column row_mask,
-        use_data_page_mask mask_data_pages,
+        cpp_use_data_page_mask mask_data_pages,
         ParquetReaderOptions options,
         Stream stream=None,
         DeviceMemoryResource mr=None
@@ -576,7 +570,7 @@ cdef class HybridScanReader:
         size_t pass_read_limit,
         list row_group_indices,
         Column row_mask,
-        use_data_page_mask mask_data_pages,
+        cpp_use_data_page_mask mask_data_pages,
         list column_chunk_buffers,
         ParquetReaderOptions options,
         Stream stream=None
@@ -654,7 +648,7 @@ cdef class HybridScanReader:
         size_t pass_read_limit,
         list row_group_indices,
         Column row_mask,
-        use_data_page_mask mask_data_pages,
+        cpp_use_data_page_mask mask_data_pages,
         list column_chunk_buffers,
         ParquetReaderOptions options,
         Stream stream=None
@@ -744,3 +738,6 @@ cdef class DeviceBuffer:
     def __init__(self):
         """DeviceBuffer should be created from existing RMM buffers."""
         pass
+
+
+UseDataPageMask.__str__ = UseDataPageMask.__repr__
