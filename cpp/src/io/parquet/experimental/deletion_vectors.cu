@@ -204,6 +204,7 @@ std::unique_ptr<cudf::column> compute_partial_row_index_column(
       not(row_group_offsets.empty() or row_group_num_rows.empty()),
       "Unable to compute the row index column from the specified row group offsets and counts");
 
+    // Compute how many rows can be extracted from the current row group
     auto const row_count = std::min<size_type>(num_rows - rows_filled, row_group_num_rows.front());
     row_counts.emplace_back(row_count);
     row_offsets.emplace_back(row_group_offsets.front());
