@@ -1353,6 +1353,20 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Find and return a scalar of type INT32 containing the index of the minimum value in the column.
+   */
+  public Scalar argMin() {
+    return reduce(ReductionAggregation.argMin(), type);
+  }
+
+  /**
+   * Find and return a scalar of type INT32 containing the index of the maximum value in the column.
+   */
+  public Scalar argMax() {
+    return reduce(ReductionAggregation.argMax(), type);
+  }
+
+  /**
    * Returns the minimum of all values in the column, returning a scalar
    * of the same type as this column.
    */
