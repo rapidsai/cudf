@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 
 from libcpp.memory cimport unique_ptr
@@ -37,7 +37,7 @@ cdef class RegexProgram:
         ----------
         pattern : str
             Regex pattern
-        flags : Uniont[int, RegexFlags]
+        flags : Union[int, RegexFlags]
             Regex flags for interpreting special characters in the pattern
 
         Returns

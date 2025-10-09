@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+from collections.abc import Callable
 from functools import cached_property
 from typing import TYPE_CHECKING, cast
 
@@ -323,7 +324,9 @@ class StringColumn(ColumnBase):
             if not is_pandas_nullable_extension_dtype(dtype):
                 result = result.fillna(False)
             return result._with_type_metadata(dtype)  # type: ignore[return-value]
-        elif dtype.kind in {"i", "u"}:
+
+        cast_func: Callable[[plc.Column, plc.DataType], plc.Column]
+        if dtype.kind in {"i", "u"}:
             if not self.is_integer().all():
                 raise ValueError(
                     "Could not convert strings to integer "
@@ -362,7 +365,9 @@ class StringColumn(ColumnBase):
             raise ValueError(
                 "Cannot convert `None` value to datetime or timedelta."
             )
-        elif dtype.kind == "M":  # type: ignore[union-attr]
+
+        casting_func: Callable[[plc.Column, plc.DataType, str], plc.Column]
+        if dtype.kind == "M":  # type: ignore[union-attr]
             if format.endswith("%z"):
                 raise NotImplementedError(
                     "cuDF does not yet support timezone-aware datetimes"
@@ -587,10 +592,10 @@ class StringColumn(ColumnBase):
             }:
                 if isinstance(other, pa.Scalar):
                     other = pa_scalar_to_plc_scalar(other)
-                lhs, rhs = (other, self) if reflect else (self, other)
+                lhs_op, rhs_op = (other, self) if reflect else (self, other)
                 return binaryop.binaryop(
-                    lhs=lhs,
-                    rhs=rhs,
+                    lhs=lhs_op,
+                    rhs=rhs_op,
                     op=op,
                     dtype=get_dtype_of_same_kind(
                         self.dtype, np.dtype(np.bool_)
@@ -1062,7 +1067,7 @@ class StringColumn(ColumnBase):
         self,
         delimiter: plc.Scalar,
         maxsplit: int,
-        method: Callable[[plc.Column, plc.Scalar, int], plc.Column],
+        method: Callable[[plc.Column, plc.Scalar, int], plc.Table],
     ) -> dict[int, Self]:
         plc_table = method(
             self.to_pylibcudf(mode="read"),
@@ -1086,7 +1091,7 @@ class StringColumn(ColumnBase):
     def _partition(
         self,
         delimiter: plc.Scalar,
-        method: Callable[[plc.Column, plc.Scalar], plc.Column],
+        method: Callable[[plc.Column, plc.Scalar], plc.Table],
     ) -> dict[int, Self]:
         plc_table = method(
             self.to_pylibcudf(mode="read"),
