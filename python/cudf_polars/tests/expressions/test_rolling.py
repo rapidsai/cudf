@@ -398,3 +398,29 @@ def test_fill_over(
 def test_fill_null_with_mean_over_unsupported(df: pl.LazyFrame) -> None:
     q = df.select(pl.col("x").fill_null(strategy="mean").over("g"))
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.parametrize(
+    "expr,group_key",
+    [
+        (pl.col("x"), "g"),
+        (pl.when((pl.col("x") % 4) == 1).then(None).otherwise(pl.col("x")), "g"),
+        (pl.col("x"), "g_null"),
+    ],
+)
+@pytest.mark.parametrize(
+    "order_by",
+    [
+        None,
+        ["g2", pl.col("x2") * 2],
+    ],
+)
+def test_cum_sum_over(
+    df: pl.LazyFrame,
+    *,
+    expr: pl.Expr,
+    group_key: str,
+    order_by: None | list[str | pl.Expr],
+) -> None:
+    q = df.select(expr.cum_sum().over(group_key, order_by=order_by))
+    assert_gpu_result_equal(q)
