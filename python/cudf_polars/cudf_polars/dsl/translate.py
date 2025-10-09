@@ -33,6 +33,7 @@ from cudf_polars.utils import config, sorting
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_131,
     POLARS_VERSION_LT_132,
+    POLARS_VERSION_LT_133,
     POLARS_VERSION_LT_1323,
 )
 
@@ -61,6 +62,7 @@ class Translator:
         self.config_options = config.ConfigOptions.from_polars_engine(engine)
         self.errors: list[Exception] = []
         self._cache_nodes: dict[int, ir.Cache] = {}
+        self._expr_context: ExecutionContext = ExecutionContext.FRAME
 
     def translate_ir(self, *, n: int | None = None) -> ir.IR:
         """
@@ -201,6 +203,23 @@ class set_node(AbstractContextManager[None]):
 noop_context: nullcontext[None] = nullcontext()
 
 
+class set_expr_context(AbstractContextManager[None]):
+    __slots__ = ("_prev", "ctx", "translator")
+
+    def __init__(self, translator: Translator, ctx: ExecutionContext) -> None:
+        self.translator = translator
+        self.ctx = ctx
+        self._prev: ExecutionContext | None = None
+
+    def __enter__(self) -> None:
+        self._prev = self.translator._expr_context
+        self.translator._expr_context = self.ctx
+
+    def __exit__(self, *args: Any) -> None:
+        assert self._prev is not None
+        self.translator._expr_context = self._prev
+
+
 @singledispatch
 def _translate_ir(node: Any, translator: Translator, schema: Schema) -> ir.IR:
     raise NotImplementedError(
@@ -318,9 +337,11 @@ def _(node: pl_ir.GroupBy, translator: Translator, schema: Schema) -> ir.IR:
         keys = [
             translate_named_expr(translator, n=e, schema=inp.schema) for e in node.keys
         ]
-        original_aggs = [
-            translate_named_expr(translator, n=e, schema=inp.schema) for e in node.aggs
-        ]
+        with set_expr_context(translator, ExecutionContext.GROUPBY):
+            original_aggs = [
+                translate_named_expr(translator, n=e, schema=inp.schema)
+                for e in node.aggs
+            ]
     is_rolling = node.options.rolling is not None
     is_dynamic = node.options.dynamic is not None
     if is_dynamic:
@@ -718,15 +739,32 @@ def _(
         )
     elif isinstance(name, str):
         children = (translator.translate_expr(n=n, schema=schema) for n in node.input)
-        if name == "log":
-            (base,) = options
-            (child,) = children
-            return expr.BinOp(
-                dtype,
-                plc.binaryop.BinaryOperator.LOG_BASE,
-                child,
-                expr.Literal(dtype, base),
-            )
+        if name == "log" or (
+            not POLARS_VERSION_LT_133
+            and name == "l"
+            and isinstance(options[0], str)
+            and "".join((name, *options)) == "log"
+        ):
+            if POLARS_VERSION_LT_133:  # pragma: no cover
+                (base,) = options
+                (child,) = children
+                return expr.BinOp(
+                    dtype,
+                    plc.binaryop.BinaryOperator.LOG_BASE,
+                    child,
+                    expr.Literal(dtype, base),
+                )
+            else:
+                (child, base) = children
+                return expr.Cast(
+                    DataType(pl.Float64()),
+                    expr.BinOp(
+                        dtype,
+                        plc.binaryop.BinaryOperator.LOG_BASE,
+                        child,
+                        expr.Literal(dtype, base.value),
+                    ),
+                )
         elif name == "pow":
             return expr.BinOp(dtype, plc.binaryop.BinaryOperator.POW, *children)
         return expr.UnaryFunction(dtype, name, options, *children)
@@ -741,7 +779,8 @@ def _(
 ) -> expr.Expr:
     if isinstance(node.options, pl_expr.RollingGroupOptions):
         # pl.col("a").rolling(...)
-        agg = translator.translate_expr(n=node.function, schema=schema)
+        with set_expr_context(translator, ExecutionContext.ROLLING):
+            agg = translator.translate_expr(n=node.function, schema=schema)
         name_generator = unique_names(schema)
         aggs, named_post_agg = decompose_single_agg(
             expr.NamedExpr(next(name_generator), agg),
@@ -782,7 +821,8 @@ def _(
         return replace([named_post_agg.value], replacements)[0]
     elif isinstance(node.options, pl_expr.WindowMapping):
         # pl.col("a").over(...)
-        agg = translator.translate_expr(n=node.function, schema=schema)
+        with set_expr_context(translator, ExecutionContext.WINDOW):
+            agg = translator.translate_expr(n=node.function, schema=schema)
         name_gen = unique_names(schema)
         aggs, post = decompose_single_agg(
             expr.NamedExpr(next(name_gen), agg),
@@ -929,7 +969,7 @@ def _(
             for arg in args
         ]
 
-    value = expr.Agg(dtype, agg_name, node.options, *args)
+    value = expr.Agg(dtype, agg_name, node.options, translator._expr_context, *args)
 
     if agg_name in ("count", "n_unique") and value.dtype.id() != plc.TypeId.INT32:
         return expr.Cast(value.dtype, value)
@@ -957,8 +997,12 @@ def _(
 ) -> expr.Expr:
     left = translator.translate_expr(n=node.left, schema=schema)
     right = translator.translate_expr(n=node.right, schema=schema)
-    if plc.traits.is_boolean(dtype.plc_type) and node.op == pl_expr.Operator.TrueDivide:
-        dtype = DataType(pl.Float64())
+    if (
+        POLARS_VERSION_LT_133
+        and plc.traits.is_boolean(dtype.plc_type)
+        and node.op == pl_expr.Operator.TrueDivide
+    ):
+        dtype = DataType(pl.Float64())  # pragma: no cover
     if node.op == pl_expr.Operator.TrueDivide and (
         plc.traits.is_fixed_point(left.dtype.plc_type)
         or plc.traits.is_fixed_point(right.dtype.plc_type)
