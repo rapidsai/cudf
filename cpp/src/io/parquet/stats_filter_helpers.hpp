@@ -287,7 +287,9 @@ class stats_columns_collector : public ast::detail::expression_transformer {
  */
 class stats_expression_converter : public stats_columns_collector {
  public:
-  stats_expression_converter(ast::expression const& expr, size_type num_columns);
+  stats_expression_converter(ast::expression const& expr,
+                             size_type num_columns,
+                             rmm::cuda_stream_view stream);
 
   // Bring all overrides of `visit` from stats_columns_collector into scope
   using stats_columns_collector::visit;
@@ -311,6 +313,8 @@ class stats_expression_converter : public stats_columns_collector {
 
  private:
   ast::tree _stats_expr;
+  std::unique_ptr<cudf::numeric_scalar<bool>> _always_true_scalar;
+  std::unique_ptr<ast::literal> _always_true;
 };
 
 }  // namespace cudf::io::parquet::detail
