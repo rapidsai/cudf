@@ -445,15 +445,32 @@ cpdef TableWithMetadata read_orc(
     with nogil:
         c_result = move(cpp_read_orc(options.c_obj, s.view(), mr.get_mr()))
 
-    return TableWithMetadata.from_libcudf(c_result, s)
+    return TableWithMetadata.from_libcudf(c_result, s, mr)
 
 
 cpdef ParsedOrcStatistics read_parsed_orc_statistics(
-    SourceInfo source_info
+    SourceInfo source_info,
+    Stream stream=None
 ):
-    cdef parsed_orc_statistics parsed = (
-        cpp_read_parsed_orc_statistics(source_info.c_obj)
-    )
+    """
+    Read ORC statistics from a source.
+
+    Parameters
+    ----------
+    source_info : SourceInfo
+        The source to read statistics from.
+    stream : Stream | None
+        CUDA stream used for device memory operations and kernel launches.
+
+    Returns
+    -------
+    ParsedOrcStatistics
+        The parsed ORC statistics.
+    """
+    cdef Stream s = _get_stream(stream)
+    cdef parsed_orc_statistics parsed
+    with nogil:
+        parsed = cpp_read_parsed_orc_statistics(source_info.c_obj, s.view())
     return ParsedOrcStatistics.from_libcudf(parsed)
 
 

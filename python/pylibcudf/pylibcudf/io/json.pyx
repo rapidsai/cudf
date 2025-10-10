@@ -738,7 +738,7 @@ cpdef tuple chunked_read_json(
             )
         new_chunk = [
             col for col in TableWithMetadata.from_libcudf(
-                c_result, s).columns
+                c_result, s, mr).columns
         ]
 
         if len(final_columns) == 0:
@@ -785,7 +785,7 @@ cpdef TableWithMetadata read_json(
     with nogil:
         c_result = move(cpp_read_json(options.c_obj, s.view(), mr.get_mr()))
 
-    return TableWithMetadata.from_libcudf(c_result, s)
+    return TableWithMetadata.from_libcudf(c_result, s, mr)
 
 cpdef TableWithMetadata read_json_from_string_column(
     Column input,
@@ -854,7 +854,7 @@ cpdef TableWithMetadata read_json_from_string_column(
 
     # Create a new source from the joined string data
     cdef SourceInfo joined_source = SourceInfo(
-            [DeviceBuffer.c_from_unique_ptr(move(c_contents.data), stream)])
+            [DeviceBuffer.c_from_unique_ptr(move(c_contents.data), stream, mr)])
 
     # Create new options using the joined string as source
     cdef JsonReaderOptions options = (
@@ -870,9 +870,9 @@ cpdef TableWithMetadata read_json_from_string_column(
 
     # Read JSON from the joined string
     with nogil:
-        c_result = move(cpp_read_json(options.c_obj, stream.view()))
+        c_result = move(cpp_read_json(options.c_obj, stream.view(), mr.get_mr()))
 
-    return TableWithMetadata.from_libcudf(c_result, stream)
+    return TableWithMetadata.from_libcudf(c_result, stream, mr)
 
 cdef class JsonWriterOptions:
     """

@@ -3098,3 +3098,12 @@ def test_singleton_array(binary_op, xp):
     expect = binary_op(lhs.to_pandas(), rhs_host)
     got = binary_op(lhs, rhs_device)
     assert_eq(expect, got)
+
+
+def test_binops_float_scalar_decimal():
+    result = 1.0 - cudf.Series(
+        [decimal.Decimal("1"), decimal.Decimal("-2.5"), None],
+        dtype=cudf.Decimal32Dtype(3, 2),
+    )
+    expected = cudf.Series([0.0, -3.5, None], dtype="float64")
+    assert_eq(result, expected)
