@@ -53,10 +53,10 @@ class TemporalBaseColumn(ColumnBase):
         data: Buffer,
         size: int | None,
         dtype: np.dtype | pd.DatetimeTZDtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple = (),
+        mask: Buffer | None,
+        offset: int,
+        null_count: int | None,
+        children: tuple,
     ):
         if not isinstance(data, Buffer):
             raise ValueError("data must be a Buffer.")

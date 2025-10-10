@@ -105,10 +105,10 @@ class DatetimeColumn(TemporalBaseColumn):
         data: Buffer,
         size: int | None,
         dtype: np.dtype | pd.DatetimeTZDtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple = (),
+        mask: Buffer | None,
+        offset: int,
+        null_count: int | None,
+        children: tuple,
     ):
         dtype = self._validate_dtype_instance(dtype)
         super().__init__(
@@ -646,6 +646,7 @@ class DatetimeColumn(TemporalBaseColumn):
                 size=self.size,
                 offset=self.offset,
                 null_count=self.null_count,
+                children=self.base_children,  # type: ignore[arg-type]
             )
         if cudf.get_option("mode.pandas_compatible"):
             self._dtype = get_dtype_of_same_type(dtype, self.dtype)
@@ -762,10 +763,10 @@ class DatetimeTZColumn(DatetimeColumn):
         data: Buffer,
         size: int | None,
         dtype: pd.DatetimeTZDtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple = (),
+        mask: Buffer | None,
+        offset: int,
+        null_count: int | None,
+        children: tuple,
     ):
         super().__init__(
             data=data,
@@ -831,6 +832,7 @@ class DatetimeTZColumn(DatetimeColumn):
             size=self.size,
             offset=self.offset,
             null_count=self.null_count,
+            children=self.base_children,  # type: ignore[arg-type]
         )
 
     @functools.cached_property

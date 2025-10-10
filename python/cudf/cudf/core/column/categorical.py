@@ -100,10 +100,10 @@ class CategoricalColumn(column.ColumnBase):
         data: None,
         size: int | None,
         dtype: CategoricalDtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple[NumericalColumn] = (),  # type: ignore[assignment]
+        mask: Buffer | None,
+        offset: int,
+        null_count: int | None,
+        children: tuple[NumericalColumn],  # type: ignore[assignment]
     ):
         if data is not None:
             raise ValueError(f"{data=} must be None")

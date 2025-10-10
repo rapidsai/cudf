@@ -46,10 +46,10 @@ class ListColumn(ColumnBase):
         data: None,
         size: int,
         dtype: ListDtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple[NumericalColumn, ColumnBase] = (),  # type: ignore[assignment]
+        mask: Buffer | None,
+        offset: int,
+        null_count: int | None,
+        children: tuple[NumericalColumn, ColumnBase],  # type: ignore[assignment]
     ):
         if data is not None:
             raise ValueError("data must be None")

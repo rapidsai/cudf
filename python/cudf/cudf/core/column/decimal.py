@@ -72,10 +72,10 @@ class DecimalBaseColumn(NumericalBaseColumn):
         data: Buffer,
         size: int,
         dtype: DecimalDtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple = (),
+        mask: Buffer | None,
+        offset: int,
+        null_count: int | None,
+        children: tuple,
     ):
         if not isinstance(size, int):
             raise ValueError("Must specify an integer size")
@@ -353,10 +353,10 @@ class Decimal32Column(DecimalBaseColumn):
         data: Buffer,
         size: int,
         dtype: Decimal32Dtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple = (),
+        mask: Buffer | None,
+        offset: int,
+        null_count: int | None,
+        children: tuple,
     ):
         if not isinstance(dtype, Decimal32Dtype):
             raise ValueError(f"{dtype=} must be a Decimal32Dtype instance")
@@ -424,10 +424,10 @@ class Decimal128Column(DecimalBaseColumn):
         data: Buffer,
         size: int,
         dtype: Decimal128Dtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple = (),
+        mask: Buffer | None,
+        offset: int,
+        null_count: int | None,
+        children: tuple,
     ):
         if (
             not cudf.get_option("mode.pandas_compatible")
@@ -478,10 +478,10 @@ class Decimal64Column(DecimalBaseColumn):
         data: Buffer,
         size: int,
         dtype: Decimal64Dtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple = (),
+        mask: Buffer | None,
+        offset: int,
+        null_count: int | None,
+        children: tuple,
     ):
         if not isinstance(dtype, Decimal64Dtype):
             raise ValueError(f"{dtype=} must be a Decimal64Dtype instance")

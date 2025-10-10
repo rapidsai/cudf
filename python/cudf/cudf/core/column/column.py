@@ -147,10 +147,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         data: None | Buffer,
         size: int,
         dtype,
-        mask: None | Buffer = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple[ColumnBase, ...] = (),
+        mask: None | Buffer,
+        offset: int,
+        null_count: int | None,
+        children: tuple[ColumnBase, ...],
     ) -> None:
         if size < 0:
             raise ValueError("size must be >=0")
@@ -1061,6 +1061,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     else self.base_mask.copy(deep=False),
                     size=self.size,
                     offset=self.offset,
+                    null_count=self.null_count,
                     children=tuple(
                         col.copy(deep=False) for col in self.base_children
                     ),
@@ -2544,11 +2545,11 @@ def build_column(
     data: Buffer | None,
     dtype: DtypeObj,
     *,
-    size: int | None = None,
-    mask: Buffer | None = None,
-    offset: int = 0,
-    null_count: int | None = None,
-    children: tuple[ColumnBase, ...] = (),
+    size: int | None,
+    mask: Buffer | None,
+    offset: int,
+    null_count: int | None,
+    children: tuple[ColumnBase, ...],
 ) -> ColumnBase:
     """
     Build a Column of the appropriate type from the given parameters
@@ -2584,6 +2585,7 @@ def build_column(
             size=size,
             offset=offset,
             null_count=null_count,
+            children=children,
         )
     elif dtype.kind == "M":
         return cudf.core.column.DatetimeColumn(
@@ -2593,6 +2595,7 @@ def build_column(
             size=size,
             offset=offset,
             null_count=null_count,
+            children=children,
         )
     elif dtype.kind == "m":
         return cudf.core.column.TimeDeltaColumn(
@@ -2602,6 +2605,7 @@ def build_column(
             size=size,
             offset=offset,
             null_count=null_count,
+            children=children,
         )
     elif (
         dtype == CUDF_STRING_DTYPE
@@ -2686,6 +2690,7 @@ def build_column(
             size=size,
             offset=offset,
             null_count=null_count,
+            children=children,
         )
     else:
         raise TypeError(f"Unrecognized dtype: {dtype}")

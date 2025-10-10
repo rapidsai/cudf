@@ -53,10 +53,10 @@ class StructColumn(ColumnBase):
         data: None,
         size: int,
         dtype: StructDtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple[ColumnBase, ...] = (),
+        mask: Buffer | None,
+        offset: int,
+        null_count: int | None,
+        children: tuple[ColumnBase, ...],
     ):
         if data is not None:
             raise ValueError("data must be None.")
