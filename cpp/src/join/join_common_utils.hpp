@@ -43,6 +43,23 @@ struct mixed_join_always_not_equal {
   }
 };
 
+/**
+ * @brief Hash functions for double hashing in mixed joins.
+ *
+ * These hashers implement a double hashing scheme for the mixed join multiset:
+ *
+ * - mixed_join_hasher1: Determines the initial probe slot for a given key. We simply use
+ *   the precomputed row hash value, which is the first element of our (row_hash, row_index) pair.
+ *
+ * - mixed_join_hasher2: Determines the step size for the probing sequence. This allows keys
+ *   with the same hash value to have different step sizes, helping to avoid secondary clustering.
+ *
+ * Note: Strictly speaking, this setup does not truly avoid secondary clustering because rows with
+ * the same hash value still receive the same step size. A true secondary clustering avoidance
+ * method would compute a different hash value for each row. However, based on performance testing,
+ * this current approach actually delivers better performance than computing row hashes with a
+ * different hasher.
+ */
 struct mixed_join_hasher1 {
   __device__ constexpr hash_value_type operator()(pair_type const& key) const noexcept
   {
