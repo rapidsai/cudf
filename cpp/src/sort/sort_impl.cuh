@@ -20,6 +20,7 @@
 #include "sort_column_impl.cuh"
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/row_operator/lexicographic.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <thrust/sequence.h>

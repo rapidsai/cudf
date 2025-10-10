@@ -17,7 +17,7 @@
 #pragma once
 
 #include <cudf/aggregation.hpp>
-#include <cudf/detail/row_operator/row_operators.cuh>
+#include <cudf/detail/row_operator/lexicographic.cuh>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/reduction/detail/reduction_operators.cuh>

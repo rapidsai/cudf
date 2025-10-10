@@ -16,8 +16,8 @@
 
 #include "contains_table_impl.cuh"
 
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/row_operator/primitive_row_operators.cuh>
-#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/detail/search.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>

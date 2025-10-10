@@ -19,7 +19,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/labeling/label_segments.cuh>
-#include <cudf/detail/row_operator/row_operators.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/reduction/detail/segmented_reduction.cuh>
 #include <cudf/reduction/detail/segmented_reduction_functions.hpp>
 #include <cudf/table/table_view.hpp>
