@@ -93,7 +93,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
         dtype: np.dtype,
         mask: Buffer | None,
         offset: int,
-        null_count: int | None,
+        null_count: int,
         children: tuple = (),
     ):
         if cudf.get_option("mode.pandas_compatible"):

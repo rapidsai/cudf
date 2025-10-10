@@ -48,7 +48,7 @@ class ListColumn(ColumnBase):
         dtype: ListDtype,
         mask: Buffer | None,
         offset: int,
-        null_count: int | None,
+        null_count: int,
         children: tuple[NumericalColumn, ColumnBase],  # type: ignore[assignment]
     ):
         if data is not None:

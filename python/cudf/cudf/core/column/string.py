@@ -98,7 +98,7 @@ class StringColumn(ColumnBase):
         dtype: np.dtype,
         mask: Buffer | None,
         offset: int,
-        null_count: int | None,
+        null_count: int,
         children: tuple[ColumnBase],  # type: ignore[assignment]
     ):
         if not isinstance(data, Buffer):

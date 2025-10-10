@@ -74,7 +74,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         dtype: DecimalDtype,
         mask: Buffer | None,
         offset: int,
-        null_count: int | None,
+        null_count: int,
         children: tuple,
     ):
         if not isinstance(size, int):
@@ -355,7 +355,7 @@ class Decimal32Column(DecimalBaseColumn):
         dtype: Decimal32Dtype,
         mask: Buffer | None,
         offset: int,
-        null_count: int | None,
+        null_count: int,
         children: tuple,
     ):
         if not isinstance(dtype, Decimal32Dtype):
@@ -426,7 +426,7 @@ class Decimal128Column(DecimalBaseColumn):
         dtype: Decimal128Dtype,
         mask: Buffer | None,
         offset: int,
-        null_count: int | None,
+        null_count: int,
         children: tuple,
     ):
         if (
@@ -480,7 +480,7 @@ class Decimal64Column(DecimalBaseColumn):
         dtype: Decimal64Dtype,
         mask: Buffer | None,
         offset: int,
-        null_count: int | None,
+        null_count: int,
         children: tuple,
     ):
         if not isinstance(dtype, Decimal64Dtype):

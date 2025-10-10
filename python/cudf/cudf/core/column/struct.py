@@ -55,7 +55,7 @@ class StructColumn(ColumnBase):
         dtype: StructDtype,
         mask: Buffer | None,
         offset: int,
-        null_count: int | None,
+        null_count: int,
         children: tuple[ColumnBase, ...],
     ):
         if data is not None:

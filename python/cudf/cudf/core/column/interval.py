@@ -28,7 +28,7 @@ class IntervalColumn(StructColumn):
         dtype: IntervalDtype,
         mask: Buffer | None,
         offset: int,
-        null_count: int | None,
+        null_count: int,
         children: tuple[ColumnBase, ColumnBase],  # type: ignore[assignment]
     ):
         if len(children) != 2:

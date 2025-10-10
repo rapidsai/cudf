@@ -76,7 +76,7 @@ class NumericalColumn(NumericalBaseColumn):
         dtype: np.dtype,
         mask: Buffer | None,
         offset: int,
-        null_count: int | None,
+        null_count: int,
         children: tuple,
     ):
         if (

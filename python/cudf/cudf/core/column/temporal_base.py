@@ -55,7 +55,7 @@ class TemporalBaseColumn(ColumnBase):
         dtype: np.dtype | pd.DatetimeTZDtype,
         mask: Buffer | None,
         offset: int,
-        null_count: int | None,
+        null_count: int,
         children: tuple,
     ):
         if not isinstance(data, Buffer):

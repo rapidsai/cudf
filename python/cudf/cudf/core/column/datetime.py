@@ -107,7 +107,7 @@ class DatetimeColumn(TemporalBaseColumn):
         dtype: np.dtype | pd.DatetimeTZDtype,
         mask: Buffer | None,
         offset: int,
-        null_count: int | None,
+        null_count: int,
         children: tuple,
     ):
         dtype = self._validate_dtype_instance(dtype)

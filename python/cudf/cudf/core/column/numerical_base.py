@@ -66,7 +66,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         dtype: DecimalDtype | np.dtype,
         mask: Buffer | None,
         offset: int,
-        null_count: int | None,
+        null_count: int,
         children: tuple,
     ):
         if not isinstance(data, Buffer):

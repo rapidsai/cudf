@@ -149,7 +149,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         dtype,
         mask: None | Buffer,
         offset: int,
-        null_count: int | None,
+        null_count: int,
         children: tuple[ColumnBase, ...],
     ) -> None:
         if size < 0:
@@ -158,6 +158,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self._distinct_count: dict[bool, int] = {}
         self._dtype = dtype
         self._offset = offset
+        if null_count < 0:
+            raise ValueError("null_count must be >=0")
         self._null_count = null_count
         self._mask = None
         self._base_mask = None
@@ -336,7 +338,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             except AttributeError:
                 # attr was not called yet, so ignore.
                 pass
-        self._null_count = None
+        self._null_count = None  # type: ignore[assignment]
 
     def set_mask(self, value) -> Self:
         """
@@ -2548,7 +2550,7 @@ def build_column(
     size: int,
     mask: Buffer | None,
     offset: int,
-    null_count: int | None,
+    null_count: int,
     children: tuple[ColumnBase, ...],
 ) -> ColumnBase:
     """

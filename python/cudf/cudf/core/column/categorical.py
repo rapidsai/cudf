@@ -102,7 +102,7 @@ class CategoricalColumn(column.ColumnBase):
         dtype: CategoricalDtype,
         mask: Buffer | None,
         offset: int,
-        null_count: int | None,
+        null_count: int,
         children: tuple[NumericalColumn],  # type: ignore[assignment]
     ):
         if data is not None:
