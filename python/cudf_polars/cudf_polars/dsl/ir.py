@@ -1332,11 +1332,11 @@ class Select(IR):
             and Select._is_len_expr(self.exprs)
             and self.children[0].typ == "parquet"
             and self.children[0].predicate is None
-        ):
+        ):  # pragma: no cover
             stream = get_cuda_stream()
-            scan = self.children[0]  # pragma: no cover
-            effective_rows = scan.fast_count()  # pragma: no cover
-            dtype = DataType(pl.UInt32())  # pragma: no cover
+            scan = self.children[0]
+            effective_rows = scan.fast_count()
+            dtype = DataType(pl.UInt32())
             col = Column(
                 plc.Column.from_scalar(
                     plc.Scalar.from_py(effective_rows, dtype.plc_type, stream=stream),
@@ -1345,8 +1345,8 @@ class Select(IR):
                 ),
                 name=self.exprs[0].name or "len",
                 dtype=dtype,
-            )  # pragma: no cover
-            return DataFrame([col], stream=stream)  # pragma: no cover
+            )
+            return DataFrame([col], stream=stream)
 
         return super().evaluate(cache=cache, timer=timer)
 
