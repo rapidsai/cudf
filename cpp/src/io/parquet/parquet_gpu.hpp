@@ -755,6 +755,7 @@ uint32_t get_aggregated_decode_kernel_mask(cudf::detail::hostdevice_span<PageInf
  */
 void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
                         cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                        cudf::device_span<bool const> page_mask,
                         size_t min_row,
                         size_t num_rows,
                         bool compute_num_rows,

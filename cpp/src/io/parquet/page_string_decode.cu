@@ -594,6 +594,7 @@ template <typename level_t>
 CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   compute_string_page_bounds_kernel(PageInfo* pages,
                                     device_span<ColumnChunkDesc const> chunks,
+                                    device_span<bool const> page_mask,
                                     size_t min_row,
                                     size_t num_rows,
                                     bool all_rows)
@@ -650,6 +651,17 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
 
   // if we have size info, then we only need to do this for bounds pages
   if (pp->has_page_index && !is_bounds_pg) { return; }
+
+  // Zero out everything and return early if the page is pruned
+  if (not page_mask.empty() and not page_mask[page_idx]) {
+    if (t == 0) {
+      pp->num_nulls  = 0;
+      pp->num_valids = 0;
+      pp->start_val  = 0;
+      pp->end_val    = 0;
+    }
+    return;
+  }
 
   // find start/end value indices
   auto const [start_value, end_value] =
@@ -1016,10 +1028,10 @@ void compute_page_string_sizes_pass1(cudf::detail::hostdevice_span<PageInfo> pag
 
   if (level_type_size == 1) {
     compute_string_page_bounds_kernel<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, all_rows);
+      pages.device_ptr(), chunks, page_mask, min_row, num_rows, all_rows);
   } else {
     compute_string_page_bounds_kernel<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, all_rows);
+      pages.device_ptr(), chunks, page_mask, min_row, num_rows, all_rows);
   }
 
   // kernel mask may contain other kernels we don't need to count
