@@ -44,11 +44,11 @@ namespace CUDF_EXPORT cudf {
  */
 class sort_merge_join {
  public:
-  sort_merge_join()                                    = delete;
-  sort_merge_join(sort_merge_join const&)              = delete;
-  sort_merge_join(sort_merge_join&&)                   = delete;
-  sort_merge_join& operator=(sort_merge_join const&)   = delete;
-  sort_merge_join& operator=(sort_merge_join&&)        = delete;
+  sort_merge_join()                                  = delete;
+  sort_merge_join(sort_merge_join const&)            = delete;
+  sort_merge_join(sort_merge_join&&)                 = delete;
+  sort_merge_join& operator=(sort_merge_join const&) = delete;
+  sort_merge_join& operator=(sort_merge_join&&)      = delete;
 
   /**
    * @brief Construct a sort-merge join object that pre-processes the right table

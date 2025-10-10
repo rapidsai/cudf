@@ -32,11 +32,11 @@ class cuda_stream_pool {
   // matching type used in rmm::cuda_stream_pool::get_stream(stream_id)
   using stream_id_type = std::size_t;
 
-  virtual ~cuda_stream_pool()                            = default;
-  cuda_stream_pool(cuda_stream_pool const&)              = delete;
-  cuda_stream_pool(cuda_stream_pool&&)                   = delete;
-  cuda_stream_pool& operator=(cuda_stream_pool const&)   = delete;
-  cuda_stream_pool& operator=(cuda_stream_pool&&)        = delete;
+  virtual ~cuda_stream_pool()                          = default;
+  cuda_stream_pool(cuda_stream_pool const&)            = delete;
+  cuda_stream_pool(cuda_stream_pool&&)                 = delete;
+  cuda_stream_pool& operator=(cuda_stream_pool const&) = delete;
+  cuda_stream_pool& operator=(cuda_stream_pool&&)      = delete;
 
   /**
    * @brief Get a `cuda_stream_view` of a stream in the pool.
