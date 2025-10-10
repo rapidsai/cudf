@@ -26,10 +26,10 @@ class IntervalColumn(StructColumn):
         data: None,
         size: int,
         dtype: IntervalDtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple[ColumnBase, ColumnBase] = (),  # type: ignore[assignment]
+        mask: Buffer | None,
+        offset: int,
+        null_count: int,
+        children: tuple[ColumnBase, ColumnBase],  # type: ignore[assignment]
     ):
         if len(children) != 2:
             raise ValueError(

@@ -98,22 +98,16 @@ class CategoricalColumn(column.ColumnBase):
     def __init__(
         self,
         data: None,
-        size: int | None,
+        size: int,
         dtype: CategoricalDtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple[NumericalColumn] = (),  # type: ignore[assignment]
+        mask: Buffer | None,
+        offset: int,
+        null_count: int,
+        children: tuple[NumericalColumn],  # type: ignore[assignment]
     ):
         if data is not None:
             raise ValueError(f"{data=} must be None")
         validate_categorical_children(children)
-        if size is None:
-            child = children[0]
-            assert child.offset == 0
-            assert child.base_mask is None
-            size = child.size
-            size = size - offset
         if not isinstance(dtype, CategoricalDtype):
             raise ValueError(
                 f"{dtype=} must be cudf.CategoricalDtype instance."
