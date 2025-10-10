@@ -129,10 +129,9 @@ struct mixed_join_setup_data {
   mixed_multiset_type hash_table;
   std::shared_ptr<detail::row::equality::preprocessed_table> preprocessed_build;
   std::shared_ptr<detail::row::equality::preprocessed_table> preprocessed_probe;
-  decltype(table_device_view::create(std::declval<table_view>(),
-                                     std::declval<rmm::cuda_stream_view>())) left_conditional_view;
-  decltype(table_device_view::create(std::declval<table_view>(),
-                                     std::declval<rmm::cuda_stream_view>())) right_conditional_view;
+  std::unique_ptr<table_device_view, std::function<void(table_device_view*)>> left_conditional_view;
+  std::unique_ptr<table_device_view, std::function<void(table_device_view*)>>
+    right_conditional_view;
   detail::grid_1d config;
   thread_index_type shmem_size_per_block;
   row_equality equality_probe;
