@@ -56,10 +56,10 @@ class hostdevice_vector {
   hostdevice_vector() : hostdevice_vector(0, cudf::get_default_stream()) {}
 
   explicit hostdevice_vector(size_t size, rmm::cuda_stream_view stream)
-    : use_integrated_memory{cudf::io::integrated_memory_optimization::is_enabled()},
+    : keep_single_copy{cudf::io::integrated_memory_optimization::is_enabled()},
       h_data{make_pinned_vector_async<T>(size, stream)},
-      d_data{use_integrated_memory ? 0 : size, stream},
-      _device_ptr{use_integrated_memory ? h_data.data() : d_data.data()}
+      d_data{keep_single_copy ? 0 : size, stream},
+      _device_ptr{keep_single_copy ? h_data.data() : d_data.data()}
   {
   }
 
@@ -105,7 +105,7 @@ class hostdevice_vector {
 
   void host_to_device_async(rmm::cuda_stream_view stream)
   {
-    if (!use_integrated_memory) { cuda_memcpy_async<T>(d_data, h_data, stream); }
+    if (not keep_single_copy) { cuda_memcpy_async<T>(d_data, h_data, stream); }
   }
 
   void host_to_device(rmm::cuda_stream_view stream)
@@ -115,7 +115,7 @@ class hostdevice_vector {
   }
   void device_to_host_async(rmm::cuda_stream_view stream)
   {
-    if (!use_integrated_memory) { cuda_memcpy_async<T>(h_data, d_data, stream); }
+    if (not keep_single_copy) { cuda_memcpy_async<T>(h_data, d_data, stream); }
   }
 
   void device_to_host(rmm::cuda_stream_view stream)
@@ -137,7 +137,7 @@ class hostdevice_vector {
   }
 
  private:
-  bool use_integrated_memory;
+  bool keep_single_copy;
   cudf::detail::host_vector<T> h_data;
   rmm::device_uvector<T> d_data;
   T* _device_ptr{};  // Device pointer for integrated memory systems
