@@ -250,7 +250,7 @@ _COMPARISON_BINOPS = {
 
 
 def _parquet_physical_types(
-    schema: Schema, paths: list[str], columns: list[str] | None
+    schema: Schema, paths: list[str], columns: list[str] | None, stream: Stream
 ) -> dict[str, plc.DataType]:
     # TODO: Read the physical types as cudf::data_type's using
     # read_parquet_metadata or another parquet API
@@ -260,7 +260,7 @@ def _parquet_physical_types(
     if columns is not None:
         options.set_columns(columns)
     options.set_num_rows(0)
-    df = plc.io.parquet.read_parquet(options)
+    df = plc.io.parquet.read_parquet(options, stream=stream)
     return dict(zip(schema.keys(), [c.type() for c in df.tbl.columns()], strict=True))
 
 
@@ -317,7 +317,11 @@ def _align_parquet_schema(df: DataFrame, schema: Schema) -> DataFrame:
             and ((src.id() != dst.id()) or (src.scale() != dst.scale()))
         ):
             cast_list.append(
-                Column(plc.unary.cast(col.obj, dst), name=name, dtype=schema[name])
+                Column(
+                    plc.unary.cast(col.obj, dst, stream=df.stream),
+                    name=name,
+                    dtype=schema[name],
+                )
             )
 
     if cast_list:
@@ -551,6 +555,7 @@ class Scan(IR):
             plc.Column.from_arrow(
                 pl.Series(values=rows_per_path, dtype=pl.datatypes.Int32())
             ),
+            stream=df.stream,
         ).columns()
         dtype = DataType(pl.String())
         return df.with_columns([Column(filepaths, name=name, dtype=dtype)])
@@ -664,7 +669,7 @@ class Scan(IR):
                 options.set_na_values(null_values)
                 if comment is not None:
                     options.set_comment(comment)
-                tbl_w_meta = plc.io.csv.read_csv(options)
+                tbl_w_meta = plc.io.csv.read_csv(options, stream=stream)
                 pieces.append(tbl_w_meta)
                 if include_file_paths is not None:
                     seen_paths.append(p)
@@ -680,7 +685,7 @@ class Scan(IR):
                 strict=True,
             )
             df = DataFrame.from_table(
-                plc.concatenate.concatenate(list(tables)),
+                plc.concatenate.concatenate(list(tables), stream=stream),
                 colnames,
                 [schema[colname] for colname in colnames],
                 stream=stream,
@@ -700,7 +705,7 @@ class Scan(IR):
                     _cast_literals_to_physical_types(
                         predicate.value,
                         _parquet_physical_types(
-                            schema, paths, with_columns or list(schema.keys())
+                            schema, paths, with_columns or list(schema.keys()), stream
                         ),
                     )
                 )
@@ -720,6 +725,7 @@ class Scan(IR):
                     options,
                     chunk_read_limit=parquet_options.chunk_read_limit,
                     pass_read_limit=parquet_options.pass_read_limit,
+                    stream=stream,
                 )
                 chunk = reader.read_chunk()
                 tbl = chunk.tbl
@@ -731,7 +737,7 @@ class Scan(IR):
                     tbl = chunk.tbl
                     for i in range(tbl.num_columns()):
                         concatenated_columns[i] = plc.concatenate.concatenate(
-                            [concatenated_columns[i], tbl._columns[i]]
+                            [concatenated_columns[i], tbl._columns[i]], stream=stream
                         )
                         # Drop residual columns to save memory
                         tbl._columns[i] = None
@@ -747,7 +753,7 @@ class Scan(IR):
                         include_file_paths, paths, chunk.num_rows_per_source, df
                     )
             else:
-                tbl_w_meta = plc.io.parquet.read_parquet(options)
+                tbl_w_meta = plc.io.parquet.read_parquet(options, stream=stream)
                 # TODO: consider nested column names?
                 col_names = tbl_w_meta.column_names(include_children=False)
                 df = DataFrame.from_table(
@@ -774,7 +780,8 @@ class Scan(IR):
                     lines=True,
                     dtypes=json_schema,
                     prune_columns=True,
-                )
+                ),
+                stream=stream,
             )
             # TODO: I don't think cudf-polars supports nested types in general right now
             # (but when it does, we should pass child column names from nested columns in)
@@ -797,10 +804,10 @@ class Scan(IR):
             name, offset = row_index
             offset += skip_rows
             dtype = schema[name]
-            step = plc.Scalar.from_py(1, dtype.plc_type)
-            init = plc.Scalar.from_py(offset, dtype.plc_type)
+            step = plc.Scalar.from_py(1, dtype.plc_type, stream=stream)
+            init = plc.Scalar.from_py(offset, dtype.plc_type, stream=stream)
             index_col = Column(
-                plc.filling.sequence(df.num_rows, init, step),
+                plc.filling.sequence(df.num_rows, init, step, stream=stream),
                 is_sorted=plc.types.Sorted.YES,
                 order=plc.types.Order.ASCENDING,
                 null_order=plc.types.NullOrder.AFTER,
@@ -976,7 +983,7 @@ class Sink(IR):
             .inter_column_delimiter(chr(serialize["separator"]))
             .build()
         )
-        plc.io.csv.write_csv(options)
+        plc.io.csv.write_csv(options, stream=df.stream)
 
     @classmethod
     def _write_json(cls, target: plc.io.SinkInfo, df: DataFrame) -> None:
@@ -993,7 +1000,7 @@ class Sink(IR):
             .utf8_escaped(val=False)
             .build()
         )
-        plc.io.json.write_json(options)
+        plc.io.json.write_json(options, stream=df.stream)
 
     @staticmethod
     def _make_parquet_metadata(df: DataFrame) -> plc.io.types.TableInputMetadata:
@@ -1053,7 +1060,9 @@ class Sink(IR):
             ).metadata(metadata)
             builder = cls._apply_parquet_writer_options(builder, options)
             writer_options = builder.build()
-            writer = plc.io.parquet.ChunkedParquetWriter.from_options(writer_options)
+            writer = plc.io.parquet.ChunkedParquetWriter.from_options(
+                writer_options, stream=df.stream
+            )
 
             # TODO: Can be based on a heuristic that estimates chunk size
             # from the input table size and available GPU memory.
@@ -1061,6 +1070,7 @@ class Sink(IR):
             table_chunks = plc.copying.split(
                 df.table,
                 [i * df.table.num_rows() // num_chunks for i in range(1, num_chunks)],
+                stream=df.stream,
             )
             for chunk in table_chunks:
                 writer.write(chunk)
@@ -1072,7 +1082,7 @@ class Sink(IR):
             ).metadata(metadata)
             builder = cls._apply_parquet_writer_options(builder, options)
             writer_options = builder.build()
-            plc.io.parquet.write_parquet(writer_options)
+            plc.io.parquet.write_parquet(writer_options, stream=df.stream)
 
     @classmethod
     @log_do_evaluate
@@ -2023,6 +2033,8 @@ class Join(IR):
         right_policy: plc.copying.OutOfBoundsPolicy,
         *,
         left_primary: bool = True,
+        left_stream: Stream,
+        right_stream: Stream,
     ) -> list[plc.Column]:
         """
         Reorder gather maps to satisfy polars join order restrictions.
@@ -2042,8 +2054,15 @@ class Join(IR):
         right_policy
             Nullify policy for right map
         left_primary
-            Whether to preserve the left input row order first.
+            Whether to preserve the left input row order first, and which
+            input stream to use for the primary sort.
             Defaults to True.
+        left_stream
+            CUDA stream used for device memory operations and kernel launches
+            on the left dataframe.
+        right_stream
+            CUDA stream used for device memory operations and kernel launches
+            on the right dataframe.
 
         Returns
         -------
@@ -2056,14 +2075,24 @@ class Join(IR):
         the original row order of the left side, breaking ties by the right side.
         And vice versa when ``left_primary`` is False.
         """
-        init = plc.Scalar.from_py(0, plc.types.SIZE_TYPE)
-        step = plc.Scalar.from_py(1, plc.types.SIZE_TYPE)
+        if left_primary:
+            primary_stream = left_stream
+        else:
+            primary_stream = right_stream
+        init = plc.Scalar.from_py(0, plc.types.SIZE_TYPE, stream=primary_stream)
+        step = plc.Scalar.from_py(1, plc.types.SIZE_TYPE, stream=primary_stream)
 
         (left_order_col,) = plc.copying.gather(
-            plc.Table([plc.filling.sequence(left_rows, init, step)]), lg, left_policy
+            plc.Table([plc.filling.sequence(left_rows, init, step)]),
+            lg,
+            left_policy,
+            stream=left_stream,
         ).columns()
         (right_order_col,) = plc.copying.gather(
-            plc.Table([plc.filling.sequence(right_rows, init, step)]), rg, right_policy
+            plc.Table([plc.filling.sequence(right_rows, init, step)]),
+            rg,
+            right_policy,
+            stream=right_stream,
         ).columns()
 
         keys = (
@@ -2072,11 +2101,14 @@ class Join(IR):
             else plc.Table([right_order_col, left_order_col])
         )
 
+        # TODO(Tom): figure out if we need to sync / join the two streams before the sort.
+
         return plc.sorting.stable_sort_by_key(
             plc.Table([lg, rg]),
             keys,
             [plc.types.Order.ASCENDING, plc.types.Order.ASCENDING],
             [plc.types.NullOrder.AFTER, plc.types.NullOrder.AFTER],
+            stream=primary_stream,
         ).columns()
 
     @staticmethod
@@ -2210,6 +2242,8 @@ class Join(IR):
                     rg,
                     right_policy,
                     left_primary=maintain_order.startswith("left"),
+                    left_stream=left.stream,
+                    right_stream=right.stream,
                 )
             if coalesce:
                 if how == "Full":
@@ -2930,14 +2964,17 @@ class Empty(IR):
     @nvtx_annotate_cudf_polars(message="Empty")
     def do_evaluate(cls, schema: Schema) -> DataFrame:  # pragma: no cover
         """Evaluate and return a dataframe."""
+        stream = get_cuda_stream()
         return DataFrame(
             [
                 Column(
-                    plc.column_factories.make_empty_column(dtype.plc_type),
+                    plc.column_factories.make_empty_column(
+                        dtype.plc_type, stream=stream
+                    ),
                     dtype=dtype,
                     name=name,
                 )
                 for name, dtype in schema.items()
             ],
-            stream=get_cuda_stream(),
+            stream=stream,
         )
