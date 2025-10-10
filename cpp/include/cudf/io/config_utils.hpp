@@ -63,7 +63,7 @@ namespace integrated_memory_optimization {
  */
 [[nodiscard]] inline bool is_enabled()
 {
-  static auto const policy = []() {
+  auto const policy = []() {
     auto const* env_val = std::getenv("LIBCUDF_INTEGRATED_MEMORY_OPTIMIZATION");
     if (env_val == nullptr) return std::string("AUTO");
     return std::string(env_val);
