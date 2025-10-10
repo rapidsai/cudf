@@ -31,26 +31,11 @@ cudf::size_type num_multiprocessors()
 
 bool has_integrated_memory()
 {
-  return true;
   int device = 0;
   CUDF_CUDA_TRY(cudaGetDevice(&device));
-
-  // Check for unified addressing support
-  int unified_addressing = 0;
-  CUDF_CUDA_TRY(cudaDeviceGetAttribute(&unified_addressing, cudaDevAttrUnifiedAddressing, device));
-
-  // Check for managed memory support
-  int managed_memory = 0;
-  CUDF_CUDA_TRY(cudaDeviceGetAttribute(&managed_memory, cudaDevAttrManagedMemory, device));
-
-  // Check for concurrent managed access
-  int concurrent_managed_access = 0;
-  CUDF_CUDA_TRY(
-    cudaDeviceGetAttribute(&concurrent_managed_access, cudaDevAttrConcurrentManagedAccess, device));
-
-  // Integrated memory systems typically support all three features
-  bool result = unified_addressing && managed_memory && concurrent_managed_access;
-  return result;
+  int is_integrated = 0;
+  CUDF_CUDA_TRY(cudaDeviceGetAttribute(&is_integrated, cudaDevAttrIntegrated, device));
+  return is_integrated != 0;
 }
 
 }  // namespace cudf::detail
