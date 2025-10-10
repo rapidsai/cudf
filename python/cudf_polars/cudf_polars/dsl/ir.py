@@ -21,9 +21,6 @@ from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, overload
 
-if TYPE_CHECKING:
-    import os
-
 from typing_extensions import assert_never
 
 import polars as pl
@@ -632,9 +629,8 @@ class Scan(IR):
                 with path.open() as f:
                     while f.readline() == "\n":
                         skiprows += 1
-                path_list: list[os.PathLike[Any]] = [path]
                 options = (
-                    plc.io.csv.CsvReaderOptions.builder(plc.io.SourceInfo(path_list))
+                    plc.io.csv.CsvReaderOptions.builder(plc.io.SourceInfo([path]))
                     .nrows(n_rows)
                     .skiprows(skiprows + skip_rows)
                     .lineterminator(str(eol))
@@ -718,24 +714,16 @@ class Scan(IR):
                     pass_read_limit=parquet_options.pass_read_limit,
                 )
                 chunk = reader.read_chunk()
-                tbl = chunk.tbl
                 # TODO: Nested column names
                 names = chunk.column_names(include_children=False)
-                concatenated_columns = tbl.columns()
+                concatenated_columns = chunk.tbl.columns()
                 while reader.has_next():
-                    chunk = reader.read_chunk()
-                    tbl = chunk.tbl
-                    tbl_columns = tbl.columns()
-                    for i in range(tbl.num_columns()):
-                        if (
-                            concatenated_columns[i] is not None
-                            and tbl_columns[i] is not None
-                        ):
-                            concatenated_columns[i] = plc.concatenate.concatenate(
-                                [concatenated_columns[i], tbl_columns[i]]
-                            )
-                        # Drop residual columns to save memory
-                        tbl_columns[i] = None  # type: ignore[call-overload]
+                    for i, next_column_chunk in enumerate(
+                        reader.read_chunk().tbl.columns()
+                    ):
+                        concatenated_columns[i] = plc.concatenate.concatenate(
+                            [concatenated_columns[i], next_column_chunk]
+                        )
                 df = DataFrame.from_table(
                     plc.Table(concatenated_columns),
                     names=names,
@@ -2101,18 +2089,18 @@ class Join(IR):
                 for col in template
             ]
 
-        result_columns = [
+        result = [
             Column(new, col.dtype, name=rename(col.name))
             for new, col in zip(columns, template, strict=True)
         ]
 
         if left:
-            result_columns = [
+            result = [
                 col.sorted_like(orig)
-                for col, orig in zip(result_columns, template, strict=True)
+                for col, orig in zip(result, template, strict=True)
             ]
 
-        return result_columns
+        return result
 
     @classmethod
     @log_do_evaluate

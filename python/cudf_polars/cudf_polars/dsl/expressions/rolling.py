@@ -373,7 +373,7 @@ class GroupedRollingWindow(Expr):
         self,
         op: FillNullWithStrategyOp,
         df: DataFrame,
-        _: plc.groupby.GroupBy,
+        _,
     ) -> tuple[list[str], list[DataType], list[plc.Table]]:
         named_exprs = op.named_exprs
 
@@ -384,17 +384,16 @@ class GroupedRollingWindow(Expr):
         # TODO: Now handling order_index being None, whereas before we were
         # assuming it was always non-None via _gather_columns call
         if op.order_index is not None:
-            gathered_tbl = plc.copying.gather(
+            vals_tbl = plc.copying.gather(
                 plc.Table(plc_cols),
                 op.order_index,
                 plc.copying.OutOfBoundsPolicy.NULLIFY,
             )
-            vals_tbl = gathered_tbl
         else:
             vals_tbl = plc.Table(plc_cols)  # pragma: no cover
         local_grouper = op.local_grouper
         assert isinstance(local_grouper, plc.groupby.GroupBy)
-        _, filled_tbl = local_grouper.replace_nulls(  # type: ignore[assignment]
+        _, filled_tbl = local_grouper.replace_nulls(
             vals_tbl,
             [op.policy] * len(plc_cols),
         )
@@ -409,7 +408,7 @@ class GroupedRollingWindow(Expr):
         self,
         op: CumSumOp,
         df: DataFrame,
-        _: plc.groupby.GroupBy,
+        _,
     ) -> tuple[list[str], list[DataType], list[plc.Table]]:
         cum_named = op.named_exprs
         order_index = op.order_index
@@ -425,12 +424,11 @@ class GroupedRollingWindow(Expr):
                 ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
                 for ne in cum_named
             ]
-            gathered_tbl = plc.copying.gather(
+            val_cols = plc.copying.gather(
                 plc.Table(plc_cols),
                 order_index,
                 plc.copying.OutOfBoundsPolicy.NULLIFY,
-            )
-            val_cols = gathered_tbl.columns()
+            ).columns()
         else:
             # TODO: Now handling order_index being None whereas before we were assuming it was always non-None
             val_cols = [  # pragma: no cover
@@ -446,7 +444,7 @@ class GroupedRollingWindow(Expr):
 
         local_grouper = op.local_grouper
         assert isinstance(local_grouper, plc.groupby.GroupBy)
-        _, tables = local_grouper.scan(requests)  # type: ignore[assignment]
+        _, tables = local_grouper.scan(requests)
 
         return out_names, out_dtypes, tables
 
@@ -558,7 +556,7 @@ class GroupedRollingWindow(Expr):
 
     def _gather_columns(
         self,
-        cols: list[Column],
+        cols: Sequence[Column],
         order_index: plc.Column,
     ) -> list[Column]:
         gathered_tbl = plc.copying.gather(
@@ -569,14 +567,14 @@ class GroupedRollingWindow(Expr):
 
         return [
             Column(
-                gathered_tbl.columns()[i],
+                gathered,
                 name=c.name,
                 dtype=c.dtype,
                 order=c.order,
                 null_order=c.null_order,
-                is_sorted=plc.types.Sorted.YES,
+                is_sorted=c.is_sorted,
             )
-            for i, c in enumerate(cols)
+            for gathered, c in zip(gathered_tbl.columns(), cols, strict=True)
         ]
 
     def do_evaluate(  # noqa: D102

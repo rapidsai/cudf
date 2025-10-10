@@ -210,30 +210,29 @@ class UnaryFunction(Expr):
             keep = plc.stream_compaction.DuplicateKeepOption.KEEP_ANY
             if values.is_sorted:
                 maintain_order = True
-                result = plc.stream_compaction.unique(
+                (compacted,) = plc.stream_compaction.unique(
                     plc.Table([values.obj]),
                     [0],
                     keep,
                     plc.types.NullEquality.EQUAL,
-                )
+                ).columns()
             else:
                 distinct = (
                     plc.stream_compaction.stable_distinct
                     if maintain_order
                     else plc.stream_compaction.distinct
                 )
-                result = distinct(
+                (compacted,) = distinct(
                     plc.Table([values.obj]),
                     [0],
                     keep,
                     plc.types.NullEquality.EQUAL,
                     plc.types.NanEquality.ALL_EQUAL,
-                )
-            (plc_column,) = result.columns()
-            column_result = Column(plc_column, dtype=self.dtype)
+                ).columns()
+            column = Column(compacted, dtype=self.dtype)
             if maintain_order:
-                column_result = column_result.sorted_like(values)
-            return column_result
+                column = column.sorted_like(values)
+            return column
         elif self.name == "set_sorted":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             (asc,) = self.options
@@ -347,10 +346,10 @@ class UnaryFunction(Expr):
                 )
             ):
                 return column
+
+            replacement: plc.replace.ReplacePolicy | plc.Scalar
             if strategy == "forward":
-                replacement: plc.replace.ReplacePolicy | plc.Scalar = (
-                    plc.replace.ReplacePolicy.PRECEDING
-                )
+                replacement = plc.replace.ReplacePolicy.PRECEDING
             elif strategy == "backward":
                 replacement = plc.replace.ReplacePolicy.FOLLOWING
             elif strategy == "min":
