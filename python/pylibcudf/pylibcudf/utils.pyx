@@ -66,15 +66,8 @@ def _is_concurrent_managed_access_supported():
     return supports_managed_access != 0
 
 
-if os.getenv("CUDF_NO_DEFAULT_STREAM_ARG", "0") == "1":
-    CUDF_NO_DEFAULT_STREAM_ARG = True
-else:
-    CUDF_NO_DEFAULT_STREAM_ARG = False
-
-
 cdef Stream _get_stream(Stream stream = None):
     if stream is None:
-        assert not CUDF_NO_DEFAULT_STREAM_ARG
         return CUDF_DEFAULT_STREAM
     return stream
 

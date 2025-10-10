@@ -2855,8 +2855,7 @@ class Union(IR):
     @nvtx_annotate_cudf_polars(message="Union")
     def do_evaluate(cls, zlice: Zlice | None, *dfs: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
-        stream = get_cuda_stream()
-        join_cuda_streams(downstreams=(stream,), upstreams=dfs)
+        stream = get_joined_cuda_stream(upstreams=(df.stream for df in dfs))
 
         # TODO: only evaluate what we need if we have a slice?
         return DataFrame.from_table(
