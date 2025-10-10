@@ -156,13 +156,13 @@ void build_join_hash_table(
     auto const iter = cudf::detail::make_counting_transform_iterator(0, pair_fn{d_hasher});
 
     if (nulls_equal == cudf::null_equality::EQUAL or not nullable(build)) {
-      hash_table.insert(iter, iter + build.num_rows(), stream.value());
+      hash_table.insert_async(iter, iter + build.num_rows(), stream.value());
     } else {
       auto const stencil = thrust::counting_iterator<size_type>{0};
       auto const pred    = row_is_valid{bitmask};
 
       // insert valid rows
-      hash_table.insert_if(iter, iter + build.num_rows(), stencil, pred, stream.value());
+      hash_table.insert_if_async(iter, iter + build.num_rows(), stencil, pred, stream.value());
     }
   };
 
