@@ -266,7 +266,7 @@ class stats_columns_collector : public ast::detail::expression_transformer {
    *
    * @return Boolean vector indicating input columns that can participate in stats based filtering
    */
-  thrust::host_vector<bool> get_stats_columns_mask() &&;
+  std::pair<thrust::host_vector<bool>, bool> get_stats_columns_mask() &&;
 
  protected:
   std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
@@ -276,6 +276,7 @@ class stats_columns_collector : public ast::detail::expression_transformer {
 
  private:
   thrust::host_vector<bool> _columns_mask;
+  bool _has_is_null_operator = false;
 };
 
 /**
@@ -311,6 +312,8 @@ class stats_expression_converter : public stats_columns_collector {
 
  private:
   ast::tree _stats_expr;
+  cudf::numeric_scalar<bool> _always_true_scalar{true};
+  ast::literal const _always_true{_always_true_scalar};
 };
 
 }  // namespace cudf::io::parquet::detail
