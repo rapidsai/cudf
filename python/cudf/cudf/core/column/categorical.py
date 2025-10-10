@@ -98,7 +98,7 @@ class CategoricalColumn(column.ColumnBase):
     def __init__(
         self,
         data: None,
-        size: int | None,
+        size: int,
         dtype: CategoricalDtype,
         mask: Buffer | None,
         offset: int,
@@ -108,12 +108,6 @@ class CategoricalColumn(column.ColumnBase):
         if data is not None:
             raise ValueError(f"{data=} must be None")
         validate_categorical_children(children)
-        if size is None:
-            child = children[0]
-            assert child.offset == 0
-            assert child.base_mask is None
-            size = child.size
-            size = size - offset
         if not isinstance(dtype, CategoricalDtype):
             raise ValueError(
                 f"{dtype=} must be cudf.CategoricalDtype instance."

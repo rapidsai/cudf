@@ -2545,7 +2545,7 @@ def build_column(
     data: Buffer | None,
     dtype: DtypeObj,
     *,
-    size: int | None,
+    size: int,
     mask: Buffer | None,
     offset: int,
     null_count: int | None,
