@@ -2899,6 +2899,7 @@ void filter_unary_operation_typed_test()
     auto const expected = cudf::apply_boolean_mask(written_table, *predicate);
 
     // JIT does not support nullness-dependent operators such as IS_NULL
+    // Ref: https://github.com/rapidsai/cudf/issues/20177
     auto constexpr use_jit = false;
 
     // Reading with Predicate Pushdown
@@ -3081,6 +3082,7 @@ TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTypedJIT)
   filter_typed_test<TypeParam, true>();
   // JIT does not support nullness-dependent operators such as IS_NULL so we can't call
   // `filter_unary_operation_typed_test`
+  // Ref: https://github.com/rapidsai/cudf/issues/20177
 }
 
 TEST_P(ParquetDecompressionTest, RoundTripBasic)
