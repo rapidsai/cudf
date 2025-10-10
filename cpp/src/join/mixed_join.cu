@@ -53,7 +53,7 @@ namespace {
  * This function exists as a performance optimization to work around the register spilling issue
  * reported in https://github.com/NVIDIA/cuCollections/issues/761. The new cuco hash table
  * implementation suffers from register spilling due to longer register live ranges, which can
- * cause significant performance degradation.
+ * cause up to 20x performance degradation.
  *
  * By precomputing the double hashing indices (initial slot and step size) and row hash values
  * in a separate pass, we reduce register pressure in the subsequent count and retrieve kernels.
@@ -91,6 +91,9 @@ precompute_mixed_join_data(mixed_multiset_type const& hash_table,
   auto const probe_hash_fn                 = hash_table.hash_function();
   static constexpr std::size_t bucket_size = mixed_multiset_type::bucket_size;
 
+  auto const num_buckets           = extent / bucket_size;
+  auto const num_buckets_minus_one = num_buckets - 1;
+
   // Functor to pre-compute both input pairs and initial slots and step sizes for double hashing.
   auto precompute_fn = [=] __device__(size_type i) {
     auto const probe_key = cuco::pair<hash_value_type, size_type>{hash_probe(i), i};
@@ -100,9 +103,9 @@ precompute_mixed_join_data(mixed_multiset_type const& hash_table,
     auto const hash2_val = cuda::std::get<1>(probe_hash_fn)(probe_key);
 
     auto const init_idx = static_cast<hash_value_type>(
-      (static_cast<std::size_t>(hash1_val) % (extent / bucket_size)) * bucket_size);
+      (static_cast<std::size_t>(hash1_val) % num_buckets) * bucket_size);
     auto const step_val = static_cast<hash_value_type>(
-      ((static_cast<std::size_t>(hash2_val) % (extent / bucket_size - 1)) + 1) * bucket_size);
+      ((static_cast<std::size_t>(hash2_val) % num_buckets_minus_one) + 1) * bucket_size);
 
     return cuda::std::pair{probe_key, cuda::std::pair{init_idx, step_val}};
   };
