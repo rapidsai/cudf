@@ -54,7 +54,9 @@ struct regex_program {
                                                regex_flags flags      = regex_flags::DEFAULT,
                                                capture_groups capture = capture_groups::EXTRACT);
 
-  regex_program() = delete;
+  regex_program()                                = delete;
+  regex_program(regex_program const&)            = delete;
+  regex_program& operator=(regex_program const&) = delete;
 
   /**
    * @brief Move constructor
