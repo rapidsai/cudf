@@ -58,6 +58,7 @@ build_example() {
 }
 
 build_example basic
+build_example hybrid_scan_io
 build_example strings
 build_example string_transforms
 build_example nested_types
