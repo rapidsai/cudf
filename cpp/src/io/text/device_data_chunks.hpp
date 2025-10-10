@@ -36,6 +36,11 @@ class device_uvector_data_chunk : public device_data_chunk {
  public:
   device_uvector_data_chunk(rmm::device_uvector<char>&& data) : _data(std::move(data)) {}
 
+  device_uvector_data_chunk(device_uvector_data_chunk const&)            = delete;
+  device_uvector_data_chunk& operator=(device_uvector_data_chunk const&) = delete;
+  device_uvector_data_chunk(device_uvector_data_chunk&&)                 = default;
+  device_uvector_data_chunk& operator=(device_uvector_data_chunk&&)      = default;
+
   [[nodiscard]] char const* data() const override { return _data.data(); }
   [[nodiscard]] std::size_t size() const override { return _data.size(); }
   operator device_span<char const>() const override { return _data; }
