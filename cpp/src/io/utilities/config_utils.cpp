@@ -16,7 +16,6 @@
 
 #include "getenv_or.hpp"
 
-#include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <kvikio/defaults.hpp>
@@ -69,51 +68,10 @@ enum class usage_policy : uint8_t { OFF, STABLE, ALWAYS };
 
 [[nodiscard]] bool is_all_enabled() { return get_env_policy() == usage_policy::ALWAYS; }
 
-[[nodiscard]] bool is_stable_enabled() { return is_all_enabled() or get_env_policy() == usage_policy::STABLE; }
+[[nodiscard]] bool is_stable_enabled()
+{
+  return is_all_enabled() or get_env_policy() == usage_policy::STABLE;
+}
 
 }  // namespace nvcomp_integration
-
-namespace integrated_memory_optimization {
-
-namespace {
-/**
- * @brief Defines which integrated memory optimization policy to use.
- */
-enum class optimization_policy : uint8_t { OFF, AUTO, ON };
-
-/**
- * @brief Get the current optimization policy.
- */
- [[nodiscard]]  optimization_policy get_env_policy()
-{
-  auto const env_val =
-    getenv_or<std::string>("LIBCUDF_INTEGRATED_MEMORY_OPTIMIZATION", "AUTO");
-  if (env_val == "OFF") return optimization_policy::OFF;
-  if (env_val == "AUTO") return optimization_policy::AUTO;
-  if (env_val == "ON") return optimization_policy::ON;
-  CUDF_FAIL("Invalid LIBCUDF_INTEGRATED_MEMORY_OPTIMIZATION value: " + env_val);
-}
-}  // namespace
-
-/**
- * @brief Check if integrated memory optimizations are enabled.
- *
- * Controlled by the LIBCUDF_INTEGRATED_MEMORY_OPTIMIZATION environment variable.
- * Valid values: "AUTO" (default), "ON", "OFF"
- * - AUTO: Use hardware detection (cudaDevAttrIntegrated)
- * - ON: Always enable optimization
- * - OFF: Always disable optimization
- */
-[[nodiscard]] bool is_enabled()
-{
-  auto const policy = get_env_policy();
-  switch (policy) {
-    case optimization_policy::OFF: return false;
-    case optimization_policy::ON: return true;
-    case optimization_policy::AUTO: return cudf::detail::has_integrated_memory();
-  }
-  CUDF_FAIL("Invalid LIBCUDF_INTEGRATED_MEMORY_OPTIMIZATION value");
-}
-
-}  // namespace integrated_memory_optimization
 }  // namespace cudf::io

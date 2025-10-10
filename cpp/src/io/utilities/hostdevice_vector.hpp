@@ -108,7 +108,8 @@ class hostdevice_vector {
     if (not keep_single_copy) { cuda_memcpy_async<T>(d_data, h_data, stream); }
   }
 
-  void host_to_device(rmm::cuda_stream_view stream)
+  [[deprecated("Use host_to_device_async instead")]] void host_to_device(
+    rmm::cuda_stream_view stream)
   {
     host_to_device_async(stream);
     stream.synchronize();
@@ -203,7 +204,11 @@ class hostdevice_2dvector {
   [[nodiscard]] size_t size_bytes() const noexcept { return _data.size_bytes(); }
 
   void host_to_device_async(rmm::cuda_stream_view stream) { _data.host_to_device_async(stream); }
-  void host_to_device(rmm::cuda_stream_view stream) { _data.host_to_device(stream); }
+  [[deprecated("Use host_to_device_async instead")]] void host_to_device(
+    rmm::cuda_stream_view stream)
+  {
+    _data.host_to_device(stream);
+  }
 
   void device_to_host_async(rmm::cuda_stream_view stream) { _data.device_to_host_async(stream); }
   void device_to_host(rmm::cuda_stream_view stream) { _data.device_to_host(stream); }
