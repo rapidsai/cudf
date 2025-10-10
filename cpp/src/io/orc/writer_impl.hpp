@@ -249,6 +249,11 @@ class writer::impl {
    */
   ~impl();
 
+  impl(impl const&)            = delete;
+  impl& operator=(impl const&) = delete;
+  impl(impl&&)                 = delete;
+  impl& operator=(impl&&)      = delete;
+
   /**
    * @brief Writes a single subtable as part of a larger ORC file/table write.
    *

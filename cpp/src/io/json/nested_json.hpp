@@ -144,6 +144,11 @@ struct device_json_column {
   // Type used to count number of rows
   using row_offset_t = size_type;
 
+  device_json_column(device_json_column const&)            = delete;
+  device_json_column& operator=(device_json_column const&) = delete;
+  device_json_column(device_json_column&&)                 = default;
+  device_json_column& operator=(device_json_column&&)      = default;
+
   // The inferred type of this column (list, struct, or value/string column)
   json_col_t type = json_col_t::Unknown;
 

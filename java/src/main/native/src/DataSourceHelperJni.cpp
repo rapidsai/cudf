@@ -66,7 +66,7 @@ class host_buffer_done_callback {
   explicit host_buffer_done_callback(JavaVM* jvm, jobject ds, long id) : jvm(jvm), ds(ds), id(id) {}
 
   host_buffer_done_callback(host_buffer_done_callback const& other) = delete;
-  host_buffer_done_callback(host_buffer_done_callback&& other)
+  host_buffer_done_callback(host_buffer_done_callback&& other) noexcept
     : jvm(other.jvm), ds(other.ds), id(other.id)
   {
     other.jvm = nullptr;

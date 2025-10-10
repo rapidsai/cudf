@@ -87,6 +87,11 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     static constexpr std::size_t default_offset_alloc =
       1 << 16;  // 64k offset allocation, resized on demand
 
+    decompression_blocks(decompression_blocks const&)            = delete;
+    decompression_blocks& operator=(decompression_blocks const&) = delete;
+    decompression_blocks(decompression_blocks&&)                 = default;
+    decompression_blocks& operator=(decompression_blocks&&)      = default;
+
     cudaEvent_t event;
     cudf::detail::host_vector<char> h_compressed_blocks;
     cudf::detail::host_vector<std::size_t> h_compressed_offsets;
