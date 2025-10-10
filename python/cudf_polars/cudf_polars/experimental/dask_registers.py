@@ -74,14 +74,17 @@ def register() -> None:
     @cuda_serialize.register((Column, DataFrame))
     def serialize_column_or_frame(
         x: DataFrame | Column,
-    ) -> tuple[DataFrameHeader | ColumnHeader, list[memoryview]]:
+    ) -> tuple[
+        DataFrameHeader | ColumnHeader, list[memoryview[bytes] | plc.gpumemoryview]
+    ]:
         with log_errors():
             header, frames = x.serialize()
-            return header, list(frames)  # Dask expect a list of frames
+            # Dask expect a list of frames
+            return header, list(frames)
 
     @cuda_deserialize.register(DataFrame)
     def _(
-        header: DataFrameHeader, frames: tuple[memoryview, plc.gpumemoryview]
+        header: DataFrameHeader, frames: tuple[memoryview[bytes], plc.gpumemoryview]
     ) -> DataFrame:
         with log_errors():
             metadata, gpudata = frames  # TODO: check if this is a length-2 list...
@@ -92,7 +95,9 @@ def register() -> None:
             )
 
     @cuda_deserialize.register(Column)
-    def _(header: ColumnHeader, frames: tuple[memoryview, plc.gpumemoryview]) -> Column:
+    def _(
+        header: ColumnHeader, frames: tuple[memoryview[bytes], plc.gpumemoryview]
+    ) -> Column:
         with log_errors():
             metadata, gpudata = frames
             return Column.deserialize(header, (metadata, plc.gpumemoryview(gpudata)))
@@ -110,7 +115,7 @@ def register() -> None:
     @dask_serialize.register(Column)
     def dask_serialize_column_or_frame(
         x: DataFrame | Column,
-    ) -> tuple[DataFrameHeader | ColumnHeader, tuple[memoryview, memoryview]]:
+    ) -> tuple[DataFrameHeader | ColumnHeader, tuple[memoryview[bytes], memoryview]]:
         with log_errors():
             header, (metadata, gpudata) = x.serialize()
 
@@ -128,12 +133,15 @@ def register() -> None:
             return header, (metadata, gpudata_on_host)
 
     @dask_deserialize.register(Column)
-    def _(header: ColumnHeader, frames: tuple[memoryview, memoryview]) -> Column:
+    def _(header: ColumnHeader, frames: tuple[memoryview[bytes], memoryview]) -> Column:
         with log_errors():
             assert len(frames) == 2
             # Copy the second frame (the gpudata in host memory) back to the gpu
-            frames = frames[0], plc.gpumemoryview(rmm.DeviceBuffer.to_device(frames[1]))
-            return Column.deserialize(header, frames)
+            new_frames = (
+                frames[0],
+                plc.gpumemoryview(rmm.DeviceBuffer.to_device(frames[1])),
+            )
+            return Column.deserialize(header, new_frames)
 
     @dask_serialize.register(DataFrame)
     def _(
@@ -171,12 +179,19 @@ def register() -> None:
             return header, frame
 
     @dask_deserialize.register(DataFrame)
-    def _(header: DataFrameHeader, frames: tuple[memoryview, memoryview]) -> DataFrame:
+    def _(
+        header: DataFrameHeader, frames: tuple[memoryview[bytes], memoryview]
+    ) -> DataFrame:
         with log_errors():
             assert len(frames) == 2
             # Copy the second frame (the gpudata in host memory) back to the gpu
-            frames = frames[0], plc.gpumemoryview(rmm.DeviceBuffer.to_device(frames[1]))
-            return DataFrame.deserialize(header, frames, stream=get_dask_cuda_stream())
+            new_frames = (
+                frames[0],
+                plc.gpumemoryview(rmm.DeviceBuffer.to_device(frames[1])),
+            )
+            return DataFrame.deserialize(
+                header, new_frames, stream=get_dask_cuda_stream()
+            )
 
     @sizeof_dispatch.register(Column)
     def _(x: Column) -> int:

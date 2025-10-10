@@ -170,7 +170,7 @@ cpdef Column like(
 
     if escape_character is None:
         escape_character = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view())
+            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
         )
 
     cdef const string_scalar* c_escape_character = <const string_scalar*>(

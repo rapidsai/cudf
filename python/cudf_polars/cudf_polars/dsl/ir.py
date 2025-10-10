@@ -26,14 +26,16 @@ from typing_extensions import assert_never
 import polars as pl
 
 import pylibcudf as plc
+from pylibcudf import expressions as plc_expr
 
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import Column, DataFrame, DataType
+from cudf_polars.containers.dataframe import NamedColumn
 from cudf_polars.dsl.expressions import rolling, unary
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
-from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
+from cudf_polars.dsl.tracing import log_do_evaluate, nvtx_annotate_cudf_polars
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import range_window_bounds
 from cudf_polars.utils import dtypes
@@ -85,6 +87,23 @@ __all__ = [
     "Sort",
     "Union",
 ]
+
+
+_BINOPS = {
+    plc.binaryop.BinaryOperator.EQUAL,
+    plc.binaryop.BinaryOperator.NOT_EQUAL,
+    plc.binaryop.BinaryOperator.LESS,
+    plc.binaryop.BinaryOperator.LESS_EQUAL,
+    plc.binaryop.BinaryOperator.GREATER,
+    plc.binaryop.BinaryOperator.GREATER_EQUAL,
+    # TODO: Handle other binary operations as needed
+}
+
+
+_DECIMAL_TYPES = {plc.TypeId.DECIMAL32, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL128}
+
+
+_FLOAT_TYPES = {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
 
 
 class IR(Node["IR"]):
@@ -218,22 +237,84 @@ class PythonScan(IR):
         raise NotImplementedError("PythonScan not implemented")
 
 
+_DECIMAL_IDS = {plc.TypeId.DECIMAL32, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL128}
+
+_COMPARISON_BINOPS = {
+    plc.binaryop.BinaryOperator.EQUAL,
+    plc.binaryop.BinaryOperator.NOT_EQUAL,
+    plc.binaryop.BinaryOperator.LESS,
+    plc.binaryop.BinaryOperator.LESS_EQUAL,
+    plc.binaryop.BinaryOperator.GREATER,
+    plc.binaryop.BinaryOperator.GREATER_EQUAL,
+}
+
+
+def _parquet_physical_types(
+    schema: Schema, paths: list[str], columns: list[str] | None
+) -> dict[str, plc.DataType]:
+    # TODO: Read the physical types as cudf::data_type's using
+    # read_parquet_metadata or another parquet API
+    options = plc.io.parquet.ParquetReaderOptions.builder(
+        plc.io.SourceInfo(paths)
+    ).build()
+    if columns is not None:
+        options.set_columns(columns)
+    options.set_num_rows(0)
+    df = plc.io.parquet.read_parquet(options)
+    return dict(zip(schema.keys(), [c.type() for c in df.tbl.columns()], strict=True))
+
+
+def _cast_literals_to_physical_types(
+    node: expr.Expr, phys_type_map: dict[str, plc.DataType]
+) -> expr.Expr:
+    if isinstance(node, expr.BinOp):
+        left, right = node.children
+        left = _cast_literals_to_physical_types(left, phys_type_map)
+        right = _cast_literals_to_physical_types(right, phys_type_map)
+        if node.op in _COMPARISON_BINOPS:
+            if (
+                isinstance(left, expr.Col)
+                and isinstance(right, expr.Literal)
+                and phys_type_map[left.name].id() in _DECIMAL_IDS
+            ):
+                right = expr.Cast(
+                    left.dtype,
+                    expr.Cast(
+                        DataType(pl.Decimal(38, abs(phys_type_map[left.name].scale()))),
+                        right,
+                    ),
+                )
+            elif (
+                isinstance(right, expr.Col)
+                and isinstance(left, expr.Literal)
+                and phys_type_map[right.name].id() in _DECIMAL_IDS
+            ):
+                left = expr.Cast(
+                    right.dtype,
+                    expr.Cast(
+                        DataType(
+                            pl.Decimal(38, abs(phys_type_map[right.name].scale()))
+                        ),
+                        left,
+                    ),
+                )
+
+        return node.reconstruct([left, right])
+    return node
+
+
 def _align_parquet_schema(df: DataFrame, schema: Schema) -> DataFrame:
     # TODO: Alternatively set the schema of the parquet reader to decimal128
-    plc_decimals_ids = {
-        plc.TypeId.DECIMAL32,
-        plc.TypeId.DECIMAL64,
-        plc.TypeId.DECIMAL128,
-    }
     cast_list = []
 
     for name, col in df.column_map.items():
         src = col.obj.type()
         dst = schema[name].plc_type
+
         if (
-            src.id() in plc_decimals_ids
-            and dst.id() in plc_decimals_ids
-            and ((src.id() != dst.id()) or (src.scale != dst.scale))
+            plc.traits.is_fixed_point(src)
+            and plc.traits.is_fixed_point(dst)
+            and ((src.id() != dst.id()) or (src.scale() != dst.scale()))
         ):
             cast_list.append(
                 Column(plc.unary.cast(col.obj, dst), name=name, dtype=schema[name])
@@ -485,6 +566,7 @@ class Scan(IR):
         return max(total_rows, 0)
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Scan")
     def do_evaluate(
         cls,
@@ -614,7 +696,14 @@ class Scan(IR):
             filters = None
             if predicate is not None and row_index is None:
                 # Can't apply filters during read if we have a row index.
-                filters = to_parquet_filter(predicate.value)
+                filters = to_parquet_filter(
+                    _cast_literals_to_physical_types(
+                        predicate.value,
+                        _parquet_physical_types(
+                            schema, paths, with_columns or list(schema.keys())
+                        ),
+                    )
+                )
             options = plc.io.parquet.ParquetReaderOptions.builder(
                 plc.io.SourceInfo(paths)
             ).build()
@@ -986,6 +1075,7 @@ class Sink(IR):
             plc.io.parquet.write_parquet(writer_options)
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Sink")
     def do_evaluate(
         cls,
@@ -1045,6 +1135,7 @@ class Cache(IR):
         return False
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Cache")
     def do_evaluate(
         cls, key: int, refcount: int | None, df: DataFrame
@@ -1125,6 +1216,7 @@ class DataFrameScan(IR):
         )
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="DataFrameScan")
     def do_evaluate(
         cls,
@@ -1184,6 +1276,7 @@ class Select(IR):
         return False
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Select")
     def do_evaluate(
         cls,
@@ -1269,6 +1362,7 @@ class Reduce(IR):
         self._non_child_args = (self.exprs,)
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Reduce")
     def do_evaluate(
         cls,
@@ -1365,6 +1459,7 @@ class Rolling(IR):
         )
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Rolling")
     def do_evaluate(
         cls,
@@ -1496,6 +1591,7 @@ class GroupBy(IR):
         )
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="GroupBy")
     def do_evaluate(
         cls,
@@ -1601,6 +1697,108 @@ class GroupBy(IR):
         return DataFrame(broadcasted, stream=df.stream).slice(zlice)
 
 
+def _strip_predicate_casts(node: expr.Expr) -> expr.Expr:
+    if isinstance(node, expr.Cast):
+        (child,) = node.children
+        child = _strip_predicate_casts(child)
+
+        src = child.dtype
+        dst = node.dtype
+
+        if plc.traits.is_fixed_point(src.plc_type) or plc.traits.is_fixed_point(
+            dst.plc_type
+        ):
+            return child
+
+    if not node.children:
+        return node
+    return node.reconstruct([_strip_predicate_casts(child) for child in node.children])
+
+
+def _add_cast(
+    target: DataType,
+    side: expr.ColRef,
+    left_casts: dict[str, DataType],
+    right_casts: dict[str, DataType],
+) -> None:
+    (col,) = side.children
+    assert isinstance(col, expr.Col)
+    casts = (
+        left_casts if side.table_ref == plc_expr.TableReference.LEFT else right_casts
+    )
+    casts[col.name] = target
+
+
+def _align_decimal_binop_types(
+    left_expr: expr.ColRef,
+    right_expr: expr.ColRef,
+    left_casts: dict[str, DataType],
+    right_casts: dict[str, DataType],
+) -> None:
+    left_type, right_type = left_expr.dtype, right_expr.dtype
+
+    if plc.traits.is_fixed_point(left_type.plc_type) and plc.traits.is_fixed_point(
+        right_type.plc_type
+    ):
+        target = DataType.common_decimal_dtype(left_type, right_type)
+
+        if left_type.id() != target.id() or left_type.scale() != target.scale():
+            _add_cast(target, left_expr, left_casts, right_casts)
+
+        if right_type.id() != target.id() or right_type.scale() != target.scale():
+            _add_cast(target, right_expr, left_casts, right_casts)
+
+    elif (
+        plc.traits.is_fixed_point(left_type.plc_type)
+        and plc.traits.is_floating_point(right_type.plc_type)
+    ) or (
+        plc.traits.is_fixed_point(right_type.plc_type)
+        and plc.traits.is_floating_point(left_type.plc_type)
+    ):
+        is_decimal_left = plc.traits.is_fixed_point(left_type.plc_type)
+        decimal_expr, float_expr = (
+            (left_expr, right_expr) if is_decimal_left else (right_expr, left_expr)
+        )
+        _add_cast(decimal_expr.dtype, float_expr, left_casts, right_casts)
+
+
+def _collect_decimal_binop_casts(
+    predicate: expr.Expr,
+) -> tuple[dict[str, DataType], dict[str, DataType]]:
+    left_casts: dict[str, DataType] = {}
+    right_casts: dict[str, DataType] = {}
+
+    def _walk(node: expr.Expr) -> None:
+        if isinstance(node, expr.BinOp) and node.op in _BINOPS:
+            left_expr, right_expr = node.children
+            if isinstance(left_expr, expr.ColRef) and isinstance(
+                right_expr, expr.ColRef
+            ):
+                _align_decimal_binop_types(
+                    left_expr, right_expr, left_casts, right_casts
+                )
+        for child in node.children:
+            _walk(child)
+
+    _walk(predicate)
+    return left_casts, right_casts
+
+
+def _apply_casts(df: DataFrame, casts: dict[str, DataType]) -> DataFrame:
+    if not casts:
+        return df
+
+    columns = []
+    for col in df.columns:
+        target = casts.get(col.name)
+        if target is None:
+            columns.append(Column(col.obj, dtype=col.dtype, name=col.name))
+        else:
+            casted = col.astype(target)
+            columns.append(Column(casted.obj, dtype=casted.dtype, name=col.name))
+    return DataFrame(columns, stream=df.stream)
+
+
 class ConditionalJoin(IR):
     """A conditional inner join of two dataframes on a predicate."""
 
@@ -1626,7 +1824,8 @@ class ConditionalJoin(IR):
         tuple[
             str,
             pl_expr.Operator | Iterable[pl_expr.Operator],
-        ],
+        ]
+        | None,
         bool,
         Zlice | None,
         str,
@@ -1647,7 +1846,14 @@ class ConditionalJoin(IR):
         self, schema: Schema, predicate: expr.Expr, options: tuple, left: IR, right: IR
     ) -> None:
         self.schema = schema
+        predicate = _strip_predicate_casts(predicate)
         self.predicate = predicate
+        # options[0] is a tuple[str, Operator, ...]
+        # The Operator class can't be pickled, but we don't use it anyway so
+        # just throw that away
+        if options[0] is not None:
+            options = (None, *options[1:])
+
         self.options = options
         self.children = (left, right)
         predicate_wrapper = self.Predicate(predicate)
@@ -1660,24 +1866,28 @@ class ConditionalJoin(IR):
             raise NotImplementedError(
                 f"Conditional join with predicate {predicate}"
             )  # pragma: no cover; polars never delivers expressions we can't handle
-        self._non_child_args = (predicate_wrapper, zlice, suffix, maintain_order)
+        self._non_child_args = (predicate_wrapper, options)
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="ConditionalJoin")
     def do_evaluate(
         cls,
         predicate_wrapper: Predicate,
-        zlice: Zlice | None,
-        suffix: str,
-        maintain_order: Literal["none", "left", "right", "left_right", "right_left"],
+        options: tuple,
         left: DataFrame,
         right: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         stream = get_joined_cuda_stream(upstreams=(left, right))
+        left_casts, right_casts = _collect_decimal_binop_casts(
+            predicate_wrapper.predicate
+        )
+        _, _, zlice, suffix, _, _ = options
+
         lg, rg = plc.join.conditional_inner_join(
-            left.table,
-            right.table,
+            _apply_casts(left, left_casts).table,
+            _apply_casts(right, right_casts).table,
             predicate_wrapper.ast,
             stream=stream,
         )
@@ -1735,6 +1945,19 @@ class Join(IR):
     - maintain_order: which DataFrame row order to preserve, if any
     """
 
+    SWAPPED_ORDER: ClassVar[
+        dict[
+            Literal["none", "left", "right", "left_right", "right_left"],
+            Literal["none", "left", "right", "left_right", "right_left"],
+        ]
+    ] = {
+        "none": "none",
+        "left": "right",
+        "right": "left",
+        "left_right": "right_left",
+        "right_left": "left_right",
+    }
+
     def __init__(
         self,
         schema: Schema,
@@ -1750,9 +1973,6 @@ class Join(IR):
         self.options = options
         self.children = (left, right)
         self._non_child_args = (self.left_on, self.right_on, self.options)
-        # TODO: Implement maintain_order
-        if options[5] != "none":
-            raise NotImplementedError("maintain_order not implemented yet")
 
     @staticmethod
     @cache
@@ -1801,6 +2021,8 @@ class Join(IR):
         right_rows: int,
         rg: plc.Column,
         right_policy: plc.copying.OutOfBoundsPolicy,
+        *,
+        left_primary: bool = True,
     ) -> list[plc.Column]:
         """
         Reorder gather maps to satisfy polars join order restrictions.
@@ -1819,28 +2041,40 @@ class Join(IR):
             Right gather map
         right_policy
             Nullify policy for right map
+        left_primary
+            Whether to preserve the left input row order first.
+            Defaults to True.
 
         Returns
         -------
-        list of reordered left and right gather maps.
+        list[plc.Column]
+            Reordered left and right gather maps.
 
         Notes
         -----
-        For a left join, the polars result preserves the order of the
-        left keys, and is stable wrt the right keys. For all other
-        joins, there is no order obligation.
+        When ``left_primary`` is True, the pair of gather maps is stably sorted by
+        the original row order of the left side, breaking ties by the right side.
+        And vice versa when ``left_primary`` is False.
         """
         init = plc.Scalar.from_py(0, plc.types.SIZE_TYPE)
         step = plc.Scalar.from_py(1, plc.types.SIZE_TYPE)
-        left_order = plc.copying.gather(
+
+        (left_order_col,) = plc.copying.gather(
             plc.Table([plc.filling.sequence(left_rows, init, step)]), lg, left_policy
-        )
-        right_order = plc.copying.gather(
+        ).columns()
+        (right_order_col,) = plc.copying.gather(
             plc.Table([plc.filling.sequence(right_rows, init, step)]), rg, right_policy
+        ).columns()
+
+        keys = (
+            plc.Table([left_order_col, right_order_col])
+            if left_primary
+            else plc.Table([right_order_col, left_order_col])
         )
+
         return plc.sorting.stable_sort_by_key(
             plc.Table([lg, rg]),
-            plc.Table([*left_order.columns(), *right_order.columns()]),
+            keys,
             [plc.types.Order.ASCENDING, plc.types.Order.ASCENDING],
             [plc.types.NullOrder.AFTER, plc.types.NullOrder.AFTER],
         ).columns()
@@ -1881,6 +2115,7 @@ class Join(IR):
         return columns
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Join")
     def do_evaluate(
         cls,
@@ -1899,7 +2134,7 @@ class Join(IR):
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         stream = get_joined_cuda_stream(upstreams=(left.stream, right.stream))
-        how, nulls_equal, zlice, suffix, coalesce, _ = options
+        how, nulls_equal, zlice, suffix, coalesce, maintain_order = options
         if how == "Cross":
             # Separate implementation, since cross_join returns the
             # result, not the gather maps
@@ -1961,13 +2196,20 @@ class Join(IR):
                 # Right join is a left join with the tables swapped
                 left, right = right, left
                 left_on, right_on = right_on, left_on
+                maintain_order = Join.SWAPPED_ORDER[maintain_order]
+
             lg, rg = join_fn(
                 left_on.table, right_on.table, null_equality, stream=stream
             )
-            if how == "Left" or how == "Right":
-                # Order of left table is preserved
+            if how in ("Inner", "Left", "Right", "Full") and maintain_order != "none":
                 lg, rg = cls._reorder_maps(
-                    left.num_rows, lg, left_policy, right.num_rows, rg, right_policy
+                    left.num_rows,
+                    lg,
+                    left_policy,
+                    right.num_rows,
+                    rg,
+                    right_policy,
+                    left_primary=maintain_order.startswith("left"),
                 )
             if coalesce:
                 if how == "Full":
@@ -2045,6 +2287,7 @@ class HStack(IR):
         self.children = (df,)
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="HStack")
     def do_evaluate(
         cls,
@@ -2110,6 +2353,7 @@ class Distinct(IR):
     }
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Distinct")
     def do_evaluate(
         cls,
@@ -2201,6 +2445,7 @@ class Sort(IR):
         self.children = (df,)
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Sort")
     def do_evaluate(
         cls,
@@ -2254,6 +2499,7 @@ class Slice(IR):
         self.children = (df,)
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Slice")
     def do_evaluate(cls, offset: int, length: int, df: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -2275,6 +2521,7 @@ class Filter(IR):
         self.children = (df,)
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Filter")
     def do_evaluate(cls, mask_expr: expr.NamedExpr, df: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -2294,6 +2541,7 @@ class Projection(IR):
         self.children = (df,)
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Projection")
     def do_evaluate(cls, schema: Schema, df: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -2327,6 +2575,7 @@ class MergeSorted(IR):
         self._non_child_args = (key,)
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="MergeSorted")
     def do_evaluate(cls, key: str, *dfs: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -2450,6 +2699,7 @@ class MapFunction(IR):
         )
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="MapFunction")
     def do_evaluate(
         cls, schema: Schema, name: str, options: Any, df: DataFrame
@@ -2556,6 +2806,7 @@ class Union(IR):
         schema = self.children[0].schema
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Union")
     def do_evaluate(cls, zlice: Zlice | None, *dfs: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -2601,6 +2852,8 @@ class HConcat(IR):
             Table to extend
         nrows
             Number of additional rows
+        stream
+            CUDA stream used for device memory operations and kernel launches
 
         Returns
         -------
@@ -2620,6 +2873,7 @@ class HConcat(IR):
         )
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="HConcat")
     def do_evaluate(
         cls,
@@ -2672,6 +2926,7 @@ class Empty(IR):
         self.children = ()
 
     @classmethod
+    @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Empty")
     def do_evaluate(cls, schema: Schema) -> DataFrame:  # pragma: no cover
         """Evaluate and return a dataframe."""

@@ -146,6 +146,9 @@ class DataFrame:
         ----------
         df
             Polars dataframe to convert
+        stream
+            CUDA stream used for device memory operations and kernel launches
+            on this dataframe.
 
         Returns
         -------
@@ -183,6 +186,9 @@ class DataFrame:
             Names for the columns
         dtypes
             Dtypes for the columns
+        stream
+            CUDA stream used for device memory operations and kernel launches
+            on this dataframe.
 
         Returns
         -------
@@ -208,7 +214,7 @@ class DataFrame:
     def deserialize(
         cls,
         header: DataFrameHeader,
-        frames: tuple[memoryview, plc.gpumemoryview],
+        frames: tuple[memoryview[bytes], plc.gpumemoryview],
         stream: Stream = None,
     ) -> Self:
         """
@@ -220,6 +226,9 @@ class DataFrame:
             The (unpickled) metadata required to reconstruct the object.
         frames
             Two-tuple of frames (a memoryview and a gpumemoryview).
+        stream
+            CUDA stream used for device memory operations and kernel launches
+            on this dataframe.
 
         Returns
         -------
@@ -240,7 +249,7 @@ class DataFrame:
 
     def serialize(
         self,
-    ) -> tuple[DataFrameHeader, tuple[memoryview, plc.gpumemoryview]]:
+    ) -> tuple[DataFrameHeader, tuple[memoryview[bytes], plc.gpumemoryview]]:
         """
         Serialize the table into header and frames.
 
