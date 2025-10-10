@@ -144,41 +144,6 @@ struct pair_expression_equality : public expression_equality<has_nulls> {
 };
 
 /**
- * @brief Equality comparator for static_multiset queries (non-pair based).
- *
- * This equality comparator is designed for use with cuco::static_multiset's
- * non-pair APIs. It works directly with pairs as keys and performs the same
- * three-level checks as pair_expression_equality but with the multiset interface.
- */
-template <bool has_nulls>
-struct multiset_expression_equality : public expression_equality<has_nulls> {
-  using expression_equality<has_nulls>::expression_equality;
-
-  __device__ __forceinline__ bool operator()(pair_type const& lhs,
-                                             pair_type const& rhs) const noexcept
-  {
-    using cudf::detail::row::lhs_index_type;
-    using cudf::detail::row::rhs_index_type;
-
-    auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
-    // Three levels of checks:
-    // 1. Row hashes of the columns involved in the equality condition are equal.
-    // 2. The contents of the columns involved in the equality condition are equal.
-    // 3. The predicate evaluated on the relevant columns (already encoded in the evaluator)
-    // evaluates to true.
-    if ((lhs.first == rhs.first) &&
-        this->equality_probe(lhs_index_type{lhs.second}, rhs_index_type{rhs.second})) {
-      auto const lrow_idx = this->swap_tables ? rhs.second : lhs.second;
-      auto const rrow_idx = this->swap_tables ? lhs.second : rhs.second;
-      this->evaluator.evaluate(
-        output_dest, lrow_idx, rrow_idx, 0, this->thread_intermediate_storage);
-      return (output_dest.is_valid() && output_dest.value());
-    }
-    return false;
-  }
-};
-
-/**
  * @brief Equality comparator that composes two row_equality comparators.
  */
 struct double_row_equality_comparator {
