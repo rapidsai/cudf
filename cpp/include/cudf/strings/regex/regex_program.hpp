@@ -61,7 +61,7 @@ struct regex_program {
    *
    * @param other Object to move from
    */
-  regex_program(regex_program&& other);
+  regex_program(regex_program&& other) noexcept;
 
   /**
    * @brief Move operator assignment
@@ -69,7 +69,7 @@ struct regex_program {
    * @param other Object to move from
    * @return this object
    */
-  regex_program& operator=(regex_program&& other);
+  regex_program& operator=(regex_program&& other) noexcept;
 
   /**
    * @brief Return the pattern used to create this instance
