@@ -14,14 +14,16 @@ import pylibcudf as plc
 
 from cudf_polars.containers import Column, DataType
 from cudf_polars.utils import conversion
+from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence, Set
 
     from typing_extensions import Any, CapsuleType, Self
 
-    from cudf_polars.typing import ColumnOptions, DataFrameHeader, PolarsDataType, Slice
+    from rmm.pylibrmm.stream import Stream
 
+    from cudf_polars.typing import ColumnOptions, DataFrameHeader, PolarsDataType, Slice
 
 __all__: list[str] = ["DataFrame"]
 
@@ -78,8 +80,9 @@ class DataFrame:
     column_map: dict[str, Column]
     table: plc.Table
     columns: list[NamedColumn]
+    stream: Stream
 
-    def __init__(self, columns: Iterable[Column]) -> None:
+    def __init__(self, columns: Iterable[Column], stream: Stream) -> None:
         columns = list(columns)
         if any(c.name is None for c in columns):
             raise ValueError("All columns must have a name")
@@ -87,10 +90,11 @@ class DataFrame:
         self.dtypes = [c.dtype for c in self.columns]
         self.column_map = {c.name: c for c in self.columns}
         self.table = plc.Table([c.obj for c in self.columns])
+        self.stream = stream
 
     def copy(self) -> Self:
         """Return a shallow copy of self."""
-        return type(self)(c.copy() for c in self.columns)
+        return type(self)((c.copy() for c in self.columns), stream=self.stream)
 
     def to_polars(self) -> pl.DataFrame:
         """Convert to a polars DataFrame."""
@@ -135,7 +139,7 @@ class DataFrame:
         return self.table.num_rows() if self.column_map else 0
 
     @classmethod
-    def from_polars(cls, df: pl.DataFrame) -> Self:
+    def from_polars(cls, df: pl.DataFrame, stream: Stream | None = None) -> Self:
         """
         Create from a polars dataframe.
 
@@ -143,22 +147,35 @@ class DataFrame:
         ----------
         df
             Polars dataframe to convert
+        stream
+            CUDA stream used for device memory operations and kernel launches
+            on this dataframe.
 
         Returns
         -------
         New dataframe representing the input.
         """
+        stream = stream or get_cuda_stream()
         plc_table = plc.Table.from_arrow(df)
         return cls(
-            Column(d_col, name=name, dtype=DataType(h_col.dtype)).copy_metadata(h_col)
-            for d_col, h_col, name in zip(
-                plc_table.columns(), df.iter_columns(), df.columns, strict=True
-            )
+            (
+                Column(d_col, name=name, dtype=DataType(h_col.dtype)).copy_metadata(
+                    h_col
+                )
+                for d_col, h_col, name in zip(
+                    plc_table.columns(), df.iter_columns(), df.columns, strict=True
+                )
+            ),
+            stream=stream,
         )
 
     @classmethod
     def from_table(
-        cls, table: plc.Table, names: Sequence[str], dtypes: Sequence[DataType]
+        cls,
+        table: plc.Table,
+        names: Sequence[str],
+        dtypes: Sequence[DataType],
+        stream: Stream | None = None,
     ) -> Self:
         """
         Create from a pylibcudf table.
@@ -171,6 +188,9 @@ class DataFrame:
             Names for the columns
         dtypes
             Dtypes for the columns
+        stream
+            CUDA stream used for device memory operations and kernel launches
+            on this dataframe.
 
         Returns
         -------
@@ -182,11 +202,15 @@ class DataFrame:
             If the number of provided names does not match the
             number of columns in the table.
         """
+        stream = stream or get_cuda_stream()
         if table.num_columns() != len(names):
             raise ValueError("Mismatching name and table length.")
         return cls(
-            Column(c, name=name, dtype=dtype)
-            for c, name, dtype in zip(table.columns(), names, dtypes, strict=True)
+            (
+                Column(c, name=name, dtype=dtype)
+                for c, name, dtype in zip(table.columns(), names, dtypes, strict=True)
+            ),
+            stream=stream,
         )
 
     @classmethod
@@ -194,6 +218,7 @@ class DataFrame:
         cls,
         header: DataFrameHeader,
         frames: tuple[memoryview[bytes], plc.gpumemoryview],
+        stream: Stream,
     ) -> Self:
         """
         Create a DataFrame from a serialized representation returned by `.serialize()`.
@@ -204,6 +229,9 @@ class DataFrame:
             The (unpickled) metadata required to reconstruct the object.
         frames
             Two-tuple of frames (a memoryview and a gpumemoryview).
+        stream
+            CUDA stream used for device memory operations and kernel launches
+            on this dataframe.
 
         Returns
         -------
@@ -212,11 +240,15 @@ class DataFrame:
         """
         packed_metadata, packed_gpu_data = frames
         table = plc.contiguous_split.unpack_from_memoryviews(
-            packed_metadata, packed_gpu_data
+            packed_metadata,
+            packed_gpu_data,
         )
         return cls(
-            Column(c, **Column.deserialize_ctor_kwargs(kw))
-            for c, kw in zip(table.columns(), header["columns_kwargs"], strict=True)
+            (
+                Column(c, **Column.deserialize_ctor_kwargs(kw))
+                for c, kw in zip(table.columns(), header["columns_kwargs"], strict=True)
+            ),
+            stream=stream,
         )
 
     def serialize(
@@ -240,7 +272,7 @@ class DataFrame:
         frames
             Two-tuple of frames suitable for passing to `plc.contiguous_split.unpack_from_memoryviews`
         """
-        packed = plc.contiguous_split.pack(self.table)
+        packed = plc.contiguous_split.pack(self.table, stream=self.stream)
 
         # Keyword arguments for `Column.__init__`.
         columns_kwargs: list[ColumnOptions] = [
@@ -278,8 +310,11 @@ class DataFrame:
             raise ValueError("Can only copy from identically named frame")
         subset = self.column_names_set if subset is None else subset
         return type(self)(
-            c.sorted_like(other) if c.name in subset else c
-            for c, other in zip(self.columns, like.columns, strict=True)
+            (
+                c.sorted_like(other) if c.name in subset else c
+                for c, other in zip(self.columns, like.columns, strict=True)
+            ),
+            stream=self.stream,
         )
 
     def with_columns(
@@ -307,22 +342,30 @@ class DataFrame:
         new = {c.name: c for c in columns}
         if replace_only and not self.column_names_set.issuperset(new.keys()):
             raise ValueError("Cannot replace with non-existing names")
-        return type(self)((self.column_map | new).values())
+        return type(self)((self.column_map | new).values(), stream=self.stream)
 
     def discard_columns(self, names: Set[str]) -> Self:
         """Drop columns by name."""
-        return type(self)(column for column in self.columns if column.name not in names)
+        return type(self)(
+            (column for column in self.columns if column.name not in names),
+            stream=self.stream,
+        )
 
     def select(self, names: Sequence[str] | Mapping[str, Any]) -> Self:
         """Select columns by name returning DataFrame."""
         try:
-            return type(self)(self.column_map[name] for name in names)
+            return type(self)(
+                (self.column_map[name] for name in names), stream=self.stream
+            )
         except KeyError as e:
             raise ValueError("Can't select missing names") from e
 
     def rename_columns(self, mapping: Mapping[str, str]) -> Self:
         """Rename some columns."""
-        return type(self)(c.rename(mapping.get(c.name, c.name)) for c in self.columns)
+        return type(self)(
+            (c.rename(mapping.get(c.name, c.name)) for c in self.columns),
+            stream=self.stream,
+        )
 
     def select_columns(self, names: Set[str]) -> list[Column]:
         """Select columns by name."""
@@ -330,10 +373,12 @@ class DataFrame:
 
     def filter(self, mask: Column) -> Self:
         """Return a filtered table given a mask."""
-        table = plc.stream_compaction.apply_boolean_mask(self.table, mask.obj)
+        table = plc.stream_compaction.apply_boolean_mask(
+            self.table, mask.obj, stream=self.stream
+        )
         return (
             type(self)
-            .from_table(table, self.column_names, self.dtypes)
+            .from_table(table, self.column_names, self.dtypes, self.stream)
             .sorted_like(self)
         )
 
@@ -354,10 +399,12 @@ class DataFrame:
         if zlice is None:
             return self
         (table,) = plc.copying.slice(
-            self.table, conversion.from_polars_slice(zlice, num_rows=self.num_rows)
+            self.table,
+            conversion.from_polars_slice(zlice, num_rows=self.num_rows),
+            stream=self.stream,
         )
         return (
             type(self)
-            .from_table(table, self.column_names, self.dtypes)
+            .from_table(table, self.column_names, self.dtypes, self.stream)
             .sorted_like(self)
         )

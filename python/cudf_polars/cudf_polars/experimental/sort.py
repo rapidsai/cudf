@@ -135,7 +135,8 @@ def _select_local_split_candidates(
                     dtype=part_id_dtype,
                     name=next(name_gen),
                 ),
-            ]
+            ],
+            stream=df.stream,
         )
 
     candidates = [i * df.num_rows // num_partitions for i in range(num_partitions)]
