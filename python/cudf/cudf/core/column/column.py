@@ -44,6 +44,7 @@ from cudf.core.buffer import (
     as_buffer,
     cuda_array_interface_wrapper,
 )
+from cudf.core.buffer.spillable_buffer import SpillableBuffer
 from cudf.core.copy_types import GatherMap
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -615,19 +616,21 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             new_dtype = plc.DataType(plc.TypeId.INT8)
 
             col = plc.column_factories.make_numeric_column(
-                new_dtype, col.size(), plc.column_factories.MaskState.ALL_NULL
+                new_dtype, col.size(), plc.types.MaskState.ALL_NULL
             )
 
         dtype = dtype_from_pylibcudf_column(col)
 
+        data_view = col.data()
+        mask_view = col.null_mask()
         return build_column(  # type: ignore[return-value]
-            data=as_buffer(col.data().obj, exposed=data_ptr_exposed)
-            if col.data() is not None
+            data=as_buffer(data_view.obj, exposed=data_ptr_exposed)
+            if data_view is not None
             else None,
             dtype=dtype,
             size=col.size(),
-            mask=as_buffer(col.null_mask().obj, exposed=data_ptr_exposed)
-            if col.null_mask() is not None
+            mask=as_buffer(mask_view.obj, exposed=data_ptr_exposed)
+            if mask_view is not None
             else None,
             offset=col.offset(),
             null_count=col.null_count(),
@@ -985,7 +988,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if not fill_value.is_valid() and not self.nullable:
             mask = as_buffer(
                 plc.null_mask.create_null_mask(
-                    self.size, plc.null_mask.MaskState.ALL_VALID
+                    self.size, plc.types.MaskState.ALL_VALID
                 )
             )
             self.set_base_mask(mask)
@@ -2001,11 +2004,55 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
         if isinstance(dtype, CategoricalDtype):
             data = children.pop(0)
+
+        class spillable_gpumemoryview(plc.gpumemoryview):
+            """
+            HACK: Prevent automatic unspilling of `SpillableBuffer` objects
+            when constructing `plc.Column`.
+
+            The `plc.Column()` constructor expects a `gpumemoryview` object,
+            but wrapping a `SpillableBuffer` directly in a `gpumemoryview`
+            forces the buffer to unspill (materialize) its device data prematurely.
+
+            To avoid this, we wrap spillable buffers in this subclass that implements
+            only the `.obj` attribute; the only attribute actually accessed by
+            `.from_pylibcudf()`. All other attributes intentionally raise errors to
+            prevent accidental usage paths that would cause unspilling.
+            """
+
+            def __init__(self, buf: SpillableBuffer):
+                self._buf = buf
+
+            @property
+            def obj(self):
+                return self._buf
+
+            @property
+            def cai(self):
+                assert False
+
+            @property
+            def ptr(self):
+                assert False
+
+            @property
+            def nbytes(self):
+                assert False
+
+        if isinstance(data, SpillableBuffer):
+            data = spillable_gpumemoryview(data)
+        elif data is not None:
+            data = plc.gpumemoryview(data)
+        if isinstance(mask, SpillableBuffer):
+            mask = spillable_gpumemoryview(mask)
+        elif mask is not None:
+            mask = plc.gpumemoryview(mask)
+
         plc_column = plc.Column(
             plc_type,
             header["size"],
-            plc.gpumemoryview(data) if data is not None else None,
-            plc.gpumemoryview(mask) if mask is not None else None,
+            data,
+            mask,
             null_count,
             0,
             [child.to_pylibcudf(mode="read") for child in children],
@@ -2464,7 +2511,7 @@ def column_empty(
             if row_count == 0
             else plc.gpumemoryview(
                 plc.null_mask.create_null_mask(
-                    row_count, plc.null_mask.MaskState.ALL_NULL
+                    row_count, plc.types.MaskState.ALL_NULL
                 )
             )
         )
