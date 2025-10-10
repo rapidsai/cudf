@@ -5699,4 +5699,4 @@ def _validate_freq(freq: Any) -> DateOffset | None:
         return freq
     elif freq is not None and not isinstance(freq, cudf.DateOffset):
         raise ValueError(f"Invalid frequency: {freq}")
-    return cast("cudf.DateOffset", freq)
+    return cast(cudf.DateOffset, freq)

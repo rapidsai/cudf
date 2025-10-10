@@ -46,13 +46,13 @@ def maybe_nested_pa_scalar_to_py(pa_scalar: pa.Scalar) -> Any:
     if not pa_scalar.is_valid:
         return pd.NA
     if pa.types.is_struct(pa_scalar.type):
-        struct_scalar = cast("pa.StructScalar", pa_scalar)
+        struct_scalar = cast(pa.StructScalar, pa_scalar)
         return {
             str(i): maybe_nested_pa_scalar_to_py(val)
             for i, (_, val) in enumerate(struct_scalar.items())
         }
     elif pa.types.is_list(pa_scalar.type):
-        list_scalar = cast("pa.ListScalar", pa_scalar)
+        list_scalar = cast(pa.ListScalar, pa_scalar)
         # TODO: Fix pyarrow-stubs typing - ListScalar iteration should yield Scalar objects
         return [maybe_nested_pa_scalar_to_py(val) for val in list_scalar]  # type: ignore[arg-type]
     else:

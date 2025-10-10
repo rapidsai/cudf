@@ -51,7 +51,7 @@ class GatherMap:
     def __init__(self, column: Any, nrows: int, *, nullify: bool):
         #: The gather map
         self.column = cast(
-            "cudf.core.column.NumericalColumn",
+            cudf.core.column.NumericalColumn,
             cudf.core.column.as_column(column),
         )
         self.nrows = nrows
@@ -139,7 +139,7 @@ class BooleanMask:
     def __init__(self, column: Any, nrows: int):
         #: The boolean mask
         self.column = cast(
-            "cudf.core.column.NumericalColumn",
+            cudf.core.column.NumericalColumn,
             cudf.core.column.as_column(column),
         )
         if self.column.dtype.kind != "b":

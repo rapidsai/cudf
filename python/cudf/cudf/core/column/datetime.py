@@ -814,7 +814,7 @@ class DatetimeTZColumn(DatetimeColumn):
 
     def to_arrow(self) -> pa.Array:
         # Cast to expected timestamp array type for assume_timezone
-        local_array = cast("pa.TimestampArray", self._local_time.to_arrow())
+        local_array = cast(pa.TimestampArray, self._local_time.to_arrow())
         return pa.compute.assume_timezone(local_array, str(self.dtype.tz))
 
     @functools.cached_property

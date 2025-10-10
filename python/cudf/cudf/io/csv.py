@@ -186,9 +186,7 @@ def read_csv(
             else:
                 dtype = cudf_dtype(dtype)
             cudf_dtypes = dtype
-            cast("list", plc_dtypes).append(
-                _get_plc_data_type_from_dtype(dtype)
-            )
+            cast(list, plc_dtypes).append(_get_plc_data_type_from_dtype(dtype))
         elif isinstance(dtype, Collection):
             for index, col_dtype in enumerate(dtype):
                 if (
