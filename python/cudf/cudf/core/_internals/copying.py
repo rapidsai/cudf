@@ -6,11 +6,11 @@ from typing import TYPE_CHECKING, cast
 import pylibcudf as plc
 
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import ColumnBase
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+    from cudf.core.column import ColumnBase
     from cudf.core.column.numerical import NumericalColumn
 
 
@@ -63,12 +63,7 @@ def scatter(
     plc_tbl = plc.copying.scatter(
         cast(list[plc.Scalar], sources)
         if isinstance(sources[0], plc.Scalar)
-        else plc.Table(
-            [
-                col.to_pylibcudf(mode="read")
-                for col in cast(list[ColumnBase], sources)
-            ]
-        ),
+        else plc.Table([col.to_pylibcudf(mode="read") for col in sources]),
         scatter_map.to_pylibcudf(mode="read"),
         plc.Table([col.to_pylibcudf(mode="read") for col in target_columns]),
     )
