@@ -15,7 +15,8 @@
  */
 #pragma once
 
-#include "join/join_common_utils.hpp"
+#include "join_common_utils.cuh"
+#include "join_common_utils.hpp"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -175,6 +176,97 @@ using hash_set_type =
 
 // The hash_set_ref_type used by mixed_semi_join kerenels for probing.
 using hash_set_ref_type = hash_set_type::ref_type<cuco::contains_tag>;
+
+/**
+ * @brief Common utility for probing a hash table bucket and checking slot equality
+ *
+ * This encapsulates the common logic of reading bucket slots and checking for
+ * empty slots and key equality, used by both count and retrieve operations.
+ */
+template <bool has_nulls>
+struct hash_probe_result {
+  bool first_slot_is_empty;
+  bool second_slot_is_empty;
+  bool first_slot_equals;
+  bool second_slot_equals;
+
+  __device__ __forceinline__ hash_probe_result(
+    pair_expression_equality<has_nulls> const& key_equal,
+    cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
+    cuco::pair<hash_value_type, cudf::size_type> const& probe_key,
+    std::size_t probe_idx)
+  {
+    auto const* data = hash_table_storage.data();
+    auto const bucket_slots =
+      *reinterpret_cast<cuda::std::array<cuco::pair<hash_value_type, cudf::size_type>, 2> const*>(
+        data + probe_idx);
+
+    first_slot_is_empty  = bucket_slots[0].second == cudf::detail::JoinNoneValue;
+    second_slot_is_empty = bucket_slots[1].second == cudf::detail::JoinNoneValue;
+    first_slot_equals    = (not first_slot_is_empty and key_equal(probe_key, bucket_slots[0]));
+    second_slot_equals   = (not second_slot_is_empty and key_equal(probe_key, bucket_slots[1]));
+  }
+
+  __device__ __forceinline__ bool has_empty_slot() const noexcept
+  {
+    return first_slot_is_empty or second_slot_is_empty;
+  }
+
+  __device__ __forceinline__ cudf::size_type match_count() const noexcept
+  {
+    return static_cast<cudf::size_type>(first_slot_equals) +
+           static_cast<cudf::size_type>(second_slot_equals);
+  }
+
+  __device__ __forceinline__ bool has_match() const noexcept
+  {
+    return first_slot_equals or second_slot_equals;
+  }
+};
+
+/**
+ * @brief Iterator-style wrapper for probing through a hash table
+ *
+ * This encapsulates the common double hashing probe sequence used by both
+ * count and retrieve kernels.
+ */
+template <bool has_nulls>
+struct hash_table_prober {
+  cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage;
+  pair_expression_equality<has_nulls> const& key_equal;
+  cuco::pair<hash_value_type, cudf::size_type> const& probe_key;
+  std::size_t probe_idx;
+  std::size_t step;
+  std::size_t extent;
+
+  __device__ __forceinline__ hash_table_prober(
+    pair_expression_equality<has_nulls> const& key_equal,
+    cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
+    cuco::pair<hash_value_type, cudf::size_type> const& probe_key,
+    cuda::std::pair<hash_value_type, hash_value_type> const& hash_idx)
+    : hash_table_storage{hash_table_storage},
+      key_equal{key_equal},
+      probe_key{probe_key},
+      probe_idx{static_cast<std::size_t>(hash_idx.first)},
+      step{static_cast<std::size_t>(hash_idx.second)},
+      extent{hash_table_storage.size()}
+  {
+  }
+
+  __device__ __forceinline__ hash_probe_result<has_nulls> probe_current_bucket() const
+  {
+    return hash_probe_result<has_nulls>{key_equal, hash_table_storage, probe_key, probe_idx};
+  }
+
+  __device__ __forceinline__ void advance() noexcept { probe_idx = (probe_idx + step) % extent; }
+
+  __device__ __forceinline__ auto get_bucket_slots() const noexcept
+  {
+    auto const* data = hash_table_storage.data();
+    return *reinterpret_cast<
+      cuda::std::array<cuco::pair<hash_value_type, cudf::size_type>, 2> const*>(data + probe_idx);
+  }
+};
 
 }  // namespace detail
 

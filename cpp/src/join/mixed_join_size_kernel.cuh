@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include "join_common_utils.cuh"
 #include "join_common_utils.hpp"
 #include "mixed_join_common_utils.cuh"
 
@@ -45,34 +44,20 @@ __device__ __forceinline__ auto standalone_count(
   bool is_outer_join) noexcept
 {
   cudf::size_type count = 0;
-  auto const extent     = hash_table_storage.size();
-  auto const* data      = hash_table_storage.data();
-  auto probe_idx        = static_cast<std::size_t>(hash_idx.first);   // initial probe index
-  auto const step       = static_cast<std::size_t>(hash_idx.second);  // step size
+  auto prober = hash_table_prober<has_nulls>{key_equal, hash_table_storage, probe_key, hash_idx};
 
   while (true) {
-    auto const bucket_slots =
-      *reinterpret_cast<cuda::std::array<cuco::pair<hash_value_type, cudf::size_type>, 2> const*>(
-        data + probe_idx);
-
-    // Check for empty slots and key equality
-    auto const first_slot_is_empty  = bucket_slots[0].second == cudf::detail::JoinNoneValue;
-    auto const second_slot_is_empty = bucket_slots[1].second == cudf::detail::JoinNoneValue;
-    auto const first_slot_equals =
-      (not first_slot_is_empty and key_equal(probe_key, bucket_slots[0]));
-    auto const second_slot_equals =
-      (not second_slot_is_empty and key_equal(probe_key, bucket_slots[1]));
-
-    count += (first_slot_equals + second_slot_equals);
+    auto const result = prober.probe_current_bucket();
+    count += result.match_count();
 
     // Exit if we find an empty slot
-    if (first_slot_is_empty or second_slot_is_empty) {
+    if (result.has_empty_slot()) {
       // Handle outer join logic: non-matching rows are counted as 1 match
       if (is_outer_join && count == 0) { return 1; }
       return count;
     }
 
-    probe_idx = (probe_idx + step) % extent;
+    prober.advance();
   }
 }
 

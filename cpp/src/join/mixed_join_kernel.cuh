@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include "join_common_utils.cuh"
 #include "join_common_utils.hpp"
 #include "mixed_join_common_utils.cuh"
 #include "mixed_join_kernel.hpp"
@@ -48,36 +47,23 @@ __device__ __forceinline__ void retrieve_matches(
   cudf::size_type* probe_output,
   cudf::size_type* match_output) noexcept
 {
-  auto const extent          = hash_table_storage.size();
-  auto const* data           = hash_table_storage.data();
-  auto probe_idx             = static_cast<std::size_t>(hash_idx.first);   // initial probe index
-  auto const step            = static_cast<std::size_t>(hash_idx.second);  // step size
   auto const probe_row_index = probe_key.second;
-
   cudf::size_type output_idx = 0;
   bool found_match           = false;
+  auto prober = hash_table_prober<has_nulls>{key_equal, hash_table_storage, probe_key, hash_idx};
 
   while (true) {
-    auto const bucket_slots =
-      *reinterpret_cast<cuda::std::array<cuco::pair<hash_value_type, cudf::size_type>, 2> const*>(
-        data + probe_idx);
+    auto const result       = prober.probe_current_bucket();
+    auto const bucket_slots = prober.get_bucket_slots();
 
-    // Check for empty slots and key equality
-    auto const first_slot_is_empty  = bucket_slots[0].second == cudf::detail::JoinNoneValue;
-    auto const second_slot_is_empty = bucket_slots[1].second == cudf::detail::JoinNoneValue;
-    auto const first_slot_equals =
-      (not first_slot_is_empty and key_equal(probe_key, bucket_slots[0]));
-    auto const second_slot_equals =
-      (not second_slot_is_empty and key_equal(probe_key, bucket_slots[1]));
-
-    if (first_slot_equals) {
+    if (result.first_slot_equals) {
       probe_output[output_idx] = probe_row_index;
       match_output[output_idx] = bucket_slots[0].second;
       output_idx++;
       found_match = true;
     }
 
-    if (second_slot_equals) {
+    if (result.second_slot_equals) {
       probe_output[output_idx] = probe_row_index;
       match_output[output_idx] = bucket_slots[1].second;
       output_idx++;
@@ -85,9 +71,9 @@ __device__ __forceinline__ void retrieve_matches(
     }
 
     // Exit if we find an empty slot
-    if (first_slot_is_empty or second_slot_is_empty) { break; }
+    if (result.has_empty_slot()) { break; }
 
-    probe_idx = (probe_idx + step) % extent;
+    prober.advance();
   }
 
   // Handle outer join logic for non-matching rows
