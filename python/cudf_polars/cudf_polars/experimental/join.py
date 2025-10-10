@@ -347,6 +347,15 @@ def _(
     assert config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'lower_join'"
     )
+
+    maintain_order = ir.options[5]
+    if maintain_order != "none" and output_count > 1:
+        return _lower_ir_fallback(
+            ir,
+            rec,
+            msg=f"Join({maintain_order=}) not supported for multiple partitions.",
+        )
+
     if _should_bcast_join(
         ir,
         left,

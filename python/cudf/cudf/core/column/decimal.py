@@ -17,7 +17,7 @@ import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column.column import ColumnBase
+from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtypes import (
     Decimal32Dtype,
@@ -217,7 +217,9 @@ class DecimalBaseColumn(NumericalBaseColumn):
         if isinstance(other, ColumnBase):
             if not isinstance(other, NumericalBaseColumn):
                 return NotImplemented
-            elif other.dtype.kind in {"f", "b"}:
+            elif other.dtype.kind == "f":
+                return self.astype(other.dtype)._binaryop(other, op)
+            elif other.dtype.kind == "b":
                 raise TypeError(
                     "Decimal columns only support binary operations with "
                     "integer numerical columns."
@@ -234,6 +236,8 @@ class DecimalBaseColumn(NumericalBaseColumn):
             other_cudf_dtype = other.dtype
         elif isinstance(other, (int, Decimal)):
             other_cudf_dtype = self.dtype._from_decimal(Decimal(other))
+        elif isinstance(other, float):
+            return self._binaryop(as_column(other, length=len(self)), op)
         elif is_na_like(other):
             other = pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
             other_cudf_dtype = self.dtype
