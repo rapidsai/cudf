@@ -240,7 +240,8 @@ class DataFrame:
         """
         packed_metadata, packed_gpu_data = frames
         table = plc.contiguous_split.unpack_from_memoryviews(
-            packed_metadata, packed_gpu_data, stream=stream
+            packed_metadata,
+            packed_gpu_data,
         )
         return cls(
             (

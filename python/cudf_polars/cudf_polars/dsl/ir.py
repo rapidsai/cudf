@@ -2075,21 +2075,32 @@ class Join(IR):
         the original row order of the left side, breaking ties by the right side.
         And vice versa when ``left_primary`` is False.
         """
-        if left_primary:
-            primary_stream = left_stream
-        else:
-            primary_stream = right_stream
-        init = plc.Scalar.from_py(0, plc.types.SIZE_TYPE, stream=primary_stream)
-        step = plc.Scalar.from_py(1, plc.types.SIZE_TYPE, stream=primary_stream)
-
+        # create the `init` and `step` args twice, once per stream,
+        # to avoid creating a dependency between the two streams too early.
         (left_order_col,) = plc.copying.gather(
-            plc.Table([plc.filling.sequence(left_rows, init, step)]),
+            plc.Table(
+                [
+                    plc.filling.sequence(
+                        left_rows,
+                        plc.Scalar.from_py(0, plc.types.SIZE_TYPE, stream=left_stream),
+                        plc.Scalar.from_py(1, plc.types.SIZE_TYPE, stream=left_stream),
+                    )
+                ]
+            ),
             lg,
             left_policy,
             stream=left_stream,
         ).columns()
         (right_order_col,) = plc.copying.gather(
-            plc.Table([plc.filling.sequence(right_rows, init, step)]),
+            plc.Table(
+                [
+                    plc.filling.sequence(
+                        right_rows,
+                        plc.Scalar.from_py(0, plc.types.SIZE_TYPE, stream=right_stream),
+                        plc.Scalar.from_py(1, plc.types.SIZE_TYPE, stream=right_stream),
+                    )
+                ]
+            ),
             rg,
             right_policy,
             stream=right_stream,
