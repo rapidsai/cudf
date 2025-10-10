@@ -226,7 +226,7 @@ hybrid_scan_reader_impl::prepare_dictionaries(
   CUDF_EXPECTS(
     row_groups_info.size() * dictionary_col_schemas.size() == dictionary_page_data.size(),
     "Dictionary page data size must match the number of row groups times the number of columns "
-    "with dictionaries and a(n) (in)equality predicate");
+    "with dictionaries and an (in)equality predicate");
 
   // Number of column chunks
   auto const total_column_chunks = dictionary_page_data.size();
