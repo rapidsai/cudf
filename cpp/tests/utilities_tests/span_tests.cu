@@ -385,7 +385,6 @@ TEST(HostDeviceSpanTest, CanGetSize)
   EXPECT_EQ(static_cast<size_t>(0), empty_span.size());
 }
 
-
 TEST(HostDeviceSpanTest, CanCopySpan)
 {
   auto message = get_test_hostdevice_vector();
