@@ -513,7 +513,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
     cudf::detail::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
   auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
-  // Precompute hash table storage and input data for the new interface
+  // Precompute hash table storage and input data
   auto hash_table_storage = cudf::device_span<cuco::pair<hash_value_type, size_type>>{
     hash_table.data(), hash_table.capacity()};
   auto [input_pairs, hash_indices] =
