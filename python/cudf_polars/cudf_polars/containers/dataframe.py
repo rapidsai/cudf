@@ -14,6 +14,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import Column, DataType
 from cudf_polars.utils import conversion
+from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence, Set
@@ -138,7 +139,7 @@ class DataFrame:
         return self.table.num_rows() if self.column_map else 0
 
     @classmethod
-    def from_polars(cls, df: pl.DataFrame, stream: Stream = None) -> Self:
+    def from_polars(cls, df: pl.DataFrame, stream: Stream | None = None) -> Self:
         """
         Create from a polars dataframe.
 
@@ -154,6 +155,7 @@ class DataFrame:
         -------
         New dataframe representing the input.
         """
+        stream = stream or get_cuda_stream()
         plc_table = plc.Table.from_arrow(df)
         return cls(
             (
@@ -173,7 +175,7 @@ class DataFrame:
         table: plc.Table,
         names: Sequence[str],
         dtypes: Sequence[DataType],
-        stream: Stream = None,
+        stream: Stream | None = None,
     ) -> Self:
         """
         Create from a pylibcudf table.
@@ -200,6 +202,7 @@ class DataFrame:
             If the number of provided names does not match the
             number of columns in the table.
         """
+        stream = stream or get_cuda_stream()
         if table.num_columns() != len(names):
             raise ValueError("Mismatching name and table length.")
         return cls(
@@ -215,7 +218,7 @@ class DataFrame:
         cls,
         header: DataFrameHeader,
         frames: tuple[memoryview[bytes], plc.gpumemoryview],
-        stream: Stream = None,
+        stream: Stream,
     ) -> Self:
         """
         Create a DataFrame from a serialized representation returned by `.serialize()`.
@@ -237,7 +240,7 @@ class DataFrame:
         """
         packed_metadata, packed_gpu_data = frames
         table = plc.contiguous_split.unpack_from_memoryviews(
-            packed_metadata, packed_gpu_data
+            packed_metadata, packed_gpu_data, stream=stream
         )
         return cls(
             (
@@ -268,7 +271,7 @@ class DataFrame:
         frames
             Two-tuple of frames suitable for passing to `plc.contiguous_split.unpack_from_memoryviews`
         """
-        packed = plc.contiguous_split.pack(self.table)
+        packed = plc.contiguous_split.pack(self.table, stream=self.stream)
 
         # Keyword arguments for `Column.__init__`.
         columns_kwargs: list[ColumnOptions] = [
@@ -369,7 +372,9 @@ class DataFrame:
 
     def filter(self, mask: Column) -> Self:
         """Return a filtered table given a mask."""
-        table = plc.stream_compaction.apply_boolean_mask(self.table, mask.obj)
+        table = plc.stream_compaction.apply_boolean_mask(
+            self.table, mask.obj, stream=self.stream
+        )
         return (
             type(self)
             .from_table(table, self.column_names, self.dtypes, self.stream)
@@ -393,7 +398,9 @@ class DataFrame:
         if zlice is None:
             return self
         (table,) = plc.copying.slice(
-            self.table, conversion.from_polars_slice(zlice, num_rows=self.num_rows)
+            self.table,
+            conversion.from_polars_slice(zlice, num_rows=self.num_rows),
+            stream=self.stream,
         )
         return (
             type(self)
