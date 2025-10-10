@@ -34,7 +34,7 @@ cudf::size_type num_multiprocessors();
  * @brief Check if the current system has integrated memory (unified addressing, managed memory, and
  * concurrent managed access)
  */
-bool has_integrated_memory();
+[[nodiscard]] bool has_integrated_memory();
 
 /**
  * @brief Get the number of elements that can be processed per thread.

@@ -326,9 +326,9 @@ TEST(MdSpanTest, CanGetCount)
 
 auto get_test_hostdevice_vector()
 {
-  auto v = cudf::detail::hostdevice_vector<char>(11, cudf::get_default_stream());
-  for (int i = 0; i < 11; i++) {
-    v[i] = create_hello_world_message()[i];
+  auto v = cudf::detail::hostdevice_vector<char>(0, 11, cudf::get_default_stream());
+  for (auto c : create_hello_world_message()) {
+    v.push_back(c);
   }
 
   return v;
@@ -383,6 +383,20 @@ TEST(HostDeviceSpanTest, CanGetSize)
 
   EXPECT_EQ(static_cast<size_t>(11), message_span.size());
   EXPECT_EQ(static_cast<size_t>(0), empty_span.size());
+}
+
+TEST(HostDeviceSpanTest, CanGetSizeBytes)
+{
+  auto doubles     = std::vector<double>({6, 3, 2});
+  auto doubles_hdv = cudf::detail::hostdevice_vector<double>(0, 3, cudf::get_default_stream());
+  for (auto d : doubles) {
+    doubles_hdv.push_back(d);
+  }
+  auto const doubles_span = cudf::detail::hostdevice_span<double>(doubles_hdv);
+  auto const empty_span   = cudf::detail::hostdevice_span<double>();
+
+  EXPECT_EQ(static_cast<size_t>(24), doubles_span.size_bytes());
+  EXPECT_EQ(static_cast<size_t>(0), empty_span.size_bytes());
 }
 
 TEST(HostDeviceSpanTest, CanCopySpan)
