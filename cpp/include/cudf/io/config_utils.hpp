@@ -45,5 +45,17 @@ bool is_all_enabled();
 bool is_stable_enabled();
 
 }  // namespace nvcomp_integration
+
+namespace integrated_memory_optimization {
+
+/**
+ * @brief Returns true if integrated memory optimizations are enabled.
+ *
+ * Controlled by the LIBCUDF_INTEGRATED_MEMORY_OPTIMIZATION environment variable.
+ * Valid values: "ON" (default), "OFF"
+ */
+bool is_enabled();
+
+}  // namespace integrated_memory_optimization
 }  // namespace io
 }  // namespace CUDF_EXPORT cudf

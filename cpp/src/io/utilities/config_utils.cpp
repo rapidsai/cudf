@@ -71,4 +71,20 @@ bool is_all_enabled() { return get_env_policy() == usage_policy::ALWAYS; }
 bool is_stable_enabled() { return is_all_enabled() or get_env_policy() == usage_policy::STABLE; }
 
 }  // namespace nvcomp_integration
+
+namespace integrated_memory_optimization {
+
+/**
+ * @brief Check if integrated memory optimizations are enabled.
+ *
+ * Controlled by the LIBCUDF_INTEGRATED_MEMORY_OPTIMIZATION environment variable.
+ * Valid values: "ON" (default), "OFF"
+ */
+bool is_enabled()
+{
+  static auto const policy = getenv_or<std::string>("LIBCUDF_INTEGRATED_MEMORY_OPTIMIZATION", "ON");
+  return policy == "ON";
+}
+
+}  // namespace integrated_memory_optimization
 }  // namespace cudf::io
