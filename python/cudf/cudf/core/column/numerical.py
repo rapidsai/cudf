@@ -72,7 +72,7 @@ class NumericalColumn(NumericalBaseColumn):
     def __init__(
         self,
         data: Buffer,
-        size: int | None,
+        size: int,
         dtype: np.dtype,
         mask: Buffer | None,
         offset: int,
@@ -89,11 +89,6 @@ class NumericalColumn(NumericalBaseColumn):
             raise ValueError(
                 f"dtype must be a floating, integer or boolean dtype. Got: {dtype}"
             )
-
-        if data.size % dtype.itemsize:
-            raise ValueError("Buffer size must be divisible by element size")
-        if size is None:
-            size = (data.size // dtype.itemsize) - offset
         super().__init__(
             data=data,
             size=size,
