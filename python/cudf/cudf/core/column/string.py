@@ -94,7 +94,7 @@ class StringColumn(ColumnBase):
     def __init__(
         self,
         data: Buffer,
-        size: int | None,
+        size: int,
         dtype: np.dtype,
         mask: Buffer | None,
         offset: int,
@@ -120,20 +120,6 @@ class StringColumn(ColumnBase):
             dtype = CUDF_STRING_DTYPE
         if len(children) > 1:
             raise ValueError("StringColumn must have at most 1 offset column.")
-
-        if size is None:
-            for child in children:
-                assert child.offset == 0
-
-            if len(children) == 0:
-                size = 0
-            elif children[0].size == 0:
-                size = 0
-            else:
-                # one less because the last element of offsets is the number of
-                # bytes in the data buffer
-                size = children[0].size - 1
-            size = size - offset
 
         if len(children) == 0 and size != 0:
             # all nulls-column:
