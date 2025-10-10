@@ -47,6 +47,32 @@ namespace cudf {
 namespace detail {
 
 namespace {
+/**
+ * @brief Precomputes double hashing indices and row hash values for mixed join operations.
+ *
+ * This function exists as a performance optimization to work around the register spilling issue
+ * reported in https://github.com/NVIDIA/cuCollections/issues/761. The new cuco hash table
+ * implementation suffers from register spilling due to longer register live ranges, which can
+ * cause significant performance degradation.
+ *
+ * By precomputing the double hashing indices (initial slot and step size) and row hash values
+ * in a separate pass, we reduce register pressure in the subsequent count and retrieve kernels.
+ * This approach yields approximately 20% speedup compared to the legacy multimap-based
+ * implementation.
+ *
+ * The tradeoff is that we cannot use cuco's device APIs directly in mixed join operations.
+ * Instead, we must reimplement the entire double hashing probing logic in cudf without relying
+ * on cuco's device APIs. This should be revisited and potentially removed once issue #761 is
+ * fully resolved.
+ *
+ * @param hash_table The cuco multiset hash table
+ * @param hash_probe Hash function for computing row hashes
+ * @param probe_table_num_rows Number of rows in the probe table
+ * @param stream CUDA stream for operations
+ * @param mr Memory resource for allocations
+ * @return A pair of device vectors: (input_pairs, hash_indices) where input_pairs contains
+ *         (row_hash, row_index) pairs and hash_indices contains (initial_slot, step_size) pairs
+ */
 template <typename HashProbe>
 std::pair<rmm::device_uvector<cuco::pair<hash_value_type, size_type>>,
           rmm::device_uvector<cuda::std::pair<hash_value_type, hash_value_type>>>
