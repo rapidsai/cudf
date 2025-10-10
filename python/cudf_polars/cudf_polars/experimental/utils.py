@@ -94,10 +94,7 @@ def _lower_ir_fallback(
         if multi_partitioned or rapidsmpf_engine:
             # Fall-back logic
             child = Repartition(child.schema, child)
-            partition_info[child] = PartitionInfo(
-                count=1,
-                bcasted=partition_info[c].bcasted,
-            )
+            partition_info[child] = PartitionInfo(count=1)
         children.append(child)
 
     if inform and msg:
@@ -107,8 +104,7 @@ def _lower_ir_fallback(
 
     # Reconstruct and return
     new_node = ir.reconstruct(children)
-    bcasted = all(partition_info[c].bcasted for c in children)
-    partition_info[new_node] = PartitionInfo(count=1, bcasted=bcasted)
+    partition_info[new_node] = PartitionInfo(count=1)
     return new_node, partition_info
 
 

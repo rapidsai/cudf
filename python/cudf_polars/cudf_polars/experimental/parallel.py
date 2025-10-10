@@ -312,11 +312,10 @@ def _(
 
     # Partition count is the sum of all child partitions
     count = sum(partition_info[c].count for c in children)
-    bcasted = all(partition_info[c].bcasted for c in children)
 
     # Return reconstructed node and partition-info dict
     new_node = ir.reconstruct(children)
-    partition_info[new_node] = PartitionInfo(count=count, bcasted=bcasted)
+    partition_info[new_node] = PartitionInfo(count=count)
     return new_node, partition_info
 
 
@@ -369,8 +368,7 @@ def _lower_ir_pwise(
     if preserve_partitioning and len(children) == 1:
         partition = partition_info[children[0]]
     else:
-        bcasted = all(partition_info[c].bcasted for c in children)
-        partition = PartitionInfo(count=max(counts), bcasted=bcasted)
+        partition = PartitionInfo(count=max(counts))
 
     # Return reconstructed node and partition-info dict
     new_node = ir.reconstruct(children)
@@ -423,14 +421,13 @@ def _(
         # Taking the first N rows.
         # We don't know how large each partition is, so we reduce.
         new_node, partition_info = _lower_ir_pwise(ir, rec)
-        bcasted = partition_info[new_node].bcasted
         if partition_info[new_node].count > 1:
             # Collapse down to single partition
             inter = Repartition(new_node.schema, new_node)
-            partition_info[inter] = PartitionInfo(count=1, bcasted=bcasted)
+            partition_info[inter] = PartitionInfo(count=1)
             # Slice reduced partition
             new_node = ir.reconstruct([inter])
-            partition_info[new_node] = PartitionInfo(count=1, bcasted=bcasted)
+            partition_info[new_node] = PartitionInfo(count=1)
         return new_node, partition_info
 
     # Fallback
