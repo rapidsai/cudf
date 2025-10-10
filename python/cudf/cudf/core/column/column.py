@@ -146,7 +146,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self,
         data: None | Buffer,
         size: int,
-        dtype,
+        dtype: DtypeObj,
         mask: None | Buffer,
         offset: int,
         null_count: int,
