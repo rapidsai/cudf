@@ -369,7 +369,7 @@ class GroupedRollingWindow(Expr):
         return rank_out_names, rank_out_dtypes, rank_tables
 
     @_apply_unary_op.register
-    def _(
+    def _(  # type: ignore[no-untyped-def]
         self,
         op: FillNullWithStrategyOp,
         df: DataFrame,
@@ -404,7 +404,7 @@ class GroupedRollingWindow(Expr):
         return names, dtypes, tables
 
     @_apply_unary_op.register
-    def _(
+    def _(  # type: ignore[no-untyped-def]
         self,
         op: CumSumOp,
         df: DataFrame,

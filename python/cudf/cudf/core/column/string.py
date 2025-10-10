@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+import re
 from collections.abc import Callable
 from functools import cached_property
 from typing import TYPE_CHECKING, cast
@@ -51,6 +52,26 @@ if TYPE_CHECKING:
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.timedelta import TimeDeltaColumn
     from cudf.core.dtypes import DecimalDtype
+
+
+# For now all supported re flags have matching names in libcudf. If that ever changes
+# this construction will need to be updated with more explicit mapping.
+_FLAG_MAP = {
+    getattr(re, flag): getattr(plc.strings.regex_flags.RegexFlags, flag)
+    for flag in ("MULTILINE", "DOTALL")
+}
+
+
+def plc_flags_from_re_flags(flags):
+    # Convert Python re flags to pylibcudf RegexFlags
+    plc_flags = plc.strings.regex_flags.RegexFlags(0)
+    for re_flag, plc_flag in _FLAG_MAP.items():
+        if flags & re_flag:
+            plc_flags |= plc_flag
+            flags &= ~re_flag
+    if flags:
+        raise ValueError(f"Unsupported re flags: {flags}")
+    return plc_flags
 
 
 class StringColumn(ColumnBase):
@@ -1185,7 +1206,10 @@ class StringColumn(ColumnBase):
     def extract(self, pattern: str, flags: int) -> dict[int, Self]:
         plc_table = plc.strings.extract.extract(
             self.to_pylibcudf(mode="read"),
-            plc.strings.regex_program.RegexProgram.create(pattern, flags),
+            plc.strings.regex_program.RegexProgram.create(
+                pattern,
+                plc_flags_from_re_flags(flags),
+            ),
         )
         return dict(
             enumerate(
@@ -1197,7 +1221,10 @@ class StringColumn(ColumnBase):
     def contains_re(self, pattern: str, flags: int) -> Self:
         plc_column = plc.strings.contains.contains_re(
             self.to_pylibcudf(mode="read"),
-            plc.strings.regex_program.RegexProgram.create(pattern, flags),
+            plc.strings.regex_program.RegexProgram.create(
+                pattern,
+                plc_flags_from_re_flags(flags),
+            ),
         )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
@@ -1405,7 +1432,9 @@ class StringColumn(ColumnBase):
     def count_re(self, pattern: str, flags: int) -> NumericalColumn:
         plc_result = plc.strings.contains.count_re(
             self.to_pylibcudf(mode="read"),
-            plc.strings.regex_program.RegexProgram.create(pattern, flags),
+            plc.strings.regex_program.RegexProgram.create(
+                pattern, plc_flags_from_re_flags(flags)
+            ),
         )
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 
@@ -1420,7 +1449,9 @@ class StringColumn(ColumnBase):
     ) -> Self:
         plc_result = method(
             self.to_pylibcudf(mode="read"),
-            plc.strings.regex_program.RegexProgram.create(pat, flags),
+            plc.strings.regex_program.RegexProgram.create(
+                pat, plc_flags_from_re_flags(flags)
+            ),
         )
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 
@@ -1469,7 +1500,9 @@ class StringColumn(ColumnBase):
     def matches_re(self, pattern: str, flags: int) -> Self:
         plc_result = plc.strings.contains.matches_re(
             self.to_pylibcudf(mode="read"),
-            plc.strings.regex_program.RegexProgram.create(pattern, flags),
+            plc.strings.regex_program.RegexProgram.create(
+                pattern, plc_flags_from_re_flags(flags)
+            ),
         )
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 
