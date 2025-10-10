@@ -64,8 +64,11 @@ std::unique_ptr<cudf::table> combine_tables(std::unique_ptr<cudf::table> filter_
  *
  * @param lhs_table View to lhs table
  * @param rhs_table View to rhs table
+ * @param stream CUDA stream to use
  */
-void check_tables_equal(cudf::table_view const& lhs_table, cudf::table_view const& rhs_table);
+void check_tables_equal(cudf::table_view const& lhs_table,
+                        cudf::table_view const& rhs_table,
+                        rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Fetches a host span of Parquet footer bytes from the input buffer span

@@ -321,11 +321,12 @@ std::vector<io_source> extract_input_sources(std::string const& paths,
   std::vector<io_source> input_sources;
   input_sources.reserve(parquet_files.size());
   // Transform input files to the specified io sources
-  std::transform(
-    parquet_files.begin(),
-    parquet_files.end(),
-    std::back_inserter(input_sources),
-    [&](auto const& file_name) { return io_source{file_name, io_source_type, stream}; });
+  std::transform(parquet_files.begin(),
+                 parquet_files.end(),
+                 std::back_inserter(input_sources),
+                 [&](auto const& file_name) {
+                   return io_source{file_name, io_source_type, stream};
+                 });
   stream.synchronize();
   return input_sources;
 }
@@ -452,7 +453,7 @@ int32_t main(int argc, char const** argv)
     default_stream.synchronize();
 
     // Check if the tables are identical
-    check_tables_equal(input_table->view(), transcoded_table->view());
+    check_tables_equal(input_table->view(), transcoded_table->view(), default_stream);
 
     // Remove the created temp directory and parquet data
     std::filesystem::remove_all(output_path);

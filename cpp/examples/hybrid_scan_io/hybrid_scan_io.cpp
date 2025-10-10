@@ -374,7 +374,7 @@ int main(int argc, char const** argv)
   timer.print_elapsed_millis();
 
   // Check for validity
-  check_tables_equal(table_next_gen_reader->view(), table_main_reader->view());
+  check_tables_equal(table_next_gen_reader->view(), table_main_reader->view(), stream);
 
   return 0;
 }

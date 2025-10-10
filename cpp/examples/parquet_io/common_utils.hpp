@@ -68,8 +68,11 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_
  *
  * @param lhs_table View to lhs table
  * @param rhs_table View to rhs table
+ * @param stream CUDA stream to use
  */
-void check_tables_equal(cudf::table_view const& lhs_table, cudf::table_view const& rhs_table);
+void check_tables_equal(cudf::table_view const& lhs_table,
+                        cudf::table_view const& rhs_table,
+                        rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Concatenate a vector of tables and return the resultant table

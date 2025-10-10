@@ -21,7 +21,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
-#include <cudf/join/join.hpp>
+#include <cudf/join/filtered_join.hpp>
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -29,8 +29,8 @@
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
-#include <memory>
 #include <string>
+#include <vector>
 
 /**
  * @file common_utils.cpp
@@ -71,13 +71,16 @@ std::unique_ptr<cudf::table> combine_tables(std::unique_ptr<cudf::table> filter_
   return table;
 }
 
-void check_tables_equal(cudf::table_view const& lhs_table, cudf::table_view const& rhs_table)
+void check_tables_equal(cudf::table_view const& lhs_table,
+                        cudf::table_view const& rhs_table,
+                        rmm::cuda_stream_view stream)
 {
   try {
-    // Left anti-join the original and transcoded tables
-    // identical tables should not throw an exception and
-    // return an empty indices vector
-    auto const indices = cudf::left_anti_join(lhs_table, rhs_table, cudf::null_equality::EQUAL);
+    // Left anti-join the original and transcoded tables identical tables should not throw an
+    // exception and return an empty indices vector
+    cudf::filtered_join join_obj(
+      lhs_table, cudf::null_equality::EQUAL, cudf::set_as_build_table::RIGHT, stream);
+    auto const indices = join_obj.anti_join(rhs_table, stream);
 
     // No exception thrown, check indices
     auto const valid = indices->size() == 0;
@@ -130,20 +133,18 @@ std::vector<rmm::device_buffer> fetch_byte_ranges(
 {
   CUDF_FUNC_RANGE();
 
-  std::vector<rmm::device_buffer> buffers{};
-  buffers.reserve(byte_ranges.size());
+  std::vector<rmm::device_buffer> buffers(byte_ranges.size());
 
-  std::transform(
-    byte_ranges.begin(),
-    byte_ranges.end(),
-    std::back_inserter(buffers),
-    [&](auto const& byte_range) {
-      auto const chunk_offset = host_buffer.data() + byte_range.offset();
-      auto const chunk_size   = byte_range.size();
+  std::for_each(
+    thrust::counting_iterator<size_t>(0),
+    thrust::counting_iterator(byte_ranges.size()),
+    [&](auto const idx) {
+      auto const chunk_offset = host_buffer.data() + byte_ranges[idx].offset();
+      auto const chunk_size   = byte_ranges[idx].size();
       auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
       CUDF_CUDA_TRY(cudaMemcpyAsync(
         buffer.data(), chunk_offset, chunk_size, cudaMemcpyHostToDevice, stream.value()));
-      return buffer;
+      buffers[idx] = std::move(buffer);
     });
 
   stream.synchronize_no_throw();
