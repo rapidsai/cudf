@@ -15,7 +15,11 @@
  */
 #pragma once
 
+#include <cudf/detail/utilities/cuda.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
+
+#include <string>
 
 namespace CUDF_EXPORT cudf {
 namespace io {
@@ -37,13 +41,40 @@ namespace nvcomp_integration {
 /**
  * @brief Returns true if all nvCOMP uses are enabled.
  */
-bool is_all_enabled();
+[[nodiscard]] bool is_all_enabled();
 
 /**
  * @brief Returns true if stable nvCOMP use is enabled.
  */
-bool is_stable_enabled();
+[[nodiscard]] bool is_stable_enabled();
 
 }  // namespace nvcomp_integration
+
+namespace integrated_memory_optimization {
+
+/**
+ * @brief Returns true if integrated memory optimizations are enabled.
+ *
+ * Controlled by the LIBCUDF_INTEGRATED_MEMORY_OPTIMIZATION environment variable.
+ * Valid values: "AUTO" (default), "ON", "OFF"
+ * - AUTO: Use hardware detection (cudaDevAttrIntegrated)
+ * - ON: Always enable optimization
+ * - OFF: Always disable optimization
+ */
+[[nodiscard]] inline bool is_enabled()
+{
+  auto const policy = []() {
+    auto const* env_val = std::getenv("LIBCUDF_INTEGRATED_MEMORY_OPTIMIZATION");
+    if (env_val == nullptr) return std::string("AUTO");
+    return std::string(env_val);
+  }();
+
+  if (policy == "OFF") return false;
+  if (policy == "ON") return true;
+  if (policy == "AUTO") return cudf::detail::has_integrated_memory();
+  CUDF_FAIL("Invalid LIBCUDF_INTEGRATED_MEMORY_OPTIMIZATION value: " + policy);
+}
+
+}  // namespace integrated_memory_optimization
 }  // namespace io
 }  // namespace CUDF_EXPORT cudf

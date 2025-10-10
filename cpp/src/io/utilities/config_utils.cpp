@@ -56,7 +56,7 @@ enum class usage_policy : uint8_t { OFF, STABLE, ALWAYS };
 /**
  * @brief Get the current usage policy.
  */
-usage_policy get_env_policy()
+[[nodiscard]] usage_policy get_env_policy()
 {
   auto const env_val = getenv_or<std::string>("LIBCUDF_NVCOMP_POLICY", "STABLE");
   if (env_val == "OFF") return usage_policy::OFF;
@@ -66,9 +66,12 @@ usage_policy get_env_policy()
 }
 }  // namespace
 
-bool is_all_enabled() { return get_env_policy() == usage_policy::ALWAYS; }
+[[nodiscard]] bool is_all_enabled() { return get_env_policy() == usage_policy::ALWAYS; }
 
-bool is_stable_enabled() { return is_all_enabled() or get_env_policy() == usage_policy::STABLE; }
+[[nodiscard]] bool is_stable_enabled()
+{
+  return is_all_enabled() or get_env_policy() == usage_policy::STABLE;
+}
 
 }  // namespace nvcomp_integration
 }  // namespace cudf::io

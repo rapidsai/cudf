@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,12 @@ namespace detail {
  * @brief Get the number of multiprocessors on the device
  */
 cudf::size_type num_multiprocessors();
+
+/**
+ * @brief Check if the current system has integrated memory (unified addressing, managed memory, and
+ * concurrent managed access)
+ */
+[[nodiscard]] bool has_integrated_memory();
 
 /**
  * @brief Get the number of elements that can be processed per thread.
