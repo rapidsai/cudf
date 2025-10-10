@@ -478,10 +478,14 @@ TYPED_TEST(MixedInnerJoinTest, BasicInequality)
              {{3, 3}});
 }
 
+// This test is designed to prevent https://github.com/NVIDIA/spark-rapids/issues/13416 from
+// happening again, where the block atomic counter was improperly set, causing illegal memory access
+// when the input data is large enough that multiple blocks are needed for the kernel.
 TYPED_TEST(MixedInnerJoinTest, LargeDataMultiBlockCoordination)
 {
   using T = TypeParam;
 
+  // These sizes are large enough to ensure the kernel launches with multiple blocks
   constexpr int left_size  = 5000;
   constexpr int right_size = 20;
 
