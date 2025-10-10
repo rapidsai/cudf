@@ -121,6 +121,7 @@ def manager(request):
     """Fixture to enable and make a spilling manager availabe"""
     kwargs = dict(getattr(request, "param", {}))
     with warnings.catch_warnings():
+        warnings.simplefilter("error")
         set_global_manager(manager=SpillManager(**kwargs))
         yield get_global_manager()
         # Retrieving the test result using the `pytest_runtest_makereport`
@@ -509,7 +510,6 @@ def test_serialize_host(manager, target, view):
     assert_eq(df1, df2)
 
 
-@pytest.mark.filterwarnings("ignore:overwriting non-empty manager:UserWarning")
 def test_serialize_dask_dataframe(manager: SpillManager):
     protocol = pytest.importorskip("distributed.protocol")
 
@@ -531,7 +531,6 @@ def test_serialize_dask_dataframe(manager: SpillManager):
     assert_eq(df1, df2)
 
 
-@pytest.mark.filterwarnings("ignore:overwriting non-empty manager:UserWarning")
 def test_serialize_cuda_dataframe(manager: SpillManager):
     protocol = pytest.importorskip("distributed.protocol")
 
