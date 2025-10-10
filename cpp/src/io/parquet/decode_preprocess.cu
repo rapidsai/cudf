@@ -174,11 +174,11 @@ __device__ void update_page_sizes(page_state_s* s,
 /**
  * @brief Updates size information for a pruned page across all nesting levels
  *
- * @param page The page to comptues sizes for
- * @param state The local page info
- * @param has_repetition Whether the page has repetition
- * @param is_base_pass Whether this is the base pass
- * @param block The current thread block cooperative group
+ * @param[in,out] page The page to compute sizes for
+ * @param[in] state The local page info
+ * @param[in] has_repetition Whether the page has repetition
+ * @param[in] is_base_pass Whether this is the base pass
+ * @param[in] block The current thread block cooperative group
  */
 __device__ void compute_page_sizes_for_pruned_pages(PageInfo* page,
                                                     page_state_s* const state,
