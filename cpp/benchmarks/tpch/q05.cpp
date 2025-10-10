@@ -26,7 +26,7 @@
 
 /**
  * @file q05.cpp
- * @brief Implement query 5 of the NDS-H benchmark.
+ * @brief Implement query 5 of the "tpch" benchmark.
  *
  * create view customer as select * from '/tables/scale-1/customer.parquet';
  * create view orders as select * from '/tables/scale-1/orders.parquet';
@@ -88,7 +88,7 @@
   return revenue;
 }
 
-void run_ndsh_q5(nvbench::state& state,
+void run_tpch_q5(nvbench::state& state,
                  std::unordered_map<std::string, cuio_source_sink_pair>& sources)
 {
   // Define the column projection and filter predicate for the `orders` table
@@ -161,7 +161,7 @@ void run_ndsh_q5(nvbench::state& state,
   orderedby_table->to_parquet("q5.parquet");
 }
 
-void ndsh_q5(nvbench::state& state)
+void tpch_q5(nvbench::state& state)
 {
   // Generate the required parquet files in device buffers
   double const scale_factor = state.get_float64("scale_factor");
@@ -172,7 +172,7 @@ void ndsh_q5(nvbench::state& state)
   auto stream = cudf::get_default_stream();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   state.exec(nvbench::exec_tag::sync,
-             [&](nvbench::launch& launch) { run_ndsh_q5(state, sources); });
+             [&](nvbench::launch& launch) { run_tpch_q5(state, sources); });
 }
 
-NVBENCH_BENCH(ndsh_q5).set_name("ndsh_q5").add_float64_axis("scale_factor", {0.01, 0.1, 1});
+NVBENCH_BENCH(tpch_q5).set_name("tpch_q5").add_float64_axis("scale_factor", {0.01, 0.1, 1});

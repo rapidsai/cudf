@@ -16,7 +16,7 @@
 
 #include "utilities.hpp"
 
-#include <benchmarks/common/ndsh_data_generator/ndsh_data_generator.hpp>
+#include <benchmarks/common/tpch_data_generator/tpch_data_generator.hpp>
 #include <benchmarks/common/nvtx_ranges.hpp>
 #include <benchmarks/common/table_utilities.hpp>
 

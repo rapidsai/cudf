@@ -27,7 +27,7 @@
 
 /**
  * @file q01.cpp
- * @brief Implement query 1 of the NDS-H benchmark.
+ * @brief Implement query 1 of the "tpch" benchmark.
  *
  * create view lineitem as select * from '/tables/scale-1/lineitem.parquet';
  *
@@ -104,7 +104,7 @@
     disc_price, one_plus_tax->view(), cudf::binary_operator::MUL, tax.type(), stream, mr);
 }
 
-void run_ndsh_q1(nvbench::state& state, cudf::io::source_info const& source)
+void run_tpch_q1(nvbench::state& state, cudf::io::source_info const& source)
 {
   // Define the column projections and filter predicate for `lineitem` table
   std::vector<std::string> const lineitem_cols = {"l_returnflag",
@@ -165,7 +165,7 @@ void run_ndsh_q1(nvbench::state& state, cudf::io::source_info const& source)
   orderedby_table->to_parquet("q1.parquet");
 }
 
-void ndsh_q1(nvbench::state& state)
+void tpch_q1(nvbench::state& state)
 {
   // Generate the required parquet files in device buffers
   auto const scale_factor = state.get_float64("scale_factor");
@@ -185,10 +185,10 @@ void ndsh_q1(nvbench::state& state)
 
   auto stream = cudf::get_default_stream();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) { run_ndsh_q1(state, source); });
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) { run_tpch_q1(state, source); });
 }
 
-NVBENCH_BENCH(ndsh_q1)
-  .set_name("ndsh_q1")
+NVBENCH_BENCH(tpch_q1)
+  .set_name("tpch_q1")
   .add_string_axis("filename", {""})
   .add_float64_axis("scale_factor", {0.01, 0.1, 1});
