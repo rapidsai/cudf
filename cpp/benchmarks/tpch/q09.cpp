@@ -56,7 +56,7 @@ struct q9_data {
 
 /**
  * @file q09.cpp
- * @brief Implement query 9 of the NDS-H benchmark.
+ * @brief Implement query 9 of the "tpch" benchmark.
  *
  * create view part as select * from '/tables/scale-1/part.parquet';
  * create view supplier as select * from '/tables/scale-1/supplier.parquet';
@@ -307,7 +307,7 @@ std::unique_ptr<table_with_names> compute_profit(
     groupedby_table, {"nation", "o_year"}, {cudf::order::ASCENDING, cudf::order::DESCENDING});
 }
 
-void ndsh_q9(nvbench::state& state)
+void tpch_q9(nvbench::state& state)
 {
   auto const scale_factor = state.get_float64("scale_factor");
   auto const engine       = engine_from_string(state.get_string("engine"));
@@ -327,7 +327,7 @@ void ndsh_q9(nvbench::state& state)
   });
 }
 
-void ndsh_q9_noio(nvbench::state& state)
+void tpch_q9_noio(nvbench::state& state)
 {
   auto const scale_factor = state.get_float64("scale_factor");
   auto const engine       = engine_from_string(state.get_string("engine"));
@@ -351,8 +351,8 @@ void ndsh_q9_noio(nvbench::state& state)
   if (result) { result->to_parquet("q9_noio.parquet"); }
 }
 
-// unlike `ndsh_q9`, `ndsh_q9_amount` benchmarks only the amount calculation part of the benchmark
-void ndsh_q9_amount(nvbench::state& state)
+// unlike `tpch_q9`, `tpch_q9_amount` benchmarks only the amount calculation part of the benchmark
+void tpch_q9_amount(nvbench::state& state)
 {
   auto const scale_factor = state.get_float64("scale_factor");
   auto const engine       = engine_from_string(state.get_string("engine"));
@@ -381,17 +381,17 @@ void ndsh_q9_amount(nvbench::state& state)
   });
 }
 
-NVBENCH_BENCH(ndsh_q9)
-  .set_name("ndsh_q9")
+NVBENCH_BENCH(tpch_q9)
+  .set_name("tpch_q9")
   .add_float64_axis("scale_factor", {0.01, 0.1, 1})
   .add_string_axis("engine", {"binaryop", "ast", "transform"});
 
-NVBENCH_BENCH(ndsh_q9_noio)
-  .set_name("ndsh_q9_noio")
+NVBENCH_BENCH(tpch_q9_noio)
+  .set_name("tpch_q9_noio")
   .add_float64_axis("scale_factor", {0.01, 0.1, 1})
   .add_string_axis("engine", {"binaryop", "ast", "transform"});
 
-NVBENCH_BENCH(ndsh_q9_amount)
-  .set_name("ndsh_q9_amount")
+NVBENCH_BENCH(tpch_q9_amount)
+  .set_name("tpch_q9_amount")
   .add_float64_axis("scale_factor", {0.01, 0.1, 1})
   .add_string_axis("engine", {"binaryop", "ast", "transform"});

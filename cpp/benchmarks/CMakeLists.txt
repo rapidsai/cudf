@@ -36,25 +36,25 @@ target_include_directories(
 )
 
 add_library(
-  ndsh_data_generator STATIC
-  common/ndsh_data_generator/ndsh_data_generator.cpp common/ndsh_data_generator/table_helpers.cpp
-  common/ndsh_data_generator/random_column_generator.cu
+  tpch_data_generator STATIC
+  common/tpch_data_generator/tpch_data_generator.cpp common/tpch_data_generator/table_helpers.cpp
+  common/tpch_data_generator/random_column_generator.cu
 )
-target_compile_features(ndsh_data_generator PUBLIC cxx_std_20 cuda_std_20)
+target_compile_features(tpch_data_generator PUBLIC cxx_std_20 cuda_std_20)
 
 target_compile_options(
-  ndsh_data_generator PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
+  tpch_data_generator PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
                              "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
 )
 
 target_link_libraries(
-  ndsh_data_generator
+  tpch_data_generator
   PUBLIC cudf cudf::cudftestutil nvtx3::nvtx3-cpp
   PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
 )
 
 target_include_directories(
-  ndsh_data_generator
+  tpch_data_generator
   PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>" "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
 )
@@ -131,7 +131,7 @@ function(ConfigureNVBench CMAKE_BENCH_NAME)
   )
   target_link_libraries(
     ${CMAKE_BENCH_NAME}
-    PRIVATE cudf_benchmark_common ndsh_data_generator cudf_datagen nvbench::nvbench
+    PRIVATE cudf_benchmark_common tpch_data_generator cudf_datagen nvbench::nvbench
             $<TARGET_NAME_IF_EXISTS:conda_env> cudf::cudftestutil_objects
   )
   install(
@@ -166,12 +166,12 @@ ConfigureNVBench(SET_OPS_NVBENCH lists/set_operations.cpp)
 ConfigureBench(TRANSPOSE_BENCH transpose/transpose.cpp)
 
 # ##################################################################################################
-# * nds-h benchmark --------------------------------------------------------------------------------
-ConfigureNVBench(NDSH_Q01_NVBENCH ndsh/q01.cpp ndsh/utilities.cpp)
-ConfigureNVBench(NDSH_Q05_NVBENCH ndsh/q05.cpp ndsh/utilities.cpp)
-ConfigureNVBench(NDSH_Q06_NVBENCH ndsh/q06.cpp ndsh/utilities.cpp)
-ConfigureNVBench(NDSH_Q09_NVBENCH ndsh/q09.cpp ndsh/utilities.cpp)
-ConfigureNVBench(NDSH_Q10_NVBENCH ndsh/q10.cpp ndsh/utilities.cpp)
+# * tpch benchmark --------------------------------------------------------------------------------
+ConfigureNVBench(TPCH_Q01_NVBENCH tpch/q01.cpp tpch/utilities.cpp)
+ConfigureNVBench(TPCH_Q05_NVBENCH tpch/q05.cpp tpch/utilities.cpp)
+ConfigureNVBench(TPCH_Q06_NVBENCH tpch/q06.cpp tpch/utilities.cpp)
+ConfigureNVBench(TPCH_Q09_NVBENCH tpch/q09.cpp tpch/utilities.cpp)
+ConfigureNVBench(TPCH_Q10_NVBENCH tpch/q10.cpp tpch/utilities.cpp)
 
 # ##################################################################################################
 # * filter benchmark -------------------------------------------------------------------
