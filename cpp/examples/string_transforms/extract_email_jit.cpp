@@ -70,6 +70,7 @@ __device__ void email_provider(cudf::string_view* out,
                                    false,
                                    std::nullopt,
                                    cudf::null_aware::NO,
+                                   cudf::null_output::PRESERVE,
                                    stream,
                                    mr);
 

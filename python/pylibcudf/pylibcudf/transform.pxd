@@ -1,6 +1,6 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libcpp cimport bool
-from pylibcudf.libcudf.types cimport bitmask_type, data_type, null_aware
+from pylibcudf.libcudf.types cimport bitmask_type, data_type, null_aware, null_output
 from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
@@ -37,6 +37,7 @@ cpdef Column transform(
     DataType output_type,
     bool is_ptx,
     null_aware is_null_aware,
+    null_output null_policy,
     Stream stream = *,
     DeviceMemoryResource mr = *,
 )
