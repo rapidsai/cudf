@@ -191,7 +191,9 @@ class DataFrame:
 
     @classmethod
     def deserialize(
-        cls, header: DataFrameHeader, frames: tuple[memoryview, plc.gpumemoryview]
+        cls,
+        header: DataFrameHeader,
+        frames: tuple[memoryview[bytes], plc.gpumemoryview],
     ) -> Self:
         """
         Create a DataFrame from a serialized representation returned by `.serialize()`.
@@ -219,7 +221,7 @@ class DataFrame:
 
     def serialize(
         self,
-    ) -> tuple[DataFrameHeader, tuple[memoryview, plc.gpumemoryview]]:
+    ) -> tuple[DataFrameHeader, tuple[memoryview[bytes], plc.gpumemoryview]]:
         """
         Serialize the table into header and frames.
 
