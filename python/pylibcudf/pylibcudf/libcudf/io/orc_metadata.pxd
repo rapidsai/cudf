@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from libc.stdint cimport int32_t, int64_t, uint32_t, uint64_t
 from libcpp cimport bool
 from libcpp.optional cimport optional
@@ -7,6 +7,7 @@ from libcpp.vector cimport vector
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.io cimport types as cudf_io_types
 from pylibcudf.variant cimport monostate, variant
+from rmm.librmm.cuda_stream_view cimport cuda_stream_view
 
 
 cdef extern from "cudf/io/orc_metadata.hpp" \
@@ -68,5 +69,6 @@ cdef extern from "cudf/io/orc_metadata.hpp" \
         vector[vector[column_statistics]] stripes_stats
 
     cdef parsed_orc_statistics read_parsed_orc_statistics(
-        cudf_io_types.source_info src_info
+        const cudf_io_types.source_info& src_info,
+        cuda_stream_view stream
     ) except +libcudf_exception_handler
