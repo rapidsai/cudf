@@ -2239,7 +2239,6 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
       }
     }
   }
-  // Synchronize to ensure the copy is complete before we clear `map_slots`
   stripe_dicts.host_to_device_async(stream);
 
   collect_map_entries(stripe_dicts, stream);

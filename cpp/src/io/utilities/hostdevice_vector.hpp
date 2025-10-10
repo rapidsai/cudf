@@ -105,25 +105,21 @@ class hostdevice_vector {
 
   void host_to_device_async(rmm::cuda_stream_view stream)
   {
-    CUDF_FUNC_RANGE();
     if (!use_integrated_memory) { cuda_memcpy_async<T>(d_data, h_data, stream); }
   }
 
   void host_to_device(rmm::cuda_stream_view stream)
   {
-    CUDF_FUNC_RANGE();
     host_to_device_async(stream);
     stream.synchronize();
   }
   void device_to_host_async(rmm::cuda_stream_view stream)
   {
-    CUDF_FUNC_RANGE();
     if (!use_integrated_memory) { cuda_memcpy_async<T>(h_data, d_data, stream); }
   }
 
   void device_to_host(rmm::cuda_stream_view stream)
   {
-    CUDF_FUNC_RANGE();
     device_to_host_async(stream);
     stream.synchronize();
   }
