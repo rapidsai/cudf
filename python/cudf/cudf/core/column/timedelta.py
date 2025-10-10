@@ -89,7 +89,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
     def __init__(
         self,
         data: Buffer,
-        size: int | None,
+        size: int,
         dtype: np.dtype,
         mask: Buffer | None,
         offset: int,

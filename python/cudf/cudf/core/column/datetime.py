@@ -103,7 +103,7 @@ class DatetimeColumn(TemporalBaseColumn):
     def __init__(
         self,
         data: Buffer,
-        size: int | None,
+        size: int,
         dtype: np.dtype | pd.DatetimeTZDtype,
         mask: Buffer | None,
         offset: int,
@@ -758,26 +758,6 @@ class DatetimeColumn(TemporalBaseColumn):
 
 
 class DatetimeTZColumn(DatetimeColumn):
-    def __init__(
-        self,
-        data: Buffer,
-        size: int | None,
-        dtype: pd.DatetimeTZDtype,
-        mask: Buffer | None,
-        offset: int,
-        null_count: int | None,
-        children: tuple,
-    ):
-        super().__init__(
-            data=data,
-            size=size,
-            dtype=dtype,
-            mask=mask,
-            offset=offset,
-            null_count=null_count,
-            children=children,
-        )
-
     def _clear_cache(self) -> None:
         super()._clear_cache()
         try:
