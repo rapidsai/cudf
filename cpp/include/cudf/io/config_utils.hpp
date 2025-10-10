@@ -37,12 +37,12 @@ namespace nvcomp_integration {
 /**
  * @brief Returns true if all nvCOMP uses are enabled.
  */
-bool is_all_enabled();
+ [[nodiscard]] bool is_all_enabled();
 
 /**
  * @brief Returns true if stable nvCOMP use is enabled.
  */
-bool is_stable_enabled();
+ [[nodiscard]] bool is_stable_enabled();
 
 }  // namespace nvcomp_integration
 
@@ -52,9 +52,12 @@ namespace integrated_memory_optimization {
  * @brief Returns true if integrated memory optimizations are enabled.
  *
  * Controlled by the LIBCUDF_INTEGRATED_MEMORY_OPTIMIZATION environment variable.
- * Valid values: "ON" (default), "OFF"
+ * Valid values: "AUTO" (default), "ON", "OFF"
+ * - AUTO: Use hardware detection (cudaDevAttrIntegrated)
+ * - ON: Always enable optimization
+ * - OFF: Always disable optimization
  */
-bool is_enabled();
+ [[nodiscard]] bool is_enabled();
 
 }  // namespace integrated_memory_optimization
 }  // namespace io

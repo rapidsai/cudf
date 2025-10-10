@@ -45,7 +45,8 @@ namespace cudf::detail {
  * On systems with integrated memory, this class uses only pinned buffer memory
  * that is accessible by both host and device, eliminating the need for separate
  * device memory allocation and data transfers. This optimization can be controlled
- * via the LIBCUDF_INTEGRATED_MEMORY_OPTIMIZATION environment variable.
+ * via the LIBCUDF_INTEGRATED_MEMORY_OPTIMIZATION environment variable (AUTO by default,
+ * which uses hardware detection).
  */
 template <typename T>
 class hostdevice_vector {
@@ -55,8 +56,7 @@ class hostdevice_vector {
   hostdevice_vector() : hostdevice_vector(0, cudf::get_default_stream()) {}
 
   explicit hostdevice_vector(size_t size, rmm::cuda_stream_view stream)
-    : use_integrated_memory{has_integrated_memory() &&
-                            cudf::io::integrated_memory_optimization::is_enabled()},
+    : use_integrated_memory{cudf::io::integrated_memory_optimization::is_enabled()},
       h_data{make_pinned_vector_async<T>(size, stream)},
       d_data{use_integrated_memory ? 0 : size, stream},
       _device_ptr{use_integrated_memory ? h_data.data() : d_data.data()}
