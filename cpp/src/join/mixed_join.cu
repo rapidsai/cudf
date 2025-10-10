@@ -306,7 +306,7 @@ mixed_join(
   // Given the number of matches per row, we need to compute the offsets for insertion.
   auto join_result_offsets =
     rmm::device_uvector<size_type>{static_cast<std::size_t>(outer_num_rows), stream, mr};
-  thrust::exclusive_scan(rmm::exec_policy{stream},
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          matches_per_row_span.begin(),
                          matches_per_row_span.end(),
                          join_result_offsets.begin());
@@ -427,14 +427,18 @@ compute_mixed_join_output_size(table_view const& left_equality,
     switch (join_type) {
       // Left joins return all the row indices from left with a corresponding NULL from the right.
       case join_kind::LEFT_JOIN: {
-        thrust::fill(
-          rmm::exec_policy{stream}, matches_per_row_span.begin(), matches_per_row_span.end(), 1);
+        thrust::fill(rmm::exec_policy_nosync(stream),
+                     matches_per_row_span.begin(),
+                     matches_per_row_span.end(),
+                     1);
         return {left_num_rows, std::move(matches_per_row)};
       }
       // Inner joins return empty output because no matches can exist.
       case join_kind::INNER_JOIN: {
-        thrust::fill(
-          rmm::exec_policy{stream}, matches_per_row_span.begin(), matches_per_row_span.end(), 0);
+        thrust::fill(rmm::exec_policy_nosync(stream),
+                     matches_per_row_span.begin(),
+                     matches_per_row_span.end(),
+                     0);
         return {0, std::move(matches_per_row)};
       }
       default: CUDF_FAIL("Invalid join kind."); break;
@@ -444,8 +448,10 @@ compute_mixed_join_output_size(table_view const& left_equality,
       // Left and inner joins all return empty sets.
       case join_kind::LEFT_JOIN:
       case join_kind::INNER_JOIN: {
-        thrust::fill(
-          rmm::exec_policy{stream}, matches_per_row_span.begin(), matches_per_row_span.end(), 0);
+        thrust::fill(rmm::exec_policy_nosync(stream),
+                     matches_per_row_span.begin(),
+                     matches_per_row_span.end(),
+                     0);
         return {0, std::move(matches_per_row)};
       }
       default: CUDF_FAIL("Invalid join kind."); break;
