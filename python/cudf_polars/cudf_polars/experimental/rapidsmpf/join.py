@@ -1,0 +1,241 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-License-Identifier: Apache-2.0
+"""Join logic for the RapidsMPF streaming engine."""
+
+from __future__ import annotations
+
+import asyncio
+import operator
+from functools import reduce
+from itertools import chain
+from typing import TYPE_CHECKING, Any, Literal
+
+from rapidsmpf.streaming.core.channel import Channel, Message
+from rapidsmpf.streaming.cudf.table_chunk import TableChunk
+
+import pylibcudf as plc
+from rmm.pylibrmm.stream import DEFAULT_STREAM
+
+from cudf_polars.containers import DataFrame
+from cudf_polars.dsl.ir import IR, Join
+from cudf_polars.experimental.rapidsmpf.dispatch import (
+    generate_ir_sub_network,
+)
+from cudf_polars.experimental.rapidsmpf.nodes import (
+    default_node_multi,
+    define_py_node,
+    shutdown_on_error,
+)
+from cudf_polars.experimental.utils import _concat
+
+if TYPE_CHECKING:
+    from rapidsmpf.streaming.core.context import Context
+
+    from cudf_polars.dsl.ir import IR
+    from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
+
+
+async def get_small_table(
+    ctx: Context,
+    small_child: IR,
+    ch_small: Channel[TableChunk],
+) -> list[DataFrame]:
+    """
+    Get the small-table DataFrame partitions from the small-table channel.
+
+    Parameters
+    ----------
+    ctx
+        The context.
+    small_child
+        The small-table child IR node.
+    ch_small
+        The small-table channel.
+
+    Returns
+    -------
+    list[DataFrame]
+        The small-table DataFrame partitions.
+    """
+    small_chunks = []
+    while (msg := await ch_small.recv(ctx)) is not None:
+        small_chunks.append(TableChunk.from_message(msg).table_view())
+
+    if len(small_chunks) == 0:
+        raise ValueError("Empty small side")
+
+    return [
+        DataFrame.from_table(
+            small_chunk,
+            list(small_child.schema.keys()),
+            list(small_child.schema.values()),
+        )
+        for small_chunk in small_chunks
+    ]
+
+
+@define_py_node()
+async def broadcast_join_node(
+    ctx: Context,
+    ir: Join,
+    ch_out: Channel[TableChunk],
+    ch_left: Channel[TableChunk],
+    ch_right: Channel[TableChunk],
+    broadcast_side: Literal["left", "right"],
+) -> None:
+    """
+    Join node for rapidsmpf.
+
+    Parameters
+    ----------
+    ctx
+        The context.
+    ir
+        The Join IR node.
+    ch_out
+        The output channel.
+    ch_left
+        The left input channel.
+    ch_right
+        The right input channel.
+    broadcast_side
+        The side to broadcast.
+    """
+    async with shutdown_on_error(ctx, ch_left, ch_right, ch_out):
+        if broadcast_side == "right":
+            # Broadcast right, stream left
+            small_ch = ch_right
+            large_ch = ch_left
+            small_child = ir.children[1]
+            large_child = ir.children[0]
+        else:
+            # Broadcast left, stream right
+            small_ch = ch_left
+            large_ch = ch_right
+            small_child = ir.children[0]
+            large_child = ir.children[1]
+
+        # TODO: Build output partition incrementally?
+        small_dfs: list[DataFrame] = []
+        get_small_table_fut = asyncio.create_task(
+            get_small_table(ctx, small_child, small_ch)
+        )
+
+        # Stream through large side, joining with broadcast data
+        while (msg := await large_ch.recv(ctx)) is not None:
+            large_chunk = TableChunk.from_message(msg)
+            large_df = DataFrame.from_table(
+                large_chunk.table_view(),
+                list(large_child.schema.keys()),
+                list(large_child.schema.values()),
+            )
+
+            if not small_dfs:
+                small_dfs = list(
+                    chain.from_iterable(await asyncio.gather(get_small_table_fut))
+                )
+                if ir.options[0] != "Inner":
+                    # TODO: Use local repartitioning for non-inner joins
+                    small_dfs = [_concat(*small_dfs)]
+
+            # Perform the join
+            results = [
+                (
+                    await asyncio.to_thread(
+                        ir.do_evaluate,
+                        *ir._non_child_args,
+                        *(
+                            [large_df, small_df]
+                            if broadcast_side == "right"
+                            else [small_df, large_df]
+                        ),
+                    )
+                ).table
+                for small_df in small_dfs
+            ]
+
+            # Send output chunk
+            build_stream = DEFAULT_STREAM
+            await ch_out.send(
+                ctx,
+                Message(
+                    TableChunk.from_pylibcudf_table(
+                        large_chunk.sequence_number,
+                        (
+                            results[0]
+                            if len(results) == 1
+                            else plc.concatenate.concatenate(results, build_stream)
+                        ),
+                        build_stream,
+                    )
+                ),
+            )
+
+        # Drain the output channel
+        await ch_out.drain(ctx)
+
+
+@generate_ir_sub_network.register(Join)
+def _(
+    ir: Join, rec: SubNetGenerator
+) -> tuple[dict[IR, list[Any]], dict[IR, list[Any]]]:
+    # Join operation.
+    left, right = ir.children
+    partition_info = rec.state["partition_info"]
+    output_count = partition_info[ir].count
+
+    left_count = partition_info[left].count
+    right_count = partition_info[right].count
+    left_partitioned = (
+        partition_info[left].partitioned_on == ir.left_on and left_count == output_count
+    )
+    right_partitioned = (
+        partition_info[right].partitioned_on == ir.right_on
+        and right_count == output_count
+    )
+
+    # Process children
+    nodes: dict[IR, list[Any]] = {}
+    channels: dict[IR, list[Any]] = {}
+    if ir.children:
+        _nodes, _channels = zip(*(rec(c) for c in ir.children), strict=True)
+        nodes = reduce(operator.or_, _nodes)
+        channels = reduce(operator.or_, _channels)
+
+    # Create output channel
+    channels[ir] = [Channel()]
+
+    if output_count == 1 or (left_partitioned and right_partitioned):
+        # Partition-wise join (use default_node_multi)
+        nodes[ir] = [
+            default_node_multi(
+                rec.state["ctx"],
+                ir,
+                channels[ir][0],
+                channels[left].pop(),
+                channels[right].pop(),
+                bcast_indices=[],
+            )
+        ]
+        return nodes, channels
+
+    else:
+        # Broadcast join (use broadcast_join_node)
+        broadcast_side: Literal["left", "right"]
+        if left_count >= right_count:
+            # Broadcast right, stream left
+            broadcast_side = "right"
+        else:
+            broadcast_side = "left"
+
+        nodes[ir] = [
+            broadcast_join_node(
+                rec.state["ctx"],
+                ir,
+                channels[ir][0],
+                channels[left].pop(),
+                channels[right].pop(),
+                broadcast_side=broadcast_side,
+            )
+        ]
+        return nodes, channels
