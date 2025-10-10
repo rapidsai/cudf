@@ -49,7 +49,7 @@ namespace detail {
 namespace {
 template <typename HashProbe>
 std::pair<rmm::device_uvector<cuco::pair<hash_value_type, size_type>>,
-          rmm::device_uvector<cuda::std::pair<uint32_t, uint32_t>>>
+          rmm::device_uvector<cuda::std::pair<hash_value_type, hash_value_type>>>
 precompute_mixed_join_data(mixed_multiset_type const& hash_table,
                            HashProbe const& hash_probe,
                            size_type probe_table_num_rows,
@@ -58,8 +58,8 @@ precompute_mixed_join_data(mixed_multiset_type const& hash_table,
 {
   auto input_pairs =
     rmm::device_uvector<cuco::pair<hash_value_type, size_type>>(probe_table_num_rows, stream, mr);
-  auto hash_indices =
-    rmm::device_uvector<cuda::std::pair<uint32_t, uint32_t>>(probe_table_num_rows, stream, mr);
+  auto hash_indices = rmm::device_uvector<cuda::std::pair<hash_value_type, hash_value_type>>(
+    probe_table_num_rows, stream, mr);
 
   auto const extent                        = hash_table.capacity();
   auto const probe_hash_fn                 = hash_table.hash_function();
@@ -73,9 +73,9 @@ precompute_mixed_join_data(mixed_multiset_type const& hash_table,
     auto const hash1_val = cuda::std::get<0>(probe_hash_fn)(probe_key);
     auto const hash2_val = cuda::std::get<1>(probe_hash_fn)(probe_key);
 
-    auto const init_idx = static_cast<uint32_t>(
+    auto const init_idx = static_cast<hash_value_type>(
       (static_cast<std::size_t>(hash1_val) % (extent / bucket_size)) * bucket_size);
-    auto const step_val = static_cast<uint32_t>(
+    auto const step_val = static_cast<hash_value_type>(
       ((static_cast<std::size_t>(hash2_val) % (extent / bucket_size - 1)) + 1) * bucket_size);
 
     return cuda::std::pair{probe_key, cuda::std::pair{init_idx, step_val}};

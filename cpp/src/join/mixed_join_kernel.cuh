@@ -44,7 +44,7 @@ __device__ __forceinline__ void retrieve_matches(
   cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   pair_expression_equality<has_nulls> const& key_equal,
   cuco::pair<hash_value_type, cudf::size_type> const& probe_key,
-  cuda::std::pair<uint32_t, uint32_t> const& hash_idx,
+  cuda::std::pair<hash_value_type, hash_value_type> const& hash_idx,
   cudf::size_type* probe_output,
   cudf::size_type* match_output) noexcept
 {
@@ -108,7 +108,7 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
              row_equality equality_probe,
              cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
              cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
-             cuda::std::pair<uint32_t, uint32_t> const* hash_indices,
+             cuda::std::pair<hash_value_type, hash_value_type> const* hash_indices,
              cudf::ast::detail::expression_device_view device_expression_data,
              size_type* join_output_l,
              size_type* join_output_r,
@@ -173,7 +173,7 @@ void launch_mixed_join(
   row_equality equality_probe,
   cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
-  cuda::std::pair<uint32_t, uint32_t> const* hash_indices,
+  cuda::std::pair<hash_value_type, hash_value_type> const* hash_indices,
   cudf::ast::detail::expression_device_view device_expression_data,
   size_type* join_output_l,
   size_type* join_output_r,
