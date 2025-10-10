@@ -1889,7 +1889,7 @@ class ConditionalJoin(IR):
         right: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        stream = get_joined_cuda_stream(upstreams=(left, right))
+        stream = get_joined_cuda_stream(upstreams=(left.stream, right.stream))
         left_casts, right_casts = _collect_decimal_binop_casts(
             predicate_wrapper.predicate
         )
@@ -2101,14 +2101,14 @@ class Join(IR):
             else plc.Table([right_order_col, left_order_col])
         )
 
-        # TODO(Tom): figure out if we need to sync / join the two streams before the sort.
+        out_stream = get_joined_cuda_stream(upstreams=(left_stream, right_stream))
 
         return plc.sorting.stable_sort_by_key(
             plc.Table([lg, rg]),
             keys,
             [plc.types.Order.ASCENDING, plc.types.Order.ASCENDING],
             [plc.types.NullOrder.AFTER, plc.types.NullOrder.AFTER],
-            stream=primary_stream,
+            stream=out_stream,
         ).columns()
 
     @staticmethod
@@ -2613,7 +2613,7 @@ class MergeSorted(IR):
     @nvtx_annotate_cudf_polars(message="MergeSorted")
     def do_evaluate(cls, key: str, *dfs: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
-        stream = get_joined_cuda_stream(upstreams=dfs)
+        stream = get_joined_cuda_stream(upstreams=(df.stream for df in dfs))
         left, right = dfs
         right = right.discard_columns(right.column_names_set - left.column_names_set)
         on_col_left = left.select_columns({key})[0]
