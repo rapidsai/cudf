@@ -34,7 +34,7 @@ from cudf.utils.temporal import infer_format
 from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Mapping
+    from collections.abc import Callable, Iterable
 
     import cupy as cp
 
@@ -1273,26 +1273,24 @@ class StringColumn(ColumnBase):
         max_replace_count: int = -1,
     ) -> Self:
         if isinstance(pattern, list) and isinstance(replacement, type(self)):
-            plc_replacement: plc.Column | plc.Scalar = (
-                replacement.to_pylibcudf(mode="read")
-            )
-            plc_pattern: list[str] | plc.strings.regex_program.RegexProgram = (
-                pattern
+            plc_column = plc.strings.replace_re.replace_re(
+                self.to_pylibcudf(mode="read"),
+                pattern,
+                replacement.to_pylibcudf(mode="read"),
+                max_replace_count,
             )
         elif isinstance(pattern, str) and isinstance(replacement, pa.Scalar):
-            plc_pattern = plc.strings.regex_program.RegexProgram.create(
-                pattern,
-                plc.strings.regex_flags.RegexFlags.DEFAULT,
+            plc_column = plc.strings.replace_re.replace_re(
+                self.to_pylibcudf(mode="read"),
+                plc.strings.regex_program.RegexProgram.create(
+                    pattern,
+                    plc.strings.regex_flags.RegexFlags.DEFAULT,
+                ),
+                pa_scalar_to_plc_scalar(replacement),
+                max_replace_count,
             )
-            plc_replacement = pa_scalar_to_plc_scalar(replacement)
         else:
             raise ValueError("Invalid pattern and replacement types")
-        plc_column = plc.strings.replace_re.replace_re(
-            self.to_pylibcudf(mode="read"),
-            plc_pattern,
-            plc_replacement,
-            max_replace_count,
-        )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     @acquire_spill_lock()
@@ -1326,9 +1324,11 @@ class StringColumn(ColumnBase):
         step: int | None = None,
     ) -> Self:
         if isinstance(start, ColumnBase) and isinstance(stop, ColumnBase):
-            plc_start = start.to_pylibcudf(mode="read")
-            plc_stop = stop.to_pylibcudf(mode="read")
-            plc_step = None
+            plc_start: plc.Column | plc.Scalar = start.to_pylibcudf(
+                mode="read"
+            )
+            plc_stop: plc.Column | plc.Scalar = stop.to_pylibcudf(mode="read")
+            plc_step: plc.Scalar | None = None
         elif all(isinstance(x, int) or x is None for x in (start, stop)):
             param_dtype = pa.int32()
             plc_start = pa_scalar_to_plc_scalar(
@@ -1488,7 +1488,9 @@ class StringColumn(ColumnBase):
         pat: str | Self,
     ) -> Self:
         if isinstance(pat, str):
-            plc_pat = pa_scalar_to_plc_scalar(pa.scalar(pat, type=pa.string()))
+            plc_pat: plc.Column | plc.Scalar = pa_scalar_to_plc_scalar(
+                pa.scalar(pat, type=pa.string())
+            )
         elif isinstance(pat, type(self)):
             plc_pat = pat.to_pylibcudf(mode="read")
         else:
@@ -1532,23 +1534,23 @@ class StringColumn(ColumnBase):
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 
     @acquire_spill_lock()
-    def translate(self, table: Mapping[int | str, int | str]) -> Self:
+    def translate(self, table: dict) -> Self:
         plc_result = plc.strings.translate.translate(
             self.to_pylibcudf(mode="read"),
-            str.maketrans(table),
+            str.maketrans(table),  # type: ignore[arg-type]
         )
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 
     @acquire_spill_lock()
     def filter_characters(
         self,
-        table: Mapping[int | str, int | str],
+        table: dict,
         keep: bool = True,
         repl: str | None = None,
     ) -> Self:
         plc_result = plc.strings.translate.filter_characters(
             self.to_pylibcudf(mode="read"),
-            str.maketrans(table),
+            str.maketrans(table),  # type: ignore[arg-type]
             plc.strings.translate.FilterType.KEEP
             if keep
             else plc.strings.translate.FilterType.REMOVE,

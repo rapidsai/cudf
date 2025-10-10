@@ -278,7 +278,7 @@ class ListColumn(ColumnBase):
         offset_col = plc.Column.from_iterable_of_py(
             offset_vals, dtype=plc.types.SIZE_TYPE
         )
-        data_col = data_col.to_pylibcudf(mode="read")
+        data_plc_col = data_col.to_pylibcudf(mode="read")
         mask, null_count = plc.transform.bools_to_mask(
             plc.Column.from_iterable_of_py(mask_bools)
         )
@@ -289,7 +289,7 @@ class ListColumn(ColumnBase):
             mask,
             null_count,
             0,
-            [offset_col, data_col],
+            [offset_col, data_plc_col],
         )
         return cls.from_pylibcudf(plc_column)  # type: ignore[return-value]
 
@@ -507,7 +507,9 @@ class ListColumn(ColumnBase):
         string_na_rep: str,
     ) -> StringColumn:
         if isinstance(separator, str):
-            sep = pa_scalar_to_plc_scalar(pa.scalar(separator))
+            sep: plc.Scalar | plc.Column = pa_scalar_to_plc_scalar(
+                pa.scalar(separator)
+            )
         else:
             sep = separator.to_pylibcudf(mode="read")
         plc_column = plc.strings.combine.join_list_elements(

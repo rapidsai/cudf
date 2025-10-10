@@ -1275,7 +1275,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             return ColumnBase.from_pylibcudf(  # type: ignore[return-value]
                 copying.scatter(
-                    [value], key, [self], bounds_check=bounds_check
+                    cast(list[plc.Scalar], [value])
+                    if isinstance(value, plc.Scalar)
+                    else cast(list[ColumnBase], [value]),
+                    key,
+                    [self],
+                    bounds_check=bounds_check,
                 )[0]
             )._with_type_metadata(self.dtype)
 
@@ -1348,7 +1353,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         with acquire_spill_lock():
             plc_replace: plc.replace.ReplacePolicy | plc.Scalar
             if method:
-                plc_replace: plc.replace.ReplacePolicy | plc.Scalar = (
+                plc_replace = (
                     plc.replace.ReplacePolicy.PRECEDING
                     if method == "ffill"
                     else plc.replace.ReplacePolicy.FOLLOWING
