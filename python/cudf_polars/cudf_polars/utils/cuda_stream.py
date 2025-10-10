@@ -16,20 +16,44 @@ if TYPE_CHECKING:
 
 
 def get_dask_cuda_stream() -> Stream:
+    """Get the default CUDA stream for Dask."""
     return DEFAULT_STREAM
 
 
 def get_cuda_stream() -> Stream:
+    """Get the default CUDA stream for the current thread."""
     return DEFAULT_STREAM
 
 
 def join_cuda_streams(
     *, downstreams: Iterable[Stream], upstreams: Iterable[Stream]
 ) -> None:
+    """
+    Join multiple CUDA streams.
+
+    Parameters
+    ----------
+    downstreams
+        CUDA streams to that will be ordered after ``upstreams``.
+    upstreams
+        CUDA streams that will be ordered before ``downstreams``.
+    """
     return
 
 
 def get_joined_cuda_stream(*, upstreams: Iterable[Stream]) -> Stream:
+    """
+    Return a CUDA stream that is joined to the given streams.
+
+    Parameters
+    ----------
+    upstreams
+        CUDA streams that will be ordered before the returned stream.
+
+    Returns
+    -------
+    CUDA stream that is joined to the given streams.
+    """
     ret = get_cuda_stream()
     join_cuda_streams(downstreams=(ret,), upstreams=upstreams)
     return ret
