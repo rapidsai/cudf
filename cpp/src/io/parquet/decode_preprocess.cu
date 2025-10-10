@@ -172,6 +172,71 @@ __device__ void update_page_sizes(page_state_s* s,
 }
 
 /**
+ * @brief Updates size information for a pruned page across all nesting levels
+ *
+ * @param page The page to comptues sizes for
+ * @param state The local page info
+ * @param has_repetition Whether the page has repetition
+ * @param is_base_pass Whether this is the base pass
+ * @param block The current thread block cooperative group
+ */
+__device__ void compute_page_sizes_for_pruned_pages(PageInfo* page,
+                                                    page_state_s* const state,
+                                                    bool has_repetition,
+                                                    bool is_base_pass,
+                                                    cg::thread_block const& block)
+{
+  auto const max_depth = page->num_output_nesting_levels;
+  // Return early if no repetition and max depth is 1
+  if (not has_repetition and max_depth == 1) {
+    if (!block.thread_rank()) {
+      if (is_base_pass) { page->nesting[0].size = page->num_rows; }
+      page->nesting[0].batch_size = state->num_rows;
+    }
+    return;
+  }
+
+  // Use warp 0 to set nesting size information for all depths
+  auto const warp = cg::tiled_partition<cudf::detail::warp_size>(block);
+  if (warp.meta_group_rank() == 0) {
+    auto list_depth = 0;
+    // Find the depth of the first list
+    if (has_repetition) {
+      auto depth = 0;
+      while (depth < max_depth) {
+        auto const thread_depth = depth + warp.thread_rank();
+        auto const is_list =
+          thread_depth < max_depth and page->nesting[thread_depth].type == type_id::LIST;
+        uint32_t const list_mask = warp.ballot(is_list);
+        if (list_mask != 0) {
+          auto const first_list_lane = cuda::std::countr_zero(list_mask);
+          list_depth                 = warp.shfl(thread_depth, first_list_lane);
+          break;
+        }
+        depth += warp.size();
+      }
+      // Zero out size information for all depths beyond the first list depth
+      for (auto depth = list_depth + 1 + warp.thread_rank(); depth < max_depth;
+           depth += warp.size()) {
+        if (is_base_pass) { page->nesting[depth].size = 0; }
+        page->nesting[depth].batch_size = 0;
+      }
+    }
+    // Write size information for all depths up to the list depth
+    for (auto depth = warp.thread_rank(); depth < list_depth; depth += warp.size()) {
+      if (is_base_pass) { page->nesting[depth].size = page->num_rows; }
+      page->nesting[depth].batch_size = state->num_rows;
+    }
+    // Write size information at the list depth (zero if no list)
+    if (warp.thread_rank() == 0) {
+      if (is_base_pass) { page->nesting[list_depth].size = page->num_rows; }
+      page->nesting[list_depth].batch_size = state->num_rows;
+    }
+  }
+  return;
+}
+
+/**
  * @brief Kernel for computing per-page column size information for all nesting levels.
  *
  * This function will write out the size field for each level of nesting.
@@ -218,56 +283,9 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
     return;
   }
 
-  // Check if this page is pruned
+  // Return early if this page is pruned
   if (not page_mask.empty() and not page_mask[page_idx]) {
-    auto const max_depth = pp->num_output_nesting_levels;
-    // Return early if no repetition and max depth is 1
-    if (not has_repetition and max_depth == 1) {
-      if (!t) {
-        if (is_base_pass) { pp->nesting[0].size = pp->num_rows; }
-        pp->nesting[0].batch_size = s->num_rows;
-      }
-      return;
-    }
-
-    // Use warp 0 to set nesting size information for all depths
-    auto const warp = cg::tiled_partition<cudf::detail::warp_size>(block);
-    if (warp.meta_group_rank() == 0) {
-      auto list_depth = 0;
-      // Find the depth of the first list
-      if (has_repetition) {
-        auto depth = 0;
-        while (depth < max_depth) {
-          auto const thread_depth = depth + warp.thread_rank();
-          auto const is_list =
-            thread_depth < max_depth and pp->nesting[thread_depth].type == type_id::LIST;
-          uint32_t const list_mask = warp.ballot(is_list);
-          if (list_mask != 0) {
-            auto const first_list_lane = cuda::std::countr_zero(list_mask);
-            list_depth                 = warp.shfl(thread_depth, first_list_lane);
-            break;
-          }
-          depth += warp.size();
-        }
-        // Zero out size information for all depths beyond the first list depth
-        for (auto depth = list_depth + 1 + warp.thread_rank(); depth < max_depth;
-             depth += warp.size()) {
-          if (is_base_pass) { pp->nesting[depth].size = 0; }
-          pp->nesting[depth].batch_size = 0;
-        }
-      }
-      // Write size information for all depths up to the list depth
-      for (auto depth = warp.thread_rank(); depth < list_depth; depth += warp.size()) {
-        if (is_base_pass) { pp->nesting[depth].size = pp->num_rows; }
-        pp->nesting[depth].batch_size = s->num_rows;
-      }
-      // Write size information at the list depth (zero if no list)
-      if (warp.thread_rank() == 0) {
-        if (is_base_pass) { pp->nesting[list_depth].size = pp->num_rows; }
-        pp->nesting[list_depth].batch_size = s->num_rows;
-      }
-    }
-    return;
+    return compute_page_sizes_for_pruned_pages(pp, s, has_repetition, is_base_pass, block);
   }
 
   // initialize the stream decoders (requires values computed in setup_local_page_info)
