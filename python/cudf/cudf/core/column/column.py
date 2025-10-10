@@ -44,6 +44,7 @@ from cudf.core.buffer import (
     as_buffer,
     cuda_array_interface_wrapper,
 )
+from cudf.core.buffer.spillable_buffer import SpillableBuffer
 from cudf.core.copy_types import GatherMap
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -2019,11 +2020,55 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
         if isinstance(dtype, CategoricalDtype):
             data = children.pop(0)
+
+        class spillable_gpumemoryview(plc.gpumemoryview):
+            """
+            HACK: Prevent automatic unspilling of `SpillableBuffer` objects
+            when constructing `plc.Column`.
+
+            The `plc.Column()` constructor expects a `gpumemoryview` object,
+            but wrapping a `SpillableBuffer` directly in a `gpumemoryview`
+            forces the buffer to unspill (materialize) its device data prematurely.
+
+            To avoid this, we wrap spillable buffers in this subclass that implements
+            only the `.obj` attribute; the only attribute actually accessed by
+            `.from_pylibcudf()`. All other attributes intentionally raise errors to
+            prevent accidental usage paths that would cause unspilling.
+            """
+
+            def __init__(self, buf: SpillableBuffer):
+                self._buf = buf
+
+            @property
+            def obj(self):
+                return self._buf
+
+            @property
+            def cai(self):
+                assert False
+
+            @property
+            def ptr(self):
+                assert False
+
+            @property
+            def nbytes(self):
+                assert False
+
+        if isinstance(data, SpillableBuffer):
+            data = spillable_gpumemoryview(data)
+        elif data is not None:
+            data = plc.gpumemoryview(data)
+        if isinstance(mask, SpillableBuffer):
+            mask = spillable_gpumemoryview(mask)
+        elif mask is not None:
+            mask = plc.gpumemoryview(mask)
+
         plc_column = plc.Column(
             plc_type,
             header["size"],
-            plc.gpumemoryview(data) if data is not None else None,
-            plc.gpumemoryview(mask) if mask is not None else None,
+            data,
+            mask,
             null_count,
             0,
             [child.to_pylibcudf(mode="read") for child in children],
