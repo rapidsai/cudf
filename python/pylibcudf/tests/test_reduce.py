@@ -15,6 +15,8 @@ import pylibcudf as plc
         (plc.aggregation.product(), pa.uint16()),
         (plc.aggregation.min(), pa.string()),
         (plc.aggregation.max(), pa.timestamp("s")),
+        (plc.aggregation.argmin(), pa.int8()),
+        (plc.aggregation.argmax(), pa.uint8()),
         (plc.aggregation.mean(), pa.int32()),
         (plc.aggregation.sum_of_squares(), pa.uint32()),
         (plc.aggregation.std(), pa.float32()),
@@ -34,8 +36,6 @@ def test_is_valid_aggregation(agg, dt):
 @pytest.mark.parametrize(
     "agg,dt",
     [
-        (plc.aggregation.argmin(), pa.int8()),
-        (plc.aggregation.argmax(), pa.uint8()),
         (plc.aggregation.rank(0), pa.string()),
         (plc.aggregation.covariance(1, 1), pa.float32()),
         (plc.aggregation.correlation(0, 1), pa.float64()),

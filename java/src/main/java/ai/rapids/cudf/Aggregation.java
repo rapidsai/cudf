@@ -753,10 +753,7 @@ abstract class Aggregation {
     }
 
     /**
-     * Index of max element. Please note that when using this aggregation with a group by if the
-     * data is not already sorted by the grouping keys it may be automatically sorted
-     * prior to doing the aggregation. This would result in an index into the sorted data being
-     * returned.
+     * Index of the max element.
      */
     static ArgMaxAggregation argMax() {
         return new ArgMaxAggregation();
@@ -769,10 +766,7 @@ abstract class Aggregation {
     }
 
     /**
-     * Index of min element. Please note that when using this aggregation with a group by if the
-     * data is not already sorted by the grouping keys it may be automatically sorted
-     * prior to doing the aggregation. This would result in an index into the sorted data being
-     * returned.
+     * Index of the min element.
      */
     static ArgMinAggregation argMin() {
         return new ArgMinAggregation();

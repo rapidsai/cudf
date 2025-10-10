@@ -151,11 +151,17 @@ class arg_minmax_binop_generator {
   }
 
  public:
-  auto binop() const
-  {
-    auto const device_comp = row_comparator.less<true>(cudf::nullate::DYNAMIC{has_nulls});
-    return row_arg_minmax_fn(input_tview.num_rows(), device_comp, is_min_op);
-  }
+  /**
+   * @brief Generate the `less` comparator for the input table.
+   * @return The `less` comparator
+   */
+  auto less() const { return row_comparator.less<true>(cudf::nullate::DYNAMIC{has_nulls}); }
+
+  /**
+   * @brief Generate the binary operator for ARGMIN/ARGMAX with index values into the input table.
+   * @return The binary operator for ARGMIN/ARGMAX
+   */
+  auto binop() const { return row_arg_minmax_fn(input_tview.num_rows(), less(), is_min_op); }
 
   template <typename BinOp>
   static auto create(column_view const& input, rmm::cuda_stream_view stream)

@@ -561,7 +561,9 @@ class quantile_aggregation final : public groupby_aggregation, public reduce_agg
 /**
  * @brief Derived class for specifying an argmax aggregation
  */
-class argmax_aggregation final : public rolling_aggregation, public groupby_aggregation {
+class argmax_aggregation final : public rolling_aggregation,
+                                 public groupby_aggregation,
+                                 public reduce_aggregation {
  public:
   argmax_aggregation() : aggregation(ARGMAX) {}
 
@@ -580,7 +582,9 @@ class argmax_aggregation final : public rolling_aggregation, public groupby_aggr
 /**
  * @brief Derived class for specifying an argmin aggregation
  */
-class argmin_aggregation final : public rolling_aggregation, public groupby_aggregation {
+class argmin_aggregation final : public rolling_aggregation,
+                                 public groupby_aggregation,
+                                 public reduce_aggregation {
  public:
   argmin_aggregation() : aggregation(ARGMIN) {}
 

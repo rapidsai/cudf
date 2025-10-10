@@ -71,6 +71,20 @@ public final class ReductionAggregation {
   }
 
   /**
+   * ArgMin Aggregation
+   */
+  public static ReductionAggregation argMin() {
+    return new ReductionAggregation(Aggregation.argMin());
+  }
+
+  /**
+   * ArgMax Aggregation
+   */
+  public static ReductionAggregation argMax() {
+    return new ReductionAggregation(Aggregation.argMax());
+  }
+
+  /**
    * Min Aggregation
    */
   public static ReductionAggregation min() {

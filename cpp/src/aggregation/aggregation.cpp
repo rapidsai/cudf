@@ -703,6 +703,8 @@ template CUDF_EXPORT std::unique_ptr<rolling_aggregation>
 make_argmax_aggregation<rolling_aggregation>();
 template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
 make_argmax_aggregation<groupby_aggregation>();
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_argmax_aggregation<reduce_aggregation>();
 
 /// Factory to create an ARGMIN aggregation
 template <typename Base>
@@ -715,6 +717,8 @@ template CUDF_EXPORT std::unique_ptr<rolling_aggregation>
 make_argmin_aggregation<rolling_aggregation>();
 template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
 make_argmin_aggregation<groupby_aggregation>();
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_argmin_aggregation<reduce_aggregation>();
 
 /// Factory to create an NUNIQUE aggregation
 template <typename Base>
