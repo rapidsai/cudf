@@ -515,7 +515,6 @@ TEST_F(OrcWriterTest, Strings)
     cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .metadata(expected_metadata);
   cudf::io::write_orc(out_opts);
-  return;
 
   cudf::io::orc_reader_options in_opts =
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).use_index(false);
