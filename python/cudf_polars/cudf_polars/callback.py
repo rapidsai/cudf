@@ -25,7 +25,10 @@ from rmm._cuda import gpu
 import cudf_polars.dsl.tracing
 from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN
 from cudf_polars.dsl.translate import Translator
-from cudf_polars.utils.config import _env_get_int, get_total_device_memory
+from cudf_polars.utils.config import (
+    _env_get_int,
+    get_total_device_memory,
+)
 from cudf_polars.utils.timer import Timer
 
 if TYPE_CHECKING:
@@ -36,7 +39,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.typing import NodeTraverser
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ConfigOptions, MemoryResourceConfig
 
 __all__: list[str] = ["execute_with_cudf"]
 
@@ -45,6 +48,7 @@ __all__: list[str] = ["execute_with_cudf"]
 def default_memory_resource(
     device: int,
     cuda_managed_memory: bool,  # noqa: FBT001
+    memory_resource_config: MemoryResourceConfig | None,
 ) -> rmm.mr.DeviceMemoryResource:
     """
     Return the default memory resource for cudf-polars.
@@ -56,6 +60,9 @@ def default_memory_resource(
         the active device when this function is called.
     cuda_managed_memory
         Whether to use managed memory or not.
+    memory_resource_config
+        Memory resource configuration to use. If ``None``, the default
+        memory resource is used.
 
     Returns
     -------
@@ -65,7 +72,9 @@ def default_memory_resource(
         else, an async pool resource is returned.
     """
     try:
-        if (
+        if memory_resource_config is not None:
+            mr = memory_resource_config.create_memory_resource()
+        elif (
             cuda_managed_memory
             and pylibcudf.utils._is_concurrent_managed_access_supported()
         ):
@@ -101,6 +110,7 @@ def default_memory_resource(
 @contextlib.contextmanager
 def set_memory_resource(
     mr: rmm.mr.DeviceMemoryResource | None,
+    memory_resource_config: MemoryResourceConfig | None,
 ) -> Generator[rmm.mr.DeviceMemoryResource, None, None]:
     """
     Set the current memory resource for an execution block.
@@ -110,6 +120,9 @@ def set_memory_resource(
     mr
         Memory resource to use. If `None`, calls :func:`default_memory_resource`
         to obtain an mr on the currently active device.
+    memory_resource_config
+        Memory resource configuration to use when a concrete memory resource.
+        is not provided. If ``None``, the default memory resource is used.
 
     Returns
     -------
@@ -133,6 +146,7 @@ def set_memory_resource(
                 )
                 != 0
             ),
+            memory_resource_config=memory_resource_config,
         )
 
     if (
@@ -222,7 +236,7 @@ def _callback(
         nvtx.annotate(message="ExecuteIR", domain=CUDF_POLARS_NVTX_DOMAIN),
         # Device must be set before memory resource is obtained.
         set_device(config_options.device),
-        set_memory_resource(memory_resource),
+        set_memory_resource(memory_resource, config_options.memory_resource_config),
     ):
         if config_options.executor.name == "in-memory":
             df = ir.evaluate(cache={}, timer=timer).to_polars()
