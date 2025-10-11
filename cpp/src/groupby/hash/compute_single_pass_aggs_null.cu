@@ -14,18 +14,15 @@
  * limitations under the License.
  */
 
-#include "compute_global_memory_aggs.cuh"
-#include "compute_global_memory_aggs.hpp"
+#include "compute_single_pass_aggs.cuh"
+#include "compute_single_pass_aggs.hpp"
 
 namespace cudf::groupby::detail::hash {
-template rmm::device_uvector<cudf::size_type> compute_global_memory_aggs<nullable_global_set_t>(
-  cudf::size_type num_rows,
-  bitmask_type const* row_bitmask,
-  cudf::table_view const& flattened_values,
-  cudf::aggregation::Kind const* d_agg_kinds,
-  host_span<cudf::aggregation::Kind const> agg_kinds,
-  nullable_global_set_t& global_set,
-  std::vector<std::unique_ptr<aggregation>>& aggregations,
-  cudf::detail::result_cache* sparse_results,
-  rmm::cuda_stream_view stream);
+template std::pair<rmm::device_uvector<size_type>, bool>
+compute_single_pass_aggs<nullable_global_set_t>(nullable_global_set_t& global_set,
+                                                bitmask_type const* row_bitmask,
+                                                host_span<aggregation_request const> requests,
+                                                cudf::detail::result_cache* cache,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::device_async_resource_ref mr);
 }  // namespace cudf::groupby::detail::hash
