@@ -27,7 +27,7 @@ def test_series_take(ntake):
 def test_series_take_positional():
     psr = pd.Series([1, 2, 3, 4, 5], index=["a", "b", "c", "d", "e"])
 
-    gsr = cudf.Series.from_pandas(psr)
+    gsr = cudf.Series(psr)
 
     take_indices = [1, 2, 0, 3]
 

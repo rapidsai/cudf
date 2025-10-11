@@ -102,7 +102,7 @@ class DataFrame:
         # serialise with names we control and rename with that map.
         name_map = {f"column_{i}": name for i, name in enumerate(self.column_map)}
         metadata = [
-            _create_polars_column_metadata(name, dtype.polars)
+            _create_polars_column_metadata(name, dtype.polars_type)
             for name, dtype in zip(name_map, self.dtypes, strict=True)
         ]
         table_with_metadata = _ObjectWithArrowMetadata(self.table, metadata)
@@ -191,7 +191,9 @@ class DataFrame:
 
     @classmethod
     def deserialize(
-        cls, header: DataFrameHeader, frames: tuple[memoryview, plc.gpumemoryview]
+        cls,
+        header: DataFrameHeader,
+        frames: tuple[memoryview[bytes], plc.gpumemoryview],
     ) -> Self:
         """
         Create a DataFrame from a serialized representation returned by `.serialize()`.
@@ -219,7 +221,7 @@ class DataFrame:
 
     def serialize(
         self,
-    ) -> tuple[DataFrameHeader, tuple[memoryview, plc.gpumemoryview]]:
+    ) -> tuple[DataFrameHeader, tuple[memoryview[bytes], plc.gpumemoryview]]:
         """
         Serialize the table into header and frames.
 

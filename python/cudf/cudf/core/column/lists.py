@@ -19,7 +19,6 @@ from cudf.core.column.numerical import NumericalColumn
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
 from cudf.utils.dtypes import (
-    SIZE_TYPE_DTYPE,
     get_dtype_of_same_kind,
     is_dtype_obj_list,
 )
@@ -153,8 +152,7 @@ class ListColumn(ColumnBase):
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         # Lists only support __add__, which concatenates lists.
         reflect, op = self._check_reflected_op(op)
-        other = self._normalize_binop_operand(other)
-        if other is NotImplemented:
+        if not isinstance(other, type(self)):
             return NotImplemented
         if isinstance(other.dtype, ListDtype):
             if op == "__add__":
@@ -193,11 +191,15 @@ class ListColumn(ColumnBase):
 
         if self.nullable:
             nbuf = pa.py_buffer(self.mask.memoryview())  # type: ignore[union-attr]
-            buffers = (nbuf, offsets.buffers()[1])
+            buffers = [nbuf, offsets.buffers()[1]]
         else:
-            buffers = offsets.buffers()
+            buffers = list(offsets.buffers())
         return pa.ListArray.from_buffers(
-            pa_type, len(self), buffers, children=[elements]
+            pa_type,
+            len(self),
+            # PyArrow stubs are too strict - from_buffers should accept None for missing buffers
+            buffers,  # type: ignore[arg-type]
+            children=[elements],
         )
 
     def set_base_data(self, value):
@@ -218,11 +220,6 @@ class ListColumn(ColumnBase):
         raise NotImplementedError(
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
-
-    def _normalize_binop_operand(self, other: Any) -> ColumnBase:
-        if isinstance(other, type(self)):
-            return other
-        return NotImplemented
 
     def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
         if isinstance(dtype, ListDtype):
@@ -263,37 +260,45 @@ class ListColumn(ColumnBase):
         Create a list column for list of column-like sequences
         """
         data_col = column_empty(0)
-        mask_col = []
+        mask_bools = []
         offset_vals = [0]
         offset = 0
 
         # Build Data, Mask & Offsets
         for data in arbitrary:
             if _is_null_host_scalar(data):
-                mask_col.append(False)
+                mask_bools.append(False)
                 offset_vals.append(offset)
             else:
-                mask_col.append(True)
+                mask_bools.append(True)
                 data_col = data_col.append(as_column(data))
                 offset += len(data)
                 offset_vals.append(offset)
 
-        offset_col = cast(
-            NumericalColumn,
-            as_column(offset_vals, dtype=SIZE_TYPE_DTYPE),
+        offset_col = plc.Column.from_iterable_of_py(
+            offset_vals, dtype=plc.types.SIZE_TYPE
         )
+        data_col = data_col.to_pylibcudf(mode="read")
+        mask, null_count = plc.transform.bools_to_mask(
+            plc.Column.from_iterable_of_py(mask_bools)
+        )
+        plc_column = plc.Column(
+            plc.DataType(plc.TypeId.LIST),
+            len(offset_vals) - 1,
+            None,
+            mask,
+            null_count,
+            0,
+            [offset_col, data_col],
+        )
+        return cls.from_pylibcudf(plc_column)  # type: ignore[return-value]
 
-        # Build ListColumn
-        res = cls(
-            data=None,
-            size=len(arbitrary),
-            dtype=cudf.ListDtype(data_col.dtype),
-            mask=as_column(mask_col).as_mask(),
-            offset=0,
-            null_count=0,
-            children=(offset_col, data_col),
+    @cached_property
+    def _string_separators(self) -> plc.Column:
+        # Separator strings to match the Python format
+        return plc.Column.from_iterable_of_py(
+            [", ", "[", "]"], dtype=plc.DataType(plc.TypeId.STRING)
         )
-        return res
 
     def as_string_column(self, dtype) -> StringColumn:
         """
@@ -306,44 +311,41 @@ class ListColumn(ColumnBase):
                 )
         lc = self._transform_leaves(lambda col: col.as_string_column(dtype))
 
-        # Separator strings to match the Python format
-        separators = as_column([", ", "[", "]"])
-
         with acquire_spill_lock():
             plc_column = plc.strings.convert.convert_lists.format_list_column(
                 lc.to_pylibcudf(mode="read"),
                 pa_scalar_to_plc_scalar(pa.scalar("None")),
-                separators.to_pylibcudf(mode="read"),
+                self._string_separators,
             )
             return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
-    def _transform_leaves(self, func, *args, **kwargs) -> Self:
-        # return a new list column with the same nested structure
-        # as ``self``, but with the leaf column transformed
-        # by applying ``func`` to it
+    def _transform_leaves(self, func, *args) -> Self:
+        """
+        Return a new column like Self but with func applied to the last leaf column.
+        """
+        leaf_queue: list[ListColumn] = []
+        curr_col: ColumnBase = self
 
-        cc: list[ListColumn] = []
-        c: ColumnBase = self
+        while isinstance(curr_col, ListColumn):
+            leaf_queue.append(curr_col)
+            curr_col = curr_col.children[1]
 
-        while isinstance(c, ListColumn):
-            cc.insert(0, c)
-            c = c.children[1]
-
-        lc = func(c, *args, **kwargs)
+        plc_leaf_col = func(curr_col, *args).to_pylibcudf(mode="read")
 
         # Rebuild the list column replacing just the leaf child
-        for c in cc:
-            o = c.children[0]
-            lc = ListColumn(  # type: ignore
-                data=None,
-                size=c.size,
-                dtype=cudf.ListDtype(lc.dtype),
-                mask=c.mask,
-                offset=c.offset,
-                null_count=c.null_count,
-                children=(o, lc),  # type: ignore[arg-type]
+        while leaf_queue:
+            col = leaf_queue.pop()
+            offsets = col.children[0].to_pylibcudf(mode="read")
+            plc_leaf_col = plc.Column(
+                plc.DataType(plc.TypeId.LIST),
+                col.size,
+                None,
+                plc.gpumemoryview(col.mask) if col.mask is not None else None,
+                col.null_count,
+                col.offset,
+                [offsets, plc_leaf_col],
             )
-        return lc
+        return type(self).from_pylibcudf(plc_leaf_col)
 
     @property
     def element_type(self) -> Dtype:

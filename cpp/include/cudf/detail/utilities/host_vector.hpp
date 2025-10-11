@@ -20,6 +20,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/aligned.hpp>
 
@@ -153,7 +154,7 @@ class rmm_host_allocator {
    *        It is the responsibility of the caller to destroy
    *        the objects stored at \p p.
    */
-  inline void deallocate(pointer p, size_type cnt)
+  inline void deallocate(pointer p, size_type cnt) noexcept
   {
     mr.deallocate_async(p, cnt * sizeof(value_type), rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream);
   }
@@ -210,6 +211,17 @@ class host_vector : public thrust::host_vector<T, rmm_host_allocator<T>> {
   host_vector(rmm_host_allocator<T> const& alloc) : base(alloc) {}
 
   host_vector(size_t size, rmm_host_allocator<T> const& alloc) : base(size, alloc) {}
+
+  [[nodiscard]] operator host_span<T const>() const
+  {
+    return host_span<T const>{
+      base::data(), base::size(), base::get_allocator().is_device_accessible()};
+  }
+
+  [[nodiscard]] operator host_span<T>()
+  {
+    return host_span<T>{base::data(), base::size(), base::get_allocator().is_device_accessible()};
+  }
 };
 
 }  // namespace detail

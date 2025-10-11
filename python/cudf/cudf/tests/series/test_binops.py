@@ -1097,7 +1097,7 @@ def test_str_series_compare_str(comparison_op):
         ["a", "b", None, "d", "e", None], dtype="string"
     )
     expect = comparison_op(str_series_cmp_data, "a")
-    got = comparison_op(cudf.Series.from_pandas(str_series_cmp_data), "a")
+    got = comparison_op(cudf.Series(str_series_cmp_data), "a")
 
     assert_eq(expect, got.to_pandas(nullable=True))
 
@@ -1107,7 +1107,7 @@ def test_str_series_compare_str_reflected(comparison_op):
         ["a", "b", None, "d", "e", None], dtype="string"
     )
     expect = comparison_op("a", str_series_cmp_data)
-    got = comparison_op("a", cudf.Series.from_pandas(str_series_cmp_data))
+    got = comparison_op("a", cudf.Series(str_series_cmp_data))
 
     assert_eq(expect, got.to_pandas(nullable=True))
 
@@ -1120,9 +1120,7 @@ def test_str_series_compare_num(comparison_op, cmp_scalar):
         ["a", "b", None, "d", "e", None], dtype="string"
     )
     expect = comparison_op(str_series_cmp_data, cmp_scalar)
-    got = comparison_op(
-        cudf.Series.from_pandas(str_series_cmp_data), cmp_scalar
-    )
+    got = comparison_op(cudf.Series(str_series_cmp_data), cmp_scalar)
 
     assert_eq(expect, got.to_pandas(nullable=True))
 
@@ -1135,9 +1133,7 @@ def test_str_series_compare_num_reflected(comparison_op, cmp_scalar):
         ["a", "b", None, "d", "e", None], dtype="string"
     )
     expect = comparison_op(cmp_scalar, str_series_cmp_data)
-    got = comparison_op(
-        cmp_scalar, cudf.Series.from_pandas(str_series_cmp_data)
-    )
+    got = comparison_op(cmp_scalar, cudf.Series(str_series_cmp_data))
 
     assert_eq(expect, got.to_pandas(nullable=True))
 
@@ -3041,8 +3037,8 @@ def test_cat_non_cat_compare_ops(
         dtype=pd.CategoricalDtype(categories=data_right, ordered=ordered),
     )
 
-    cudf_non_cat = cudf.Series.from_pandas(pd_non_cat)
-    cudf_cat = cudf.Series.from_pandas(pd_cat)
+    cudf_non_cat = cudf.Series(pd_non_cat)
+    cudf_cat = cudf.Series(pd_cat)
 
     if (
         not ordered and comparison_op not in {operator.eq, operator.ne}
@@ -3090,4 +3086,24 @@ def test_binops_compare_stdlib_date_scalar(comparison_op):
     data = [dt]
     result = comparison_op(cudf.Series(data), dt)
     expected = comparison_op(pd.Series(data), dt)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("xp", [cp, np])
+def test_singleton_array(binary_op, xp):
+    # Validate that we handle singleton numpy/cupy arrays appropriately
+    lhs = cudf.Series([1, 2, 3])
+    rhs_device = xp.array(1)
+    rhs_host = np.array(1)
+    expect = binary_op(lhs.to_pandas(), rhs_host)
+    got = binary_op(lhs, rhs_device)
+    assert_eq(expect, got)
+
+
+def test_binops_float_scalar_decimal():
+    result = 1.0 - cudf.Series(
+        [decimal.Decimal("1"), decimal.Decimal("-2.5"), None],
+        dtype=cudf.Decimal32Dtype(3, 2),
+    )
+    expected = cudf.Series([0.0, -3.5, None], dtype="float64")
     assert_eq(result, expected)

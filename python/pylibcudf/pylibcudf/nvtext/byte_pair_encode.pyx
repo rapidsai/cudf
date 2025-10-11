@@ -15,7 +15,8 @@ from pylibcudf.libcudf.scalar.scalar_factories cimport (
     make_string_scalar as cpp_make_string_scalar,
 )
 from pylibcudf.scalar cimport Scalar
-from pylibcudf.utils cimport _get_stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 __all__ = ["BPEMergePairs", "byte_pair_encoding"]
@@ -25,11 +26,17 @@ cdef class BPEMergePairs:
 
     For details, see :cpp:class:`cudf::nvtext::bpe_merge_pairs`.
     """
-    def __cinit__(self, Column merge_pairs, Stream stream=None):
+    def __cinit__(
+        self,
+        Column merge_pairs,
+        Stream stream=None,
+        DeviceMemoryResource mr=None
+    ):
         cdef column_view c_pairs = merge_pairs.view()
         stream = _get_stream(stream)
+        mr = _get_memory_resource(mr)
         with nogil:
-            self.c_obj = move(cpp_load_merge_pairs(c_pairs, stream.view()))
+            self.c_obj = move(cpp_load_merge_pairs(c_pairs, stream.view(), mr.get_mr()))
 
     __hash__ = None
 
@@ -37,7 +44,8 @@ cpdef Column byte_pair_encoding(
     Column input,
     BPEMergePairs merge_pairs,
     Scalar separator=None,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Byte pair encode the input strings.
@@ -62,10 +70,11 @@ cpdef Column byte_pair_encoding(
     """
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     if separator is None:
         separator = Scalar.from_libcudf(
-            cpp_make_string_scalar(" ".encode(), stream.view())
+            cpp_make_string_scalar(" ".encode(), stream.view(), mr.get_mr())
         )
 
     with nogil:
@@ -74,8 +83,9 @@ cpdef Column byte_pair_encoding(
                 input.view(),
                 dereference(merge_pairs.c_obj.get()),
                 dereference(<const string_scalar*>separator.c_obj.get()),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)

@@ -15,7 +15,6 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.utils import dtypes
-from cudf_polars.utils.versions import POLARS_VERSION_LT_129
 
 if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame, DataType
@@ -33,7 +32,7 @@ class Cast(Expr):
         self.dtype = dtype
         self.children = (value,)
         self.is_pointwise = True
-        if not dtypes.can_cast(value.dtype.plc, self.dtype.plc):
+        if not dtypes.can_cast(value.dtype.plc_type, self.dtype.plc_type):
             raise NotImplementedError(
                 f"Can't cast {value.dtype.id().name} to {self.dtype.id().name}"
             )
@@ -61,7 +60,7 @@ class Len(Expr):
         """Evaluate this expression given a dataframe for context."""
         return Column(
             plc.Column.from_scalar(
-                plc.Scalar.from_py(df.num_rows, self.dtype.plc),
+                plc.Scalar.from_py(df.num_rows, self.dtype.plc_type),
                 1,
             ),
             dtype=self.dtype,
@@ -179,21 +178,16 @@ class UnaryFunction(Expr):
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             return Column(
                 plc.Column.from_scalar(
-                    plc.Scalar.from_py(column.null_count, self.dtype.plc),
+                    plc.Scalar.from_py(column.null_count, self.dtype.plc_type),
                     1,
                 ),
                 dtype=self.dtype,
             )
         if self.name == "round":
-            round_mode = "half_away_from_zero"
-            if POLARS_VERSION_LT_129:
-                (decimal_places,) = self.options  # pragma: no cover
-            else:
-                # pragma: no cover
-                (
-                    decimal_places,
-                    round_mode,
-                ) = self.options
+            (
+                decimal_places,
+                round_mode,
+            ) = self.options
             (values,) = (child.evaluate(df, context=context) for child in self.children)
             return Column(
                 plc.round.round(
@@ -303,7 +297,7 @@ class UnaryFunction(Expr):
                 counts_col = plc.unary.cast(counts_col, plc.DataType(plc.TypeId.UINT32))
 
             plc_column = plc.Column(
-                self.dtype.plc,
+                self.dtype.plc_type,
                 counts_col.size(),
                 None,
                 None,
@@ -328,12 +322,12 @@ class UnaryFunction(Expr):
                 return column
             fill_value = self.children[1]
             if isinstance(fill_value, Literal):
-                arg = plc.Scalar.from_py(fill_value.value, fill_value.dtype.plc)
+                arg = plc.Scalar.from_py(fill_value.value, fill_value.dtype.plc_type)
             else:
                 evaluated = fill_value.evaluate(df, context=context)
                 arg = evaluated.obj_scalar if evaluated.is_scalar else evaluated.obj
             if isinstance(arg, plc.Scalar) and dtypes.can_cast(
-                column.dtype.plc, arg.type()
+                column.dtype.plc_type, arg.type()
             ):  # pragma: no cover
                 arg = (
                     Column(plc.Column.from_scalar(arg, 1), dtype=fill_value.dtype)
@@ -360,13 +354,13 @@ class UnaryFunction(Expr):
                 replacement = plc.reduce.reduce(
                     column.obj,
                     plc.aggregation.min(),
-                    column.dtype.plc,
+                    column.dtype.plc_type,
                 )
             elif strategy == "max":
                 replacement = plc.reduce.reduce(
                     column.obj,
                     plc.aggregation.max(),
-                    column.dtype.plc,
+                    column.dtype.plc_type,
                 )
             elif strategy == "mean":
                 replacement = plc.reduce.reduce(
@@ -375,9 +369,9 @@ class UnaryFunction(Expr):
                     plc.DataType(plc.TypeId.FLOAT64),
                 )
             elif strategy == "zero":
-                replacement = plc.scalar.Scalar.from_py(0, dtype=column.dtype.plc)
+                replacement = plc.scalar.Scalar.from_py(0, dtype=column.dtype.plc_type)
             elif strategy == "one":
-                replacement = plc.scalar.Scalar.from_py(1, dtype=column.dtype.plc)
+                replacement = plc.scalar.Scalar.from_py(1, dtype=column.dtype.plc_type)
             else:
                 assert_never(strategy)  # pragma: no cover
 
@@ -399,7 +393,7 @@ class UnaryFunction(Expr):
             ]
             return Column(
                 plc.Column(
-                    data_type=self.dtype.plc,
+                    data_type=self.dtype.plc_type,
                     size=children[0].size(),
                     data=None,
                     mask=None,
@@ -437,7 +431,7 @@ class UnaryFunction(Expr):
             # Min/Max/Dense/Ordinal -> IDX_DTYPE
             # See https://github.com/pola-rs/polars/blob/main/crates/polars-ops/src/series/ops/rank.rs
             if method_str in {"min", "max", "dense", "ordinal"}:
-                dest = self.dtype.plc.id()
+                dest = self.dtype.plc_type.id()
                 src = ranked.type().id()
                 if dest == plc.TypeId.UINT32 and src != plc.TypeId.UINT32:
                     ranked = plc.unary.cast(ranked, plc.DataType(plc.TypeId.UINT32))
@@ -464,8 +458,8 @@ class UnaryFunction(Expr):
             )
         elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context)
-            if column.dtype.plc.id() != self.dtype.id():
-                arg = plc.unary.cast(column.obj, self.dtype.plc)
+            if column.dtype.plc_type.id() != self.dtype.id():
+                arg = plc.unary.cast(column.obj, self.dtype.plc_type)
             else:
                 arg = column.obj
             return Column(
@@ -475,7 +469,7 @@ class UnaryFunction(Expr):
         elif self.name in UnaryFunction._supported_cum_aggs:
             column = self.children[0].evaluate(df, context=context)
             plc_col = column.obj
-            col_type = column.dtype.plc
+            col_type = column.dtype.plc_type
             # cum_sum casts
             # Int8, UInt8, Int16, UInt16 -> Int64 for overflow prevention
             # Bool -> UInt32
@@ -497,7 +491,10 @@ class UnaryFunction(Expr):
                 and plc.types.size_of(col_type) <= 4
             ):
                 plc_col = plc.unary.cast(plc_col, plc.DataType(plc.TypeId.INT64))
-            elif self.name == "cum_sum" and column.dtype.plc.id() == plc.TypeId.BOOL8:
+            elif (
+                self.name == "cum_sum"
+                and column.dtype.plc_type.id() == plc.TypeId.BOOL8
+            ):
                 plc_col = plc.unary.cast(plc_col, plc.DataType(plc.TypeId.UINT32))
             if self.name == "cum_sum":
                 agg = plc.aggregation.sum()

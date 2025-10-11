@@ -10,6 +10,7 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from pylibcudf.contiguous_split cimport HostBuffer
 from pylibcudf.expressions cimport Expression
@@ -41,7 +42,7 @@ from pylibcudf.libcudf.io.types cimport (
 )
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.table cimport Table
-from pylibcudf.utils cimport _get_stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
 
 __all__ = [
     "ChunkedParquetReader",
@@ -323,10 +324,12 @@ cdef class ChunkedParquetReader:
         self,
         ParquetReaderOptions options,
         Stream stream = None,
+        DeviceMemoryResource mr = None,
         size_t chunk_read_limit=0,
         size_t pass_read_limit=1024000000,
     ):
         self.stream = _get_stream(stream)
+        self.mr = _get_memory_resource(mr)
         with nogil:
             self.reader.reset(
                 new cpp_chunked_parquet_reader(
@@ -334,6 +337,7 @@ cdef class ChunkedParquetReader:
                     pass_read_limit,
                     options.c_obj,
                     self.stream.view(),
+                    self.mr.get_mr()
                 )
             )
 
@@ -351,9 +355,14 @@ cdef class ChunkedParquetReader:
         with nogil:
             return self.reader.get()[0].has_next()
 
-    cpdef TableWithMetadata read_chunk(self):
+    cpdef TableWithMetadata read_chunk(self, DeviceMemoryResource mr=None):
         """
         Read the next chunk into a :py:class:`~.types.TableWithMetadata`
+
+        Parameters
+        ----------
+        mr : DeviceMemoryResource, optional
+            Device memory resource used to allocate the returned table's device memory.
 
         Returns
         -------
@@ -362,14 +371,17 @@ cdef class ChunkedParquetReader:
         """
         # Read Parquet
         cdef table_with_metadata c_result
+        mr = _get_memory_resource(mr)
 
         with nogil:
             c_result = move(self.reader.get()[0].read_chunk())
 
-        return TableWithMetadata.from_libcudf(c_result, self.stream)
+        return TableWithMetadata.from_libcudf(c_result, self.stream, mr)
 
 
-cpdef read_parquet(ParquetReaderOptions options, Stream stream = None):
+cpdef read_parquet(
+    ParquetReaderOptions options, Stream stream = None, DeviceMemoryResource mr=None
+):
     """
     Read from Parquet format.
 
@@ -384,12 +396,15 @@ cpdef read_parquet(ParquetReaderOptions options, Stream stream = None):
         Settings for controlling reading behavior
     stream : Stream | None
         CUDA stream used for device memory operations and kernel launches
+    mr : DeviceMemoryResource, optional
+        Device memory resource used to allocate the returned table's device memory.
     """
     cdef Stream s = _get_stream(stream)
+    mr = _get_memory_resource(mr)
     with nogil:
-        c_result = move(cpp_read_parquet(options.c_obj, s.view()))
+        c_result = move(cpp_read_parquet(options.c_obj, s.view(), mr.get_mr()))
 
-    return TableWithMetadata.from_libcudf(c_result, stream)
+    return TableWithMetadata.from_libcudf(c_result, s, mr)
 
 
 cdef class ChunkedParquetWriter:
@@ -431,15 +446,12 @@ cdef class ChunkedParquetWriter:
         -------
         None
         """
-        if partitions_info is None:
-            with nogil:
-                self.c_obj.get()[0].write(table.view())
-            return
         cdef vector[partition_info] partitions
-        for part in partitions_info:
-            partitions.push_back(
-                partition_info(part[0], part[1])
-            )
+        if partitions_info is not None:
+            for part in partitions_info:
+                partitions.push_back(
+                    partition_info(part[0], part[1])
+                )
         with nogil:
             self.c_obj.get()[0].write(table.view(), partitions)
 

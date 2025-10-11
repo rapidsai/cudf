@@ -58,7 +58,7 @@ def pdf(request):
 )
 @pytest.mark.parametrize("series", [False, True])
 def test_groupby_basic(series, aggregation, pdf):
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     gdf_grouped = gdf.groupby("xx", dropna=True)
     ddf_grouped = dask_cudf.from_cudf(gdf, npartitions=5).groupby(
         "xx", dropna=True
@@ -86,7 +86,7 @@ def test_groupby_basic(series, aggregation, pdf):
 @pytest.mark.parametrize("series", [True, False])
 @pytest.mark.parametrize("aggregation", ["cumsum", "cumcount"])
 def test_groupby_cumulative(aggregation, pdf, series):
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     ddf = dask_cudf.from_cudf(gdf, npartitions=5)
 
     gdf_grouped = gdf.groupby("xx")
@@ -115,7 +115,7 @@ def test_groupby_cumulative(aggregation, pdf, series):
     ],
 )
 def test_groupby_agg(func, aggregation, pdf):
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     ddf = dask_cudf.from_cudf(gdf, npartitions=5)
 
     actual = func(ddf, aggregation)
@@ -171,7 +171,7 @@ def test_groupby_multi_column(func):
         }
     )
 
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     ddf = dask_cudf.from_cudf(gdf, npartitions=5)
 
@@ -663,7 +663,7 @@ def test_groupby_agg_redirect(aggregations):
         }
     )
 
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     ddf = dask_cudf.from_cudf(gdf, npartitions=5)
 
@@ -713,7 +713,7 @@ def test_groupby_unique_lists():
 @pytest.mark.parametrize("agg", ["first", "last"])
 def test_groupby_first_last(data, agg):
     pdf = pd.DataFrame(data)
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     ddf = dd.from_pandas(pdf, npartitions=2)
     gddf = dask_cudf.from_cudf(gdf, npartitions=2)

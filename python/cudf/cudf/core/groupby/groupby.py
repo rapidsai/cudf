@@ -11,10 +11,7 @@ from collections.abc import Mapping
 from functools import cached_property, singledispatch
 from typing import TYPE_CHECKING, Any, Literal
 
-# Needed to make Sphinx happy for typing purposes
-import cupy
 import cupy as cp
-import numpy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -34,7 +31,6 @@ from cudf.core.column.column import (
     deserialize_columns,
     serialize_columns,
 )
-from cudf.core.column.struct import StructColumn
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.common import pipe
 from cudf.core.copy_types import GatherMap
@@ -582,7 +578,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         )
 
     @cached_property
-    def indices(self) -> dict[ScalarLike, cupy.ndarray]:
+    def indices(self) -> dict[ScalarLike, cp.ndarray]:
         """
         Dict {group name -> group indices}.
 
@@ -1473,7 +1469,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         frac: float | None = None,
         replace: bool = False,
         weights: Sequence | Series | None = None,
-        random_state: numpy.random.RandomState | int | None = None,
+        random_state: np.random.RandomState | int | None = None,
     ):
         """Return a random sample of items in each group.
 
@@ -1765,10 +1761,10 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         See Also
         --------
-        Series.pipe
+        cudf.Series.pipe
             Apply a function with arguments to a series.
 
-        DataFrame.pipe
+        cudf.DataFrame.pipe
             Apply a function with arguments to a dataframe.
 
         apply
@@ -2065,155 +2061,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         if self._as_index is False:
             result = result.reset_index()
         return result
-
-    @_performance_tracking
-    def apply_grouped(self, function, **kwargs):
-        """Apply a transformation function over the grouped chunk.
-
-        This uses numba's CUDA JIT compiler to convert the Python
-        transformation function into a CUDA kernel, thus will have a
-        compilation overhead during the first run.
-
-        Parameters
-        ----------
-        func : function
-          The transformation function that will be executed on the CUDA GPU.
-        incols: list
-          A list of names of input columns.
-        outcols: list
-          A dictionary of output column names and their dtype.
-        kwargs : dict
-          name-value of extra arguments. These values are passed directly into
-          the function.
-
-        Examples
-        --------
-        .. code-block:: python
-
-            from cudf import DataFrame
-            from numba import cuda
-            import numpy as np
-
-            df = DataFrame()
-            df['key'] = [0, 0, 1, 1, 2, 2, 2]
-            df['val'] = [0, 1, 2, 3, 4, 5, 6]
-            groups = df.groupby(['key'])
-
-            # Define a function to apply to each group
-            def mult_add(key, val, out1, out2):
-                for i in range(cuda.threadIdx.x, len(key), cuda.blockDim.x):
-                    out1[i] = key[i] * val[i]
-                    out2[i] = key[i] + val[i]
-
-            result = groups.apply_grouped(mult_add,
-                                          incols=['key', 'val'],
-                                          outcols={'out1': np.int32,
-                                                   'out2': np.int32},
-                                          # threads per block
-                                          tpb=8)
-
-            print(result)
-
-        Output:
-
-        .. code-block:: python
-
-               key  val out1 out2
-            0    0    0    0    0
-            1    0    1    0    1
-            2    1    2    2    3
-            3    1    3    3    4
-            4    2    4    8    6
-            5    2    5   10    7
-            6    2    6   12    8
-
-
-
-        .. code-block:: python
-
-            import cudf
-            import numpy as np
-            from numba import cuda
-            import pandas as pd
-            from random import randint
-
-
-            # Create a random 15 row dataframe with one categorical
-            # feature and one random integer valued feature
-            df = DataFrame(
-                    {
-                        "cat": [1] * 5 + [2] * 5 + [3] * 5,
-                        "val": [randint(0, 100) for _ in range(15)],
-                    }
-                 )
-
-            # Group the dataframe by its categorical feature
-            groups = df.groupby("cat")
-
-            # Define a kernel which takes the moving average of a
-            # sliding window
-            def rolling_avg(val, avg):
-                win_size = 3
-                for i in range(cuda.threadIdx.x, len(val), cuda.blockDim.x):
-                    if i < win_size - 1:
-                        # If there is not enough data to fill the window,
-                        # take the average to be NaN
-                        avg[i] = np.nan
-                    else:
-                        total = 0
-                        for j in range(i - win_size + 1, i + 1):
-                            total += val[j]
-                        avg[i] = total / win_size
-
-            # Compute moving averages on all groups
-            results = groups.apply_grouped(rolling_avg,
-                                           incols=['val'],
-                                           outcols=dict(avg=np.float64))
-            print("Results:", results)
-
-            # Note this gives the same result as its pandas equivalent
-            pdf = df.to_pandas()
-            pd_results = pdf.groupby('cat')['val'].rolling(3).mean()
-
-
-        Output:
-
-        .. code-block:: python
-
-            Results:
-               cat  val                 avg
-            0    1   16
-            1    1   45
-            2    1   62                41.0
-            3    1   45  50.666666666666664
-            4    1   26  44.333333333333336
-            5    2    5
-            6    2   51
-            7    2   77  44.333333333333336
-            8    2    1                43.0
-            9    2   46  41.333333333333336
-            [5 more rows]
-
-        This is functionally equivalent to `pandas.DataFrame.Rolling
-        <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.rolling.html>`_
-
-        """
-        warnings.warn(
-            "apply_grouped is deprecated and will be "
-            "removed in a future release. Please use `apply` "
-            "or use a custom numba kernel instead or refer "
-            "to the UDF guidelines for more information "
-            "https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html",
-            FutureWarning,
-        )
-        if not callable(function):
-            raise TypeError(f"type {type(function)} is not callable")
-
-        _, offsets, _, grouped_values = self._grouped()
-        kwargs.update({"chunks": offsets})
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            return grouped_values.apply_chunks(function, **kwargs)
 
     @_performance_tracking
     def _broadcast(self, values: Series) -> Series:
@@ -2546,15 +2393,15 @@ class GroupBy(Serializable, Reducible, Scannable):
                 )
                 x, y = str(x), str(y)
 
-            column_pair_structs[(x, y)] = StructColumn(
-                data=None,
-                dtype=StructDtype(
-                    fields={x: self.obj._data[x].dtype, y: self.obj._data[y]}
-                ),
-                children=(self.obj._data[x], self.obj._data[y]),
-                size=len(self.obj),
-                offset=0,
-            )
+            struct_column = ColumnBase.from_pylibcudf(
+                plc.Column.struct_from_children(
+                    [
+                        self.obj._data[x].to_pylibcudf(mode="read"),
+                        self.obj._data[y].to_pylibcudf(mode="read"),
+                    ]
+                )
+            ).set_mask(None)
+            column_pair_structs[(x, y)] = struct_column
 
         from cudf.core.dataframe import DataFrame
 
@@ -3157,7 +3004,7 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
         sort: bool = True,
         ascending: bool = False,
         dropna: bool = True,
-    ) -> DataFrameOrSeries:
+    ) -> DataFrame | Series:
         """
         Return a Series or DataFrame containing counts of unique rows.
 
@@ -3593,9 +3440,9 @@ class _Grouping(Serializable):
                 elif isinstance(by, Grouper):
                     self._handle_grouper(by)
                 elif isinstance(by, pd.Series):
-                    self._handle_series(Series.from_pandas(by))
+                    self._handle_series(Series(by))
                 elif isinstance(by, pd.Index):
-                    self._handle_index(Index.from_pandas(by))
+                    self._handle_index(Index(by))
                 else:
                     try:
                         self._handle_label(by)

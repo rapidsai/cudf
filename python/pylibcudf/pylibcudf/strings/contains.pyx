@@ -12,7 +12,8 @@ from pylibcudf.libcudf.scalar.scalar_factories cimport (
 from pylibcudf.libcudf.strings cimport contains as cpp_contains
 from pylibcudf.strings.regex_program cimport RegexProgram
 from pylibcudf.scalar cimport Scalar
-from pylibcudf.utils cimport _get_stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 __all__ = ["contains_re", "count_re", "like", "matches_re"]
@@ -20,7 +21,8 @@ __all__ = ["contains_re", "count_re", "like", "matches_re"]
 cpdef Column contains_re(
     Column input,
     RegexProgram prog,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Returns a boolean column identifying rows which match the given
     regex_program object.
@@ -42,21 +44,24 @@ cpdef Column contains_re(
 
     cdef unique_ptr[column] result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         result = cpp_contains.contains_re(
             input.view(),
             prog.c_obj.get()[0],
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(result), stream)
+    return Column.from_libcudf(move(result), stream, mr)
 
 
 cpdef Column count_re(
     Column input,
     RegexProgram prog,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Returns the number of times the given regex_program's pattern
     matches in each string.
@@ -78,21 +83,24 @@ cpdef Column count_re(
 
     cdef unique_ptr[column] result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         result = cpp_contains.count_re(
             input.view(),
             prog.c_obj.get()[0],
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(result), stream)
+    return Column.from_libcudf(move(result), stream, mr)
 
 
 cpdef Column matches_re(
     Column input,
     RegexProgram prog,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Returns a boolean column identifying rows which
     matching the given regex_program object but only at
@@ -115,22 +123,25 @@ cpdef Column matches_re(
 
     cdef unique_ptr[column] result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         result = cpp_contains.matches_re(
             input.view(),
             prog.c_obj.get()[0],
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(result), stream)
+    return Column.from_libcudf(move(result), stream, mr)
 
 
 cpdef Column like(
     Column input,
     ColumnOrScalar pattern,
     Scalar escape_character=None,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Returns a boolean column identifying rows which
@@ -155,10 +166,11 @@ cpdef Column like(
     """
     cdef unique_ptr[column] result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     if escape_character is None:
         escape_character = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view())
+            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
         )
 
     cdef const string_scalar* c_escape_character = <const string_scalar*>(
@@ -172,7 +184,8 @@ cpdef Column like(
                 input.view(),
                 pattern.view(),
                 dereference(c_escape_character),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     elif ColumnOrScalar is Scalar:
         c_pattern = <const string_scalar*>(pattern.c_obj.get())
@@ -181,9 +194,10 @@ cpdef Column like(
                 input.view(),
                 dereference(c_pattern),
                 dereference(c_escape_character),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     else:
         raise ValueError("pattern must be a Column or a Scalar")
 
-    return Column.from_libcudf(move(result), stream)
+    return Column.from_libcudf(move(result), stream, mr)

@@ -37,10 +37,15 @@ JsonDecodeType = list[tuple[str, plc.DataType, "JsonDecodeType"]]
 
 def _dtypes_for_json_decode(dtype: DataType) -> JsonDecodeType:
     """Get the dtypes for json decode."""
+    # the type checker doesn't know that this equality check implies a struct dtype.
     if dtype.id() == plc.TypeId.STRUCT:
         return [
-            (field.name, child.plc, _dtypes_for_json_decode(child))
-            for field, child in zip(dtype.polars.fields, dtype.children, strict=True)
+            (field.name, child.plc_type, _dtypes_for_json_decode(child))
+            for field, child in zip(
+                dtype.polars_type.fields,  # type: ignore[attr-defined]
+                dtype.children,
+                strict=True,  # type: ignore[attr-defined]
+            )
         ]
     else:
         return []
@@ -278,7 +283,7 @@ class StringFunction(Expr):
                     and width.value is not None
                     and width.value < 0
                 ):  # pragma: no cover
-                    dtypestr = dtype_str_repr(width.dtype.polars)
+                    dtypestr = dtype_str_repr(width.dtype.polars_type)
                     raise InvalidOperationError(
                         f"conversion from `{dtypestr}` to `u64` "
                         f"failed in column 'literal' for 1 out of "
@@ -325,8 +330,10 @@ class StringFunction(Expr):
             return Column(
                 plc.strings.combine.concatenate(
                     plc.Table([col.obj for col in broadcasted]),
-                    plc.Scalar.from_py(delimiter, self.dtype.plc),
-                    None if ignore_nulls else plc.Scalar.from_py(None, self.dtype.plc),
+                    plc.Scalar.from_py(delimiter, self.dtype.plc_type),
+                    None
+                    if ignore_nulls
+                    else plc.Scalar.from_py(None, self.dtype.plc_type),
                     None,
                     plc.strings.combine.SeparatorOnNulls.NO,
                 ),
@@ -341,8 +348,8 @@ class StringFunction(Expr):
             return Column(
                 plc.strings.combine.join_strings(
                     column.obj,
-                    plc.Scalar.from_py(delimiter, self.dtype.plc),
-                    plc.Scalar.from_py(None, self.dtype.plc),
+                    plc.Scalar.from_py(delimiter, self.dtype.plc_type),
+                    plc.Scalar.from_py(None, self.dtype.plc_type),
                 ),
                 dtype=self.dtype,
             )
@@ -373,7 +380,7 @@ class StringFunction(Expr):
                 if width.value is None:
                     return Column(
                         plc.Column.from_scalar(
-                            plc.Scalar.from_py(None, self.dtype.plc),
+                            plc.Scalar.from_py(None, self.dtype.plc_type),
                             column.size,
                         ),
                         self.dtype,
@@ -429,19 +436,19 @@ class StringFunction(Expr):
         elif self.name is StringFunction.Name.ContainsAny:
             (ascii_case_insensitive,) = self.options
             child, arg = self.children
-            column = child.evaluate(df, context=context).obj
-            targets = arg.evaluate(df, context=context).obj
+            plc_column = child.evaluate(df, context=context).obj
+            plc_targets = arg.evaluate(df, context=context).obj
             if ascii_case_insensitive:
-                column = plc.strings.case.to_lower(column)
-                targets = plc.strings.case.to_lower(targets)
+                plc_column = plc.strings.case.to_lower(plc_column)
+                plc_targets = plc.strings.case.to_lower(plc_targets)
             contains = plc.strings.find_multiple.contains_multiple(
-                column,
-                targets,
+                plc_column,
+                plc_targets,
             )
             binary_or = functools.partial(
                 plc.binaryop.binary_operation,
                 op=plc.binaryop.BinaryOperator.BITWISE_OR,
-                output_type=self.dtype.plc,
+                output_type=self.dtype.plc_type,
             )
             return Column(
                 functools.reduce(binary_or, contains.columns()),
@@ -449,27 +456,27 @@ class StringFunction(Expr):
             )
         elif self.name is StringFunction.Name.CountMatches:
             (child, _) = self.children
-            column = child.evaluate(df, context=context).obj
+            plc_column = child.evaluate(df, context=context).obj
             return Column(
                 plc.unary.cast(
-                    plc.strings.contains.count_re(column, self._regex_program),
-                    self.dtype.plc,
+                    plc.strings.contains.count_re(plc_column, self._regex_program),
+                    self.dtype.plc_type,
                 ),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.Extract:
             (group_index,) = self.options
-            column = self.children[0].evaluate(df, context=context).obj
+            plc_column = self.children[0].evaluate(df, context=context).obj
             return Column(
                 plc.strings.extract.extract_single(
-                    column, self._regex_program, group_index - 1
+                    plc_column, self._regex_program, group_index - 1
                 ),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.ExtractGroups:
-            column = self.children[0].evaluate(df, context=context).obj
+            plc_column = self.children[0].evaluate(df, context=context).obj
             plc_table = plc.strings.extract.extract(
-                column,
+                plc_column,
                 self._regex_program,
             )
             return Column(
@@ -479,16 +486,16 @@ class StringFunction(Expr):
         elif self.name is StringFunction.Name.Find:
             literal, _ = self.options
             (child, expr) = self.children
-            column = child.evaluate(df, context=context).obj
+            plc_column = child.evaluate(df, context=context).obj
             if literal:
                 assert isinstance(expr, Literal)
                 plc_column = plc.strings.find.find(
-                    column,
-                    plc.Scalar.from_py(expr.value, expr.dtype.plc),
+                    plc_column,
+                    plc.Scalar.from_py(expr.value, expr.dtype.plc_type),
                 )
             else:
                 plc_column = plc.strings.findall.find_re(
-                    column,
+                    plc_column,
                     self._regex_program,
                 )
             # Polars returns None for not found, libcudf returns -1
@@ -501,7 +508,7 @@ class StringFunction(Expr):
                 )
             )
             plc_column = plc.unary.cast(
-                plc_column.with_mask(new_mask, null_count), self.dtype.plc
+                plc_column.with_mask(new_mask, null_count), self.dtype.plc_type
             )
             return Column(plc_column, dtype=self.dtype)
         elif self.name is StringFunction.Name.JsonDecode:
@@ -518,26 +525,27 @@ class StringFunction(Expr):
             )
         elif self.name is StringFunction.Name.JsonPathMatch:
             (child, expr) = self.children
-            column = child.evaluate(df, context=context).obj
+            plc_column = child.evaluate(df, context=context).obj
             assert isinstance(expr, Literal)
-            json_path = plc.Scalar.from_py(expr.value, expr.dtype.plc)
+            json_path = plc.Scalar.from_py(expr.value, expr.dtype.plc_type)
             return Column(
-                plc.json.get_json_object(column, json_path),
+                plc.json.get_json_object(plc_column, json_path),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.LenBytes:
-            column = self.children[0].evaluate(df, context=context).obj
+            plc_column = self.children[0].evaluate(df, context=context).obj
             return Column(
                 plc.unary.cast(
-                    plc.strings.attributes.count_bytes(column), self.dtype.plc
+                    plc.strings.attributes.count_bytes(plc_column), self.dtype.plc_type
                 ),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.LenChars:
-            column = self.children[0].evaluate(df, context=context).obj
+            plc_column = self.children[0].evaluate(df, context=context).obj
             return Column(
                 plc.unary.cast(
-                    plc.strings.attributes.count_characters(column), self.dtype.plc
+                    plc.strings.attributes.count_characters(plc_column),
+                    self.dtype.plc_type,
                 ),
                 dtype=self.dtype,
             )
@@ -582,7 +590,7 @@ class StringFunction(Expr):
             column = child.evaluate(df, context=context)
             if n == 1 and self.name is StringFunction.Name.SplitN:
                 plc_column = plc.Column(
-                    self.dtype.plc,
+                    self.dtype.plc_type,
                     column.obj.size(),
                     None,
                     None,
@@ -592,7 +600,7 @@ class StringFunction(Expr):
                 )
             else:
                 assert isinstance(expr, Literal)
-                by = plc.Scalar.from_py(expr.value, expr.dtype.plc)
+                by = plc.Scalar.from_py(expr.value, expr.dtype.plc_type)
                 # See https://github.com/pola-rs/polars/issues/11640
                 # for SplitN vs SplitExact edge case behaviors
                 max_splits = n if is_split_n else 0
@@ -614,7 +622,7 @@ class StringFunction(Expr):
                 # TODO: Use plc.Column.struct_from_children once it is generalized
                 # to handle columns that don't share the same null_mask/null_count
                 plc_column = plc.Column(
-                    self.dtype.plc,
+                    self.dtype.plc_type,
                     ref_column.size(),
                     None,
                     None,
@@ -628,9 +636,9 @@ class StringFunction(Expr):
             StringFunction.Name.StripSuffix,
         }:
             child, expr = self.children
-            column = child.evaluate(df, context=context).obj
+            plc_column = child.evaluate(df, context=context).obj
             assert isinstance(expr, Literal)
-            target = plc.Scalar.from_py(expr.value, expr.dtype.plc)
+            target = plc.Scalar.from_py(expr.value, expr.dtype.plc_type)
             if self.name == StringFunction.Name.StripPrefix:
                 find = plc.strings.find.starts_with
                 start = len(expr.value)
@@ -640,16 +648,16 @@ class StringFunction(Expr):
                 start = 0
                 end = -len(expr.value)
 
-            mask = find(column, target)
+            mask = find(plc_column, target)
             sliced = plc.strings.slice.slice_strings(
-                column,
+                plc_column,
                 plc.Scalar.from_py(start, plc.DataType(plc.TypeId.INT32)),
                 plc.Scalar.from_py(end, plc.DataType(plc.TypeId.INT32)),
             )
             return Column(
                 plc.copying.copy_if_else(
                     sliced,
-                    column,
+                    plc_column,
                     mask,
                 ),
                 dtype=self.dtype,
@@ -678,14 +686,14 @@ class StringFunction(Expr):
             if self.children[1].value is None:
                 return Column(
                     plc.Column.from_scalar(
-                        plc.Scalar.from_py(None, self.dtype.plc),
+                        plc.Scalar.from_py(None, self.dtype.plc_type),
                         column.size,
                     ),
                     self.dtype,
                 )
             elif self.children[1].value == 0:
                 result = plc.Column.from_scalar(
-                    plc.Scalar.from_py("", self.dtype.plc),
+                    plc.Scalar.from_py("", self.dtype.plc_type),
                     column.size,
                 )
                 if column.obj.null_mask():
@@ -715,7 +723,7 @@ class StringFunction(Expr):
             if end is None:
                 return Column(
                     plc.Column.from_scalar(
-                        plc.Scalar.from_py(None, self.dtype.plc),
+                        plc.Scalar.from_py(None, self.dtype.plc_type),
                         column.size,
                     ),
                     self.dtype,
@@ -766,7 +774,7 @@ class StringFunction(Expr):
             if plc_col.null_count() == plc_col.size():
                 return Column(
                     plc.Column.from_scalar(
-                        plc.Scalar.from_py(None, self.dtype.plc),
+                        plc.Scalar.from_py(None, self.dtype.plc_type),
                         plc_col.size(),
                     ),
                     self.dtype,
@@ -783,7 +791,8 @@ class StringFunction(Expr):
                 else:
                     first_valid_data = plc.copying.get_element(plc_col, 0).to_py()
 
-                format = _infer_datetime_format(first_valid_data)
+                # See https://github.com/rapidsai/cudf/issues/20202 for we type ignore
+                format = _infer_datetime_format(first_valid_data)  # type: ignore[arg-type]
                 if not format:
                     raise InvalidOperationError(
                         "Unable to infer datetime format from data"
@@ -810,23 +819,28 @@ class StringFunction(Expr):
 
             return Column(
                 plc.strings.convert.convert_datetime.to_timestamps(
-                    plc_col, self.dtype.plc, format
+                    plc_col, self.dtype.plc_type, format
                 ),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.Replace:
-            column, target, repl = columns
+            col_column, col_target, col_repl = columns
             n, _ = self.options
             return Column(
                 plc.strings.replace.replace(
-                    column.obj, target.obj_scalar, repl.obj_scalar, maxrepl=n
+                    col_column.obj,
+                    col_target.obj_scalar,
+                    col_repl.obj_scalar,
+                    maxrepl=n,
                 ),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.ReplaceMany:
-            column, target, repl = columns
+            col_column, col_target, col_repl = columns
             return Column(
-                plc.strings.replace.replace_multiple(column.obj, target.obj, repl.obj),
+                plc.strings.replace.replace_multiple(
+                    col_column.obj, col_target.obj, col_repl.obj
+                ),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.PadStart:
@@ -838,10 +852,14 @@ class StringFunction(Expr):
                 (char,) = self.options
                 # TODO: Maybe accept a string scalar in
                 # cudf::strings::pad to avoid DtoH transfer
-                width = width_col.obj.to_scalar().to_py()
+                # See https://github.com/rapidsai/cudf/issues/20202 for we type ignore
+                width = width_col.obj.to_scalar().to_py()  # type: ignore[assignment]
             return Column(
                 plc.strings.padding.pad(
-                    column.obj, width, plc.strings.SideType.LEFT, char
+                    column.obj,
+                    width,
+                    plc.strings.SideType.LEFT,
+                    char,  # type: ignore[arg-type]
                 ),
                 dtype=self.dtype,
             )
@@ -854,10 +872,13 @@ class StringFunction(Expr):
                 (char,) = self.options
                 # TODO: Maybe accept a string scalar in
                 # cudf::strings::pad to avoid DtoH transfer
-                width = width_col.obj.to_scalar().to_py()
+                width = width_col.obj.to_scalar().to_py()  # type: ignore[assignment]
             return Column(
                 plc.strings.padding.pad(
-                    column.obj, width, plc.strings.SideType.RIGHT, char
+                    column.obj,
+                    width,
+                    plc.strings.SideType.RIGHT,
+                    char,  # type: ignore[arg-type]
                 ),
                 dtype=self.dtype,
             )

@@ -46,7 +46,7 @@ def pdf(request):
 @pytest.fixture
 def gdf(pdf):
     pdf, nrows = pdf
-    return (cudf.DataFrame.from_pandas(pdf), nrows)
+    return (cudf.DataFrame(pdf), nrows)
 
 
 @pytest.fixture(params=["fixed", "table"])

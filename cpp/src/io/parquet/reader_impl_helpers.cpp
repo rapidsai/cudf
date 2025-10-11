@@ -307,7 +307,7 @@ void metadata::sanitize_schema()
   process(0);
 }
 
-metadata::metadata(datasource* source)
+metadata::metadata(datasource* source, bool read_page_indexes)
 {
   constexpr auto header_len = sizeof(file_header_s);
   constexpr auto ender_len  = sizeof(file_ender_s);
@@ -337,7 +337,8 @@ metadata::metadata(datasource* source)
   auto const has_strings = std::any_of(
     schema.begin(), schema.end(), [](auto const& elem) { return elem.type == Type::BYTE_ARRAY; });
 
-  if (has_strings and not row_groups.empty() and not row_groups.front().columns.empty()) {
+  if (read_page_indexes and has_strings and not row_groups.empty() and
+      not row_groups.front().columns.empty()) {
     // column index and offset index are encoded back to back.
     // the first column of the first row group will have the first column index, the last
     // column of the last row group will have the final offset index.
@@ -375,16 +376,20 @@ metadata::metadata(datasource* source)
 }
 
 std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
-  host_span<std::unique_ptr<datasource> const> sources)
+  host_span<std::unique_ptr<datasource> const> sources, bool read_page_indexes)
 {
   // Avoid using the thread pool for a single source
-  if (sources.size() == 1) { return {metadata{sources[0].get()}}; }
+  if (sources.size() == 1) {
+    std::vector<metadata> result;
+    result.emplace_back(sources[0].get(), read_page_indexes);
+    return result;
+  }
 
   std::vector<std::future<metadata>> metadata_ctor_tasks;
   metadata_ctor_tasks.reserve(sources.size());
   for (auto const& source : sources) {
     metadata_ctor_tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
-      [source = source.get()] { return metadata{source}; }));
+      [source = source.get(), read_page_indexes] { return metadata{source, read_page_indexes}; }));
   }
   std::vector<metadata> metadatas;
   metadatas.reserve(sources.size());
@@ -607,8 +612,9 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
 aggregate_reader_metadata::aggregate_reader_metadata(
   host_span<std::unique_ptr<datasource> const> sources,
   bool use_arrow_schema,
-  bool has_cols_from_mismatched_srcs)
-  : per_file_metadata(metadatas_from_sources(sources)),
+  bool has_cols_from_mismatched_srcs,
+  bool read_page_indexes)
+  : per_file_metadata(metadatas_from_sources(sources, read_page_indexes)),
     keyval_maps(collect_keyval_metadata()),
     schema_idx_maps(init_schema_idx_maps(has_cols_from_mismatched_srcs)),
     num_rows(calc_num_rows()),

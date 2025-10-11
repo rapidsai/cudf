@@ -16,6 +16,7 @@ import pandas as pd
 # I suspect it relates to pyarrow's pandas-shim that gets imported
 # with this module https://github.com/rapidsai/cudf/issues/14521#issue-2015198786
 import pyarrow.dataset as ds  # noqa: F401
+from pandas._testing import at, getitem, iat, iloc, loc, setitem
 from pandas.tseries.holiday import (
     AbstractHolidayCalendar as pd_AbstractHolidayCalendar,
     EasterMonday as pd_EasterMonday,
@@ -300,6 +301,7 @@ DataFrame = make_final_proxy_type(
         "dtypes": property(_DataFrame__dtypes),
         "__iter__": custom_iter,
         "attrs": _FastSlowAttribute("attrs"),
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
 )
 
@@ -1203,6 +1205,12 @@ register_proxy_func(pd.to_pickle)(_FunctionProxy(_Unusable(), pd.to_pickle))
 register_proxy_func(pd.api.types.is_list_like)(  # noqa: TID251
     _FunctionProxy(_Unusable(), pd.api.types.is_list_like)  # noqa: TID251
 )
+register_proxy_func(loc)(loc)
+register_proxy_func(iloc)(iloc)
+register_proxy_func(at)(at)
+register_proxy_func(iat)(iat)
+register_proxy_func(setitem)(setitem)
+register_proxy_func(getitem)(getitem)
 
 
 def _get_eval_locals_and_globals(level, local_dict=None, global_dict=None):

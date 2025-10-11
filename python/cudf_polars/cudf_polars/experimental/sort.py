@@ -126,12 +126,12 @@ def _select_local_split_candidates(
             [
                 *df.columns,
                 Column(
-                    plc.column_factories.make_empty_column(part_id_dtype.plc),
+                    plc.column_factories.make_empty_column(part_id_dtype.plc_type),
                     dtype=part_id_dtype,
                     name=next(name_gen),
                 ),
                 Column(
-                    plc.column_factories.make_empty_column(part_id_dtype.plc),
+                    plc.column_factories.make_empty_column(part_id_dtype.plc_type),
                     dtype=part_id_dtype,
                     name=next(name_gen),
                 ),
@@ -139,11 +139,11 @@ def _select_local_split_candidates(
         )
 
     candidates = [i * df.num_rows // num_partitions for i in range(num_partitions)]
-    row_id = plc.Column.from_iterable_of_py(candidates, part_id_dtype.plc)
+    row_id = plc.Column.from_iterable_of_py(candidates, part_id_dtype.plc_type)
 
     res = plc.copying.gather(df.table, row_id, plc.copying.OutOfBoundsPolicy.DONT_CHECK)
     part_id = plc.Column.from_scalar(
-        plc.Scalar.from_py(my_part_id, part_id_dtype.plc),
+        plc.Scalar.from_py(my_part_id, part_id_dtype.plc_type),
         len(candidates),
     )
 
@@ -359,7 +359,7 @@ def _sort_partition_dataframe(
     """
     if df.num_rows == 0:  # pragma: no cover
         # Fast path for empty DataFrame
-        return {i: df for i in range(partition_count)}
+        return dict.fromkeys(range(partition_count), df)
 
     splits = find_sort_splits(
         df.select(options["by"]).table,

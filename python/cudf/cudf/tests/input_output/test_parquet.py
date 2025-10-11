@@ -92,7 +92,7 @@ def simple_pdf():
 
 @pytest.fixture
 def simple_gdf(simple_pdf):
-    return cudf.DataFrame.from_pandas(simple_pdf)
+    return cudf.DataFrame(simple_pdf)
 
 
 def build_pdf(num_columns, day_resolution_timestamps):
@@ -179,12 +179,12 @@ def pdf_day_timestamps(request):
 
 @pytest.fixture
 def gdf(pdf):
-    return cudf.DataFrame.from_pandas(pdf)
+    return cudf.DataFrame(pdf)
 
 
 @pytest.fixture
 def gdf_day_timestamps(pdf_day_timestamps):
-    return cudf.DataFrame.from_pandas(pdf_day_timestamps)
+    return cudf.DataFrame(pdf_day_timestamps)
 
 
 @pytest.fixture
@@ -217,7 +217,7 @@ def parquet_path_or_buf(datadir):
 
 @pytest.fixture(scope="module")
 def large_int64_gdf():
-    return cudf.DataFrame.from_pandas(pd.DataFrame({"col": range(0, 1 << 20)}))
+    return cudf.DataFrame(pd.DataFrame({"col": range(0, 1 << 20)}))
 
 
 @pytest.fixture(params=["pyarrow", "cudf"])
@@ -3736,7 +3736,7 @@ def test_parquet_writer_roundtrip_with_arrow_schema(index):
 
     # Read parquet with pyarrow, pandas and cudf readers
     got = cudf.DataFrame.from_arrow(pq.read_table(buffer))
-    got2 = cudf.DataFrame.from_pandas(pd.read_parquet(buffer))
+    got2 = cudf.DataFrame(pd.read_parquet(buffer))
     got3 = cudf.read_parquet(buffer)
 
     # drop the index column for comparison: __index_level_0__
