@@ -81,6 +81,17 @@ __all__ = [
 ]
 
 
+def _fmt_cols(cols: Iterable[str], max_len: int = 80) -> str:
+    s = ", ".join(cols)
+    if len(s) > max_len:
+        return s[: max_len - 1] + "…"
+    return s
+
+
+def _fmt_name(head: str, args: Iterable[str]) -> str:
+    return f"{head}({_fmt_cols(args)})"
+
+
 class IR(Node["IR"]):
     """Abstract plan node, representing an unevaluated dataframe."""
 
@@ -134,6 +145,9 @@ class IR(Node["IR"]):
         translation phase should fail earlier.
     """
 
+    def profile_name(self) -> str:  # noqa: D102
+        return type(self).__name__
+
     def evaluate(self, *, cache: CSECache, timer: Timer | None) -> DataFrame:
         """
         Evaluate the node (recursively) and return a dataframe.
@@ -169,8 +183,7 @@ class IR(Node["IR"]):
             start = time.monotonic_ns()
             result = self.do_evaluate(*self._non_child_args, *children)
             end = time.monotonic_ns()
-            # TODO: Set better names on each class object.
-            timer.store(start, end, type(self).__name__)
+            timer.store(start, end, self.profile_name())
             return result
         else:
             return self.do_evaluate(*self._non_child_args, *children)
@@ -1168,6 +1181,9 @@ class Select(IR):
             )
         return False
 
+    def profile_name(self) -> str:  # noqa: D102
+        return _fmt_name("select", self.schema.keys())
+
     @classmethod
     @nvtx_annotate_cudf_polars(message="Select")
     def do_evaluate(
@@ -1470,6 +1486,9 @@ class GroupBy(IR):
             maintain_order,
             self.zlice,
         )
+
+    def profile_name(self) -> str:  # noqa: D102
+        return _fmt_name("group_by", [e.name for e in self.keys])
 
     @classmethod
     @nvtx_annotate_cudf_polars(message="GroupBy")
@@ -1846,6 +1865,9 @@ class Join(IR):
 
         return columns
 
+    def profile_name(self) -> str:  # noqa: D102
+        return _fmt_name("join", [e.name for e in self.left_on])
+
     @classmethod
     @nvtx_annotate_cudf_polars(message="Join")
     def do_evaluate(
@@ -1990,6 +2012,9 @@ class HStack(IR):
         self.should_broadcast = should_broadcast
         self._non_child_args = (self.columns, self.should_broadcast)
         self.children = (df,)
+
+    def profile_name(self) -> str:  # noqa: D102
+        return _fmt_name("with_column", [e.name for e in self.columns])
 
     @classmethod
     @nvtx_annotate_cudf_polars(message="HStack")
@@ -2146,6 +2171,9 @@ class Sort(IR):
         )
         self.children = (df,)
 
+    def profile_name(self) -> str:  # noqa: D102
+        return _fmt_name("sort", [e.name for e in self.by])
+
     @classmethod
     @nvtx_annotate_cudf_polars(message="Sort")
     def do_evaluate(
@@ -2206,16 +2234,23 @@ class Slice(IR):
 class Filter(IR):
     """Filter a dataframe with a boolean mask."""
 
-    __slots__ = ("mask",)
-    _non_child = ("schema", "mask")
+    __slots__ = ("mask", "predicate_str")
+    _non_child = ("schema", "mask", "predicate_str")
     mask: expr.NamedExpr
     """Expression to produce the filter mask."""
+    predicate_str: str
 
-    def __init__(self, schema: Schema, mask: expr.NamedExpr, df: IR):
+    def __init__(
+        self, schema: Schema, mask: expr.NamedExpr, df: IR, predicate_str: str = ""
+    ):
         self.schema = schema
         self.mask = mask
+        self.predicate_str = predicate_str
         self._non_child_args = (mask,)
         self.children = (df,)
+
+    def profile_name(self) -> str:  # noqa: D102
+        return f".filter({self.predicate_str})"
 
     @classmethod
     @nvtx_annotate_cudf_polars(message="Filter")
@@ -2235,6 +2270,9 @@ class Projection(IR):
         self.schema = schema
         self._non_child_args = (schema,)
         self.children = (df,)
+
+    def profile_name(self) -> str:  # noqa: D102
+        return _fmt_name("simple-projection", self.schema.keys())
 
     @classmethod
     @nvtx_annotate_cudf_polars(message="Projection")
