@@ -5,7 +5,7 @@ from __future__ import annotations
 import itertools
 import re
 from collections.abc import Callable
-from functools import cached_property
+from functools import cached_property, lru_cache
 from typing import TYPE_CHECKING, cast
 
 import numpy as np
@@ -62,7 +62,10 @@ _FLAG_MAP = {
 }
 
 
-def plc_flags_from_re_flags(flags):
+@lru_cache
+def plc_flags_from_re_flags(
+    flags: re.RegexFlag,
+) -> plc.strings.regex_flags.RegexFlags:
     # Convert Python re flags to pylibcudf RegexFlags
     plc_flags = plc.strings.regex_flags.RegexFlags(0)
     for re_flag, plc_flag in _FLAG_MAP.items():
