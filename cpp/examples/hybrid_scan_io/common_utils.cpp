@@ -143,7 +143,7 @@ std::vector<rmm::device_buffer> fetch_byte_ranges(
       auto const chunk_size   = byte_ranges[idx].size();
       auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
       CUDF_CUDA_TRY(cudaMemcpyAsync(
-        buffer.data(), chunk_offset, chunk_size, cudaMemcpyHostToDevice, stream.value()));
+        buffer.data(), chunk_offset, chunk_size, cudaMemcpyDefault, stream.value()));
       buffers[idx] = std::move(buffer);
     });
 
