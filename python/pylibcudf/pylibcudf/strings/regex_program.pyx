@@ -42,12 +42,11 @@ cdef class RegexProgram:
             A new RegexProgram
         """
         cdef unique_ptr[regex_program] c_prog
-        cdef regex_flags c_flags
         cdef string c_pattern = pattern.encode()
 
         cdef RegexProgram ret = RegexProgram.__new__(RegexProgram)
         with nogil:
-            c_prog = regex_program.create(c_pattern, c_flags)
+            c_prog = regex_program.create(c_pattern, flags)
 
         ret.c_obj = move(c_prog)
         return ret

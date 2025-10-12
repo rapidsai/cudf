@@ -5,12 +5,8 @@ from pylibcudf.exception_handler cimport libcudf_exception_handler
 
 cdef extern from "cudf/strings/regex/flags.hpp" namespace "cudf::strings" nogil:
 
-    # Unlike most enums in pylibcudf, this one needs to be declared not as a C++-style
-    # scoped enum (enum class) because it is used as a bitmask and therefore
-    # needs to support bitwise operations producing values outside the defined set.
-    # Cython will generate IntFlag enums for "enum", whereas it will generate IntEnum
-    # (which does not support this use case) for "enum class".
-    # https://github.com/cython/cython/pull/4877#issuecomment-1213227726
+    # Note that unlike most libcudf enums, this one is an enum and not an enum class.
+    # That allows it to be used as a bitmask with bitwise operators.
     cpdef enum regex_flags:
         DEFAULT "cudf::strings::regex_flags::DEFAULT"
         MULTILINE "cudf::strings::regex_flags::MULTILINE"
