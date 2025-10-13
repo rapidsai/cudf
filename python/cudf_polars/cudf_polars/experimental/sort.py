@@ -360,7 +360,7 @@ def _sort_partition_dataframe(
     """
     if df.num_rows == 0:  # pragma: no cover
         # Fast path for empty DataFrame
-        return {i: df for i in range(partition_count)}
+        return dict.fromkeys(range(partition_count), df)
 
     splits = find_sort_splits(
         df.select(options["by"]).table,
