@@ -316,8 +316,11 @@ class BooleanFunction(Expr):
                 ).astype(needles.dtype)
             if haystack.size:  # type: ignore[truthy-function]
                 return Column(
-                    plc.search.contains(haystack.obj, needles.obj),
-                    dtype=self.dtype,  # type: ignore[attr-defined]
+                    plc.search.contains(
+                        haystack.obj,
+                        needles.obj,  # type: ignore[attr-defined]
+                    ),
+                    dtype=self.dtype,
                 )
             return Column(
                 plc.Column.from_scalar(plc.Scalar.from_py(py_val=False), needles.size),
