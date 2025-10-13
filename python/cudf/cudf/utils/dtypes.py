@@ -204,7 +204,7 @@ def min_signed_type(x: int, min_size: int = 8) -> np.dtype:
     that can represent the integer ``x``
     """
     for int_dtype in (np.int8, np.int16, np.int32, np.int64):
-        dtype = np.dtype(int_dtype)
+        dtype: np.dtype[Any] = np.dtype(int_dtype)
         if (dtype.itemsize * 8) >= min_size:
             if np.iinfo(int_dtype).min <= x <= np.iinfo(int_dtype).max:
                 return dtype
