@@ -513,7 +513,7 @@ cdef class ChunkedParquetWriterOptionsBuilder:
         self.c_obj.metadata(metadata.c_obj)
         return self
 
-    cpdef ChunkedParquetWriterOptionsBuilder key_value_metadata(self, list metadata):
+    cpdef ChunkedParquetWriterOptionsBuilder key_value_metadata(self, metadata):
         """
         Sets Key-Value footer metadata.
 
@@ -833,7 +833,7 @@ cdef class ParquetWriterOptionsBuilder:
         self.c_obj.metadata(metadata.c_obj)
         return self
 
-    cpdef ParquetWriterOptionsBuilder key_value_metadata(self, list metadata):
+    cpdef ParquetWriterOptionsBuilder key_value_metadata(self, metadata):
         """
         Sets Key-Value footer metadata.
 

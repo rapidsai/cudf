@@ -92,7 +92,7 @@ cdef class ChunkedParquetWriterOptionsBuilder:
 
     cpdef ChunkedParquetWriterOptionsBuilder metadata(self, TableInputMetadata metadata)
 
-    cpdef ChunkedParquetWriterOptionsBuilder key_value_metadata(self, list metadata)
+    cpdef ChunkedParquetWriterOptionsBuilder key_value_metadata(self, metadata)
 
     cpdef ChunkedParquetWriterOptionsBuilder compression(
         self,
@@ -142,7 +142,7 @@ cdef class ParquetWriterOptionsBuilder:
 
     cpdef ParquetWriterOptionsBuilder metadata(self, TableInputMetadata metadata)
 
-    cpdef ParquetWriterOptionsBuilder key_value_metadata(self, list metadata)
+    cpdef ParquetWriterOptionsBuilder key_value_metadata(self, metadata)
 
     cpdef ParquetWriterOptionsBuilder compression(self, compression_type compression)
 
