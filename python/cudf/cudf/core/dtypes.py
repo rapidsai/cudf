@@ -33,7 +33,7 @@ else:
     PANDAS_NUMPY_DTYPE = pd.core.dtypes.dtypes.PandasDtype
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
 
     from typing_extension import Self
 
@@ -1318,7 +1318,7 @@ def is_decimal128_dtype(obj):
 
 
 def recursively_update_struct_names(
-    dtype: DtypeObj, child_names: dict
+    dtype: DtypeObj, child_names: Mapping[Any, Any]
 ) -> DtypeObj:
     """
     Update dtype's field names (namely StructDtype) recursively with child_names.
