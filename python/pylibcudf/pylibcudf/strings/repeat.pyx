@@ -23,7 +23,7 @@ cpdef Column repeat_strings(
     Repeat each string in the given strings column by the numbers
     of times given in another numeric column.
 
-    For details, see :cpp:func:`cudf::strings::repeat`.
+    For details, see :cpp:func:`repeat`.
 
     Parameters
     ----------

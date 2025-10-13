@@ -221,6 +221,11 @@ cdef class OrcColumnStatistics:
 
 
 cdef class ParsedOrcStatistics:
+    """
+    Holds column names and parsed file-level and stripe-level statistics.
+
+    For details, see :cpp:class:`cudf::io::parsed_orc_statistics`
+    """
 
     __hash__ = None
 
