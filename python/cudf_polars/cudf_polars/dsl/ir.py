@@ -19,7 +19,7 @@ import random
 import time
 from functools import cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, overload
 
 from typing_extensions import assert_never
 
@@ -709,38 +709,36 @@ class Scan(IR):
                         ),
                     )
                 )
-            options = plc.io.parquet.ParquetReaderOptions.builder(
+            parquet_reader_options = plc.io.parquet.ParquetReaderOptions.builder(
                 plc.io.SourceInfo(paths)
             ).build()
             if with_columns is not None:
-                options.set_columns(with_columns)
+                parquet_reader_options.set_columns(with_columns)
             if filters is not None:
-                options.set_filter(filters)
+                parquet_reader_options.set_filter(filters)
             if n_rows != -1:
-                options.set_num_rows(n_rows)
+                parquet_reader_options.set_num_rows(n_rows)
             if skip_rows != 0:
-                options.set_skip_rows(skip_rows)
+                parquet_reader_options.set_skip_rows(skip_rows)
             if parquet_options.chunked:
                 reader = plc.io.parquet.ChunkedParquetReader(
-                    options,
+                    parquet_reader_options,
                     chunk_read_limit=parquet_options.chunk_read_limit,
                     pass_read_limit=parquet_options.pass_read_limit,
                     stream=stream,
                 )
                 chunk = reader.read_chunk()
-                tbl = chunk.tbl
                 # TODO: Nested column names
                 names = chunk.column_names(include_children=False)
-                concatenated_columns = tbl.columns()
+                concatenated_columns = chunk.tbl.columns()
                 while reader.has_next():
-                    chunk = reader.read_chunk()
-                    tbl = chunk.tbl
-                    for i in range(tbl.num_columns()):
+                    columns = reader.read_chunk().tbl.columns()
+                    # Discard columns while concatenating to reduce memory footprint.
+                    # Reverse order to avoid O(n^2) list popping cost.
+                    for i in range(len(concatenated_columns) - 1, -1, -1):
                         concatenated_columns[i] = plc.concatenate.concatenate(
-                            [concatenated_columns[i], tbl._columns[i]], stream=stream
+                            [concatenated_columns[i], columns.pop()], stream=stream
                         )
-                        # Drop residual columns to save memory
-                        tbl._columns[i] = None
                 df = DataFrame.from_table(
                     plc.Table(concatenated_columns),
                     names=names,
@@ -753,7 +751,9 @@ class Scan(IR):
                         include_file_paths, paths, chunk.num_rows_per_source, df
                     )
             else:
-                tbl_w_meta = plc.io.parquet.read_parquet(options, stream=stream)
+                tbl_w_meta = plc.io.parquet.read_parquet(
+                    parquet_reader_options, stream=stream
+                )
                 # TODO: consider nested column names?
                 col_names = tbl_w_meta.column_names(include_children=False)
                 df = DataFrame.from_table(
@@ -774,15 +774,14 @@ class Scan(IR):
             json_schema: list[plc.io.json.NameAndType] = [
                 (name, typ.plc_type, []) for name, typ in schema.items()
             ]
-            plc_tbl_w_meta = plc.io.json.read_json(
-                plc.io.json._setup_json_reader_options(
-                    plc.io.SourceInfo(paths),
-                    lines=True,
-                    dtypes=json_schema,
-                    prune_columns=True,
-                ),
-                stream=stream,
+            json_reader_options = (
+                plc.io.json.JsonReaderOptions.builder(plc.io.SourceInfo(paths))
+                .lines(val=True)
+                .dtypes(json_schema)
+                .prune_columns(val=True)
+                .build()
             )
+            plc_tbl_w_meta = plc.io.json.read_json(json_reader_options, stream=stream)
             # TODO: I don't think cudf-polars supports nested types in general right now
             # (but when it does, we should pass child column names from nested columns in)
             col_names = plc_tbl_w_meta.column_names(include_children=False)
@@ -974,7 +973,7 @@ class Sink(IR):
     ) -> None:
         """Write CSV data to a sink."""
         serialize = options["serialize_options"]
-        options = (
+        csv_writer_options = (
             plc.io.csv.CsvWriterOptions.builder(target, df.table)
             .include_header(options["include_header"])
             .names(df.column_names if options["include_header"] else [])
@@ -983,7 +982,7 @@ class Sink(IR):
             .inter_column_delimiter(chr(serialize["separator"]))
             .build()
         )
-        plc.io.csv.write_csv(options, stream=df.stream)
+        plc.io.csv.write_csv(csv_writer_options, stream=df.stream)
 
     @classmethod
     def _write_json(cls, target: plc.io.SinkInfo, df: DataFrame) -> None:
@@ -1009,6 +1008,22 @@ class Sink(IR):
         for i, name in enumerate(df.column_names):
             metadata.column_metadata[i].set_name(name)
         return metadata
+
+    @overload
+    @staticmethod
+    def _apply_parquet_writer_options(
+        builder: plc.io.parquet.ChunkedParquetWriterOptionsBuilder,
+        options: dict[str, Any],
+    ) -> plc.io.parquet.ChunkedParquetWriterOptionsBuilder: ...
+
+    # TODO: Remove the type ignore once we actually include pylibcudf type stubs in
+    # checking. Without those these types resolve to Any and the overloads collide.
+    @overload
+    @staticmethod
+    def _apply_parquet_writer_options(  # type: ignore[overload-cannot-match]
+        builder: plc.io.parquet.ParquetWriterOptionsBuilder,
+        options: dict[str, Any],
+    ) -> plc.io.parquet.ParquetWriterOptionsBuilder: ...
 
     @staticmethod
     def _apply_parquet_writer_options(
@@ -1055,13 +1070,15 @@ class Sink(IR):
             and parquet_options.n_output_chunks != 1
             and df.table.num_rows() != 0
         ):
-            builder = plc.io.parquet.ChunkedParquetWriterOptions.builder(
+            chunked_builder = plc.io.parquet.ChunkedParquetWriterOptions.builder(
                 target
             ).metadata(metadata)
-            builder = cls._apply_parquet_writer_options(builder, options)
-            writer_options = builder.build()
+            chunked_builder = cls._apply_parquet_writer_options(
+                chunked_builder, options
+            )
+            chunked_writer_options = chunked_builder.build()
             writer = plc.io.parquet.ChunkedParquetWriter.from_options(
-                writer_options, stream=df.stream
+                chunked_writer_options, stream=df.stream
             )
 
             # TODO: Can be based on a heuristic that estimates chunk size
@@ -1820,7 +1837,12 @@ class ConditionalJoin(IR):
 
         def __init__(self, predicate: expr.Expr):
             self.predicate = predicate
-            self.ast = to_ast(predicate)
+            ast_result = to_ast(predicate)
+            if ast_result is None:
+                raise NotImplementedError(
+                    f"Conditional join with predicate {predicate}"
+                )  # pragma: no cover; polars never delivers expressions we can't handle
+            self.ast = ast_result
 
         def __reduce__(self) -> tuple[Any, ...]:
             """Pickle a Predicate object."""
@@ -1872,10 +1894,6 @@ class ConditionalJoin(IR):
         assert not nulls_equal
         assert not coalesce
         assert maintain_order == "none"
-        if predicate_wrapper.ast is None:
-            raise NotImplementedError(
-                f"Conditional join with predicate {predicate}"
-            )  # pragma: no cover; polars never delivers expressions we can't handle
         self._non_child_args = (predicate_wrapper, options)
 
     @classmethod
@@ -2141,18 +2159,18 @@ class Join(IR):
                 for col in template
             ]
 
-        columns = [
+        result = [
             Column(new, col.dtype, name=rename(col.name))
             for new, col in zip(columns, template, strict=True)
         ]
 
         if left:
-            columns = [
+            result = [
                 col.sorted_like(orig)
-                for col, orig in zip(columns, template, strict=True)
+                for col, orig in zip(result, template, strict=True)
             ]
 
-        return columns
+        return result
 
     @classmethod
     @log_do_evaluate

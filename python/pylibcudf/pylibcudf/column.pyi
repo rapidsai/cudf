@@ -118,5 +118,5 @@ class ListColumnView:
     def offsets(self) -> Column: ...
 
 def is_c_contiguous(
-    shape: Sequence[int], strides: Sequence[int], itemsize: int
+    shape: Sequence[int], strides: Sequence[int] | None, itemsize: int
 ) -> bool: ...
