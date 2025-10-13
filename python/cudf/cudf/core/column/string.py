@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import itertools
-from functools import cached_property
+import re
+from collections.abc import Callable
+from functools import cached_property, lru_cache
 from typing import TYPE_CHECKING, cast
 
 import numpy as np
@@ -50,6 +52,29 @@ if TYPE_CHECKING:
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.timedelta import TimeDeltaColumn
     from cudf.core.dtypes import DecimalDtype
+
+
+# For now all supported re flags have matching names in libcudf. If that ever changes
+# this construction will need to be updated with more explicit mapping.
+_FLAG_MAP = {
+    getattr(re, flag): getattr(plc.strings.regex_flags.RegexFlags, flag)
+    for flag in ("MULTILINE", "DOTALL")
+}
+
+
+@lru_cache
+def plc_flags_from_re_flags(
+    flags: re.RegexFlag,
+) -> plc.strings.regex_flags.RegexFlags:
+    # Convert Python re flags to pylibcudf RegexFlags
+    plc_flags = plc.strings.regex_flags.RegexFlags(0)
+    for re_flag, plc_flag in _FLAG_MAP.items():
+        if flags & re_flag:
+            plc_flags |= plc_flag
+            flags &= ~re_flag
+    if flags:
+        raise ValueError(f"Unsupported re flags: {flags}")
+    return plc_flags
 
 
 class StringColumn(ColumnBase):
@@ -323,7 +348,9 @@ class StringColumn(ColumnBase):
             if not is_pandas_nullable_extension_dtype(dtype):
                 result = result.fillna(False)
             return result._with_type_metadata(dtype)  # type: ignore[return-value]
-        elif dtype.kind in {"i", "u"}:
+
+        cast_func: Callable[[plc.Column, plc.DataType], plc.Column]
+        if dtype.kind in {"i", "u"}:
             if not self.is_integer().all():
                 raise ValueError(
                     "Could not convert strings to integer "
@@ -362,7 +389,9 @@ class StringColumn(ColumnBase):
             raise ValueError(
                 "Cannot convert `None` value to datetime or timedelta."
             )
-        elif dtype.kind == "M":  # type: ignore[union-attr]
+
+        casting_func: Callable[[plc.Column, plc.DataType, str], plc.Column]
+        if dtype.kind == "M":  # type: ignore[union-attr]
             if format.endswith("%z"):
                 raise NotImplementedError(
                     "cuDF does not yet support timezone-aware datetimes"
@@ -587,10 +616,10 @@ class StringColumn(ColumnBase):
             }:
                 if isinstance(other, pa.Scalar):
                     other = pa_scalar_to_plc_scalar(other)
-                lhs, rhs = (other, self) if reflect else (self, other)
+                lhs_op, rhs_op = (other, self) if reflect else (self, other)
                 return binaryop.binaryop(
-                    lhs=lhs,
-                    rhs=rhs,
+                    lhs=lhs_op,
+                    rhs=rhs_op,
                     op=op,
                     dtype=get_dtype_of_same_kind(
                         self.dtype, np.dtype(np.bool_)
@@ -1062,7 +1091,7 @@ class StringColumn(ColumnBase):
         self,
         delimiter: plc.Scalar,
         maxsplit: int,
-        method: Callable[[plc.Column, plc.Scalar, int], plc.Column],
+        method: Callable[[plc.Column, plc.Scalar, int], plc.Table],
     ) -> dict[int, Self]:
         plc_table = method(
             self.to_pylibcudf(mode="read"),
@@ -1086,7 +1115,7 @@ class StringColumn(ColumnBase):
     def _partition(
         self,
         delimiter: plc.Scalar,
-        method: Callable[[plc.Column, plc.Scalar], plc.Column],
+        method: Callable[[plc.Column, plc.Scalar], plc.Table],
     ) -> dict[int, Self]:
         plc_table = method(
             self.to_pylibcudf(mode="read"),
@@ -1180,7 +1209,10 @@ class StringColumn(ColumnBase):
     def extract(self, pattern: str, flags: int) -> dict[int, Self]:
         plc_table = plc.strings.extract.extract(
             self.to_pylibcudf(mode="read"),
-            plc.strings.regex_program.RegexProgram.create(pattern, flags),
+            plc.strings.regex_program.RegexProgram.create(
+                pattern,
+                plc_flags_from_re_flags(flags),
+            ),
         )
         return dict(
             enumerate(
@@ -1192,7 +1224,10 @@ class StringColumn(ColumnBase):
     def contains_re(self, pattern: str, flags: int) -> Self:
         plc_column = plc.strings.contains.contains_re(
             self.to_pylibcudf(mode="read"),
-            plc.strings.regex_program.RegexProgram.create(pattern, flags),
+            plc.strings.regex_program.RegexProgram.create(
+                pattern,
+                plc_flags_from_re_flags(flags),
+            ),
         )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
@@ -1400,7 +1435,9 @@ class StringColumn(ColumnBase):
     def count_re(self, pattern: str, flags: int) -> NumericalColumn:
         plc_result = plc.strings.contains.count_re(
             self.to_pylibcudf(mode="read"),
-            plc.strings.regex_program.RegexProgram.create(pattern, flags),
+            plc.strings.regex_program.RegexProgram.create(
+                pattern, plc_flags_from_re_flags(flags)
+            ),
         )
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 
@@ -1415,7 +1452,9 @@ class StringColumn(ColumnBase):
     ) -> Self:
         plc_result = method(
             self.to_pylibcudf(mode="read"),
-            plc.strings.regex_program.RegexProgram.create(pat, flags),
+            plc.strings.regex_program.RegexProgram.create(
+                pat, plc_flags_from_re_flags(flags)
+            ),
         )
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 
@@ -1464,7 +1503,9 @@ class StringColumn(ColumnBase):
     def matches_re(self, pattern: str, flags: int) -> Self:
         plc_result = plc.strings.contains.matches_re(
             self.to_pylibcudf(mode="read"),
-            plc.strings.regex_program.RegexProgram.create(pattern, flags),
+            plc.strings.regex_program.RegexProgram.create(
+                pattern, plc_flags_from_re_flags(flags)
+            ),
         )
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 

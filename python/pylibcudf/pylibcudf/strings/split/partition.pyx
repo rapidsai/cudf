@@ -28,7 +28,7 @@ cpdef Table partition(
     Returns a set of 3 columns by splitting each string using the
     specified delimiter.
 
-    For details, see :cpp:func:`cudf::strings::partition`.
+    For details, see :cpp:func:`partition`.
 
     Parameters
     ----------
@@ -77,7 +77,7 @@ cpdef Table rpartition(
     Returns a set of 3 columns by splitting each string using the
     specified delimiter starting from the end of each string.
 
-    For details, see :cpp:func:`cudf::strings::rpartition`.
+    For details, see :cpp:func:`rpartition`.
 
     Parameters
     ----------
