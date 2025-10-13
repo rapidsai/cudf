@@ -327,7 +327,8 @@ class TemporalBaseColumn(ColumnBase):
                 self.time_unit,  # type: ignore[call-overload]
             )
             max_to_res = np.timedelta64(
-                np.iinfo(self._UNDERLYING_DTYPE).max, to_res
+                np.iinfo(self._UNDERLYING_DTYPE).max,
+                to_res,  # type: ignore[call-overload]
             ).astype(f"m8[{self.time_unit}]", copy=False)
             return bool(max_dist <= max_to_res and min_dist <= max_to_res)
         elif (
