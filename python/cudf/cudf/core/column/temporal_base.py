@@ -314,9 +314,13 @@ class TemporalBaseColumn(ColumnBase):
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if to_dtype.kind == self.dtype.kind:  # type: ignore[union-attr]
             to_res, _ = np.datetime_data(to_dtype)
+            # type: ignore[call-overload]: numpy stubs only accept literal strings
+            # for time units (e.g., "ns", "us") to allow compile-time validation,
+            # but we're passing variables (self.time_unit) with time units that
+            # we know are valid at runtime
             max_dist = np.timedelta64(
                 self.max().astype(self._UNDERLYING_DTYPE, copy=False),
-                self.time_unit,
+                self.time_unit,  # type: ignore[call-overload]
             )
             min_dist = np.timedelta64(
                 self.min().astype(self._UNDERLYING_DTYPE, copy=False),
