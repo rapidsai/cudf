@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeGuard
 
 import numpy as np
 import pandas as pd
@@ -284,18 +284,26 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
     # Early exit for categoricals since they're not hashable and therefore
     # can't be put in a set.
     if any(isinstance(dtype, cudf.CategoricalDtype) for dtype in dtypes):
+        # Filter to only CategoricalDtype for type narrowing
+        cat_dtypes = [
+            d
+            for d in dtypes
+            if isinstance(d, cudf.CategoricalDtype)
+            and d._categories is not None
+        ]
         if all(
-            (
-                isinstance(dtype, cudf.CategoricalDtype)
-                and (not dtype.ordered if hasattr(dtype, "ordered") else True)
-            )
-            for dtype in dtypes
+            (not dtype.ordered if hasattr(dtype, "ordered") else True)
+            for dtype in cat_dtypes
         ):
-            if len({dtype._categories.dtype for dtype in dtypes}) == 1:
+            # Extract categories - we know they're not None from the filter above
+            categories_list = []
+            for dtype in cat_dtypes:
+                assert dtype._categories is not None
+                categories_list.append(dtype._categories)
+
+            if len({cat.dtype for cat in categories_list}) == 1:
                 return cudf.CategoricalDtype(
-                    cudf.core.column.concat_columns(
-                        [dtype._categories for dtype in dtypes]
-                    ).unique()
+                    cudf.core.column.concat_columns(categories_list).unique()
                 )
             else:
                 raise NotImplementedError(
@@ -451,7 +459,9 @@ def is_pandas_nullable_numpy_dtype(dtype_to_check) -> bool:
     )
 
 
-def is_pandas_nullable_extension_dtype(dtype_to_check) -> bool:
+def is_pandas_nullable_extension_dtype(
+    dtype_to_check: Any,
+) -> TypeGuard[pd.core.dtypes.base.ExtensionDtype]:
     if is_pandas_nullable_numpy_dtype(dtype_to_check) or isinstance(
         dtype_to_check, pd.ArrowDtype
     ):
