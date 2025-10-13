@@ -123,7 +123,7 @@ cdef class ParquetWriterOptions:
 
     cpdef void set_partitions(self, list partitions)
 
-    cpdef void set_column_chunks_file_paths(self, list file_paths)
+    cpdef void set_column_chunks_file_paths(self, file_paths)
 
     cpdef void set_row_group_size_bytes(self, size_t size_bytes)
 

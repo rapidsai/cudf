@@ -724,7 +724,7 @@ cdef class ParquetWriterOptions:
 
         self.c_obj.set_partitions(c_partions)
 
-    cpdef void set_column_chunks_file_paths(self, list file_paths):
+    cpdef void set_column_chunks_file_paths(self, file_paths):
         """
         Sets column chunks file path to be set in the raw output metadata.
 
