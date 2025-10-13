@@ -324,7 +324,7 @@ class TemporalBaseColumn(ColumnBase):
             )
             min_dist = np.timedelta64(
                 self.min().astype(self._UNDERLYING_DTYPE, copy=False),
-                self.time_unit,
+                self.time_unit,  # type: ignore[call-overload]
             )
             max_to_res = np.timedelta64(
                 np.iinfo(self._UNDERLYING_DTYPE).max, to_res
