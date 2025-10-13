@@ -321,9 +321,15 @@ CUDF_KERNEL void special_tokens_kernel(uint32_t* d_normalized,
     return;
   }
 
-  // fix up chars to remove the extra spaces
+  // fix up chars to remove the extra spaces and convert to upper-case
   *(begin + 1) = 0;  // removes space after '['
   *(match - 1) = 0;  // removes space before ']'
+  auto itr     = begin + 2;
+  while (itr < match - 2) {
+    auto ch = *itr;
+    if (ch >= 'a' && ch <= 'z') { *itr = ch - 'a' + 'A'; }
+    ++itr;
+  }
 }
 
 /**
