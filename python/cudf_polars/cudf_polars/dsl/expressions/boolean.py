@@ -188,7 +188,7 @@ class BooleanFunction(Expr):
             (column,) = columns
             is_any = self.name is BooleanFunction.Name.Any
             agg = plc.aggregation.any() if is_any else plc.aggregation.all()
-            result = plc.reduce.reduce(column.obj, agg, self.dtype.plc_type)
+            scalar_result = plc.reduce.reduce(column.obj, agg, self.dtype.plc_type)
             if not ignore_nulls and column.null_count > 0:
                 #      Truth tables
                 #     Any         All
@@ -200,14 +200,14 @@ class BooleanFunction(Expr):
                 #
                 # If the input null count was non-zero, we must
                 # post-process the result to insert the correct value.
-                h_result = result.to_py()
+                h_result = scalar_result.to_py()
                 if (is_any and not h_result) or (not is_any and h_result):
                     # Any                     All
                     # False || Null => Null   True && Null => Null
                     return Column(
                         plc.Column.all_null_like(column.obj, 1), dtype=self.dtype
                     )
-            return Column(plc.Column.from_scalar(result, 1), dtype=self.dtype)
+            return Column(plc.Column.from_scalar(scalar_result, 1), dtype=self.dtype)
         if self.name is BooleanFunction.Name.IsNull:
             (column,) = columns
             return Column(plc.unary.is_null(column.obj), dtype=self.dtype)
@@ -305,18 +305,19 @@ class BooleanFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name is BooleanFunction.Name.IsIn:
-            needles, haystack = columns
-            if haystack.obj.type().id() == plc.TypeId.LIST:
+            needles, haystack = columns  # type: ignore[assignment]
+            if haystack.obj.type().id() == plc.TypeId.LIST:  # type: ignore[attr-defined]
                 # Unwrap values from the list column
                 # the type: ignore is safe because we know that the type ID is LIST,
                 # which always has an inner attribute.
-                haystack = Column(
-                    haystack.obj.children()[1],
+                haystack = Column(  # type: ignore[assignment]
+                    haystack.obj.children()[1],  # type: ignore[attr-defined]
                     dtype=DataType(haystack.dtype.polars_type.inner),  # type: ignore[attr-defined]
                 ).astype(needles.dtype)
-            if haystack.size:
+            if haystack.size:  # type: ignore[truthy-function]
                 return Column(
-                    plc.search.contains(haystack.obj, needles.obj), dtype=self.dtype
+                    plc.search.contains(haystack.obj, needles.obj),
+                    dtype=self.dtype,  # type: ignore[attr-defined]
                 )
             return Column(
                 plc.Column.from_scalar(plc.Scalar.from_py(py_val=False), needles.size),
