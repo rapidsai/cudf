@@ -1378,14 +1378,12 @@ def _read_parquet(
             del tbl_w_meta
 
             while reader.has_next():
-                tbl = reader.read_chunk().tbl
-
-                for i in range(tbl.num_columns()):
+                columns = reader.read_chunk().tbl.columns()
+                # Iterate in reverse to avoid O(n²) cost from popping
+                for i in range(len(concatenated_columns) - 1, -1, -1):
                     concatenated_columns[i] = plc.concatenate.concatenate(
-                        [concatenated_columns[i], tbl._columns[i]]
+                        [concatenated_columns[i], columns.pop()]
                     )
-                    # Drop residual columns to save memory
-                    tbl._columns[i] = None
 
             data = {
                 name: ColumnBase.from_pylibcudf(col)
