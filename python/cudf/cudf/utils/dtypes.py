@@ -218,7 +218,7 @@ def min_unsigned_type(x: int, min_size: int = 8) -> np.dtype:
     that can represent the integer ``x``
     """
     for int_dtype in (np.uint8, np.uint16, np.uint32, np.uint64):
-        dtype = np.dtype(int_dtype)
+        dtype: np.dtype[Any] = np.dtype(int_dtype)
         if (dtype.itemsize * 8) >= min_size:
             if 0 <= x <= np.iinfo(int_dtype).max:
                 return dtype
