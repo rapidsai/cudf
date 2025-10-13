@@ -125,6 +125,7 @@ def test_select_fill_null_with_strategy(df):
             pl.col("b").n_unique(),
             (pl.col("c").n_unique() + 1),
         ),
+        (pl.col("a").min(), pl.col("b"), pl.col("c").max()),
     ],
 )
 def test_select_aggs(df, engine, aggs):
