@@ -180,6 +180,11 @@ class StructColumn(ColumnBase):
                 f"Can not set {type(value).__name__} into StructColumn"
             )
 
+    def copy(self, deep: bool = True) -> Self:
+        # Since struct columns are immutable, both deep and
+        # shallow copies share the underlying device data and mask.
+        return super().copy(deep=False)
+
     @property
     def __cuda_array_interface__(self):
         raise NotImplementedError(
