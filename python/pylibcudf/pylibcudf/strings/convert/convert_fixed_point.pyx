@@ -22,7 +22,7 @@ cpdef Column to_fixed_point(
     Returns a new fixed-point column parsing decimal values from the
     provided strings column.
 
-    For details, see :cpp:func:`cudf::strings::to_fixed_point`
+    For details, see :cpp:func:`to_fixed_point`
 
     Parameters
     ----------
@@ -61,7 +61,7 @@ cpdef Column from_fixed_point(
     Returns a new strings column converting the fixed-point values
     into a strings column.
 
-    For details, see :cpp:func:`cudf::strings::from_fixed_point`
+    For details, see :cpp:func:`from_fixed_point`
 
     Parameters
     ----------
@@ -97,7 +97,7 @@ cpdef Column is_fixed_point(
     Returns a boolean column identifying strings in which all
     characters are valid for conversion to fixed-point.
 
-    For details, see :cpp:func:`cudf::strings::is_fixed_point`
+    For details, see :cpp:func:`is_fixed_point`
 
     Parameters
     ----------

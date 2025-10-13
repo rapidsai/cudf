@@ -26,7 +26,7 @@ import sys
 import tempfile
 import warnings
 import xml.etree.ElementTree as ET
-from enum import IntEnum
+from enum import IntEnum, IntFlag
 from typing import Any
 
 import cudf
@@ -684,7 +684,7 @@ class PLCIntEnumDocumenter(ClassDocumenter):
     ) -> bool:
         try:
             return issubclass(
-                member, IntEnum
+                member, (IntEnum, IntFlag)
             ) and member.__module__.startswith("pylibcudf")
         except TypeError:
             return False
@@ -703,7 +703,7 @@ class PLCIntEnumDocumenter(ClassDocumenter):
 
         if self.object.__name__ != "Kind":
             self.add_line(
-                f"See also :cpp:enum:`cudf::{self.object.__name__}`.",
+                f"See also :cpp:enum:`{self.object.__name__}`.",
                 source_name,
             )
         self.add_line("", source_name)
