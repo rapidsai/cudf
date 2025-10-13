@@ -44,7 +44,7 @@ class TemporalBaseColumn(ColumnBase):
     """
 
     _PANDAS_NA_VALUE = pd.NaT
-    _UNDERLYING_DTYPE = np.dtype(np.int64)
+    _UNDERLYING_DTYPE: np.dtype[np.int64] = np.dtype(np.int64)
     _NP_SCALAR: np.datetime64 | np.timedelta64
     _PD_SCALAR: pd.Timestamp | pd.Timedelta
 
