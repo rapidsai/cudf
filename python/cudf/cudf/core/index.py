@@ -3730,7 +3730,6 @@ class DatetimeIndex(Index):
         if len(uniques) <= 4:
             # inspect a small host copy for special cases
             uniques_host = uniques.to_arrow().to_pylist()
-
         if len(uniques) == 1:
             # base case of a fixed frequency
             freq = uniques_host[0]
@@ -3791,10 +3790,17 @@ class DatetimeIndex(Index):
                 if self.is_month_end.all():
                     return cudf.DateOffset._from_freqstr("ME")
             else:
-                return None
+                raise NotImplementedError
         else:
             return None
         return None
+
+    @property
+    def _safe_inferred_freq(self):
+        try:
+            return self.inferred_freq
+        except NotImplementedError:
+            return None
 
     def _get_slice_frequency(self, slc=None):
         if slc.step in (1, None):

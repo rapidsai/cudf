@@ -1559,7 +1559,7 @@ class Series(SingleColumnFrame, IndexedFrame):
 
         result = cls._from_column(col, name=name, index=result_index)
         if isinstance(result.index, DatetimeIndex):
-            result.index._freq = result.index.inferred_freq
+            result.index._freq = result.index._safe_inferred_freq
         return result
 
     @property  # type: ignore

@@ -2071,7 +2071,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             out.index.names = objs[0].index.names
 
         if isinstance(out.index, DatetimeIndex):
-            out.index._freq = out.index.inferred_freq
+            out.index._freq = out.index._safe_inferred_freq
         return out
 
     def astype(
