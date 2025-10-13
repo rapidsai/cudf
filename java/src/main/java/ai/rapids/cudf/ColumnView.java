@@ -1353,7 +1353,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Find and return a scalar of type INT32 containing the index of the minimum value in the column.
+   * Find and return a scalar of type INT32 containing index of the minimum value in the column.
+   * If there are multiple minimum values, index of the first encountered minimum value is returned.
+   * If the input column is empty or all nulls, an empty scalar is returned.
+   *
+   * If the input is floating point type and contains NaNs, the result is undefined.
    */
   public Scalar argMin() {
     return reduce(ReductionAggregation.argMin(), DType.INT32);
@@ -1361,6 +1365,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Find and return a scalar of type INT32 containing the index of the maximum value in the column.
+   * If there are multiple maximum values, index of the first encountered maximum value is returned.
+   * If the input column is empty or all nulls, an empty scalar is returned.
+   *
+   * If the input is floating point type and contains NaNs, the result is undefined.
    */
   public Scalar argMax() {
     return reduce(ReductionAggregation.argMax(), DType.INT32);
