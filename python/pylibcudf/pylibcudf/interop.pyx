@@ -143,7 +143,7 @@ cpdef Table from_dlpack(
     """
     Convert a DLPack DLTensor into a cudf table.
 
-    For details, see :cpp:func:`cudf::from_dlpack`
+    For details, see :cpp:func:`from_dlpack`
 
     Parameters
     ----------
@@ -188,7 +188,7 @@ cpdef object to_dlpack(Table input, Stream stream=None, DeviceMemoryResource mr=
     """
     Convert a cudf table into a DLPack DLTensor.
 
-    For details, see :cpp:func:`cudf::to_dlpack`
+    For details, see :cpp:func:`to_dlpack`
 
     Parameters
     ----------
