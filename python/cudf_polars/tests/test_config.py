@@ -252,6 +252,35 @@ def test_validate_cluster() -> None:
         )
 
 
+def test_scheduler_deprecated() -> None:
+    # Test that using deprecated scheduler parameter emits warning
+    # and correctly maps to cluster parameter
+
+    # Test scheduler="synchronous" maps to cluster="single"
+    with pytest.warns(FutureWarning, match="'scheduler' parameter is deprecated"):
+        config = ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"scheduler": "synchronous"},
+            )
+        )
+    assert config.executor.name == "streaming"
+    assert config.executor.cluster == "single"
+    assert config.executor.scheduler is None  # Should be cleared after mapping
+
+    # Test scheduler="distributed" maps to cluster="distributed"
+    with pytest.warns(FutureWarning, match="'scheduler' parameter is deprecated"):
+        config = ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"scheduler": "distributed"},
+            )
+        )
+    assert config.executor.name == "streaming"
+    assert config.executor.cluster == "distributed"
+    assert config.executor.scheduler is None  # Should be cleared after mapping
+
+
 def test_validate_shuffle_method_defaults(
     *,
     rapidsmpf_distributed_available: bool,
