@@ -2243,6 +2243,15 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         f"{reduction_op} not implemented for decimal types."
                     )
                 precision = max(min(new_p, col_dtype.MAX_PRECISION), 0)  # type: ignore[union-attr]
+                # Narrow type for mypy - we know col_dtype is a decimal type from the check above
+                assert isinstance(
+                    col_dtype,
+                    (
+                        cudf.Decimal32Dtype,
+                        cudf.Decimal64Dtype,
+                        cudf.Decimal128Dtype,
+                    ),
+                )
                 new_dtype = type(col_dtype)(precision, scale)
                 result_col = result_col.astype(new_dtype)
             elif isinstance(col_dtype, IntervalDtype):
