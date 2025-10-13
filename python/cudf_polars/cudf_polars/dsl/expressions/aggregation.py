@@ -199,7 +199,8 @@ class Agg(Expr):
         return self._reduce(column, request=plc.aggregation.sum(), stream=stream)
 
     def _min(self, column: Column, *, propagate_nans: bool, stream: Stream) -> Column:
-        if propagate_nans and column.nan_count > 0:
+        nan_count = column.nan_count(stream=stream)
+        if propagate_nans and nan_count > 0:
             return Column(
                 plc.Column.from_scalar(
                     plc.Scalar.from_py(
@@ -210,12 +211,13 @@ class Agg(Expr):
                 name=column.name,
                 dtype=self.dtype,
             )
-        if column.nan_count > 0:
+        if nan_count > 0:
             column = column.mask_nans(stream=stream)
         return self._reduce(column, request=plc.aggregation.min(), stream=stream)
 
     def _max(self, column: Column, *, propagate_nans: bool, stream: Stream) -> Column:
-        if propagate_nans and column.nan_count > 0:
+        nan_count = column.nan_count(stream=stream)
+        if propagate_nans and nan_count > 0:
             return Column(
                 plc.Column.from_scalar(
                     plc.Scalar.from_py(
@@ -226,7 +228,7 @@ class Agg(Expr):
                 name=column.name,
                 dtype=self.dtype,
             )
-        if column.nan_count > 0:
+        if nan_count > 0:
             column = column.mask_nans(stream=stream)
         return self._reduce(column, request=plc.aggregation.max(), stream=stream)
 

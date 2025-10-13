@@ -822,7 +822,9 @@ class Scan(IR):
         if predicate is None:
             return df
         else:
-            (mask,) = broadcast(predicate.evaluate(df), target_length=df.num_rows)
+            (mask,) = broadcast(
+                predicate.evaluate(df), target_length=df.num_rows, stream=df.stream
+            )
             return df.filter(mask)
 
 
@@ -1315,7 +1317,7 @@ class Select(IR):
         # Handle any broadcasting
         columns = [e.evaluate(df) for e in exprs]
         if should_broadcast:
-            columns = broadcast(*columns)
+            columns = broadcast(*columns, stream=df.stream)
         return DataFrame(columns, stream=df.stream)
 
     def evaluate(self, *, cache: CSECache, timer: Timer | None) -> DataFrame:
@@ -1397,7 +1399,7 @@ class Reduce(IR):
         df: DataFrame,
     ) -> DataFrame:  # pragma: no cover; not exposed by polars yet
         """Evaluate and return a dataframe."""
-        columns = broadcast(*(e.evaluate(df) for e in exprs))
+        columns = broadcast(*(e.evaluate(df) for e in exprs), stream=df.stream)
         assert all(column.size == 1 for column in columns)
         return DataFrame(columns, stream=df.stream)
 
@@ -1500,7 +1502,11 @@ class Rolling(IR):
         df: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        keys = broadcast(*(k.evaluate(df) for k in keys_in), target_length=df.num_rows)
+        keys = broadcast(
+            *(k.evaluate(df) for k in keys_in),
+            target_length=df.num_rows,
+            stream=df.stream,
+        )
         orderby = index.evaluate(df)
         # Polars casts integral orderby to int64, but only for calculating window bounds
         if (
@@ -1632,7 +1638,11 @@ class GroupBy(IR):
         df: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        keys = broadcast(*(k.evaluate(df) for k in keys_in), target_length=df.num_rows)
+        keys = broadcast(
+            *(k.evaluate(df) for k in keys_in),
+            target_length=df.num_rows,
+            stream=df.stream,
+        )
         sorted = (
             plc.types.Sorted.YES
             if all(k.is_sorted for k in keys)
@@ -1678,7 +1688,7 @@ class GroupBy(IR):
             Column(grouped_key, name=key.name, dtype=key.dtype)
             for key, grouped_key in zip(keys, group_keys.columns(), strict=True)
         ]
-        broadcasted = broadcast(*result_keys, *results)
+        broadcasted = broadcast(*result_keys, *results, stream=df.stream)
         # Handle order preservation of groups
         if maintain_order and not sorted:
             # The order we want
@@ -2232,10 +2242,12 @@ class Join(IR):
             return DataFrame([*left_cols, *right_cols], stream=stream).slice(zlice)
         # TODO: Waiting on clarity based on https://github.com/pola-rs/polars/issues/17184
         left_on = DataFrame(
-            broadcast(*(e.evaluate(left) for e in left_on_exprs)), stream=stream
+            broadcast(*(e.evaluate(left) for e in left_on_exprs), stream=stream),
+            stream=stream,
         )
         right_on = DataFrame(
-            broadcast(*(e.evaluate(right) for e in right_on_exprs)), stream=stream
+            broadcast(*(e.evaluate(right) for e in right_on_exprs), stream=stream),
+            stream=stream,
         )
         join_cuda_streams(
             downstreams=(stream,), upstreams=(left_on.stream, right_on.stream)
@@ -2362,7 +2374,9 @@ class HStack(IR):
         columns = [c.evaluate(df) for c in exprs]
         if should_broadcast:
             columns = broadcast(
-                *columns, target_length=df.num_rows if df.num_columns != 0 else None
+                *columns,
+                target_length=df.num_rows if df.num_columns != 0 else None,
+                stream=df.stream,
             )
         else:
             # Polars ensures this is true, but let's make sure nothing
@@ -2520,7 +2534,9 @@ class Sort(IR):
         df: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        sort_keys = broadcast(*(k.evaluate(df) for k in by), target_length=df.num_rows)
+        sort_keys = broadcast(
+            *(k.evaluate(df) for k in by), target_length=df.num_rows, stream=df.stream
+        )
         do_sort = plc.sorting.stable_sort_by_key if stable else plc.sorting.sort_by_key
         table = do_sort(
             df.table,
@@ -2588,7 +2604,9 @@ class Filter(IR):
     @nvtx_annotate_cudf_polars(message="Filter")
     def do_evaluate(cls, mask_expr: expr.NamedExpr, df: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
-        (mask,) = broadcast(mask_expr.evaluate(df), target_length=df.num_rows)
+        (mask,) = broadcast(
+            mask_expr.evaluate(df), target_length=df.num_rows, stream=df.stream
+        )
         return df.filter(mask)
 
 
@@ -2610,7 +2628,9 @@ class Projection(IR):
         """Evaluate and return a dataframe."""
         # This can reorder things.
         columns = broadcast(
-            *(df.column_map[name] for name in schema), target_length=df.num_rows
+            *(df.column_map[name] for name in schema),
+            target_length=df.num_rows,
+            stream=df.stream,
         )
         return DataFrame(columns, stream=df.stream)
 
@@ -2951,7 +2971,10 @@ class HConcat(IR):
         # Used to recombine decomposed expressions
         if should_broadcast:
             return DataFrame(
-                broadcast(*itertools.chain.from_iterable(df.columns for df in dfs)),
+                broadcast(
+                    *itertools.chain.from_iterable(df.columns for df in dfs),
+                    stream=stream,
+                ),
                 stream=stream,
             )
 

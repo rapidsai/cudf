@@ -323,6 +323,7 @@ class StringFunction(Expr):
             broadcasted = broadcast(
                 *columns,
                 target_length=max(non_unit_sizes) if non_unit_sizes else None,
+                stream=df.stream,
             )
 
             delimiter, ignore_nulls = self.options
@@ -423,7 +424,7 @@ class StringFunction(Expr):
             if literal:
                 pat = arg.evaluate(df, context=context)
                 pattern = (
-                    pat.obj_scalar
+                    pat.obj_scalar(stream=df.stream)
                     if pat.is_scalar and pat.size != column.size
                     else pat.obj
                 )
@@ -677,7 +678,9 @@ class StringFunction(Expr):
             else:
                 side = plc.strings.SideType.BOTH
             return Column(
-                plc.strings.strip.strip(column.obj, side, chars.obj_scalar),
+                plc.strings.strip.strip(
+                    column.obj, side, chars.obj_scalar(stream=df.stream)
+                ),
                 dtype=self.dtype,
             )
 
@@ -751,7 +754,7 @@ class StringFunction(Expr):
             return Column(
                 plc.strings.find.ends_with(
                     column.obj,
-                    suffix.obj_scalar
+                    suffix.obj_scalar(stream=df.stream)
                     if column.size != suffix.size and suffix.is_scalar
                     else suffix.obj,
                 ),
@@ -762,7 +765,7 @@ class StringFunction(Expr):
             return Column(
                 plc.strings.find.starts_with(
                     column.obj,
-                    prefix.obj_scalar
+                    prefix.obj_scalar(stream=df.stream)
                     if column.size != prefix.size and prefix.is_scalar
                     else prefix.obj,
                 ),
@@ -831,8 +834,8 @@ class StringFunction(Expr):
             return Column(
                 plc.strings.replace.replace(
                     col_column.obj,
-                    col_target.obj_scalar,
-                    col_repl.obj_scalar,
+                    col_target.obj_scalar(stream=df.stream),
+                    col_repl.obj_scalar(stream=df.stream),
                     maxrepl=n,
                 ),
                 dtype=self.dtype,

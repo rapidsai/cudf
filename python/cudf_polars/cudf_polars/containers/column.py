@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import functools
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -84,6 +83,8 @@ class Column:
         self.name = name
         self.dtype = dtype
         self.set_sorted(is_sorted=is_sorted, order=order, null_order=null_order)
+        self._nan_count: int | None = None
+        self._obj_scalar: plc.Scalar | None = None
 
     @classmethod
     def deserialize(
@@ -165,8 +166,7 @@ class Column:
             "dtype": pl.polars.dtype_str_repr(self.dtype.polars_type),
         }
 
-    @functools.cached_property  # TODO(Tom): property -> method
-    def obj_scalar(self) -> plc.Scalar:
+    def obj_scalar(self, stream: Stream) -> plc.Scalar:
         """
         A copy of the column object as a pylibcudf Scalar.
 
@@ -181,7 +181,9 @@ class Column:
         """
         if not self.is_scalar:
             raise ValueError(f"Cannot convert a column of length {self.size} to scalar")
-        return plc.copying.get_element(self.obj, 0)
+        if self._obj_scalar is None:
+            self._obj_scalar = plc.copying.get_element(self.obj, 0, stream=stream)
+        return self._obj_scalar
 
     def rename(self, name: str | None, /) -> Self:
         """
@@ -468,17 +470,19 @@ class Column:
             return result
         return self.copy()
 
-    @functools.cached_property  # TODO(Tom): property -> method
-    def nan_count(self) -> int:
+    def nan_count(self, stream: Stream) -> int:
         """Return the number of NaN values in the column."""
-        if self.size > 0 and plc.traits.is_floating_point(self.obj.type()):
-            # See https://github.com/rapidsai/cudf/issues/20202 for we type ignore
-            return plc.reduce.reduce(
-                plc.unary.is_nan(self.obj),
-                plc.aggregation.sum(),
-                plc.types.SIZE_TYPE,
-            ).to_py()  # type: ignore[return-value]
-        return 0
+        if self._nan_count is None:
+            if self.size > 0 and plc.traits.is_floating_point(self.obj.type()):
+                # See https://github.com/rapidsai/cudf/issues/20202 for we type ignore
+                self._nan_count = plc.reduce.reduce(
+                    plc.unary.is_nan(self.obj, stream),
+                    plc.aggregation.sum(),
+                    plc.types.SIZE_TYPE,
+                ).to_py()
+            else:
+                self._nan_count = 0
+        return self._nan_count
 
     @property
     def size(self) -> int:

@@ -91,9 +91,9 @@ class BinOp(Expr):
         rop = right.obj
         if left.size != right.size:
             if left.is_scalar:
-                lop = left.obj_scalar
+                lop = left.obj_scalar(stream=df.stream)
             elif right.is_scalar:
-                rop = right.obj_scalar
+                rop = right.obj_scalar(stream=df.stream)
         if plc.traits.is_integral_not_bool(self.dtype.plc_type) and self.op in {
             plc.binaryop.BinaryOperator.FLOOR_DIV,
             plc.binaryop.BinaryOperator.PYMOD,

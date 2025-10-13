@@ -325,7 +325,11 @@ class UnaryFunction(Expr):
                 arg = plc.Scalar.from_py(fill_value.value, fill_value.dtype.plc_type)
             else:
                 evaluated = fill_value.evaluate(df, context=context)
-                arg = evaluated.obj_scalar if evaluated.is_scalar else evaluated.obj
+                arg = (
+                    evaluated.obj_scalar(stream=df.stream)
+                    if evaluated.is_scalar
+                    else evaluated.obj
+                )
             if isinstance(arg, plc.Scalar) and dtypes.can_cast(
                 column.dtype.plc_type, arg.type()
             ):  # pragma: no cover

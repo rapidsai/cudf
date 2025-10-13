@@ -594,9 +594,12 @@ class GroupedRollingWindow(Expr):
         by_cols = broadcast(
             *(b.evaluate(df) for b in by_exprs),
             target_length=df.num_rows,
+            stream=df.stream,
         )
         order_by_col = (
-            broadcast(order_by_expr.evaluate(df), target_length=df.num_rows)[0]
+            broadcast(
+                order_by_expr.evaluate(df), target_length=df.num_rows, stream=df.stream
+            )[0]
             if order_by_expr is not None
             else None
         )

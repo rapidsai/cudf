@@ -24,7 +24,19 @@ def test_non_scalar_access_raises():
         dtype=dtype,
     )
     with pytest.raises(ValueError):
-        _ = column.obj_scalar
+        _ = column.obj_scalar(stream=get_cuda_stream())
+
+
+def test_obj_scalar_caching():
+    stream = get_cuda_stream()
+    dtype = DataType(pl.Int8())
+    column = Column(
+        plc.Column.from_iterable_of_py([1], dtype.plc_type),
+        dtype=dtype,
+    )
+    assert column.obj_scalar(stream=stream).to_py() == 1
+    # test caching behavior
+    assert column.obj_scalar(stream=stream).to_py() == 1
 
 
 def test_check_sorted():
@@ -126,7 +138,9 @@ def test_mask_nans_float():
         dtype=dtype,
     )
     masked = column.mask_nans(stream=stream)
-    assert masked.nan_count == 0
+    assert masked.nan_count(stream=stream) == 0
+    # test caching behavior
+    assert masked.nan_count(stream=stream) == 0
     assert masked.slice((0, 2), stream=stream).null_count == 0
     assert masked.slice((2, 1), stream=stream).null_count == 1
 
