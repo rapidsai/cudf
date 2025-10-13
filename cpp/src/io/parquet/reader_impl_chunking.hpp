@@ -27,6 +27,13 @@ namespace cudf::io::parquet::detail {
  * all passes/chunks in the file.
  */
 struct file_intermediate_data {
+  file_intermediate_data() = default;
+
+  file_intermediate_data(file_intermediate_data const&)            = delete;
+  file_intermediate_data& operator=(file_intermediate_data const&) = delete;
+  file_intermediate_data(file_intermediate_data&&)                 = default;
+  file_intermediate_data& operator=(file_intermediate_data&&)      = default;
+
   // all row groups to read
   std::vector<row_group_info> row_groups{};
 
@@ -77,6 +84,13 @@ struct row_range {
  * @brief Passes are broken down into subpasses based on temporary memory constraints.
  */
 struct subpass_intermediate_data {
+  subpass_intermediate_data() = default;
+
+  subpass_intermediate_data(subpass_intermediate_data const&)            = delete;
+  subpass_intermediate_data& operator=(subpass_intermediate_data const&) = delete;
+  subpass_intermediate_data(subpass_intermediate_data&&)                 = default;
+  subpass_intermediate_data& operator=(subpass_intermediate_data&&)      = default;
+
   rmm::device_buffer decomp_page_data;
 
   rmm::device_buffer level_decode_data{};
@@ -118,6 +132,13 @@ struct subpass_intermediate_data {
  * rowgroups may represent less than all of the rowgroups to be read for the file.
  */
 struct pass_intermediate_data {
+  pass_intermediate_data() = default;
+
+  pass_intermediate_data(pass_intermediate_data const&)            = delete;
+  pass_intermediate_data& operator=(pass_intermediate_data const&) = delete;
+  pass_intermediate_data(pass_intermediate_data&&)                 = default;
+  pass_intermediate_data& operator=(pass_intermediate_data&&)      = default;
+
   std::vector<rmm::device_buffer> raw_page_data;
 
   // rowgroup, chunk and page information for the current pass.

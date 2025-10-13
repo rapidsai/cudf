@@ -1176,10 +1176,11 @@ inline __device__ bool setup_local_page_info(page_state_s* const s,
     // NOTE: s->page.num_rows, s->col.chunk_row, s->first_row and s->num_rows will be
     // invalid/bogus during first pass of the preprocess step for nested types. this is ok
     // because we ignore these values in that stage.
-    auto const max_row = min_row + num_rows;
+    auto const end_row = min_row + num_rows;
 
     // if we are totally outside the range of the input, do nothing
-    if ((page_start_row > max_row) || (page_start_row + s->page.num_rows < min_row)) {
+    auto const page_end_row = page_start_row + s->page.num_rows;
+    if ((page_start_row >= end_row) || (page_end_row <= min_row)) {
       s->first_row = 0;
       s->num_rows  = 0;
     }
@@ -1187,12 +1188,11 @@ inline __device__ bool setup_local_page_info(page_state_s* const s,
     else {
       s->first_row             = page_start_row >= min_row ? 0 : min_row - page_start_row;
       auto const max_page_rows = s->page.num_rows - s->first_row;
-      s->num_rows              = (page_start_row + s->first_row) + max_page_rows <= max_row
+      s->num_rows              = (page_start_row + s->first_row) + max_page_rows <= end_row
                                    ? max_page_rows
-                                   : max_row - (page_start_row + s->first_row);
+                                   : end_row - (page_start_row + s->first_row);
     }
   }
-
   __syncthreads();
 
   // zero counts

@@ -80,6 +80,11 @@ class reader_impl {
                        rmm::cuda_stream_view stream,
                        rmm::device_async_resource_ref mr);
 
+  reader_impl(reader_impl const&)            = delete;
+  reader_impl& operator=(reader_impl const&) = delete;
+  reader_impl(reader_impl&&)                 = delete;
+  reader_impl& operator=(reader_impl&&)      = delete;
+
   /**
    * @copydoc cudf::io::orc::detail::reader::read
    */
