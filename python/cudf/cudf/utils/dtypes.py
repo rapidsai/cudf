@@ -762,7 +762,7 @@ def is_dtype_obj_decimal128(obj):
     )
 
 
-SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES = {
+SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES: dict[np.dtype[Any], plc.types.TypeId] = {
     np.dtype("int8"): plc.types.TypeId.INT8,
     np.dtype("int16"): plc.types.TypeId.INT16,
     np.dtype("int32"): plc.types.TypeId.INT32,
