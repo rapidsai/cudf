@@ -148,7 +148,7 @@ def _shape_mismatch_error(x, y):
 
 
 def _recursively_update_struct_names(
-    col: ColumnBase, child_names: dict
+    col: ColumnBase, child_names: Mapping[Any, Any]
 ) -> ColumnBase:
     """Update a Column with struct names from pylibcudf.io.TableWithMetadata.child_names"""
     if col.children:
