@@ -1366,8 +1366,11 @@ class dictionary_expression_converter : public equality_literals_collector {
  public:
   dictionary_expression_converter(ast::expression const& expr,
                                   size_type num_input_columns,
-                                  cudf::host_span<std::vector<ast::literal*> const> literals)
-    : _literals{literals}
+                                  cudf::host_span<std::vector<ast::literal*> const> literals,
+                                  rmm::cuda_stream_view stream)
+    : _literals{literals},
+      _always_true_scalar{std::make_unique<cudf::numeric_scalar<bool>>(true, true, stream)},
+      _always_true{std::make_unique<ast::literal>(*_always_true_scalar)}
   {
     // Set the num columns
     _num_input_columns = num_input_columns;
@@ -1403,23 +1406,23 @@ class dictionary_expression_converter : public equality_literals_collector {
   std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override
   {
     using cudf::ast::ast_operator;
-    auto const operands = expr.get_operands();
-    auto const op       = expr.get_operator();
+    auto const operands       = expr.get_operands();
+    auto const op             = expr.get_operator();
+    auto const operator_arity = cudf::ast::detail::ast_operator_arity(op);
 
     if (auto* v = dynamic_cast<ast::column_reference const*>(&operands[0].get())) {
       // First operand should be column reference, second (if binary operation) should be literal.
-      CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 1 or
-                     cudf::ast::detail::ast_operator_arity(op) == 2,
+      CUDF_EXPECTS(operator_arity == 1 or operator_arity == 2,
                    "Only unary and binary operations are supported on column reference");
-      CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 1 or
-                     dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
-                   "Second operand of binary operation with column reference must be a literal");
+      CUDF_EXPECTS(
+        operator_arity == 1 or dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
+        "Second operand of binary operation with column reference must be a literal");
       v->accept(*this);
 
       // Propagate the `_always_true` as expression to its unary operator parent
-      if (cudf::ast::detail::ast_operator_arity(op) == 1) {
-        _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, _always_true});
-        return _always_true;
+      if (operator_arity == 1) {
+        _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
+        return *_always_true;
       }
 
       if (op == ast_operator::EQUAL or op == ast::ast_operator::NOT_EQUAL) {
@@ -1450,17 +1453,17 @@ class dictionary_expression_converter : public equality_literals_collector {
       }
       // For all other expressions, push the `_always_true` expression
       else {
-        _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, _always_true});
+        _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
       }
     } else {
       auto new_operands = visit_operands(operands);
-      if (cudf::ast::detail::ast_operator_arity(op) == 2) {
+      if (operator_arity == 2) {
         _dictionary_expr.push(ast::operation{op, new_operands.front(), new_operands.back()});
-      } else if (cudf::ast::detail::ast_operator_arity(op) == 1) {
+      } else if (operator_arity == 1) {
         // If the new_operands is just a `_always_true` literal, propagate it here
-        if (&new_operands.front().get() == &_always_true) {
+        if (&new_operands.front().get() == _always_true.get()) {
           _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, _dictionary_expr.back()});
-          return _always_true;
+          return *_always_true;
         } else {
           _dictionary_expr.push(ast::operation{op, new_operands.front()});
         }
@@ -1483,8 +1486,8 @@ class dictionary_expression_converter : public equality_literals_collector {
   std::vector<cudf::size_type> _col_literals_offsets;
   cudf::host_span<std::vector<ast::literal*> const> _literals;
   ast::tree _dictionary_expr;
-  cudf::numeric_scalar<bool> _always_true_scalar{true};
-  ast::literal const _always_true{_always_true_scalar};
+  std::unique_ptr<cudf::numeric_scalar<bool>> _always_true_scalar;
+  std::unique_ptr<ast::literal> _always_true;
 };
 
 }  // namespace
@@ -1522,8 +1525,8 @@ aggregate_reader_metadata::apply_dictionary_filter(
 
   // For each input column
   std::for_each(
-    thrust::counting_iterator<size_t>(0),
-    thrust::counting_iterator(output_dtypes.size()),
+    thrust::counting_iterator(0),
+    thrust::counting_iterator(num_input_columns),
     [&](auto input_col_idx) {
       auto const& dtype = output_dtypes[input_col_idx];
 
@@ -1566,7 +1569,8 @@ aggregate_reader_metadata::apply_dictionary_filter(
 
   // Convert AST to DictionaryAST expression with reference to dictionary membership
   // in above `dictionary_membership_table`
-  dictionary_expression_converter dictionary_expr{filter.get(), num_input_columns, literals};
+  dictionary_expression_converter dictionary_expr{
+    filter.get(), num_input_columns, literals, stream};
 
   // Filter dictionary membership table with the DictionaryAST expression and collect
   // filtered row group indices
@@ -1594,16 +1598,16 @@ std::reference_wrapper<ast::expression const> dictionary_literals_collector::vis
 
   if (auto* v = dynamic_cast<ast::column_reference const*>(&operands[0].get())) {
     // First operand should be column reference, second (if binary operation) should be literal.
-    CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 1 or
-                   cudf::ast::detail::ast_operator_arity(op) == 2,
+    auto const operator_arity = cudf::ast::detail::ast_operator_arity(op);
+    CUDF_EXPECTS(operator_arity == 1 or operator_arity == 2,
                  "Only unary and binary operations are supported on column reference");
-    CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 1 or
-                   dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
-                 "Second operand of binary operation with column reference must be a literal");
+    CUDF_EXPECTS(
+      operator_arity == 1 or dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
+      "Second operand of binary operation with column reference must be a literal");
     v->accept(*this);
 
     // Return early if this is a unary operation
-    if (cudf::ast::detail::ast_operator_arity(op) == 1) { return expr; }
+    if (operator_arity == 1) { return expr; }
 
     // Push to the corresponding column's literals and operators list iff EQUAL or NOT_EQUAL
     // operator is seen

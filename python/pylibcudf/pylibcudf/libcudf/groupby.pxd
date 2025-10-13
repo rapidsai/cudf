@@ -53,25 +53,6 @@ cdef extern from "cudf/groupby.hpp" \
         unique_ptr[table] values
 
     cdef cppclass groupby:
-        groupby(const table_view& keys) except +libcudf_exception_handler
-        groupby(
-            const table_view& keys,
-            null_policy include_null_keys
-        ) except +libcudf_exception_handler
-
-        groupby(
-            const table_view& keys,
-            null_policy include_null_keys,
-            sorted keys_are_sorted,
-        ) except +libcudf_exception_handler
-
-        groupby(
-            const table_view& keys,
-            null_policy include_null_keys,
-            sorted keys_are_sorted,
-            const vector[order]& column_order,
-        ) except +libcudf_exception_handler
-
         groupby(
             const table_view& keys,
             null_policy include_null_keys,

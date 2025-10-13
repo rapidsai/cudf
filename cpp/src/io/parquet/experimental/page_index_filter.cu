@@ -665,13 +665,8 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
 
   // Return early if no columns will participate in stats based page filtering
   if (stats_columns_mask.empty()) {
-    auto row_mask = cudf::make_numeric_column(
-      data_type{cudf::type_id::BOOL8}, total_rows, rmm::device_buffer{}, 0, stream, mr);
-    thrust::fill(rmm::exec_policy_nosync(stream),
-                 row_mask->mutable_view().begin<bool>(),
-                 row_mask->mutable_view().end<bool>(),
-                 true);
-    return row_mask;
+    auto const scalar_true = cudf::numeric_scalar<bool>(true, true, stream);
+    return cudf::make_column_from_scalar(scalar_true, total_rows, stream, mr);
   }
 
   // Convert page statistics to a table
@@ -710,7 +705,7 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
 
   // Converts AST to StatsAST with reference to min, max columns in above `stats_table`.
   parquet::detail::stats_expression_converter const stats_expr{
-    filter.get(), static_cast<size_type>(output_dtypes.size())};
+    filter.get(), static_cast<size_type>(output_dtypes.size()), stream};
 
   // Filter the input table using AST expression and return the (BOOL8) predicate column.
   return cudf::detail::compute_column(stats_table, stats_expr.get_stats_expr().get(), stream, mr);

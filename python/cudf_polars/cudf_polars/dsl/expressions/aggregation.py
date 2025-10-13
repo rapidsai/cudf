@@ -22,17 +22,23 @@ __all__ = ["Agg"]
 
 
 class Agg(Expr):
-    __slots__ = ("name", "op", "options", "request")
-    _non_child = ("dtype", "name", "options")
+    __slots__ = ("context", "name", "op", "options", "request")
+    _non_child = ("dtype", "name", "options", "context")
 
     def __init__(
-        self, dtype: DataType, name: str, options: Any, *children: Expr
+        self,
+        dtype: DataType,
+        name: str,
+        options: Any,
+        context: ExecutionContext,
+        *children: Expr,
     ) -> None:
         self.dtype = dtype
         self.name = name
         self.options = options
         self.is_pointwise = False
         self.children = children
+        self.context = context
         if name not in Agg._SUPPORTED:
             raise NotImplementedError(
                 f"Unsupported aggregation {name=}"
@@ -80,6 +86,15 @@ class Agg(Expr):
             raise NotImplementedError(
                 f"Unreachable, {name=} is incorrectly listed in _SUPPORTED"
             )  # pragma: no cover
+        if (
+            context == ExecutionContext.FRAME
+            and req is not None
+            and not plc.aggregation.is_valid_aggregation(dtype.plc_type, req)
+        ):
+            # TODO: Check which cases polars raises vs returns all-NULL column.
+            # For the all-NULL column cases, we could build it using Column.all_null_like
+            # at evaluation time.
+            raise NotImplementedError(f"Invalid aggregation {req} with dtype {dtype}")
         self.request = req
         op = getattr(self, f"_{name}", None)
         if op is None:
