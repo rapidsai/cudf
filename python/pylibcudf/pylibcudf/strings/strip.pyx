@@ -28,7 +28,7 @@ cpdef Column strip(
     """Removes the specified characters from the beginning
     or end (or both) of each string.
 
-    For details, see :cpp:func:`cudf::strings::strip`.
+    For details, see :cpp:func:`strip`.
 
     Parameters
     ----------
@@ -51,7 +51,7 @@ cpdef Column strip(
 
     if to_strip is None:
         to_strip = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view())
+            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
         )
 
     cdef unique_ptr[column] c_result

@@ -627,6 +627,12 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
                                              static_cast<size_type>(output_dtypes.size())}
       .get_stats_columns_mask();
 
+  // Return early if no columns will participate in stats based page filtering
+  if (stats_columns_mask.empty()) {
+    auto const scalar_true = cudf::numeric_scalar<bool>(true, true, stream);
+    return cudf::make_column_from_scalar(scalar_true, total_rows, stream, mr);
+  }
+
   // Convert page statistics to a table
   // where min(col[i]) = columns[i*2], max(col[i])=columns[i*2+1]
   // For each column, it contains total number of rows from all row groups.
@@ -660,7 +666,7 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
 
   // Converts AST to StatsAST with reference to min, max columns in above `stats_table`.
   parquet::detail::stats_expression_converter const stats_expr{
-    filter.get(), static_cast<size_type>(output_dtypes.size())};
+    filter.get(), static_cast<size_type>(output_dtypes.size()), stream};
 
   // Filter the input table using AST expression and return the (BOOL8) predicate column.
   return cudf::detail::compute_column(stats_table, stats_expr.get_stats_expr().get(), stream, mr);

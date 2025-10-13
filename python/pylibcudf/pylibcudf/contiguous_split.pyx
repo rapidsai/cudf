@@ -95,22 +95,23 @@ cdef class PackedColumns:
     __hash__ = None
 
     @staticmethod
-    cdef PackedColumns from_libcudf(unique_ptr[packed_columns] data):
+    cdef PackedColumns from_libcudf(
+        unique_ptr[packed_columns] data,
+        Stream stream,
+        DeviceMemoryResource mr
+    ):
         """Create a Python PackedColumns from a libcudf packed_columns."""
         cdef PackedColumns out = PackedColumns.__new__(PackedColumns)
         out.c_obj = move(data)
+        out.stream = stream
+        out.mr = mr
         return out
 
-    cpdef tuple release(self, Stream stream=None):
+    cpdef tuple release(self):
         """Releases and returns the underlying serialized metadata and gpu data.
 
         The ownership of the memory are transferred to the returned buffers. After
         this call, `self` is empty.
-
-        Parameters
-        ----------
-        stream : Stream | None
-            CUDA stream on which to perform the operation.
 
         Returns
         -------
@@ -121,7 +122,6 @@ cdef class PackedColumns:
         """
         if not (dereference(self.c_obj).metadata and dereference(self.c_obj).gpu_data):
             raise ValueError("Cannot release empty PackedColumns")
-        stream = _get_stream(stream)
 
         return (
             memoryview(
@@ -130,7 +130,8 @@ cdef class PackedColumns:
             gpumemoryview(
                 DeviceBuffer.c_from_unique_ptr(
                     move(dereference(self.c_obj).gpu_data),
-                    stream
+                    self.stream,
+                    self.mr
                 )
             )
         )
@@ -336,7 +337,7 @@ cpdef PackedColumns pack(Table input, Stream stream=None, DeviceMemoryResource m
     >>> metadata, gpu_data = packed.release()
     >>> pylibcudf.contiguous_split.unpack_from_memoryviews(metadata, gpu_data)
 
-    For details, see :cpp:func:`cudf::pack`.
+    For details, see :cpp:func:`pack`.
     """
     cdef unique_ptr[packed_columns] pack
     stream = _get_stream(stream)
@@ -345,22 +346,20 @@ cpdef PackedColumns pack(Table input, Stream stream=None, DeviceMemoryResource m
         pack = move(make_unique[packed_columns](
             cpp_pack(input.view(), stream.view(), mr.get_mr())
         ))
-    return PackedColumns.from_libcudf(move(pack))
+    return PackedColumns.from_libcudf(move(pack), stream, mr)
 
 
-cpdef Table unpack(PackedColumns input, DeviceMemoryResource mr=None):
+cpdef Table unpack(PackedColumns input):
     """Deserialize the result of `pack`.
 
     Copies the result of a serialized table into a table.
 
-    For details, see :cpp:func:`cudf::unpack`.
+    For details, see :cpp:func:`unpack`.
 
     Parameters
     ----------
     input : PackedColumns
         The packed columns to unpack.
-    mr : DeviceMemoryResource, optional
-        Device memory resource used to allocate the returned table's device memory.
 
     Returns
     -------
@@ -381,7 +380,7 @@ cpdef Table unpack_from_memoryviews(
 
     Copies the result of a serialized table into a table.
 
-    For details, see :cpp:func:`cudf::unpack`.
+    For details, see :cpp:func:`unpack`.
 
     Parameters
     ----------

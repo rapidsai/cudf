@@ -48,6 +48,11 @@ class FillNullWithStrategyOp(UnaryOp):
     policy: plc.replace.ReplacePolicy = plc.replace.ReplacePolicy.PRECEDING
 
 
+@dataclass(frozen=True)
+class CumSumOp(UnaryOp):
+    pass
+
+
 def to_request(
     value: expr.Expr, orderby: Column, df: DataFrame
 ) -> plc.rolling.RollingRequest:
@@ -117,7 +122,7 @@ class RollingWindow(Expr):
     def __init__(
         self,
         dtype: DataType,
-        orderby_dtype: DataType,
+        orderby_dtype: plc.DataType,
         offset: Duration,
         period: Duration,
         closed_window: ClosedInterval,
@@ -241,7 +246,8 @@ class GroupedRollingWindow(Expr):
                 isinstance(named_expr.value, (expr.Len, expr.Agg))
                 or (
                     isinstance(named_expr.value, expr.UnaryFunction)
-                    and named_expr.value.name in {"rank", "fill_null_with_strategy"}
+                    and named_expr.value.name
+                    in {"rank", "fill_null_with_strategy", "cum_sum"}
                 )
             )
         ]
@@ -265,7 +271,7 @@ class GroupedRollingWindow(Expr):
             if isinstance(v, expr.Agg)
             or (
                 isinstance(v, expr.UnaryFunction)
-                and v.name in {"rank", "fill_null_with_strategy"}
+                and v.name in {"rank", "fill_null_with_strategy", "cum_sum"}
             )
         ]
         self.by_count = len(by_expr)
@@ -363,35 +369,84 @@ class GroupedRollingWindow(Expr):
         return rank_out_names, rank_out_dtypes, rank_tables
 
     @_apply_unary_op.register
-    def _(
+    def _(  # type: ignore[no-untyped-def]
         self,
         op: FillNullWithStrategyOp,
         df: DataFrame,
-        _: plc.groupby.GroupBy,
+        _,
     ) -> tuple[list[str], list[DataType], list[plc.Table]]:
         named_exprs = op.named_exprs
 
-        val_cols = self._gather_columns(
-            [
-                ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
-                for ne in named_exprs
-            ],
-            op.order_index,
-            cudf_polars_column=False,
-        )
-
-        vals_tbl = plc.Table(val_cols)
-        lg = op.local_grouper
-        assert isinstance(lg, plc.groupby.GroupBy)
-        _, filled_tbl = lg.replace_nulls(
+        plc_cols = [
+            ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
+            for ne in named_exprs
+        ]
+        # TODO: Now handling order_index being None, whereas before we were
+        # assuming it was always non-None via _gather_columns call
+        if op.order_index is not None:
+            vals_tbl = plc.copying.gather(
+                plc.Table(plc_cols),
+                op.order_index,
+                plc.copying.OutOfBoundsPolicy.NULLIFY,
+            )
+        else:
+            vals_tbl = plc.Table(plc_cols)  # pragma: no cover
+        local_grouper = op.local_grouper
+        assert isinstance(local_grouper, plc.groupby.GroupBy)
+        _, filled_tbl = local_grouper.replace_nulls(
             vals_tbl,
-            [op.policy] * len(val_cols),
+            [op.policy] * len(plc_cols),
         )
 
         tables = [plc.Table([column]) for column in filled_tbl.columns()]
         names = [ne.name for ne in named_exprs]
         dtypes = [ne.value.dtype for ne in named_exprs]
         return names, dtypes, tables
+
+    @_apply_unary_op.register
+    def _(  # type: ignore[no-untyped-def]
+        self,
+        op: CumSumOp,
+        df: DataFrame,
+        _,
+    ) -> tuple[list[str], list[DataType], list[plc.Table]]:
+        cum_named = op.named_exprs
+        order_index = op.order_index
+
+        requests: list[plc.groupby.GroupByRequest] = []
+        out_names: list[str] = []
+        out_dtypes: list[DataType] = []
+
+        # Instead of calling self._gather_columns, let's call plc.copying.gather directly
+        # since we need plc.Column objects, not cudf_polars Column objects
+        if order_index is not None:
+            plc_cols = [
+                ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
+                for ne in cum_named
+            ]
+            val_cols = plc.copying.gather(
+                plc.Table(plc_cols),
+                order_index,
+                plc.copying.OutOfBoundsPolicy.NULLIFY,
+            ).columns()
+        else:
+            # TODO: Now handling order_index being None whereas before we were assuming it was always non-None
+            val_cols = [  # pragma: no cover
+                ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
+                for ne in cum_named
+            ]  # pragma: no cover
+        agg = plc.aggregation.sum()
+
+        for ne, val_col in zip(cum_named, val_cols, strict=True):
+            requests.append(plc.groupby.GroupByRequest(val_col, [agg]))
+            out_names.append(ne.name)
+            out_dtypes.append(ne.value.dtype)
+
+        local_grouper = op.local_grouper
+        assert isinstance(local_grouper, plc.groupby.GroupBy)
+        _, tables = local_grouper.scan(requests)
+
+        return out_names, out_dtypes, tables
 
     def _reorder_to_input(
         self,
@@ -444,6 +499,7 @@ class GroupedRollingWindow(Expr):
         unary_window_ops: dict[str, list[expr.NamedExpr]] = {
             "rank": [],
             "fill_null_with_strategy": [],
+            "cum_sum": [],
         }
 
         for ne in self.named_aggs:
@@ -500,31 +556,26 @@ class GroupedRollingWindow(Expr):
 
     def _gather_columns(
         self,
-        cols: list[plc.Column] | list[Column],
+        cols: Sequence[Column],
         order_index: plc.Column,
-        *,
-        cudf_polars_column: bool = True,
-    ) -> list[plc.Column] | list[Column]:
+    ) -> list[Column]:
         gathered_tbl = plc.copying.gather(
-            plc.Table([c.obj if cudf_polars_column else c for c in cols]),
+            plc.Table([c.obj for c in cols]),
             order_index,
             plc.copying.OutOfBoundsPolicy.NULLIFY,
         )
 
-        if cudf_polars_column:
-            return [
-                Column(
-                    gathered_tbl.columns()[i],
-                    name=c.name,
-                    dtype=c.dtype,
-                    order=c.order,
-                    null_order=c.null_order,
-                    is_sorted=True,
-                )
-                for i, c in enumerate(cols)
-            ]
-        else:
-            return gathered_tbl.columns()
+        return [
+            Column(
+                gathered,
+                name=c.name,
+                dtype=c.dtype,
+                order=c.order,
+                null_order=c.null_order,
+                is_sorted=c.is_sorted,
+            )
+            for gathered, c in zip(gathered_tbl.columns(), cols, strict=True)
+        ]
 
     def do_evaluate(  # noqa: D102
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -636,7 +687,6 @@ class GroupedRollingWindow(Expr):
                     rank_expr = ne.value
                     assert isinstance(rank_expr, expr.UnaryFunction)
                     (child,) = rank_expr.children
-                    val = child.evaluate(df, context=ExecutionContext.FRAME).obj
                     desc = rank_expr.options[1]
 
                     order_index = self._build_window_order_index(
@@ -645,7 +695,9 @@ class GroupedRollingWindow(Expr):
                         order_by_col=order_by_col,
                         ob_desc=ob_desc,
                         ob_nulls_last=ob_nulls_last,
-                        value_col=val,
+                        value_col=child.evaluate(
+                            df, context=ExecutionContext.FRAME
+                        ).obj,
                         value_desc=desc,
                     )
                     by_cols_for_scan = self._gather_columns(by_cols, order_index)
@@ -732,6 +784,40 @@ class GroupedRollingWindow(Expr):
                         order_index=order_index,
                     )
                 )
+
+        if cum_named := unary_window_ops["cum_sum"]:
+            order_index = self._build_window_order_index(
+                by_cols,
+                row_id=row_id,
+                order_by_col=order_by_col if self._order_by_expr is not None else None,
+                ob_desc=self.options[2] if self._order_by_expr is not None else False,
+                ob_nulls_last=self.options[3]
+                if self._order_by_expr is not None
+                else False,
+            )
+            by_cols_for_scan = self._gather_columns(by_cols, order_index)
+            local = self._sorted_grouper(by_cols_for_scan)
+            names, dtypes, tables = self._apply_unary_op(
+                CumSumOp(
+                    named_exprs=cum_named,
+                    order_index=order_index,
+                    by_cols_for_scan=by_cols_for_scan,
+                    local_grouper=local,
+                ),
+                df,
+                grouper,
+            )
+            broadcasted_cols.extend(
+                self._reorder_to_input(
+                    row_id,
+                    by_cols,
+                    df.num_rows,
+                    tables,
+                    names,
+                    dtypes,
+                    order_index=order_index,
+                )
+            )
 
         # Create a temporary DataFrame with the broadcasted columns named by their
         # placeholder names from agg decomposition, then evaluate the post-expression.

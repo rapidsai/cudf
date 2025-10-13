@@ -16,7 +16,7 @@ cpdef Column url_encode(Column input, Stream stream=None, DeviceMemoryResource m
     """
     Encodes each string using URL encoding.
 
-    For details, see :cpp:func:`cudf::strings::url_encode`
+    For details, see :cpp:func:`url_encode`
 
     Parameters
     ----------
@@ -45,7 +45,7 @@ cpdef Column url_decode(Column input, Stream stream=None, DeviceMemoryResource m
     """
     Decodes each string using URL encoding.
 
-    For details, see :cpp:func:`cudf::strings::url_decode`
+    For details, see :cpp:func:`url_decode`
 
     Parameters
     ----------

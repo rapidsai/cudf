@@ -113,6 +113,11 @@ class reader_impl {
                        rmm::cuda_stream_view stream,
                        rmm::device_async_resource_ref mr);
 
+  reader_impl(reader_impl const&)            = delete;
+  reader_impl& operator=(reader_impl const&) = delete;
+  reader_impl(reader_impl&&)                 = delete;
+  reader_impl& operator=(reader_impl&&)      = delete;
+
   /**
    * @copydoc cudf::io::chunked_parquet_reader::has_next
    */
@@ -303,8 +308,12 @@ class reader_impl {
    * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param skip_rows Crop all rows below skip_rows
    * @param num_rows Number of rows to read
+   * @param page_mask Boolean device span indicating if a page needs to be decoded or is pruned
    */
-  void allocate_columns(read_mode mode, size_t skip_rows, size_t num_rows);
+  void allocate_columns(read_mode mode,
+                        size_t skip_rows,
+                        size_t num_rows,
+                        cudf::device_span<bool const> page_mask);
 
   /**
    * @brief Calculate per-page offsets for string data
@@ -319,7 +328,7 @@ class reader_impl {
    * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to decode
-   * @param page_mask Boolean vector indicating if a page needs to be decoded or is pruned
+   * @param page_mask Boolean device span indicating if a page needs to be decoded or is pruned
    */
   void decode_page_data(read_mode mode,
                         size_t skip_rows,
