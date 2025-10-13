@@ -149,7 +149,7 @@ def _fuse_simple_reductions(
         The new Select nodes, and the updated partition information.
     """
     # After a Select node is decomposed, it will be broken into
-    # one or more Select nodes that  each target a different
+    # one or more Select nodes that each target a different
     # named expression. In some cases, one or more of these
     # decomposed select nodes will be simple reductions that
     # *should* be performed at the same time. Each "simple"
