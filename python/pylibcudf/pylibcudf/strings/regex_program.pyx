@@ -27,7 +27,7 @@ cdef class RegexProgram:
     def create(str pattern, regex_flags flags):
         """Create a program from a pattern.
 
-        For detils, see :cpp:func:`cudf::strings::regex_program::create`.
+        For detils, see :cpp:func:`create`.
 
         Parameters
         ----------
