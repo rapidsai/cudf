@@ -107,6 +107,29 @@ TEST_F(ParquetTest, ParquetReader)
   auto meta   = cudf::io::read_parquet_metadata(cudf::io::source_info{filepath});
 }
 
+TEST_F(ParquetTest, ParquetReaderPredicatePushdown)
+{
+  auto tab      = construct_table();
+  auto filepath = temp_env->get_temp_filepath("MultiColumn.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, tab);
+  cudf::io::write_parquet(out_opts, cudf::test::get_default_stream());
+
+  auto col3_ref      = cudf::ast::column_reference(3);
+  auto literal_value = cudf::numeric_scalar<int32_t>(0, true, cudf::test::get_default_stream());
+  auto literal       = cudf::ast::literal(literal_value);
+  auto expr1 = cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col3_ref, literal);
+
+  auto col0_ref = cudf::ast::column_reference(0);
+  auto expr2    = cudf::ast::operation(cudf::ast::ast_operator::IDENTITY, col0_ref);
+  auto expr3    = cudf::ast::operation(cudf::ast::ast_operator::NOT, expr2);
+
+  auto filter_expr = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, expr1, expr3);
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter_expr);
+  auto result = cudf::io::read_parquet(in_opts, cudf::test::get_default_stream());
+}
+
 TEST_F(ParquetTest, ChunkedOperations)
 {
   auto tab      = construct_table();
