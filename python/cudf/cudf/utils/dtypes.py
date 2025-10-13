@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
@@ -20,7 +20,9 @@ if TYPE_CHECKING:
     from cudf._typing import DtypeObj
     from cudf.core.dtypes import DecimalDtype
 
-np_dtypes_to_pandas_dtypes = {
+np_dtypes_to_pandas_dtypes: dict[
+    np.dtype[Any], pd.core.dtypes.base.ExtensionDtype
+] = {
     np.dtype("uint8"): pd.UInt8Dtype(),
     np.dtype("uint16"): pd.UInt16Dtype(),
     np.dtype("uint32"): pd.UInt32Dtype(),
