@@ -628,13 +628,9 @@ class StreamingExecutor:
 
         # Check for rapidsmpf engine
         if self.engine == "rapidsmpf":
-            if not rapidsmpf_single_available():
-                raise ValueError("The rapidsmpf streaming engine requires rapidsmpf.")
-            if self.shuffle_method == "tasks":
-                raise ValueError(
-                    "The rapidsmpf streaming engine does not support task-based shuffling."
-                )
-            object.__setattr__(self, "shuffle_method", "rapidsmpf")
+            raise NotImplementedError(
+                "The rapidsmpf streaming engine is not yet supported."
+            )
 
         # Handle shuffle_method defaults for streaming executor
         if self.shuffle_method is None:

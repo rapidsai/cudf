@@ -281,6 +281,19 @@ def test_scheduler_deprecated() -> None:
     assert config.executor.scheduler is None  # Should be cleared after mapping
 
 
+def test_rapidsmpf_engine_raises() -> None:
+    # Test that rapidsmpf engine is not yet supported
+    with pytest.raises(
+        NotImplementedError, match="rapidsmpf streaming engine is not yet supported"
+    ):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"engine": "rapidsmpf"},
+            )
+        )
+
+
 def test_validate_shuffle_method_defaults(
     *,
     rapidsmpf_distributed_available: bool,
