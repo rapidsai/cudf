@@ -41,7 +41,7 @@ class ManagedUDFString(types.Type):
 
 
 class StringView(types.Type):
-    np_dtype = np.dtype("object")
+    np_dtype: np.dtype[np.object_] = np.dtype("object")
 
     def __init__(self):
         super().__init__(name="string_view")
