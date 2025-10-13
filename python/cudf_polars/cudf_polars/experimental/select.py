@@ -182,10 +182,6 @@ def _fuse_simple_reductions(
     # Find reduction groups
     reduction_groups: defaultdict[IR, list[Select]] = defaultdict(list)
     for select_c in decomposed_select_irs:
-        # Every element of decomposed_select_irs should be
-        # a Select node, even if it is not a simple reduction
-        assert isinstance(select_c, Select), f"Expected Select, got {type(select_c)}"
-
         # Final expressions and schema must be included in
         # the fused select_c node even if this specific
         # selection is not a simple reduction.
@@ -218,9 +214,6 @@ def _fuse_simple_reductions(
             fused_select_b_schema: Schema = {}
             fused_select_a_schema: Schema = {}
             for select_c in group:
-                assert isinstance(select_c, Select), (
-                    f"Expected Select, got {type(select_c)}"
-                )
                 select_b = select_c.children[0]
                 assert isinstance(select_b, Select), (
                     f"Expected Select, got {type(select_b)}"
