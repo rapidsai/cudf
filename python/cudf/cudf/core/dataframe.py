@@ -98,8 +98,7 @@ from cudf.core.series import Series
 from cudf.core.udf.row_function import DataFrameApplyKernel
 from cudf.errors import MixedTypeError
 from cudf.options import get_option
-from cudf.utils import applyutils, docutils, ioutils, queryutils
-from cudf.utils.docutils import copy_docstring
+from cudf.utils import docutils, ioutils, queryutils
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
@@ -5082,80 +5081,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         return DataFrame._from_data(result, index=self.index, attrs=self.attrs)
 
     @_performance_tracking
-    @applyutils.doc_applychunks()
-    def apply_chunks(
-        self,
-        func,
-        incols,
-        outcols,
-        kwargs=None,
-        pessimistic_nulls=True,
-        chunks=None,
-        blkct=None,
-        tpb=None,
-    ):
-        """
-        Transform user-specified chunks using the user-provided function.
-
-        Parameters
-        ----------
-        {params}
-
-        Examples
-        --------
-        For ``tpb > 1``, ``func`` is executed by ``tpb`` number of threads
-        concurrently.  To access the thread id and count,
-        use ``numba.cuda.threadIdx.x`` and ``numba.cuda.blockDim.x``,
-        respectively (See `numba CUDA kernel documentation`_).
-
-        .. _numba CUDA kernel documentation:\
-        https://numba.readthedocs.io/en/stable/cuda/kernels.html
-
-        In the example below, the *kernel* is invoked concurrently on each
-        specified chunk. The *kernel* computes the corresponding output
-        for the chunk.
-
-        By looping over the range
-        ``range(cuda.threadIdx.x, in1.size, cuda.blockDim.x)``, the *kernel*
-        function can be used with any *tpb* in an efficient manner.
-
-        >>> from numba import cuda
-        >>> @cuda.jit
-        ... def kernel(in1, in2, in3, out1):
-        ...      for i in range(cuda.threadIdx.x, in1.size, cuda.blockDim.x):
-        ...          x = in1[i]
-        ...          y = in2[i]
-        ...          z = in3[i]
-        ...          out1[i] = x * y + z
-
-        See Also
-        --------
-        DataFrame.apply
-        """
-        warnings.warn(
-            "DataFrame.apply_chunks is deprecated and will be "
-            "removed in a future release. Please use `apply` "
-            "or use a custom numba kernel instead or refer "
-            "to the UDF guidelines for more information "
-            "https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html",
-            FutureWarning,
-        )
-        if kwargs is None:
-            kwargs = {}
-        if chunks is None:
-            raise ValueError("*chunks* must be defined")
-        return applyutils.apply_chunks(
-            self,
-            func,
-            incols,
-            outcols,
-            kwargs,
-            pessimistic_nulls,
-            chunks,
-            tpb=tpb,
-        )
-
-    @_performance_tracking
     def partition_by_hash(
         self, columns: Sequence[Hashable], nparts: int, keep_index: bool = True
     ) -> list[Self]:
@@ -7913,12 +7838,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         )
 
     @_performance_tracking
-    @copy_docstring(reshape.pivot)
+    @docutils.copy_docstring(reshape.pivot)
     def pivot(self, *, columns, index=no_default, values=no_default):
         return reshape.pivot(self, index=index, columns=columns, values=values)
 
     @_performance_tracking
-    @copy_docstring(reshape.pivot_table)
+    @docutils.copy_docstring(reshape.pivot_table)
     def pivot_table(
         self,
         values=None,
@@ -7947,7 +7872,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         )
 
     @_performance_tracking
-    @copy_docstring(reshape.unstack)
+    @docutils.copy_docstring(reshape.unstack)
     def unstack(self, level=-1, fill_value=None, sort: bool = True):
         return reshape.unstack(
             self, level=level, fill_value=fill_value, sort=sort
@@ -8921,24 +8846,6 @@ def _setitem_with_dataframe(
                     name=col_1,
                     value=replace_df[col_2],
                 )
-
-
-def extract_col(df, col):
-    """
-    Extract column from dataframe `df` with their name `col`.
-    If `col` is index and there are no columns with name `index`,
-    then this will return index column.
-    """
-    try:
-        return df._data[col]
-    except KeyError:
-        if (
-            col == "index"
-            and col not in df.index._data
-            and not isinstance(df.index, MultiIndex)
-        ):
-            return df.index._column
-        return df.index._data[col]
 
 
 def _index_from_listlike_of_series(

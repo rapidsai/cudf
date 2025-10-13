@@ -9,15 +9,15 @@ import cupy as cp
 import numpy as np
 from numba import cuda
 
-import cudf
+from cudf.core._internals import binaryop
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import as_column
-from cudf.utils import applyutils
 from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.dtypes import (
     BOOL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
+    SIZE_TYPE_DTYPE,
     TIMEDELTA_TYPES,
 )
 
@@ -196,6 +196,20 @@ def _wrap_query_expr(name, fn, args):
     return kernel
 
 
+def extract_col(df, col):
+    """
+    Extract column from dataframe `df` with their name `col`.
+    If `col` is index and there are no columns with name `index`,
+    then this will return index column.
+    """
+    try:
+        return df._data[col]
+    except KeyError:
+        if col == "index" and col not in df.index._data and df.index.ndim != 2:
+            return df.index._column
+        return df.index._data[col]
+
+
 @acquire_spill_lock()
 def query_execute(df, expr, callenv):
     """Compile & execute the query expression
@@ -216,15 +230,15 @@ def query_execute(df, expr, callenv):
     columns = compiled["colnames"]
 
     # prepare col args
-    colarrays = [cudf.core.dataframe.extract_col(df, col) for col in columns]
+    cols = [extract_col(df, col) for col in columns]
 
     # wait to check the types until we know which cols are used
-    if any(col.dtype not in SUPPORTED_QUERY_TYPES for col in colarrays):
+    if any(col.dtype not in SUPPORTED_QUERY_TYPES for col in cols):
         raise TypeError(
             "query only supports numeric, datetime, timedelta, or bool dtypes."
         )
 
-    colarrays = [col.values for col in colarrays]
+    colarrays = [col.values for col in cols]
 
     kernel = compiled["kernel"]
     # process env args
@@ -253,5 +267,16 @@ def query_execute(df, expr, callenv):
     args = [out, *colarrays, *envargs]
     with _CUDFNumbaConfig():
         kernel.forall(nrows)(*args)
-    out_mask = applyutils.make_aggregate_nullmask(df, columns=columns)
+    out_mask = None
+    for col in cols:
+        if not col.nullable:
+            continue
+        nullmask = as_column(col.nullmask)
+
+        if out_mask is None:
+            out_mask = nullmask.astype(dtype=SIZE_TYPE_DTYPE)
+        else:
+            out_mask = binaryop.binaryop(
+                nullmask, out_mask, "__and__", out_mask.dtype
+            )
     return as_column(out).set_mask(out_mask).fillna(False)
