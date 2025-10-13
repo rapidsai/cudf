@@ -2217,7 +2217,9 @@ class Join(IR):
         right_on = DataFrame(
             broadcast(*(e.evaluate(right) for e in right_on_exprs)), stream=stream
         )
-        join_cuda_streams(downstreams=(stream,), upstreams=(left_on, right_on))
+        join_cuda_streams(
+            downstreams=(stream,), upstreams=(left_on.stream, right_on.stream)
+        )
         null_equality = (
             plc.types.NullEquality.EQUAL
             if nulls_equal
