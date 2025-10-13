@@ -703,7 +703,7 @@ class PLCIntEnumDocumenter(ClassDocumenter):
 
         if self.object.__name__ != "Kind":
             self.add_line(
-                f"See also :cpp:enum:`cudf::{self.object.__name__}`.",
+                f"See also :cpp:enum:`{self.object.__name__}`.",
                 source_name,
             )
         self.add_line("", source_name)
