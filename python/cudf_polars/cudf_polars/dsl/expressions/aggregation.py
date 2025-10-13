@@ -16,6 +16,8 @@ from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 
 if TYPE_CHECKING:
+    from rmm.pylibrmm.stream import Stream
+
     from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["Agg"]
@@ -151,82 +153,94 @@ class Agg(Expr):
             return self.request
 
     def _reduce(
-        self, column: Column, *, request: plc.aggregation.Aggregation
+        self, column: Column, *, request: plc.aggregation.Aggregation, stream: Stream
     ) -> Column:
         if (
             self.name in {"mean", "median"}
             and plc.traits.is_fixed_point(column.dtype.plc_type)
             and self.dtype.plc_type.id() in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
         ):
-            column = column.astype(self.dtype)
+            column = column.astype(self.dtype, stream=stream)
         return Column(
             plc.Column.from_scalar(
-                plc.reduce.reduce(column.obj, request, self.dtype.plc_type), 1
-            ),
-            name=column.name,
-            dtype=self.dtype,
-        )
-
-    def _count(self, column: Column, *, include_nulls: bool) -> Column:
-        null_count = column.null_count if not include_nulls else 0
-        return Column(
-            plc.Column.from_scalar(
-                plc.Scalar.from_py(column.size - null_count, self.dtype.plc_type),
+                plc.reduce.reduce(
+                    column.obj, request, self.dtype.plc_type, stream=stream
+                ),
                 1,
             ),
             name=column.name,
             dtype=self.dtype,
         )
 
-    def _sum(self, column: Column) -> Column:
+    def _count(self, column: Column, *, include_nulls: bool, stream: Stream) -> Column:
+        null_count = column.null_count if not include_nulls else 0
+        return Column(
+            plc.Column.from_scalar(
+                plc.Scalar.from_py(
+                    column.size - null_count, self.dtype.plc_type, stream=stream
+                ),
+                1,
+                stream=stream,
+            ),
+            name=column.name,
+            dtype=self.dtype,
+        )
+
+    def _sum(self, column: Column, stream: Stream) -> Column:
         if column.size == 0 or column.null_count == column.size:
             return Column(
                 plc.Column.from_scalar(
-                    plc.Scalar.from_py(0, self.dtype.plc_type),
+                    plc.Scalar.from_py(0, self.dtype.plc_type, stream=stream),
                     1,
                 ),
                 name=column.name,
                 dtype=self.dtype,
             )
-        return self._reduce(column, request=plc.aggregation.sum())
+        return self._reduce(column, request=plc.aggregation.sum(), stream=stream)
 
-    def _min(self, column: Column, *, propagate_nans: bool) -> Column:
+    def _min(self, column: Column, *, propagate_nans: bool, stream: Stream) -> Column:
         if propagate_nans and column.nan_count > 0:
             return Column(
                 plc.Column.from_scalar(
-                    plc.Scalar.from_py(float("nan"), self.dtype.plc_type),
+                    plc.Scalar.from_py(
+                        float("nan"), self.dtype.plc_type, stream=stream
+                    ),
                     1,
                 ),
                 name=column.name,
                 dtype=self.dtype,
             )
         if column.nan_count > 0:
-            column = column.mask_nans()
-        return self._reduce(column, request=plc.aggregation.min())
+            column = column.mask_nans(stream=stream)
+        return self._reduce(column, request=plc.aggregation.min(), stream=stream)
 
-    def _max(self, column: Column, *, propagate_nans: bool) -> Column:
+    def _max(self, column: Column, *, propagate_nans: bool, stream: Stream) -> Column:
         if propagate_nans and column.nan_count > 0:
             return Column(
                 plc.Column.from_scalar(
-                    plc.Scalar.from_py(float("nan"), self.dtype.plc_type),
+                    plc.Scalar.from_py(
+                        float("nan"), self.dtype.plc_type, stream=stream
+                    ),
                     1,
                 ),
                 name=column.name,
                 dtype=self.dtype,
             )
         if column.nan_count > 0:
-            column = column.mask_nans()
-        return self._reduce(column, request=plc.aggregation.max())
+            column = column.mask_nans(stream=stream)
+        return self._reduce(column, request=plc.aggregation.max(), stream=stream)
 
-    def _first(self, column: Column) -> Column:
+    def _first(self, column: Column, stream: Stream) -> Column:
         return Column(
-            plc.copying.slice(column.obj, [0, 1])[0], name=column.name, dtype=self.dtype
+            plc.copying.slice(column.obj, [0, 1], stream=stream)[0],
+            name=column.name,
+            dtype=self.dtype,
         )
 
-    def _last(self, column: Column) -> Column:
+    def _last(self, column: Column, stream: Stream) -> Column:
         n = column.size
         return Column(
-            plc.copying.slice(column.obj, [n - 1, n])[0],
+            plc.copying.slice(column.obj, [n - 1, n], stream=stream)[0],
             name=column.name,
             dtype=self.dtype,
         )
@@ -243,4 +257,4 @@ class Agg(Expr):
         # Aggregations like quantiles may have additional children that were
         # preprocessed into pylibcudf requests.
         child = self.children[0]
-        return self.op(child.evaluate(df, context=context))
+        return self.op(child.evaluate(df, context=context), stream=df.stream)

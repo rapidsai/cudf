@@ -313,7 +313,7 @@ class BooleanFunction(Expr):
                 haystack = Column(
                     haystack.obj.children()[1],
                     dtype=DataType(haystack.dtype.polars_type.inner),  # type: ignore[attr-defined]
-                ).astype(needles.dtype)
+                ).astype(needles.dtype, stream=df.stream)
             if haystack.size:
                 return Column(
                     plc.search.contains(haystack.obj, needles.obj), dtype=self.dtype

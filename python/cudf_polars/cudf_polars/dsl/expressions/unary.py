@@ -43,7 +43,7 @@ class Cast(Expr):
         """Evaluate this expression given a dataframe for context."""
         (child,) = self.children
         column = child.evaluate(df, context=context)
-        return column.astype(self.dtype)
+        return column.astype(self.dtype, stream=df.stream)
 
 
 class Len(Expr):
@@ -173,7 +173,7 @@ class UnaryFunction(Expr):
         """Evaluate this expression given a dataframe for context."""
         if self.name == "mask_nans":
             (child,) = self.children
-            return child.evaluate(df, context=context).mask_nans()
+            return child.evaluate(df, context=context).mask_nans(stream=df.stream)
         if self.name == "null_count":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             return Column(
@@ -331,7 +331,7 @@ class UnaryFunction(Expr):
             ):  # pragma: no cover
                 arg = (
                     Column(plc.Column.from_scalar(arg, 1), dtype=fill_value.dtype)
-                    .astype(column.dtype)
+                    .astype(column.dtype, stream=df.stream)
                     .obj.to_scalar()
                 )
             return Column(plc.replace.replace_nulls(column.obj, arg), dtype=self.dtype)
@@ -384,7 +384,7 @@ class UnaryFunction(Expr):
                         replacement,
                     ),
                     dtype=self.dtype,
-                ).astype(self.dtype)
+                ).astype(self.dtype, stream=df.stream)
             return Column(
                 plc.replace.replace_nulls(column.obj, replacement),
                 dtype=self.dtype,

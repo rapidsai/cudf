@@ -1532,7 +1532,9 @@ class Rolling(IR):
                 raise RuntimeError("Input for grouped rolling is not sorted")
         else:
             if not orderby.check_sorted(
-                order=plc.types.Order.ASCENDING, null_order=plc.types.NullOrder.BEFORE
+                order=plc.types.Order.ASCENDING,
+                null_order=plc.types.NullOrder.BEFORE,
+                stream=df.stream,
             ):
                 raise RuntimeError(
                     f"Index column '{index.name}' in rolling is not sorted, please sort first"
@@ -1821,7 +1823,7 @@ def _apply_casts(df: DataFrame, casts: dict[str, DataType]) -> DataFrame:
         if target is None:
             columns.append(Column(col.obj, dtype=col.dtype, name=col.name))
         else:
-            casted = col.astype(target)
+            casted = col.astype(target, stream=df.stream)
             columns.append(Column(casted.obj, dtype=casted.dtype, name=col.name))
     return DataFrame(columns, stream=df.stream)
 
@@ -2818,7 +2820,9 @@ class MapFunction(IR):
             ).columns()
             value_column = plc.concatenate.concatenate(
                 [
-                    df.column_map[pivotee].astype(schema[value_name]).obj
+                    df.column_map[pivotee]
+                    .astype(schema[value_name], stream=df.stream)
+                    .obj
                     for pivotee in pivotees
                 ],
                 stream=df.stream,

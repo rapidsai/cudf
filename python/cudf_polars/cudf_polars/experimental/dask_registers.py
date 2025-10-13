@@ -77,8 +77,9 @@ def register() -> None:
     ) -> tuple[
         DataFrameHeader | ColumnHeader, list[memoryview[bytes] | plc.gpumemoryview]
     ]:
+        stream = get_dask_cuda_stream()
         with log_errors():
-            header, frames = x.serialize()
+            header, frames = x.serialize(stream=stream)
             # Dask expect a list of frames
             return header, list(frames)
 
@@ -116,8 +117,9 @@ def register() -> None:
     def dask_serialize_column_or_frame(
         x: DataFrame | Column,
     ) -> tuple[DataFrameHeader | ColumnHeader, tuple[memoryview[bytes], memoryview]]:
+        stream = get_dask_cuda_stream()
         with log_errors():
-            header, (metadata, gpudata) = x.serialize()
+            header, (metadata, gpudata) = x.serialize(stream=stream)
 
             # For robustness, we check that the gpu data is contiguous
             cai = gpudata.__cuda_array_interface__

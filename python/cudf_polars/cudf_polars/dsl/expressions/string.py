@@ -315,7 +315,7 @@ class StringFunction(Expr):
             columns = [
                 Column(
                     child.evaluate(df, context=context).obj, dtype=child.dtype
-                ).astype(self.dtype)
+                ).astype(self.dtype, stream=df.stream)
                 for child in self.children
             ]
 
@@ -341,7 +341,9 @@ class StringFunction(Expr):
             )
         elif self.name is StringFunction.Name.ConcatVertical:
             (child,) = self.children
-            column = child.evaluate(df, context=context).astype(self.dtype)
+            column = child.evaluate(df, context=context).astype(
+                self.dtype, stream=df.stream
+            )
             delimiter, ignore_nulls = self.options
             if column.null_count > 0 and not ignore_nulls:
                 return Column(plc.Column.all_null_like(column.obj, 1), dtype=self.dtype)
