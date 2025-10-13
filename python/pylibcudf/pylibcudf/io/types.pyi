@@ -1,7 +1,7 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 import io
 import os
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from enum import IntEnum
 from typing import Any, Literal, Self, TypeAlias, overload
 
@@ -112,15 +112,20 @@ class TableWithMetadata:
 
 class SourceInfo:
     def __init__(
-        self, sources: list[str] | list[os.PathLike[Any]] | list[Datasource]
+        self,
+        sources: Sequence[str]
+        | Sequence[os.PathLike[Any]]
+        | Sequence[Datasource],
     ) -> None: ...
+    @staticmethod
+    def _is_remote_uri(path: str | os.PathLike[Any]) -> bool: ...
 
 class SinkInfo:
     def __init__(
         self,
-        sinks: list[os.PathLike[Any]]
-        | list[io.StringIO]
-        | list[io.BytesIO]
-        | list[io.TextIOBase]
-        | list[str],
+        sinks: Sequence[os.PathLike[Any]]
+        | Sequence[io.StringIO]
+        | Sequence[io.BytesIO]
+        | Sequence[io.TextIOBase]
+        | Sequence[str],
     ) -> None: ...
