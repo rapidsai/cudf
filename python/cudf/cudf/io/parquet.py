@@ -10,6 +10,7 @@ import shutil
 import tempfile
 import warnings
 from collections import defaultdict
+from collections.abc import Hashable, Sequence
 from contextlib import ExitStack
 from functools import partial, reduce
 from typing import TYPE_CHECKING, Any, Literal
@@ -696,7 +697,7 @@ def _parse_metadata(meta) -> tuple[bool, Any, None | np.dtype]:
 @_performance_tracking
 def read_parquet_metadata(
     filepath_or_buffer,
-) -> tuple[int, int, list[Hashable], int, list[dict[str, int]]]:
+) -> tuple[int, int, Sequence[Hashable], int, Sequence[dict[str, int]]]:
     """{docstring}"""
 
     # List of filepaths or buffers
