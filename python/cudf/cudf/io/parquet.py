@@ -44,7 +44,7 @@ except ImportError:
     import json
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Hashable
+    from collections.abc import Callable, Hashable, Sequence
 
     from typing_extensions import Self
 
@@ -2389,7 +2389,7 @@ def _get_stat_freq(
 
 def _process_metadata(
     df: DataFrame,
-    names: list[Hashable],
+    names: Sequence[Hashable],
     per_file_user_data: list,
     row_groups,
     filepaths_or_buffers,
