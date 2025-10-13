@@ -18,7 +18,7 @@ def engine():
     return pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
-        executor_options={"max_rows_per_partition": 3, "scheduler": DEFAULT_SCHEDULER},
+        executor_options={"max_rows_per_partition": 3, "cluster": DEFAULT_SCHEDULER},
     )
 
 

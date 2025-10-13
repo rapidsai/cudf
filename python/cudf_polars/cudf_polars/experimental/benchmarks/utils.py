@@ -217,7 +217,7 @@ class RunConfig:
     queries: list[int]
     suffix: str
     executor: ExecutorType
-    scheduler: str
+    cluster: str
     n_workers: int
     versions: PackageVersions = dataclasses.field(
         default_factory=PackageVersions.collect
@@ -254,10 +254,10 @@ class RunConfig:
     def from_args(cls, args: argparse.Namespace) -> RunConfig:
         """Create a RunConfig from command line arguments."""
         executor: ExecutorType = args.executor
-        scheduler = args.scheduler
+        cluster = args.cluster
 
         if executor == "in-memory" or executor == "cpu":
-            scheduler = None
+            cluster = None
 
         path = args.path
         name = args.query_set
@@ -300,7 +300,7 @@ class RunConfig:
         return cls(
             queries=args.query,
             executor=executor,
-            scheduler=scheduler,
+            cluster=cluster,
             n_workers=args.n_workers,
             shuffle=args.shuffle,
             gather_shuffle_stats=args.rapidsmpf_dask_statistics,
@@ -341,12 +341,12 @@ class RunConfig:
             print(f"scale_factor: {self.scale_factor}")
             print(f"executor: {self.executor}")
             if self.executor == "streaming":
-                print(f"scheduler: {self.scheduler}")
+                print(f"cluster: {self.cluster}")
                 print(f"blocksize: {self.blocksize}")
                 print(f"shuffle_method: {self.shuffle}")
                 print(f"broadcast_join_limit: {self.broadcast_join_limit}")
                 print(f"stats_planning: {self.stats_planning}")
-                if self.scheduler == "distributed":
+                if self.cluster == "distributed":
                     print(f"n_workers: {self.n_workers}")
                     print(f"threads: {self.threads}")
                     print(f"rmm_async: {self.rmm_async}")
@@ -391,8 +391,8 @@ def get_executor_options(
         executor_options["broadcast_join_limit"] = run_config.broadcast_join_limit
     if run_config.rapidsmpf_spill:
         executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
-    if run_config.scheduler == "distributed":
-        executor_options["scheduler"] = "distributed"
+    if run_config.cluster == "distributed":
+        executor_options["cluster"] = "distributed"
     if run_config.stats_planning:
         executor_options["stats_planning"] = {"use_reduction_planning": True}
 
@@ -444,7 +444,7 @@ def print_query_plan(
 
 def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  # type: ignore
     """Initialize a Dask distributed cluster."""
-    if run_config.scheduler != "distributed":
+    if run_config.cluster != "distributed":
         return None
 
     from dask_cuda import LocalCUDACluster
@@ -606,21 +606,21 @@ def parse_args(
                 - cpu       : Use Polars CPU engine"""),
     )
     parser.add_argument(
-        "-s",
-        "--scheduler",
-        default="synchronous",
+        "-c",
+        "--cluster",
+        default="single",
         type=str,
-        choices=["synchronous", "distributed"],
+        choices=["single", "distributed"],
         help=textwrap.dedent("""\
-            Scheduler type to use with the 'streaming' executor.
-                - synchronous : Run locally in a single process
+            Cluster type to use with the 'streaming' executor.
+                - single      : Run locally in a single process
                 - distributed : Use Dask for multi-GPU execution"""),
     )
     parser.add_argument(
         "--n-workers",
         default=1,
         type=int,
-        help="Number of Dask-CUDA workers (requires 'distributed' scheduler).",
+        help="Number of Dask-CUDA workers (requires 'distributed' cluster).",
     )
     parser.add_argument(
         "--blocksize",
@@ -694,7 +694,7 @@ def parse_args(
         "--rmm-async",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Use RMM async memory resource. Note: only affects distributed scheduler!",
+        help="Use RMM async memory resource. Note: only affects distributed cluster!",
     )
     parser.add_argument(
         "--rapidsmpf-oom-protection",
@@ -959,7 +959,7 @@ def setup_logging(query_id: int, iteration: int) -> None:  # noqa: D103
     if _HAS_STRUCTLOG:
         # structlog uses contextvars to propagate context down to where log records
         # are emitted. Ideally, we'd just set the contextvars here using
-        # structlog.bind_contextvars; for the distributed scheduler we would need
+        # structlog.bind_contextvars; for the distributed cluster we would need
         # to use something like client.run to set the contextvars on the worker.
         # However, there's an unfortunate conflict between structlog's use of
         # context vars and how Dask Workers actually execute tasks, such that

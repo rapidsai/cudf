@@ -31,7 +31,7 @@ def engine():
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_SCHEDULER,
             "shuffle_method": "tasks",
             "target_partition_size": 10_000,
             "max_rows_per_partition": 1_000,
@@ -83,7 +83,7 @@ def test_explain_physical_plan(tmp_path, df):
         raise_on_fail=True,
         executor_options={
             "target_partition_size": 10_000,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_SCHEDULER,
         },
     )
 
@@ -109,7 +109,7 @@ def test_explain_physical_plan_with_groupby(tmp_path, df):
         raise_on_fail=True,
         executor_options={
             "target_partition_size": 10_000,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_SCHEDULER,
         },
     )
 

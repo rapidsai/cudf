@@ -39,7 +39,7 @@ def test_parallel_scan(tmp_path, df, fmt, scan_fn):
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
-        executor_options={"scheduler": DEFAULT_SCHEDULER},
+        executor_options={"cluster": DEFAULT_SCHEDULER},
     )
     assert_gpu_result_equal(q, engine=engine)
 
@@ -54,7 +54,7 @@ def test_target_partition_size(tmp_path, df, blocksize, n_files):
         executor="streaming",
         executor_options={
             "target_partition_size": blocksize,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_SCHEDULER,
         },
     )
     assert_gpu_result_equal(q, engine=engine)
@@ -80,7 +80,7 @@ def test_split_scan_predicate(tmp_path, df, mask):
         executor="streaming",
         executor_options={
             "target_partition_size": 1_000,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_SCHEDULER,
         },
     )
     assert_gpu_result_equal(q, engine=engine)

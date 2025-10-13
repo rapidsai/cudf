@@ -23,7 +23,7 @@ def engine(request):
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 4,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_SCHEDULER,
             "shuffle_method": request.param,
         },
     )

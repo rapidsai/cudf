@@ -30,7 +30,7 @@ def test_evaluate_streaming():
         engine=GPUEngine(
             raise_on_fail=True,
             executor="streaming",
-            executor_options={"scheduler": DEFAULT_SCHEDULER},
+            executor_options={"cluster": DEFAULT_SCHEDULER},
         )
     )
     assert_frame_equal(expected, got_gpu)
@@ -87,7 +87,7 @@ def engine():
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 2,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_SCHEDULER,
         },
     )
 
@@ -120,7 +120,7 @@ def test_preserve_partitioning():
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 2,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_SCHEDULER,
             "broadcast_join_limit": 2,
             "unique_fraction": {"a": 1.0},
         },
@@ -143,15 +143,15 @@ def test_preserve_partitioning():
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_synchronous_scheduler():
-    # Test that the synchronous scheduler clears
+def test_single_cluster():
+    # Test that the single cluster clears
     # the cache as tasks are executed.
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 4,
-            "scheduler": "synchronous",
+            "cluster": "single",
         },
     )
     left = pl.LazyFrame(

@@ -18,7 +18,7 @@ def engine():
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 3,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_SCHEDULER,
             "shuffle_method": "tasks",
             "fallback_mode": "raise",
         },
@@ -32,7 +32,7 @@ def engine_large():
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 2_100,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_SCHEDULER,
             "shuffle_method": "tasks",
             "fallback_mode": "raise",
         },
@@ -140,7 +140,7 @@ def test_sort_after_sparse_join():
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_SCHEDULER,
             "max_rows_per_partition": 4,
         },
     )

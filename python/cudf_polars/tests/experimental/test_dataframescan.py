@@ -32,7 +32,7 @@ def test_parallel_dataframescan(df, max_rows_per_partition):
         executor="streaming",
         executor_options={
             "max_rows_per_partition": max_rows_per_partition,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_SCHEDULER,
         },
     )
     assert_gpu_result_equal(df, engine=engine)
@@ -53,7 +53,7 @@ def test_dataframescan_concat(df):
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 1_000,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_SCHEDULER,
         },
     )
     df2 = pl.concat([df, df])

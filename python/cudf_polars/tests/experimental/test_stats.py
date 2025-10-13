@@ -39,7 +39,7 @@ def engine():
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_SCHEDULER,
             "shuffle_method": "tasks",
             "target_partition_size": 10_000,
             "max_rows_per_partition": 1_000,
@@ -124,7 +124,7 @@ def test_base_stats_parquet(
         executor="streaming",
         executor_options={
             "target_partition_size": 10_000,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_SCHEDULER,
         },
         parquet_options={
             "max_footer_samples": max_footer_samples,
@@ -220,7 +220,7 @@ def test_base_stats_parquet_groupby(
         executor="streaming",
         executor_options={
             "target_partition_size": 10_000,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_SCHEDULER,
             "stats_planning": {"use_reduction_planning": True},
         },
         parquet_options={
@@ -441,7 +441,7 @@ def test_stats_planning(
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_SCHEDULER,
             "shuffle_method": "tasks",
             "target_partition_size": 10_000,
             "max_rows_per_partition": 1_000,

@@ -30,7 +30,7 @@ def test_rolling_datetime():
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 3,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_SCHEDULER,
             "fallback_mode": StreamingFallbackMode.WARN,
         },
     )
@@ -54,7 +54,7 @@ def test_over_in_filter_unsupported() -> None:
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 1,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_SCHEDULER,
             "fallback_mode": StreamingFallbackMode.WARN,
         },
     )
