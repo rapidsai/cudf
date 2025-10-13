@@ -162,7 +162,11 @@ class TemporalBaseColumn(ColumnBase):
                     if np.isnat(other):
                         # Workaround for https://github.com/numpy/numpy/issues/28496
                         # Once fixed, can always use the astype below
-                        other = type(other)("NaT", to_unit)
+                        # type: ignore[call-overload]: numpy stubs only accept literal strings
+                        # for time units (e.g., "ns", "us") to allow compile-time validation,
+                        # but we're passing a variable string (to_unit) with a time unit that
+                        # we know is valid at runtime
+                        other = type(other)("NaT", to_unit)  # type: ignore[call-overload]
                     else:
                         other = other.astype(
                             np.dtype(f"{other.dtype.kind}8[{to_unit}]")
