@@ -126,6 +126,9 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
     stats_columns_collector{filter.get(), static_cast<size_type>(output_dtypes.size())}
       .get_stats_columns_mask();
 
+  // Return early if no columns will participate in stats based filtering
+  if (stats_columns_mask.empty()) { return std::nullopt; }
+
   // Converts Column chunk statistics to a table
   // where min(col[i]) = columns[i*2], max(col[i])=columns[i*2+1]
   // For each column, it contains #sources * #column_chunks_per_src rows
@@ -153,8 +156,8 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   auto stats_table = cudf::table(std::move(columns));
 
   // Converts AST to StatsAST with reference to min, max columns in above `stats_table`.
-  stats_expression_converter const stats_expr{filter.get(),
-                                              static_cast<size_type>(output_dtypes.size())};
+  stats_expression_converter const stats_expr{
+    filter.get(), static_cast<size_type>(output_dtypes.size()), stream};
 
   // Filter stats table with StatsAST expression and collect filtered row group indices
   return collect_filtered_row_group_indices(
@@ -309,12 +312,13 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
 std::reference_wrapper<ast::expression const> named_to_reference_converter::visit(
   ast::operation const& expr)
 {
-  auto const operands = expr.get_operands();
-  auto op             = expr.get_operator();
-  auto new_operands   = visit_operands(operands);
-  if (cudf::ast::detail::ast_operator_arity(op) == 2) {
+  auto const operands       = expr.get_operands();
+  auto op                   = expr.get_operator();
+  auto new_operands         = visit_operands(operands);
+  auto const operator_arity = cudf::ast::detail::ast_operator_arity(op);
+  if (operator_arity == 2) {
     _operators.emplace_back(op, new_operands.front(), new_operands.back());
-  } else if (cudf::ast::detail::ast_operator_arity(op) == 1) {
+  } else if (operator_arity == 1) {
     _operators.emplace_back(op, new_operands.front());
   }
   _converted_expr = std::reference_wrapper<ast::expression const>(_operators.back());
