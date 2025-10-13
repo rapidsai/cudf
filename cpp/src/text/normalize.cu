@@ -297,7 +297,8 @@ namespace {
  */
 CUDF_KERNEL void special_tokens_kernel(uint32_t* d_normalized,
                                        int64_t total_count,
-                                       cudf::device_span<cudf::string_view const> special_tokens)
+                                       cudf::device_span<cudf::string_view const> special_tokens,
+                                       bool do_lower_case)
 {
   auto const idx = cudf::detail::grid_1d::global_thread_id();
   if (idx >= total_count) { return; }
@@ -324,11 +325,13 @@ CUDF_KERNEL void special_tokens_kernel(uint32_t* d_normalized,
   // fix up chars to remove the extra spaces and convert to upper-case
   *(begin + 1) = 0;  // removes space after '['
   *(match - 1) = 0;  // removes space before ']'
-  auto itr     = begin + 2;
-  while (itr < match - 2) {
-    auto ch = *itr;
-    if (ch >= 'a' && ch <= 'z') { *itr = ch - 'a' + 'A'; }
-    ++itr;
+  if (do_lower_case) {
+    auto itr = begin + 2;
+    while (itr < match - 2) {
+      auto ch = *itr;
+      if (ch >= 'a' && ch <= 'z') { *itr = ch - 'a' + 'A'; }
+      ++itr;
+    }
   }
 }
 
@@ -539,7 +542,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   auto const special_tokens = parameters->get_special_tokens();
   if (!special_tokens.empty()) {
     special_tokens_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-      d_normalized.data(), chars_size, special_tokens);
+      d_normalized.data(), chars_size, special_tokens, parameters->do_lower_case);
   }
 
   // Use segmented-reduce over the non-zero codepoints to get the size of the output rows
