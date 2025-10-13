@@ -88,7 +88,10 @@ class Column:
     def to_arrow(self, metadata: list | str | None = None) -> ArrowLike: ...
     @staticmethod
     def from_arrow(
-        obj: ArrowLike, dtype: DataType | None = None
+        obj: ArrowLike,
+        dtype: DataType | None = None,
+        stream: Stream | None = None,
+        mr: DeviceMemoryResource | None = None,
     ) -> Column: ...
     @classmethod
     def from_cuda_array_interface(
