@@ -64,6 +64,11 @@ class aggregate_orc_metadata {
   aggregate_orc_metadata(std::vector<std::unique_ptr<datasource>> const& sources,
                          rmm::cuda_stream_view stream);
 
+  aggregate_orc_metadata(aggregate_orc_metadata const&)            = delete;
+  aggregate_orc_metadata& operator=(aggregate_orc_metadata const&) = delete;
+  aggregate_orc_metadata(aggregate_orc_metadata&&)                 = delete;
+  aggregate_orc_metadata& operator=(aggregate_orc_metadata&&)      = delete;
+
   [[nodiscard]] auto get_col_type(int col_idx) const
   {
     return per_file_metadata[0].ff.types[col_idx];
