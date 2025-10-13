@@ -2033,8 +2033,7 @@ class Join(IR):
         right_policy: plc.copying.OutOfBoundsPolicy,
         *,
         left_primary: bool = True,
-        left_stream: Stream,
-        right_stream: Stream,
+        stream: Stream,
     ) -> list[plc.Column]:
         """
         Reorder gather maps to satisfy polars join order restrictions.
@@ -2057,12 +2056,8 @@ class Join(IR):
             Whether to preserve the left input row order first, and which
             input stream to use for the primary sort.
             Defaults to True.
-        left_stream
-            CUDA stream used for device memory operations and kernel launches
-            on the left dataframe.
-        right_stream
-            CUDA stream used for device memory operations and kernel launches
-            on the right dataframe.
+        stream
+            CUDA stream used for device memory operations and kernel launches.
 
         Returns
         -------
@@ -2075,6 +2070,10 @@ class Join(IR):
         the original row order of the left side, breaking ties by the right side.
         And vice versa when ``left_primary`` is False.
         """
+        # TODO: Perform the `left` and `right` operations concurrently.
+        # `lg` and `rg` are on a stream that's downstream of the left and right
+        # streams
+
         # create the `init` and `step` args twice, once per stream,
         # to avoid creating a dependency between the two streams too early.
         (left_order_col,) = plc.copying.gather(
@@ -2082,28 +2081,28 @@ class Join(IR):
                 [
                     plc.filling.sequence(
                         left_rows,
-                        plc.Scalar.from_py(0, plc.types.SIZE_TYPE, stream=left_stream),
-                        plc.Scalar.from_py(1, plc.types.SIZE_TYPE, stream=left_stream),
+                        plc.Scalar.from_py(0, plc.types.SIZE_TYPE, stream=stream),
+                        plc.Scalar.from_py(1, plc.types.SIZE_TYPE, stream=stream),
                     )
                 ]
             ),
             lg,
             left_policy,
-            stream=left_stream,
+            stream=stream,
         ).columns()
         (right_order_col,) = plc.copying.gather(
             plc.Table(
                 [
                     plc.filling.sequence(
                         right_rows,
-                        plc.Scalar.from_py(0, plc.types.SIZE_TYPE, stream=right_stream),
-                        plc.Scalar.from_py(1, plc.types.SIZE_TYPE, stream=right_stream),
+                        plc.Scalar.from_py(0, plc.types.SIZE_TYPE, stream=stream),
+                        plc.Scalar.from_py(1, plc.types.SIZE_TYPE, stream=stream),
                     )
                 ]
             ),
             rg,
             right_policy,
-            stream=right_stream,
+            stream=stream,
         ).columns()
 
         keys = (
@@ -2112,14 +2111,12 @@ class Join(IR):
             else plc.Table([right_order_col, left_order_col])
         )
 
-        out_stream = get_joined_cuda_stream(upstreams=(left_stream, right_stream))
-
         return plc.sorting.stable_sort_by_key(
             plc.Table([lg, rg]),
             keys,
             [plc.types.Order.ASCENDING, plc.types.Order.ASCENDING],
             [plc.types.NullOrder.AFTER, plc.types.NullOrder.AFTER],
-            stream=out_stream,
+            stream=stream,
         ).columns()
 
     @staticmethod
@@ -2253,8 +2250,7 @@ class Join(IR):
                     rg,
                     right_policy,
                     left_primary=maintain_order.startswith("left"),
-                    left_stream=left.stream,
-                    right_stream=right.stream,
+                    stream=stream,
                 )
             if coalesce:
                 if how == "Full":
