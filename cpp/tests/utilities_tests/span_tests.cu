@@ -420,7 +420,7 @@ TEST(HostDeviceSpanTest, CanSendToDevice)
 
   original_message.host_to_device_async(stream);
 
-  std::string got_message(12, '\0');
+  std::string got_message(original_message.size(), '\0');
   cudaMemcpyAsync(got_message.data(),
                   original_message.device_ptr(),
                   original_message.size(),
@@ -428,7 +428,6 @@ TEST(HostDeviceSpanTest, CanSendToDevice)
                   stream.value());
   stream.synchronize();
 
-  EXPECT_EQ(11, got_message.size());
   EXPECT_EQ(got_message, hello_world_message);
 }
 
