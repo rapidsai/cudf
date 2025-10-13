@@ -129,9 +129,14 @@ def _plc_write_parquet(
         )
         tbl_meta = plc.io.types.TableInputMetadata(plc_table)
         for level, idx_name in enumerate(table.index.names):
-            tbl_meta.column_metadata[level].set_name(
-                ioutils._index_level_name(idx_name, level, table._column_names)
+            idx_name_str = ioutils._index_level_name(
+                idx_name, level, table._column_names
             )
+            if not isinstance(idx_name_str, str):
+                raise ValueError(
+                    f"Index name must be a string, got {type(idx_name_str)}"
+                )
+            tbl_meta.column_metadata[level].set_name(idx_name_str)
         num_index_cols_meta = table.index.nlevels
     else:
         plc_table = plc.Table(
