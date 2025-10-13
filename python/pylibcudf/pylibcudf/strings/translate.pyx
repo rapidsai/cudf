@@ -47,7 +47,7 @@ cpdef Column translate(
     """
     Translates individual characters within each string.
 
-    For details, see :cpp:func:`cudf::strings::translate`.
+    For details, see :cpp:func:`translate`.
 
     Parameters
     ----------
@@ -92,7 +92,7 @@ cpdef Column filter_characters(
     """
     Removes ranges of characters from each string in a strings column.
 
-    For details, see :cpp:func:`cudf::strings::filter_characters`.
+    For details, see :cpp:func:`filter_characters`.
 
     Parameters
     ----------

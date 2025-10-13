@@ -117,6 +117,11 @@ class metadata : public file_metadata {
  public:
   explicit metadata(datasource* const src) : source(src) {}
 
+  metadata(metadata const&)            = delete;
+  metadata& operator=(metadata const&) = delete;
+  metadata(metadata&&)                 = delete;
+  metadata& operator=(metadata&&)      = delete;
+
   /**
    * @brief Initializes the parser and filters down to a subset of rows
    *

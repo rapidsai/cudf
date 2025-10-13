@@ -337,7 +337,7 @@ cpdef PackedColumns pack(Table input, Stream stream=None, DeviceMemoryResource m
     >>> metadata, gpu_data = packed.release()
     >>> pylibcudf.contiguous_split.unpack_from_memoryviews(metadata, gpu_data)
 
-    For details, see :cpp:func:`cudf::pack`.
+    For details, see :cpp:func:`pack`.
     """
     cdef unique_ptr[packed_columns] pack
     stream = _get_stream(stream)
@@ -354,7 +354,7 @@ cpdef Table unpack(PackedColumns input):
 
     Copies the result of a serialized table into a table.
 
-    For details, see :cpp:func:`cudf::unpack`.
+    For details, see :cpp:func:`unpack`.
 
     Parameters
     ----------
@@ -380,7 +380,7 @@ cpdef Table unpack_from_memoryviews(
 
     Copies the result of a serialized table into a table.
 
-    For details, see :cpp:func:`cudf::unpack`.
+    For details, see :cpp:func:`unpack`.
 
     Parameters
     ----------

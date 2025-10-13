@@ -470,7 +470,7 @@ cdef class SourceInfo:
         different types of sources will raise a `ValueError`.
     """
 
-    def __init__(self, list sources):
+    def __init__(self, sources):
         if not sources:
             raise ValueError("Need to pass at least one source")
 
