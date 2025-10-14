@@ -188,7 +188,8 @@ class DataFrame:
             Dtypes for the columns
         stream
             CUDA stream used for device memory operations and kernel launches
-            on this dataframe. The data in ``table`` must be valid on ``stream``.
+            on this dataframe. The caller is responsible for ensuring that
+            the data in ``table`` is valid on ``stream``.
 
         Returns
         -------
@@ -228,7 +229,8 @@ class DataFrame:
             Two-tuple of frames (a memoryview and a gpumemoryview).
         stream
             CUDA stream used for device memory operations and kernel launches
-            on this dataframe. The data in ``frames`` must be valid on ``stream``.
+            on this dataframe. The caller is responsible for ensuring that
+            the data in ``frames`` is valid on ``stream``.
 
         Returns
         -------
