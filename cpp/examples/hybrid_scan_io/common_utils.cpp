@@ -25,6 +25,7 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device/cuda_async_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
@@ -39,12 +40,11 @@
 
 std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_pool_used)
 {
-  auto cuda_mr = std::make_shared<rmm::mr::cuda_memory_resource>();
   if (is_pool_used) {
     return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-      cuda_mr, rmm::percent_of_free_device_memory(50));
+      std::make_shared<rmm::mr::cuda_memory_resource>(), rmm::percent_of_free_device_memory(50));
   }
-  return cuda_mr;
+  return std::make_shared<rmm::mr::cuda_async_memory_resource>();
 }
 
 cudf::ast::operation create_filter_expression(std::string const& column_name,
@@ -135,17 +135,16 @@ std::vector<rmm::device_buffer> fetch_byte_ranges(
 
   std::vector<rmm::device_buffer> buffers(byte_ranges.size());
 
-  std::for_each(
-    thrust::counting_iterator<size_t>(0),
-    thrust::counting_iterator(byte_ranges.size()),
-    [&](auto const idx) {
-      auto const chunk_offset = host_buffer.data() + byte_ranges[idx].offset();
-      auto const chunk_size   = byte_ranges[idx].size();
-      auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
-      CUDF_CUDA_TRY(cudaMemcpyAsync(
-        buffer.data(), chunk_offset, chunk_size, cudaMemcpyDefault, stream.value()));
-      buffers[idx] = std::move(buffer);
-    });
+  std::for_each(thrust::counting_iterator<size_t>(0),
+                thrust::counting_iterator(byte_ranges.size()),
+                [&](auto const idx) {
+                  auto const chunk_offset = host_buffer.data() + byte_ranges[idx].offset();
+                  auto const chunk_size   = byte_ranges[idx].size();
+                  auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
+                  CUDF_CUDA_TRY(cudaMemcpyAsync(
+                    buffer.data(), chunk_offset, chunk_size, cudaMemcpyDefault, stream.value()));
+                  buffers[idx] = std::move(buffer);
+                });
 
   stream.synchronize_no_throw();
   return buffers;
