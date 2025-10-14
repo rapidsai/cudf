@@ -595,6 +595,7 @@ class StreamingExecutor:
             object.__setattr__(self, "scheduler", None)
         elif self.cluster is None:
             object.__setattr__(self, "cluster", Cluster.SINGLE)
+        assert self.cluster is not None, "Expected cluster to be set."
 
         # Handle shuffle_method defaults for streaming executor
         if self.shuffle_method is None:
@@ -627,7 +628,6 @@ class StreamingExecutor:
             self, "fallback_mode", StreamingFallbackMode(self.fallback_mode)
         )
         if self.target_partition_size == 0:
-            assert self.cluster is not None, "Expected cluster to be set."
             object.__setattr__(
                 self, "target_partition_size", default_blocksize(self.cluster)
             )
