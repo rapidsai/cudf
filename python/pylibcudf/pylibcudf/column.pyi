@@ -95,7 +95,10 @@ class Column:
     def _to_host_array(self) -> Any: ...
     @staticmethod
     def from_arrow(
-        obj: ArrowLike, dtype: DataType | None = None
+        obj: ArrowLike,
+        dtype: DataType | None = None,
+        stream: Stream | None = None,
+        mr: DeviceMemoryResource | None = None,
     ) -> Column: ...
     @classmethod
     def from_cuda_array_interface(
