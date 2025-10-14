@@ -183,23 +183,7 @@ class StructColumn(ColumnBase):
     def copy(self, deep: bool = True) -> Self:
         # Since struct columns are immutable, both deep and
         # shallow copies share the underlying device data and mask.
-        result = super().copy(deep=False)
-        if deep:
-            result = result._rename_fields(self.dtype.fields.keys())
-        return result
-
-    def _rename_fields(self, names) -> Self:
-        """
-        Return a StructColumn with the same field values as this StructColumn,
-        but with the field names equal to `names`.
-        """
-        dtype = StructDtype(
-            {
-                name: col.dtype
-                for name, col in zip(names, self.children, strict=True)
-            }
-        )
-        return self._with_type_metadata(dtype)  # type: ignore[return-value]
+        return super().copy(deep=False)
 
     @property
     def __cuda_array_interface__(self):
