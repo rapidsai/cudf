@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,18 @@
 #pragma once
 
 #include <rmm/cuda_device.hpp>
+#include <rmm/mr/device/cuda_async_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
 #include <string>
+
+/**
+ * @brief Create CUDA async memory resource
+ */
+auto make_cuda_async_mr() { return std::make_shared<rmm::mr::cuda_async_memory_resource>(); }
 
 /**
  * @brief Create CUDA memory resource
@@ -43,5 +49,5 @@ auto make_pool_mr()
 std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(std::string const& name)
 {
   if (name == "pool") { return make_pool_mr(); }
-  return make_cuda_mr();
+  return make_cuda_async_mr();
 }

@@ -57,12 +57,11 @@
  */
 std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool pool)
 {
-  auto cuda_mr = std::make_shared<rmm::mr::cuda_memory_resource>();
   if (pool) {
     return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-      cuda_mr, rmm::percent_of_free_device_memory(50));
+      std::make_shared<rmm::mr::cuda_memory_resource>(), rmm::percent_of_free_device_memory(50));
   }
-  return cuda_mr;
+  return std::make_shared<rmm::mr::cuda_async_memory_resource>();
 }
 
 /**

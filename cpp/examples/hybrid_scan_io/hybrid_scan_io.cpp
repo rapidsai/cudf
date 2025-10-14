@@ -325,7 +325,7 @@ int main(int argc, char const** argv)
   }
 
   // Initialize mr, default stream and stream pool
-  auto constexpr is_pool_used = true;
+  auto constexpr is_pool_used = false;
   auto stream                 = cudf::get_default_stream();
   auto resource               = create_memory_resource(is_pool_used);
   auto stats_mr =
