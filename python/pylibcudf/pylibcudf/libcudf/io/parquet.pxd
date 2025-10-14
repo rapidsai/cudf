@@ -40,7 +40,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
 
         void set_filter(expression &filter) except +libcudf_exception_handler
         void set_columns(vector[string] col_names) except +libcudf_exception_handler
-        void set_num_rows(size_type val) except +libcudf_exception_handler
+        void set_num_rows(int64_t val) except +libcudf_exception_handler
         void set_row_groups(
             vector[vector[size_type]] row_grp
         ) except +libcudf_exception_handler
