@@ -530,7 +530,7 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
     _sources,
     options.is_enabled_use_arrow_schema(),
     options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas(),
-    true);  //read page index
+    true);  // read page index
 
   // Number of input sources
   _num_sources = _sources.size();
@@ -1041,7 +1041,8 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
 
   // Open and parse the source dataset metadata
   // Don't read page index
-  auto metadata = aggregate_reader_metadata(sources, use_arrow_schema, has_column_projection, false);
+  auto metadata =
+    aggregate_reader_metadata(sources, use_arrow_schema, has_column_projection, false);
 
   return parquet_metadata{parquet_schema{walk_schema(&metadata, 0)},
                           metadata.get_num_rows(),

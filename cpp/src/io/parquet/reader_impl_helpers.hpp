@@ -116,7 +116,7 @@ struct metadata : public FileMetaData {
   metadata() = default;
   explicit metadata(datasource* source, bool read_page_indexes = true);
   void sanitize_schema();
-  
+
   // Explicit destructor with NVTX profiling and manual data member destruction
   ~metadata();
 };
@@ -575,7 +575,7 @@ class aggregate_reader_metadata {
   aggregate_reader_metadata(host_span<std::unique_ptr<datasource> const> sources,
                             bool use_arrow_schema,
                             bool has_cols_from_mismatched_srcs,
-                            bool read_page_indexes);
+                            bool read_page_indexes = true);
 };
 
 /**
