@@ -31,6 +31,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 
+#include <cmath>
 #include <functional>
 #include <future>
 #include <numeric>
@@ -366,27 +367,31 @@ metadata::metadata(datasource* source, bool read_page_indexes)
       size_t const total_columns = all_columns.size();
 
       // Use parallel processing only if we have enough columns to justify the overhead
-      constexpr size_t parallel_threshold = 512;
+      constexpr std::size_t parallel_threshold = 512;
 
       if (total_columns >= parallel_threshold) {
         // Dynamically calculate number of tasks based on column count
-        constexpr size_t min_tasks               = 4;
-        constexpr size_t max_tasks               = 32;
-        constexpr size_t columns_per_task_target = parallel_threshold / min_tasks;
+        // Scale by powers of 2: min_tasks at parallel_threshold, then double for each 4x increase
+        // This allows columns per task to scale up before adding more tasks
+        constexpr std::size_t min_tasks = 4;
+        constexpr std::size_t max_tasks = 32;
 
-        size_t const num_tasks =
-          std::clamp(total_columns / columns_per_task_target, min_tasks, max_tasks);
-        size_t const columns_per_task = total_columns / num_tasks;
-        size_t const remainder        = total_columns % num_tasks;
+        // Calculate the scaling factor as a power of 2, but grow more slowly
+        auto const ratio      = static_cast<double>(total_columns) / parallel_threshold;
+        auto const multiplier = std::size_t(1) << (static_cast<size_t>(std::log2(ratio)) / 2);
+        auto const num_tasks  = std::clamp(min_tasks * multiplier, min_tasks, max_tasks);
+
+        auto const columns_per_task = total_columns / num_tasks;
+        auto const remainder        = total_columns % num_tasks;
 
         std::vector<std::future<void>> tasks;
         tasks.reserve(num_tasks);
 
-        size_t start_idx = 0;
-        for (size_t task_id = 0; task_id < num_tasks; ++task_id) {
+        std::size_t start_idx = 0;
+        for (std::size_t task_id = 0; task_id < num_tasks; ++task_id) {
           // Calculate work range for this task
-          size_t task_size = columns_per_task + (task_id < remainder ? 1 : 0);
-          size_t end_idx   = start_idx + task_size;
+          auto const task_size = columns_per_task + (task_id < remainder ? 1 : 0);
+          auto const end_idx   = start_idx + task_size;
 
           // Skip empty tasks
           if (start_idx >= total_columns) break;
