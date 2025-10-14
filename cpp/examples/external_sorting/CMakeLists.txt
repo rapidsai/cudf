@@ -25,16 +25,16 @@ set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
 list(APPEND CUDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
 
-add_library(cusort OBJECT cusort.cpp parquet_io.cpp)
+add_library(cusort OBJECT cusort.cu parquet_io.cpp)
 target_link_libraries(cusort PRIVATE cudf::cudf)
-target_compile_features(cusort PRIVATE cxx_std_20)
+target_compile_features(cusort PRIVATE cxx_std_20 cuda_std_20)
 target_compile_options(cusort PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
 
 add_executable(external_sort sort.cpp)
+target_compile_features(external_sort PRIVATE cxx_std_20)
 target_link_libraries(
   external_sort 
-  PRIVATE cudf::cudf 
-          $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
-          $<TARGET_OBJECTS:cusort>
+  PRIVATE $<TARGET_OBJECTS:cusort>
+          cudf::cudf 
 )
 install(TARGETS external_sort DESTINATION bin/examples/libcudf/external_sorting)

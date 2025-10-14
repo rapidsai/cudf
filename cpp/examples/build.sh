@@ -17,13 +17,14 @@ eval set -- "$ARGS"
 # shellcheck disable=2078
 while [ : ]; do
   case "$1" in
-    -i | --install)
-        INSTALL_EXAMPLES=true
-        shift
-        ;;
-    --) shift;
-        break
-        ;;
+  -i | --install)
+    INSTALL_EXAMPLES=true
+    shift
+    ;;
+  --)
+    shift
+    break
+    ;;
   esac
 done
 
@@ -57,10 +58,11 @@ build_example() {
   fi
 }
 
-build_example basic
-build_example strings
-build_example string_transforms
-build_example nested_types
-build_example parquet_inspect
-build_example parquet_io
-build_example billion_rows
+#build_example basic
+#build_example strings
+#build_example string_transforms
+#build_example nested_types
+#build_example parquet_inspect
+#build_example parquet_io
+#build_example billion_rows
+build_example external_sorting

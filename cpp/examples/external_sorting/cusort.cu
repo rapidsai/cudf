@@ -18,6 +18,14 @@
 
 #include <cudf/copying.hpp>
 #include <cudf/sorting.hpp>
+#include <cudf/column/column.hpp>
+
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/gather.h>
+
+#include <cuda/iterator>
+#include <memory>
 
 namespace cudf {
 namespace examples {
@@ -37,8 +45,14 @@ std::unique_ptr<cudf::column> sample_splitters(cudf::table_view const& table_vie
   std::vector<cudf::null_order> null_precedence{cudf::null_order::AFTER};
   
   auto sorted_indices = cudf::sorted_order(table_view.select({0}), column_order, null_precedence, stream, mr);
-  // TODO: sample
-  return sorted_indices;
+  rmm::device_uvector<cudf::size_type> sampled_indices(num_splitters, stream, mr);
+  auto const stride = table_view.num_rows() / num_splitters;
+  auto sample_iterator_begin = cuda::strided_iterator(cuda::counting_iterator(0), stride);
+  auto sample_iterator_end = cuda::strided_iterator(cuda::counting_iterator(table_view.num_rows()), stride);
+  thrust::gather(rmm::exec_policy_nosync(stream), sample_iterator_begin, sample_iterator_end, sorted_indices->view().begin<cudf::size_type>(), sampled_indices.begin());
+  cudf::column sampled_indices_col(std::move(sampled_indices), rmm::device_buffer{}, 0);
+  auto sampled_values = cudf::gather(table_view.select({0}), sampled_indices_col.view(), cudf::out_of_bounds_policy::DONT_CHECK, stream, mr);
+  return std::move(sampled_values->release()[0]);
 }
 
 }  // namespace examples
