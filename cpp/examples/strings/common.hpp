@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_device.hpp>
-#include <rmm/mr/device/cuda_async_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
@@ -59,11 +58,6 @@ std::unique_ptr<cudf::column> redact_strings(cudf::column_view const& names,
 auto make_cuda_mr() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
 
 /**
- * @brief Create CUDA async memory resource
- */
-auto make_cuda_async_mr() { return std::make_shared<rmm::mr::cuda_async_memory_resource>(); }
-
-/**
  * @brief Create a pool device memory resource
  */
 auto make_pool_mr()
@@ -78,7 +72,7 @@ auto make_pool_mr()
 std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(std::string const& name)
 {
   if (name == "pool") { return make_pool_mr(); }
-  return make_cuda_async_mr();
+  return make_cuda_mr();
 }
 
 /**
@@ -97,7 +91,7 @@ int main(int argc, char const** argv)
     return 1;
   }
 
-  auto const mr_name = std::string{argc > 2 ? std::string(argv[2]) : std::string("async")};
+  auto const mr_name = std::string{argc > 2 ? std::string(argv[2]) : std::string("cuda")};
   auto resource      = create_memory_resource(mr_name);
   cudf::set_current_device_resource(resource.get());
 

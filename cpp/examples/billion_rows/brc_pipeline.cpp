@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -113,7 +113,7 @@ int main(int argc, char const** argv)
   std::cout << "Chunks: " << divider << std::endl;
   std::cout << "Threads: " << thread_count << std::endl;
 
-  auto const mr_name = std::string("async");
+  auto const mr_name = std::string("pool");
   auto resource      = create_memory_resource(mr_name);
   auto stats_mr =
     rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(resource.get());
