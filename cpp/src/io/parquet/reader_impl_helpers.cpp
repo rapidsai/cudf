@@ -352,35 +352,44 @@ metadata::metadata(datasource* source, bool read_page_indexes)
     if (max_offset > 0) {
       int64_t const length = max_offset - min_offset;
       auto const idx_buf   = source->host_read(min_offset, length);
-
-      // Parallelize row group and column index processing using thread pool
-      // Split work into fixed number of tasks for better load balancing
-
       // Flatten all columns into a single vector for easier task distribution
       std::vector<std::reference_wrapper<ColumnChunk>> all_columns;
+      all_columns.reserve(row_groups.size() * row_groups.front().columns.size());
       for (auto& rg : row_groups) {
         for (auto& col : rg.columns) {
           all_columns.emplace_back(std::ref(col));
         }
       }
 
-      size_t const total_columns = all_columns.size();
+      auto const total_columns = all_columns.size();
+
+      auto read_column_indexes = [&idx_buf, min_offset](CompactProtocolReader& reader,
+                                                        ColumnChunk& col) {
+        if (col.column_index_length > 0 && col.column_index_offset > 0) {
+          int64_t const offset = col.column_index_offset - min_offset;
+          reader.init(idx_buf->data() + offset, col.column_index_length);
+          col.column_index = ColumnIndex();
+          reader.read(&col.column_index.value());
+        }
+        if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
+          int64_t const offset = col.offset_index_offset - min_offset;
+          reader.init(idx_buf->data() + offset, col.offset_index_length);
+          col.offset_index = OffsetIndex();
+          reader.read(&col.offset_index.value());
+        }
+      };
 
       // Use parallel processing only if we have enough columns to justify the overhead
       constexpr std::size_t parallel_threshold = 512;
 
       if (total_columns >= parallel_threshold) {
         // Dynamically calculate number of tasks based on column count
-        // Scale by powers of 2: min_tasks at parallel_threshold, then double for each 4x increase
-        // This allows columns per task to scale up before adding more tasks
         constexpr std::size_t min_tasks = 4;
         constexpr std::size_t max_tasks = 32;
-
-        // Calculate the scaling factor as a power of 2, but grow more slowly
-        auto const ratio      = static_cast<double>(total_columns) / parallel_threshold;
+        auto const ratio                = static_cast<double>(total_columns) / parallel_threshold;
         auto const multiplier = std::size_t(1) << (static_cast<size_t>(std::log2(ratio)) / 2);
-        auto const num_tasks  = std::clamp(min_tasks * multiplier, min_tasks, max_tasks);
 
+        auto const num_tasks        = std::clamp(min_tasks * multiplier, min_tasks, max_tasks);
         auto const columns_per_task = total_columns / num_tasks;
         auto const remainder        = total_columns % num_tasks;
 
@@ -389,62 +398,30 @@ metadata::metadata(datasource* source, bool read_page_indexes)
 
         std::size_t start_idx = 0;
         for (std::size_t task_id = 0; task_id < num_tasks; ++task_id) {
-          // Calculate work range for this task
           auto const task_size = columns_per_task + (task_id < remainder ? 1 : 0);
           auto const end_idx   = start_idx + task_size;
 
-          // Skip empty tasks
           if (start_idx >= total_columns) break;
 
-          // Submit task to process a range of columns
           tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
-            [&all_columns, &idx_buf, min_offset, start_idx, end_idx]() {
-              // Create a thread-local CompactProtocolReader for each task
+            [&all_columns, &read_column_indexes, start_idx, end_idx]() {
               CompactProtocolReader local_cp;
 
-              // Process assigned range of columns
               for (size_t i = start_idx; i < end_idx && i < all_columns.size(); ++i) {
-                auto& col = all_columns[i].get();
-
-                if (col.column_index_length > 0 && col.column_index_offset > 0) {
-                  int64_t const offset = col.column_index_offset - min_offset;
-                  local_cp.init(idx_buf->data() + offset, col.column_index_length);
-                  col.column_index = ColumnIndex();
-                  local_cp.read(&col.column_index.value());
-                }
-                if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
-                  int64_t const offset = col.offset_index_offset - min_offset;
-                  local_cp.init(idx_buf->data() + offset, col.offset_index_length);
-                  col.offset_index = OffsetIndex();
-                  local_cp.read(&col.offset_index.value());
-                }
+                read_column_indexes(local_cp, all_columns[i].get());
               }
             }));
 
           start_idx = end_idx;
         }
 
-        // Wait for all tasks to complete
         for (auto& task : tasks) {
           task.get();
         }
       } else {
         // For small numbers of columns, use sequential processing to avoid overhead
-        for (auto& rg : row_groups) {
-          for (auto& col : rg.columns) {
-            if (col.column_index_length > 0 && col.column_index_offset > 0) {
-              int64_t const offset = col.column_index_offset - min_offset;
-              cp.init(idx_buf->data() + offset, col.column_index_length);
-              col.column_index = ColumnIndex();
-              cp.read(&col.column_index.value());
-            }
-            if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
-              int64_t const offset = col.offset_index_offset - min_offset;
-              cp.init(idx_buf->data() + offset, col.offset_index_length);
-              col.offset_index = OffsetIndex();
-              cp.read(&col.offset_index.value());
-            }
-          }
+        for (auto& col_ref : all_columns) {
+          read_column_indexes(cp, col_ref.get());
         }
       }
     }
