@@ -325,7 +325,7 @@ def _align_parquet_schema(df: DataFrame, schema: Schema) -> DataFrame:
             )
 
     if cast_list:
-        df = df.with_columns(cast_list)
+        df = df.with_columns(cast_list, stream=df.stream)
 
     return df
 
@@ -558,7 +558,9 @@ class Scan(IR):
             stream=df.stream,
         ).columns()
         dtype = DataType(pl.String())
-        return df.with_columns([Column(filepaths, name=name, dtype=dtype)])
+        return df.with_columns(
+            [Column(filepaths, name=name, dtype=dtype)], stream=df.stream
+        )
 
     def fast_count(self) -> int:  # pragma: no cover
         """Get the number of rows in a Parquet Scan."""
@@ -1942,7 +1944,7 @@ class ConditionalJoin(IR):
                 if name in left.column_names_set
             }
         )
-        result = left.with_columns(right.columns)
+        result = left.with_columns(right.columns, stream=stream)
         return result.slice(zlice)
 
 
@@ -2276,8 +2278,15 @@ class Join(IR):
                     # In this case, keys must be column references,
                     # possibly with dtype casting. We should use them in
                     # preference to the columns from the original tables.
-                    left = left.with_columns(left_on.columns, replace_only=True)
-                    right = right.with_columns(right_on.columns, replace_only=True)
+
+                    # We need to specify `stream` here. We know that `{left,right}_on`
+                    # is valid on `stream`, which is ordered after `{left,right}.stream`.
+                    left = left.with_columns(
+                        left_on.columns, replace_only=True, stream=stream
+                    )
+                    right = right.with_columns(
+                        right_on.columns, replace_only=True, stream=stream
+                    )
                 else:
                     right = right.discard_columns(right_on.column_names_set)
             left = DataFrame.from_table(
@@ -2309,6 +2318,7 @@ class Join(IR):
                         )
                     ),
                     replace_only=True,
+                    stream=stream,
                 )
                 right = right.discard_columns(right_on.column_names_set)
             if how == "Right":
@@ -2321,7 +2331,7 @@ class Join(IR):
                     if name in left.column_names_set
                 }
             )
-            result = left.with_columns(right.columns)
+            result = left.with_columns(right.columns, stream=stream)
         return result.slice(zlice)
 
 
@@ -2370,7 +2380,7 @@ class HStack(IR):
             # never be turned into a pylibcudf Table with all columns
             # by the Select, which is why this is safe.
             assert all(e.name.startswith("__POLARS_CSER_0x") for e in exprs)
-        return df.with_columns(columns)
+        return df.with_columns(columns, stream=df.stream)
 
 
 class Distinct(IR):

@@ -111,10 +111,15 @@ class DataFrame:
         table_with_metadata = _ObjectWithArrowMetadata(self.table, metadata)
         df = pl.DataFrame(table_with_metadata)
         return df.rename(name_map).with_columns(
-            pl.col(c.name).set_sorted(descending=c.order == plc.types.Order.DESCENDING)
-            if c.is_sorted
-            else pl.col(c.name)
-            for c in self.columns
+            *[
+                pl.col(c.name).set_sorted(
+                    descending=c.order == plc.types.Order.DESCENDING
+                )
+                if c.is_sorted
+                else pl.col(c.name)
+                for c in self.columns
+            ],
+            stream=self.stream,
         )
 
     @cached_property
@@ -317,7 +322,11 @@ class DataFrame:
         )
 
     def with_columns(
-        self, columns: Iterable[Column], *, replace_only: bool = False
+        self,
+        columns: Iterable[Column],
+        *,
+        replace_only: bool = False,
+        stream: Stream,
     ) -> Self:
         """
         Return a new dataframe with extra columns.
@@ -328,6 +337,13 @@ class DataFrame:
             Columns to add
         replace_only
             If true, then only replacements are allowed (matching by name).
+        stream
+            CUDA stream used for device memory operations and kernel launches.
+            The caller is responsible for ensuring that
+
+            1. The data in ``columns`` is valid on ``stream``.
+            2. No additional operations occur on ``self.stream`` with the
+               original data in ``self``.
 
         Returns
         -------
@@ -338,10 +354,11 @@ class DataFrame:
         If column names overlap, newer names replace older ones, and
         appear in the same order as the original frame.
         """
+        stream = stream or self.stream
         new = {c.name: c for c in columns}
         if replace_only and not self.column_names_set.issuperset(new.keys()):
             raise ValueError("Cannot replace with non-existing names")
-        return type(self)((self.column_map | new).values(), stream=self.stream)
+        return type(self)((self.column_map | new).values(), stream=stream)
 
     def discard_columns(self, names: Set[str]) -> Self:
         """Drop columns by name."""
