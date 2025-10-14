@@ -974,18 +974,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
         return type(self).from_pylibcudf(plc_col)  # type: ignore[return-value]
 
-    @property
-    def nullmask(self) -> cp.ndarray:
-        """The gpu buffer for the null-mask"""
-        if not self.nullable:
-            raise ValueError("Column has no null mask")
-        obj = cuda_array_interface_wrapper(
-            ptr=self.mask.get_ptr(mode="read"),  # type: ignore[union-attr]
-            size=self.mask.size,  # type: ignore[union-attr]
-            owner=self.mask,  # type: ignore[union-attr]
-        )
-        return cp.asarray(obj).view(SIZE_TYPE_DTYPE)
-
     def copy(self, deep: bool = True) -> Self:
         """
         Makes a copy of the Column.
