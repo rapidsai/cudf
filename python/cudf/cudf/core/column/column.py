@@ -758,8 +758,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def find_and_replace(
         self,
-        to_replace: ColumnLike,
-        replacement: ColumnLike,
+        to_replace: ColumnBase | list,
+        replacement: ColumnBase | list,
         all_nan: bool = False,
     ) -> Self:
         raise NotImplementedError
@@ -1318,6 +1318,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 values_to_replace.to_pylibcudf(mode="read"),
                 replacement_values.to_pylibcudf(mode="read"),
             )
+        )
+
+    @acquire_spill_lock()
+    def repeat(self, repeats: int) -> Self:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.filling.repeat(
+                plc.Table([self.to_pylibcudf(mode="read")]), repeats
+            ).columns()[0]
         )
 
     def fillna(

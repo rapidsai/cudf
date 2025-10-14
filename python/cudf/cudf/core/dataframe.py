@@ -3869,7 +3869,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             else:
                 to_replace = list(index.keys())
                 vals = list(index.values())
-                is_all_na = vals.count(None) == len(vals)
+                is_all_na = all(val is None for val in vals)
 
                 try:
                     out_index = _index_from_data(

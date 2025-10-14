@@ -674,13 +674,15 @@ class NumericalColumn(NumericalBaseColumn):
 
     def find_and_replace(
         self,
-        to_replace: ColumnLike,
-        replacement: ColumnLike,
+        to_replace: ColumnBase | list,
+        replacement: ColumnBase | list,
         all_nan: bool = False,
     ) -> Self:
         """
         Return col with *to_replace* replaced with *value*.
         """
+        # TODO: all_nan and list arguments only used for this
+        # this subclass, try to factor these cases out of this method
 
         # If all of `to_replace`/`replacement` are `None`,
         # dtype of `to_replace_col`/`replacement_col`
@@ -737,9 +739,7 @@ class NumericalColumn(NumericalBaseColumn):
             (to_replace_col.dtype, replacement_col.dtype, self.dtype)
         )
         if len(replacement_col) == 1 and len(to_replace_col) > 1:
-            replacement_col = as_column(
-                replacement[0], length=len(to_replace_col), dtype=common_type
-            )
+            replacement_col = replacement_col.repeat(len(to_replace_col))
         elif len(replacement_col) == 1 and len(to_replace_col) == 0:
             return self.copy()
         replaced = cast(Self, self.astype(common_type))
