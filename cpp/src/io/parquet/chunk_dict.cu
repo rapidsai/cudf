@@ -17,7 +17,7 @@
 #include "parquet_gpu.cuh"
 
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/row_operator/row_operators.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 

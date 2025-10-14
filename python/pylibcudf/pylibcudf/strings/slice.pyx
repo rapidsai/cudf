@@ -35,7 +35,7 @@ cpdef Column slice_strings(
     :py:class:`~pylibcudf.scalar.Scalar`. But ``step`` must be a
     :py:class:`~pylibcudf.scalar.Scalar`.
 
-    For details, see :cpp:func:`cudf::strings::slice_strings`.
+    For details, see :cpp:func:`slice_strings`.
 
     Parameters
     ----------

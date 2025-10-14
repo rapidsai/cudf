@@ -614,6 +614,11 @@ class metadata {
  public:
   explicit metadata(datasource* const src, rmm::cuda_stream_view stream);
 
+  metadata(metadata const&)            = delete;
+  metadata& operator=(metadata const&) = delete;
+  metadata(metadata&&)                 = default;
+  metadata& operator=(metadata&&)      = default;
+
   [[nodiscard]] auto get_total_rows() const { return ff.numberOfRows; }
   [[nodiscard]] size_type get_num_stripes() const { return ff.stripes.size(); }
   [[nodiscard]] size_type get_num_columns() const { return ff.types.size(); }
@@ -671,7 +676,7 @@ class metadata {
   Metadata md;
   std::vector<StripeFooter> stripefooters;
   std::unique_ptr<orc_decompressor> decompressor;
-  datasource* const source;
+  datasource* source;
 
  private:
   struct column_parent {
