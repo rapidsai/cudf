@@ -138,8 +138,8 @@ int main(int argc, char const** argv)
   }
 
   // Create and use a memory pool
-  bool is_pool_used = false;
-  auto resource     = create_memory_resource(is_pool_used);
+  bool constexpr is_pool_used = true;
+  auto resource               = create_memory_resource(is_pool_used);
   cudf::set_current_device_resource(resource.get());
 
   // Read input parquet file
