@@ -336,51 +336,25 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 pass
         self._null_count = None
 
-    def set_mask(self, value: Buffer | None) -> Self:
+    def set_mask(self, mask: Buffer | None) -> Self:
         """
-        Replaces the mask buffer of the column and returns a new column. This
-        will zero the column offset, compute a new mask buffer if necessary,
-        and compute new data Buffers zero-copy that use pointer arithmetic to
-        properly adjust the pointer.
+        Replaces the mask buffer of the column and returns a new column.
+        The input mask is assumed to be of appropriate size for self.
         """
-        mask_size = plc.null_mask.bitmask_allocation_size_bytes(self.size)
-        required_num_bytes = -(-self.size // 8)  # ceiling divide
-        error_msg = (
-            "The value for mask is smaller than expected, got {} bytes, "
-            f"expected {required_num_bytes} bytes."
-        )
-        if value is None:
-            mask = None
-        elif isinstance(value, Buffer):
-            cai = value.__cuda_array_interface__
-            if cai["typestr"][1] == "t":
-                mask_size = plc.null_mask.bitmask_allocation_size_bytes(
-                    cai["shape"][0]
-                )
-                mask = as_buffer(
-                    data=cai["data"][0], size=mask_size, owner=value
-                )
-            elif cai["typestr"][1] == "b":
-                mask = as_column(value).as_mask()
-            else:
-                mask = as_buffer(value)
-            if mask.size < required_num_bytes:
-                raise ValueError(error_msg.format(str(value.size)))
-        else:
-            raise ValueError(
-                f"Expected a Buffer object or None for mask, got {type(value).__name__}"
-            )
-
-        if mask is not None:
+        if isinstance(mask, Buffer):
             new_mask = plc.gpumemoryview(mask)
             new_null_count = plc.null_mask.null_count(
                 new_mask,
                 0,
                 self.size,
             )
-        else:
+        elif mask is None:
             new_mask = None
             new_null_count = 0
+        else:
+            raise ValueError(
+                f"Expected a Buffer object or None for mask, got {type(mask).__name__}"
+            )
         new_plc_column = self.to_pylibcudf(
             mode="read", use_base=False
         ).with_mask(new_mask, new_null_count)
@@ -659,10 +633,16 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 )
             elif cai_mask["typestr"][1] == "b":
                 mask_buff = ColumnBase.from_cuda_array_interface(
-                    mask
+                    mask,
                 ).as_mask()
             else:
                 mask_buff = as_buffer(mask)
+            required_num_bytes = -(-column.size // 8)  # ceiling divide
+            if mask_buff.size < required_num_bytes:
+                raise ValueError(
+                    f"The value for mask is smaller than expected, got {mask.size} bytes, "
+                    f"expected {required_num_bytes} bytes."
+                )
             column = column.set_mask(mask_buff)
         return column  # type: ignore[return-value]
 
