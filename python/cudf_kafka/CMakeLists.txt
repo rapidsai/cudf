@@ -22,6 +22,13 @@ project(
   LANGUAGES CXX
 )
 
+# Set C++ standard to match other cudf Python packages
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Disable CMake's automatic module scanning for C++ files due to sccache bug with gcc>=14
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+
 find_package(cudf_kafka "${RAPIDS_VERSION}" REQUIRED)
 
 if(NOT cudf_kafka_FOUND)

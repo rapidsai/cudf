@@ -111,13 +111,17 @@ class StructColumn(ColumnBase):
             else self.dtype
         )
         pa_type = pa.struct(
-            {field: child.type for field, child in zip(dtype.fields, children)}
+            {
+                field: child.type
+                for field, child in zip(dtype.fields, children, strict=True)
+            }
         )
 
         if self.mask is not None:
-            buffers = (pa.py_buffer(self.mask.memoryview()),)
+            buffers = [pa.py_buffer(self.mask.memoryview())]
         else:
-            buffers = (None,)
+            # PyArrow stubs are too strict - from_buffers should accept None for missing buffers
+            buffers = [None]  # type: ignore[list-item]
 
         return pa.StructArray.from_buffers(
             pa_type, len(self), buffers, children=children
@@ -179,28 +183,7 @@ class StructColumn(ColumnBase):
     def copy(self, deep: bool = True) -> Self:
         # Since struct columns are immutable, both deep and
         # shallow copies share the underlying device data and mask.
-        result = super().copy(deep=False)
-        if deep:
-            result = result._rename_fields(self.dtype.fields.keys())
-        return result
-
-    def _rename_fields(self, names) -> Self:
-        """
-        Return a StructColumn with the same field values as this StructColumn,
-        but with the field names equal to `names`.
-        """
-        dtype = StructDtype(
-            {name: col.dtype for name, col in zip(names, self.children)}
-        )
-        return StructColumn(  # type: ignore[return-value]
-            data=None,
-            size=self.size,
-            dtype=dtype,
-            mask=self.base_mask,
-            offset=self.offset,
-            null_count=self.null_count,
-            children=self.base_children,
-        )
+        return super().copy(deep=False)
 
     @property
     def __cuda_array_interface__(self):
@@ -214,7 +197,17 @@ class StructColumn(ColumnBase):
 
         # Check IntervalDtype first because it's a subclass of StructDtype
         if isinstance(dtype, IntervalDtype):
-            return IntervalColumn.from_struct_column(self, closed=dtype.closed)
+            return IntervalColumn(
+                data=None,
+                size=self.size,
+                dtype=dtype,
+                mask=self.base_mask,
+                offset=self.offset,
+                null_count=self.null_count,
+                children=tuple(  # type: ignore[arg-type]
+                    child.astype(dtype.subtype) for child in self.base_children
+                ),  # type: ignore[arg-type]
+            )
         elif isinstance(dtype, StructDtype):
             return StructColumn(
                 data=None,

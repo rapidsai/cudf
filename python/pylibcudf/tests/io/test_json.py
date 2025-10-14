@@ -21,7 +21,10 @@ from pylibcudf.io.types import CompressionType
 _COMMON_JSON_SOURCE_KWARGS = {"format": "json", "orient": "records"}
 
 
-@pytest.mark.parametrize("stream", [None, Stream()])
+# TODO: Reenable testing on non-default stream once we can resolve
+# https://github.com/rapidsai/cudf/issues/19900
+# @pytest.mark.parametrize("stream", [None, Stream()])
+@pytest.mark.parametrize("stream", [None])
 @pytest.mark.parametrize("rows_per_chunk", [8, 100])
 @pytest.mark.parametrize("lines", [True, False])
 def test_write_json_basic(
@@ -305,7 +308,7 @@ def test_read_json_lines_byte_range(source_or_sink, chunk_size):
     tbls = []
     for tbl_w_meta in tbls_w_meta:
         if tbl_w_meta.tbl.num_rows() > 0:
-            tbls.append(plc.interop.to_arrow(tbl_w_meta.tbl))
+            tbls.append(tbl_w_meta.tbl.to_arrow())
     full_tbl = pa.concat_tables(tbls)
 
     full_tbl_plc = plc.io.TableWithMetadata(
@@ -373,6 +376,35 @@ def test_read_json_lines_recovery_mode(recovery_mode, source_or_sink):
             [[1, 2, None, 3], [10, 11, None, 12]], names=["a", "b"]
         )
         assert_table_and_meta_eq(exp, tbl_w_meta)
+
+
+def test_read_json_string_column():
+    # Test the string column overload specifically
+    # Create a string column with JSON strings
+    json_strings = [
+        '{"name": "Alice", "age": 30}',
+        '{"name": "Bob", "age": 25}',
+        '{"name": "Charlie", "age": 35}',
+    ]
+
+    # Create string column
+    string_col = plc.Column.from_iterable_of_py(json_strings)
+
+    # Create separator and narep scalars
+    separator = plc.Scalar.from_py("\n")
+    narep = plc.Scalar.from_py("null")
+
+    # Read JSON from string column
+    got = plc.io.json.read_json_from_string_column(
+        string_col, separator, narep
+    )
+
+    # Expected result
+    expect = pa.Table.from_arrays(
+        [["Alice", "Bob", "Charlie"], [30, 25, 35]], names=["name", "age"]
+    )
+
+    assert_table_and_meta_eq(expect, got)
 
 
 @pytest.mark.parametrize("num_buffers", [1, 2])

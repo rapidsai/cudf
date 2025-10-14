@@ -18,6 +18,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
@@ -43,37 +44,11 @@ namespace CUDF_EXPORT cudf {
  */
 class sort_merge_join {
  public:
-  /**
-   * @brief Holds context information about matches between tables during a join operation.
-   *
-   * This structure stores the left table view and a device vector containing the count of
-   * matching rows in the right table for each row in the left table. Used primarily by
-   * inner_join_match_context() to track join match information.
-   */
-  struct match_context {
-    table_view _left_table;  ///< View of the left table involved in the join operation
-    std::unique_ptr<rmm::device_uvector<size_type>>
-      _match_counts;  ///< A device vector containing the count of matching rows in the right table
-                      ///< for each row in left table
-  };
-
-  /**
-   * @brief Stores context information for partitioned join operations.
-   *
-   * This structure maintains context for partitioned join operations, containing the match
-   * context from a previous join operation along with the start and end indices that define
-   * the current partition of the left table being processed.
-   *
-   * Used with partitioned_inner_join() to perform large joins in smaller chunks while
-   * preserving the context from the initial match operation.
-   */
-  struct partition_context {
-    match_context
-      left_table_context;      ///< The match context from a previous inner_join_match_context call
-    size_type left_start_idx;  ///< The starting row index of the current left table partition
-    size_type
-      left_end_idx;  ///< The ending row index (exclusive) of the current left table partition
-  };
+  sort_merge_join()                                  = delete;
+  sort_merge_join(sort_merge_join const&)            = delete;
+  sort_merge_join(sort_merge_join&&)                 = delete;
+  sort_merge_join& operator=(sort_merge_join const&) = delete;
+  sort_merge_join& operator=(sort_merge_join&&)      = delete;
 
   /**
    * @brief Construct a sort-merge join object that pre-processes the right table
@@ -126,7 +101,7 @@ class sort_merge_join {
    * - Determining the total size of a potential join result without materializing it
    * - Planning partitioned join operations for large datasets
    *
-   * The returned match_context can be used directly with partitioned_inner_join() to
+   * The returned join_match_context can be used directly with partitioned_inner_join() to
    * process large joins in manageable chunks.
    *
    * @param left The left table to join with the pre-processed right table
@@ -134,10 +109,10 @@ class sort_merge_join {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the result device memory
    *
-   * @return A match_context object containing the left table view and a device vector
+   * @return A join_match_context object containing the left table view and a device vector
    *         of match counts for each row in the left table
    */
-  match_context inner_join_match_context(
+  cudf::join_match_context inner_join_match_context(
     table_view const& left,
     sorted is_left_sorted,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -147,8 +122,8 @@ class sort_merge_join {
    * @brief Performs an inner join between a partition of the left table and the right table.
    *
    * This method executes an inner join operation between a specific partition of the left table
-   * (defined by the partition_context) and the right table that was provided when constructing
-   * the sort_merge_join object. The partition_context must have been previously created by
+   * (defined by the join_partition_context) and the right table that was provided when constructing
+   * the sort_merge_join object. The join_partition_context must have been previously created by
    * calling inner_join_match_context().
    *
    * This partitioning approach enables processing large joins in smaller, memory-efficient chunks,
@@ -180,7 +155,7 @@ class sort_merge_join {
    *   size_type end = std::min(start + 1000, left_table.num_rows());
    *
    *   // Create partition context
-   *   sort_merge_join::partition_context part_ctx{context, start, end};
+   *   cudf::join_partition_context part_ctx{context, start, end};
    *
    *   // Get join indices for this partition
    *   auto [left_indices, right_indices] = join_obj.partitioned_inner_join(part_ctx);
@@ -192,7 +167,7 @@ class sort_merge_join {
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   partitioned_inner_join(
-    partition_context const& context,
+    cudf::join_partition_context const& context,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -318,7 +293,7 @@ class sort_merge_join {
  * Result: {{1}, {0}}
  * @endcode
  *
- * @throw cudf::logic_error if number of elements in `left_keys` or `right_keys`
+ * @throw std::invalid_argument if number of elements in `left_keys` or `right_keys`
  * mismatch.
  *
  * @param[in] left_keys The left table
@@ -360,7 +335,7 @@ sort_merge_inner_join(cudf::table_view const& left_keys,
  * Result: {{1}, {0}}
  * @endcode
  *
- * @throw cudf::logic_error if number of elements in `left_keys` or `right_keys`
+ * @throw std::invalid_argument if number of elements in `left_keys` or `right_keys`
  * mismatch.
  *
  * @param[in] left_keys The left table

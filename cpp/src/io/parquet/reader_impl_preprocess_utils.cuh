@@ -16,19 +16,17 @@
 
 #pragma once
 
-#include "io/utilities/hostdevice_span.hpp"
 #include "reader_impl_chunking.hpp"
-#include "reader_impl_helpers.hpp"
 
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/functional>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/logical.h>
 
-#include <bitset>
 #include <future>
-#include <map>
 #include <vector>
 
 namespace cudf::io::parquet::detail {
@@ -138,7 +136,10 @@ std::string encoding_to_string(Encoding encoding);
 /**
  * @brief Decode the page information for a given pass.
  *
- * @param pass_intermediate_data The struct containing pass information
+ * @param pass The struct containing pass information
+ * @param unsorted_pages Device span of page information to decode
+ * @param has_page_index Boolean indicating if the page index is available
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void decode_page_headers(pass_intermediate_data& pass,
                          device_span<PageInfo> unsorted_pages,
@@ -346,6 +347,7 @@ struct get_page_nesting_size {
   size_type const max_depth;
   size_t const num_pages;
   PageInfo const* const pages;
+  bool const* const page_mask;
 
   __device__ inline size_type operator()(size_t index) const
   {
@@ -356,6 +358,16 @@ struct get_page_nesting_size {
         page.flags & PAGEINFO_FLAGS_DICTIONARY ||
         indices.depth_idx >= input_cols[indices.col_idx].nesting_depth) {
       return 0;
+    }
+
+    // If this page is pruned and has a list parent, set the batch size for this depth to 0 to
+    // reduce the required output buffer size and eliminate any non-empty nulls
+    if (not page_mask[indices.page_idx] and indices.depth_idx > 0 and
+        thrust::any_of(thrust::seq,
+                       thrust::counting_iterator(0),
+                       thrust::counting_iterator(indices.depth_idx),
+                       [&](auto depth) { return page.nesting[depth].type == type_id::LIST; })) {
+      page.nesting[indices.depth_idx].batch_size = 0;
     }
 
     return page.nesting[indices.depth_idx].batch_size;

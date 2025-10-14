@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from pandas.api import types as pd_types  # noqa: TID251
+from pandas.core.computation.common import result_type_many
 
 import pylibcudf as plc
 
@@ -30,6 +31,7 @@ np_dtypes_to_pandas_dtypes = {
     np.dtype("int64"): pd.Int64Dtype(),
     np.dtype("bool_"): pd.BooleanDtype(),
     np.dtype("object"): pd.StringDtype(),
+    np.dtype("str"): pd.StringDtype(),
     np.dtype("float32"): pd.Float32Dtype(),
     np.dtype("float64"): pd.Float64Dtype(),
 }
@@ -131,6 +133,8 @@ def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:
     elif pa.types.is_struct(typ):
         return cudf.core.dtypes.StructDtype.from_arrow(typ)
     elif pa.types.is_decimal(typ):
+        if isinstance(typ, pa.Decimal256Type):
+            raise NotImplementedError("cudf does not support Decimal256Type")
         return cudf.core.dtypes.Decimal128Dtype.from_arrow(typ)
     elif pa.types.is_large_string(typ) or pa.types.is_string(typ):
         return CUDF_STRING_DTYPE
@@ -226,8 +230,17 @@ def is_mixed_with_object_dtype(lhs, rhs):
     elif isinstance(rhs.dtype, cudf.CategoricalDtype):
         return is_mixed_with_object_dtype(lhs, rhs.dtype.categories)
 
-    return (lhs.dtype == "object" and rhs.dtype != "object") or (
+    res = (lhs.dtype == "object" and rhs.dtype != "object") or (
         rhs.dtype == "object" and lhs.dtype != "object"
+    )
+    if res:
+        return res
+    return (
+        cudf.api.types.is_string_dtype(lhs.dtype)
+        and not cudf.api.types.is_string_dtype(rhs.dtype)
+    ) or (
+        cudf.api.types.is_string_dtype(rhs.dtype)
+        and not cudf.api.types.is_string_dtype(lhs.dtype)
     )
 
 
@@ -288,11 +301,14 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
                     "may be currently coerced to a common type."
                 )
         else:
-            # TODO: Should this be an error case (mixing categorical with other
-            # dtypes) or should this return object? Unclear if we have enough
-            # information to decide right now, may have to come back to this as
-            # usage of find_common_type increases.
-            return CUDF_STRING_DTYPE
+            # extract the categories' dtype
+            non_cat_dtypes = [
+                x.categories.dtype
+                if isinstance(x, cudf.CategoricalDtype)
+                else x
+                for x in dtypes
+            ]
+            return find_common_type(non_cat_dtypes)
 
     # Aggregate same types
     dtypes = set(dtypes)
@@ -329,23 +345,14 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
             "not supported"
         )
 
-    common_dtype = np.result_type(*dtypes)  # noqa: TID251
+    try:
+        common_dtype = np.result_type(*dtypes)  # noqa: TID251
+    except TypeError:
+        common_dtype = result_type_many(*dtypes)
+
     if common_dtype == np.dtype(np.float16):
         return np.dtype(np.float32)
     return common_dtype
-
-
-def _dtype_pandas_compatible(dtype):
-    """
-    A utility function, that returns `str` instead of `object`
-    dtype when pandas compatibility mode is enabled.
-    """
-    if (
-        cudf.get_option("mode.pandas_compatible")
-        and dtype == CUDF_STRING_DTYPE
-    ):
-        return "str"
-    return dtype
 
 
 def _maybe_convert_to_default_type(dtype: DtypeObj) -> DtypeObj:
@@ -392,8 +399,8 @@ pa_decimal32type = getattr(pa, "Decimal32Type", None)
 pa_decimal64type = getattr(pa, "Decimal64Type", None)
 
 
-def pyarrow_dtype_to_cudf_dtype(dtype: pa.DataType) -> DtypeObj:
-    """Given a pyarrow dtype, converts it into the equivalent cudf pandas
+def pyarrow_dtype_to_cudf_dtype(dtype: pd.ArrowDtype) -> DtypeObj:
+    """Given a pandas ArrowDtype, converts it into the equivalent cudf pandas
     dtype.
     """
 
@@ -622,6 +629,7 @@ def is_dtype_obj_string(obj):
     """
     return (
         obj is CUDF_STRING_DTYPE
+        or obj is np.dtype("str")
         or (isinstance(obj, pd.StringDtype))
         or (
             isinstance(obj, pd.ArrowDtype)
@@ -768,6 +776,7 @@ SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES = {
     np.dtype("datetime64[us]"): plc.types.TypeId.TIMESTAMP_MICROSECONDS,
     np.dtype("datetime64[ns]"): plc.types.TypeId.TIMESTAMP_NANOSECONDS,
     np.dtype("object"): plc.types.TypeId.STRING,
+    np.dtype("str"): plc.types.TypeId.STRING,
     np.dtype("bool"): plc.types.TypeId.BOOL8,
     np.dtype("timedelta64[s]"): plc.types.TypeId.DURATION_SECONDS,
     np.dtype("timedelta64[ms]"): plc.types.TypeId.DURATION_MILLISECONDS,
@@ -786,7 +795,9 @@ PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.STRUCT] = np.dtype(
     "object"
 )
 PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.LIST] = np.dtype("object")
-
+PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.STRING] = np.dtype(
+    "object"
+)
 
 SIZE_TYPE_DTYPE = PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.SIZE_TYPE_ID]
 CUDF_STRING_DTYPE = PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.STRING]

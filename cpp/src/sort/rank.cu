@@ -19,10 +19,10 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/utilities/functional.hpp>
 #include <cudf/sorting.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
@@ -75,7 +75,7 @@ rmm::device_uvector<size_type> sorted_dense_rank(column_view input_col,
                                                  rmm::cuda_stream_view stream)
 {
   auto const t_input    = table_view{{input_col}};
-  auto const comparator = cudf::experimental::row::equality::self_comparator{t_input, stream};
+  auto const comparator = cudf::detail::row::equality::self_comparator{t_input, stream};
 
   auto const sorted_index_order = thrust::make_permutation_iterator(
     sorted_order_view.begin<size_type>(), thrust::make_counting_iterator<size_type>(0));

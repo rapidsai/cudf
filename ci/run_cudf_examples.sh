@@ -9,26 +9,40 @@ trap "EXITCODE=1" ERR
 # Support customizing the examples' install location
 cd "${INSTALL_PREFIX:-${CONDA_PREFIX:-/usr}}/bin/examples/libcudf/" || exit
 
+pushd basic || exit
 compute-sanitizer --tool memcheck basic_example
+popd || exit
 
+pushd nested_types || exit
 compute-sanitizer --tool memcheck deduplication
+popd || exit
 
+pushd strings || exit
 compute-sanitizer --tool memcheck custom_optimized names.csv
 compute-sanitizer --tool memcheck custom_prealloc names.csv
 compute-sanitizer --tool memcheck custom_with_malloc names.csv
+popd || exit
 
-compute-sanitizer --tool memcheck branching_public info.csv output.csv
-compute-sanitizer --tool memcheck branching info.csv output.csv
-compute-sanitizer --tool memcheck int_output info.csv output.csv
-compute-sanitizer --tool memcheck output_public info.csv output.csv
-compute-sanitizer --tool memcheck output info.csv output.csv
-compute-sanitizer --tool memcheck preallocated_public info.csv output.csv
-compute-sanitizer --tool memcheck preallocated info.csv output.csv
+pushd string_transformers || exit
+compute-sanitizer --tool memcheck compute_checksum_jit info.csv output.csv
+compute-sanitizer --tool memcheck extract_email_jit info.csv output.csv
+compute-sanitizer --tool memcheck extract_email_precompiled info.csv output.csv
+compute-sanitizer --tool memcheck format_phone_jit info.csv output.csv
+compute-sanitizer --tool memcheck format_phone_precompiled info.csv output.csv
+compute-sanitizer --tool memcheck localize_phone_jit info.csv output.csv
+compute-sanitizer --tool memcheck localize_phone_precompiled info.csv output.csv
+popd || exit
 
+pushd parquet_io || exit
 compute-sanitizer --tool memcheck parquet_io example.parquet
 compute-sanitizer --tool memcheck parquet_io example.parquet output.parquet DELTA_BINARY_PACKED ZSTD TRUE
 
 compute-sanitizer --tool memcheck parquet_io_multithreaded example.parquet
 compute-sanitizer --tool memcheck parquet_io_multithreaded example.parquet 4 DEVICE_BUFFER 2 2
+popd || exit
+
+pushd parquet_inspect || exit
+compute-sanitizer --tool memcheck parquet_inspect example.parquet
+popd || exit
 
 exit ${EXITCODE}

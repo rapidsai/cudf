@@ -195,7 +195,9 @@ def _store_func(
         f.write(f"{num_outer_bins}\n")
         f.writelines(
             f"{coeff} {offset}\n"
-            for coeff, offset in zip(inner_table_coeffs, offsets_into_ht)
+            for coeff, offset in zip(
+                inner_table_coeffs, offsets_into_ht, strict=True
+            )
         )
         f.write(f"{len(hash_table)}\n")
         f.writelines(f"{kv}\n" for kv in hash_table)

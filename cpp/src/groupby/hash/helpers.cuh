@@ -16,8 +16,9 @@
 #pragma once
 
 #include <cudf/detail/cuco_helpers.hpp>
+#include <cudf/detail/row_operator/equality.cuh>
+#include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/types.hpp>
 
 #include <cuco/static_set.cuh>
@@ -52,22 +53,40 @@ using shmem_extent_t =
 CUDF_HOST_DEVICE auto constexpr valid_extent =
   cuco::make_valid_extent<GROUPBY_CG_SIZE, GROUPBY_BUCKET_SIZE>(shmem_extent_t{});
 
-using row_hash_t =
-  cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
-                                                   cudf::nullate::DYNAMIC>;
+using row_hash_t = cudf::detail::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
+                                                              cudf::nullate::DYNAMIC>;
+
+/// Adapter to cudf row hasher with caching support.
+class row_hasher_with_cache_t {
+  row_hash_t hasher;
+  hash_value_type const* values;
+
+ public:
+  row_hasher_with_cache_t(row_hash_t const& hasher,
+                          hash_value_type const* values = nullptr) noexcept
+    : hasher(hasher), values(values)
+  {
+  }
+
+  __device__ hash_value_type operator()(size_type const idx) const noexcept
+  {
+    if (values) { return values[idx]; }
+    return hasher(idx);
+  }
+};
 
 /// Probing scheme type used by groupby hash table
-using probing_scheme_t = cuco::linear_probing<GROUPBY_CG_SIZE, row_hash_t>;
+using probing_scheme_t = cuco::linear_probing<GROUPBY_CG_SIZE, row_hasher_with_cache_t>;
 
-using row_comparator_t = cudf::experimental::row::equality::device_row_comparator<
+using row_comparator_t = cudf::detail::row::equality::device_row_comparator<
   false,
   cudf::nullate::DYNAMIC,
-  cudf::experimental::row::equality::nan_equal_physical_equality_comparator>;
+  cudf::detail::row::equality::nan_equal_physical_equality_comparator>;
 
-using nullable_row_comparator_t = cudf::experimental::row::equality::device_row_comparator<
+using nullable_row_comparator_t = cudf::detail::row::equality::device_row_comparator<
   true,
   cudf::nullate::DYNAMIC,
-  cudf::experimental::row::equality::nan_equal_physical_equality_comparator>;
+  cudf::detail::row::equality::nan_equal_physical_equality_comparator>;
 
 using global_set_t = cuco::static_set<cudf::size_type,
                                       cuco::extent<int64_t>,

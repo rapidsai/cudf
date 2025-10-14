@@ -45,6 +45,16 @@ engine = pl.GPUEngine(
 )
 ```
 
+You can configure the default value for configuration options through
+environment variables with the prefix `CUDF_POLARS__EXECUTOR__{option_name}`.
+For example, the environment variable
+`CUDF_POLARS__EXECUTOR__MAX_ROWS_PER_PARTITION` will set the default
+`max_rows_per_partition` to use if it isn't overridden through
+`executor_options`.
+
+For boolean options, like `rapidsmpf_spill`, the values `{"1", "true", "yes", "y"}`
+are considered `True` and `{"0", "false", "no", "n"}` are considered `False`.
+
 See [Configuration Reference](#cudf-polars-api) for a full list of options, and
 [Streaming Execution](#cudf-polars-streaming) for more on the streaming executor,
 including multi-GPU execution.
@@ -70,6 +80,12 @@ engine = GPUEngine(
 result = query.collect(engine=engine)
 ```
 Note that passing `chunked: False` disables chunked reading entirely, and thus `chunk_read_limit` and `pass_read_limit` will have no effect.
+
+You can configure the default value for configuration options through
+environment variables with the prefix
+`CUDF_POLARS__PARQUET_OPTIONS__{option_name}`. For example, the environment
+variable `CUDF_POLARS__PARQUET_OPTIONS__CHUNKED=0` will set the default
+`chunked` to `False`.
 
 ## Disabling CUDA Managed Memory
 

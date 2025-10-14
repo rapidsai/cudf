@@ -19,10 +19,12 @@
 #include "reader_impl_chunking_utils.cuh"
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/gather.h>
 #include <thrust/transform_scan.h>
 
 #include <numeric>
@@ -50,7 +52,7 @@ constexpr float input_limit_compression_reserve = 0.3f;
 
 }  // namespace
 
-void reader::impl::handle_chunking(read_mode mode)
+void reader_impl::handle_chunking(read_mode mode)
 {
   // if this is our first time in here, setup the first pass.
   if (!_pass_itm_data) {
@@ -91,7 +93,7 @@ void reader::impl::handle_chunking(read_mode mode)
   setup_next_subpass(mode);
 }
 
-void reader::impl::setup_next_pass(read_mode mode)
+void reader_impl::setup_next_pass(read_mode mode)
 {
   auto const num_passes = _file_itm_data.num_passes();
 
@@ -215,7 +217,7 @@ void reader::impl::setup_next_pass(read_mode mode)
   }
 }
 
-void reader::impl::setup_next_subpass(read_mode mode)
+void reader_impl::setup_next_subpass(read_mode mode)
 {
   auto& pass    = *_pass_itm_data;
   pass.subpass  = std::make_unique<subpass_intermediate_data>();
@@ -275,7 +277,11 @@ void reader::impl::setup_next_subpass(read_mode mode)
 
     // include scratch space needed for decompression. for certain codecs (eg ZSTD) this
     // can be considerable.
-    include_decompression_scratch_size(pass.chunks, pass.pages, c_info, _stream);
+    if (is_first_subpass) {
+      pass.decomp_scratch_sizes =
+        compute_decompression_scratch_sizes(pass.chunks, pass.pages, _stream);
+    }
+    include_decompression_scratch_size(pass.decomp_scratch_sizes, c_info, _stream);
 
     auto iter               = thrust::make_counting_iterator(0);
     auto const pass_max_row = pass.skip_rows + pass.num_rows;
@@ -337,16 +343,17 @@ void reader::impl::setup_next_subpass(read_mode mode)
   std::transform(
     h_spans.begin(), h_spans.end(), subpass.column_page_count.begin(), get_span_size{});
 
+  // Set the page mask information for the subpass
+  set_subpass_page_mask();
+
   // decompress the data pages in this subpass; also decompress the dictionary pages in this pass,
   // if this is the first subpass in the pass
   if (pass.has_compressed_data) {
-    // Empty page mask indicates all pages must be decompressed
-    auto const empty_page_mask = cudf::host_span<bool>{};
     auto [pass_data, subpass_data] =
       decompress_page_data(pass.chunks,
                            is_first_subpass ? pass.pages : host_span<PageInfo>{},
                            subpass.pages,
-                           empty_page_mask,
+                           _subpass_page_mask,
                            _stream,
                            _mr);
 
@@ -404,7 +411,7 @@ void reader::impl::setup_next_subpass(read_mode mode)
 #endif
 }
 
-void reader::impl::create_global_chunk_info()
+void reader_impl::create_global_chunk_info()
 {
   auto const num_rows         = _file_itm_data.global_num_rows;
   auto const& row_groups_info = _file_itm_data.row_groups;
@@ -507,7 +514,7 @@ void reader::impl::create_global_chunk_info()
   }
 }
 
-void reader::impl::compute_input_passes(read_mode mode)
+void reader_impl::compute_input_passes(read_mode mode)
 {
   // at this point, row_groups has already been filtered down to just the row groups we need to
   // handle optional skip_rows/num_rows parameters.
@@ -626,8 +633,10 @@ void reader::impl::compute_input_passes(read_mode mode)
   }
 }
 
-void reader::impl::compute_output_chunks_for_subpass()
+void reader_impl::compute_output_chunks_for_subpass()
 {
+  CUDF_FUNC_RANGE();
+
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
@@ -664,6 +673,35 @@ void reader::impl::compute_output_chunks_for_subpass()
   // compute the splits
   subpass.output_chunk_read_info = compute_page_splits_by_row(
     c_info, subpass.pages, subpass.skip_rows, subpass.num_rows, _output_chunk_read_limit, _stream);
+}
+
+void reader_impl::set_subpass_page_mask()
+{
+  auto const& pass    = _pass_itm_data;
+  auto const& subpass = pass->subpass;
+
+  // Create a host vector to store the subpass page mask
+  _subpass_page_mask = cudf::detail::make_host_vector<bool>(subpass->pages.size(), _stream);
+
+  // Fill with all true if no pass level page mask is available
+  if (_pass_page_mask.empty()) {
+    std::fill(_subpass_page_mask.begin(), _subpass_page_mask.end(), true);
+    return;
+  }
+
+  // If this is the only subpass, move the pass level page mask data as is
+  if (subpass->single_subpass) {
+    std::move(_pass_page_mask.begin(), _pass_page_mask.end(), _subpass_page_mask.begin());
+    return;
+  }
+
+  // Use the pass page index mask to gather the subpass page mask from the pass level page mask
+  auto const host_page_src_index = cudf::detail::make_host_vector(subpass->page_src_index, _stream);
+  thrust::gather(thrust::seq,
+                 host_page_src_index.begin(),
+                 host_page_src_index.end(),
+                 _pass_page_mask.begin(),
+                 _subpass_page_mask.begin());
 }
 
 }  // namespace cudf::io::parquet::detail

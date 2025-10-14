@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -6,6 +6,9 @@ from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.scalar.scalar cimport scalar, string_scalar
+
+from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.memory_resource cimport device_memory_resource
 
 
 cdef extern from "cudf/json/json.hpp" namespace "cudf" nogil:
@@ -26,4 +29,6 @@ cdef extern from "cudf/json/json.hpp" namespace "cudf" nogil:
         column_view col,
         string_scalar json_path,
         get_json_object_options options,
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler

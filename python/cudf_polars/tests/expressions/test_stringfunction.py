@@ -15,9 +15,10 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_129,
     POLARS_VERSION_LT_130,
     POLARS_VERSION_LT_131,
+    POLARS_VERSION_LT_132,
+    POLARS_VERSION_LT_133,
 )
 
 
@@ -143,13 +144,13 @@ def slice_column_data(ldf, request):
 
 
 def test_supported_stringfunction_expression(ldf):
-    query = ldf.select(
+    q = ldf.select(
         pl.col("a").str.starts_with("Z"),
         pl.col("a").str.ends_with("h").alias("endswith_h"),
         pl.col("a").str.to_lowercase().alias("lower"),
         pl.col("a").str.to_uppercase().alias("upper"),
     )
-    assert_gpu_result_equal(query)
+    assert_gpu_result_equal(q)
 
 
 def test_unsupported_stringfunction(ldf):
@@ -185,89 +186,128 @@ def test_contains_re_non_literal_raises(ldf):
     ],
 )
 def test_contains_regex(ldf, substr):
-    query = ldf.select(pl.col("a").str.contains(substr))
-    assert_gpu_result_equal(query)
+    q = ldf.select(pl.col("a").str.contains(substr))
+    assert_gpu_result_equal(q)
 
 
 @pytest.mark.parametrize(
     "literal", ["A", "de", "FGHI", "j", "kLm", "nOPq", "RsT", "uVw"]
 )
 def test_contains_literal(ldf, literal):
-    query = ldf.select(pl.col("a").str.contains(pl.lit(literal), literal=True))
-    assert_gpu_result_equal(query)
+    q = ldf.select(pl.col("a").str.contains(pl.lit(literal), literal=True))
+    assert_gpu_result_equal(q)
 
 
 def test_contains_column(ldf):
-    query = ldf.select(pl.col("a").str.contains(pl.col("a"), literal=True))
-    assert_gpu_result_equal(query)
+    q = ldf.select(pl.col("a").str.contains(pl.col("a"), literal=True))
+    assert_gpu_result_equal(q)
 
 
 def test_contains_invalid(ldf):
-    query = ldf.select(pl.col("a").str.contains("["))
+    q = ldf.select(pl.col("a").str.contains("["))
 
     with pytest.raises(pl.exceptions.ComputeError):
-        query.collect()
+        q.collect()
     with pytest.raises(pl.exceptions.ComputeError):
-        query.collect(post_opt_callback=partial(execute_with_cudf, raise_on_fail=True))
+        q.collect(post_opt_callback=partial(execute_with_cudf, raise_on_fail=True))
 
 
 @pytest.mark.parametrize("offset", [1, -1, 0, 100, -100])
 def test_slice_scalars_offset(ldf, offset):
-    query = ldf.select(pl.col("a").str.slice(offset))
-    assert_gpu_result_equal(query)
+    q = ldf.select(pl.col("a").str.slice(offset))
+    assert_gpu_result_equal(q)
 
 
 @pytest.mark.parametrize("offset,length", slice_cases)
 def test_slice_scalars_length_and_offset(ldf, offset, length):
-    query = ldf.select(pl.col("a").str.slice(offset, length))
-    assert_gpu_result_equal(query)
+    q = ldf.select(pl.col("a").str.slice(offset, length))
+    assert_gpu_result_equal(q)
 
 
 def test_slice_column(slice_column_data):
     if "length" in slice_column_data.collect_schema():
-        query = slice_column_data.select(
+        q = slice_column_data.select(
             pl.col("a").str.slice(pl.col("start"), pl.col("length"))
         )
     else:
-        query = slice_column_data.select(pl.col("a").str.slice(pl.col("start")))
-    assert_ir_translation_raises(query, NotImplementedError)
+        q = slice_column_data.select(pl.col("a").str.slice(pl.col("start")))
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.fixture
-def to_datetime_data():
-    return pl.LazyFrame(
-        {
-            "a": [
-                "2021-01-01",
-                "2021-01-02",
-                "abcd",
-            ]
-        }
-    )
+def ldf_split():
+    return pl.LazyFrame({"a": ["a b", "a_b", "a_b_c", "a_b c_d", None]})
+
+
+@pytest.mark.parametrize("n", [1, 2, 10])
+@pytest.mark.parametrize("by", ["_", " "])
+def test_split_n(ldf_split, n, by):
+    q = ldf_split.select(pl.col("a").str.splitn(by, n))
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("n", [1, 2, 10])
+def test_split_exact(ldf_split, n):
+    q = ldf_split.select(pl.col("a").str.split_exact("_", n))
+    assert_gpu_result_equal(q)
+
+
+def test_split_exact_inclusive_unsupported(ldf_split):
+    q = ldf_split.select(pl.col("a").str.split_exact("_", 1, inclusive=True))
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.mark.parametrize("cache", [True, False], ids=lambda cache: f"{cache=}")
 @pytest.mark.parametrize("strict", [True, False], ids=lambda strict: f"{strict=}")
 @pytest.mark.parametrize("exact", [True, False], ids=lambda exact: f"{exact=}")
 @pytest.mark.parametrize("format", ["%Y-%m-%d", None], ids=lambda format: f"{format=}")
-def test_to_datetime(to_datetime_data, cache, strict, format, exact):
-    query = to_datetime_data.select(
+@pytest.mark.parametrize(
+    "values, has_invalid_row",
+    [
+        (["2024-01-01", "2023-12-31", "2023-06-15"], False),
+        (["2024-01-01", "2023-12-31", None], False),
+        (["2024-13-01", "2023-12-31", "2023-06-15"], True),
+        (["2024-01-01", "foo", None], True),
+        (["foo", "2023-06-15"], True),
+        ([None, None, None], False),
+    ],
+    ids=["valid", "valid", "invalid", "invalid", "invalid", "valid"],
+)
+def test_to_datetime(values, has_invalid_row, cache, strict, format, exact):
+    df = pl.DataFrame({"a": pl.Series(values, dtype=pl.String())})
+    q = df.lazy().select(
         pl.col("a").str.strptime(
-            pl.Datetime("ns"), format=format, cache=cache, strict=strict, exact=exact
+            pl.Datetime("ns"),
+            format=format,
+            cache=cache,
+            strict=strict,
+            exact=exact,
         )
     )
-    if cache or format is None or not exact:
-        assert_ir_translation_raises(query, NotImplementedError)
-    elif strict:
-        assert_collect_raises(
-            query,
-            polars_except=pl.exceptions.InvalidOperationError,
-            cudf_except=pl.exceptions.ComputeError
+    if cache or not exact or (not strict and format is None):
+        outcome = "translation_error"
+    elif (values[0] == "foo" and format is None and strict) or (
+        strict and has_invalid_row
+    ):
+        outcome = "collect_error"
+    else:
+        outcome = "success"
+
+    if outcome == "translation_error":
+        assert_ir_translation_raises(q, NotImplementedError)
+    elif outcome == "collect_error":
+        cudf_exc = (
+            pl.exceptions.ComputeError
             if POLARS_VERSION_LT_130
-            else pl.exceptions.InvalidOperationError,
+            else pl.exceptions.InvalidOperationError
+        )
+        assert_collect_raises(
+            q,
+            polars_except=pl.exceptions.InvalidOperationError,
+            cudf_except=cudf_exc,
         )
     else:
-        assert_gpu_result_equal(query)
+        assert_gpu_result_equal(q)
 
 
 @pytest.mark.parametrize(
@@ -276,19 +316,19 @@ def test_to_datetime(to_datetime_data, cache, strict, format, exact):
 )
 @pytest.mark.parametrize("n", [0, 3, -1])
 def test_replace_literal(ldf, target, repl, n):
-    query = ldf.select(pl.col("a").str.replace(target, repl, literal=True, n=n))
-    assert_gpu_result_equal(query)
+    q = ldf.select(pl.col("a").str.replace(target, repl, literal=True, n=n))
+    assert_gpu_result_equal(q)
 
 
 @pytest.mark.parametrize("target, repl", [("", ""), ("a", pl.col("a"))])
 def test_replace_literal_unsupported(ldf, target, repl):
-    query = ldf.select(pl.col("a").str.replace(target, repl, literal=True))
-    assert_ir_translation_raises(query, NotImplementedError)
+    q = ldf.select(pl.col("a").str.replace(target, repl, literal=True))
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 def test_replace_re(ldf):
-    query = ldf.select(pl.col("a").str.replace("A", "a", literal=False))
-    assert_ir_translation_raises(query, NotImplementedError)
+    q = ldf.select(pl.col("a").str.replace("A", "a", literal=False))
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.mark.parametrize(
@@ -307,7 +347,7 @@ def test_replace_re(ldf):
 def test_replace_many(ldf, target, repl):
     q = ldf.select(pl.col("a").str.replace_many(target, repl))
     _need_support_for_implode_agg = isinstance(repl, list)
-    if POLARS_VERSION_LT_129 or _need_support_for_implode_agg:
+    if _need_support_for_implode_agg:
         assert_gpu_result_equal(q)
     elif POLARS_VERSION_LT_131:
         assert_ir_translation_raises(q, NotImplementedError)
@@ -321,16 +361,16 @@ def test_replace_many(ldf, target, repl):
     [(["A", ""], ["a", "b"]), (pl.col("a").drop_nulls(), pl.col("a").drop_nulls())],
 )
 def test_replace_many_notimplemented(ldf, target, repl):
-    query = ldf.select(pl.col("a").str.replace_many(target, repl))
-    assert_ir_translation_raises(query, NotImplementedError)
+    q = ldf.select(pl.col("a").str.replace_many(target, repl))
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 def test_replace_many_ascii_case(ldf):
-    query = ldf.select(
+    q = ldf.select(
         pl.col("a").str.replace_many(["a", "b", "c"], "a", ascii_case_insensitive=True)
     )
 
-    assert_ir_translation_raises(query, NotImplementedError)
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 _strip_data = [
@@ -417,7 +457,7 @@ def test_invalid_regex_raises():
     )
 
 
-@pytest.mark.parametrize("pattern", ["a{1000}", "a(?i:B)"])
+@pytest.mark.parametrize("pattern", ["a{1000}", "a(?i:B)", ""])
 def test_unsupported_regex_raises(pattern):
     df = pl.LazyFrame({"a": ["abc"]})
 
@@ -429,18 +469,18 @@ def test_unsupported_regex_raises(pattern):
 
 
 def test_string_to_integer(str_to_integer_data, integer_type):
-    query = str_to_integer_data.select(pl.col("a").cast(integer_type))
-    assert_gpu_result_equal(query)
+    q = str_to_integer_data.select(pl.col("a").cast(integer_type))
+    assert_gpu_result_equal(q)
 
 
 def test_string_from_integer(str_from_integer_data):
-    query = str_from_integer_data.select(pl.col("a").cast(pl.String))
-    assert_gpu_result_equal(query)
+    q = str_from_integer_data.select(pl.col("a").cast(pl.String))
+    assert_gpu_result_equal(q)
 
 
 def test_string_to_float(str_to_float_data, floating_type):
-    query = str_to_float_data.select(pl.col("a").cast(floating_type))
-    assert_gpu_result_equal(query)
+    q = str_to_float_data.select(pl.col("a").cast(floating_type))
+    assert_gpu_result_equal(q)
 
 
 def test_string_from_float(request, str_from_float_data):
@@ -454,12 +494,12 @@ def test_string_from_float(request, str_from_float_data):
         # 1.1000000000000000888 which will result in libcudf truncating the
         # final value to 1.1.
         request.applymarker(pytest.mark.xfail(reason="libcudf truncation"))
-    query = str_from_float_data.select(pl.col("a").cast(pl.String))
+    q = str_from_float_data.select(pl.col("a").cast(pl.String))
 
     # libcudf reads float('inf') -> "inf"
     # but polars reads float('inf') -> "Inf"
-    query = query.select(pl.col("a").str.to_lowercase())
-    assert_gpu_result_equal(query)
+    q = q.select(pl.col("a").str.to_lowercase())
+    assert_gpu_result_equal(q)
 
 
 def test_string_to_numeric_invalid(numeric_type):
@@ -478,6 +518,182 @@ def test_string_to_numeric_invalid(numeric_type):
 @pytest.mark.parametrize("delimiter", ["", "/"])
 def test_string_join(ldf, ignore_nulls, delimiter):
     q = ldf.select(pl.col("a").str.join(delimiter, ignore_nulls=ignore_nulls))
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "fill",
+    [
+        0,
+        1,
+        2,
+        5,
+        999,
+        -1,
+        None,
+    ],
+)
+@pytest.mark.parametrize(
+    "input_strings",
+    [
+        ["1", "0"],
+        ["123", "45"],
+        ["", "0"],
+        ["abc", "def"],
+    ],
+)
+def test_string_zfill(fill, input_strings):
+    ldf = pl.LazyFrame({"a": input_strings})
+    q = ldf.select(pl.col("a").str.zfill(fill))
+
+    if fill is not None and fill < 0:
+        cudf_except = (
+            pl.exceptions.InvalidOperationError
+            if not POLARS_VERSION_LT_132
+            else pl.exceptions.ComputeError
+        )
+        assert_collect_raises(
+            q,
+            polars_except=pl.exceptions.InvalidOperationError,
+            cudf_except=cudf_except,
+        )
+    else:
+        assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "fill",
+    [
+        5
+        if not POLARS_VERSION_LT_131
+        else pytest.param(5, marks=pytest.mark.xfail(reason="fixed in Polars 1.30")),
+        999
+        if not POLARS_VERSION_LT_131
+        else pytest.param(999, marks=pytest.mark.xfail(reason="fixed in Polars 1.30")),
+    ],
+)
+def test_string_zfill_pl_129(fill):
+    ldf = pl.LazyFrame({"a": ["-1", "+2"]})
+    q = ldf.select(pl.col("a").str.zfill(fill))
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "fill",
+    [
+        0,
+        1,
+        2,
+        5
+        if not POLARS_VERSION_LT_131
+        else pytest.param(5, marks=pytest.mark.xfail(reason="fixed in Polars 1.30")),
+        999
+        if not POLARS_VERSION_LT_131
+        else pytest.param(999, marks=pytest.mark.xfail(reason="fixed in Polars 1.30")),
+        -1,
+        pytest.param(None, marks=pytest.mark.xfail(reason="None dtype")),
+    ],
+)
+def test_string_zfill_column(fill):
+    ldf = pl.DataFrame(
+        {
+            "input_strings": ["1", "0", "123", "45", "", "0", "-1", "+2", "abc", "def"],
+            "fill": [fill] * 10,
+        }
+    ).lazy()
+    q = ldf.select(pl.col("input_strings").str.zfill(pl.col("fill")))
+    if fill is not None and fill < 0:
+        cudf_except = (
+            (
+                pl.exceptions.InvalidOperationError
+                if not POLARS_VERSION_LT_130
+                else pl.exceptions.ComputeError
+            )
+            if POLARS_VERSION_LT_132
+            else ()
+        )
+        assert_collect_raises(
+            q,
+            polars_except=pl.exceptions.InvalidOperationError,
+            cudf_except=cudf_except,
+        )
+    else:
+        assert_gpu_result_equal(q)
+
+
+def test_string_zfill_forbidden_chars():
+    ldf = pl.LazyFrame({"a": ["Café", "345", "東京", None]})
+    q = ldf.select(pl.col("a").str.zfill(3))
+    assert_collect_raises(
+        q,
+        polars_except=(),
+        cudf_except=pl.exceptions.InvalidOperationError
+        if not POLARS_VERSION_LT_130
+        else pl.exceptions.ComputeError,
+    )
+
+
+@pytest.mark.parametrize(
+    "width",
+    [
+        1,
+        0,
+        999,
+        pytest.param(
+            -1, marks=pytest.mark.xfail(reason="negative width fails before collect")
+        ),
+        pytest.param(
+            None, marks=pytest.mark.xfail(reason="None width fails before collect")
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "char",
+    [
+        "*",
+        "a",
+        " ",
+        pytest.param("", marks=pytest.mark.xfail(reason="length one characters only")),
+        pytest.param(
+            None, marks=pytest.mark.xfail(reason="None char fails before collect")
+        ),
+    ],
+)
+def test_string_pad_start(width, char):
+    df = pl.LazyFrame({"a": ["abc", "defg", "hij"]})
+    q = df.select(pl.col("a").str.pad_start(width, char))
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "width",
+    [
+        1,
+        0,
+        999,
+        pytest.param(
+            -1, marks=pytest.mark.xfail(reason="negative width fails before collect")
+        ),
+        pytest.param(
+            None, marks=pytest.mark.xfail(reason="None width fails before collect")
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "char",
+    [
+        "*",
+        "a",
+        " ",
+        pytest.param("", marks=pytest.mark.xfail(reason="length one characters only")),
+        pytest.param(
+            None, marks=pytest.mark.xfail(reason="None char fails before collect")
+        ),
+    ],
+)
+def test_string_pad_end(width, char):
+    df = pl.LazyFrame({"a": ["abc", "defg", "hij"]})
+    q = df.select(pl.col("a").str.pad_end(width, char))
     assert_gpu_result_equal(q)
 
 
@@ -551,6 +767,68 @@ def test_count_matches_literal_unsupported(ldf):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
+def test_strip_prefix(ldf):
+    q = ldf.select(pl.col("a").str.strip_prefix("A"))
+    assert_gpu_result_equal(q)
+
+
+def test_strip_suffix(ldf):
+    q = ldf.select(pl.col("a").str.strip_suffix("e"))
+    assert_gpu_result_equal(q)
+
+
+def test_strip_prefix_suffix_dupes():
+    ldf = pl.LazyFrame({"a": ["a", "aa", "ab", "bb", "b"]})
+
+    q = ldf.select(pl.col("a").str.strip_prefix("a"))
+    assert_gpu_result_equal(q)
+
+    q = ldf.select(pl.col("a").str.strip_suffix("a"))
+    assert_gpu_result_equal(q)
+
+    q = ldf.select(pl.col("a").str.strip_prefix("b"))
+    assert_gpu_result_equal(q)
+
+    q = ldf.select(pl.col("a").str.strip_suffix("b"))
+    assert_gpu_result_equal(q)
+
+
+@pytest.fixture
+def ldf_jsonlike():
+    return pl.LazyFrame(
+        {"a": ['{"a":"1"}', None, '{"a":"2"}', '{"a":"2.1"}', '{"a":"true"}']}
+    )
+
+
+def test_json_decode(ldf_jsonlike):
+    q = ldf_jsonlike.select(pl.col("a").str.json_decode(pl.Struct({"a": pl.String()})))
+    assert_gpu_result_equal(q)
+
+    if POLARS_VERSION_LT_133:
+        q = ldf_jsonlike.select(pl.col("a").str.json_decode(None))
+        assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.parametrize("dtype", [pl.Int64(), pl.Float64()])
+def test_json_decode_numeric_types(dtype):
+    ldf = pl.LazyFrame({"a": ['{"a": 1}', None, '{"a": 2}']})
+    q = ldf.select(pl.col("a").str.json_decode(pl.Struct({"a": dtype})))
+    assert_gpu_result_equal(q)
+
+
+def test_json_decode_nested():
+    ldf = pl.LazyFrame({"a": ['{"a": {"b": 1}}', None]})
+    q = ldf.select(
+        pl.col("a").str.json_decode(pl.Struct({"a": pl.Struct({"b": pl.Int64()})}))
+    )
+    assert_gpu_result_equal(q)
+
+
+def test_json_path_match(ldf_jsonlike):
+    q = ldf_jsonlike.select(pl.col("a").str.json_path_match("$.a"))
+    assert_gpu_result_equal(q)
+
+
 @pytest.fixture
 def ldf_find():
     return pl.LazyFrame(
@@ -599,12 +877,6 @@ def test_extract_groups(ldf_extract):
     assert_gpu_result_equal(q)
 
 
-def test_json_path_match():
-    df = pl.LazyFrame({"a": ['{"a":"1"}', None, '{"a":2}', '{"a":2.1}', '{"a":true}']})
-    q = df.select(pl.col("a").str.json_path_match("$.a"))
-    assert_gpu_result_equal(q)
-
-
 def test_len_bytes(ldf):
     q = ldf.select(pl.col("a").str.len_bytes())
     assert_gpu_result_equal(q)
@@ -612,4 +884,11 @@ def test_len_bytes(ldf):
 
 def test_len_chars(ldf):
     q = ldf.select(pl.col("a").str.len_chars())
+    assert_gpu_result_equal(q)
+
+
+def test_string_concat_empty_frame():
+    lf = pl.LazyFrame({"a": pl.Series([], dtype=pl.String)})
+    q = lf.select(pl.lit(", ") + pl.col("a"))
+
     assert_gpu_result_equal(q)

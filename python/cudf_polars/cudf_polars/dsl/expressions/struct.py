@@ -29,7 +29,6 @@ class StructFunction(Expr):
     class Name(IntEnum):
         """Internal and picklable representation of polars' `StructFunction`."""
 
-        FieldByIndex = auto()
         FieldByName = auto()
         RenameFields = auto()
         PrefixFields = auto()
@@ -37,6 +36,7 @@ class StructFunction(Expr):
         JsonEncode = auto()
         WithFields = auto()  # TODO: https://github.com/rapidsai/cudf/issues/19284
         MapFieldNames = auto()  # TODO: https://github.com/rapidsai/cudf/issues/19285
+        FieldByIndex = auto()
         MultipleFields = (
             auto()
         )  # https://github.com/pola-rs/polars/pull/23022#issuecomment-2933910958
@@ -56,8 +56,7 @@ class StructFunction(Expr):
     __slots__ = ("name", "options")
     _non_child = ("dtype", "name", "options")
 
-    _valid_ops: ClassVar[set[Name]] = {
-        Name.FieldByIndex,
+    _supported_ops: ClassVar[set[Name]] = {
         Name.FieldByName,
         Name.RenameFields,
         Name.PrefixFields,
@@ -77,7 +76,7 @@ class StructFunction(Expr):
         self.name = name
         self.children = children
         self.is_pointwise = True
-        if self.name not in self._valid_ops:
+        if self.name not in self._supported_ops:
             raise NotImplementedError(
                 f"Struct function {self.name}"
             )  # pragma: no cover
@@ -88,11 +87,13 @@ class StructFunction(Expr):
         """Evaluate this expression given a dataframe for context."""
         columns = [child.evaluate(df, context=context) for child in self.children]
         (column,) = columns
+        # these type ignores are needed because the type checker doesn't
+        # know that polars only calls StructFunction with struct types.
         if self.name == StructFunction.Name.FieldByName:
             field_index = next(
                 (
                     i
-                    for i, field in enumerate(self.children[0].dtype.polars.fields)
+                    for i, field in enumerate(self.children[0].dtype.polars_type.fields)  # type: ignore[attr-defined]
                     if field.name == self.options[0]
                 ),
                 None,
@@ -103,12 +104,17 @@ class StructFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name == StructFunction.Name.JsonEncode:
+            # Once https://github.com/rapidsai/cudf/issues/19338 is implemented,
+            # we can use do this conversion on host.
             buff = StringIO()
             target = plc.io.SinkInfo([buff])
             table = plc.Table(column.obj.children())
             metadata = plc.io.TableWithMetadata(
                 table,
-                [(field.name, []) for field in self.children[0].dtype.polars.fields],
+                [
+                    (field.name, [])
+                    for field in self.children[0].dtype.polars_type.fields  # type: ignore[attr-defined]
+                ],
             )
             options = (
                 plc.io.json.JsonWriterOptions.builder(target, table)

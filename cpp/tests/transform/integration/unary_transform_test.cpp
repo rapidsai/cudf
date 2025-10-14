@@ -25,7 +25,6 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
-#include <cudf/jit/runtime_support.hpp>
 #include <cudf/transform.hpp>
 
 namespace transformation {
@@ -53,66 +52,56 @@ struct RuntimeSupportTest : public cudf::test::BaseFixture {
     )***";
 };
 
-struct AssertsTest : public RuntimeSupportTest {
- protected:
-  void SetUp() override
-  {
-    if (!cudf::is_runtime_jit_supported()) {
-      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
-    }
-  }
-};
-
-TEST_F(RuntimeSupportTest, RuntimeSupport)
-{
-  if (!cudf::is_runtime_jit_supported()) {
-    EXPECT_THROW(
-      cudf::transform({a, b, t}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt),
-      std::logic_error);
-  } else {
-    EXPECT_NO_THROW(cudf::transform(
-      {a, b, t}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt));
-  }
-}
+struct AssertsTest : public RuntimeSupportTest {};
 
 TEST_F(AssertsTest, TypeSupport)
 {
-  EXPECT_NO_THROW(
-    cudf::transform({a, b, t}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt));
+  EXPECT_NO_THROW(cudf::transform({a, b, t},
+                                  udf,
+                                  cudf::data_type{cudf::type_id::FLOAT32},
+                                  false,
+                                  std::nullopt,
+                                  cudf::null_aware::NO));
 
-  EXPECT_THROW(
-    cudf::transform({a, b, t}, udf, cudf::data_type{cudf::type_id::STRUCT}, false, std::nullopt),
-    std::invalid_argument);
+  EXPECT_THROW(cudf::transform({a, b, t},
+                               udf,
+                               cudf::data_type{cudf::type_id::STRUCT},
+                               false,
+                               std::nullopt,
+                               cudf::null_aware::NO),
+               std::invalid_argument);
 
-  EXPECT_THROW(
-    cudf::transform(
-      {struct_col, t}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt),
-    std::invalid_argument);
+  EXPECT_THROW(cudf::transform({struct_col, t},
+                               udf,
+                               cudf::data_type{cudf::type_id::FLOAT32},
+                               false,
+                               std::nullopt,
+                               cudf::null_aware::NO),
+               std::invalid_argument);
 }
 
 TEST_F(AssertsTest, UnequalRowCount)
 {
-  EXPECT_THROW(
-    cudf::transform(
-      {a, b, bad_col}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt),
-    std::invalid_argument);
+  EXPECT_THROW(cudf::transform({a, b, bad_col},
+                               udf,
+                               cudf::data_type{cudf::type_id::FLOAT32},
+                               false,
+                               std::nullopt,
+                               cudf::null_aware::NO),
+               std::invalid_argument);
 }
 
 TEST_F(AssertsTest, NullSupport)
 {
-  EXPECT_NO_THROW(cudf::transform(
-    {a, b_nulls, t}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt));
+  EXPECT_NO_THROW(cudf::transform({a, b_nulls, t},
+                                  udf,
+                                  cudf::data_type{cudf::type_id::FLOAT32},
+                                  false,
+                                  std::nullopt,
+                                  cudf::null_aware::NO));
 }
 
-struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {
- protected:
-  void SetUp() override
-  {
-    if (!cudf::is_runtime_jit_supported()) {
-      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
-    }
-  }
-};
+struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {};
 
 template <class dtype, class Op, class Data>
 void test_udf(char const* udf, Op op, Data data_init, cudf::size_type size, bool is_ptx)
@@ -308,15 +297,7 @@ __device__ inline void f(cudf::timestamp_us* output, cudf::timestamp_us input)
   test_udf<dtype>(cuda.c_str(), op, data_init, 500, false);
 }
 
-struct TernaryOperationTest : public cudf::test::BaseFixture {
- protected:
-  void SetUp() override
-  {
-    if (!cudf::is_runtime_jit_supported()) {
-      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
-    }
-  }
-};
+struct TernaryOperationTest : public cudf::test::BaseFixture {};
 
 TEST_F(TernaryOperationTest, TransformWithScalar)
 {
@@ -432,15 +413,7 @@ __device__ inline void transform(
 }
 
 template <typename T>
-struct TernaryDecimalOperationTest : public cudf::test::BaseFixture {
- protected:
-  void SetUp() override
-  {
-    if (!cudf::is_runtime_jit_supported()) {
-      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
-    }
-  }
-};
+struct TernaryDecimalOperationTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(TernaryDecimalOperationTest, cudf::test::FixedPointTypes);
 
@@ -486,15 +459,7 @@ TYPED_TEST(TernaryDecimalOperationTest, TransformDecimalsAndScalar)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, expected);
 }
 
-struct StringOperationTest : public cudf::test::BaseFixture {
- protected:
-  void SetUp() override
-  {
-    if (!cudf::is_runtime_jit_supported()) {
-      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
-    }
-  }
-};
+struct StringOperationTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringOperationTest, StringComparison)
 {
@@ -643,20 +608,14 @@ __device__ void transform(void* user_data, cudf::size_type row,
                                 cuda,
                                 cudf::data_type(cudf::type_id::STRING),
                                 false,
-                                scratch.data());
+                                scratch.data(),
+                                cudf::null_aware::NO);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
 struct NullTest : public cudf::test::BaseFixture {
  protected:
-  void SetUp() override
-  {
-    if (!cudf::is_runtime_jit_supported()) {
-      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
-    }
-  }
-
   char const* const cuda =
     "__device__ inline void lerp(float* output, float low, float high, float t){*output = low - t "
     "* low + t * high; }";
@@ -839,6 +798,75 @@ TEST_F(NullTest, ColumnNulls_And_ScalarNull)
     cudf::transform({*low, *high, *t_scalar}, ptx, cudf::data_type(cudf::type_id::FLOAT32), true);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ptx_result, *expected);
+}
+
+TEST_F(NullTest, IsNull)
+{
+  auto udf = R"***(
+  __device__ inline void is_null(bool * output, cuda::std::optional<float> input)
+  {
+    *output = !input.has_value();
+  }
+  )***";
+
+  auto value = cudf::test::fixed_width_column_wrapper<float>({1.0f, 2.0f, 3.0f, 4.0f, 5.0f},
+                                                             {false, false, true, false, true})
+                 .release();
+
+  auto expected = cudf::test::fixed_width_column_wrapper<bool>({true, true, false, true, false});
+
+  auto result = cudf::transform({*value},
+                                udf,
+                                cudf::data_type(cudf::type_id::BOOL8),
+                                false,
+                                std::nullopt,
+                                cudf::null_aware::YES);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
+}
+
+TEST_F(NullTest, NullProject)
+{
+  auto udf = R"***(
+__device__ inline void null_lerp(
+       float* output,
+       cuda::std::optional<float> low,
+       cuda::std::optional<float> high,
+       cuda::std::optional<float> t
+)
+{
+auto lerp = [] (auto l, auto h, auto t) {
+return l - t * l + t * h;
+};
+  *output =  low.has_value() && high.has_value() && t.has_value()
+    ? lerp(*low, *high, *t)
+    : 0.0F;
+}
+)***";
+
+  auto low =
+    cudf::test::fixed_width_column_wrapper<float>(low_host.begin(), low_host.end(), fourth())
+      .release();
+  auto high =
+    cudf::test::fixed_width_column_wrapper<float>(high_host.begin(), high_host.end(), fifth())
+      .release();
+  auto t = cudf::test::fixed_width_column_wrapper<float>(t_host.begin(), t_host.end()).release();
+
+  auto expected_iter = cudf::detail::make_counting_transform_iterator(
+    0, [&](auto i) { return ((i % 5) == 0) && ((i % 4) == 0) ? expected_host[i] : 0.0F; });
+
+  auto expected =
+    cudf::test::fixed_width_column_wrapper<float>(expected_iter, expected_iter + low_host.size())
+      .release();
+
+  auto cuda_result = cudf::transform({*low, *high, *t},
+                                     udf,
+                                     cudf::data_type(cudf::type_id::FLOAT32),
+                                     false,
+                                     std::nullopt,
+                                     cudf::null_aware::YES);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, *expected);
 }
 
 }  // namespace transformation

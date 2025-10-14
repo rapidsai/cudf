@@ -508,8 +508,11 @@ struct bit_to_word_index {
   bool const inclusive;
 };
 
-struct popc {
-  __device__ inline size_type operator()(bitmask_type word) const { return __popc(word); }
+struct popcount {
+  __device__ inline size_type operator()(bitmask_type word) const
+  {
+    return cuda::std::popcount(word);
+  }
 };
 
 // Count set/unset bits in a segmented null mask, using offset iterators accessible by the device.
@@ -526,7 +529,7 @@ rmm::device_uvector<size_type> segmented_count_bits(bitmask_type const* bitmask,
     static_cast<size_type>(std::distance(first_bit_indices_begin, first_bit_indices_end));
   rmm::device_uvector<size_type> d_bit_counts(num_ranges, stream);
 
-  auto num_set_bits_in_word = thrust::make_transform_iterator(bitmask, popc{});
+  auto num_set_bits_in_word = thrust::make_transform_iterator(bitmask, popcount{});
   auto first_word_indices =
     thrust::make_transform_iterator(first_bit_indices_begin, bit_to_word_index{true});
   auto last_word_indices =

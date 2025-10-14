@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "reductions/nested_type_minmax_util.cuh"
+#include "reductions/nested_types_extrema_utils.cuh"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -152,7 +152,6 @@ struct group_reduction_functor<
                                         cudf::device_span<cudf::size_type const> group_labels,
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
-
   {
     using SourceDType = device_storage_type_t<T>;
     using ResultType  = cudf::detail::target_type_t<T, K>;
@@ -245,7 +244,7 @@ struct group_reduction_functor<
     auto const count_iter   = thrust::make_counting_iterator<ResultType>(0);
     auto const result_begin = result->mutable_view().template begin<ResultType>();
     auto const binop_generator =
-      cudf::reduction::detail::comparison_binop_generator::create<K>(values, stream);
+      cudf::reduction::detail::arg_minmax_binop_generator::create<K>(values, stream);
     do_reduction(count_iter, result_begin, binop_generator.binop());
 
     if (values.has_nulls()) {

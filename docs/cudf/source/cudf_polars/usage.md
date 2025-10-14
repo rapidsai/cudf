@@ -83,3 +83,71 @@ shape: (3, 3)
 │ Scan               ┆ 813   ┆ 233993 │
 └────────────────────┴───────┴────────┘
 ```
+
+## Tracing
+
+cudf-polars can optionally trace execution of each node in the query plan.
+To enable tracing, set the environment variable ``CUDF_POLARS_LOG_TRACES`` to a
+true value ("1", "true", "y", "yes") before starting your process. This will
+capture and log information about each node before and after it executes, and includes
+information on timing, memory usage, and the input and output dataframes. The log message
+includes the following fields:
+
+| Field Name | Type  | Description |
+| ---------- | ----- | ----------- |
+| type       | string | The name of the IR node |
+| start      | int    | A nanosecond-precision counter indicating when this node started executing |
+| stop       | int    | A nanosecond-precision counter indicating when this node finished executing |
+| overhead   | int    | The overhead, in nanoseconds, added by tracing |
+| `count_frames_{phase}` | int | The number of dataframes for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_DATAFRAMES=0`. |
+| `frames_{phase}` | `list[dict]` | A list with dictionaries with "shape" and "size" fields, one per input dataframe, for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_DATAFRAMES=0`. |
+| `total_bytes_{phase}` | int | The sum of the size (in bytes) of the dataframes for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=0`. |
+| `rmm_current_bytes_{phase}` | int | The current number of bytes allocated by RMM Memory Resource used by cudf-polars for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=0`. |
+| `rmm_current_count_{phase}` | int | The current number of allocations made by RMM Memory Resource used by cudf-polars for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=0`. |
+| `rmm_peak_bytes_{phase}` | int | The peak number of bytes allocated by RMM Memory Resource used by cudf-polars for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=0`. |
+| `rmm_peak_count_{phase}` | int | The peak number of allocations made by RMM Memory Resource used by cudf-polars for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=0`. |
+| `rmm_total_bytes_{phase}` | int | The total number of bytes allocated by RMM Memory Resource used by cudf-polars for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=0`. |
+| `rmm_total_count_{phase}` | int | The total number of allocations made by RMM Memory Resource used by cudf-polars for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=0`. |
+| `nvml_current_bytes_{phase}` | int | The device memory usage of this process, as reported by NVML, for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=0`. |
+
+Setting `CUDF_POLARS_LOG_TRACES=1` enables all the metrics. Depending on the query, the overhead
+from collecting the memory or dataframe metrics can be measurable. You can disable some metrics
+through additional environment variables. For example, do disable the memory related metrics, set:
+
+```
+CUDF_POLARS_LOG_TRACES=1 CUDF_POLARS_LOG_TRACES_MEMORY=0
+```
+
+And to disable the memory and dataframe metrics, which essentially leaves just
+the duration metrics, set
+```
+CUDF_POLARS_LOG_TRACES=1 CUDF_POLARS_LOG_TRACES_MEMORY=0 CUDF_POLARS_LOG_TRACES_DATAFRAMES=0
+```
+
+Note that tracing still needs to be enabled with `CUDF_POLARS_LOG_TRACES=1`.
+
+The implementation uses [structlog] to build log records. You can configure the
+output using structlog's [configuration][structlog-configure] and enrich the
+records with [context variables][structlog-context].
+
+```
+>>> df = pl.DataFrame({"a": ["a", "a", "b"], "b": [1, 2, 3]}).lazy()
+>>> df.group_by("a").agg(pl.col("b").min().alias("min"), pl.col("b").max().alias("max")).collect(engine="gpu")
+2025-09-10 07:44:01 [info     ] Execute IR      count_frames_input=0 count_frames_output=1 ... type=DataFrameScan
+2025-09-10 07:44:01 [info     ] Execute IR      count_frames_input=1 count_frames_output=1 ... type=GroupBy
+shape: (2, 3)
+┌─────┬─────┬─────┐
+│ a   ┆ min ┆ max │
+│ --- ┆ --- ┆ --- │
+│ str ┆ i64 ┆ i64 │
+╞═════╪═════╪═════╡
+│ b   ┆ 3   ┆ 3   │
+│ a   ┆ 1   ┆ 2   │
+└─────┴─────┴─────┘
+```
+
+[nvml]: https://developer.nvidia.com/management-library-nvml
+[rmm-stats]: https://docs.rapids.ai/api/rmm/stable/guide/#memory-statistics-and-profiling
+[structlog]: https://www.structlog.org/
+[structlog-configure]: https://www.structlog.org/en/stable/configuration.html
+[structlog-context]: https://www.structlog.org/en/stable/contextvars.html

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import itertools
-from functools import cached_property
-from typing import TYPE_CHECKING, Any, cast
+import re
+from collections.abc import Callable
+from functools import cached_property, lru_cache
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pandas as pd
@@ -18,10 +20,11 @@ from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column, column_empty
-from cudf.utils.docutils import copy_docstring
+from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
+    cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     get_dtype_of_same_kind,
     is_dtype_obj_string,
@@ -34,8 +37,7 @@ from cudf.utils.utils import is_na_like
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
-    import cupy
-    import numba.cuda
+    import cupy as cp
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -50,6 +52,29 @@ if TYPE_CHECKING:
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.timedelta import TimeDeltaColumn
     from cudf.core.dtypes import DecimalDtype
+
+
+# For now all supported re flags have matching names in libcudf. If that ever changes
+# this construction will need to be updated with more explicit mapping.
+_FLAG_MAP = {
+    getattr(re, flag): getattr(plc.strings.regex_flags.RegexFlags, flag)
+    for flag in ("MULTILINE", "DOTALL")
+}
+
+
+@lru_cache
+def plc_flags_from_re_flags(
+    flags: re.RegexFlag,
+) -> plc.strings.regex_flags.RegexFlags:
+    # Convert Python re flags to pylibcudf RegexFlags
+    plc_flags = plc.strings.regex_flags.RegexFlags(0)
+    for re_flag, plc_flag in _FLAG_MAP.items():
+        if flags & re_flag:
+            plc_flags |= plc_flag
+            flags &= ~re_flag
+    if flags:
+        raise ValueError(f"Unsupported re flags: {flags}")
+    return plc_flags
 
 
 class StringColumn(ColumnBase):
@@ -106,11 +131,18 @@ class StringColumn(ColumnBase):
         if (
             not cudf.get_option("mode.pandas_compatible")
             and dtype != CUDF_STRING_DTYPE
+            and dtype.kind != "U"
         ) or (
             cudf.get_option("mode.pandas_compatible")
             and not is_dtype_obj_string(dtype)
         ):
             raise ValueError(f"dtype must be {CUDF_STRING_DTYPE}")
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and isinstance(dtype, np.dtype)
+            and dtype.kind == "U"
+        ):
+            dtype = CUDF_STRING_DTYPE
         if len(children) > 1:
             raise ValueError("StringColumn must have at most 1 offset column.")
 
@@ -233,17 +265,24 @@ class StringColumn(ColumnBase):
 
         raise NotImplementedError("`any` not implemented for `StringColumn`")
 
-    def data_array_view(
-        self, *, mode="write"
-    ) -> numba.cuda.devicearray.DeviceNDArray:
-        raise ValueError("Cannot get an array view of a StringColumn")
-
     @property
     def __cuda_array_interface__(self):
         raise NotImplementedError(
             f"dtype {self.dtype} is not yet supported via "
             "`__cuda_array_interface__`"
         )
+
+    def _validate_fillna_value(
+        self, fill_value: ScalarLike | ColumnLike
+    ) -> plc.Scalar | ColumnBase:
+        """Align fill_value for .fillna based on column type."""
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and is_scalar(fill_value)
+            and fill_value is np.nan
+        ):
+            raise MixedTypeError("Cannot fill `np.nan` in string column")
+        return super()._validate_fillna_value(fill_value)
 
     def element_indexing(self, index: int):
         result = super().element_indexing(index)
@@ -309,7 +348,9 @@ class StringColumn(ColumnBase):
             if not is_pandas_nullable_extension_dtype(dtype):
                 result = result.fillna(False)
             return result._with_type_metadata(dtype)  # type: ignore[return-value]
-        elif dtype.kind in {"i", "u"}:
+
+        cast_func: Callable[[plc.Column, plc.DataType], plc.Column]
+        if dtype.kind in {"i", "u"}:
             if not self.is_integer().all():
                 raise ValueError(
                     "Could not convert strings to integer "
@@ -348,7 +389,9 @@ class StringColumn(ColumnBase):
             raise ValueError(
                 "Cannot convert `None` value to datetime or timedelta."
             )
-        elif dtype.kind == "M":  # type: ignore[union-attr]
+
+        casting_func: Callable[[plc.Column, plc.DataType, str], plc.Column]
+        if dtype.kind == "M":  # type: ignore[union-attr]
             if format.endswith("%z"):
                 raise NotImplementedError(
                     "cuDF does not yet support timezone-aware datetimes"
@@ -411,27 +454,30 @@ class StringColumn(ColumnBase):
         return result  # type: ignore[return-value]
 
     def as_string_column(self, dtype) -> StringColumn:
+        col = self
         if dtype != self.dtype:
             if isinstance(dtype, pd.StringDtype) or (
                 isinstance(dtype, pd.ArrowDtype)
                 and pa.string() == dtype.pyarrow_dtype
             ):
-                self._dtype = dtype
-        return self
+                # TODO: Drop the deep copies on astype's copy keyword
+                # default value is fixed in `25.10`
+                col = self.copy(deep=True)
+                col._dtype = dtype
+            elif isinstance(dtype, np.dtype) and dtype.kind in {"U", "O"}:
+                # TODO: Drop the deep copies on astype's copy keyword
+                # default value is fixed in `25.10`
+                col = self.copy(deep=True)
+                col._dtype = CUDF_STRING_DTYPE
+        return col
 
     @property
-    def values_host(self) -> np.ndarray:
+    def values(self) -> cp.ndarray:
         """
-        Return a numpy representation of the StringColumn.
+        Return a CuPy representation of the Column.
         """
-        return self.to_pandas().values
-
-    @property
-    def values(self) -> cupy.ndarray:
-        """
-        Return a CuPy representation of the StringColumn.
-        """
-        raise TypeError("String arrays are not supported by cupy")
+        # dask checks for a TypeError instead of NotImplementedError
+        raise TypeError(f"cupy does not support {self.dtype}")
 
     def to_pandas(
         self,
@@ -500,15 +546,6 @@ class StringColumn(ColumnBase):
             res = self
         return res.replace(df._data["old"], df._data["new"])
 
-    def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
-        if is_scalar(other):
-            if is_na_like(other):
-                return super()._normalize_binop_operand(other)
-            return pa.scalar(other)
-        elif isinstance(other, type(self)):
-            return other
-        return NotImplemented
-
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
         # Due to https://github.com/pandas-dev/pandas/issues/46332 we need to
@@ -534,8 +571,12 @@ class StringColumn(ColumnBase):
             elif op == "__ne__":
                 return self.isnull()
 
-        other = self._normalize_binop_operand(other)
-        if other is NotImplemented:
+        if is_scalar(other):
+            if is_na_like(other):
+                other = pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
+            else:
+                other = pa.scalar(other)  # type: ignore[arg-type]
+        elif not isinstance(other, type(self)):
             return NotImplemented
 
         if isinstance(other, (StringColumn, pa.Scalar)):
@@ -575,38 +616,16 @@ class StringColumn(ColumnBase):
             }:
                 if isinstance(other, pa.Scalar):
                     other = pa_scalar_to_plc_scalar(other)
-                lhs, rhs = (other, self) if reflect else (self, other)
+                lhs_op, rhs_op = (other, self) if reflect else (self, other)
                 return binaryop.binaryop(
-                    lhs=lhs,
-                    rhs=rhs,
+                    lhs=lhs_op,
+                    rhs=rhs_op,
                     op=op,
                     dtype=get_dtype_of_same_kind(
                         self.dtype, np.dtype(np.bool_)
                     ),
                 )
         return NotImplemented
-
-    @copy_docstring(ColumnBase.view)
-    def view(self, dtype: DtypeObj) -> ColumnBase:
-        if self.null_count > 0:
-            raise ValueError(
-                "Can not produce a view of a string column with nulls"
-            )
-        str_byte_offset = self.base_children[0].element_indexing(self.offset)
-        str_end_byte_offset = self.base_children[0].element_indexing(
-            self.offset + self.size
-        )
-
-        n_bytes_to_view = str_end_byte_offset - str_byte_offset
-
-        to_view = cudf.core.column.NumericalColumn(
-            self.base_data,  # type: ignore[arg-type]
-            dtype=np.dtype(np.int8),
-            offset=str_byte_offset,
-            size=n_bytes_to_view,
-        )
-
-        return to_view.view(dtype)
 
     @acquire_spill_lock()
     def minhash(
@@ -818,32 +837,6 @@ class StringColumn(ColumnBase):
                 else index.to_pylibcudf(mode="read"),
             )
         )
-
-    @acquire_spill_lock()
-    def subword_tokenize(
-        self,
-        hashed_vocabulary: plc.nvtext.subword_tokenize.HashedVocabulary,
-        max_sequence_length: int = 64,
-        stride: int = 48,
-        do_lower: bool = True,
-        do_truncate: bool = False,
-    ) -> tuple[ColumnBase, ColumnBase, ColumnBase]:
-        """
-        Subword tokenizes text series by using the pre-loaded hashed vocabulary
-        """
-        result = plc.nvtext.subword_tokenize.subword_tokenize(
-            self.to_pylibcudf(mode="read"),
-            hashed_vocabulary,
-            max_sequence_length,
-            stride,
-            do_lower,
-            do_truncate,
-        )
-        # return the 3 tensor components
-        tokens = type(self).from_pylibcudf(result[0])
-        masks = type(self).from_pylibcudf(result[1])
-        metadata = type(self).from_pylibcudf(result[2])
-        return tokens, masks, metadata
 
     @acquire_spill_lock()
     def tokenize_scalar(self, delimiter: plc.Scalar) -> Self:
@@ -1098,7 +1091,7 @@ class StringColumn(ColumnBase):
         self,
         delimiter: plc.Scalar,
         maxsplit: int,
-        method: Callable[[plc.Column, plc.Scalar, int], plc.Column],
+        method: Callable[[plc.Column, plc.Scalar, int], plc.Table],
     ) -> dict[int, Self]:
         plc_table = method(
             self.to_pylibcudf(mode="read"),
@@ -1122,7 +1115,7 @@ class StringColumn(ColumnBase):
     def _partition(
         self,
         delimiter: plc.Scalar,
-        method: Callable[[plc.Column, plc.Scalar], plc.Column],
+        method: Callable[[plc.Column, plc.Scalar], plc.Table],
     ) -> dict[int, Self]:
         plc_table = method(
             self.to_pylibcudf(mode="read"),
@@ -1216,7 +1209,10 @@ class StringColumn(ColumnBase):
     def extract(self, pattern: str, flags: int) -> dict[int, Self]:
         plc_table = plc.strings.extract.extract(
             self.to_pylibcudf(mode="read"),
-            plc.strings.regex_program.RegexProgram.create(pattern, flags),
+            plc.strings.regex_program.RegexProgram.create(
+                pattern,
+                plc_flags_from_re_flags(flags),
+            ),
         )
         return dict(
             enumerate(
@@ -1228,7 +1224,10 @@ class StringColumn(ColumnBase):
     def contains_re(self, pattern: str, flags: int) -> Self:
         plc_column = plc.strings.contains.contains_re(
             self.to_pylibcudf(mode="read"),
-            plc.strings.regex_program.RegexProgram.create(pattern, flags),
+            plc.strings.regex_program.RegexProgram.create(
+                pattern,
+                plc_flags_from_re_flags(flags),
+            ),
         )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
@@ -1289,11 +1288,14 @@ class StringColumn(ColumnBase):
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     @acquire_spill_lock()
-    def replace_str(self, pattern: str, replacement: pa.Scalar) -> Self:
+    def replace_str(
+        self, pattern: str, replacement: pa.Scalar, max_replace_count: int = -1
+    ) -> Self:
         plc_result = plc.strings.replace.replace(
             self.to_pylibcudf(mode="read"),
             pa_scalar_to_plc_scalar(pa.scalar(pattern)),
             pa_scalar_to_plc_scalar(replacement),
+            max_replace_count,
         )
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 
@@ -1433,7 +1435,9 @@ class StringColumn(ColumnBase):
     def count_re(self, pattern: str, flags: int) -> NumericalColumn:
         plc_result = plc.strings.contains.count_re(
             self.to_pylibcudf(mode="read"),
-            plc.strings.regex_program.RegexProgram.create(pattern, flags),
+            plc.strings.regex_program.RegexProgram.create(
+                pattern, plc_flags_from_re_flags(flags)
+            ),
         )
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 
@@ -1448,7 +1452,9 @@ class StringColumn(ColumnBase):
     ) -> Self:
         plc_result = method(
             self.to_pylibcudf(mode="read"),
-            plc.strings.regex_program.RegexProgram.create(pat, flags),
+            plc.strings.regex_program.RegexProgram.create(
+                pat, plc_flags_from_re_flags(flags)
+            ),
         )
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 
@@ -1464,17 +1470,32 @@ class StringColumn(ColumnBase):
     def starts_ends_with(
         self,
         method: Callable[[plc.Column, plc.Column | plc.Scalar], plc.Column],
-        pat: str | Self,
+        pat: str | tuple[str, ...],
     ) -> Self:
         if isinstance(pat, str):
             plc_pat = pa_scalar_to_plc_scalar(pa.scalar(pat, type=pa.string()))
-        elif isinstance(pat, type(self)):
-            plc_pat = pat.to_pylibcudf(mode="read")
+            plc_result = method(self.to_pylibcudf(mode="read"), plc_pat)
+        elif isinstance(pat, tuple) and all(isinstance(p, str) for p in pat):
+            plc_self = self.to_pylibcudf(mode="read")
+            plc_pat = pa_scalar_to_plc_scalar(
+                pa.scalar(pat[0], type=pa.string())
+            )
+            plc_result = method(plc_self, plc_pat)
+            for next_pat in pat[1:]:
+                plc_pat = pa_scalar_to_plc_scalar(
+                    pa.scalar(next_pat, type=pa.string())
+                )
+                plc_next_result = method(plc_self, plc_pat)
+                plc_result = plc.binaryop.binary_operation(
+                    plc_result,
+                    plc_next_result,
+                    plc.binaryop.BinaryOperator.BITWISE_OR,
+                    plc.DataType(plc.TypeId.BOOL8),
+                )
         else:
             raise TypeError(
-                f"expected a str or {type(self).__name__}, not {type(pat).__name__}"
+                f"expected a str or tuple[str, ...], not {type(pat).__name__}"
             )
-        plc_result = method(self.to_pylibcudf(mode="read"), plc_pat)
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 
     @acquire_spill_lock()
@@ -1497,7 +1518,9 @@ class StringColumn(ColumnBase):
     def matches_re(self, pattern: str, flags: int) -> Self:
         plc_result = plc.strings.contains.matches_re(
             self.to_pylibcudf(mode="read"),
-            plc.strings.regex_program.RegexProgram.create(pattern, flags),
+            plc.strings.regex_program.RegexProgram.create(
+                pattern, plc_flags_from_re_flags(flags)
+            ),
         )
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 

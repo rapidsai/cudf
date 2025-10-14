@@ -1,4 +1,5 @@
-#Configuration File for CodeCov
+# Configuration File for CodeCov
+comment: false
 coverage:
   status:
     project: off
@@ -7,6 +8,5 @@ coverage:
         target: auto
         threshold: 5%
         informational: true  # The coverage will always pass
-
 github_checks:
     annotations: true

@@ -44,8 +44,8 @@ DESELECTED_TESTS_STR=$(printf -- " --deselect %s" "${DESELECTED_TESTS[@]}")
 # multiple quoted arguments inline
 # shellcheck disable=SC2086
 rapids-logger "Run polars tests with the streaming executor"
-CUDF_POLARS__STREAMING__TARGET_PARTITION_SIZE=805306368 \
-CUDF_POLARS__STREAMING__FALLBACK_MODE=silent \
+CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE=805306368 \
+CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
     python -m pytest \
        --import-mode=importlib \
        --cache-clear \

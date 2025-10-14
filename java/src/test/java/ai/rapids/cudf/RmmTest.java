@@ -547,13 +547,7 @@ public class RmmTest {
   @Tag("noSanitizer")
   @Test
   public void testCudaAsyncMemoryResourceSize() {
-    try {
-      Rmm.initialize(RmmAllocationMode.CUDA_ASYNC, Rmm.logToStderr(), 1024);
-    } catch (CudfException e) {
-      // CUDA 11.2 introduced cudaMallocAsync, older CUDA Toolkit will skip this test.
-      assumeFalse(e.getMessage().contains("cudaMallocAsync not supported"));
-      throw e;
-    }
+    Rmm.initialize(RmmAllocationMode.CUDA_ASYNC, Rmm.logToStderr(), 1024);
     try (DeviceMemoryBuffer ignored1 = Rmm.alloc(1024)) {
       assertThrows(OutOfMemoryError.class,
           () -> {

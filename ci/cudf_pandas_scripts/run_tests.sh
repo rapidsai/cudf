@@ -116,7 +116,7 @@ python -m pytest -p cudf.pandas \
 # More details: https://github.com/rapidsai/cudf/pull/16930#issuecomment-2707873968
 python -m pytest -p cudf.pandas \
     --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
-    --numprocesses=1 \
+    --numprocesses=0 \
     -k "profiler" \
     ./python/cudf/cudf_pandas_tests/
 
@@ -133,15 +133,19 @@ for version in "${versions[@]}"; do
         --numprocesses=8 \
         --dist=worksteal \
         -k "not profiler" \
+        -m "not serial" \
         --cov-config=./python/cudf/.coveragerc \
         --cov=cudf \
         --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
         --cov-report=term \
         ./python/cudf/cudf_pandas_tests/
 
+    # NOTE: We don't currently run serial tests (only 1 as of 2025-07-25)
+    # with multiple versions of pandas.
+
     python -m pytest -p cudf.pandas \
         --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
-        --numprocesses=1 \
+        --numprocesses=0 \
         -k "profiler" \
         ./python/cudf/cudf_pandas_tests/
 done

@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
@@ -11,6 +11,9 @@ from pylibcudf.libcudf.nvtext.ngrams_tokenize cimport (
 from pylibcudf.libcudf.scalar.scalar cimport string_scalar
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 __all__ = ["ngrams_tokenize"]
 
@@ -18,7 +21,9 @@ cpdef Column ngrams_tokenize(
     Column input,
     size_type ngrams,
     Scalar delimiter,
-    Scalar separator
+    Scalar separator,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Returns a single column of strings by tokenizing the input strings column
@@ -37,6 +42,8 @@ cpdef Column ngrams_tokenize(
         An empty string will separate tokens using whitespace.
     separator : Scalar
         The string to use for separating ngram tokens
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -44,6 +51,8 @@ cpdef Column ngrams_tokenize(
         New strings columns of tokens
     """
     cdef unique_ptr[column] c_result
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_ngrams_tokenize(
@@ -51,5 +60,7 @@ cpdef Column ngrams_tokenize(
             ngrams,
             dereference(<const string_scalar*>delimiter.get()),
             dereference(<const string_scalar*>separator.get()),
+            stream.view(),
+            mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream, mr)

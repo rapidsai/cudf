@@ -26,7 +26,7 @@ import sys
 import tempfile
 import warnings
 import xml.etree.ElementTree as ET
-from enum import IntEnum
+from enum import IntEnum, IntFlag
 from typing import Any
 
 import cudf
@@ -457,6 +457,13 @@ _intersphinx_cache = {}
 
 _intersphinx_extra_prefixes = ("rmm", "rmm::mr", "mr")
 
+_external_intersphinx_aliases = {
+    "pandas": "pd",
+    "pyarrow": "pa",
+    "numpy": "np",
+    "cupy": "cp",
+}
+
 
 def _cached_intersphinx_lookup(env, node, contnode):
     """Perform an intersphinx lookup and cache the result.
@@ -515,6 +522,17 @@ def on_missing_reference(app, env, node, contnode):
         # Sphinx docs, those are pages that doxygen automatically
         # generates. Adding those would clutter the Sphinx output.
         return contnode
+
+    if node["refdomain"] == "py" and reftarget is not None:
+        # These replacements are needed because of
+        # https://github.com/sphinx-doc/sphinx/issues/10151
+        for module, alias in _external_intersphinx_aliases.items():
+            if f"{alias}." in node["reftarget"]:
+                node["reftarget"] = node["reftarget"].replace(alias, module)
+                if (
+                    ref := _cached_intersphinx_lookup(env, node, contnode)
+                ) is not None:
+                    return ref
 
     if node["refdomain"] in ("std", "cpp") and reftarget is not None:
         if any(toskip in reftarget for toskip in _names_to_skip_in_cpp):
@@ -578,48 +596,16 @@ def on_missing_reference(app, env, node, contnode):
     return None
 
 
+# The following are erroneously warned due to
+# https://github.com/sphinx-doc/sphinx/issues/11225
 nitpick_ignore = [
-    # Erroneously warned in ParquetColumnSchema.name
-    ("py:class", "unicode"),
-    ("py:class", "SeriesOrIndex"),
-    ("py:class", "DataFrameOrSeries"),
     ("py:class", "Dtype"),
-    # The following are erroneously warned due to
-    # https://github.com/sphinx-doc/sphinx/issues/11225
-    ("py:obj", "cudf.DatetimeIndex.time"),
-    ("py:obj", "cudf.DatetimeIndex.date"),
-    ("py:obj", "cudf.Index.values_host"),
-    ("py:obj", "cudf.Index.transpose"),
-    ("py:obj", "cudf.Index.T"),
-    ("py:obj", "cudf.Index.to_flat_index"),
-    ("py:obj", "cudf.MultiIndex.to_flat_index"),
-    ("py:obj", "Series.pipe"),
-    ("py:obj", "DataFrame.pipe"),
-    ("py:meth", "pyarrow.Table.to_pandas"),
-    ("py:class", "abc.Hashable"),
-    ("py:class", "cp.ndarray"),
-    ("py:class", "pd.DataFrame"),
     ("py:class", "pandas.core.indexes.frozen.FrozenList"),
-    ("py:class", "pa.Array"),
-    ("py:class", "pa.Table"),
-    ("py:class", "pa.ListType"),
-    ("py:class", "pa.Decimal128Type"),
     ("py:class", "ScalarLike"),
-    ("py:class", "ParentType"),
-    ("py:class", "pyarrow.lib.DataType"),
-    ("py:class", "pyarrow.lib.Table"),
-    ("py:class", "pyarrow.lib.Scalar"),
-    ("py:class", "pyarrow.lib.ChunkedArray"),
-    ("py:class", "pyarrow.lib.Array"),
     ("py:class", "StringColumn"),
     ("py:class", "ColumnLike"),
     ("py:class", "DtypeObj"),
-    ("py:class", "pa.StructType"),
-    # TODO: Remove this when we figure out why typing_extensions doesn't seem
-    # to map types correctly for intersphinx
-    ("py:class", "typing_extensions.Self"),
-    ("py:class", "np.uint32"),
-    ("py:class", "np.uint64"),
+    ("py:class", "ArrowLike"),
 ]
 
 
@@ -698,7 +684,7 @@ class PLCIntEnumDocumenter(ClassDocumenter):
     ) -> bool:
         try:
             return issubclass(
-                member, IntEnum
+                member, (IntEnum, IntFlag)
             ) and member.__module__.startswith("pylibcudf")
         except TypeError:
             return False
@@ -717,7 +703,7 @@ class PLCIntEnumDocumenter(ClassDocumenter):
 
         if self.object.__name__ != "Kind":
             self.add_line(
-                f"See also :cpp:enum:`cudf::{self.object.__name__}`.",
+                f"See also :cpp:enum:`{self.object.__name__}`.",
                 source_name,
             )
         self.add_line("", source_name)
