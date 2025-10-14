@@ -36,7 +36,7 @@ cudf::size_type num_multiprocessors()
     CUDF_CUDA_TRY(cudaGetDevice(&device));
     int is_integrated = 0;
     CUDF_CUDA_TRY(cudaDeviceGetAttribute(&is_integrated, cudaDevAttrIntegrated, device));
-    return is_integrated != 0;
+    return is_integrated == 1;
   }();
   return cached_result;
 }
