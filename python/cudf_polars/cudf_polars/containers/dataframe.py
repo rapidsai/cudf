@@ -14,7 +14,6 @@ import pylibcudf as plc
 
 from cudf_polars.containers import Column, DataType
 from cudf_polars.utils import conversion
-from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence, Set
@@ -189,7 +188,7 @@ class DataFrame:
             Dtypes for the columns
         stream
             CUDA stream used for device memory operations and kernel launches
-            on this dataframe.
+            on this dataframe. The data in ``table`` must be valid on ``stream``.
 
         Returns
         -------
@@ -201,7 +200,6 @@ class DataFrame:
             If the number of provided names does not match the
             number of columns in the table.
         """
-        stream = stream or get_cuda_stream()
         if table.num_columns() != len(names):
             raise ValueError("Mismatching name and table length.")
         return cls(
@@ -230,7 +228,7 @@ class DataFrame:
             Two-tuple of frames (a memoryview and a gpumemoryview).
         stream
             CUDA stream used for device memory operations and kernel launches
-            on this dataframe.
+            on this dataframe. The data in ``frames`` must be valid on ``stream``.
 
         Returns
         -------
