@@ -22,6 +22,8 @@
 #include "ipc/Message_generated.h"
 #include "ipc/Schema_generated.h"
 
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/host_memory.hpp>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/logger.hpp>
@@ -30,6 +32,7 @@
 #include <thrust/iterator/zip_iterator.h>
 
 #include <functional>
+#include <future>
 #include <numeric>
 #include <optional>
 #include <regex>
@@ -328,7 +331,7 @@ metadata::metadata(datasource* source, bool read_page_indexes)
   cp.read(this);
   CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
 
-  // Reading the page indexes is somewhat expensive, so skip if there are no byte array columns.
+  // Reading the page indexes is somewhat expensive, so skip if requested or if there are no byte array columns.
   // Currently the indexes are only used for the string size calculations.
   // Could also just read indexes for string columns, but that would require changes elsewhere
   // where we're trying to determine if we have the indexes or not.
@@ -337,8 +340,7 @@ metadata::metadata(datasource* source, bool read_page_indexes)
   auto const has_strings = std::any_of(
     schema.begin(), schema.end(), [](auto const& elem) { return elem.type == Type::BYTE_ARRAY; });
 
-  if (read_page_indexes and has_strings and not row_groups.empty() and
-      not row_groups.front().columns.empty()) {
+  if (read_page_indexes and has_strings and not row_groups.empty() and not row_groups.front().columns.empty()) {
     // column index and offset index are encoded back to back.
     // the first column of the first row group will have the first column index, the last
     // column of the last row group will have the final offset index.
@@ -350,22 +352,92 @@ metadata::metadata(datasource* source, bool read_page_indexes)
       int64_t const length = max_offset - min_offset;
       auto const idx_buf   = source->host_read(min_offset, length);
 
-      // now loop over row groups
+      // Parallelize row group and column index processing using thread pool
+      // Split work into fixed number of tasks for better load balancing
+      
+      // Flatten all columns into a single vector for easier task distribution
+      std::vector<std::reference_wrapper<ColumnChunk>> all_columns;
       for (auto& rg : row_groups) {
         for (auto& col : rg.columns) {
-          if (col.column_index_length > 0 && col.column_index_offset > 0) {
-            int64_t const offset = col.column_index_offset - min_offset;
-            cp.init(idx_buf->data() + offset, col.column_index_length);
-            ColumnIndex ci;
-            cp.read(&ci);
-            col.column_index = std::move(ci);
-          }
-          if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
-            int64_t const offset = col.offset_index_offset - min_offset;
-            cp.init(idx_buf->data() + offset, col.offset_index_length);
-            OffsetIndex oi;
-            cp.read(&oi);
-            col.offset_index = std::move(oi);
+          all_columns.emplace_back(std::ref(col));
+        }
+      }
+      
+      size_t const total_columns = all_columns.size();
+      
+      // Use parallel processing only if we have enough columns to justify the overhead
+      constexpr size_t parallel_threshold = 512;
+      
+      if (total_columns >= parallel_threshold) {
+        // Dynamically calculate number of tasks based on column count
+        // Scale between 32 and 128 tasks for optimal load balancing
+        constexpr size_t min_tasks = 32;
+        constexpr size_t max_tasks = 128;
+        constexpr size_t columns_per_task_target = parallel_threshold/min_tasks;  // Target ~8 columns per task for optimal granularity
+        
+        size_t const num_tasks = std::clamp(total_columns / columns_per_task_target, min_tasks, max_tasks);
+        size_t const columns_per_task = total_columns / num_tasks;
+        size_t const remainder = total_columns % num_tasks;
+       
+        std::vector<std::future<void>> tasks;
+        tasks.reserve(num_tasks);
+        
+        size_t start_idx = 0;
+        for (size_t task_id = 0; task_id < num_tasks; ++task_id) {
+          // Calculate work range for this task
+          size_t task_size = columns_per_task + (task_id < remainder ? 1 : 0);
+          size_t end_idx = start_idx + task_size;
+          
+          // Skip empty tasks
+          if (start_idx >= total_columns) break;
+          
+          // Submit task to process a range of columns
+          tasks.emplace_back(cudf::detail::host_worker_pool().submit_task([&all_columns, &idx_buf, min_offset, start_idx, end_idx]() {
+            // Create a thread-local CompactProtocolReader for each task
+            CompactProtocolReader local_cp;
+            
+            // Process assigned range of columns
+            for (size_t i = start_idx; i < end_idx && i < all_columns.size(); ++i) {
+              auto& col = all_columns[i].get();
+              
+              if (col.column_index_length > 0 && col.column_index_offset > 0) {
+                int64_t const offset = col.column_index_offset - min_offset;
+                local_cp.init(idx_buf->data() + offset, col.column_index_length);
+                col.column_index = ColumnIndex();
+                local_cp.read(&col.column_index.value());
+              }
+              if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
+                int64_t const offset = col.offset_index_offset - min_offset;
+                local_cp.init(idx_buf->data() + offset, col.offset_index_length);
+                col.offset_index = OffsetIndex();
+                local_cp.read(&col.offset_index.value());
+              }
+            }
+          }));
+          
+          start_idx = end_idx;
+        }
+        
+        // Wait for all tasks to complete
+        for (auto& task : tasks) {
+          task.get();
+        }
+      } else {
+        // For small numbers of columns, use sequential processing to avoid overhead
+        for (auto& rg : row_groups) {
+          for (auto& col : rg.columns) {
+            if (col.column_index_length > 0 && col.column_index_offset > 0) {
+              int64_t const offset = col.column_index_offset - min_offset;
+              cp.init(idx_buf->data() + offset, col.column_index_length);
+              col.column_index  = ColumnIndex();
+              cp.read(&col.column_index.value());
+            }
+            if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
+              int64_t const offset = col.offset_index_offset - min_offset;
+              cp.init(idx_buf->data() + offset, col.offset_index_length);
+              col.offset_index = OffsetIndex();
+              cp.read(&col.offset_index.value());
+            }
           }
         }
       }
@@ -375,9 +447,27 @@ metadata::metadata(datasource* source, bool read_page_indexes)
   sanitize_schema();
 }
 
+metadata::~metadata()
+{
+  std::optional<std::vector<ColumnOrder>> column_orders_to_destroy;
+  if (column_orders.has_value()) {
+    column_orders_to_destroy = std::move(column_orders.value());
+    column_orders.reset();  // Clear the original
+  }
+  
+  // Submit destruction work to host worker pool thread
+  // Using detach() so destructor doesn't wait for completion
+  cudf::detail::host_worker_pool().detach_task([schema_to_destroy = std::move(schema),
+                                                row_groups_to_destroy = std::move(row_groups),
+                                                key_value_to_destroy = std::move(key_value_metadata),
+                                                created_by_to_destroy = std::move(created_by),
+                                                column_orders_to_destroy = std::move(column_orders_to_destroy)]() mutable {});
+}
+
 std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
   host_span<std::unique_ptr<datasource> const> sources, bool read_page_indexes)
 {
+  CUDF_FUNC_RANGE();
   // Avoid using the thread pool for a single source
   if (sources.size() == 1) {
     std::vector<metadata> result;
