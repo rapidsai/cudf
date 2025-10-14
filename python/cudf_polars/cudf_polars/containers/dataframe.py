@@ -139,7 +139,7 @@ class DataFrame:
         return self.table.num_rows() if self.column_map else 0
 
     @classmethod
-    def from_polars(cls, df: pl.DataFrame, stream: Stream | None = None) -> Self:
+    def from_polars(cls, df: pl.DataFrame, stream: Stream) -> Self:
         """
         Create from a polars dataframe.
 
@@ -155,8 +155,7 @@ class DataFrame:
         -------
         New dataframe representing the input.
         """
-        stream = stream or get_cuda_stream()
-        plc_table = plc.Table.from_arrow(df)
+        plc_table = plc.Table.from_arrow(df, stream=stream)
         return cls(
             (
                 Column(d_col, name=name, dtype=DataType(h_col.dtype)).copy_metadata(
@@ -175,7 +174,7 @@ class DataFrame:
         table: plc.Table,
         names: Sequence[str],
         dtypes: Sequence[DataType],
-        stream: Stream | None = None,
+        stream: Stream,
     ) -> Self:
         """
         Create from a pylibcudf table.

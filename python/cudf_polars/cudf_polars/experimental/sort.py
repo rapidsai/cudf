@@ -152,6 +152,7 @@ def _select_local_split_candidates(
         plc.Table([*res.columns(), part_id, row_id]),
         [*df.column_names, next(name_gen), next(name_gen)],
         [*df.dtypes, part_id_dtype, part_id_dtype],
+        stream=df.stream,
     )
 
 
@@ -203,6 +204,7 @@ def _get_final_sort_boundaries(
         sort_boundaries,
         sort_boundaries_candidates.column_names,
         sort_boundaries_candidates.dtypes,
+        stream=sort_boundaries_candidates.stream,
     )
 
 
@@ -317,6 +319,8 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
         column_names = options["column_names"]
         column_dtypes = options["column_dtypes"]
 
+        stream = DEFAULT_STREAM
+
         # TODO: When sorting, this step should finalize with a merge (unless we
         # require stability, as cudf merge is not stable).
         return DataFrame.from_table(
@@ -328,10 +332,11 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
                     statistics=context.statistics,
                 ),
                 br=context.br,
-                stream=DEFAULT_STREAM,
+                stream=stream,
             ),
             column_names,
             column_dtypes,
+            stream=stream,
         )
 
 
@@ -376,6 +381,7 @@ def _sort_partition_dataframe(
             split,
             df.column_names,
             df.dtypes,
+            stream=df.stream,
         )
         for i, split in enumerate(plc.copying.split(df.table, splits))
     }
