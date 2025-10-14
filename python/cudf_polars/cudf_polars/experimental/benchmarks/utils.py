@@ -20,6 +20,7 @@ import time
 import traceback
 from collections import defaultdict
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, assert_never
 
 import nvtx
@@ -46,7 +47,6 @@ except ImportError:
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
-    from pathlib import Path
 
 
 try:
@@ -1019,3 +1019,125 @@ def setup_logging(query_id: int, iteration: int) -> None:  # noqa: D103
             wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
             cache_logger_on_first_use=True,
         )
+
+
+def execute_duckdb_query(query: str, dataset_path: Path) -> pl.DataFrame:
+    """Execute a query with DuckDB."""
+    import duckdb
+
+    conn = duckdb.connect()
+
+    statements = [
+        f"CREATE VIEW {table.stem} as SELECT * FROM read_parquet('{table.absolute()}');"
+        for table in Path(dataset_path).glob("*.parquet")
+    ]
+    statements.append(query)
+    return conn.execute("\n".join(statements)).pl()
+
+
+def run_duckdb(
+    duckdb_queries_cls: Any, options: Sequence[str] | None = None, *, num_queries: int
+) -> None:
+    """Run the benchmark with DuckDB."""
+    args = parse_args(options, num_queries=num_queries)
+    vars(args).update({"query_set": duckdb_queries_cls.name})
+    run_config = RunConfig.from_args(args)
+    records: defaultdict[int, list[Record]] = defaultdict(list)
+
+    for q_id in run_config.queries:
+        try:
+            get_q = getattr(duckdb_queries_cls, f"q{q_id}")
+        except AttributeError as err:
+            raise NotImplementedError(f"Query {q_id} not implemented.") from err
+
+        sql = get_q(run_config)
+        print(f"DuckDB Executing: {q_id}")
+        records[q_id] = []
+
+        for i in range(args.iterations):
+            t0 = time.time()
+            result = execute_duckdb_query(sql, run_config.dataset_path)
+            t1 = time.time()
+            record = Record(query=q_id, iteration=i, duration=t1 - t0)
+            if args.print_results:
+                print(result)
+            print(f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s")
+            records[q_id].append(record)
+
+
+def run_validate(
+    polars_queries_cls: Any,
+    duckdb_queries_cls: Any,
+    options: Sequence[str] | None = None,
+    *,
+    num_queries: int,
+    check_dtypes: bool,
+    check_column_order: bool,
+) -> None:
+    """Validate Polars CPU/GPU vs DuckDB."""
+    from polars.testing import assert_frame_equal
+
+    args = parse_args(options, num_queries=num_queries)
+    vars(args).update({"query_set": polars_queries_cls.name})
+    run_config = RunConfig.from_args(args)
+
+    baseline = args.baseline
+    if baseline not in {"duckdb", "cpu"}:
+        raise ValueError("Baseline must be one of: 'duckdb', 'cpu'")
+
+    failures: list[int] = []
+
+    engine: pl.GPUEngine | None = None
+    if run_config.executor != "cpu":
+        engine = pl.GPUEngine(
+            raise_on_fail=True,
+            executor=run_config.executor,
+            executor_options=get_executor_options(run_config, polars_queries_cls),
+        )
+
+    for q_id in run_config.queries:
+        print(f"\nValidating Query {q_id}")
+        try:
+            get_pl = getattr(polars_queries_cls, f"q{q_id}")
+            get_ddb = getattr(duckdb_queries_cls, f"q{q_id}")
+        except AttributeError as err:
+            raise NotImplementedError(f"Query {q_id} not implemented.") from err
+
+        polars_query = get_pl(run_config)
+        if baseline == "duckdb":
+            base_sql = get_ddb(run_config)
+            base_result = execute_duckdb_query(base_sql, run_config.dataset_path)
+        else:
+            base_result = polars_query.collect(engine="streaming")
+
+        if run_config.executor == "cpu":
+            test_result = polars_query.collect(engine="streaming")
+        else:
+            try:
+                test_result = polars_query.collect(engine=engine)
+            except Exception as e:
+                failures.append(q_id)
+                print(f"❌ Query {q_id} failed validation: GPU execution failed.\n{e}")
+                continue
+
+        try:
+            assert_frame_equal(
+                base_result,
+                test_result,
+                check_dtypes=check_dtypes,
+                check_column_order=check_column_order,
+            )
+            print(f"✅ Query {q_id} passed validation.")
+        except AssertionError as e:
+            failures.append(q_id)
+            print(f"❌ Query {q_id} failed validation:\n{e}")
+            if args.print_results:
+                print("Baseline Result:\n", base_result)
+                print("Test Result:\n", test_result)
+
+    if failures:
+        print("\nValidation Summary:")
+        print("===================")
+        print(f"{len(failures)} query(s) failed: {failures}")
+    else:
+        print("\nAll queries passed validation.")
