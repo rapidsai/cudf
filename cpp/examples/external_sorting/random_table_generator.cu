@@ -50,7 +50,7 @@ namespace examples {
  * @brief Generate a random numeric column using thrust
  *
  * Creates a column filled with random values of the specified numeric type.
- * Uses thrust::uniform_int_distribution for integral types and 
+ * Uses thrust::uniform_int_distribution for integral types and
  * thrust::uniform_real_distribution for floating-point types.
  *
  * @tparam T The numeric data type (int32_t, int64_t, float, double, etc.)
@@ -71,22 +71,21 @@ std::unique_ptr<cudf::column> generate_random_numeric_column(T lower,
   auto col = cudf::make_numeric_column(
     cudf::data_type{cudf::type_to_id<T>()}, num_rows, cudf::mask_state::ALL_VALID, stream, mr);
 
-  thrust::transform(
-    rmm::exec_policy(stream),
-    thrust::counting_iterator(0),
-    thrust::counting_iterator(num_rows),
-    col->mutable_view().begin<T>(),
-    [lower, upper] __device__(auto idx) -> T {
-      thrust::minstd_rand engine;
-      engine.discard(idx);  
-      if constexpr (std::is_integral_v<T>) {
-        thrust::uniform_int_distribution<T> dist(lower, upper);
-        return dist(engine);
-      } else {
-        thrust::uniform_real_distribution<T> dist(lower, upper);
-        return dist(engine);
-      }
-    });
+  thrust::transform(rmm::exec_policy(stream),
+                    thrust::counting_iterator(0),
+                    thrust::counting_iterator(num_rows),
+                    col->mutable_view().begin<T>(),
+                    [lower, upper] __device__(auto idx) -> T {
+                      thrust::minstd_rand engine;
+                      engine.discard(idx);
+                      if constexpr (std::is_integral_v<T>) {
+                        thrust::uniform_int_distribution<T> dist(lower, upper);
+                        return dist(engine);
+                      } else {
+                        thrust::uniform_real_distribution<T> dist(lower, upper);
+                        return dist(engine);
+                      }
+                    });
 
   return col;
 }
@@ -111,11 +110,11 @@ std::unique_ptr<cudf::column> generate_random_numeric_column(T lower,
  * @param mr Device memory resource for allocations
  * @return Unique pointer to the generated table
  */
-std::unique_ptr<cudf::table> generate_random_table(std::vector<cudf::data_type> const &types,
-                                                    cudf::size_type n_columns,
-                                                    cudf::size_type m_rows,
-                                                    rmm::cuda_stream_view stream,
-                                                    rmm::device_async_resource_ref mr)
+std::unique_ptr<cudf::table> generate_random_table(std::vector<cudf::data_type> const& types,
+                                                   cudf::size_type n_columns,
+                                                   cudf::size_type m_rows,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::device_async_resource_ref mr)
 {
   std::vector<std::unique_ptr<cudf::column>> columns;
 
@@ -131,37 +130,39 @@ std::unique_ptr<cudf::table> generate_random_table(std::vector<cudf::data_type> 
           generate_random_numeric_column<double>(0.0, 1000.0 + i * 100, m_rows, stream, mr));
         break;
       case cudf::type_id::INT64:
-        columns.emplace_back(generate_random_numeric_column<int64_t>(
-          static_cast<int64_t>(1e9) + i * 1000000,
-          static_cast<int64_t>(1e10) + i * 1000000,
-          m_rows,
-          stream,
-          mr));
+        columns.emplace_back(
+          generate_random_numeric_column<int64_t>(static_cast<int64_t>(1e9) + i * 1000000,
+                                                  static_cast<int64_t>(1e10) + i * 1000000,
+                                                  m_rows,
+                                                  stream,
+                                                  mr));
         break;
       case cudf::type_id::FLOAT32:
         columns.emplace_back(
           generate_random_numeric_column<float>(10.0f + i, 1000.0f + i * 50, m_rows, stream, mr));
         break;
       case cudf::type_id::INT16:
-        columns.emplace_back(generate_random_numeric_column<int16_t>(
-          static_cast<int16_t>(100 + i * 10),
-          static_cast<int16_t>(30000 + i * 1000),
-          m_rows,
-          stream,
-          mr));
+        columns.emplace_back(
+          generate_random_numeric_column<int16_t>(static_cast<int16_t>(100 + i * 10),
+                                                  static_cast<int16_t>(30000 + i * 1000),
+                                                  m_rows,
+                                                  stream,
+                                                  mr));
         break;
-      default: 
-        CUDF_FAIL("Unsupported data type");
+      default: CUDF_FAIL("Unsupported data type");
     }
   }
 
   return std::make_unique<cudf::table>(std::move(columns));
 }
 
-void write_random_table(std::string const &directory, int num_files, cudf::size_type num_rows, cudf::size_type num_cols,
-                                                    rmm::cuda_stream_view stream,
-                                                    rmm::device_async_resource_ref mr) {
-
+void write_random_table(std::string const& directory,
+                        int num_files,
+                        cudf::size_type num_rows,
+                        cudf::size_type num_cols,
+                        rmm::cuda_stream_view stream,
+                        rmm::device_async_resource_ref mr)
+{
   std::vector<cudf::data_type> types = {
     cudf::data_type{cudf::type_id::INT32},    // Integer column for primary sorting
     cudf::data_type{cudf::type_id::FLOAT64},  // Double precision floating point
@@ -170,9 +171,9 @@ void write_random_table(std::string const &directory, int num_files, cudf::size_
     cudf::data_type{cudf::type_id::INT16}     // Short integer
   };
 
-  for(int i = 0; i < num_files; i++) {
+  for (int i = 0; i < num_files; i++) {
     std::string filepath = directory + "/data_" + std::to_string(i) + ".parquet";
-    auto partition = generate_random_table(types, num_cols, num_rows, stream, mr);
+    auto partition       = generate_random_table(types, num_cols, num_rows, stream, mr);
     cudf::examples::write_parquet_file(filepath, partition->view(), stream);
   }
 }

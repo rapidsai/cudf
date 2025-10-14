@@ -56,15 +56,18 @@ namespace examples {
  * @param mr Device memory resource for allocations
  * @return Unique pointer to the generated table
  */
-std::unique_ptr<cudf::table> generate_random_table(std::vector<cudf::data_type> const &types,
-                                                    cudf::size_type n_columns,
-                                                    cudf::size_type m_rows,
-                                                    rmm::cuda_stream_view stream,
-                                                    rmm::device_async_resource_ref mr);
+std::unique_ptr<cudf::table> generate_random_table(std::vector<cudf::data_type> const& types,
+                                                   cudf::size_type n_columns,
+                                                   cudf::size_type m_rows,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::device_async_resource_ref mr);
 
-void write_random_table(std::string const &directory, int num_files, cudf::size_type num_rows, cudf::size_type num_cols,
-                                                    rmm::cuda_stream_view stream,
-                                                    rmm::device_async_resource_ref mr);
+void write_random_table(std::string const& directory,
+                        int num_files,
+                        cudf::size_type num_rows,
+                        cudf::size_type num_cols,
+                        rmm::cuda_stream_view stream,
+                        rmm::device_async_resource_ref mr);
 
 }  // namespace examples
 }  // namespace cudf

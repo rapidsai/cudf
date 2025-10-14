@@ -32,9 +32,5 @@ target_compile_options(cusort PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FL
 
 add_executable(external_sort sort.cpp)
 target_compile_features(external_sort PRIVATE cxx_std_20)
-target_link_libraries(
-  external_sort 
-  PRIVATE $<TARGET_OBJECTS:cusort>
-          cudf::cudf 
-)
+target_link_libraries(external_sort PRIVATE $<TARGET_OBJECTS:cusort> cudf::cudf)
 install(TARGETS external_sort DESTINATION bin/examples/libcudf/external_sorting)
