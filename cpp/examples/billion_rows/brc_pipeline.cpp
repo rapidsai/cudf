@@ -113,7 +113,7 @@ int main(int argc, char const** argv)
   std::cout << "Chunks: " << divider << std::endl;
   std::cout << "Threads: " << thread_count << std::endl;
 
-  auto const mr_name = std::string("pool");
+  auto const mr_name = std::string("async");
   auto resource      = create_memory_resource(mr_name);
   auto stats_mr =
     rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(resource.get());
