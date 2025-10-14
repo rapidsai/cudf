@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,11 @@ class device_span_data_chunk : public device_data_chunk {
 class device_uvector_data_chunk : public device_data_chunk {
  public:
   device_uvector_data_chunk(rmm::device_uvector<char>&& data) : _data(std::move(data)) {}
+
+  device_uvector_data_chunk(device_uvector_data_chunk const&)            = delete;
+  device_uvector_data_chunk& operator=(device_uvector_data_chunk const&) = delete;
+  device_uvector_data_chunk(device_uvector_data_chunk&&)                 = default;
+  device_uvector_data_chunk& operator=(device_uvector_data_chunk&&)      = default;
 
   [[nodiscard]] char const* data() const override { return _data.data(); }
   [[nodiscard]] std::size_t size() const override { return _data.size(); }
