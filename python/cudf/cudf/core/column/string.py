@@ -1470,17 +1470,32 @@ class StringColumn(ColumnBase):
     def starts_ends_with(
         self,
         method: Callable[[plc.Column, plc.Column | plc.Scalar], plc.Column],
-        pat: str | Self,
+        pat: str | tuple[str, ...],
     ) -> Self:
         if isinstance(pat, str):
             plc_pat = pa_scalar_to_plc_scalar(pa.scalar(pat, type=pa.string()))
-        elif isinstance(pat, type(self)):
-            plc_pat = pat.to_pylibcudf(mode="read")
+            plc_result = method(self.to_pylibcudf(mode="read"), plc_pat)
+        elif isinstance(pat, tuple) and all(isinstance(p, str) for p in pat):
+            plc_self = self.to_pylibcudf(mode="read")
+            plc_pat = pa_scalar_to_plc_scalar(
+                pa.scalar(pat[0], type=pa.string())
+            )
+            plc_result = method(plc_self, plc_pat)
+            for next_pat in pat[1:]:
+                plc_pat = pa_scalar_to_plc_scalar(
+                    pa.scalar(next_pat, type=pa.string())
+                )
+                plc_next_result = method(plc_self, plc_pat)
+                plc_result = plc.binaryop.binary_operation(
+                    plc_result,
+                    plc_next_result,
+                    plc.binaryop.BinaryOperator.BITWISE_OR,
+                    plc.DataType(plc.TypeId.BOOL8),
+                )
         else:
             raise TypeError(
-                f"expected a str or {type(self).__name__}, not {type(pat).__name__}"
+                f"expected a str or tuple[str, ...], not {type(pat).__name__}"
             )
-        plc_result = method(self.to_pylibcudf(mode="read"), plc_pat)
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 
     @acquire_spill_lock()
