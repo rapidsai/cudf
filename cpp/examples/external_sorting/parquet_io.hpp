@@ -49,5 +49,8 @@ namespace examples {
 std::unique_ptr<cudf::table> read_parquet_file(std::string const& filepath,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr);
+
+void write_parquet_file(std::string const &filepath, cudf::table_view table_view, rmm::cuda_stream_view stream);
+
 }  // namespace examples
 }  // namespace cudf

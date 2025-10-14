@@ -34,6 +34,7 @@
 #include "../utilities/timer.hpp"
 #include "cusort.hpp"
 #include "parquet_io.hpp"
+#include "random_table_generator.hpp"
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/concatenate.hpp>
@@ -129,21 +130,37 @@ struct to_host {
 
  public:
   template <typename T>  
-  size_t operator()(cudf::column_view c, std::vector<std::byte> &host_data, rmm::cuda_stream_view stream)
+  void operator()(cudf::column_view c, std::vector<std::byte> &host_data, rmm::cuda_stream_view stream)
   requires(is_supported<T>())
   {
     auto col_span  = cudf::device_span<T const>(c.data<T>(), c.size());
     auto host_data_ = cudf::detail::make_std_vector(col_span, stream);
     std::memcpy(host_data.data(), host_data_.data(), host_data_.size() * sizeof(T));
-    return sizeof(T);
   }  
   template <typename T>  
-  size_t operator()(cudf::column_view c, std::vector<std::byte> &host_data, rmm::cuda_stream_view stream)
+  void operator()(cudf::column_view c, std::vector<std::byte> &host_data, rmm::cuda_stream_view stream)
   requires(not is_supported<T>())
   {
     CUDF_FAIL("AST literal not implemented for nested types");
   }
 };
+
+bool sanity_checks(int num_files, std::string const directory) {
+  // Validate parameters
+  if (num_files <= 0) {
+    std::cerr << "Error: Number of files must be a positive integer" << std::endl;
+    print_usage();
+    return false;
+  }
+
+  // Check if input directory exists
+  if (!std::filesystem::exists(directory) || !std::filesystem::is_directory(directory)) {
+    std::cerr << "Error: Input directory '" << directory << "' does not exist or is not a directory" << std::endl;
+    return false;
+  }
+  
+  return true;
+}
 
 /**
  * @brief Main function
@@ -153,6 +170,8 @@ int main(int argc, char** argv)
   // Default parameters
   std::string input_dir = "./sort_data";
   int num_files = 4;
+  cudf::size_type num_cols = 5;
+  cudf::size_type num_rows = 1000;
 
   // Parse command line arguments
   if (argc >= 2) {
@@ -164,28 +183,7 @@ int main(int argc, char** argv)
   }
   if (argc >= 3) num_files = std::stoi(argv[2]);
 
-  // Validate parameters
-  if (num_files <= 0) {
-    std::cerr << "Error: Number of files must be a positive integer" << std::endl;
-    print_usage();
-    return 1;
-  }
-
-  // Check if input directory exists
-  if (!std::filesystem::exists(input_dir) || !std::filesystem::is_directory(input_dir)) {
-    std::cerr << "Error: Input directory '" << input_dir << "' does not exist or is not a directory" << std::endl;
-    return 1;
-  }
-
-  // Check if all required input files exist
-  if (!input_files_exist(input_dir, num_files)) {
-    std::cerr << "Error: Not all required parquet files exist in " << input_dir << std::endl;
-    std::cerr << "Expected files: ";
-    for (int i = 0; i < num_files; ++i) {
-      std::cerr << "data_" << i << ".parquet";
-      if (i < num_files - 1) std::cerr << ", ";
-    }
-    std::cerr << std::endl;
+  if(!sanity_checks(num_files, input_dir)) {
     return 1;
   }
 
@@ -197,7 +195,11 @@ int main(int argc, char** argv)
 
   auto stream = cudf::get_default_stream();
   auto mr = cudf::get_current_device_resource_ref();
-  
+
+  if(!input_files_exist(input_dir, num_files)) {
+    cudf::examples::write_random_table(input_dir, num_files, num_rows, num_cols, stream, mr);
+  }
+
   cudf::examples::timer perf_timer;
 
   std::vector<std::unique_ptr<cudf::column>> per_table_splitters;
@@ -216,7 +218,7 @@ int main(int argc, char** argv)
   auto splitters = cudf::examples::sample_splitters(cudf::table_view({concatenated_splitters->view()}), num_splitters, stream, mr);
   auto sort_col_type = splitters->type();
   std::vector<std::byte> h_splitters(num_splitters * 8);
-  auto sort_col_type_size = cudf::type_dispatcher(sort_col_type, to_host{}, splitters->view(), h_splitters, stream);
+  cudf::type_dispatcher(sort_col_type, to_host{}, splitters->view(), h_splitters, stream);
 
   auto col_ref = cudf::ast::column_reference(0);
   std::vector<std::vector<std::unique_ptr<cudf::table>>> table_splits(num_splitters + 1);

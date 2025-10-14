@@ -25,7 +25,7 @@ set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
 list(APPEND CUDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
 
-add_library(cusort OBJECT cusort.cu parquet_io.cpp)
+add_library(cusort OBJECT cusort.cu parquet_io.cpp random_table_generator.cu)
 target_link_libraries(cusort PRIVATE cudf::cudf)
 target_compile_features(cusort PRIVATE cxx_std_20 cuda_std_20)
 target_compile_options(cusort PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")

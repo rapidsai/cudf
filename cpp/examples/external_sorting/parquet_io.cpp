@@ -19,6 +19,7 @@
 
 #include <cudf/copying.hpp>
 #include <cudf/io/parquet.hpp>
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <iostream>
@@ -33,6 +34,21 @@ std::unique_ptr<cudf::table> read_parquet_file(std::string const& filepath,
   std::unique_ptr<cudf::table> table;
   std::cout << "Reading: " << filepath << std::endl;
   return cudf::io::read_parquet(cudf::io::parquet_reader_options::builder(cudf::io::source_info(filepath)), stream).tbl;
+}
+
+void write_parquet_file(std::string const &filepath, cudf::table_view table_view, rmm::cuda_stream_view stream) {
+  auto sink_info = cudf::io::sink_info(filepath);
+  auto builder   = cudf::io::parquet_writer_options::builder(sink_info, table_view);
+
+  // Create metadata for better compression
+  auto table_metadata = cudf::io::table_input_metadata{table_view};
+  for (cudf::size_type i = 0; i < table_view.num_columns(); ++i) {
+    table_metadata.column_metadata[i].set_name("column_" + std::to_string(i));
+  }
+
+  auto options = builder.metadata(table_metadata).compression(cudf::io::compression_type::SNAPPY);
+  cudf::io::write_parquet(options.build(), stream);
+  stream.synchronize();
 }
 
 }  // namespace examples
