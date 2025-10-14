@@ -14,7 +14,6 @@ import pytest
 import pylibcudf as plc
 
 import cudf
-from cudf.core.column.column import as_column
 from cudf.utils import dtypes as dtypeutils
 from cudf.utils.temporal import unit_to_nanoseconds_conversion
 
@@ -262,12 +261,12 @@ def gen_rand(dtype, size, **kwargs):
 
 def gen_rand_series(dtype, size, **kwargs):
     values = gen_rand(dtype, size, **kwargs)
+    ser = cudf.Series(values)
     if kwargs.get("has_nulls", False):
-        return cudf.Series._from_column(
-            as_column(values).set_mask(random_bitmask(size))
-        )
-
-    return cudf.Series(values)
+        rng = np.random.default_rng(0)
+        boolmask = rng.choice([True, False], size=size)
+        ser.loc[boolmask] = None
+    return ser
 
 
 def _decimal_series(input, dtype):
