@@ -18,6 +18,7 @@ import sys
 import textwrap
 import time
 import traceback
+import warnings
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Literal, assert_never
@@ -218,6 +219,7 @@ class RunConfig:
     suffix: str
     executor: ExecutorType
     cluster: str
+    scheduler: str  # Deprecated, kept for backward compatibility
     n_workers: int
     versions: PackageVersions = dataclasses.field(
         default_factory=PackageVersions.collect
@@ -255,9 +257,31 @@ class RunConfig:
         """Create a RunConfig from command line arguments."""
         executor: ExecutorType = args.executor
         cluster = args.cluster
+        scheduler = args.scheduler
 
+        # Deal with deprecated scheduler argument
+        # and non-streaming executors
         if executor == "in-memory" or executor == "cpu":
             cluster = None
+            scheduler = None
+        elif scheduler is not None:
+            if cluster is not None:
+                raise ValueError(
+                    "Cannot specify both -s/--scheduler and -c/--cluster. "
+                    "Please use -c/--cluster only."
+                )
+            else:
+                warnings.warn(
+                    "The -s/--scheduler argument is deprecated. Use -c/--cluster instead.",
+                    FutureWarning,
+                    stacklevel=2,
+                )
+            cluster = "single" if scheduler == "synchronous" else "distributed"
+        elif cluster is not None:
+            scheduler = "synchronous" if cluster == "single" else "distributed"
+        else:
+            cluster = "single"
+            scheduler = "synchronous"
 
         path = args.path
         name = args.query_set
@@ -301,6 +325,7 @@ class RunConfig:
             queries=args.query,
             executor=executor,
             cluster=cluster,
+            scheduler=scheduler,
             n_workers=args.n_workers,
             shuffle=args.shuffle,
             gather_shuffle_stats=args.rapidsmpf_dask_statistics,
@@ -608,12 +633,25 @@ def parse_args(
     parser.add_argument(
         "-c",
         "--cluster",
-        default="single",
+        default=None,
         type=str,
         choices=["single", "distributed"],
         help=textwrap.dedent("""\
             Cluster type to use with the 'streaming' executor.
                 - single      : Run locally in a single process
+                - distributed : Use Dask for multi-GPU execution"""),
+    )
+    parser.add_argument(
+        "-s",
+        "--scheduler",
+        default=None,
+        type=str,
+        choices=["synchronous", "distributed"],
+        help=textwrap.dedent("""\
+            *Deprecated*: Use --cluster instead.
+
+            Scheduler type to use with the 'streaming' executor.
+                - synchronous : Run locally in a single process
                 - distributed : Use Dask for multi-GPU execution"""),
     )
     parser.add_argument(

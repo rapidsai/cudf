@@ -41,7 +41,6 @@ if TYPE_CHECKING:
 __all__ = [
     "Cluster",
     "ConfigOptions",
-    "Engine",
     "InMemoryExecutor",
     "ParquetOptions",
     "Scheduler",  # Deprecated, kept for backward compatibility
@@ -138,34 +137,14 @@ class StreamingFallbackMode(str, enum.Enum):
     SILENT = "silent"
 
 
-class Engine(str, enum.Enum):
-    """
-    The execution engine to use for the StreamingExecutor.
-
-    * ``Engine.TASKS`` : Use the task-based execution engine.
-      This is the default execution model. With this model, the query
-      is executed as a static task graph. The ``cluster`` setting
-      (single or distributed) determines how the tasks are scheduled.
-    * ``Engine.RAPIDSMPF`` : Use the rapidsmpf streaming engine. The
-      logical plan will be translated into a network containing C++
-      and asyncio coroutines. This engine is experimental and
-      requires rapidsmpf to be installed.
-    """
-
-    TASKS = "tasks"
-    RAPIDSMPF = "rapidsmpf"
-
-
 class Cluster(str, enum.Enum):
     """
     The cluster configuration for the streaming executor.
 
-    This setting applies to both task-based and rapidsmpf execution engines.
-
-    * ``Cluster.SINGLE`` : Single-GPU execution. For task-based execution,
-      this uses a zero-dependency, synchronous, single-threaded scheduler.
-    * ``Cluster.DISTRIBUTED`` : Multi-GPU distributed execution. For task-based
-      execution, this uses a Dask-based distributed scheduler and requires an
+    * ``Cluster.SINGLE`` : Single-GPU execution. Currently uses a zero-dependency,
+      synchronous, single-threaded task scheduler.
+    * ``Cluster.DISTRIBUTED`` : Multi-GPU distributed execution. Currently
+      uses a Dask-based distributed scheduler and requires an
       active Dask cluster.
     """
 
@@ -433,17 +412,6 @@ class StreamingExecutor:
 
     Parameters
     ----------
-    engine
-        The execution engine to use for the streaming executor.
-        ``Engine.TASKS`` by default.
-
-        * ``Engine.TASKS``: Use task-based execution where a query is
-          represented as a static task graph.
-        * ``Engine.RAPIDSMPF``: Use the rapidmspf streaming engine. The
-          logical plan will be translated into a network containing C++
-          and asyncio coroutines. This is an experimental execution model
-          that requires rapidsmpf to be installed.
-
     cluster
         The cluster configuration for the streaming executor.
         ``Cluster.SINGLE`` by default.
@@ -534,18 +502,11 @@ class StreamingExecutor:
     _env_prefix = "CUDF_POLARS__EXECUTOR"
 
     name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
-    engine: Engine = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__ENGINE",
-            Engine.__call__,
-            default=Engine.TASKS,
-        )
-    )
-    cluster: Cluster = dataclasses.field(
+    cluster: Cluster | None = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__CLUSTER",
             Cluster.__call__,
-            default=Cluster.SINGLE,
+            default=None,
         )
     )
     scheduler: Scheduler | None = dataclasses.field(
@@ -611,13 +572,20 @@ class StreamingExecutor:
     def __post_init__(self) -> None:  # noqa: D105
         # Handle backward compatibility for deprecated scheduler parameter
         if self.scheduler is not None:
-            warnings.warn(
-                "The 'scheduler' parameter is deprecated. Please use 'cluster' instead. "
-                "Use 'cluster=\"single\"' instead of 'scheduler=\"synchronous\"' and "
-                "'cluster=\"distributed\"' instead of 'scheduler=\"distributed\"'.",
-                FutureWarning,
-                stacklevel=2,
-            )
+            if self.cluster is not None:
+                raise ValueError(
+                    "Cannot specify both 'scheduler' and 'cluster'. "
+                    "The 'scheduler' parameter is deprecated. "
+                    "Please use only 'cluster' instead."
+                )
+            else:
+                warnings.warn(
+                    """The 'scheduler' parameter is deprecated. Please use 'cluster' instead.
+                    Use 'cluster="single"' instead of 'scheduler="synchronous"' and "
+                    'cluster="distributed"' instead of 'scheduler="distributed"'.""",
+                    FutureWarning,
+                    stacklevel=2,
+                )
             # Map old scheduler values to new cluster values
             if self.scheduler == "synchronous":
                 object.__setattr__(self, "cluster", Cluster.SINGLE)
@@ -625,12 +593,8 @@ class StreamingExecutor:
                 object.__setattr__(self, "cluster", Cluster.DISTRIBUTED)
             # Clear scheduler to avoid confusion
             object.__setattr__(self, "scheduler", None)
-
-        # Check for rapidsmpf engine
-        if self.engine == "rapidsmpf":
-            raise NotImplementedError(
-                "The rapidsmpf streaming engine is not yet supported."
-            )
+        elif self.cluster is None:
+            object.__setattr__(self, "cluster", Cluster.SINGLE)
 
         # Handle shuffle_method defaults for streaming executor
         if self.shuffle_method is None:
@@ -663,6 +627,7 @@ class StreamingExecutor:
             self, "fallback_mode", StreamingFallbackMode(self.fallback_mode)
         )
         if self.target_partition_size == 0:
+            assert self.cluster is not None, "Expected cluster to be set."
             object.__setattr__(
                 self, "target_partition_size", default_blocksize(self.cluster)
             )

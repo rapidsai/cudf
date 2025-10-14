@@ -280,16 +280,14 @@ def test_scheduler_deprecated() -> None:
     assert config.executor.cluster == "distributed"
     assert config.executor.scheduler is None  # Should be cleared after mapping
 
-
-def test_rapidsmpf_engine_raises() -> None:
-    # Test that rapidsmpf engine is not yet supported
+    # Test that specifying both cluster and scheduler raises an error
     with pytest.raises(
-        NotImplementedError, match="rapidsmpf streaming engine is not yet supported"
+        ValueError, match="Cannot specify both 'scheduler' and 'cluster'"
     ):
         ConfigOptions.from_polars_engine(
             pl.GPUEngine(
                 executor="streaming",
-                executor_options={"engine": "rapidsmpf"},
+                executor_options={"cluster": "single", "scheduler": "synchronous"},
             )
         )
 
