@@ -278,4 +278,5 @@ def query_execute(df, expr, callenv):
             out_mask = binaryop.binaryop(
                 nullmask, out_mask, "__and__", out_mask.dtype
             )
-    return as_column(out).set_mask(out_mask).fillna(False)
+    mask_buff = out_mask if out_mask is None else out_mask.as_mask()
+    return as_column(out).set_mask(mask_buff).fillna(False)

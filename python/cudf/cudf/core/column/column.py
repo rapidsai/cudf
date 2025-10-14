@@ -336,7 +336,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 pass
         self._null_count = None
 
-    def set_mask(self, value: ColumnBase | Buffer | plc.gpumemoryview) -> Self:
+    def set_mask(self, value: Buffer | None) -> Self:
         """
         Replaces the mask buffer of the column and returns a new column. This
         will zero the column offset, compute a new mask buffer if necessary,
@@ -351,7 +351,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
         if value is None:
             mask = None
-        elif isinstance(value, (ColumnBase, Buffer, plc.gpumemoryview)):
+        elif isinstance(value, Buffer):
             cai = value.__cuda_array_interface__
             if cai["typestr"][1] == "t":
                 mask_size = plc.null_mask.bitmask_allocation_size_bytes(
@@ -654,11 +654,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 mask_size = plc.null_mask.bitmask_allocation_size_bytes(
                     cai_mask["shape"][0]
                 )
-                mask_buff: Buffer | ColumnBase = as_buffer(
+                mask_buff = as_buffer(
                     data=cai_mask["data"][0], size=mask_size, owner=mask
                 )
             elif cai_mask["typestr"][1] == "b":
-                mask_buff = ColumnBase.from_cuda_array_interface(mask)
+                mask_buff = ColumnBase.from_cuda_array_interface(
+                    mask
+                ).as_mask()
             else:
                 mask_buff = as_buffer(mask)
             column = column.set_mask(mask_buff)
