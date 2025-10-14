@@ -20,7 +20,6 @@ from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 from typing_extensions import Self
 
 import pylibcudf as plc
-import rmm
 
 import cudf
 from cudf.api.types import (
@@ -364,17 +363,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             elif cai["typestr"][1] == "b":
                 mask = as_column(value).as_mask()
             else:
-                if cai["typestr"] not in ("|i1", "|u1"):
-                    if isinstance(value, ColumnBase):
-                        value = value.values
-                    value = cp.asarray(value).view("|u1")
                 mask = as_buffer(value)
             if mask.size < required_num_bytes:
                 raise ValueError(error_msg.format(str(value.size)))
-            if mask.size < mask_size:
-                dbuf = rmm.DeviceBuffer(size=mask_size)
-                dbuf.copy_from_device(value)
-                mask = as_buffer(dbuf)
         else:
             raise ValueError(
                 f"Expected a Buffer object or None for mask, got {type(value).__name__}"

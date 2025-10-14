@@ -17,7 +17,6 @@ from cudf.utils.dtypes import (
     BOOL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
-    SIZE_TYPE_DTYPE,
     TIMEDELTA_TYPES,
 )
 
@@ -271,10 +270,10 @@ def query_execute(df, expr, callenv):
     for col in cols:
         if not col.nullable:
             continue
-        nullmask = as_column(col.nullmask)
+        nullmask = col._get_mask_as_column()
 
         if out_mask is None:
-            out_mask = nullmask.astype(dtype=SIZE_TYPE_DTYPE)
+            out_mask = nullmask
         else:
             out_mask = binaryop.binaryop(
                 nullmask, out_mask, "__and__", out_mask.dtype
