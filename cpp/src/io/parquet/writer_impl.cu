@@ -1346,9 +1346,7 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
   if (total_map_storage_size == 0) { return {std::move(dict_data), std::move(dict_index)}; }
 
   // Create a single bulk storage used by all sub-dictionaries
-  auto map_storage = storage_type{
-    total_map_storage_size,
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}};
+  auto map_storage = storage_type{total_map_storage_size, rmm::mr::polymorphic_allocator<char>{}};
   // Create a span of non-const map_storage as map_storage_ref takes in a non-const pointer.
   device_span<slot_type> const map_storage_data{map_storage.data(), total_map_storage_size};
 

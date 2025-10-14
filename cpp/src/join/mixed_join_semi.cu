@@ -153,15 +153,14 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   auto const equality_build_conditional =
     row_comparator_conditional_build.equal_to<false>(build_nulls, compare_nulls);
 
-  hash_set_type row_set{
-    {compute_hash_table_size(build.num_rows())},
-    cuco::empty_key{JoinNoneValue},
-    {equality_build_equality, equality_build_conditional},
-    {row_hash_build.device_hasher(build_nulls)},
-    {},
-    {},
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-    {stream.value()}};
+  hash_set_type row_set{{compute_hash_table_size(build.num_rows())},
+                        cuco::empty_key{JoinNoneValue},
+                        {equality_build_equality, equality_build_conditional},
+                        {row_hash_build.device_hasher(build_nulls)},
+                        {},
+                        {},
+                        rmm::mr::polymorphic_allocator<char>{},
+                        {stream.value()}};
 
   auto iter = thrust::make_counting_iterator(0);
 

@@ -39,7 +39,7 @@ using mixed_multimap_type =
   cuco::static_multimap<hash_value_type,
                         size_type,
                         cuda::thread_scope_device,
-                        cudf::detail::cuco_allocator<char>,
+                        rmm::mr::polymorphic_allocator<char>,
                         cuco::legacy::double_hashing<1, hash_type, hash_type>>;
 
 /**

@@ -2165,9 +2165,8 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
   if (stripe_dicts.count() == 0) return {std::move(stripe_dicts), {}, {}};
 
   // Create a single bulk storage to use for all sub-dictionaries
-  auto map_storage = std::make_unique<storage_type>(
-    total_map_storage_size,
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream});
+  auto map_storage =
+    std::make_unique<storage_type>(total_map_storage_size, rmm::mr::polymorphic_allocator<char>{});
 
   // Initialize stripe dictionaries
   for (auto col_idx : orc_table.string_column_indices) {
