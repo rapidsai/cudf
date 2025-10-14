@@ -2088,19 +2088,17 @@ class Join(IR):
         the original row order of the left side, breaking ties by the right side.
         And vice versa when ``left_primary`` is False.
         """
-        # TODO: Perform the `left` and `right` operations concurrently.
-        # `lg` and `rg` are on a stream that's downstream of the left and right
-        # streams
+        init = plc.Scalar.from_py(0, plc.types.SIZE_TYPE, stream=stream)
+        step = plc.Scalar.from_py(1, plc.types.SIZE_TYPE, stream=stream)
 
-        # create the `init` and `step` args twice, once per stream,
-        # to avoid creating a dependency between the two streams too early.
         (left_order_col,) = plc.copying.gather(
             plc.Table(
                 [
                     plc.filling.sequence(
                         left_rows,
-                        plc.Scalar.from_py(0, plc.types.SIZE_TYPE, stream=stream),
-                        plc.Scalar.from_py(1, plc.types.SIZE_TYPE, stream=stream),
+                        init,
+                        step,
+                        stream=stream,
                     )
                 ]
             ),
@@ -2113,8 +2111,9 @@ class Join(IR):
                 [
                     plc.filling.sequence(
                         right_rows,
-                        plc.Scalar.from_py(0, plc.types.SIZE_TYPE, stream=stream),
-                        plc.Scalar.from_py(1, plc.types.SIZE_TYPE, stream=stream),
+                        init,
+                        step,
+                        stream=stream,
                     )
                 ]
             ),
