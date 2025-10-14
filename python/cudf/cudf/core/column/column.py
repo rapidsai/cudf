@@ -376,27 +376,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 dbuf = rmm.DeviceBuffer(size=mask_size)
                 dbuf.copy_from_device(value)
                 mask = as_buffer(dbuf)
-        elif hasattr(value, "__array_interface__"):
-            value = np.asarray(value).view("u1")[:mask_size]
-            if value.size < required_num_bytes:
-                raise ValueError(error_msg.format(str(value.size)))
-            dbuf = rmm.DeviceBuffer(size=mask_size)
-            dbuf.copy_from_host(value)
-            mask = as_buffer(dbuf)
         else:
-            try:
-                value = memoryview(value)
-            except TypeError as err:
-                raise TypeError(
-                    f"Expected a Buffer object or None for mask, got {type(value).__name__}"
-                ) from err
-            else:
-                value = np.asarray(value).view("u1")[:mask_size]
-                if value.size < required_num_bytes:
-                    raise ValueError(error_msg.format(str(value.size)))
-                dbuf = rmm.DeviceBuffer(size=mask_size)
-                dbuf.copy_from_host(value)
-                mask = as_buffer(dbuf)
+            raise ValueError(
+                f"Expected a Buffer object or None for mask, got {type(value).__name__}"
+            )
 
         if mask is not None:
             new_mask = plc.gpumemoryview(mask)
