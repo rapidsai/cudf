@@ -21,7 +21,6 @@
 #include <cudf/join/filtered_join.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <rmm/mr/device/cuda_async_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
@@ -38,11 +37,12 @@
 
 std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_pool_used)
 {
+  auto cuda_mr = std::make_shared<rmm::mr::cuda_memory_resource>();
   if (is_pool_used) {
     return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-      std::make_shared<rmm::mr::cuda_memory_resource>(), rmm::percent_of_free_device_memory(50));
+      cuda_mr, rmm::percent_of_free_device_memory(50));
   }
-  return std::make_shared<rmm::mr::cuda_async_memory_resource>();
+  return cuda_mr;
 }
 
 cudf::io::column_encoding get_encoding_type(std::string name)
