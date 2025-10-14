@@ -337,7 +337,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 pass
         self._null_count = None
 
-    def set_mask(self, value) -> Self:
+    def set_mask(self, value: ColumnBase | Buffer | plc.gpumemoryview) -> Self:
         """
         Replaces the mask buffer of the column and returns a new column. This
         will zero the column offset, compute a new mask buffer if necessary,
@@ -352,9 +352,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
         if value is None:
             mask = None
-        elif (
-            cai := getattr(value, "__cuda_array_interface__", None)
-        ) is not None:
+        elif isinstance(value, (ColumnBase, Buffer, plc.gpumemoryview)):
+            cai = value.__cuda_array_interface__
             if cai["typestr"][1] == "t":
                 mask_size = plc.null_mask.bitmask_allocation_size_bytes(
                     cai["shape"][0]
@@ -619,7 +618,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
 
     @classmethod
-    def from_cuda_array_interface(cls, arbitrary: Any) -> Self:
+    def from_cuda_array_interface(cls, arbitrary: Any) -> ColumnBase:
         """
         Create a Column from an object implementing the CUDA array interface.
 
@@ -659,7 +658,19 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             data_ptr_exposed=cudf.get_option("copy_on_write"),
         )
         if mask is not None:
-            column = column.set_mask(mask)
+            cai_mask = mask.__cuda_array_interface__
+            if cai_mask["typestr"][1] == "t":
+                mask_size = plc.null_mask.bitmask_allocation_size_bytes(
+                    cai_mask["shape"][0]
+                )
+                mask_buff: Buffer | ColumnBase = as_buffer(
+                    data=cai_mask["data"][0], size=mask_size, owner=mask
+                )
+            elif cai_mask["typestr"][1] == "b":
+                mask_buff = ColumnBase.from_cuda_array_interface(mask)
+            else:
+                mask_buff = as_buffer(mask)
+            column = column.set_mask(mask_buff)
         return column  # type: ignore[return-value]
 
     def __len__(self) -> int:
