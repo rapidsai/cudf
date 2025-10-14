@@ -1025,14 +1025,14 @@ def execute_duckdb_query(query: str, dataset_path: Path) -> pl.DataFrame:
     """Execute a query with DuckDB."""
     import duckdb
 
-    conn = duckdb.connect()
-
     statements = [
         f"CREATE VIEW {table.stem} as SELECT * FROM read_parquet('{table.absolute()}');"
         for table in Path(dataset_path).glob("*.parquet")
     ]
     statements.append(query)
-    return conn.execute("\n".join(statements)).pl()
+
+    with duckdb.connect() as conn:
+        return conn.execute("\n".join(statements)).pl()
 
 
 def run_duckdb(
