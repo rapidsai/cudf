@@ -287,10 +287,10 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param row_mask_offset Offset into the row mask column for the current pass
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @return A vector of boolean vectors indicating which data pages need to be decoded to produce
-   *         the output table based on the input row mask, one per input column
+   * @return Boolean vector indicating which data pages need to be decoded to produce
+   *         the output table based on the input row mask across all input columns
    */
-  [[nodiscard]] std::vector<std::vector<bool>> compute_data_page_mask(
+  [[nodiscard]] std::vector<bool> compute_data_page_mask(
     cudf::column_view row_mask,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::host_span<input_column_info const> input_columns,
