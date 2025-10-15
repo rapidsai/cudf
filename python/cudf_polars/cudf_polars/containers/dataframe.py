@@ -111,15 +111,10 @@ class DataFrame:
         table_with_metadata = _ObjectWithArrowMetadata(self.table, metadata)
         df = pl.DataFrame(table_with_metadata)
         return df.rename(name_map).with_columns(
-            *[
-                pl.col(c.name).set_sorted(
-                    descending=c.order == plc.types.Order.DESCENDING
-                )
-                if c.is_sorted
-                else pl.col(c.name)
-                for c in self.columns
-            ],
-            stream=self.stream,
+            pl.col(c.name).set_sorted(descending=c.order == plc.types.Order.DESCENDING)
+            if c.is_sorted
+            else pl.col(c.name)
+            for c in self.columns
         )
 
     @cached_property
