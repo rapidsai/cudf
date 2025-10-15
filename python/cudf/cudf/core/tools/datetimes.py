@@ -849,7 +849,7 @@ def date_range(
             FutureWarning,
         )
 
-    dtype = np.dtype("datetime64[ns]")
+    dtype: np.dtype = np.dtype("datetime64[ns]")
     unit, _ = np.datetime_data(dtype)
 
     if freq is None:

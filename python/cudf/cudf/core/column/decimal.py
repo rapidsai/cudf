@@ -384,7 +384,9 @@ class Decimal32Column(DecimalBaseColumn):
 
     def to_arrow(self) -> pa.Array:
         data_buf_32 = np.array(self.base_data.memoryview()).view("int32")  # type: ignore[union-attr]
-        data_buf_128 = np.empty(len(data_buf_32) * 4, dtype="int32")
+        data_buf_128: np.ndarray = np.empty(
+            len(data_buf_32) * 4, dtype="int32"
+        )
 
         # use striding to set the first 32 bits of each 128-bit chunk:
         data_buf_128[::4] = data_buf_32
@@ -509,7 +511,9 @@ class Decimal64Column(DecimalBaseColumn):
 
     def to_arrow(self) -> pa.Array:
         data_buf_64 = np.array(self.base_data.memoryview()).view("int64")  # type: ignore[union-attr]
-        data_buf_128 = np.empty(len(data_buf_64) * 2, dtype="int64")
+        data_buf_128: np.ndarray = np.empty(
+            len(data_buf_64) * 2, dtype="int64"
+        )
 
         # use striding to set the first 64 bits of each 128-bit chunk:
         data_buf_128[::2] = data_buf_64

@@ -1555,7 +1555,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             # interface doesn't take array-based low and high
             # arguments.
             low = 0
-            high = np.repeat(size_per_group, samples_per_group)
+            high: np.ndarray = np.repeat(size_per_group, samples_per_group)
             rng = np.random.default_rng(seed=random_state)
             indices = rng.integers(low, high, dtype=SIZE_TYPE_DTYPE)
             indices += np.repeat(group_offsets[:-1], samples_per_group)

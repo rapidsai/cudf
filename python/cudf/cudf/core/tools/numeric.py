@@ -177,7 +177,7 @@ def to_numeric(
             type_set = list(np.typecodes["UnsignedInteger"])
 
         for t in type_set:
-            downcast_dtype = np.dtype(t)
+            downcast_dtype: np.dtype = np.dtype(t)
             if downcast_dtype.itemsize <= col.dtype.itemsize:
                 if col.can_cast_safely(downcast_dtype):
                     col = col.cast(downcast_dtype)
