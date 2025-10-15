@@ -5,6 +5,7 @@ import warnings
 from typing import TYPE_CHECKING
 
 import cupy as cp
+import numpy as np
 
 import cudf
 from cudf.core.column import as_column
@@ -108,7 +109,9 @@ def factorize(
 
     labels = values._label_encoding(
         cats=cats,
-        dtype="int64" if get_option("mode.pandas_compatible") else None,
+        dtype=np.dtype("int64")
+        if get_option("mode.pandas_compatible")
+        else None,
     ).values
 
     # TODO: Avoid accessing Index from the top level namespace
