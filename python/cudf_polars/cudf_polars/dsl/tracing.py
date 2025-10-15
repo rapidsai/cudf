@@ -30,6 +30,12 @@ else:
 LOG_TRACES = _HAS_STRUCTLOG and _bool_converter(
     os.environ.get("CUDF_POLARS_LOG_TRACES", "0")
 )
+LOG_MEMORY = LOG_TRACES and _bool_converter(
+    os.environ.get("CUDF_POLARS_LOG_TRACES_MEMORY", "1")
+)
+LOG_DATAFRAMES = LOG_TRACES and _bool_converter(
+    os.environ.get("CUDF_POLARS_LOG_TRACES_DATAFRAMES", "1")
+)
 
 CUDF_POLARS_NVTX_DOMAIN = "cudf_polars"
 
@@ -84,39 +90,47 @@ def make_snapshot(
 
     d: dict[str, Any] = {
         "type": ir_name,
-        f"count_frames_{phase}": len(frames),
-        f"frames_{phase}": [
-            {
-                "shape": frame.table.shape(),
-                "size": sum(col.device_buffer_size() for col in frame.table.columns()),
-            }
-            for frame in frames
-        ],
     }
-    d[f"total_bytes_{phase}"] = sum(x["size"] for x in d[f"frames_{phase}"])
 
-    stats = rmm.statistics.get_statistics()
-    if stats:
+    if LOG_DATAFRAMES:
         d.update(
             {
-                f"rmm_current_bytes_{phase}": stats.current_bytes,
-                f"rmm_current_count_{phase}": stats.current_count,
-                f"rmm_peak_bytes_{phase}": stats.peak_bytes,
-                f"rmm_peak_count_{phase}": stats.peak_count,
-                f"rmm_total_bytes_{phase}": stats.total_bytes,
-                f"rmm_total_count_{phase}": stats.total_count,
+                f"count_frames_{phase}": len(frames),
+                f"frames_{phase}": [
+                    {
+                        "shape": frame.table.shape(),
+                        "size": sum(
+                            col.device_buffer_size() for col in frame.table.columns()
+                        ),
+                    }
+                    for frame in frames
+                ],
             }
         )
+        d[f"total_bytes_{phase}"] = sum(x["size"] for x in d[f"frames_{phase}"])
 
+    if LOG_MEMORY:
+        stats = rmm.statistics.get_statistics()
+        if stats:
+            d.update(
+                {
+                    f"rmm_current_bytes_{phase}": stats.current_bytes,
+                    f"rmm_current_count_{phase}": stats.current_count,
+                    f"rmm_peak_bytes_{phase}": stats.peak_bytes,
+                    f"rmm_peak_count_{phase}": stats.peak_count,
+                    f"rmm_total_bytes_{phase}": stats.total_bytes,
+                    f"rmm_total_count_{phase}": stats.total_count,
+                }
+            )
+
+        if device_handle is not None:
+            processes = pynvml.nvmlDeviceGetComputeRunningProcesses(device_handle)
+            for proc in processes:
+                if proc.pid == pid:
+                    d[f"nvml_current_bytes_{phase}"] = proc.usedGpuMemory
+                    break
     if extra:
         d.update(extra)
-
-    if device_handle is not None:
-        processes = pynvml.nvmlDeviceGetComputeRunningProcesses(device_handle)
-        for proc in processes:
-            if proc.pid == pid:
-                d[f"nvml_current_bytes_{phase}"] = proc.usedGpuMemory
-                break
 
     return d
 

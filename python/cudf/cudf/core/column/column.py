@@ -399,7 +399,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 mask = as_buffer(dbuf)
 
         if mask is not None:
-            new_mask: plc.gpumemoryview | None = plc.gpumemoryview(mask)
+            new_mask = plc.gpumemoryview(mask)
             new_null_count = plc.null_mask.null_count(
                 new_mask,
                 0,
@@ -611,19 +611,21 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             new_dtype = plc.DataType(plc.TypeId.INT8)
 
             col = plc.column_factories.make_numeric_column(
-                new_dtype, col.size(), plc.column_factories.MaskState.ALL_NULL
+                new_dtype, col.size(), plc.types.MaskState.ALL_NULL
             )
 
         dtype = dtype_from_pylibcudf_column(col)
 
+        data_view = col.data()
+        mask_view = col.null_mask()
         return build_column(  # type: ignore[return-value]
-            data=as_buffer(col.data().obj, exposed=data_ptr_exposed)
-            if col.data() is not None
+            data=as_buffer(data_view.obj, exposed=data_ptr_exposed)
+            if data_view is not None
             else None,
             dtype=dtype,
             size=col.size(),
-            mask=as_buffer(col.null_mask().obj, exposed=data_ptr_exposed)
-            if col.null_mask() is not None
+            mask=as_buffer(mask_view.obj, exposed=data_ptr_exposed)
+            if mask_view is not None
             else None,
             offset=col.offset(),
             null_count=col.null_count(),
@@ -981,7 +983,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if not fill_value.is_valid() and not self.nullable:
             mask = as_buffer(
                 plc.null_mask.create_null_mask(
-                    self.size, plc.null_mask.MaskState.ALL_VALID
+                    self.size, plc.types.MaskState.ALL_VALID
                 )
             )
             self.set_base_mask(mask)
@@ -1344,6 +1346,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         input_col = self.nans_to_nulls()
 
         with acquire_spill_lock():
+            plc_replace: plc.replace.ReplacePolicy | plc.Scalar
             if method:
                 plc_replace = (
                     plc.replace.ReplacePolicy.PRECEDING
@@ -2043,7 +2046,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 return _get_nan_for_dtype(self.dtype)
         return col
 
-    def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
+    def _reduction_result_dtype(self, reduction_op: str) -> DtypeObj:
         """
         Determine the correct dtype to pass to libcudf based on
         the input dtype, data dtype, and specific reduction op
@@ -2351,6 +2354,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         f"Type-casting from {other_col.dtype} "
                         f"to {self.dtype}, there could be potential data loss"
                     )
+            other_out: plc.Scalar | ColumnBase
             if other_is_scalar:
                 other_out = pa_scalar_to_plc_scalar(
                     pa.scalar(other, type=cudf_dtype_to_pa_type(self.dtype))
@@ -2436,7 +2440,7 @@ def column_empty(
             if row_count == 0
             else plc.gpumemoryview(
                 plc.null_mask.create_null_mask(
-                    row_count, plc.null_mask.MaskState.ALL_NULL
+                    row_count, plc.types.MaskState.ALL_NULL
                 )
             )
         )
