@@ -19,7 +19,7 @@
 #include "sort.hpp"
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/row_operator/row_operators.cuh>
+#include <cudf/detail/row_operator/common_utils.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
