@@ -282,7 +282,7 @@ dependencies:
         packages:
           - pip
           - pip:
-              - ibis-framework[duckdb]
+              - ibis-framework[duckdb]<11.0.0
               - duckdb<1.4.0
   test_hvplot:
     common:
