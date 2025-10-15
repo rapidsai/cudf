@@ -485,7 +485,7 @@ class StreamingExecutor:
     sink_to_directory
         Whether multi-partition sink operations should write to a directory
         rather than a single file. By default, this will be set to True for
-        the 'distributed' cluster and False otherwise. The 'distrubuted'
+        the 'distributed' cluster and False otherwise. The 'distributed'
         cluster does not currently support ``sink_to_directory=False``.
     stats_planning
         Options controlling statistics-based query planning. See

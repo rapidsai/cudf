@@ -8,7 +8,7 @@ import pytest
 import polars as pl
 from polars.testing import assert_frame_equal
 
-from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
+from cudf_polars.testing.asserts import DEFAULT_CLUSTER, assert_gpu_result_equal
 from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
@@ -33,7 +33,7 @@ def test_unique(df, keep, subset, maintain_order, cardinality):
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 50,
-            "cluster": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
             "unique_fraction": cardinality,
             "fallback_mode": "warn",
             # We are using unique_fraction to control the algorithm,
@@ -69,7 +69,7 @@ def test_unique_fallback(df):
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 50,
-            "cluster": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
             "unique_fraction": {"y": 1.0},
             "fallback_mode": "raise",
         },
@@ -90,7 +90,7 @@ def test_unique_select(df, maintain_order, cardinality):
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 4,
-            "cluster": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
             "unique_fraction": cardinality,
             "fallback_mode": "warn",
         },
@@ -114,7 +114,7 @@ def test_unique_head_tail(keep, zlice):
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 4,
-            "cluster": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
         },
     )
     data = [0, 1, 2, 3, 4, 5, 6, 7, 3, 4, 5, 6, 7, 8, 9, 10]

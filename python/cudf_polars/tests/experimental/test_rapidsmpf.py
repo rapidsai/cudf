@@ -7,7 +7,7 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
+from cudf_polars.testing.asserts import DEFAULT_CLUSTER, assert_gpu_result_equal
 from cudf_polars.utils.config import ConfigOptions
 
 
@@ -151,7 +151,7 @@ def test_sort_rapidsmpf(max_rows_per_partition: int) -> None:
         executor_options={
             "max_rows_per_partition": max_rows_per_partition,
             "shuffle_method": "rapidsmpf",
-            "cluster": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
         },
     )
 
@@ -175,7 +175,7 @@ def test_sort_stable_rapidsmpf_warns():
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 3,
-            "cluster": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
             "shuffle_method": "rapidsmpf",
             "fallback_mode": "warn",
         },

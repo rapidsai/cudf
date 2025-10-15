@@ -17,7 +17,7 @@ from cudf_polars.experimental.statistics import (
     collect_statistics,
     find_equivalence_sets,
 )
-from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
+from cudf_polars.testing.asserts import DEFAULT_CLUSTER, assert_gpu_result_equal
 from cudf_polars.testing.io import make_lazy_frame, make_partitioned_source
 from cudf_polars.utils.config import ConfigOptions
 
@@ -39,7 +39,7 @@ def engine():
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "cluster": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
             "shuffle_method": "tasks",
             "target_partition_size": 10_000,
             "max_rows_per_partition": 1_000,
@@ -124,7 +124,7 @@ def test_base_stats_parquet(
         executor="streaming",
         executor_options={
             "target_partition_size": 10_000,
-            "cluster": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
         },
         parquet_options={
             "max_footer_samples": max_footer_samples,
@@ -220,7 +220,7 @@ def test_base_stats_parquet_groupby(
         executor="streaming",
         executor_options={
             "target_partition_size": 10_000,
-            "cluster": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
             "stats_planning": {"use_reduction_planning": True},
         },
         parquet_options={
@@ -441,7 +441,7 @@ def test_stats_planning(
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "cluster": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
             "shuffle_method": "tasks",
             "target_partition_size": 10_000,
             "max_rows_per_partition": 1_000,

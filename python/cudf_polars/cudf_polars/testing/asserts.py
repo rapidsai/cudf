@@ -30,7 +30,7 @@ __all__: list[str] = [
 # Will be overriden by `conftest.py` with the value from the `--executor`
 # and `--cluster` command-line arguments
 DEFAULT_EXECUTOR = "in-memory"
-DEFAULT_SCHEDULER = "single"
+DEFAULT_CLUSTER = "single"
 DEFAULT_BLOCKSIZE_MODE: Literal["small", "default"] = "default"
 
 
@@ -205,7 +205,7 @@ def get_default_engine(
     executor_options: dict[str, Any] = {}
     executor = executor or DEFAULT_EXECUTOR
     if executor == "streaming":
-        executor_options["cluster"] = DEFAULT_SCHEDULER
+        executor_options["cluster"] = DEFAULT_CLUSTER
 
         blocksize_mode = blocksize_mode or DEFAULT_BLOCKSIZE_MODE
 

@@ -65,7 +65,7 @@ def pytest_configure(config):
         raise pytest.UsageError("Distributed cluster requires --executor='streaming'")
 
     cudf_polars.testing.asserts.DEFAULT_EXECUTOR = config.getoption("--executor")
-    cudf_polars.testing.asserts.DEFAULT_SCHEDULER = config.getoption("--cluster")
+    cudf_polars.testing.asserts.DEFAULT_CLUSTER = config.getoption("--cluster")
     cudf_polars.testing.asserts.DEFAULT_BLOCKSIZE_MODE = config.getoption(
         "--blocksize-mode"
     )
