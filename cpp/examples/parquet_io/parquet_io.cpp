@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include "../utilities/timer.hpp"
 #include "common_utils.hpp"
 #include "io_source.hpp"
+#include "timer.hpp"
 
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/types.hpp>
@@ -138,8 +138,8 @@ int main(int argc, char const** argv)
   }
 
   // Create and use a memory pool
-  bool is_pool_used = true;
-  auto resource     = create_memory_resource(is_pool_used);
+  bool constexpr is_pool_used = true;
+  auto resource               = create_memory_resource(is_pool_used);
   cudf::set_current_device_resource(resource.get());
 
   // Read input parquet file
@@ -157,7 +157,7 @@ int main(int argc, char const** argv)
             << page_stat_string << "..\n";
 
   // `timer` is automatically started here
-  cudf::examples::timer timer;
+  timer timer;
   write_parquet(input->view(), metadata, output_filepath, encoding, compression, page_stats);
   timer.print_elapsed_millis();
 
