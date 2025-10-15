@@ -24,6 +24,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -487,6 +488,147 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
   return cudf::detail::compute_column(stats_table, stats_expr.get_stats_expr().get(), stream, mr);
 }
 
+/**
+ * @brief Custom CUDA kernel using Cooperative Groups to perform the paired logical OR reduction.
+ * * NOTE: This operation is a map/stride-2-read, not a true block-to-global reduction.
+ * CUB's BlockReduce is unsuitable here as it reduces a block to a single element.
+ * Cooperative Groups is used here for robust global thread ID calculation.
+ */
+__global__ void reduce_or_kernel(cudf::device_span<bool*> level_ptrs,
+                                 size_type current_level,
+                                 size_t current_level_size)  // Size of the source level
+{
+  // Use Cooperative Groups to get the global thread index (tid)
+  auto tid = cudf::detail::grid_1d::global_thread_id();
+
+  auto const current_level_ptr = level_ptrs[current_level];
+  auto next_level_ptr          = level_ptrs[current_level + 1];
+
+  // The reduction only needs to run for half the size of the current level
+  size_t next_level_size = (current_level_size + 1) / 2;
+
+  if (tid < next_level_size) {
+    size_t idx1 = tid * 2;
+    size_t idx2 = tid * 2 + 1;
+
+    // Perform the logical OR reduction and write to the next level's location
+    next_level_ptr[tid] = current_level_ptr[idx1] || current_level_ptr[idx2];
+  }
+
+  // Handle the odd-sized remaining element if current_level_size is odd
+  if (current_level_size % 2 != 0 && tid == next_level_size) {
+    // The last element is carried forward (ORed with false)
+    next_level_ptr[tid] = current_level_ptr[current_level_size - 1];
+  }
+}
+
+/**
+ * @brief CUDA kernel to probe multiple ranges against the pre-calculated mask hierarchy.
+ * One thread handles the binary decomposition and query for one range [M, N).
+ * * @param d_level_ptrs Device array of pointers, where d_level_ptrs[k] points to the start of
+ * Level k mask.
+ * @param d_range_offsets Device array where range i is [d_range_offsets[i], d_range_offsets[i+1]).
+ * @param num_ranges The number of ranges to process.
+ * @param d_results Pointer to device memory to store the boolean result (true if a '1' is found in
+ * the range).
+ */
+__global__ void probe_hierarchical_masks_kernel(
+  cudf::device_span<bool* const> level_ptrs,        // Pointers to start of each mask level
+  cudf::device_span<cudf::size_type> page_offsets,  // Range boundary array
+  bool* results)
+{
+  auto const num_ranges = page_offsets.size() - 1;
+  size_t range_idx      = cudf::detail::grid_1d::global_thread_id();
+
+  if (range_idx > num_ranges) { return; }
+
+  // Initialize result for this range to false (assuming no set bit)
+  results[range_idx] = false;
+
+  // Retrieve M and N for the current range [M, N)
+  size_type M = page_offsets[range_idx];
+  size_type N = page_offsets[range_idx + 1];
+
+  // If the range is empty or invalid, terminate
+  if (M >= N) { return; }
+
+  // Binary Decomposition Loop
+  while (M < N) {
+    // 1. Calculate the largest power of 2 that can align M up to the boundary.
+    // This is determined by the Least Significant Bit (LSB) of M.
+    // If M=0, LSB is usually defined as the full size, but here M is typically > 0
+    // or we handle M=0 implicitly by the full range check.
+    // The expression (M & -M) gives the value of the LSB, which is the block size (2^k).
+    size_t m_lsb_block_size = (M == 0) ? N : (M & -M);
+    size_t m_next_aligned   = M + m_lsb_block_size;
+
+    // 2. Calculate the largest power of 2 block that can align N down to the boundary.
+    // This is determined by the LSB of (N - M), but simpler to use N's alignment for the end.
+    // The expression (N & -N) gives the block size corresponding to N's alignment.
+    // We ensure N_lsb_block_size does not exceed the remaining range size (N-M).
+    size_t n_lsb_block_size = N & -N;
+
+    // --- Decision Logic: Which side to consume? ---
+
+    // Block 1: M-aligned block (from M up to m_next_aligned)
+    size_t block1_size = m_next_aligned - M;
+
+    // Block 2: N-aligned block (from N - n_lsb_block_size up to N)
+    size_t block2_size = n_lsb_block_size;
+
+    // Block 3: The remaining central range block
+
+    if (block1_size > 0 && M < m_next_aligned && m_next_aligned <= N) {
+      // If the M-aligned block is fully contained in the range [M, N)
+
+      // Check if block1_size is 2^k. k = log2(block1_size).
+      // Since block1_size is based on LSB, it is always a power of 2.
+      size_t k1 = __ffs(block1_size) - 1;
+
+      // Calculate mask index: The starting point M is divided by the block size.
+      size_t mask_idx = M / block1_size;
+
+      // Look up the mask value
+      if (level_ptrs[k1][mask_idx]) {
+        results[range_idx] = true;
+        return;  // Found a set bit, terminate for this range
+      }
+
+      // Advance M
+      M = m_next_aligned;
+    } else if (block2_size > 0 && N - block2_size >= M) {
+      // If the N-aligned block is fully contained and does not overlap M's new position
+
+      // Check if block2_size is 2^k. k = log2(block2_size).
+      size_t k2 = __ffs(block2_size) - 1;
+
+      // Calculate mask index
+      size_t mask_idx = (N - block2_size) / block2_size;
+
+      // Look up the mask value
+      if (level_ptrs[k2][mask_idx]) {
+        results[range_idx] = true;
+        return;  // Found a set bit, terminate for this range
+      }
+
+      // Backtrack N
+      N = N - block2_size;
+    } else {
+      // The remaining range is unaligned and small (or just 1 element).
+      // This happens when M and N are close and unaligned (e.g., [11, 13]).
+
+      // Prioritize M (1-row check) or N (1-row check) until they meet.
+
+      // Check single row at M (Level 0)
+      if (level_ptrs[0][M]) {
+        results[range_idx] = true;
+        return;
+      }
+      M++;
+    }
+  }
+}
+
 template <typename ColumnView>
 std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   ColumnView const& row_mask,
@@ -499,6 +641,21 @@ std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
 
   CUDF_EXPECTS(row_mask.type().id() == cudf::type_id::BOOL8,
                "Input row bitmask should be of type BOOL8");
+
+  auto const total_rows = total_rows_in_row_groups(row_group_indices);
+
+  // Return an empty vector if all rows are invalid or all rows are required
+  if (row_mask.null_count(row_mask_offset, row_mask_offset + total_rows, stream) == total_rows or
+      thrust::all_of(rmm::exec_policy(stream),
+                     row_mask.template begin<bool>() + row_mask_offset,
+                     row_mask.template begin<bool>() + row_mask_offset + total_rows,
+                     cuda::std::identity{})) {
+    return {};
+  }
+
+  CUDF_EXPECTS(row_mask_offset + total_rows <= row_mask.size(),
+               "Mismatch in total rows in input row mask and row groups",
+               std::invalid_argument);
 
   auto const num_columns = input_columns.size();
 
@@ -529,7 +686,7 @@ std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
     auto const schema_idx   = column_schema_indices.front();
     size_type col_num_pages = 0;
     std::tie(page_row_offsets, col_num_pages, max_page_size) =
-      compute_page_row_offsets(per_file_metadata, row_group_indices, schema_idx);
+      compute_page_row_offsets(per_file_metadata, row_group_indices, schema_idx, row_mask_offset);
     // Add 1 to include the the 0th page's offset for each column
     col_page_offsets.emplace_back(col_num_pages + 1);
   } else {
@@ -542,8 +699,10 @@ std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
                   [&](auto const col_idx) {
                     page_row_offsets_tasks.emplace_back(
                       cudf::detail::host_worker_pool().submit_task([&, col_idx = col_idx] {
-                        return compute_page_row_offsets(
-                          per_file_metadata, row_group_indices, column_schema_indices[col_idx]);
+                        return compute_page_row_offsets(per_file_metadata,
+                                                        row_group_indices,
+                                                        column_schema_indices[col_idx],
+                                                        row_mask_offset);
                       }));
                   });
 
@@ -559,22 +718,9 @@ std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
     });
   }
 
-  auto const total_rows  = page_row_offsets.back();
   auto const total_pages = page_row_offsets.size() - num_columns;
 
-  CUDF_EXPECTS(row_mask_offset + total_rows <= row_mask.size(),
-               "Mismatch in total rows in input row mask and row groups",
-               std::invalid_argument);
-
-  // Return an empty vector if all rows are invalid or all rows are required
-  if (row_mask.null_count(row_mask_offset, row_mask_offset + total_rows, stream) == total_rows or
-      thrust::all_of(rmm::exec_policy(stream),
-                     row_mask.template begin<bool>() + row_mask_offset,
-                     row_mask.template begin<bool>() + row_mask_offset + total_rows,
-                     cuda::std::identity{})) {
-    return {};
-  }
-
+  // Make sure all row_mask elements contain valid values even if they are nulls
   if constexpr (cuda::std::is_same_v<ColumnView, cudf::mutable_column_view>) {
     if (row_mask.nullable()) {
       thrust::for_each(rmm::exec_policy_nosync(stream),
@@ -590,71 +736,65 @@ std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
                  "Row mask must not contain nulls for payload columns");
   }
 
-  // Total number of surviving pages across all columns
-  std::atomic<size_t> total_surviving_pages{0};
+  auto const mr = cudf::get_current_device_resource_ref();
+  auto const [level_offsets, total_levels_size] =
+    compute_row_mask_levels(row_mask.size(), max_page_size);
+  auto const total_levels = level_offsets.size();
 
-  // Tasks to compute data page mask for each column
-  std::vector<std::future<std::vector<bool>>> data_page_mask_tasks;
-  data_page_mask_tasks.reserve(num_columns);
+  auto levels_data = rmm::device_uvector<bool>(total_levels_size, stream, mr);
 
-  // Host row mask data
-  auto const is_row_required = cudf::detail::make_host_vector(
-    device_span<uint8_t const>(row_mask.template data<uint8_t>() + row_mask_offset, total_rows),
-    stream);
-
-  // For all columns, look up which pages contain at least one required row. i.e.
-  // !validity_it[row_idx] or is_row_required[row_idx] satisfies, and add its byte range to the
-  // output list of byte ranges for the column.
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(num_columns),
-                [&](auto const col_idx) {
-                  data_page_mask_tasks.emplace_back(
-                    cudf::detail::host_worker_pool().submit_task([&, col_idx = col_idx] {
-                      // Construct a row indices mapping based on page row counts and offsets
-                      auto const total_pages_this_column =
-                        col_page_offsets[col_idx + 1] - col_page_offsets[col_idx] - 1;
-                      auto col_data_page_mask = std::vector<bool>(total_pages_this_column, false);
-                      // Number of final filtered pages for this column
-                      size_t num_surviving_pages_this_column = 0;
-                      // For all rows
-                      for (auto row_idx = 0; row_idx < total_rows; ++row_idx) {
-                        // If this row is required, add its page index to the output list.
-                        if (is_row_required[row_idx]) {
-                          // binary search to find the page index this row_idx belongs to and set
-                          // the page index to true page_indices
-                          auto const offsets = cudf::host_span<size_type const>(
-                            page_row_offsets.data() + col_page_offsets[col_idx],
-                            col_page_offsets[col_idx + 1] - col_page_offsets[col_idx]);
-                          auto const page_itr =
-                            std::upper_bound(offsets.begin(), offsets.end(), row_idx);
-                          CUDF_EXPECTS(page_itr != offsets.begin() and page_itr != offsets.end(),
-                                       "Invalid page index");
-                          auto const page_idx = std::distance(offsets.begin(), page_itr) - 1;
-                          col_data_page_mask[page_idx] = true;
-                          num_surviving_pages_this_column++;
-                          // Move row_idx to the last row of this page
-                          row_idx = offsets[page_idx + 1] - 1;
-                        }
-                      }
-                      total_surviving_pages.fetch_add(num_surviving_pages_this_column);
-                      return col_data_page_mask;
-                    }));
+  auto host_level_ptrs = cudf::detail::make_host_vector<bool*>(total_levels, stream);
+  host_level_ptrs[0]   = const_cast<bool*>(row_mask.template begin<bool>()) + row_mask_offset;
+  std::for_each(thrust::counting_iterator<size_t>(1),
+                thrust::counting_iterator(total_levels),
+                [&](auto const level_idx) {
+                  host_level_ptrs[level_idx] = levels_data.data() + level_offsets[level_idx - 1];
                 });
+  auto device_level_ptrs = cudf::detail::make_device_uvector_async(host_level_ptrs, stream, mr);
 
-  // Vector to hold data page mask for each column
-  auto data_page_mask = std::vector<bool>();
+  {
+    auto const next_level_size    = level_offsets[1];
+    auto const current_level_size = row_mask.size();
+    cudf::detail::grid_1d config(next_level_size, 256, 1);
+    reduce_or_kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
+      device_level_ptrs, 0, current_level_size);
+    stream.synchronize();
+  }
+
+  for (size_t current_level_idx = 1; current_level_idx < total_levels - 1; current_level_idx++) {
+    auto const next_level_size =
+      level_offsets[current_level_idx + 1] - level_offsets[current_level_idx];
+    auto const current_level_size =
+      level_offsets[current_level_idx] - level_offsets[current_level_idx - 1];
+    cudf::detail::grid_1d config(next_level_size, 256, 1);
+    reduce_or_kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
+      device_level_ptrs, current_level_idx, current_level_size);
+    stream.synchronize();
+  }
+
+  auto const num_ranges = page_row_offsets.size() - 1;
+  rmm::device_uvector<bool> device_data_page_mask(num_ranges, stream, mr);
+  auto page_offsets = cudf::detail::make_device_uvector_async(page_row_offsets, stream, mr);
+  {
+    cudf::detail::grid_1d config(num_ranges, 256, 1);
+    probe_hierarchical_masks_kernel<<<config.num_blocks,
+                                      config.num_threads_per_block,
+                                      0,
+                                      stream.value()>>>(
+      device_level_ptrs, page_offsets, device_data_page_mask.data());
+  }
+
+  auto host_results = cudf::detail::make_host_vector(device_data_page_mask, stream);
+  std::vector<bool> data_page_mask{};
   data_page_mask.reserve(total_pages);
-
-  std::for_each(data_page_mask_tasks.begin(), data_page_mask_tasks.end(), [&](auto& task) {
-    auto col_data_page_mask = std::move(task).get();
-    data_page_mask.insert(data_page_mask.end(),
-                          std::make_move_iterator(col_data_page_mask.begin()),
-                          std::make_move_iterator(col_data_page_mask.end()));
-  });
-
-  CUDF_EXPECTS(
-    total_surviving_pages <= total_pages,
-    "Number of surviving pages must be less than or equal to the total number of input pages");
+  thrust::host_vector<bool> gather_mask(num_ranges, true);
+  std::for_each(thrust::counting_iterator<size_t>(0),
+                thrust::counting_iterator(num_ranges),
+                [&](auto const range_idx) {
+                  if (page_row_offsets[range_idx] < page_row_offsets[range_idx + 1]) {
+                    data_page_mask.push_back(host_results[range_idx]);
+                  }
+                });
 
   return data_page_mask;
 }

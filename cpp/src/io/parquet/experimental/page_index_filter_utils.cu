@@ -146,7 +146,8 @@ compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_fil
 std::tuple<std::vector<size_type>, size_type, size_type> compute_page_row_offsets(
   cudf::host_span<metadata_base const> per_file_metadata,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  size_type schema_idx)
+  cudf::size_type schema_idx,
+  cudf::size_type row_mask_offset)
 {
   // Compute total number of row groups
   auto const total_row_groups =
@@ -156,7 +157,7 @@ std::tuple<std::vector<size_type>, size_type, size_type> compute_page_row_offset
                     [](auto sum, auto const& rg_indices) { return sum + rg_indices.size(); });
 
   std::vector<size_type> page_row_offsets;
-  page_row_offsets.push_back(0);
+  page_row_offsets.push_back(row_mask_offset);
   size_type max_page_size = 0;
   size_type num_pages     = 0;
 
@@ -230,6 +231,29 @@ rmm::device_uvector<size_type> make_page_indices_async(
                          page_indices.begin(),
                          cuda::maximum<cudf::size_type>());
   return page_indices;
+}
+
+std::pair<std::vector<size_type>, size_type> compute_row_mask_levels(cudf::size_type num_rows,
+                                                                     cudf::size_type max_page_size)
+{
+  std::vector<size_type> level_offsets;
+  level_offsets.push_back(0);
+
+  size_t current_size  = (num_rows + 1) / 2;
+  size_t current_level = 1;
+
+  while (current_size > 0) {
+    size_t block_size = 1ULL << current_level;
+
+    level_offsets.push_back(current_size);
+    current_size += num_rows;
+
+    if (std::cmp_greater_equal(block_size, max_page_size)) { break; }
+
+    current_size = (current_size + 1) / 2;
+    current_level++;
+  }
+  return {std::move(level_offsets), current_size};
 }
 
 }  // namespace cudf::io::parquet::experimental::detail
