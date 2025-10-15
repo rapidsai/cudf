@@ -113,6 +113,7 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_parquet.py::test_allow_missing_columns[projection1-True-columns]": "Mismatching column read cudf#16394",
     "tests/unit/io/test_parquet.py::test_scan_parquet_filter_statistics_load_missing_column_21391": "Mismatching column read cudf#16394",
     "tests/unit/io/test_parquet.py::test_field_overwrites_metadata": "cannot serialize in-memory sink target.",
+    "tests/unit/io/test_parquet.py::test_binary_offset_roundtrip": "binary offset type unsupported",
     "tests/unit/io/test_parquet_field_overwrites.py::test_required_flat": "cannot serialize in-memory sink target.",
     "tests/unit/io/test_parquet_field_overwrites.py::test_required_list[dtype0]": "cannot serialize in-memory sink target.",
     "tests/unit/io/test_parquet_field_overwrites.py::test_required_list[dtype1]": "cannot serialize in-memory sink target.",

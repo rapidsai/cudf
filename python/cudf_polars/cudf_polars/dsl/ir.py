@@ -2225,36 +2225,35 @@ class Join(IR):
                 right.dtypes,
             )
             if coalesce and how == "Full":
-                left_keys_tbl = plc.copying.gather(left_on.table, lg, left_policy)
-                right_keys_tbl = plc.copying.gather(right_on.table, rg, right_policy)
+                left_key_names = left_on.column_names
+                right_key_names = right_on.column_names
+                left_key_cols = left.select(left_key_names).column_map
+                right_key_cols = right.select(right_key_names).column_map
 
-                left_keys_df = DataFrame.from_table(
-                    left_keys_tbl, left_on.column_names, left_on.dtypes
-                )
-                right_keys_df = DataFrame.from_table(
-                    right_keys_tbl, right_on.column_names, right_on.dtypes
-                )
-
-                left_key_names = [c.name for c in left_on.columns]
-                right_key_names = [c.name for c in right_on.columns]
-
-                left_keys = {
-                    c.name: c for c in left_keys_df.select_columns(left_key_names)
-                }
-                right_keys = {
-                    c.name: c for c in right_keys_df.select_columns(right_key_names)
-                }
+                def _align(rc: Column | None, target: Column) -> Column | None:
+                    if rc is None:
+                        return None
+                    if rc.dtype.plc_type.id() == target.dtype.plc_type.id():
+                        return rc
+                    return (
+                        rc.astype(target.dtype)
+                        if dtypes.can_cast(rc.dtype.plc_type, target.dtype.plc_type)
+                        else None
+                    )
 
                 left = left.with_columns(
                     (
                         Column(
                             plc.replace.replace_nulls(
-                                left_keys[name].obj, right_keys[name].obj
+                                left_key_cols[name].obj,
+                                _x.obj,
                             ),
                             name=name,
-                            dtype=left_keys[name].dtype,
+                            dtype=left_key_cols[name].dtype,
                         )
                         for name in left_key_names
+                        if (_x := _align(right_key_cols.get(name), left_key_cols[name]))
+                        is not None
                     ),
                     replace_only=True,
                 )
