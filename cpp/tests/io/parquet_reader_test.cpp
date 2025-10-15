@@ -31,10 +31,14 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
 
+#include <thrust/iterator/constant_iterator.h>
+
 #include <src/io/parquet/parquet_gpu.hpp>
 
 #include <array>
+#include <limits>
 #include <memory>
+#include <stdexcept>
 
 using ParquetDecompressionTest = DecompressionTest<ParquetReaderTest>;
 
@@ -3680,4 +3684,27 @@ TEST_F(ParquetReaderTest, ByteBoundsAndFilters)
 
     CUDF_TEST_EXPECT_TABLES_EQUAL(read->view(), expected->view());
   }
+}
+
+TEST_F(ParquetReaderTest, TableTooLargeOverflows)
+{
+  using T     = bool;
+  auto value  = thrust::make_constant_iterator(true);
+  auto column = cudf::test::fixed_width_column_wrapper<T>(
+    value, value + std::numeric_limits<cudf::size_type>::max() / 2 + 1000);
+
+  auto filepath = temp_env->get_temp_filepath("TableTooLargeOverflows.parquet");
+  {
+    auto sink = cudf::io::sink_info{filepath};
+    auto options =
+      cudf::io::parquet_writer_options::builder(sink, cudf::table_view{{column}}).build();
+    std::ignore = cudf::io::write_parquet(options);
+  }
+  std::vector<std::string> files{{filepath, filepath}};
+  auto source  = cudf::io::source_info(files);
+  auto options = cudf::io::parquet_reader_options::builder(source)
+                   .num_rows(static_cast<int64_t>(std::numeric_limits<cudf::size_type>::max()) + 10)
+                   .build();
+
+  EXPECT_THROW(cudf::io::read_parquet(options), std::overflow_error);
 }
