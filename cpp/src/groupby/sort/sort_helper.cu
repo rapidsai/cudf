@@ -25,7 +25,7 @@
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/labeling/label_segments.cuh>
-#include <cudf/detail/row_operator/row_operators.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/sequence.hpp>
 #include <cudf/detail/sorting.hpp>

@@ -1387,25 +1387,16 @@ def test_string_starts_ends(data, pat):
     ],
 )
 def test_string_starts_ends_list_like_pat(data, pat):
-    gs = cudf.Series(data)
+    pd_data = pd.Series(data)
+    cudf_data = cudf.Series(data)
 
-    starts_expected = []
-    ends_expected = []
-    for i in range(len(pat)):
-        if data[i] is None:
-            starts_expected.append(None)
-            ends_expected.append(None)
-        else:
-            if pat[i] is None:
-                starts_expected.append(False)
-                ends_expected.append(False)
-            else:
-                starts_expected.append(data[i].startswith(pat[i]))
-                ends_expected.append(data[i].endswith(pat[i]))
-    starts_expected = pd.Series(starts_expected)
-    ends_expected = pd.Series(ends_expected)
-    assert_eq(starts_expected, gs.str.startswith(pat), check_dtype=False)
-    assert_eq(ends_expected, gs.str.endswith(pat), check_dtype=False)
+    result = cudf_data.str.startswith(pat)
+    expected = pd_data.str.startswith(pat)
+    assert_eq(result, expected)
+
+    result = cudf_data.str.endswith(pat)
+    expected = pd_data.str.endswith(pat)
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize(
