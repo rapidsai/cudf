@@ -1164,14 +1164,17 @@ def _transform_arg(
         }
     elif isinstance(arg, np.ndarray) and arg.dtype == "O":
         transformed: list[Any] = [
-            _transform_arg(a, attribute_name, seen) for a in arg.flat
+            _transform_arg(a, attribute_name, seen)
+            for a in arg.flat  # type: ignore[var-annotated]
         ]
         # Keep the same memory layout as arg (the default is C_CONTIGUOUS)
         if arg.flags["F_CONTIGUOUS"] and not arg.flags["C_CONTIGUOUS"]:
             order = "F"
         else:
             order = "C"
-        result = np.empty(int(np.prod(arg.shape)), dtype=object, order=order)
+        result = np.empty(
+            int(np.prod(arg.shape)), dtype=np.object_, order=order
+        )
         result[...] = transformed
         return result.reshape(arg.shape)
     elif isinstance(arg, Iterator) and attribute_name == "_fsproxy_fast":
@@ -1386,7 +1389,7 @@ PROXY_BASE_CLASSES: set[type] = {
 }
 
 
-NUMPY_TYPES: set[str] = set(np.sctypeDict.values())
+NUMPY_TYPES: set[type[np.generic]] = set(np.sctypeDict.values())  # type: ignore[arg-type]
 
 
 _SPECIAL_METHODS: set[str] = {
