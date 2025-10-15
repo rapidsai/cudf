@@ -42,7 +42,13 @@ if TYPE_CHECKING:
 
     from typing_extensions import Self
 
-    from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
+    from cudf._typing import (
+        ColumnBinaryOperand,
+        ColumnLike,
+        Dtype,
+        DtypeObj,
+        ScalarLike,
+    )
     from cudf.core.buffer import Buffer
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.string import StringColumn
@@ -143,7 +149,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         column.dtype.precision = data.type.precision
         return column
 
-    def element_indexing(self, index: int):
+    def element_indexing(self, index: int) -> Decimal | None:
         result = super().element_indexing(index)
         if isinstance(result, pa.Scalar):
             return result.as_py()
@@ -163,7 +169,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             return self
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
-    def as_string_column(self, dtype) -> StringColumn:
+    def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         if cudf.get_option("mode.pandas_compatible"):
             if isinstance(dtype, np.dtype) and dtype.kind == "O":
                 raise TypeError(
@@ -183,7 +189,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 cudf.core.column.column_empty(0, dtype=CUDF_STRING_DTYPE),
             )
 
-    def __pow__(self, other) -> ColumnBase:
+    def __pow__(self, other: ColumnBinaryOperand) -> ColumnBase:
         if isinstance(other, int):
             if other == 0:
                 res = cudf.core.column.as_column(
@@ -206,10 +212,10 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
     # Decimals in libcudf don't support truediv, see
     # https://github.com/rapidsai/cudf/pull/7435 for explanation.
-    def __truediv__(self, other) -> ColumnBase:
+    def __truediv__(self, other: ColumnBinaryOperand) -> ColumnBase:
         return self._binaryop(other, "__div__")
 
-    def __rtruediv__(self, other) -> ColumnBase:
+    def __rtruediv__(self, other: ColumnBinaryOperand) -> ColumnBase:
         return self._binaryop(other, "__rdiv__")
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:

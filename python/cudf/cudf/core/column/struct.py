@@ -157,7 +157,7 @@ class StructColumn(ColumnBase):
 
         return n
 
-    def element_indexing(self, index: int) -> dict:
+    def element_indexing(self, index: int) -> dict[Any, Any] | None:
         result = super().element_indexing(index)
         if isinstance(result, pa.Scalar):
             py_element = maybe_nested_pa_scalar_to_py(result)

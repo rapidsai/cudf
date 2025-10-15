@@ -1476,7 +1476,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def _find_first_and_last(self, value: ScalarLike) -> tuple[int, int]:
         indices = self.indices_of(value)
         if n := len(indices):
-            return (
+            return (  # type: ignore[return-value]
                 indices.element_indexing(0),
                 indices.element_indexing(n - 1),
             )
