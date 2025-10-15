@@ -233,7 +233,6 @@ __device__ void compute_page_sizes_for_pruned_pages(PageInfo* page,
       page->nesting[list_depth].batch_size = state->num_rows;
     }
   }
-  return;
 }
 
 /**
