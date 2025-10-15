@@ -383,12 +383,12 @@ class NumericalColumn(NumericalBaseColumn):
             )
         elif op == "INT_POW" and res.null_count:
             if (
-                isinstance(lhs, plc.Scalar)
-                and lhs.to_py() == 1
-                and isinstance(rhs, ColumnBase)
-                and rhs.null_count > 0
+                isinstance(lhs_binaryop, plc.Scalar)
+                and lhs_binaryop.to_py() == 1
+                and isinstance(rhs_binaryop, ColumnBase)
+                and rhs_binaryop.null_count > 0
             ):
-                res = res.fillna(lhs.to_py())
+                res = res.fillna(lhs_binaryop.to_py())
         elif (
             cudf.get_option("mode.pandas_compatible")
             and op in cmp_ops
