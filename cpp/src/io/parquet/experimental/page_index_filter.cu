@@ -566,6 +566,15 @@ std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
                "Mismatch in total rows in input row mask and row groups",
                std::invalid_argument);
 
+  // Return an empty vector if all rows are invalid or all rows are required
+  if (row_mask.null_count(row_mask_offset, row_mask_offset + total_rows, stream) == total_rows or
+      thrust::all_of(rmm::exec_policy(stream),
+                     row_mask.template begin<bool>() + row_mask_offset,
+                     row_mask.template begin<bool>() + row_mask_offset + total_rows,
+                     cuda::std::identity{})) {
+    return {};
+  }
+
   if constexpr (cuda::std::is_same_v<ColumnView, cudf::mutable_column_view>) {
     if (row_mask.nullable()) {
       thrust::for_each(rmm::exec_policy_nosync(stream),
@@ -577,15 +586,8 @@ std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
                        });
     }
   } else {
-    CUDF_EXPECTS(not row_mask.nullable(), "Row mask must not be nullable for payload columns");
-  }
-
-  // Return an empty vector if all rows are required or all are invalid.
-  if (thrust::all_of(rmm::exec_policy(stream),
-                     row_mask.template begin<bool>() + row_mask_offset,
-                     row_mask.template begin<bool>() + row_mask_offset + total_rows,
-                     cuda::std::identity{})) {
-    return {};
+    CUDF_EXPECTS(not row_mask.nullable() or row_mask.null_count() == 0,
+                 "Row mask must not contain nulls for payload columns");
   }
 
   // Total number of surviving pages across all columns
