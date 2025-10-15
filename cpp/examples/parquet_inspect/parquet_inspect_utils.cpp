@@ -28,6 +28,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/mr/device/cuda_async_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
@@ -204,12 +205,11 @@ auto make_page_data_list_column(cudf::host_span<T const> data,
 
 std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_pool_used)
 {
-  auto cuda_mr = std::make_shared<rmm::mr::cuda_memory_resource>();
   if (is_pool_used) {
     return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-      cuda_mr, rmm::percent_of_free_device_memory(50));
+      std::make_shared<rmm::mr::cuda_memory_resource>(), rmm::percent_of_free_device_memory(50));
   }
-  return cuda_mr;
+  return std::make_shared<rmm::mr::cuda_async_memory_resource>();
 }
 
 cudf::host_span<uint8_t const> fetch_footer_bytes(cudf::host_span<uint8_t const> buffer)
