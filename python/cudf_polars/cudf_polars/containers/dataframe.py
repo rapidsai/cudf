@@ -324,7 +324,7 @@ class DataFrame:
         """Rename some columns."""
         return type(self)(c.rename(mapping.get(c.name, c.name)) for c in self.columns)
 
-    def select_columns(self, names: Set[str]) -> list[Column]:
+    def select_columns(self, names: Iterable[str]) -> list[Column]:
         """Select columns by name."""
         return [c for c in self.columns if c.name in names]
 

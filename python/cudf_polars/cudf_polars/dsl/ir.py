@@ -1711,15 +1711,18 @@ def _strip_predicate_casts(node: expr.Expr) -> expr.Expr:
             not POLARS_VERSION_LT_134
             and isinstance(child, expr.ColRef)
             and (
-                plc.traits.is_floating_point(src.plc_type)
-                and plc.traits.is_floating_point(dst.plc_type)
+                (
+                    plc.traits.is_floating_point(src.plc_type)
+                    and plc.traits.is_floating_point(dst.plc_type)
+                )
+                or (
+                    plc.traits.is_integral(src.plc_type)
+                    and plc.traits.is_integral(dst.plc_type)
+                    and src.plc_type.id() == dst.plc_type.id()
+                )
             )
-        ) or (
-            plc.traits.is_integral(src.plc_type)
-            and plc.traits.is_integral(dst.plc_type)
         ):
             return child
-
         return expr.Cast(dst, child)
 
     if not node.children:
@@ -2222,22 +2225,40 @@ class Join(IR):
                 right.dtypes,
             )
             if coalesce and how == "Full":
+                left_keys_tbl = plc.copying.gather(left_on.table, lg, left_policy)
+                right_keys_tbl = plc.copying.gather(right_on.table, rg, right_policy)
+
+                left_keys_df = DataFrame.from_table(
+                    left_keys_tbl, left_on.column_names, left_on.dtypes
+                )
+                right_keys_df = DataFrame.from_table(
+                    right_keys_tbl, right_on.column_names, right_on.dtypes
+                )
+
+                left_key_names = [c.name for c in left_on.columns]
+                right_key_names = [c.name for c in right_on.columns]
+
+                left_keys = {
+                    c.name: c for c in left_keys_df.select_columns(left_key_names)
+                }
+                right_keys = {
+                    c.name: c for c in right_keys_df.select_columns(right_key_names)
+                }
+
                 left = left.with_columns(
                     (
                         Column(
-                            plc.replace.replace_nulls(left_col.obj, right_col.obj),
-                            name=left_col.name,
-                            dtype=left_col.dtype,
+                            plc.replace.replace_nulls(
+                                left_keys[name].obj, right_keys[name].obj
+                            ),
+                            name=name,
+                            dtype=left_keys[name].dtype,
                         )
-                        for left_col, right_col in zip(
-                            left.select_columns(left_on.column_names_set),
-                            right.select_columns(right_on.column_names_set),
-                            strict=True,
-                        )
+                        for name in left_key_names
                     ),
                     replace_only=True,
                 )
-                right = right.discard_columns(right_on.column_names_set)
+                right = right.discard_columns(set(right_key_names))
             if how == "Right":
                 # Undo the swap for right join before gluing together.
                 left, right = right, left

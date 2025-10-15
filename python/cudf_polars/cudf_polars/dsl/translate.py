@@ -972,6 +972,17 @@ def _(
     node: plrs._expr_nodes.Cast, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     inner = translator.translate_expr(n=node.expr, schema=schema)
+
+    if plc.traits.is_floating_point(inner.dtype.plc_type) and plc.traits.is_fixed_point(
+        dtype.plc_type
+    ):
+        return expr.Cast(
+            dtype,
+            expr.UnaryFunction(
+                inner.dtype, "round", (-dtype.plc_type.scale(), "half_to_even"), inner
+            ),
+        )
+
     # Push casts into literals so we can handle Cast(Literal(Null))
     if isinstance(inner, expr.Literal):
         return inner.astype(dtype)
