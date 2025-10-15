@@ -115,10 +115,13 @@ struct row_group_info {
 struct metadata : public FileMetaData {
   metadata() = default;
   explicit metadata(datasource* source, bool read_page_indexes = true);
-  void sanitize_schema();
-
-  // Explicit destructor with NVTX profiling and manual data member destruction
+  metadata(metadata const& other)            = delete;
+  metadata(metadata&& other)                 = default;
+  metadata& operator=(metadata const& other) = delete;
+  metadata& operator=(metadata&& other)      = default;
   ~metadata();
+
+  void sanitize_schema();
 };
 
 /**
@@ -150,7 +153,7 @@ class aggregate_reader_metadata {
    * @brief Create a metadata object from each element in the source vector
    */
   static std::vector<metadata> metadatas_from_sources(
-    host_span<std::unique_ptr<datasource> const> sources, bool read_page_indexes);
+    host_span<std::unique_ptr<datasource> const> sources, bool read_page_indexes = true);
 
   /**
    * @brief Collect the keyvalue maps from each per-file metadata object into a vector of maps.
@@ -329,6 +332,11 @@ class aggregate_reader_metadata {
     rmm::cuda_stream_view stream) const;
 
  public:
+  aggregate_reader_metadata(host_span<std::unique_ptr<datasource> const> sources,
+                            bool use_arrow_schema,
+                            bool has_cols_from_mismatched_srcs,
+                            bool read_page_indexes = true);
+
   aggregate_reader_metadata(aggregate_reader_metadata const&)            = delete;
   aggregate_reader_metadata& operator=(aggregate_reader_metadata const&) = delete;
   aggregate_reader_metadata(aggregate_reader_metadata&&)                 = delete;
@@ -562,20 +570,6 @@ class aggregate_reader_metadata {
                  bool include_index,
                  bool strings_to_categorical,
                  type_id timestamp_type_id);
-
- public:
-  /**
-   * @brief Constructor for aggregate_reader_metadata
-   *
-   * @param sources Dataset sources
-   * @param use_arrow_schema Whether to use Arrow schema
-   * @param has_cols_from_mismatched_srcs Whether to have columns from mismatched sources
-   * @param read_page_indexes Whether to skip parsing page index information
-   */
-  aggregate_reader_metadata(host_span<std::unique_ptr<datasource> const> sources,
-                            bool use_arrow_schema,
-                            bool has_cols_from_mismatched_srcs,
-                            bool read_page_indexes = true);
 };
 
 /**

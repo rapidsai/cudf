@@ -332,11 +332,12 @@ metadata::metadata(datasource* source, bool read_page_indexes)
   cp.read(this);
   CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
 
-  // Reading the page indexes is somewhat expensive, so skip if requested or if there are no byte
-  // array columns. Currently the indexes are only used for the string size calculations. Could also
-  // just read indexes for string columns, but that would require changes elsewhere where we're
-  // trying to determine if we have the indexes or not. Note: This will have to be modified if there
-  // are other uses in the future (e.g. calculating chunk/pass boundaries).
+  // Reading the page indexes is somewhat expensive, so skip if there are no byte array columns.
+  // Currently the indexes are only used for the string size calculations.
+  // Could also just read indexes for string columns, but that would require changes elsewhere
+  // where we're trying to determine if we have the indexes or not.
+  // Note: This will have to be modified if there are other uses in the future (e.g. calculating
+  // chunk/pass boundaries).
   auto const has_strings = std::any_of(
     schema.begin(), schema.end(), [](auto const& elem) { return elem.type == Type::BYTE_ARRAY; });
 
@@ -361,8 +362,6 @@ metadata::metadata(datasource* source, bool read_page_indexes)
         }
       }
 
-      auto const total_columns = all_columns.size();
-
       auto read_column_indexes = [&idx_buf, min_offset](CompactProtocolReader& reader,
                                                         ColumnChunk& col) {
         if (col.column_index_length > 0 && col.column_index_offset > 0) {
@@ -381,7 +380,7 @@ metadata::metadata(datasource* source, bool read_page_indexes)
 
       // Use parallel processing only if we have enough columns to justify the overhead
       constexpr std::size_t parallel_threshold = 512;
-
+      auto const total_columns                 = all_columns.size();
       if (total_columns >= parallel_threshold) {
         // Dynamically calculate number of tasks based on column count
         constexpr std::size_t min_tasks = 4;
@@ -448,7 +447,6 @@ metadata::~metadata()
 std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
   host_span<std::unique_ptr<datasource> const> sources, bool read_page_indexes)
 {
-  CUDF_FUNC_RANGE();
   // Avoid using the thread pool for a single source
   if (sources.size() == 1) {
     std::vector<metadata> result;

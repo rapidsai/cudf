@@ -529,8 +529,7 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   _metadata = std::make_unique<aggregate_reader_metadata>(
     _sources,
     options.is_enabled_use_arrow_schema(),
-    options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas(),
-    true);  // read page index
+    options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
 
   // Number of input sources
   _num_sources = _sources.size();
@@ -1032,7 +1031,6 @@ parquet_column_schema walk_schema(aggregate_reader_metadata const* mt, int idx)
 
 parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> const> sources)
 {
-  CUDF_FUNC_RANGE();
   // Do not use arrow schema when reading information from parquet metadata.
   constexpr auto use_arrow_schema = false;
 
@@ -1040,7 +1038,6 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
   constexpr auto has_column_projection = false;
 
   // Open and parse the source dataset metadata
-  // Don't read page index
   auto metadata =
     aggregate_reader_metadata(sources, use_arrow_schema, has_column_projection, false);
 
