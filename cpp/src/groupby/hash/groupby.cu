@@ -22,7 +22,7 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/groupby.hpp>
-#include <cudf/detail/row_operator/row_operators.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table.hpp>

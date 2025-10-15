@@ -21,7 +21,7 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/row_operator/row_operators.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
