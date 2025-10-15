@@ -56,7 +56,6 @@ from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
-    StringColumn,
     as_column,
     column_empty,
     concat_columns,
@@ -71,6 +70,7 @@ from cudf.core.dtypes import (
     IntervalDtype,
     ListDtype,
     StructDtype,
+    recursively_update_struct_names,
 )
 from cudf.core.groupby.groupby import DataFrameGroupBy, groupby_doc_template
 from cudf.core.index import (
@@ -145,29 +145,6 @@ def _shape_mismatch_error(x, y):
         f"could not be broadcast to indexing result of "
         f"shape {y}"
     )
-
-
-def _recursively_update_struct_names(
-    col: ColumnBase, child_names: Mapping[Any, Any]
-) -> ColumnBase:
-    """Update a Column with struct names from pylibcudf.io.TableWithMetadata.child_names"""
-    if col.children:
-        if not child_names:
-            assert isinstance(col, StringColumn), (
-                "Only string columns can have unnamed children"
-            )
-        else:
-            children = list(col.children)
-            for i, (child, names) in enumerate(
-                zip(children, child_names.values(), strict=True)
-            ):
-                children[i] = _recursively_update_struct_names(child, names)
-            col.set_base_children(tuple(children))
-
-    if isinstance(col.dtype, StructDtype):
-        col = col._rename_fields(child_names.keys())  # type: ignore[attr-defined]
-
-    return col
 
 
 class _DataFrameIndexer(_FrameIndexer):
@@ -8471,7 +8448,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         # We only have child names if the source is a pylibcudf.io.TableWithMetadata.
         if child_names is not None:
             cudf_cols = (
-                _recursively_update_struct_names(col, cn)
+                col._with_type_metadata(
+                    recursively_update_struct_names(col.dtype, cn)
+                )
                 for col, cn in zip(
                     cudf_cols, child_names.values(), strict=True
                 )

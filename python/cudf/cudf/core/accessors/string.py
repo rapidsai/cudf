@@ -3792,12 +3792,6 @@ class StringMethods(BaseAccessor):
         method: Callable[[plc.Column, plc.Column | plc.Scalar], plc.Column],
         pat: str | tuple[str, ...],
     ) -> Series | Index:
-        if isinstance(pat, tuple) and all(isinstance(p, str) for p in pat):
-            pat = as_column(pat, dtype=CUDF_STRING_DTYPE)  # type: ignore[assignment]
-        elif not isinstance(pat, str):
-            raise TypeError(
-                f"expected a string or tuple, not {type(pat).__name__}"
-            )
         return self._return_or_inplace(
             self._column.starts_ends_with(method, pat)  # type: ignore[arg-type]
         )
@@ -3808,12 +3802,8 @@ class StringMethods(BaseAccessor):
 
         Parameters
         ----------
-        pat : str or list-like
-            If `str` is an `str`, evaluates whether each string of
-            series ends with `pat`.
-            If `pat` is a list-like, evaluates whether `self[i]`
-            ends with `pat[i]`.
-            Regular expressions are not accepted.
+        pat : str or tuple[str, ...]
+            String pattern or tuple of patterns. Regular expressions are not accepted.
 
         Returns
         -------
@@ -3855,12 +3845,8 @@ class StringMethods(BaseAccessor):
 
         Parameters
         ----------
-        pat : str or list-like
-            If `str` is an `str`, evaluates whether each string of
-            series starts with `pat`.
-            If `pat` is a list-like, evaluates whether `self[i]`
-            starts with `pat[i]`.
-            Regular expressions are not accepted.
+        pat : str or tuple[str, ...]
+            String pattern or tuple of patterns. Regular expressions are not accepted.
 
         Returns
         -------
