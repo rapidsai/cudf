@@ -21,6 +21,8 @@ from cudf.utils.scalar import (
 from cudf.utils.utils import _is_null_host_scalar
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from typing_extensions import Self
 
     import pylibcudf as plc
@@ -97,7 +99,7 @@ class StructColumn(ColumnBase):
         return dtype
 
     @property
-    def base_size(self):
+    def base_size(self) -> int:
         if self.base_children:
             return len(self.base_children[0])
         else:
@@ -186,7 +188,7 @@ class StructColumn(ColumnBase):
         return super().copy(deep=False)
 
     @property
-    def __cuda_array_interface__(self):
+    def __cuda_array_interface__(self) -> Mapping[str, Any]:
         raise NotImplementedError(
             "Structs are not yet supported via `__cuda_array_interface__`"
         )

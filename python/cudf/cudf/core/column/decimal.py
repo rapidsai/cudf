@@ -38,6 +38,8 @@ from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from typing_extensions import Self
 
     from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
@@ -92,7 +94,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         )
 
     @property
-    def __cuda_array_interface__(self):
+    def __cuda_array_interface__(self) -> Mapping[str, Any]:
         raise NotImplementedError(
             "Decimals are not yet supported via `__cuda_array_interface__`"
         )
@@ -181,7 +183,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 cudf.core.column.column_empty(0, dtype=CUDF_STRING_DTYPE),
             )
 
-    def __pow__(self, other):
+    def __pow__(self, other) -> ColumnBase:
         if isinstance(other, int):
             if other == 0:
                 res = cudf.core.column.as_column(
@@ -204,13 +206,13 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
     # Decimals in libcudf don't support truediv, see
     # https://github.com/rapidsai/cudf/pull/7435 for explanation.
-    def __truediv__(self, other):
+    def __truediv__(self, other) -> ColumnBase:
         return self._binaryop(other, "__div__")
 
-    def __rtruediv__(self, other):
+    def __rtruediv__(self, other) -> ColumnBase:
         return self._binaryop(other, "__rdiv__")
 
-    def _binaryop(self, other: ColumnBinaryOperand, op: str):
+    def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
 
         # Inline _normalize_binop_operand functionality
