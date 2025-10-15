@@ -47,10 +47,10 @@ struct result_column_creator {
   rmm::cuda_stream_view stream;
   rmm::device_async_resource_ref mr;
 
-  explicit result_column_creator(size_type output_size,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
-    : output_size{output_size}, stream{stream}, mr{mr}
+  explicit result_column_creator(size_type output_size_,
+                                 rmm::cuda_stream_view stream_,
+                                 rmm::device_async_resource_ref mr_)
+    : output_size{output_size_}, stream{stream_}, mr{mr_}
   {
   }
 
@@ -68,12 +68,10 @@ struct result_column_creator {
         cudf::detail::target_type(col_type, agg), output_size, mask_flag, stream, mr);
     }
 
-    // Lambda to create empty columns for better readability
     auto const make_empty_column = [&](type_id type_id, size_type size, mask_state mask_state) {
       return make_fixed_width_column(data_type{type_id}, size, mask_state, stream, mr);
     };
 
-    // Lambda to create children for SUM_WITH_OVERFLOW struct column
     auto make_children = [&make_empty_column](size_type size) {
       std::vector<std::unique_ptr<column>> children;
       // Create sum child column (int64_t) - no null mask needed, struct-level mask handles
@@ -84,23 +82,14 @@ struct result_column_creator {
       return children;
     };
 
-    if (output_size == 0) {
-      // For empty columns, create empty struct column manually
-      return create_structs_hierarchy(0, make_children(0), 0, {}, stream);
-    }
-
-    // Create struct column with the children
-    auto children = make_children(output_size);
-
-    // For SUM_WITH_OVERFLOW, make struct nullable if input has nulls (same as other aggregations)
-    if (!nullable) {
-      return create_structs_hierarchy(output_size, std::move(children), 0, {}, stream);
-    }
-    // Start with ALL_NULL, results will be marked valid during aggregation
-    auto null_mask  = create_null_mask(output_size, mask_state::ALL_NULL, stream, mr);
-    auto null_count = output_size;  // All null initially
+    auto [null_mask, null_count] = [&]() -> std::pair<rmm::device_buffer, size_type> {
+      if (output_size > 0 && nullable) {
+        return {create_null_mask(output_size, mask_state::ALL_NULL, stream, mr), output_size};
+      }
+      return {rmm::device_buffer{}, 0};
+    }();
     return create_structs_hierarchy(
-      output_size, std::move(children), null_count, std::move(null_mask), stream);
+      output_size, make_children(output_size), null_count, std::move(null_mask), stream);
   }
 };
 
@@ -118,9 +107,8 @@ std::unique_ptr<table> create_results_table(size_type output_size,
                  agg_kinds.begin(),
                  std::back_inserter(output_cols),
                  result_column_creator{output_size, stream, mr});
-  auto result_table                    = std::make_unique<table>(std::move(output_cols));
-  mutable_table_view result_table_view = result_table->mutable_view();
-  cudf::detail::initialize_with_identity(result_table_view, agg_kinds, stream);
+  auto result_table = std::make_unique<table>(std::move(output_cols));
+  cudf::detail::initialize_with_identity(result_table->mutable_view(), agg_kinds, stream);
   return result_table;
 }
 
@@ -162,9 +150,10 @@ extract_populated_keys<nullable_global_set_t>(nullable_global_set_t const& key_s
 
 rmm::device_uvector<size_type> compute_target_indices(device_span<size_type const> input,
                                                       device_span<size_type const> transform_map,
-                                                      rmm::cuda_stream_view stream)
+                                                      rmm::cuda_stream_view stream,
+                                                      rmm::device_async_resource_ref mr)
 {
-  rmm::device_uvector<size_type> target_indices(input.size(), stream);
+  rmm::device_uvector<size_type> target_indices(input.size(), stream, mr);
   thrust::transform(rmm::exec_policy_nosync(stream),
                     input.begin(),
                     input.end(),
@@ -175,11 +164,11 @@ rmm::device_uvector<size_type> compute_target_indices(device_span<size_type cons
   return target_indices;
 }
 
-void collect_output_to_cache(table_view const& values,
-                             std::vector<std::unique_ptr<aggregation>> const& aggregations,
-                             std::unique_ptr<table>& agg_results,
-                             cudf::detail::result_cache* cache,
-                             rmm::cuda_stream_view stream)
+void finalize_output(table_view const& values,
+                     std::vector<std::unique_ptr<aggregation>> const& aggregations,
+                     std::unique_ptr<table>& agg_results,
+                     cudf::detail::result_cache* cache,
+                     rmm::cuda_stream_view stream)
 {
   auto result_cols = agg_results->release();
   for (size_t i = 0; i < aggregations.size(); i++) {

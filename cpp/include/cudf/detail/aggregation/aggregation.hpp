@@ -1815,7 +1815,7 @@ bool is_valid_aggregation(data_type source, aggregation::Kind k);
  * columns. The aggregations determine the identity value for each column.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-void initialize_with_identity(mutable_table_view& table,
+void initialize_with_identity(mutable_table_view const& table,
                               host_span<cudf::aggregation::Kind const> aggs,
                               rmm::cuda_stream_view stream);
 

@@ -62,7 +62,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   auto const run_aggs_by_global_mem_kernel = [&] {
     auto [agg_results, unique_key_indices] = compute_global_memory_aggs(
       row_bitmask, values, global_set, agg_kinds, d_agg_kinds, stream, mr);
-    collect_output_to_cache(values, aggs, agg_results, cache, stream);
+    finalize_output(values, aggs, agg_results, cache, stream);
     return std::pair{std::move(unique_key_indices), has_compound_aggs};
   };
 
@@ -212,7 +212,8 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   // This is only used when there are fallback blocks.
   auto const target_indices = [&] {
     if (num_fallback_blocks == 0) { return rmm::device_uvector<size_type>{0, stream}; }
-    return compute_target_indices(matching_keys, key_transform_map, stream);
+    return compute_target_indices(
+      matching_keys, key_transform_map, stream, cudf::get_current_device_resource_ref());
   }();
   matching_keys     = rmm::device_uvector<size_type>{0, stream};  // done, free up memory early
   key_transform_map = rmm::device_uvector<size_type>{0, stream};  // done, free up memory early
@@ -260,7 +261,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
                                                  num_rows});
   }
 
-  collect_output_to_cache(values, aggs, agg_results, cache, stream);
+  finalize_output(values, aggs, agg_results, cache, stream);
   return {std::move(unique_keys), has_compound_aggs};
 }
 }  // namespace cudf::groupby::detail::hash

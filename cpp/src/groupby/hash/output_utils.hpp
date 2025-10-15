@@ -52,6 +52,9 @@ std::unique_ptr<table> create_results_table(size_type output_size,
  * mapped, leaving other keys with uninitialized mapping values. Since the first array contains
  * indices of all unique keys, this mapping array should cover all input keys.
  *
+ * In addition, the second mapping array is not allocated using the given memory resource.
+ * Instead, it is allocated using the current device memory resource.
+ *
  * @tparam SetType Type of the key hash set
  *
  * @param key_set Key hash set
@@ -79,14 +82,17 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> extrac
  * @param input The indices of the keys to transform
  * @param transform_map The mapping array from the input keys table to the output unique keys table
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned array
  * @return A device vector mapping each input row to its output row index
  */
 rmm::device_uvector<size_type> compute_target_indices(device_span<size_type const> input,
                                                       device_span<size_type const> transform_map,
-                                                      rmm::cuda_stream_view stream);
+                                                      rmm::cuda_stream_view stream,
+                                                      rmm::device_async_resource_ref mr);
 
 /**
- * @brief Collect aggregation result columns from a table into a cache object.
+ * @brief Perform some final computation for the aggregation results such as null count and move
+ * the result columns into a `result_cache` object.
  *
  * @param values The values columns
  * @param aggregations The aggregation to compute corresponding to each values column
@@ -94,10 +100,10 @@ rmm::device_uvector<size_type> compute_target_indices(device_span<size_type cons
  * @param cache The cache object to store the extracted aggregation results
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
-void collect_output_to_cache(table_view const& values,
-                             std::vector<std::unique_ptr<aggregation>> const& aggregations,
-                             std::unique_ptr<table>& agg_results,
-                             cudf::detail::result_cache* cache,
-                             rmm::cuda_stream_view stream);
+void finalize_output(table_view const& values,
+                     std::vector<std::unique_ptr<aggregation>> const& aggregations,
+                     std::unique_ptr<table>& agg_results,
+                     cudf::detail::result_cache* cache,
+                     rmm::cuda_stream_view stream);
 
 }  // namespace cudf::groupby::detail::hash

@@ -143,7 +143,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     auto const keys_end       = set.retrieve_all(unique_key_indices.begin(), stream.value());
     auto const key_gather_map = device_span<size_type const>{
       unique_key_indices.data(),
-      static_cast<std::size_t>(thrust::distance(unique_key_indices.begin(), keys_end))};
+      static_cast<std::size_t>(cuda::std::distance(unique_key_indices.begin(), keys_end))};
     return gather_keys(key_gather_map);
   }
 
@@ -156,7 +156,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
       auto const& agg_v = request.aggregations;
       auto const& col   = request.values;
 
-      // The map to find target output index for each input row are not always available due to
+      // The map to find the target output index for each input row is not always available due to
       // minimizing overhead. As such, there is no way for the finalizers to perform additional
       // aggregation operations. They can only compute their output using the previously computed
       // single-pass aggregations with linear transformations such as addition/multiplication (e.g.

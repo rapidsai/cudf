@@ -76,13 +76,15 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_global
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  auto const num_rows = values.num_rows();
-  auto matching_keys =
-    compute_matching_keys(row_bitmask, key_set.ref(cuco::op::insert_and_find), num_rows, stream);
-  auto [unique_keys, key_transform_map] = extract_populated_keys(key_set, num_rows, stream, mr);
-  auto const target_indices = compute_target_indices(matching_keys, key_transform_map, stream);
-  matching_keys     = rmm::device_uvector<size_type>{0, stream};  // done, free up memory early
-  key_transform_map = rmm::device_uvector<size_type>{0, stream};  // done, free up memory early
+  auto const num_rows                = values.num_rows();
+  auto [unique_keys, target_indices] = [&] {
+    auto matching_keys =
+      compute_matching_keys(row_bitmask, key_set.ref(cuco::op::insert_and_find), num_rows, stream);
+    auto [unique_keys, key_transform_map] = extract_populated_keys(key_set, num_rows, stream, mr);
+    auto target_indices                   = compute_target_indices(
+      matching_keys, key_transform_map, stream, cudf::get_current_device_resource_ref());
+    return std::pair{std::move(unique_keys), std::move(target_indices)};
+  }();
 
   auto const d_values = table_device_view::create(values, stream);
   auto agg_results    = create_results_table(
