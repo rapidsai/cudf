@@ -1791,8 +1791,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
         raise NotImplementedError
 
-    def apply_boolean_mask(self, mask) -> ColumnBase:
-        mask = as_column(mask)
+    def apply_boolean_mask(self, mask: ColumnBase) -> ColumnBase:
         if mask.dtype.kind != "b":
             raise ValueError("boolean_mask is not boolean type.")
 

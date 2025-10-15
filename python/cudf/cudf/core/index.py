@@ -1777,25 +1777,6 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
 
         return self._gather(indices)
 
-    def _apply_boolean_mask(self, boolean_mask) -> Self:
-        """Apply boolean mask to each row of `self`.
-
-        Rows corresponding to `False` is dropped.
-        """
-        boolean_mask = as_column(boolean_mask)
-        if boolean_mask.dtype.kind != "b":
-            raise ValueError("boolean_mask is not boolean type.")
-
-        return self._from_columns_like_self(
-            [
-                ColumnBase.from_pylibcudf(col)
-                for col in stream_compaction.apply_boolean_mask(
-                    list(self._columns), boolean_mask
-                )
-            ],
-            column_names=self._column_names,
-        )
-
     def _new_index_for_reset_index(
         self, levels: tuple | None, name
     ) -> None | Index:
@@ -3212,12 +3193,6 @@ class RangeIndex(Index):
         return Index._from_column(
             self._column.take(gather_map, nullify, check_bounds),
             name=self.name,
-        )
-
-    @_performance_tracking
-    def _apply_boolean_mask(self, boolean_mask) -> Index:
-        return Index._from_column(
-            self._column.apply_boolean_mask(boolean_mask), name=self.name
         )
 
     def repeat(self, repeats, axis=None):
