@@ -162,7 +162,7 @@ class TemporalBaseColumn(ColumnBase):
                     if np.isnat(other):
                         # Workaround for https://github.com/numpy/numpy/issues/28496
                         # Once fixed, can always use the astype below
-                        # type: ignore[call-overload]: numpy stubs only accept literal strings
+                        # call-overload must be ignored because numpy stubs only accept literal strings
                         # for time units (e.g., "ns", "us") to allow compile-time validation,
                         # but we're passing a variable string (to_unit) with a time unit that
                         # we know is valid at runtime
@@ -314,7 +314,7 @@ class TemporalBaseColumn(ColumnBase):
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if to_dtype.kind == self.dtype.kind:  # type: ignore[union-attr]
             to_res, _ = np.datetime_data(to_dtype)
-            # type: ignore[call-overload]: numpy stubs only accept literal strings
+            # call-overload must be ignored because numpy stubs only accept literal strings
             # for time units (e.g., "ns", "us") to allow compile-time validation,
             # but we're passing variables (self.time_unit) with time units that
             # we know are valid at runtime
