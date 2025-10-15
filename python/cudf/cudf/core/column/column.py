@@ -2058,7 +2058,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return np.dtype(np.bool_)
         return self.dtype
 
-    def _with_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
+    def _with_type_metadata(self: ColumnBase, dtype: DtypeObj) -> ColumnBase:
         """
         Copies type metadata from self onto other, returning a new column.
 
