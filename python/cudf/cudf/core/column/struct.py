@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
     import pylibcudf as plc
 
-    from cudf._typing import Dtype
+    from cudf._typing import DtypeObj
     from cudf.core.buffer import Buffer
     from cudf.core.column.string import StringColumn
 
@@ -193,7 +193,9 @@ class StructColumn(ColumnBase):
             "Structs are not yet supported via `__cuda_array_interface__`"
         )
 
-    def _with_type_metadata(self: StructColumn, dtype: Dtype) -> StructColumn:
+    def _with_type_metadata(
+        self: StructColumn, dtype: DtypeObj
+    ) -> StructColumn:
         from cudf.core.column import IntervalColumn
         from cudf.core.dtypes import IntervalDtype
 

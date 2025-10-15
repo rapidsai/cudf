@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
     from typing_extensions import Self
 
-    from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, DtypeObj
+    from cudf._typing import ColumnBinaryOperand, ColumnLike, DtypeObj
     from cudf.core.buffer import Buffer
     from cudf.core.column.string import StringColumn
 
@@ -217,7 +217,7 @@ class ListColumn(ColumnBase):
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
 
-    def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
+    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, ListDtype):
             elements = self.base_children[1]._with_type_metadata(
                 dtype.element_type
