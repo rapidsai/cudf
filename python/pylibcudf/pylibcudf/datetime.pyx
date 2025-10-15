@@ -54,7 +54,7 @@ cpdef Column extract_datetime_component(
     """
     Extract a datetime component from a datetime column.
 
-    For details, see :cpp:func:`cudf::extract_datetime_component`.
+    For details, see :cpp:func:`extract_datetime_component`.
 
     Parameters
     ----------
