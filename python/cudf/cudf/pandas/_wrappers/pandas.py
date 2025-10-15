@@ -2,6 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import abc
+import builtins
 import copyreg
 import functools
 import importlib
@@ -302,6 +303,8 @@ DataFrame = make_final_proxy_type(
         "__iter__": custom_iter,
         "attrs": _FastSlowAttribute("attrs"),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+        "__array_struct__": _DELETE,
+        "__array_interface__": _DELETE,
     },
 )
 
@@ -2339,3 +2342,36 @@ copyreg.dispatch_table[pd.MultiIndex] = lambda obj: _generic_reduce_obj(
 )
 
 copyreg.dispatch_table[pd._libs.tslibs.offsets.DateOffset] = _reduce_offset_obj
+
+original_hasattr = builtins.hasattr
+
+
+def optimized_hasattr(obj, name):
+    """
+    Custom hasattr implementation that tries to avoid expensive lookups
+    """
+
+    obj_type = type(obj)
+
+    # Fast path for proxy objects - check the wrapped object directly
+    if obj_type is DataFrame:
+        return original_hasattr(obj._fsproxy_wrapped, name)
+
+    # Fast path for common built-in types that don't use __getattr__
+    if obj_type in (int, float, str, list, dict, tuple, set, frozenset):
+        return (
+            name in dir(obj_type) or name in obj.__dict__
+            if original_hasattr(obj, "__dict__")
+            else name in dir(obj_type)
+        )
+
+    # Fast path using __dict__ lookup for objects that have it
+    if original_hasattr(obj, "__dict__"):
+        if name in obj.__dict__:
+            return True
+
+    # Fall back to original hasattr for complex cases (objects with custom __getattr__)
+    return original_hasattr(obj, name)
+
+
+builtins.hasattr = optimized_hasattr
