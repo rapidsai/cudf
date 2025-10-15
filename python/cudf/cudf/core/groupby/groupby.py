@@ -1732,7 +1732,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         # seems because unlike the builtin narrowings it only performs
         # narrowing in the positive case.
         normalized_aggs = [
-            list(agg) if is_list_like(agg) else [agg]  # type: ignore
+            list(agg) if is_list_like(agg) else [agg]  # type: ignore[arg-type]
             for agg in aggs_per_column
         ]
         return column_names, columns, normalized_aggs

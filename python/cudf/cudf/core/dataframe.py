@@ -2840,7 +2840,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         """
         return _DataFrameAtIndexer(self)
 
-    @property  # type: ignore
+    @property  # type: ignore[misc]
     @_external_only_api(
         "Use _column_names instead, or _data.to_pandas_index if a pandas "
         "index is absolutely necessary. For checking if the columns are a "
@@ -2851,7 +2851,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         """Returns a tuple of columns"""
         return self._data.to_pandas_index
 
-    @columns.setter  # type: ignore
+    @columns.setter  # type: ignore[misc]
     @_performance_tracking
     def columns(self, columns):
         multiindex = False
@@ -3544,7 +3544,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         value = as_column(value, nan_as_null=nan_as_null)
         self._data.insert(name, value, loc=loc)
 
-    @property  # type:ignore
+    @property
     @_performance_tracking
     def axes(self):
         """

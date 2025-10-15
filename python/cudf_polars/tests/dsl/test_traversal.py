@@ -232,7 +232,7 @@ def test_rewrite_names_and_ops():
     @_transform.register
     def _(e: expr.Col, fn: ExprTransformer):
         # We've added an extra key to the state, so ignore this type error.
-        mapping = fn.state["mapping"]  # type: ignore
+        mapping = fn.state["mapping"]  # type: ignore[typeddict-item]
         if e.name in mapping:
             return type(e)(e.dtype, mapping[e.name])
         return e

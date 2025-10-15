@@ -1895,7 +1895,7 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
     def memory_usage(self, deep: bool = False) -> int:
         return self._column.memory_usage
 
-    @cached_property  # type: ignore
+    @cached_property  # type: ignore[explicit-override]
     @_performance_tracking
     def is_unique(self) -> bool:
         return self._column.is_unique
@@ -2185,7 +2185,7 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
             res = Index._from_column(res, name=self.name)
         return res
 
-    @property  # type: ignore
+    @property  # type: ignore[misc]
     @_performance_tracking
     def dtype(self):
         """

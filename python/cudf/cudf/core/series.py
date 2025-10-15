@@ -683,7 +683,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             result = cls(s, nan_as_null=nan_as_null)
         return result
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def is_unique(self):
         """Return boolean if values in the object are unique.
@@ -694,7 +694,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         """
         return self._column.is_unique
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def dt(self):
         """
@@ -739,7 +739,7 @@ class Series(SingleColumnFrame, IndexedFrame):
                 "Can only use .dt accessor with datetimelike values"
             )
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def hasnans(self):
         """
@@ -1451,37 +1451,37 @@ class Series(SingleColumnFrame, IndexedFrame):
         operands = lhs._make_operands_for_binop(other, fill_value, reflect)
         return operands, lhs.index, ca_attributes
 
-    @copy_docstring(CategoricalAccessor)  # type: ignore
+    @copy_docstring(CategoricalAccessor)  # type: ignore[prop-decorator]
     @property
     @_performance_tracking
     def cat(self):
         return CategoricalAccessor(parent=self)
 
-    @copy_docstring(StringMethods)  # type: ignore
+    @copy_docstring(StringMethods)  # type: ignore[prop-decorator]
     @property
     @_performance_tracking
     def str(self):
         return StringMethods(parent=self)
 
-    @copy_docstring(ListMethods)  # type: ignore
+    @copy_docstring(ListMethods)  # type: ignore[prop-decorator]
     @property
     @_performance_tracking
     def list(self):
         return ListMethods(parent=self)
 
-    @copy_docstring(StructMethods)  # type: ignore
+    @copy_docstring(StructMethods)  # type: ignore[prop-decorator]
     @property
     @_performance_tracking
     def struct(self):
         return StructMethods(parent=self)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def dtype(self):
         """The dtype of the Series."""
         return self._column.dtype
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def dtypes(self):
         """The dtype of the Series.
@@ -1550,19 +1550,19 @@ class Series(SingleColumnFrame, IndexedFrame):
 
         return cls._from_column(col, name=name, index=result_index)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def valid_count(self):
         """Number of non-null values"""
         return len(self) - self._column.null_count
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def null_count(self):
         """Number of null values"""
         return self._column.null_count
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def has_nulls(self):
         """
@@ -1972,7 +1972,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         res.attrs = self.attrs
         return res
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def data(self):
         """The gpu buffer for the data
@@ -3948,7 +3948,7 @@ class DatetimeProperties(BaseDatelikeProperties):
     dtype: int16
     """
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def year(self) -> Series:
         """
@@ -3973,7 +3973,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         """
         return self._return_result_like_self(self.series._column.year)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def month(self) -> Series:
         """
@@ -3998,7 +3998,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         """
         return self._return_result_like_self(self.series._column.month)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def day(self) -> Series:
         """
@@ -4023,7 +4023,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         """
         return self._return_result_like_self(self.series._column.day)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def hour(self) -> Series:
         """
@@ -4048,7 +4048,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         """
         return self._return_result_like_self(self.series._column.hour)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def minute(self) -> Series:
         """
@@ -4073,7 +4073,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         """
         return self._return_result_like_self(self.series._column.minute)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def second(self) -> Series:
         """
@@ -4098,7 +4098,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         """
         return self._return_result_like_self(self.series._column.second)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def microsecond(self) -> Series:
         """
@@ -4130,7 +4130,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         ) * np.int32(1000)
         return self._return_result_like_self(micro + extra)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def nanosecond(self) -> Series:
         """
@@ -4155,7 +4155,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         """
         return self._return_result_like_self(self.series._column.nanosecond)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def weekday(self) -> Series:
         """
@@ -4192,7 +4192,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         """
         return self._return_result_like_self(self.series._column.weekday)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def dayofweek(self) -> Series:
         """
@@ -4229,7 +4229,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         """
         return self._return_result_like_self(self.series._column.weekday)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def dayofyear(self) -> Series:
         """
@@ -4267,7 +4267,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         """
         return self._return_result_like_self(self.series._column.day_of_year)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def day_of_year(self) -> Series:
         """
@@ -4305,7 +4305,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         """
         return self._return_result_like_self(self.series._column.day_of_year)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def is_leap_year(self) -> Series:
         """
@@ -4361,7 +4361,7 @@ class DatetimeProperties(BaseDatelikeProperties):
             self.series._column.is_leap_year.fillna(False)
         )
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def quarter(self) -> Series:
         """
@@ -4503,7 +4503,7 @@ class DatetimeProperties(BaseDatelikeProperties):
             ca, index=self.series.index, attrs=self.series.attrs
         )
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def is_month_start(self) -> Series:
         """
@@ -4513,7 +4513,7 @@ class DatetimeProperties(BaseDatelikeProperties):
             self.series._column.is_month_start
         )
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def days_in_month(self) -> Series:
         """
@@ -4560,7 +4560,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         """
         return self._return_result_like_self(self.series._column.days_in_month)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def is_month_end(self) -> Series:
         """
@@ -4601,7 +4601,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         """
         return self._return_result_like_self(self.series._column.is_month_end)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def is_quarter_start(self) -> Series:
         """
@@ -4642,7 +4642,7 @@ class DatetimeProperties(BaseDatelikeProperties):
             self.series._column.is_quarter_start
         )
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def is_quarter_end(self) -> Series:
         """
@@ -4683,7 +4683,7 @@ class DatetimeProperties(BaseDatelikeProperties):
             self.series._column.is_quarter_end
         )
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def is_year_start(self) -> Series:
         """
@@ -4711,7 +4711,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         """
         return self._return_result_like_self(self.series._column.is_year_start)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def is_year_end(self) -> Series:
         """
@@ -5018,7 +5018,7 @@ class TimedeltaProperties(BaseDatelikeProperties):
     dtype: int64
     """
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def days(self) -> Series:
         """
@@ -5050,7 +5050,7 @@ class TimedeltaProperties(BaseDatelikeProperties):
         """
         return self._return_result_like_self(self.series._column.days)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def seconds(self) -> Series:
         """
@@ -5089,7 +5089,7 @@ class TimedeltaProperties(BaseDatelikeProperties):
         """
         return self._return_result_like_self(self.series._column.seconds)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def microseconds(self) -> Series:
         """
@@ -5121,7 +5121,7 @@ class TimedeltaProperties(BaseDatelikeProperties):
         """
         return self._return_result_like_self(self.series._column.microseconds)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def nanoseconds(self) -> Series:
         """

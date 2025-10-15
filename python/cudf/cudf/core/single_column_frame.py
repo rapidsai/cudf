@@ -68,40 +68,40 @@ class SingleColumnFrame(Frame, NotIterable):
 
         return super()._scan(op, axis=axis, *args, **kwargs)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def name(self):
         """Get the name of this object."""
         return next(iter(self._column_names))
 
-    @name.setter  # type: ignore
+    @name.setter
     @_performance_tracking
     def name(self, value):
         self._data[value] = self._data.pop(self.name)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def ndim(self) -> int:
         """Number of dimensions of the underlying data, by definition 1."""
         return 1
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def shape(self) -> tuple[int]:
         """Get a tuple representing the dimensionality of the Index."""
         return (len(self),)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def _num_columns(self) -> int:
         return 1
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def _column(self) -> ColumnBase:
         return next(iter(self._columns))
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def values(self) -> cp.ndarray:
         col = self._column
@@ -146,7 +146,7 @@ class SingleColumnFrame(Frame, NotIterable):
             .reshape(len(self), order="F")
         )
 
-    @property  # type: ignore
+    @property  # type: ignore[explicit-override]
     @_performance_tracking
     def values_host(self) -> np.ndarray:
         return self._column.values_host
@@ -229,7 +229,7 @@ class SingleColumnFrame(Frame, NotIterable):
         # TODO: Avoid accessing DataFrame from the top level namespace
         return cudf.DataFrame._from_data(ca, index=index)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def is_unique(self) -> bool:
         """Return boolean if values in the object are unique.
@@ -240,7 +240,7 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return self._column.is_unique
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def is_monotonic_increasing(self) -> bool:
         """Return boolean if values in the object are monotonically increasing.
@@ -251,7 +251,7 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return self._column.is_monotonic_increasing
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def is_monotonic_decreasing(self) -> bool:
         """Return boolean if values in the object are monotonically decreasing.
@@ -262,7 +262,7 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return self._column.is_monotonic_decreasing
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def __cuda_array_interface__(self):
         # While the parent column class has a `__cuda_array_interface__` method

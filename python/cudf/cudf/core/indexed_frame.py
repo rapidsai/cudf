@@ -265,8 +265,8 @@ class IndexedFrame(Frame):
     """
 
     # mypy can't handle bound type variables as class members
-    _loc_indexer_type: type[_LocIndexerClass]  # type: ignore
-    _iloc_indexer_type: type[_IlocIndexerClass]  # type: ignore
+    _loc_indexer_type: type[_LocIndexerClass]  # type: ignore[valid-type]
+    _iloc_indexer_type: type[_IlocIndexerClass]  # type: ignore[valid-type]
     _groupby = GroupBy
     _resampler = _Resampler
 
@@ -2436,7 +2436,7 @@ class IndexedFrame(Frame):
         """
         return self._iloc_indexer_type(self)
 
-    @property  # type:ignore
+    @property
     @_performance_tracking
     def axes(self):
         """

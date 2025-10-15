@@ -442,7 +442,7 @@ def print_query_plan(
         )
 
 
-def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  # type: ignore
+def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  # type: ignore[no-untyped-def]
     """Initialize a Dask distributed cluster."""
     if run_config.scheduler != "distributed":
         return None
@@ -805,7 +805,7 @@ def run_polars(
     validation_failures: list[int] = []
     query_failures: list[tuple[int, int]] = []
 
-    client = initialize_dask_cluster(run_config, args)  # type: ignore
+    client = initialize_dask_cluster(run_config, args)
 
     records: defaultdict[int, list[Record]] = defaultdict(list)
     engine: pl.GPUEngine | None = None

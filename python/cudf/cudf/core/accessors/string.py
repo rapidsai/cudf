@@ -4503,7 +4503,7 @@ class StringMethods(BaseAccessor):
                 for delimiters, but got {type(delimiter)}"
             )
         if isinstance(self._parent, cudf.Series):
-            result.index = self._parent.index.repeat(  # type: ignore
+            result.index = self._parent.index.repeat(  # type: ignore[union-attr]
                 self.token_count(delimiter=delimiter)
             )
         return result
@@ -4729,7 +4729,7 @@ class StringMethods(BaseAccessor):
         if isinstance(result, cudf.Series) and not as_list:
             # before exploding, removes those lists which have 0 length
             result = result[result.list.len() > 0]
-            return result.explode()  # type: ignore
+            return result.explode()  # type: ignore[union-attr]
         return result
 
     def hash_character_ngrams(
