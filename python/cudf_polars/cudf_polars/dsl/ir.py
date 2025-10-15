@@ -1127,7 +1127,7 @@ class Sink(IR):
         elif kind == "Json":
             cls._write_json(target, df)
 
-        return DataFrame([], stream=get_cuda_stream())
+        return DataFrame([], stream=df.stream)
 
 
 class Cache(IR):
