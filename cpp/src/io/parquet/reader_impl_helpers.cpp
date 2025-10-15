@@ -432,14 +432,17 @@ metadata::metadata(datasource* source, bool read_page_indexes)
 
 metadata::~metadata()
 {
-  // Submit destruction work to host worker pool thread
-  // Using detach() so destructor doesn't wait for completion
-  cudf::detail::host_worker_pool().detach_task(
-    [schema_to_destroy        = std::move(schema),
-     row_groups_to_destroy    = std::move(row_groups),
-     key_value_to_destroy     = std::move(key_value_metadata),
-     created_by_to_destroy    = std::move(created_by),
-     column_orders_to_destroy = std::move(column_orders)]{});
+  constexpr auto defer_threshold = 512;
+  if (row_groups.size() > 0 and
+      row_groups.front().columns.size() * row_groups.size() > defer_threshold) {
+    // Defer destruction to the worker pool when there are many vectors to destroy
+    cudf::detail::host_worker_pool().detach_task(
+      [schema_to_destroy        = std::move(schema),
+       row_groups_to_destroy    = std::move(row_groups),
+       key_value_to_destroy     = std::move(key_value_metadata),
+       created_by_to_destroy    = std::move(created_by),
+       column_orders_to_destroy = std::move(column_orders)] {});
+  }
 }
 
 std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
