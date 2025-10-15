@@ -8,20 +8,98 @@ import operator
 from functools import reduce
 from typing import TYPE_CHECKING, Any
 
+from cudf_polars.dsl.expr import Col
 from cudf_polars.dsl.ir import ConditionalJoin, Join, Slice
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
-from cudf_polars.experimental.shuffle import Shuffle, _hash_partition_dataframe
+from cudf_polars.experimental.shuffle import (
+    RMPFIntegration,
+    Shuffle,
+    _hash_partition_dataframe,
+)
 from cudf_polars.experimental.utils import _concat, _fallback_inform, _lower_ir_fallback
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import Callable, MutableMapping
 
+    from rapidsmpf.integrations.core import BCastJoinInfo
+
+    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.parallel import LowerIRTransformer
     from cudf_polars.utils.config import ShuffleMethod
+
+
+def _use_rapidsmpf_join(
+    ir: Join,
+    shuffle_method: ShuffleMethod,
+    rapidsmpf_join: bool,  # noqa: FBT001
+) -> bool:
+    """Return whether RapidsMPF will be used for the join."""
+    # Don't use rapidsmpf join if the shuffle method is not "rapidsmpf"
+    # or if the keys are not "simple"
+    return (
+        rapidsmpf_join
+        and shuffle_method == "rapidsmpf"
+        and all(isinstance(ne.value, Col) for ne in (ir.left_on + ir.right_on))
+    )
+
+
+class RMPFJoin(Join):
+    """Fused RapidsMPF join."""
+
+
+class RMPFJoinIntegration:
+    """RapidsMPF join integration."""
+
+    @staticmethod
+    def get_shuffler_integration() -> RMPFIntegration:
+        """Return the shuffler integration."""
+        return RMPFIntegration()
+
+    @staticmethod
+    def join_partition(
+        left_input: Callable[[int], DataFrame],
+        right_input: Callable[[int], DataFrame],
+        bcast_info: BCastJoinInfo | None,
+        options: Any,
+    ) -> DataFrame:
+        """
+        Produce a joined DataFrame partition.
+
+        Parameters
+        ----------
+        left_input
+            The left partition or a callable that produces
+            chunks of a broadcasted left partition.
+            The bcast_count argument corresponds to the number
+            of chunks the callable can produce.
+        right_input
+            The right partition or a callable that produces
+            chunks of a broadcasted right partition.
+            The bcast_count argument corresponds to the number
+            of chunks the callable can produce.
+        bcast_info
+            The broadcast join information.
+            This should be None for a regular hash join.
+        options
+            Additional join options.
+
+        Returns
+        -------
+        A joined DataFrame partition.
+
+        Notes
+        -----
+        This method is used to produce a single joined table chunk.
+        """
+        non_child_args = options.get("non_child_args", ())
+        if bcast_info is None:
+            return Join.do_evaluate(*non_child_args, left_input(0), right_input(0))
+        else:  # pragma: no cover
+            raise NotImplementedError("Broadcast join not implemented.")
 
 
 def _maybe_shuffle_frame(
@@ -60,26 +138,32 @@ def _make_hash_join(
     left: IR,
     right: IR,
     shuffle_method: ShuffleMethod,
+    rapidsmpf_join: bool,  # noqa: FBT001
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    # Shuffle left and right dataframes (if necessary)
-    new_left = _maybe_shuffle_frame(
-        left,
-        ir.left_on,
-        partition_info,
-        shuffle_method,
-        output_count,
-    )
-    new_right = _maybe_shuffle_frame(
-        right,
-        ir.right_on,
-        partition_info,
-        shuffle_method,
-        output_count,
-    )
-    if left != new_left or right != new_right:
-        ir = ir.reconstruct([new_left, new_right])
-    left = new_left
-    right = new_right
+    if _use_rapidsmpf_join(ir, shuffle_method, rapidsmpf_join):
+        # Convert ir to RMPFJoin.
+        # We don't need to shuffle the children
+        ir = RMPFJoin(ir.schema, ir.left_on, ir.right_on, ir.options, left, right)
+    else:
+        # Shuffle left and right dataframes (if necessary)
+        new_left = _maybe_shuffle_frame(
+            left,
+            ir.left_on,
+            partition_info,
+            shuffle_method,
+            output_count,
+        )
+        new_right = _maybe_shuffle_frame(
+            right,
+            ir.right_on,
+            partition_info,
+            shuffle_method,
+            output_count,
+        )
+        if left != new_left or right != new_right:
+            ir = ir.reconstruct([new_left, new_right])
+        left = new_left
+        right = new_right
 
     # Record new partitioning info
     partitioned_on: tuple[NamedExpr, ...] = ()
@@ -298,6 +382,7 @@ def _(
             left,
             right,
             config_options.executor.shuffle_method,
+            config_options.executor.rapidsmpf_join,
         )
 
 
@@ -317,7 +402,33 @@ def _(
         and partition_info[right].count == output_count
     )
 
-    if output_count == 1 or (left_partitioned and right_partitioned):
+    if isinstance(ir, RMPFJoin):
+        from rapidsmpf.integrations.dask.join import rapidsmpf_join_graph
+
+        return rapidsmpf_join_graph(
+            get_key_name(left),
+            get_key_name(right),
+            get_key_name(ir),
+            partition_info[left].count,
+            partition_info[right].count,
+            RMPFJoinIntegration(),
+            {
+                "on": [ne.name for ne in ir.left_on],
+                "column_names": list(left.schema.keys()),
+                "dtypes": list(left.schema.values()),
+            },
+            {
+                "on": [ne.name for ne in ir.right_on],
+                "column_names": list(right.schema.keys()),
+                "dtypes": list(right.schema.values()),
+            },
+            {
+                "non_child_args": ir._non_child_args,
+            },
+            left_pre_shuffled=left_partitioned,
+            right_pre_shuffled=right_partitioned,
+        )
+    elif output_count == 1 or (left_partitioned and right_partitioned):
         # Partition-wise join
         left_name = get_key_name(left)
         right_name = get_key_name(right)
