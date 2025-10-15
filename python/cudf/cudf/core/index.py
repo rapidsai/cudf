@@ -3365,7 +3365,7 @@ class RangeIndex(Index):
             i = [self._range.index(value)]
         except ValueError:
             i = []
-        return as_column(i, dtype=SIZE_TYPE_DTYPE)
+        return as_column(i, dtype=SIZE_TYPE_DTYPE)  # type: ignore[return-value]
 
     def isin(self, values, level=None) -> cupy.ndarray:
         if level is not None and level > 0:

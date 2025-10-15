@@ -181,8 +181,8 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                     )
                 except (TypeError, ValueError):
                     pass
-            return (  # type: ignore[return-value]
-                _get_nan_for_dtype(self.dtype)
+            return (
+                _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
                 if scalar_result is NA
                 else scalar_result
             )

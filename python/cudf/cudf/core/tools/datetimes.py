@@ -317,7 +317,7 @@ def to_datetime(
         elif errors == "ignore":
             pass
         elif errors == "coerce":
-            return np.datetime64("nat", "ns" if unit is None else unit)
+            return np.datetime64("nat", "ns" if unit is None else unit)  # type: ignore[call-overload]
         return arg
 
 

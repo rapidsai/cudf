@@ -105,8 +105,8 @@ class StructColumn(ColumnBase):
 
     def to_arrow(self) -> pa.Array:
         children = [child.to_arrow() for child in self.children]
-        dtype = (
-            pyarrow_dtype_to_cudf_dtype(self.dtype)
+        dtype: StructDtype = (
+            pyarrow_dtype_to_cudf_dtype(self.dtype)  # type: ignore[assignment]
             if isinstance(self.dtype, pd.ArrowDtype)
             else self.dtype
         )

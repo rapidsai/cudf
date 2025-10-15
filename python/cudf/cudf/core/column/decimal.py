@@ -111,19 +111,31 @@ class DecimalBaseColumn(NumericalBaseColumn):
         if isinstance(data, pa.ChunkedArray):
             data = data.combine_chunks()
         mask_buf, data_buf = data.buffers()
-        rmm_data_buffer = rmm.DeviceBuffer.to_device(
-            np.frombuffer(data_buf)
-            .view(view_type)[::step]
-            .copy()
-            .view("uint8")
-        )
-        plc_column = plc.Column.from_rmm_buffer(
-            rmm_data_buffer,
-            plc.DataType(plc_type, -data.type.scale),
-            len(data),
-            [],
-        )
-        if mask_buf is not None:
+        if data_buf is None:
+            # If data_buf is None, create an empty column
+            plc_column = plc.Column(
+                data_type=plc.DataType(plc_type, -data.type.scale),
+                size=0,
+                data=None,
+                mask=None,
+                null_count=0,
+                offset=0,
+                children=[],
+            )
+        else:
+            rmm_data_buffer = rmm.DeviceBuffer.to_device(
+                np.frombuffer(data_buf)
+                .view(view_type)[::step]
+                .copy()
+                .view("uint8")
+            )
+            plc_column = plc.Column.from_rmm_buffer(
+                rmm_data_buffer,
+                plc.DataType(plc_type, -data.type.scale),
+                len(data),
+                [],
+            )
+        if mask_buf is not None and data_buf is not None:
             mask_size = plc.null_mask.bitmask_allocation_size_bytes(len(data))
             if mask_buf.size < mask_size:
                 rmm_mask_buffer = rmm.DeviceBuffer(size=mask_size)
@@ -462,8 +474,9 @@ class Decimal128Column(DecimalBaseColumn):
         return result
 
     def to_arrow(self) -> pa.Array:
+        dtype: Decimal128Dtype
         if isinstance(self.dtype, pd.ArrowDtype):
-            dtype = pyarrow_dtype_to_cudf_dtype(self.dtype)
+            dtype = pyarrow_dtype_to_cudf_dtype(self.dtype)  # type: ignore[assignment]
         else:
             dtype = self.dtype
 
