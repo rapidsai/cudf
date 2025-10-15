@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 import functools
 import warnings
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import cupy as cp
 import numpy as np
@@ -45,7 +45,7 @@ class TemporalBaseColumn(ColumnBase):
 
     _PANDAS_NA_VALUE = pd.NaT
     _UNDERLYING_DTYPE: np.dtype[np.int64] = np.dtype(np.int64)
-    _NP_SCALAR: np.datetime64 | np.timedelta64
+    _NP_SCALAR: ClassVar[type[np.datetime64] | type[np.timedelta64]]
     _PD_SCALAR: pd.Timestamp | pd.Timedelta
 
     def __init__(
@@ -95,7 +95,9 @@ class TemporalBaseColumn(ColumnBase):
         ):
             fill_value = fill_value.astype(self.dtype)
         elif isinstance(fill_value, str) and fill_value.lower() == "nat":
-            fill_value = self._NP_SCALAR(fill_value, self.time_unit)
+            # call-overload must be ignored because numpy stubs only accept literal
+            # time unit strings, but we're passing self.time_unit which is valid at runtime
+            fill_value = self._NP_SCALAR(fill_value, self.time_unit)  # type: ignore[call-overload]
         return super()._validate_fillna_value(fill_value)
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
