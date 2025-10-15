@@ -629,11 +629,18 @@ class StringColumn(ColumnBase):
     @acquire_spill_lock()
     def minhash(
         self,
-        seed: np.uint32,
+        seed: int | np.uint32,
         a: NumericalColumn,
         b: NumericalColumn,
         width: int,
     ) -> ListColumn:
+        # Convert int to np.uint32 with validation
+        if isinstance(seed, int):
+            if seed < 0 or seed > np.iinfo(np.uint32).max:
+                raise ValueError(
+                    f"seed must be in range [0, {np.iinfo(np.uint32).max}]"
+                )
+            seed = np.uint32(seed)
         return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.nvtext.minhash.minhash(
                 self.to_pylibcudf(mode="read"),
@@ -647,11 +654,18 @@ class StringColumn(ColumnBase):
     @acquire_spill_lock()
     def minhash64(
         self,
-        seed: np.uint64,
+        seed: int | np.uint64,
         a: NumericalColumn,
         b: NumericalColumn,
         width: int,
     ) -> ListColumn:
+        # Convert int to np.uint64 with validation
+        if isinstance(seed, int):
+            if seed < 0 or seed > np.iinfo(np.uint64).max:
+                raise ValueError(
+                    f"seed must be in range [0, {np.iinfo(np.uint64).max}]"
+                )
+            seed = np.uint64(seed)
         return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.nvtext.minhash.minhash64(
                 self.to_pylibcudf(mode="read"),
@@ -689,8 +703,15 @@ class StringColumn(ColumnBase):
 
     @acquire_spill_lock()
     def hash_character_ngrams(
-        self, ngrams: int, seed: np.uint32
+        self, ngrams: int, seed: int | np.uint32
     ) -> ListColumn:
+        # Convert int to np.uint32 with validation
+        if isinstance(seed, int):
+            if seed < 0 or seed > np.iinfo(np.uint32).max:
+                raise ValueError(
+                    f"seed must be in range [0, {np.iinfo(np.uint32).max}]"
+                )
+            seed = np.uint32(seed)
         result = plc.nvtext.generate_ngrams.hash_character_ngrams(
             self.to_pylibcudf(mode="read"), ngrams, seed
         )

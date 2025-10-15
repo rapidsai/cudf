@@ -522,10 +522,17 @@ class ListColumn(ColumnBase):
     def minhash_ngrams(
         self,
         width: int,
-        seed: np.uint32,
+        seed: int | np.uint32,
         a: NumericalColumn,
         b: NumericalColumn,
     ) -> Self:
+        # Convert int to np.uint32 with validation
+        if isinstance(seed, int):
+            if seed < 0 or seed > np.iinfo(np.uint32).max:
+                raise ValueError(
+                    f"seed must be in range [0, {np.iinfo(np.uint32).max}]"
+                )
+            seed = np.uint32(seed)
         return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.nvtext.minhash.minhash_ngrams(
                 self.to_pylibcudf(mode="read"),
@@ -540,10 +547,17 @@ class ListColumn(ColumnBase):
     def minhash64_ngrams(
         self,
         width: int,
-        seed: np.uint64,
+        seed: int | np.uint64,
         a: NumericalColumn,
         b: NumericalColumn,
     ) -> Self:
+        # Convert int to np.uint64 with validation
+        if isinstance(seed, int):
+            if seed < 0 or seed > np.iinfo(np.uint64).max:
+                raise ValueError(
+                    f"seed must be in range [0, {np.iinfo(np.uint64).max}]"
+                )
+            seed = np.uint64(seed)
         return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.nvtext.minhash.minhash64_ngrams(
                 self.to_pylibcudf(mode="read"),
