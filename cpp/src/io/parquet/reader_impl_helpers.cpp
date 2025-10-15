@@ -382,10 +382,12 @@ metadata::metadata(datasource* source, bool read_page_indexes)
       constexpr std::size_t parallel_threshold = 512;
       auto const total_columns                 = all_columns.size();
       if (total_columns >= parallel_threshold) {
-        // Dynamically calculate number of tasks based on column count
+        // Dynamically calculate number of tasks based the number or row groups and columns
         constexpr std::size_t min_tasks = 4;
         constexpr std::size_t max_tasks = 32;
         auto const ratio                = static_cast<double>(total_columns) / parallel_threshold;
+        // Scale the number of tasks and task size evenly (e.g. quardupling the number of elements
+        // doubles both the number of tasks and the task size)
         auto const multiplier = std::size_t(1) << (static_cast<size_t>(std::log2(ratio)) / 2);
 
         auto const num_tasks        = std::clamp(min_tasks * multiplier, min_tasks, max_tasks);
