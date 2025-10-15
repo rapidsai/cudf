@@ -1069,10 +1069,20 @@ def _(
         and plc.traits.is_fixed_point(left.dtype.plc_type)
         and plc.traits.is_fixed_point(right.dtype.plc_type)
     ):
-        dtype = DataType(
-            pl.Decimal(
-                38, -(left.dtype.plc_type.scale() + right.dtype.plc_type.scale())
-            )
+        left_scale = -left.dtype.plc_type.scale()
+        right_scale = -right.dtype.plc_type.scale()
+        out_scale = max(left_scale, right_scale)
+
+        return expr.UnaryFunction(
+            DataType(pl.Decimal(38, out_scale)),
+            "round",
+            (out_scale, "half_to_even"),
+            expr.BinOp(
+                DataType(pl.Decimal(38, left_scale + right_scale)),
+                expr.BinOp._MAPPING[node.op],
+                left,
+                right,
+            ),
         )
 
     return expr.BinOp(
