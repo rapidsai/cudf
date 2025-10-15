@@ -432,12 +432,6 @@ metadata::metadata(datasource* source, bool read_page_indexes)
 
 metadata::~metadata()
 {
-  std::optional<std::vector<ColumnOrder>> column_orders_to_destroy;
-  if (column_orders.has_value()) {
-    column_orders_to_destroy = std::move(column_orders.value());
-    column_orders.reset();  // Clear the original
-  }
-
   // Submit destruction work to host worker pool thread
   // Using detach() so destructor doesn't wait for completion
   cudf::detail::host_worker_pool().detach_task(
@@ -445,7 +439,7 @@ metadata::~metadata()
      row_groups_to_destroy    = std::move(row_groups),
      key_value_to_destroy     = std::move(key_value_metadata),
      created_by_to_destroy    = std::move(created_by),
-     column_orders_to_destroy = std::move(column_orders_to_destroy)]() mutable {});
+     column_orders_to_destroy = std::move(column_orders)]{});
 }
 
 std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
