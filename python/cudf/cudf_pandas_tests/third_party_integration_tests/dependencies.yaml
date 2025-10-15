@@ -282,7 +282,9 @@ dependencies:
         packages:
           - pip
           - pip:
-              - ibis-framework[duckdb]
+            # Breaking changes to ibis in 11.0.0, so pinning temporarily
+            # until we update the third-party integration tests.
+              - ibis-framework[duckdb]<11.0.0
               - duckdb<1.4.0
   test_hvplot:
     common:
