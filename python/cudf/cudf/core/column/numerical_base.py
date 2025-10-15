@@ -90,12 +90,12 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         skipna = True if skipna is None else skipna
 
         if len(self) == 0 or self._can_return_nan(skipna=skipna):
-            return _get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
 
         self = self.nans_to_nulls().dropna()
 
         if len(self) < 4:
-            return _get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
 
         n = len(self)
         miu = self.mean()
@@ -181,7 +181,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                     )
                 except (TypeError, ValueError):
                     pass
-            return (
+            return (  # type: ignore[return-value]
                 _get_nan_for_dtype(self.dtype)
                 if scalar_result is NA
                 else scalar_result
@@ -225,7 +225,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         skipna = True if skipna is None else skipna
 
         if self._can_return_nan(skipna=skipna):
-            return _get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
 
         # enforce linear in case the default ever changes
         result = self.quantile(
@@ -244,7 +244,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             or len(other) == 0
             or (len(self) == 1 and len(other) == 1)
         ):
-            return _get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
 
         result = (self - self.mean()) * (other - other.mean())
         cov_sample = result.sum() / (len(self) - 1)
@@ -252,13 +252,13 @@ class NumericalBaseColumn(ColumnBase, Scannable):
 
     def corr(self, other: NumericalBaseColumn) -> float:
         if len(self) == 0 or len(other) == 0:
-            return _get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
 
         cov = self.cov(other)
         lhs_std, rhs_std = self.std(), other.std()
 
         if not cov or lhs_std == 0 or rhs_std == 0:
-            return _get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
         return cov / lhs_std / rhs_std
 
     def round(

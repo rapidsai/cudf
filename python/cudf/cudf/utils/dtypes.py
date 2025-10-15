@@ -246,7 +246,12 @@ def is_mixed_with_object_dtype(lhs, rhs):
     )
 
 
-def _get_nan_for_dtype(dtype: DtypeObj) -> DtypeObj:
+def _get_nan_for_dtype(dtype: DtypeObj) -> np.generic:
+    """Return the appropriate NaN/NaT value for the given dtype.
+
+    Returns a numpy scalar (np.generic subclass) representing the
+    null value for the dtype (e.g., np.float64('nan'), np.datetime64('NaT')).
+    """
     if dtype.kind in "mM":
         time_unit, _ = np.datetime_data(dtype)
         return dtype.type("nat", time_unit)
