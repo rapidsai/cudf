@@ -12,8 +12,8 @@ from datetime import datetime
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from polars import polars
 from polars.exceptions import InvalidOperationError
-from polars.polars import dtype_str_repr
 
 import pylibcudf as plc
 
@@ -23,10 +23,12 @@ from cudf_polars.dsl.expressions.literal import Literal, LiteralColumn
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
+dtype_str_repr = polars.dtype_str_repr
+
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-    from polars.polars import _expr_nodes as pl_expr
+    pl_expr = polars._expr_nodes
 
     from cudf_polars.containers import DataFrame, DataType
 
@@ -101,7 +103,7 @@ class StringFunction(Expr):
         ZFill = auto()
 
         @classmethod
-        def from_polars(cls, obj: pl_expr.StringFunction) -> Self:
+        def from_polars(cls, obj: polars._expr_nodes.StringFunction) -> Self:
             """Convert from polars' `StringFunction`."""
             try:
                 function, name = str(obj).split(".", maxsplit=1)

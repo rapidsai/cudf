@@ -34,15 +34,21 @@ class Ternary(Expr):
         self.children = (when, then, otherwise)
         self.is_pointwise = True
 
-    def do_evaluate(
+    def do_evaluate(  # noqa: D102
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
-        """Evaluate this expression given a dataframe for context."""
         when, then, otherwise = (
             child.evaluate(df, context=context) for child in self.children
         )
+
+        if then.dtype.plc_type != self.dtype.plc_type:
+            then = then.astype(self.dtype)
+        if otherwise.dtype.plc_type != self.dtype.plc_type:
+            otherwise = otherwise.astype(self.dtype)
+
         then_obj = then.obj_scalar if then.is_scalar else then.obj
         otherwise_obj = otherwise.obj_scalar if otherwise.is_scalar else otherwise.obj
+
         return Column(
             plc.copying.copy_if_else(then_obj, otherwise_obj, when.obj),
             dtype=self.dtype,

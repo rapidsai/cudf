@@ -39,7 +39,7 @@ from cudf_polars.dsl.tracing import log_do_evaluate, nvtx_annotate_cudf_polars
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import range_window_bounds
 from cudf_polars.utils import dtypes
-from cudf_polars.utils.versions import POLARS_VERSION_LT_131
+from cudf_polars.utils.versions import POLARS_VERSION_LT_131, POLARS_VERSION_LT_134
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Iterable, Sequence
@@ -47,7 +47,9 @@ if TYPE_CHECKING:
 
     from typing_extensions import Self
 
-    from polars.polars import _expr_nodes as pl_expr
+    from polars import polars
+
+    pl_expr = polars._expr_nodes
 
     from cudf_polars.containers.dataframe import NamedColumn
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
@@ -1687,6 +1689,21 @@ def _strip_predicate_casts(node: expr.Expr) -> expr.Expr:
         ):
             return child
 
+        if (
+            not POLARS_VERSION_LT_134
+            and isinstance(child, expr.ColRef)
+            and (
+                plc.traits.is_floating_point(src.plc_type)
+                and plc.traits.is_floating_point(dst.plc_type)
+            )
+        ) or (
+            plc.traits.is_integral(src.plc_type)
+            and plc.traits.is_integral(dst.plc_type)
+        ):
+            return child
+
+        return expr.Cast(dst, child)
+
     if not node.children:
         return node
     return node.reconstruct([_strip_predicate_casts(child) for child in node.children])
@@ -1800,7 +1817,7 @@ class ConditionalJoin(IR):
     options: tuple[
         tuple[
             str,
-            pl_expr.Operator | Iterable[pl_expr.Operator],
+            polars._expr_nodes.Operator | Iterable[polars._expr_nodes.Operator],
         ]
         | None,
         bool,

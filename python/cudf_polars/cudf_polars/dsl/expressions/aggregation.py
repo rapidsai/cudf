@@ -22,7 +22,14 @@ __all__ = ["Agg"]
 
 
 class Agg(Expr):
-    __slots__ = ("context", "name", "op", "options", "request")
+    __slots__ = (
+        "_nunique_include_nulls",
+        "context",
+        "name",
+        "op",
+        "options",
+        "request",
+    )
     _non_child = ("dtype", "name", "options", "context")
 
     def __init__(
@@ -43,6 +50,10 @@ class Agg(Expr):
             raise NotImplementedError(
                 f"Unsupported aggregation {name=}"
             )  # pragma: no cover; all valid aggs are supported
+        if name == "sum":
+            child = children[0]
+            if plc.traits.is_fixed_point(child.dtype.plc_type):
+                self.dtype = child.dtype
         # TODO: nan handling in groupby case
         if name == "min":
             req = plc.aggregation.min()
@@ -52,6 +63,7 @@ class Agg(Expr):
             req = plc.aggregation.median()
         elif name == "n_unique":
             # TODO: datatype of result
+            self._nunique_include_nulls = True
             req = plc.aggregation.nunique(null_handling=plc.types.NullPolicy.INCLUDE)
         elif name == "first" or name == "last":
             req = None
@@ -159,6 +171,20 @@ class Agg(Expr):
             and self.dtype.plc_type.id() in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
         ):
             column = column.astype(self.dtype)
+
+        if column.size == 0 or column.null_count == column.size:
+            z = None
+            if self.name == "n_unique":
+                include_nulls = getattr(self, "_nunique_include_nulls", False)
+                if column.size == 0:
+                    z = 0
+                else:
+                    z = 1 if include_nulls else 0
+            return Column(
+                plc.Column.from_scalar(plc.Scalar.from_py(z, self.dtype.plc_type), 1),
+                name=column.name,
+                dtype=self.dtype,
+            )
         return Column(
             plc.Column.from_scalar(
                 plc.reduce.reduce(column.obj, request, self.dtype.plc_type), 1
@@ -187,6 +213,17 @@ class Agg(Expr):
                 ),
                 name=column.name,
                 dtype=self.dtype,
+            )
+        if plc.traits.is_fixed_point(column.dtype.plc_type):
+            return Column(
+                plc.Column.from_scalar(
+                    plc.reduce.reduce(
+                        column.obj, plc.aggregation.sum(), column.dtype.plc_type
+                    ),
+                    1,
+                ),
+                name=column.name,
+                dtype=column.dtype,
             )
         return self._reduce(column, request=plc.aggregation.sum())
 
