@@ -910,9 +910,8 @@ dependencies:
           - pip:
               - pytest-env
               - sqlframe
-              # ibis 11 is the first version that supports duckdb 1.4.0
-              - ibis-framework[duckdb]>=11.0.0
-              - duckdb>=1.4.0
+              - ibis-framework[duckdb]
+              - duckdb<1.4.0
   depends_on_libcudf:
     common:
       - output_types: conda
