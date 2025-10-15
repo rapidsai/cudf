@@ -487,8 +487,9 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
   return cudf::detail::compute_column(stats_table, stats_expr.get_stats_expr().get(), stream, mr);
 }
 
+template <typename ColumnView>
 std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
-  cudf::column_view row_mask,
+  ColumnView const& row_mask,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   cudf::host_span<input_column_info const> input_columns,
   cudf::size_type row_mask_offset,
@@ -565,13 +566,26 @@ std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
                "Mismatch in total rows in input row mask and row groups",
                std::invalid_argument);
 
-  // Return if all rows are required or all are invalid.
-  if (row_mask.null_count(row_mask_offset, row_mask_offset + total_rows) == total_rows or
-      thrust::all_of(rmm::exec_policy(stream),
-                     row_mask.begin<bool>() + row_mask_offset,
-                     row_mask.begin<bool>() + row_mask_offset + total_rows,
+  if constexpr (cuda::std::is_same_v<ColumnView, cudf::mutable_column_view>) {
+    if (row_mask.nullable()) {
+      thrust::for_each(rmm::exec_policy_nosync(stream),
+                       thrust::counting_iterator(row_mask_offset),
+                       thrust::counting_iterator(row_mask_offset + total_rows),
+                       [row_mask  = row_mask.template begin<bool>(),
+                        null_mask = row_mask.null_mask()] __device__(auto const row_idx) {
+                         if (not bit_is_set(null_mask, row_idx)) { row_mask[row_idx] = true; }
+                       });
+    }
+  } else {
+    CUDF_EXPECTS(not row_mask.nullable(), "Row mask must not be nullable for payload columns");
+  }
+
+  // Return an empty vector if all rows are required or all are invalid.
+  if (thrust::all_of(rmm::exec_policy(stream),
+                     row_mask.template begin<bool>() + row_mask_offset,
+                     row_mask.template begin<bool>() + row_mask_offset + total_rows,
                      cuda::std::identity{})) {
-    return std::vector<bool>(total_pages, true);
+    return {};
   }
 
   // Total number of surviving pages across all columns
@@ -581,37 +595,10 @@ std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   std::vector<std::future<std::vector<bool>>> data_page_mask_tasks;
   data_page_mask_tasks.reserve(num_columns);
 
-  // Host row mask validity and first bit offset
-  auto const [host_row_mask_validity, first_bit_offset] = [&] {
-    if (row_mask.nullable()) {
-      auto const first_word_idx = word_index(row_mask_offset);
-      auto const last_word_idx  = word_index(row_mask_offset + total_rows);
-      auto const num_words      = last_word_idx - first_word_idx + 1;
-      auto const max_words      = num_bitmask_words(row_mask.size()) - first_word_idx - 1;
-      CUDF_EXPECTS(num_words <= max_words,
-                   "Encountered unexpected number of bitmask words to copy from the row mask");
-      return std::pair{
-        cudf::detail::make_host_vector(
-          device_span<bitmask_type const>(row_mask.null_mask() + first_word_idx, num_words),
-          stream),
-        intra_word_index(row_mask_offset)};
-    } else {
-      // Empty vector if row mask is not nullable
-      return std::pair{cudf::detail::make_host_vector<bitmask_type>(0, stream), 0};
-    }
-  }();
-
-  // Iterator for row mask validity
-  auto is_row_valid = cudf::detail::make_counting_transform_iterator(
-    first_bit_offset,
-    [is_nullable = row_mask.nullable(), nullmask = host_row_mask_validity.data()](auto bit_index) {
-      // Always valid if row mask is not nullable or check if the corresponding bit is set
-      return not is_nullable or bit_is_set(nullmask, bit_index);
-    });
-
   // Host row mask data
   auto const is_row_required = cudf::detail::make_host_vector(
-    device_span<uint8_t const>(row_mask.data<uint8_t>() + row_mask_offset, total_rows), stream);
+    device_span<uint8_t const>(row_mask.template data<uint8_t>() + row_mask_offset, total_rows),
+    stream);
 
   // For all columns, look up which pages contain at least one required row. i.e.
   // !validity_it[row_idx] or is_row_required[row_idx] satisfies, and add its byte range to the
@@ -629,9 +616,8 @@ std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
                       size_t num_surviving_pages_this_column = 0;
                       // For all rows
                       for (auto row_idx = 0; row_idx < total_rows; ++row_idx) {
-                        // If this row is required or invalid, add its page index to the output
-                        // list.
-                        if (not is_row_valid[row_idx] or is_row_required[row_idx]) {
+                        // If this row is required, add its page index to the output list.
+                        if (is_row_required[row_idx]) {
                           // binary search to find the page index this row_idx belongs to and set
                           // the page index to true page_indices
                           auto const offsets = cudf::host_span<size_type const>(
@@ -670,5 +656,20 @@ std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
 
   return data_page_mask;
 }
+
+// Instantiate the templates with ColumnView as cudf::column_view and cudf::mutable_column_view
+template std::vector<bool> aggregate_reader_metadata::compute_data_page_mask<cudf::column_view>(
+  cudf::column_view const& row_mask,
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  cudf::host_span<input_column_info const> input_columns,
+  cudf::size_type row_mask_offset,
+  rmm::cuda_stream_view stream) const;
+
+template std::vector<bool> aggregate_reader_metadata::compute_data_page_mask<
+  cudf::mutable_column_view>(cudf::mutable_column_view const& row_mask,
+                             cudf::host_span<std::vector<size_type> const> row_group_indices,
+                             cudf::host_span<input_column_info const> input_columns,
+                             cudf::size_type row_mask_offset,
+                             rmm::cuda_stream_view stream) const;
 
 }  // namespace cudf::io::parquet::experimental::detail
