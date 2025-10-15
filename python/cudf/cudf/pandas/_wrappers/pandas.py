@@ -237,6 +237,12 @@ ListMethods = make_intermediate_proxy_type(
     pd_ListAccessor,
 )
 
+SparseAccessor = make_intermediate_proxy_type(
+    "SparseAccessor",
+    _Unusable,
+    pd.core.arrays.sparse.accessor.SparseAccessor,
+)
+
 StructAccessor = make_intermediate_proxy_type(
     "StructAccessor",
     cudf.core.accessors.struct.StructMethods,
