@@ -2227,8 +2227,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 plc.TypeId.DECIMAL32,
             }:
                 scale = -plc_scalar.type().scale()
+                # Narrow type for mypy - we know col_dtype is a decimal type from the check above
+                assert isinstance(col_dtype, DecimalDtype)
+                p = col_dtype.precision
                 # https://docs.microsoft.com/en-us/sql/t-sql/data-types/precision-scale-and-length-transact-sql
-                p = col_dtype.precision  # type: ignore[union-attr]
                 nrows = len(self)
                 if reduction_op in {"min", "max"}:
                     new_p = p
@@ -2243,15 +2245,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         f"{reduction_op} not implemented for decimal types."
                     )
                 precision = max(min(new_p, col_dtype.MAX_PRECISION), 0)  # type: ignore[union-attr]
-                # Narrow type for mypy - we know col_dtype is a decimal type from the check above
-                assert isinstance(
-                    col_dtype,
-                    (
-                        cudf.Decimal32Dtype,
-                        cudf.Decimal64Dtype,
-                        cudf.Decimal128Dtype,
-                    ),
-                )
                 new_dtype = type(col_dtype)(precision, scale)
                 result_col = result_col.astype(new_dtype)
             elif isinstance(col_dtype, IntervalDtype):
