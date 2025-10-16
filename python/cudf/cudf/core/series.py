@@ -2016,7 +2016,7 @@ class Series(SingleColumnFrame, IndexedFrame):
                 )
                 raise TypeError(msg)
         if is_dict_like(dtype):
-            if len(dtype) > 1 or self.name not in dtype:
+            if len(dtype) > 1 or self.name not in dtype:  # type: ignore[arg-type,operator]
                 raise KeyError(
                     "Only the Series name can be used for the key in Series "
                     "dtype mappings."

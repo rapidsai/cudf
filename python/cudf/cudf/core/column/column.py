@@ -1771,7 +1771,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             if isinstance(dtype, CategoricalDtype):
                 result = self.as_categorical_column(dtype)
             elif is_dtype_obj_interval(dtype):
-                result = self.as_interval_column(dtype)
+                result = self.as_interval_column(dtype)  # type: ignore[arg-type]
             elif is_dtype_obj_list(dtype) or is_dtype_obj_struct(dtype):
                 if self.dtype != dtype:
                     raise NotImplementedError(
@@ -1779,7 +1779,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     )
                 result = self
             elif is_dtype_obj_decimal(dtype):
-                result = self.as_decimal_column(dtype)
+                result = self.as_decimal_column(dtype)  # type: ignore[arg-type]
             elif dtype.kind == "M":
                 result = self.as_datetime_column(dtype)
             elif dtype.kind == "m":
@@ -2301,8 +2301,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 plc.TypeId.DECIMAL32,
             }:
                 scale = -plc_scalar.type().scale()
+                # Narrow type for mypy - we know col_dtype is a decimal type from the check above
+                assert isinstance(col_dtype, DecimalDtype)
+                p = col_dtype.precision
                 # https://docs.microsoft.com/en-us/sql/t-sql/data-types/precision-scale-and-length-transact-sql
-                p = col_dtype.precision  # type: ignore[union-attr]
                 nrows = len(self)
                 if reduction_op in {"min", "max"}:
                     new_p = p
@@ -2316,7 +2318,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     raise NotImplementedError(
                         f"{reduction_op} not implemented for decimal types."
                     )
-                precision = max(min(new_p, col_dtype.MAX_PRECISION), 0)  # type: ignore[union-attr]
+                precision = max(min(new_p, col_dtype.MAX_PRECISION), 0)
                 new_dtype = type(col_dtype)(precision, scale)
                 result_col = result_col.astype(new_dtype)
             elif isinstance(col_dtype, IntervalDtype):
