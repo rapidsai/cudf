@@ -317,7 +317,7 @@ def to_datetime(
         elif errors == "ignore":
             pass
         elif errors == "coerce":
-            return np.datetime64("nat", "ns" if unit is None else unit)
+            return np.datetime64("nat", "ns" if unit is None else unit)  # type: ignore[call-overload]
         return arg
 
 
@@ -849,7 +849,7 @@ def date_range(
             FutureWarning,
         )
 
-    dtype = np.dtype("datetime64[ns]")
+    dtype: np.dtype = np.dtype("datetime64[ns]")
     unit, _ = np.datetime_data(dtype)
 
     if freq is None:

@@ -22,7 +22,7 @@ from cudf.utils.dtypes import (
 
 ENVREF_PREFIX = "__CUDF_ENVREF__"
 
-SUPPORTED_QUERY_TYPES = {
+SUPPORTED_QUERY_TYPES: set[np.dtype] = {
     np.dtype(dt)
     for dt in NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | BOOL_TYPES
 }

@@ -556,7 +556,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         # identical except for the attribute they access to generate values.
 
         def to_array(
-            col: ColumnBase, to_dtype: np.dtype
+            col: ColumnBase, to_dtype: Dtype | None
         ) -> cupy.ndarray | np.ndarray:
             if (
                 col.has_nulls()
