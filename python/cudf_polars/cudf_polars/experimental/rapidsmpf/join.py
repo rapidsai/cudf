@@ -167,6 +167,7 @@ async def broadcast_join_node(
                             else plc.concatenate.concatenate(results, build_stream)
                         ),
                         build_stream,
+                        exclusive_view=True,
                     )
                 ),
             )

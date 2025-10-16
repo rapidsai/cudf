@@ -50,7 +50,7 @@ def test_join(left, right, how, reverse, max_rows_per_partition, broadcast_join_
         executor="streaming",
         executor_options={
             "engine": "rapidsmpf",
-            "scheduler": "synchronous",
+            "cluster": "single",
             "max_rows_per_partition": max_rows_per_partition,
             "broadcast_join_limit": broadcast_join_limit,
         },
@@ -89,7 +89,7 @@ def test_broadcast_join_limit(left, right, broadcast_join_limit):
             "max_rows_per_partition": 3,
             "broadcast_join_limit": broadcast_join_limit,
             "engine": "rapidsmpf",
-            "scheduler": "synchronous",
+            "cluster": "single",
         },
     )
     left = pl.LazyFrame(
@@ -134,7 +134,7 @@ def test_join_then_shuffle(left, right):
         executor="streaming",
         executor_options={
             "engine": "rapidsmpf",
-            "scheduler": "synchronous",
+            "cluster": "single",
             "max_rows_per_partition": 2,
             "broadcast_join_limit": 1,
         },
@@ -158,7 +158,7 @@ def test_join_conditional(reverse, max_rows_per_partition):
         executor_options={
             "max_rows_per_partition": max_rows_per_partition,
             "engine": "rapidsmpf",
-            "scheduler": "synchronous",
+            "cluster": "single",
             "fallback_mode": "warn",
         },
     )
@@ -185,7 +185,7 @@ def test_join_maintain_order_fallback_streaming(left, right, maintain_order):
         executor="streaming",
         executor_options={
             "engine": "rapidsmpf",
-            "scheduler": "synchronous",
+            "cluster": "single",
             "max_rows_per_partition": 3,
             "broadcast_join_limit": 1,
             "fallback_mode": "warn",

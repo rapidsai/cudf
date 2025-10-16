@@ -9,7 +9,7 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
+from cudf_polars.testing.asserts import DEFAULT_CLUSTER, assert_gpu_result_equal
 from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 #
@@ -25,7 +25,7 @@ def engine():
         executor_options={
             "max_rows_per_partition": 4,
             "engine": "rapidsmpf",
-            "scheduler": "synchronous",
+            "cluster": "single",
         },
     )
 
@@ -60,7 +60,7 @@ def test_groupby_single_partitions(df, op, keys):
             executor="streaming",
             executor_options={
                 "max_rows_per_partition": int(1e9),
-                "scheduler": DEFAULT_SCHEDULER,
+                "cluster": DEFAULT_CLUSTER,
             },
         ),
         check_row_order=False,
@@ -90,7 +90,7 @@ def test_groupby_agg_config_options(df, op, keys):
             # Check that we can change the n-ary factor
             "groupby_n_ary": 8,
             "engine": "rapidsmpf",
-            "scheduler": "synchronous",
+            "cluster": "single",
         },
     )
     agg = getattr(pl.col("x"), op)()
@@ -111,7 +111,7 @@ def test_groupby_fallback(df, engine, fallback_mode):
             "fallback_mode": fallback_mode,
             "max_rows_per_partition": 4,
             "engine": "rapidsmpf",
-            "scheduler": "synchronous",
+            "cluster": "single",
         },
     )
     match = "Failed to decompose groupby aggs"
@@ -244,7 +244,7 @@ def test_groupby_literal_with_stats_planning(df):
         executor_options={
             "max_rows_per_partition": 4,
             "engine": "rapidsmpf",
-            "scheduler": "synchronous",
+            "cluster": "single",
             "stats_planning": {"use_reduction_planning": True},
         },
     )

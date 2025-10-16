@@ -28,7 +28,7 @@ def engine():
         executor_options={
             "max_rows_per_partition": 3,
             "engine": "rapidsmpf",
-            "scheduler": "synchronous",
+            "cluster": "single",
         },
     )
 
@@ -60,7 +60,7 @@ def test_select_reduce_fallback(df, fallback_mode):
             "fallback_mode": fallback_mode,
             "max_rows_per_partition": 3,
             "engine": "rapidsmpf",
-            "scheduler": "synchronous",
+            "cluster": "single",
         },
     )
     match = "This selection is not supported for multiple partitions."
@@ -99,7 +99,7 @@ def test_select_fill_null_with_strategy(df):
             "fallback_mode": "warn",
             "max_rows_per_partition": 3,
             "engine": "rapidsmpf",
-            "scheduler": "synchronous",
+            "cluster": "single",
         },
     )
     q = df.select(pl.col("a").forward_fill())

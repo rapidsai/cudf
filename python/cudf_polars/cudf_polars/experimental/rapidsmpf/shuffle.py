@@ -8,9 +8,9 @@ import threading
 from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.shuffler import Shuffler
+from rapidsmpf.streaming.coll.shuffler import shuffler
 from rapidsmpf.streaming.core.channel import Channel
 from rapidsmpf.streaming.cudf.partition import partition_and_pack, unpack_and_concat
-from rapidsmpf.streaming.cudf.shuffler import shuffler
 
 from cudf_polars.dsl.expr import Col
 from cudf_polars.experimental.rapidsmpf.dispatch import (

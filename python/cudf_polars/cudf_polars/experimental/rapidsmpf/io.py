@@ -209,6 +209,7 @@ async def read_chunk(
                     seq_num,
                     df.table,
                     DEFAULT_STREAM,
+                    exclusive_view=True,
                 )
             ),
         )

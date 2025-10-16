@@ -60,6 +60,7 @@ async def union_node(
                             table_chunk.sequence_number + seq_num_offset,
                             table_chunk.table_view(),
                             table_chunk.stream,
+                            exclusive_view=True,
                         )
                     ),
                 )

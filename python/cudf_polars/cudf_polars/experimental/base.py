@@ -28,8 +28,7 @@ class PartitionInfo:
     partitioned_on: tuple[NamedExpr, ...]
     """Columns the data is hash-partitioned on."""
     io_plan: IOPartitionPlan | None
-    """IO partitioning plan (Scan nodes only).
-    Only used by the 'rapidsmpf' engine."""
+    """IO partitioning plan (Scan nodes only)."""
 
     def __init__(
         self,

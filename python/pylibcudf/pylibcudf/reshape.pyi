@@ -21,5 +21,5 @@ def table_to_array(
     input_table: Table,
     ptr: int,
     size: int,
-    stream: Stream,
+    stream: Stream | None = None,
 ) -> None: ...

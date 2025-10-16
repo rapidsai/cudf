@@ -90,7 +90,9 @@ async def default_node_single(
                     list(ir.children[0].schema.values()),
                 ),
             )
-            chunk = TableChunk.from_pylibcudf_table(seq_num, df.table, chunk.stream)
+            chunk = TableChunk.from_pylibcudf_table(
+                seq_num, df.table, chunk.stream, exclusive_view=True
+            )
             await ch_out.send(ctx, Message(chunk))
 
         await ch_out.drain(ctx)
@@ -189,6 +191,7 @@ async def default_node_multi(
                             seq_num,
                             df.table,
                             DEFAULT_STREAM,
+                            exclusive_view=True,
                         )
                     ),
                 )
@@ -234,7 +237,11 @@ async def forward_to_channel(
     for seq_num, chunk in enumerate(chunks):
         await ch_out.send(
             ctx,
-            Message(TableChunk.from_pylibcudf_table(seq_num, chunk, DEFAULT_STREAM)),
+            Message(
+                TableChunk.from_pylibcudf_table(
+                    seq_num, chunk, DEFAULT_STREAM, exclusive_view=False
+                )
+            ),
         )
     await ch_out.drain(ctx)
 
@@ -345,7 +352,9 @@ async def empty_node(
         df: DataFrame = ir.do_evaluate(*ir._non_child_args)
 
         # Return the output chunk (empty but with correct schema)
-        chunk = TableChunk.from_pylibcudf_table(0, df.table, DEFAULT_STREAM)
+        chunk = TableChunk.from_pylibcudf_table(
+            0, df.table, DEFAULT_STREAM, exclusive_view=True
+        )
         await ch_out.send(ctx, Message(chunk))
 
         await ch_out.drain(ctx)

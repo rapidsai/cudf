@@ -24,7 +24,7 @@ def test_rapidmpf_engine_fallback(rows_per_partition: int, fallback_mode: str) -
             "engine": "rapidsmpf",
             "max_rows_per_partition": rows_per_partition,
             "fallback_mode": fallback_mode,
-            "scheduler": "synchronous",
+            "cluster": "single",
         },
     )
     df = pl.LazyFrame(
@@ -50,7 +50,7 @@ def test_rapidmpf_engine_concat() -> None:
         executor_options={
             "engine": "rapidsmpf",
             "max_rows_per_partition": 3,
-            "scheduler": "synchronous",
+            "cluster": "single",
         },
     )
     q = pl.concat(
@@ -82,7 +82,7 @@ def test_target_partition_size(tmp_path, blocksize, n_files):
         executor_options={
             "engine": "rapidsmpf",
             "target_partition_size": blocksize,
-            "scheduler": "synchronous",
+            "cluster": "single",
         },
     )
     assert_gpu_result_equal(q, engine=engine)
