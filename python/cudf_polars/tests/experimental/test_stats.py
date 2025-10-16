@@ -45,7 +45,7 @@ def engine():
         executor_options={
             "cluster": DEFAULT_CLUSTER,
             "runtime": DEFAULT_RUNTIME,
-            "shuffle_method": "tasks",
+            "shuffle_method": DEFAULT_RUNTIME,  # Names coincide
             "target_partition_size": 10_000,
             "max_rows_per_partition": 1_000,
             "stats_planning": {"use_reduction_planning": True},
@@ -450,7 +450,7 @@ def test_stats_planning(
         executor_options={
             "cluster": DEFAULT_CLUSTER,
             "runtime": DEFAULT_RUNTIME,
-            "shuffle_method": "tasks",
+            "shuffle_method": DEFAULT_RUNTIME,  # Names coincide
             "target_partition_size": 10_000,
             "max_rows_per_partition": 1_000,
             "stats_planning": {

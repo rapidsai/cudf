@@ -53,7 +53,7 @@ def test_join(left, right, how, reverse, max_rows_per_partition, broadcast_join_
             "runtime": DEFAULT_RUNTIME,
             "max_rows_per_partition": max_rows_per_partition,
             "broadcast_join_limit": broadcast_join_limit,
-            "shuffle_method": "tasks",
+            "shuffle_method": DEFAULT_RUNTIME,  # Names coincide
         },
     )
     if reverse:
@@ -87,7 +87,7 @@ def test_broadcast_join_limit(left, right, broadcast_join_limit):
             "broadcast_join_limit": broadcast_join_limit,
             "cluster": DEFAULT_CLUSTER,
             "runtime": DEFAULT_RUNTIME,
-            "shuffle_method": "tasks",
+            "shuffle_method": DEFAULT_RUNTIME,  # Names coincide
         },
     )
     left = pl.LazyFrame(
@@ -184,7 +184,7 @@ def test_join_and_slice(zlice):
             "broadcast_join_limit": 100,
             "cluster": DEFAULT_CLUSTER,
             "runtime": DEFAULT_RUNTIME,
-            "shuffle_method": "tasks",
+            "shuffle_method": DEFAULT_RUNTIME,  # Names coincide
             "fallback_mode": "warn",
         },
     )
@@ -216,10 +216,12 @@ def test_join_and_slice(zlice):
     # Need sort to match order after a join
     q = left.join(right, on="a", how="inner").sort(pl.col("a")).slice(*zlice)
     if zlice == (2, 2):
-        with pytest.warns(
-            UserWarning,
-            match="Sort does not support a multi-partition slice with an offset.",
-        ):
+        msg = (
+            "does not support multiple partitions."
+            if DEFAULT_RUNTIME == "rapidsmpf"
+            else "does not support a multi-partition slice with an offset."
+        )
+        with pytest.warns(UserWarning, match=msg):
             assert_gpu_result_equal(q, engine=engine)
     else:
         assert_gpu_result_equal(q, engine=engine)
@@ -237,7 +239,7 @@ def test_join_maintain_order_fallback_streaming(left, right, maintain_order):
             "runtime": DEFAULT_RUNTIME,
             "max_rows_per_partition": 3,
             "broadcast_join_limit": 1,
-            "shuffle_method": "tasks",
+            "shuffle_method": DEFAULT_RUNTIME,  # Names coincide
             "fallback_mode": "warn",
         },
     )

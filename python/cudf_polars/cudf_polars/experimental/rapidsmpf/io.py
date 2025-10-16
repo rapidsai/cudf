@@ -17,6 +17,7 @@ from rmm.pylibrmm.stream import DEFAULT_STREAM
 from cudf_polars.dsl.ir import IR, DataFrameScan, Scan
 from cudf_polars.experimental.base import (
     IOPartitionFlavor,
+    IOPartitionPlan,
     PartitionInfo,
 )
 from cudf_polars.experimental.io import SplitScan, scan_partition_plan
@@ -32,7 +33,6 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import IOPartitionPlan
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.dispatch import LowerIRTransformer
     from cudf_polars.utils.config import ParquetOptions
@@ -149,7 +149,6 @@ def _(
     ir: Scan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     config_options = rec.state["config_options"]
-    plan = scan_partition_plan(ir, rec.state["stats"], config_options)
     if (
         ir.typ in ("csv", "parquet", "ndjson")
         and ir.n_rows == -1
@@ -161,6 +160,7 @@ def _(
         # The generate_ir_sub_network logic is NOT required
         # to obey this partition count. However, the count
         # WILL match after an IO operation (for now).
+        plan = scan_partition_plan(ir, rec.state["stats"], config_options)
         paths = list(ir.paths)
         if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
             count = plan.factor * len(paths)
@@ -168,8 +168,11 @@ def _(
             count = math.ceil(len(paths) / plan.factor)
 
         return ir, {ir: PartitionInfo(count=count, io_plan=plan)}
-
-    return ir, {ir: PartitionInfo(count=1, io_plan=plan)}  # pragma: no cover
+    else:  # pragma: no cover
+        plan = IOPartitionPlan(
+            flavor=IOPartitionFlavor.SINGLE_READ, factor=len(ir.paths)
+        )
+        return ir, {ir: PartitionInfo(count=1, io_plan=plan)}
 
 
 async def read_chunk(

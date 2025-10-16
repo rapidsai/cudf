@@ -15,8 +15,10 @@ from cudf_polars.experimental.shuffle import Shuffle
 from cudf_polars.testing.asserts import DEFAULT_CLUSTER, DEFAULT_RUNTIME
 from cudf_polars.utils.config import ConfigOptions
 
+SHUFFLE_METHODS = ["tasks", None] if DEFAULT_RUNTIME == "tasks" else [None]
 
-@pytest.fixture(scope="module", params=["tasks", None])
+
+@pytest.fixture(scope="module", params=SHUFFLE_METHODS)
 def engine(request):
     return pl.GPUEngine(
         raise_on_fail=True,

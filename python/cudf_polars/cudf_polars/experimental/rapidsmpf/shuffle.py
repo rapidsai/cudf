@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 from rapidsmpf.shuffler import Shuffler
 from rapidsmpf.streaming.coll.shuffler import shuffler
 from rapidsmpf.streaming.core.channel import Channel
+from rapidsmpf.streaming.core.node import define_py_node
 from rapidsmpf.streaming.cudf.partition import partition_and_pack, unpack_and_concat
 
 from cudf_polars.dsl.expr import Col
@@ -19,6 +20,8 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 from cudf_polars.experimental.shuffle import Shuffle
 
 if TYPE_CHECKING:
+    from rapidsmpf.streaming.core.context import Context
+
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
 
@@ -37,6 +40,44 @@ def _get_new_shuffle_id() -> int:
             )
 
         return _shuffle_id_vacancy.pop()
+
+
+def _release_shuffle_id(op_id: int) -> None:
+    """Release a shuffle ID back to the vacancy set."""
+    with _shuffle_id_vacancy_lock:
+        _shuffle_id_vacancy.add(op_id)
+
+
+@define_py_node()
+async def shuffle_id_release_node(
+    ctx: Context,
+    ch_in: Channel,
+    ch_out: Channel,
+    op_id: int,
+) -> None:
+    """
+    Pass-through node that releases the shuffle ID after all chunks are processed.
+
+    Parameters
+    ----------
+    ctx
+        The context.
+    ch_in
+        The input channel.
+    ch_out
+        The output channel.
+    op_id
+        The shuffle operation ID to release back to the vacancy set.
+    """
+    # Forward all messages from input to output
+    while (msg := await ch_in.recv(ctx)) is not None:
+        await ch_out.send(ctx, msg)
+
+    # After receiving the last chunk, release the shuffle ID
+    _release_shuffle_id(op_id)
+
+    # Drain the output channel
+    await ch_out.drain(ctx)
 
 
 @generate_ir_sub_network.register(Shuffle)
@@ -87,9 +128,20 @@ def _(
         )
     )
 
+    # Release shuffle ID after shuffler completes
+    ch3_intermediate = Channel()
+    nodes[ir].append(
+        shuffle_id_release_node(
+            context,
+            ch_in=ch3,
+            ch_out=ch3_intermediate,
+            op_id=op_id,
+        )
+    )
+
     # Unpack and concat
     ch4 = Channel()
-    nodes[ir].append(unpack_and_concat(context, ch_in=ch3, ch_out=ch4))
+    nodes[ir].append(unpack_and_concat(context, ch_in=ch3_intermediate, ch_out=ch4))
     channels[ir] = [ch4]
 
     return nodes, channels

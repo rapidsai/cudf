@@ -92,7 +92,7 @@ def test_groupby_agg_config_options(df, op, keys):
             "groupby_n_ary": 8,
             "cluster": DEFAULT_CLUSTER,
             "runtime": DEFAULT_RUNTIME,
-            "shuffle_method": "tasks",
+            "shuffle_method": DEFAULT_RUNTIME,  # Names coincide
         },
     )
     agg = getattr(pl.col("x"), op)()

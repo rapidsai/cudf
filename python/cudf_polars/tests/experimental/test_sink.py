@@ -17,6 +17,12 @@ from cudf_polars.testing.asserts import (
 from cudf_polars.utils.config import ConfigOptions
 from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
+# TODO: Add Sink support to the rapidsmpf runtime.
+pytestmark = pytest.mark.skipif(
+    DEFAULT_RUNTIME == "rapidsmpf",
+    reason="Sink not yet supported for rapidsmpf runtime.",
+)
+
 
 @pytest.fixture(scope="module")
 def df():

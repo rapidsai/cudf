@@ -31,15 +31,13 @@ def df():
 
 @pytest.fixture(scope="module")
 def engine():
-    cluster = DEFAULT_CLUSTER
-    runtime = DEFAULT_RUNTIME
     return pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "cluster": cluster,
-            "runtime": runtime,
-            "shuffle_method": "tasks" if runtime == "tasks" else "rapidsmpf",
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+            "shuffle_method": DEFAULT_RUNTIME,  # Names coincide
             "target_partition_size": 10_000,
             "max_rows_per_partition": 1_000,
             "stats_planning": {
