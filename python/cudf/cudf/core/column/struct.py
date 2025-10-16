@@ -21,11 +21,13 @@ from cudf.utils.scalar import (
 from cudf.utils.utils import _is_null_host_scalar
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from typing_extensions import Self
 
     import pylibcudf as plc
 
-    from cudf._typing import Dtype
+    from cudf._typing import DtypeObj
     from cudf.core.buffer import Buffer
     from cudf.core.column.string import StringColumn
 
@@ -97,7 +99,7 @@ class StructColumn(ColumnBase):
         return dtype
 
     @property
-    def base_size(self):
+    def base_size(self) -> int:
         if self.base_children:
             return len(self.base_children[0])
         else:
@@ -155,7 +157,7 @@ class StructColumn(ColumnBase):
 
         return n
 
-    def element_indexing(self, index: int) -> dict:
+    def element_indexing(self, index: int) -> dict[Any, Any] | None:
         result = super().element_indexing(index)
         if isinstance(result, pa.Scalar):
             py_element = maybe_nested_pa_scalar_to_py(result)
@@ -186,12 +188,14 @@ class StructColumn(ColumnBase):
         return super().copy(deep=False)
 
     @property
-    def __cuda_array_interface__(self):
+    def __cuda_array_interface__(self) -> Mapping[str, Any]:
         raise NotImplementedError(
             "Structs are not yet supported via `__cuda_array_interface__`"
         )
 
-    def _with_type_metadata(self: StructColumn, dtype: Dtype) -> StructColumn:
+    def _with_type_metadata(
+        self: StructColumn, dtype: DtypeObj
+    ) -> StructColumn:
         from cudf.core.column import IntervalColumn
         from cudf.core.dtypes import IntervalDtype
 

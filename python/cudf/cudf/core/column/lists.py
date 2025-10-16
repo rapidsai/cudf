@@ -29,11 +29,11 @@ from cudf.utils.scalar import (
 from cudf.utils.utils import _is_null_host_scalar
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
     from typing_extensions import Self
 
-    from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype
+    from cudf._typing import ColumnBinaryOperand, ColumnLike, DtypeObj
     from cudf.core.buffer import Buffer
     from cudf.core.column.string import StringColumn
 
@@ -202,7 +202,7 @@ class ListColumn(ColumnBase):
             children=[elements],
         )
 
-    def set_base_data(self, value):
+    def set_base_data(self, value: None | Buffer) -> None:
         if value is not None:
             raise RuntimeError(
                 "ListColumn's do not use data attribute of Column, use "
@@ -212,12 +212,12 @@ class ListColumn(ColumnBase):
             super().set_base_data(value)
 
     @property
-    def __cuda_array_interface__(self):
+    def __cuda_array_interface__(self) -> Mapping[str, Any]:
         raise NotImplementedError(
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
 
-    def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
+    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, ListDtype):
             elements = self.base_children[1]._with_type_metadata(
                 dtype.element_type
@@ -244,7 +244,7 @@ class ListColumn(ColumnBase):
         # the underlying device data and mask.
         return super().copy(deep=False)
 
-    def leaves(self):
+    def leaves(self) -> ColumnBase:
         if isinstance(self.elements, ListColumn):
             return self.elements.leaves()
         else:
@@ -296,7 +296,7 @@ class ListColumn(ColumnBase):
             [", ", "[", "]"], dtype=plc.DataType(plc.TypeId.STRING)
         )
 
-    def as_string_column(self, dtype) -> StringColumn:
+    def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         """
         Create a strings column from a list column
         """
@@ -305,7 +305,9 @@ class ListColumn(ColumnBase):
                 raise TypeError(
                     f"Cannot cast a list from {self.dtype} to {dtype}"
                 )
-        lc = self._transform_leaves(lambda col: col.as_string_column(dtype))
+        lc = self._transform_leaves(
+            lambda col, dtype: col.as_string_column(dtype), dtype
+        )
 
         with acquire_spill_lock():
             plc_column = plc.strings.convert.convert_lists.format_list_column(
@@ -315,7 +317,9 @@ class ListColumn(ColumnBase):
             )
             return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
-    def _transform_leaves(self, func, *args) -> Self:
+    def _transform_leaves(
+        self, func: Callable[[ColumnBase, DtypeObj], ColumnBase], *args: Any
+    ) -> Self:
         """
         Return a new column like Self but with func applied to the last leaf column.
         """
@@ -344,7 +348,7 @@ class ListColumn(ColumnBase):
         return type(self).from_pylibcudf(plc_leaf_col)
 
     @property
-    def element_type(self) -> Dtype:
+    def element_type(self) -> DtypeObj:
         """
         Returns the element type of the list column.
         """
