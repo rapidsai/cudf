@@ -94,16 +94,16 @@ rmm::device_uvector<size_type> compute_target_indices(device_span<size_type cons
  * @brief Perform some final computation for the aggregation results such as null count and move
  * the result columns into a `result_cache` object.
  *
- * @param num_keys Number of unique keys in the output
  * @param values The values columns
  * @param aggregations The aggregation to compute corresponding to each values column
  * @param agg_results The table containing columns storing aggregation results
  * @param cache The cache object to store the extracted aggregation results
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
-void finalize_output(size_type num_keys,
-                     table_view const& values,
+void finalize_output(table_view const& values,
                      std::vector<std::unique_ptr<aggregation>> const& aggregations,
                      std::unique_ptr<table>& agg_results,
-                     cudf::detail::result_cache* cache);
+                     cudf::detail::result_cache* cache,
+                     rmm::cuda_stream_view stream);
 
 }  // namespace cudf::groupby::detail::hash
