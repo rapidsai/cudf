@@ -23,7 +23,6 @@ __all__ = ["Agg"]
 
 class Agg(Expr):
     __slots__ = (
-        "_nunique_include_nulls",
         "context",
         "name",
         "op",
@@ -63,7 +62,6 @@ class Agg(Expr):
             req = plc.aggregation.median()
         elif name == "n_unique":
             # TODO: datatype of result
-            self._nunique_include_nulls = True
             req = plc.aggregation.nunique(null_handling=plc.types.NullPolicy.INCLUDE)
         elif name == "first" or name == "last":
             req = None
@@ -176,11 +174,7 @@ class Agg(Expr):
         if column.size == 0 or column.null_count == column.size:
             z = None
             if self.name == "n_unique":
-                include_nulls = getattr(self, "_nunique_include_nulls", False)
-                if column.size == 0:
-                    z = 0
-                else:
-                    z = 1 if include_nulls else 0
+                z = 0 if column.size == 0 else 1
             return Column(
                 plc.Column.from_scalar(plc.Scalar.from_py(z, self.dtype.plc_type), 1),
                 name=column.name,

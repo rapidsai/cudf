@@ -1010,9 +1010,7 @@ def _(
     agg_name = node.name
     args = [translator.translate_expr(n=arg, schema=schema) for arg in node.arguments]
 
-    aggs = ["count", "n_unique", "mean", "median"]
-    if POLARS_VERSION_LT_134:
-        aggs.append("quantile")
+    aggs = ["count", "n_unique", "mean", "median", "quantile"]
     if agg_name not in aggs:
         args = [
             expr.Cast(dtype, arg)
