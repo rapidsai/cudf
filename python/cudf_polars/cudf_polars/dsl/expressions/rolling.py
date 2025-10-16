@@ -703,7 +703,6 @@ class GroupedRollingWindow(Expr):
         )
 
         order_index: plc.Column | None
-
         if rank_named := unary_window_ops["rank"]:
             if self._order_by_expr is not None:
                 _, _, ob_desc, ob_nulls_last = self.options
