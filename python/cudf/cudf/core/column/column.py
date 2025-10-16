@@ -1963,7 +1963,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         header: dict[Any, Any] = {}
         frames = []
         try:
-            dtype, dtype_frames = self.dtype.device_serialize()
+            dtype, dtype_frames = self.dtype.device_serialize()  # type: ignore[union-attr]
             header["dtype"] = dtype
             frames.extend(dtype_frames)
             header["dtype-is-cudf-serialized"] = True

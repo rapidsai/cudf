@@ -5174,7 +5174,7 @@ class IntervalIndex(Index):
             if copy:
                 col = col.copy()
             interval_col = col._with_type_metadata(
-                IntervalDtype(col.dtype.subtype, closed)
+                IntervalDtype(col.dtype.subtype, closed)  # type: ignore[union-attr]
             )
 
         if dtype:

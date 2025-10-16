@@ -812,17 +812,19 @@ class DatetimeTZColumn(DatetimeColumn):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         else:
             return self._local_time.to_pandas().tz_localize(
-                self.dtype.tz, ambiguous="NaT", nonexistent="NaT"
+                self.dtype.tz,  # type: ignore[union-attr]
+                ambiguous="NaT",
+                nonexistent="NaT",
             )
 
     def to_arrow(self) -> pa.Array:
         # Cast to expected timestamp array type for assume_timezone
         local_array = cast(pa.TimestampArray, self._local_time.to_arrow())
-        return pa.compute.assume_timezone(local_array, str(self.dtype.tz))
+        return pa.compute.assume_timezone(local_array, str(self.dtype.tz))  # type: ignore[union-attr]
 
     @functools.cached_property
     def time_unit(self) -> str:
-        return self.dtype.unit
+        return self.dtype.unit  # type: ignore[union-attr]
 
     @property
     def _utc_time(self) -> DatetimeColumn:
@@ -839,7 +841,7 @@ class DatetimeTZColumn(DatetimeColumn):
     @functools.cached_property
     def _local_time(self) -> DatetimeColumn:
         """Return the local time as naive timestamps."""
-        transition_times, offsets = get_tz_data(str(self.dtype.tz))
+        transition_times, offsets = get_tz_data(str(self.dtype.tz))  # type: ignore[union-attr]
         base_dtype = _get_base_dtype(self.dtype)
         indices = (
             transition_times.astype(base_dtype).searchsorted(
@@ -880,7 +882,7 @@ class DatetimeTZColumn(DatetimeColumn):
         # Arrow prints the UTC timestamps, but we want to print the
         # local timestamps:
         arr = self._local_time.to_arrow().cast(
-            pa.timestamp(self.dtype.unit, str(self.dtype.tz))
+            pa.timestamp(self.dtype.unit, str(self.dtype.tz))  # type: ignore[union-attr]
         )
         return (
             f"{object.__repr__(self)}\n{arr.to_string()}\ndtype: {self.dtype}"
@@ -905,7 +907,7 @@ class DatetimeTZColumn(DatetimeColumn):
     def tz_convert(self, tz: str | None) -> DatetimeColumn:
         if tz is None:
             return self._utc_time
-        elif tz == str(self.dtype.tz):
+        elif tz == str(self.dtype.tz):  # type: ignore[union-attr]
             return self.copy()
         utc_time = self._utc_time
         return utc_time._with_type_metadata(
