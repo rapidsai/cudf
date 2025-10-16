@@ -86,6 +86,7 @@ async def default_node_single(
                     chunk.table_view(),
                     list(ir.children[0].schema.keys()),
                     list(ir.children[0].schema.values()),
+                    chunk.stream,
                 ),
             )
             chunk = TableChunk.from_pylibcudf_table(
@@ -152,6 +153,7 @@ async def default_node_multi(
                                 table_chunk.table_view(),
                                 list(child.schema.keys()),
                                 list(child.schema.values()),
+                                table_chunk.stream,
                             )
                         )
                     elif ch_not_finished:

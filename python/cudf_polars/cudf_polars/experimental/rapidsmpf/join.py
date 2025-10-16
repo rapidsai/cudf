@@ -59,16 +59,17 @@ async def get_small_table(
     """
     small_chunks = []
     while (msg := await ch_small.recv(ctx)) is not None:
-        small_chunks.append(TableChunk.from_message(msg).table_view())
+        small_chunks.append(TableChunk.from_message(msg))
 
     if len(small_chunks) == 0:
         raise ValueError("Empty small side")
 
     return [
         DataFrame.from_table(
-            small_chunk,
+            small_chunk.table_view(),
             list(small_child.schema.keys()),
             list(small_child.schema.values()),
+            small_chunk.stream,
         )
         for small_chunk in small_chunks
     ]
@@ -128,6 +129,7 @@ async def broadcast_join_node(
                 large_chunk.table_view(),
                 list(large_child.schema.keys()),
                 list(large_child.schema.values()),
+                large_chunk.stream,
             )
 
             if not small_dfs:

@@ -133,6 +133,7 @@ def combine_output_chunks(ir: IR, *chunks: TableChunk) -> DataFrame:
                 chunk.table_view(),
                 list(ir.schema.keys()),
                 list(ir.schema.values()),
+                chunk.stream,
             )
             for chunk in sorted(chunks, key=lambda c: c.sequence_number)
         )
