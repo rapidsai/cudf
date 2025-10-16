@@ -997,11 +997,9 @@ class Sink(IR):
         options: dict[str, Any],
     ) -> plc.io.parquet.ChunkedParquetWriterOptionsBuilder: ...
 
-    # TODO: Remove the type ignore once we actually include pylibcudf type stubs in
-    # checking. Without those these types resolve to Any and the overloads collide.
     @overload
     @staticmethod
-    def _apply_parquet_writer_options(  # type: ignore[overload-cannot-match]
+    def _apply_parquet_writer_options(
         builder: plc.io.parquet.ParquetWriterOptionsBuilder,
         options: dict[str, Any],
     ) -> plc.io.parquet.ParquetWriterOptionsBuilder: ...

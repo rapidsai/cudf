@@ -49,6 +49,7 @@ from . import (
     types,
     unary,
     utilities,
+    utils,
 )
 from .column import Column
 from .gpumemoryview import gpumemoryview
@@ -102,4 +103,5 @@ __all__ = [
     "types",
     "unary",
     "utilities",
+    "utils",
 ]

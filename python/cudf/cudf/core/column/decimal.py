@@ -271,15 +271,17 @@ class DecimalBaseColumn(NumericalBaseColumn):
             new_rhs_dtype = type(output_type)(
                 rhs_dtype.precision, rhs_dtype.scale
             )
+            lhs_binop: plc.Scalar | ColumnBase
+            rhs_binop: plc.Scalar | ColumnBase
             if isinstance(lhs, (int, Decimal)):
-                lhs = _to_plc_scalar(lhs, new_lhs_dtype)
+                lhs_binop = _to_plc_scalar(lhs, new_lhs_dtype)
             else:
-                lhs = lhs.astype(new_lhs_dtype)
+                lhs_binop = lhs.astype(new_lhs_dtype)
             if isinstance(rhs, (int, Decimal)):
-                rhs = _to_plc_scalar(rhs, new_rhs_dtype)
+                rhs_binop = _to_plc_scalar(rhs, new_rhs_dtype)
             else:
-                rhs = rhs.astype(new_rhs_dtype)  # type: ignore[assignment]
-            result = binaryop.binaryop(lhs, rhs, op, output_type)
+                rhs_binop = rhs.astype(new_rhs_dtype)
+            result = binaryop.binaryop(lhs_binop, rhs_binop, op, output_type)
             # libcudf doesn't support precision, so result.dtype doesn't
             # maintain output_type.precision
             result.dtype.precision = output_type.precision
@@ -292,11 +294,15 @@ class DecimalBaseColumn(NumericalBaseColumn):
             "__le__",
             "__ge__",
         }:
-            if isinstance(rhs, (int, Decimal)):
-                rhs = _to_plc_scalar(rhs, self.dtype)
+            lhs_comp: plc.Scalar | ColumnBase = lhs  # type: ignore[assignment]
+            rhs_comp: plc.Scalar | ColumnBase = (
+                _to_plc_scalar(rhs, self.dtype)  # type: ignore[arg-type]
+                if isinstance(rhs, (int, Decimal))
+                else rhs
+            )
             result = binaryop.binaryop(
-                lhs,
-                rhs,
+                lhs_comp,
+                rhs_comp,
                 op,
                 get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
             )

@@ -280,12 +280,12 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         )
 
     def unary_operator(self, unaryop: str) -> ColumnBase:
-        unaryop = unaryop.upper()
-        unaryop = _unaryop_map.get(unaryop, unaryop)
-        unaryop = plc.unary.UnaryOperator[unaryop]
+        unaryop_str = unaryop.upper()
+        unaryop_str = _unaryop_map.get(unaryop_str, unaryop_str)
+        unaryop_enum = plc.unary.UnaryOperator[unaryop_str]
         with acquire_spill_lock():
             return type(self).from_pylibcudf(
                 plc.unary.unary_operation(
-                    self.to_pylibcudf(mode="read"), unaryop
+                    self.to_pylibcudf(mode="read"), unaryop_enum
                 )
             )
