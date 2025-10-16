@@ -19,8 +19,6 @@
 #include <chrono>
 #include <iostream>
 
-namespace cudf {
-namespace examples {
 /**
  * @brief Light-weight timer for measuring elapsed time.
  *
@@ -51,6 +49,3 @@ class timer {
   using time_point_t = std::chrono::time_point<std::chrono::high_resolution_clock>;
   time_point_t start_time;
 };
-
-}  // namespace examples
-};  // namespace cudf

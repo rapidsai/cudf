@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import itertools
 import re
-from collections.abc import Callable
 from functools import cached_property, lru_cache
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
@@ -35,7 +34,7 @@ from cudf.utils.temporal import infer_format
 from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable, Iterable, Mapping
 
     import cupy as cp
 
@@ -179,7 +178,7 @@ class StringColumn(ColumnBase):
         self._start_offset = None
         self._end_offset = None
 
-    def copy(self, deep: bool = True):
+    def copy(self, deep: bool = True) -> Self:
         # Since string columns are immutable, both deep
         # and shallow copies share the underlying device data and mask.
         return super().copy(deep=False)
@@ -234,18 +233,18 @@ class StringColumn(ColumnBase):
         else:
             return self.base_children[0].size - 1
 
-    # override for string column
     @property
-    def data(self):
+    def data(self) -> None | Buffer:
         if self._data is None:
+            assert self.base_data is not None
             if (
                 self.offset == 0
                 and len(self.base_children) > 0
                 and self.size == self.base_children[0].size - 1
             ):
-                self._data = self.base_data
+                self._data = self.base_data  # type: ignore[assignment]
             else:
-                self._data = self.base_data[
+                self._data = self.base_data[  # type: ignore[assignment]
                     self.start_offset : self.end_offset
                 ]
         return self._data
@@ -266,7 +265,7 @@ class StringColumn(ColumnBase):
         raise NotImplementedError("`any` not implemented for `StringColumn`")
 
     @property
-    def __cuda_array_interface__(self):
+    def __cuda_array_interface__(self) -> Mapping[str, Any]:
         raise NotImplementedError(
             f"dtype {self.dtype} is not yet supported via "
             "`__cuda_array_interface__`"
@@ -284,7 +283,7 @@ class StringColumn(ColumnBase):
             raise MixedTypeError("Cannot fill `np.nan` in string column")
         return super()._validate_fillna_value(fill_value)
 
-    def element_indexing(self, index: int):
+    def element_indexing(self, index: int) -> str | None:
         result = super().element_indexing(index)
         if isinstance(result, pa.Scalar):
             return result.as_py()
@@ -318,7 +317,7 @@ class StringColumn(ColumnBase):
         skipna: bool | None = None,
         dtype: Dtype | None = None,
         min_count: int = 0,
-    ):
+    ) -> ScalarLike:
         result_col = self._process_for_reduction(
             skipna=skipna, min_count=min_count
         )
@@ -331,7 +330,7 @@ class StringColumn(ColumnBase):
         other = [item] if is_scalar(item) else item
         return self.contains(as_column(other, dtype=self.dtype)).any()
 
-    def _with_type_metadata(self: StringColumn, dtype: Dtype) -> StringColumn:
+    def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
         """
         Copies type metadata from self onto other, returning a new column.
         """
@@ -453,7 +452,7 @@ class StringColumn(ColumnBase):
         result.dtype.precision = dtype.precision  # type: ignore[union-attr]
         return result  # type: ignore[return-value]
 
-    def as_string_column(self, dtype) -> StringColumn:
+    def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         col = self
         if dtype != self.dtype:
             if isinstance(dtype, pd.StringDtype) or (
@@ -705,7 +704,7 @@ class StringColumn(ColumnBase):
         return type(self).from_pylibcudf(result)  # type: ignore[return-value]
 
     @acquire_spill_lock()
-    def resolve_duplicates(self, sa, min_width: int) -> Self:
+    def resolve_duplicates(self, sa: Self, min_width: int) -> Self:
         result = plc.nvtext.deduplicate.resolve_duplicates(
             self.to_pylibcudf(mode="read"),
             sa.to_pylibcudf(mode="read"),
@@ -715,7 +714,7 @@ class StringColumn(ColumnBase):
 
     @acquire_spill_lock()
     def resolve_duplicates_pair(
-        self, sa1, input2, sa2, min_width: int
+        self, sa1: Self, input2: Self, sa2: Self, min_width: int
     ) -> Self:
         result = plc.nvtext.deduplicate.resolve_duplicates_pair(
             self.to_pylibcudf(mode="read"),
@@ -1233,13 +1232,14 @@ class StringColumn(ColumnBase):
 
     @acquire_spill_lock()
     def str_contains(self, pattern: str | Self) -> Self:
-        if isinstance(pattern, str):
-            pattern = pa_scalar_to_plc_scalar(pa.scalar(pattern))
-        else:
-            pattern = pattern.to_pylibcudf(mode="read")
+        plc_pattern = (
+            pa_scalar_to_plc_scalar(pa.scalar(pattern))
+            if isinstance(pattern, str)
+            else pattern.to_pylibcudf(mode="read")
+        )
         plc_column = plc.strings.find.contains(
             self.to_pylibcudf(mode="read"),
-            pattern,
+            plc_pattern,
         )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
@@ -1254,11 +1254,14 @@ class StringColumn(ColumnBase):
 
     @acquire_spill_lock()
     def repeat_strings(self, repeats: int | ColumnBase) -> Self:
-        if isinstance(repeats, ColumnBase):
-            repeats = repeats.to_pylibcudf(mode="read")
+        plc_repeats = (
+            repeats.to_pylibcudf(mode="read")
+            if isinstance(repeats, ColumnBase)
+            else repeats
+        )
         plc_column = plc.strings.repeat.repeat_strings(
             self.to_pylibcudf(mode="read"),
-            repeats,
+            plc_repeats,
         )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
@@ -1270,21 +1273,24 @@ class StringColumn(ColumnBase):
         max_replace_count: int = -1,
     ) -> Self:
         if isinstance(pattern, list) and isinstance(replacement, type(self)):
-            replacement = replacement.to_pylibcudf(mode="read")
-        elif isinstance(pattern, str) and isinstance(replacement, pa.Scalar):
-            pattern = plc.strings.regex_program.RegexProgram.create(
+            plc_column = plc.strings.replace_re.replace_re(
+                self.to_pylibcudf(mode="read"),
                 pattern,
-                plc.strings.regex_flags.RegexFlags.DEFAULT,
+                replacement.to_pylibcudf(mode="read"),
+                max_replace_count,
             )
-            replacement = pa_scalar_to_plc_scalar(replacement)
+        elif isinstance(pattern, str) and isinstance(replacement, pa.Scalar):
+            plc_column = plc.strings.replace_re.replace_re(
+                self.to_pylibcudf(mode="read"),
+                plc.strings.regex_program.RegexProgram.create(
+                    pattern,
+                    plc.strings.regex_flags.RegexFlags.DEFAULT,
+                ),
+                pa_scalar_to_plc_scalar(replacement),
+                max_replace_count,
+            )
         else:
             raise ValueError("Invalid pattern and replacement types")
-        plc_column = plc.strings.replace_re.replace_re(
-            self.to_pylibcudf(mode="read"),
-            pattern,
-            replacement,
-            max_replace_count,
-        )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     @acquire_spill_lock()
@@ -1318,17 +1324,26 @@ class StringColumn(ColumnBase):
         step: int | None = None,
     ) -> Self:
         if isinstance(start, ColumnBase) and isinstance(stop, ColumnBase):
-            start = start.to_pylibcudf(mode="read")
-            stop = stop.to_pylibcudf(mode="read")
+            plc_start: plc.Column | plc.Scalar = start.to_pylibcudf(
+                mode="read"
+            )
+            plc_stop: plc.Column | plc.Scalar = stop.to_pylibcudf(mode="read")
+            plc_step: plc.Scalar | None = None
         elif all(isinstance(x, int) or x is None for x in (start, stop)):
             param_dtype = pa.int32()
-            start = pa_scalar_to_plc_scalar(pa.scalar(start, type=param_dtype))
-            stop = pa_scalar_to_plc_scalar(pa.scalar(stop, type=param_dtype))
-            step = pa_scalar_to_plc_scalar(pa.scalar(step, type=param_dtype))
+            plc_start = pa_scalar_to_plc_scalar(
+                pa.scalar(start, type=param_dtype)
+            )
+            plc_stop = pa_scalar_to_plc_scalar(
+                pa.scalar(stop, type=param_dtype)
+            )
+            plc_step = pa_scalar_to_plc_scalar(
+                pa.scalar(step, type=param_dtype)
+            )
         else:
             raise ValueError("Invalid start and stop types")
         plc_result = plc.strings.slice.slice_strings(
-            self.to_pylibcudf(mode="read"), start, stop, step
+            self.to_pylibcudf(mode="read"), plc_start, plc_stop, plc_step
         )
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 
@@ -1535,17 +1550,20 @@ class StringColumn(ColumnBase):
     def translate(self, table: dict) -> Self:
         plc_result = plc.strings.translate.translate(
             self.to_pylibcudf(mode="read"),
-            str.maketrans(table),
+            str.maketrans(table),  # type: ignore[arg-type]
         )
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 
     @acquire_spill_lock()
     def filter_characters(
-        self, table: dict, keep: bool = True, repl: str | None = None
+        self,
+        table: dict,
+        keep: bool = True,
+        repl: str | None = None,
     ) -> Self:
         plc_result = plc.strings.translate.filter_characters(
             self.to_pylibcudf(mode="read"),
-            str.maketrans(table),
+            str.maketrans(table),  # type: ignore[arg-type]
             plc.strings.translate.FilterType.KEEP
             if keep
             else plc.strings.translate.FilterType.REMOVE,

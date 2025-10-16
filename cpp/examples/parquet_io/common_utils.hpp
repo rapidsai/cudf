@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,8 +68,11 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_
  *
  * @param lhs_table View to lhs table
  * @param rhs_table View to rhs table
+ * @param stream CUDA stream to use
  */
-void check_tables_equal(cudf::table_view const& lhs_table, cudf::table_view const& rhs_table);
+void check_tables_equal(cudf::table_view const& lhs_table,
+                        cudf::table_view const& rhs_table,
+                        rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Concatenate a vector of tables and return the resultant table

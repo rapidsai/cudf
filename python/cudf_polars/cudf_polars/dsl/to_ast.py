@@ -190,7 +190,7 @@ def _(node: expr.BinOp, self: Transformer) -> plc_expr.Expression:
     if self.state["for_parquet"]:
         op1_col, op2_col = (isinstance(op, expr.Col) for op in node.children)
         if op1_col ^ op2_col:
-            op = node.op
+            op: plc.binaryop.BinaryOperator = node.op
             if op not in SUPPORTED_STATISTICS_BINOPS:
                 raise NotImplementedError(
                     f"Parquet filter binop with column doesn't support {node.op!r}"
