@@ -674,7 +674,7 @@ std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
     auto const schema_idx   = column_schema_indices.front();
     size_type col_num_pages = 0;
     std::tie(page_row_offsets, col_num_pages, max_page_size) =
-      compute_page_row_offsets(per_file_metadata, row_group_indices, schema_idx, row_mask_offset);
+      compute_page_row_offsets(per_file_metadata, row_group_indices, schema_idx);
     // Add 1 to include the the 0th page's offset for each column
     col_page_offsets.emplace_back(col_num_pages + 1);
   } else {
@@ -687,10 +687,8 @@ std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
                   [&](auto const col_idx) {
                     page_row_offsets_tasks.emplace_back(
                       cudf::detail::host_worker_pool().submit_task([&, col_idx = col_idx] {
-                        return compute_page_row_offsets(per_file_metadata,
-                                                        row_group_indices,
-                                                        column_schema_indices[col_idx],
-                                                        row_mask_offset);
+                        return compute_page_row_offsets(
+                          per_file_metadata, row_group_indices, column_schema_indices[col_idx]);
                       }));
                   });
 
@@ -726,7 +724,7 @@ std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
 
   auto const mr = cudf::get_current_device_resource_ref();
   auto const [level_offsets, total_levels_size] =
-    compute_row_mask_levels(row_mask.size(), max_page_size);
+    compute_row_mask_levels(total_rows, max_page_size);
   auto const num_levels = static_cast<cudf::size_type>(level_offsets.size());
 
   auto levels_data = rmm::device_uvector<bool>(total_levels_size, stream, mr);
@@ -739,7 +737,7 @@ std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
     });
 
   auto device_level_ptrs  = cudf::detail::make_device_uvector_async(host_level_ptrs, stream, mr);
-  auto current_level_size = row_mask.size();
+  auto current_level_size = total_rows;
   std::for_each(
     thrust::counting_iterator(0), thrust::counting_iterator(num_levels - 1), [&](auto const level) {
       auto const next_level_size = cudf::util::div_rounding_up_unsafe(current_level_size, 2);

@@ -76,7 +76,7 @@ compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_fil
   cudf::host_span<metadata_base const> per_file_metadata,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   size_type schema_idx,
-  cudf::size_type row_mask_offset);
+  cudf::size_type row_mask_offset = 0);
 
 /**
  * @brief Make a device vector where each row contains the index of the page it belongs to
