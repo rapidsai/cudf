@@ -1296,6 +1296,7 @@ class MultiIndex(Index):
         color     object
         dtype: object
         """
+        # Not using DataFrame.dtypes to avoid expensive invocation of `._data.to_pandas_index`
         return pd.Series(dict(self.to_frame()._dtypes))
 
     @_performance_tracking
