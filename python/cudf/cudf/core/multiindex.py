@@ -1296,7 +1296,7 @@ class MultiIndex(Index):
         color     object
         dtype: object
         """
-        return self.to_frame().dtypes
+        return pd.Series(dict(self.to_frame()._dtypes))
 
     @_performance_tracking
     def to_numpy(self) -> np.ndarray:
