@@ -6578,7 +6578,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             # to compute skew/kurtosis
             return getattr(concat_columns(source._columns), op)(**kwargs)
         elif axis == 1:
-            return source._apply_cupy_method_axis_1(op, skipna=True, **kwargs)
+            return source._apply_cupy_method_axis_1(op, **kwargs)
         else:
             axis_0_results = []
             for col_label, col in source._column_labels_and_values:
@@ -6603,6 +6603,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )(**kwargs)
             else:
                 source_dtypes = [dtype for _, dtype in source._dtypes]
+                # TODO: What happens if common_dtype is None?
                 common_dtype = find_common_type(source_dtypes)
                 if (
                     common_dtype == CUDF_STRING_DTYPE
@@ -6827,12 +6828,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         return super(DataFrame, obj).any(axis, skipna, **kwargs)
 
     @_performance_tracking
-    def _apply_cupy_method_axis_1(
-        self, method: str, skipna: bool, *args, **kwargs
-    ):
+    def _apply_cupy_method_axis_1(self, method: str, *args, **kwargs):
         # This method uses cupy to perform scans and reductions along rows of a
         # DataFrame. Since cuDF is designed around columnar storage and
         # operations, we convert DataFrames to 2D cupy arrays for these ops.
+
+        # for dask metadata compatibility
+        skipna = kwargs.pop("skipna", None)
+        skipna = True if skipna is None else skipna
         if method not in _cupy_nan_methods_map and skipna not in (
             None,
             True,

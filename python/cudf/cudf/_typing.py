@@ -22,7 +22,9 @@ else:
 # Many of these are from
 # https://github.com/pandas-dev/pandas/blob/master/pandas/_typing.py
 
+# Dtype should ideally only used for public facing APIs
 Dtype = Union["ExtensionDtype", str, np.dtype]
+# DtypeObj should be used otherwise
 DtypeObj = Union["ExtensionDtype", np.dtype]
 
 # scalars
