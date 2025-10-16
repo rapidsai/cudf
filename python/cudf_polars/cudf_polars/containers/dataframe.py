@@ -349,7 +349,6 @@ class DataFrame:
         If column names overlap, newer names replace older ones, and
         appear in the same order as the original frame.
         """
-        stream = stream or self.stream
         new = {c.name: c for c in columns}
         if replace_only and not self.column_names_set.issuperset(new.keys()):
             raise ValueError("Cannot replace with non-existing names")
