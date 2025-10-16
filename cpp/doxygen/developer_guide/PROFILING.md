@@ -4,7 +4,8 @@ Profiling is essential for understanding performance characteristics and identif
 
 ## NVIDIA Nsight Systems
 
-[NVIDIA Nsight Systems](https://developer.nvidia.com/nsight-systems) is a system-wide performance analysis tool that provides detailed timeline views of CPU and GPU activity. It's the recommended tool for profiling CUDA applications and understanding kernel execution, memory transfers, and API calls.
+[NVIDIA Nsight Systems](https://developer.nvidia.com/nsight-systems) is a system-wide performance analysis tool that provides detailed timeline views of CPU and GPU activity.
+It's the recommended tool for profiling CUDA applications and understanding kernel execution, memory transfers, and API calls.
 
 ### Installation
 
