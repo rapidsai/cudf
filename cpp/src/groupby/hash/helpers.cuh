@@ -36,6 +36,11 @@ CUDF_HOST_DEVICE auto constexpr GROUPBY_BLOCK_SIZE = 128;
 /// aggregations
 CUDF_HOST_DEVICE auto constexpr GROUPBY_CARDINALITY_THRESHOLD = 128;
 
+/// Threshold to switch between two strategies: one is to output the aggregation results directly to
+/// the final dense output columns, the other is to output the results to sparse intermediate
+/// buffers then gather to the final dense output columns.
+auto constexpr GROUPBY_DENSE_OUTPUT_THRESHOLD = 2;
+
 // We add additional `block_size`, because after the number of elements in the local hash set
 // exceeds the threshold, all threads in the thread block can still insert one more element.
 /// The maximum number of elements handled per block

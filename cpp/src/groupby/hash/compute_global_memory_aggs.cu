@@ -64,10 +64,8 @@ rmm::device_uvector<size_type> compute_matching_keys(bitmask_type const* row_bit
   return key_indices;
 }
 
-}  // namespace
-
 template <typename SetType>
-std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_global_memory_aggs(
+std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_direct_output(
   bitmask_type const* row_bitmask,
   table_view const& values,
   SetType const& key_set,
@@ -98,6 +96,59 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_global
                        target_indices.begin(), d_agg_kinds.data(), *d_values, *d_results_ptr});
 
   return {std::move(agg_results), std::move(unique_keys)};
+}
+
+template <typename SetType>
+std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_sparse_output_gather(
+  bitmask_type const* row_bitmask,
+  table_view const& values,
+  SetType const& key_set,
+  host_span<aggregation::Kind const> h_agg_kinds,
+  device_span<aggregation::Kind const> d_agg_kinds,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  auto const num_rows                = values.num_rows();
+  auto [unique_keys, target_indices] = [&] {
+    auto matching_keys =
+      compute_matching_keys(row_bitmask, key_set.ref(cuco::op::insert_and_find), num_rows, stream);
+    auto [unique_keys, key_transform_map] = extract_populated_keys(key_set, num_rows, stream, mr);
+    auto target_indices                   = compute_target_indices(
+      matching_keys, key_transform_map, stream, cudf::get_current_device_resource_ref());
+    return std::pair{std::move(unique_keys), std::move(target_indices)};
+  }();
+
+  auto const d_values = table_device_view::create(values, stream);
+  auto agg_results    = create_results_table(
+    static_cast<size_type>(unique_keys.size()), values, h_agg_kinds, stream, mr);
+  auto d_results_ptr = mutable_table_device_view::create(*agg_results, stream);
+
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                     thrust::make_counting_iterator(int64_t{0}),
+                     num_rows * static_cast<int64_t>(h_agg_kinds.size()),
+                     compute_single_pass_aggs_fn{
+                       target_indices.begin(), d_agg_kinds.data(), *d_values, *d_results_ptr});
+
+  return {std::move(agg_results), std::move(unique_keys)};
+}
+
+}  // namespace
+
+template <typename SetType>
+std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_global_memory_aggs(
+  bitmask_type const* row_bitmask,
+  table_view const& values,
+  SetType const& key_set,
+  host_span<aggregation::Kind const> h_agg_kinds,
+  device_span<aggregation::Kind const> d_agg_kinds,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  return h_agg_kinds.size() > GROUPBY_DENSE_OUTPUT_THRESHOLD
+           ? compute_aggs_direct_output(
+               row_bitmask, values, key_set, h_agg_kinds, d_agg_kinds, stream, mr)
+           : compute_aggs_sparse_output_gather(
+               row_bitmask, values, key_set, h_agg_kinds, d_agg_kinds, stream, mr);
 }
 
 template std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>>
