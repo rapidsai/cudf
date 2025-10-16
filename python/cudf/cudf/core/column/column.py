@@ -122,6 +122,41 @@ def _can_values_be_equal(left: DtypeObj, right: DtypeObj) -> bool:
     return False
 
 
+class spillable_gpumemoryview(plc.gpumemoryview):
+    """
+    HACK: Prevent automatic unspilling of `SpillableBuffer` objects
+    when constructing `plc.Column`.
+
+    The `plc.Column()` constructor expects a `gpumemoryview` object,
+    but wrapping a `SpillableBuffer` directly in a `gpumemoryview`
+    forces the buffer to unspill (materialize) its device data prematurely.
+
+    To avoid this, we wrap spillable buffers in this subclass that implements
+    only the `.obj` attribute; the only attribute actually accessed by
+    `.from_pylibcudf()`. All other attributes intentionally raise errors to
+    prevent accidental usage paths that would cause unspilling.
+    """
+
+    def __init__(self, buf: SpillableBuffer) -> None:
+        self._buf = buf
+
+    @property
+    def obj(self) -> SpillableBuffer:
+        return self._buf
+
+    @property
+    def cai(self) -> None:  # type: ignore[override]
+        assert False
+
+    @property
+    def ptr(self) -> None:  # type: ignore[override]
+        assert False
+
+    @property
+    def nbytes(self) -> None:  # type: ignore[override]
+        assert False
+
+
 class ColumnBase(Serializable, BinaryOperand, Reducible):
     """
     A ColumnBase stores columnar data in device memory.
@@ -2010,40 +2045,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
         if isinstance(dtype, CategoricalDtype):
             data = children.pop(0)
-
-        class spillable_gpumemoryview(plc.gpumemoryview):
-            """
-            HACK: Prevent automatic unspilling of `SpillableBuffer` objects
-            when constructing `plc.Column`.
-
-            The `plc.Column()` constructor expects a `gpumemoryview` object,
-            but wrapping a `SpillableBuffer` directly in a `gpumemoryview`
-            forces the buffer to unspill (materialize) its device data prematurely.
-
-            To avoid this, we wrap spillable buffers in this subclass that implements
-            only the `.obj` attribute; the only attribute actually accessed by
-            `.from_pylibcudf()`. All other attributes intentionally raise errors to
-            prevent accidental usage paths that would cause unspilling.
-            """
-
-            def __init__(self, buf: SpillableBuffer):
-                self._buf = buf
-
-            @property
-            def obj(self):
-                return self._buf
-
-            @property
-            def cai(self):
-                assert False
-
-            @property
-            def ptr(self):
-                assert False
-
-            @property
-            def nbytes(self):
-                assert False
 
         if isinstance(data, SpillableBuffer):
             data = spillable_gpumemoryview(data)
