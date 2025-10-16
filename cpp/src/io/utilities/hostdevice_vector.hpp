@@ -27,7 +27,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/mr/host/host_memory_resource.hpp>
 
 namespace cudf::detail {
 

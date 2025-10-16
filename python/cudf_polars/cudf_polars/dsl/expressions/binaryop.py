@@ -87,8 +87,8 @@ class BinOp(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         left, right = (child.evaluate(df, context=context) for child in self.children)
-        lop = left.obj
-        rop = right.obj
+        lop: plc.Column | plc.Scalar = left.obj
+        rop: plc.Column | plc.Scalar = right.obj
         if left.size != right.size:
             if left.is_scalar:
                 lop = left.obj_scalar
