@@ -702,6 +702,7 @@ class GroupedRollingWindow(Expr):
             plc.Scalar.from_py(1, plc.types.SIZE_TYPE),
         )
 
+        order_index: plc.Column | None
         if rank_named := unary_window_ops["rank"]:
             if self._order_by_expr is not None:
                 _, _, ob_desc, ob_nulls_last = self.options
@@ -853,5 +854,5 @@ class GroupedRollingWindow(Expr):
 
         # Create a temporary DataFrame with the broadcasted columns named by their
         # placeholder names from agg decomposition, then evaluate the post-expression.
-        df = DataFrame(broadcasted_cols)
+        df = DataFrame(broadcasted_cols, stream=df.stream)
         return self.post.value.evaluate(df, context=ExecutionContext.FRAME)
