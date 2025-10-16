@@ -2,7 +2,7 @@
 
 import sys
 from collections.abc import Callable, Iterable
-from typing import TYPE_CHECKING, Any, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Literal, TypeVar, Union
 
 import numpy as np
 from pandas import Period, Timedelta, Timestamp
@@ -46,3 +46,5 @@ AggType = Union[str, Callable]  # noqa: UP007
 MultiColumnAggType = Union[  # noqa: UP007
     AggType, Iterable[AggType], dict[Any, Iterable[AggType]]
 ]
+
+Axis = Literal[0, 1, "index", "columns"]

@@ -3289,7 +3289,7 @@ def deserialize_columns(headers: list[dict], frames: list) -> list[ColumnBase]:
     return columns
 
 
-def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
+def concat_columns(objs: Sequence[ColumnBase]) -> ColumnBase:
     """Concatenate a sequence of columns."""
     if len(objs) == 0:
         return column_empty(0, dtype=np.dtype(np.float64))
@@ -3310,12 +3310,15 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     # Find the first non-null column:
     head = next((obj for obj in objs if obj.null_count != len(obj)), objs[0])
 
-    for i, obj in enumerate(objs):
+    new_objs = list(objs)
+    for i, obj in enumerate(new_objs):
         # Check that all columns are the same type:
         if not is_dtype_equal(obj.dtype, head.dtype):
             # if all null, cast to appropriate dtype
             if obj.null_count == len(obj):
-                objs[i] = column_empty(row_count=len(obj), dtype=head.dtype)
+                new_objs[i] = column_empty(
+                    row_count=len(obj), dtype=head.dtype
+                )
             else:
                 raise ValueError("All columns must be the same type")
 
@@ -3323,17 +3326,17 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     # ColumnBase._concat so that all subclasses can override necessary
     # behavior. However, at the moment it's not clear what that API should look
     # like, so CategoricalColumn simply implements a minimal working API.
-    if all(isinstance(o.dtype, CategoricalDtype) for o in objs):
+    if all(isinstance(o.dtype, CategoricalDtype) for o in new_objs):
         return cudf.core.column.categorical.CategoricalColumn._concat(
             cast(
                 MutableSequence[
                     cudf.core.column.categorical.CategoricalColumn
                 ],
-                objs,
+                new_objs,
             )
         )
 
-    newsize = sum(map(len, objs))
+    newsize = sum(map(len, new_objs))
     if newsize > np.iinfo(SIZE_TYPE_DTYPE).max:
         raise MemoryError(
             f"Result of concat cannot have size > {SIZE_TYPE_DTYPE}_MAX"
@@ -3342,7 +3345,7 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
         return column_empty(0, head.dtype)
 
     # Filter out inputs that have 0 length, then concatenate.
-    objs_with_len = [o for o in objs if len(o)]
+    objs_with_len = [o for o in new_objs if len(o)]
     with acquire_spill_lock():
         return ColumnBase.from_pylibcudf(
             plc.concatenate.concatenate(

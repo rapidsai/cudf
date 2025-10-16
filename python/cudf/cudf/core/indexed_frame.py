@@ -92,6 +92,7 @@ if TYPE_CHECKING:
     )
 
     from cudf._typing import (
+        Axis,
         ColumnLike,
         DataFrameOrSeries,
         Dtype,
@@ -448,7 +449,14 @@ class IndexedFrame(Frame):
         return super()._mimic_inplace(result, inplace)
 
     @_performance_tracking
-    def _scan(self, op, axis=None, skipna=True):
+    def _scan(
+        self,
+        op: str,
+        axis: Axis | None = None,
+        skipna: bool = True,
+        *args,
+        **kwargs,
+    ) -> Self:
         """
         Return {op_name} of the {cls}.
 
