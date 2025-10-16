@@ -855,11 +855,11 @@ class StringFunction(Expr):
                 # TODO: Maybe accept a string scalar in
                 # cudf::strings::pad to avoid DtoH transfer
                 # See https://github.com/rapidsai/cudf/issues/20202 for we type ignore
-                width = width_col.obj.to_scalar().to_py()  # type: ignore[assignment]
+                width: int = width_col.obj.to_scalar().to_py()  # type: ignore[assignment, no-redef]
             return Column(
                 plc.strings.padding.pad(
                     column.obj,
-                    width,
+                    width,  # type: ignore[arg-type]
                     plc.strings.SideType.LEFT,
                     char,  # type: ignore[arg-type]
                 ),
@@ -874,11 +874,11 @@ class StringFunction(Expr):
                 (char,) = self.options
                 # TODO: Maybe accept a string scalar in
                 # cudf::strings::pad to avoid DtoH transfer
-                width = width_col.obj.to_scalar().to_py()  # type: ignore[assignment]
+                width: int = width_col.obj.to_scalar().to_py()  # type: ignore[assignment, no-redef]
             return Column(
                 plc.strings.padding.pad(
                     column.obj,
-                    width,
+                    width,  # type: ignore[arg-type]
                     plc.strings.SideType.RIGHT,
                     char,  # type: ignore[arg-type]
                 ),

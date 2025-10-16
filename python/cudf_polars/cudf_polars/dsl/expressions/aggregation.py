@@ -110,6 +110,7 @@ class Agg(Expr):
         self.request = req
         op = getattr(self, f"_{name}", None)
         if op is None:
+            assert req is not None  # Ensure req is not None for _reduce
             op = partial(self._reduce, request=req)
         elif name in {"min", "max"}:
             op = partial(op, propagate_nans=options)
