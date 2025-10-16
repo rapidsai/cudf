@@ -309,7 +309,7 @@ class CategoricalColumn(column.ColumnBase):
         val = self.codes.element_indexing(index)
         if val is self._PANDAS_NA_VALUE:
             return val
-        return self._decode(int(val))
+        return self._decode(int(val))  # type: ignore[arg-type]
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
