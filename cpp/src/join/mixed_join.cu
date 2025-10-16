@@ -224,6 +224,10 @@ mixed_join_setup_data setup_mixed_join_common(table_view const& left_equality,
   // Precompute hash table storage and input data
   auto hash_table_storage = cudf::device_span<cuco::pair<hash_value_type, size_type>>{
     hash_table.data(), hash_table.capacity()};
+  CUDF_EXPECTS(reinterpret_cast<std::uintptr_t>(hash_table_storage.data()) %
+                   (2 * sizeof(cuco::pair<hash_value_type, size_type>)) ==
+                 0,
+               "Hash table storage must be aligned to 2-element boundary");
   auto [input_pairs, hash_indices] =
     precompute_mixed_join_data(hash_table, hash_probe, outer_num_rows, stream, mr);
 
