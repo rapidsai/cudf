@@ -27,7 +27,7 @@ def engine():
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 3,
-            "engine": "rapidsmpf",
+            "runtime": "rapidsmpf",
             "cluster": "single",
         },
     )
@@ -59,7 +59,7 @@ def test_select_reduce_fallback(df, fallback_mode):
         executor_options={
             "fallback_mode": fallback_mode,
             "max_rows_per_partition": 3,
-            "engine": "rapidsmpf",
+            "runtime": "rapidsmpf",
             "cluster": "single",
         },
     )
@@ -98,7 +98,7 @@ def test_select_fill_null_with_strategy(df):
         executor_options={
             "fallback_mode": "warn",
             "max_rows_per_partition": 3,
-            "engine": "rapidsmpf",
+            "runtime": "rapidsmpf",
             "cluster": "single",
         },
     )

@@ -290,7 +290,7 @@ def _(
             left,
             right,
             config_options.executor.shuffle_method,
-            config_options.executor.engine,
+            config_options.executor.runtime,
         )
     else:
         # Create a hash join

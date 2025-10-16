@@ -259,8 +259,8 @@ def evaluate_streaming(
     _clear_source_info_cache()
 
     assert config_options.executor.name == "streaming", "Executor must be streaming"
-    if config_options.executor.engine == "rapidsmpf":
-        # Using the RapidsMPF streaming engine.
+    if config_options.executor.runtime == "rapidsmpf":
+        # Using the RapidsMPF streaming runtime.
         return evaluate_rapidsmpf(ir, config_options)
     else:
         # Using the default task engine.

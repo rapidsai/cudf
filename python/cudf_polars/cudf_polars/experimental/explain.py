@@ -60,7 +60,7 @@ def explain_query(
     if physical:
         if (
             config.executor.name == "streaming"
-            and config.executor.engine == "rapidsmpf"
+            and config.executor.runtime == "rapidsmpf"
         ):
             from cudf_polars.experimental.rapidsmpf.core import (
                 lower_ir_graph as rapidsmpf_lower_ir_graph,

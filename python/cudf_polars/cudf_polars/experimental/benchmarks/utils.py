@@ -218,7 +218,7 @@ class RunConfig:
     queries: list[int]
     suffix: str
     executor: ExecutorType
-    rapidsmpf_engine: bool
+    runtime: str
     cluster: str
     scheduler: str  # Deprecated, kept for backward compatibility
     n_workers: int
@@ -259,7 +259,7 @@ class RunConfig:
         executor: ExecutorType = args.executor
         cluster = args.cluster
         scheduler = args.scheduler
-        rapidsmpf_engine = args.rapidsmpf_engine
+        runtime = args.runtime
 
         # Deal with deprecated scheduler argument
         # and non-streaming executors
@@ -328,7 +328,7 @@ class RunConfig:
             executor=executor,
             cluster=cluster,
             scheduler=scheduler,
-            rapidsmpf_engine=rapidsmpf_engine,
+            runtime=runtime,
             n_workers=args.n_workers,
             shuffle=args.shuffle,
             gather_shuffle_stats=args.rapidsmpf_dask_statistics,
@@ -369,8 +369,8 @@ class RunConfig:
             print(f"scale_factor: {self.scale_factor}")
             print(f"executor: {self.executor}")
             if self.executor == "streaming":
+                print(f"runtime: {self.runtime}")
                 print(f"cluster: {self.cluster}")
-                print(f"engine: {'rapidsmpf' if self.rapidsmpf_engine else 'tasks'}")
                 print(f"blocksize: {self.blocksize}")
                 print(f"shuffle_method: {self.shuffle}")
                 print(f"broadcast_join_limit: {self.broadcast_join_limit}")
@@ -424,7 +424,7 @@ def get_executor_options(
         executor_options["cluster"] = "distributed"
     if run_config.stats_planning:
         executor_options["stats_planning"] = {"use_reduction_planning": True}
-    executor_options["engine"] = "rapidsmpf" if run_config.rapidsmpf_engine else "tasks"
+    executor_options["runtime"] = run_config.runtime
 
     if (
         benchmark
@@ -660,10 +660,11 @@ def parse_args(
                 - distributed : Use Dask for multi-GPU execution"""),
     )
     parser.add_argument(
-        "--rapidsmpf-engine",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Whether to use the 'rapidsmpf' streaming engine.",
+        "--runtime",
+        type=str,
+        choices=["tasks", "rapidsmpf"],
+        default="tasks",
+        help="Runtime to use for the streaming executor (tasks or rapidsmpf).",
     )
     parser.add_argument(
         "--n-workers",

@@ -24,7 +24,7 @@ def engine():
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 4,
-            "engine": "rapidsmpf",
+            "runtime": "rapidsmpf",
             "cluster": "single",
         },
     )
@@ -89,7 +89,7 @@ def test_groupby_agg_config_options(df, op, keys):
             "unique_fraction": {"z": 0.5},
             # Check that we can change the n-ary factor
             "groupby_n_ary": 8,
-            "engine": "rapidsmpf",
+            "runtime": "rapidsmpf",
             "cluster": "single",
         },
     )
@@ -110,7 +110,7 @@ def test_groupby_fallback(df, engine, fallback_mode):
         executor_options={
             "fallback_mode": fallback_mode,
             "max_rows_per_partition": 4,
-            "engine": "rapidsmpf",
+            "runtime": "rapidsmpf",
             "cluster": "single",
         },
     )
@@ -243,7 +243,7 @@ def test_groupby_literal_with_stats_planning(df):
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 4,
-            "engine": "rapidsmpf",
+            "runtime": "rapidsmpf",
             "cluster": "single",
             "stats_planning": {"use_reduction_planning": True},
         },

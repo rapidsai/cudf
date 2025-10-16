@@ -66,7 +66,7 @@ def evaluate_logical_plan(ir: IR, config_options: ConfigOptions) -> DataFrame:
     The output DataFrame.
     """
     assert config_options.executor.name == "streaming", "Executor must be streaming"
-    assert config_options.executor.engine == "rapidsmpf", "Engine must be rapidsmpf"
+    assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
 
     if (
         config_options.executor.scheduler == "distributed"

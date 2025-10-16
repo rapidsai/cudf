@@ -72,7 +72,7 @@ def _lower_ir_fallback(
         "'in-memory' executor not supported in 'generate_ir_sub_network'"
     )
     if (
-        (rapidsmpf_engine := config_options.executor.engine == "rapidsmpf")
+        (rapidsmpf_engine := config_options.executor.runtime == "rapidsmpf")
         and config_options.executor.scheduler == "distributed"
     ):  # pragma: no cover; Requires distributed
         raise NotImplementedError(

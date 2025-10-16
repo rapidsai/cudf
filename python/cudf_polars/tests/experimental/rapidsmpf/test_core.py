@@ -21,7 +21,7 @@ def test_rapidmpf_engine_fallback(rows_per_partition: int, fallback_mode: str) -
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "engine": "rapidsmpf",
+            "runtime": "rapidsmpf",
             "max_rows_per_partition": rows_per_partition,
             "fallback_mode": fallback_mode,
             "cluster": "single",
@@ -48,7 +48,7 @@ def test_rapidmpf_engine_concat() -> None:
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "engine": "rapidsmpf",
+            "runtime": "rapidsmpf",
             "max_rows_per_partition": 3,
             "cluster": "single",
         },
@@ -80,7 +80,7 @@ def test_target_partition_size(tmp_path, blocksize, n_files):
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "engine": "rapidsmpf",
+            "runtime": "rapidsmpf",
             "target_partition_size": blocksize,
             "cluster": "single",
         },

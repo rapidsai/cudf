@@ -43,6 +43,7 @@ __all__ = [
     "ConfigOptions",
     "InMemoryExecutor",
     "ParquetOptions",
+    "Runtime",
     "Scheduler",  # Deprecated, kept for backward compatibility
     "ShuffleMethod",
     "StatsPlanningOptions",
@@ -137,14 +138,14 @@ class StreamingFallbackMode(str, enum.Enum):
     SILENT = "silent"
 
 
-class Engine(str, enum.Enum):
+class Runtime(str, enum.Enum):
     """
-    The compute engine to use for the streaming executor.
+    The runtime to use for the streaming executor.
 
-    * ``Engine.TASKS`` : Use the task-based execution engine.
-      This is the default engine.
-    * ``Engine.RAPIDSMPF`` : Use the rapidsmpf streaming engine.
-      This engine is experimental.
+    * ``Runtime.TASKS`` : Use the task-based runtime.
+      This is the default runtime.
+    * ``Runtime.RAPIDSMPF`` : Use the coroutine-based streaming runtime (rapidsmpf).
+      This runtime is experimental.
     """
 
     TASKS = "tasks"
@@ -426,14 +427,14 @@ class StreamingExecutor:
 
     Parameters
     ----------
-    engine
-        The execution engine to use for the streaming executor.
-        ``Engine.TASKS`` by default.
+    runtime
+        The runtime to use for the streaming executor.
+        ``Runtime.TASKS`` by default.
     cluster
         The cluster configuration for the streaming executor.
         ``Cluster.SINGLE`` by default.
 
-        This setting applies to both task-based and rapidsmpf execution models:
+        This setting applies to both task-based and rapidsmpf execution modes:
 
         * ``Cluster.SINGLE``: Single-GPU execution
         * ``Cluster.DISTRIBUTED``: Multi-GPU distributed execution (requires
@@ -519,11 +520,11 @@ class StreamingExecutor:
     _env_prefix = "CUDF_POLARS__EXECUTOR"
 
     name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
-    engine: Engine = dataclasses.field(
+    runtime: Runtime = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__ENGINE",
-            Engine.__call__,
-            default=Engine.TASKS,
+            f"{_env_prefix}__RUNTIME",
+            Runtime.__call__,
+            default=Runtime.TASKS,
         )
     )
     cluster: Cluster | None = dataclasses.field(
@@ -594,8 +595,8 @@ class StreamingExecutor:
     )
 
     def __post_init__(self) -> None:  # noqa: D105
-        # Check for rapidsmpf engine
-        if self.engine == "rapidsmpf":
+        # Check for rapidsmpf runtime
+        if self.runtime == "rapidsmpf":
             if not rapidsmpf_single_available():
                 raise ValueError("The rapidsmpf streaming engine requires rapidsmpf.")
             if self.shuffle_method == "tasks":
