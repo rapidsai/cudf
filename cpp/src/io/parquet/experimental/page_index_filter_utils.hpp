@@ -66,15 +66,13 @@ compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_fil
  * @param per_file_metadata Span of parquet footer metadata
  * @param row_group_indices Span of input row group indices
  * @param schema_idx Column's schema index
- * @param row_mask_offset Offset of the row mask
- * @return Tuple of page row offsets, number of pages, and the size of the largest page in this
+ * @return Pair of page row offsets and the size of the largest page in this
  * column
  */
-[[nodiscard]] std::tuple<std::vector<size_type>, size_type, size_type> compute_page_row_offsets(
+[[nodiscard]] std::pair<std::vector<size_type>, size_type> compute_page_row_offsets(
   cudf::host_span<metadata_base const> per_file_metadata,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  size_type schema_idx,
-  cudf::size_type row_mask_offset = 0);
+  size_type schema_idx);
 
 /**
  * @brief Make a device vector where each row contains the index of the page it belongs to

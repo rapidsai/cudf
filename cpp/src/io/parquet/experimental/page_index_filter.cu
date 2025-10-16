@@ -25,7 +25,6 @@
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
-#include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -48,6 +47,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <thread>
 
 namespace cudf::io::parquet::experimental::detail {
 
@@ -668,38 +668,48 @@ cudf::detail::host_vector<bool> aggregate_reader_metadata::compute_data_page_mas
 
   size_type max_page_size = 0;
 
-  if (num_columns == 1) {
-    auto const schema_idx   = column_schema_indices.front();
-    size_type col_num_pages = 0;
-    std::tie(page_row_offsets, col_num_pages, max_page_size) =
-      compute_page_row_offsets(per_file_metadata, row_group_indices, schema_idx);
-    // Add 1 to include the the 0th page's offset for each column
-    col_page_offsets.emplace_back(col_num_pages + 1);
+  if (num_columns <= 2) {
+    std::for_each(
+      column_schema_indices.begin(), column_schema_indices.end(), [&](auto const schema_idx) {
+        auto [col_page_row_offsets, col_max_page_size] =
+          compute_page_row_offsets(per_file_metadata, row_group_indices, schema_idx);
+        page_row_offsets.insert(
+          page_row_offsets.end(), col_page_row_offsets.begin(), col_page_row_offsets.end());
+        max_page_size = std::max<size_type>(max_page_size, col_max_page_size);
+        col_page_offsets.emplace_back(page_row_offsets.size());
+      });
   } else {
-    std::vector<std::future<std::tuple<std::vector<size_type>, size_type, size_type>>>
-      page_row_offsets_tasks;
-    page_row_offsets_tasks.reserve(num_columns);
+    auto constexpr max_data_page_mask_threads = 2;
+    auto const num_threads = std::min<size_type>(max_data_page_mask_threads, num_columns);
+    std::vector<std::thread> threads{};
+    threads.reserve(num_threads);
+    std::vector<std::vector<std::pair<std::vector<size_type>, size_type>>> thread_results(
+      num_threads);
+    auto const cols_per_thread = cudf::util::div_rounding_up_unsafe(num_columns, num_threads);
+    std::for_each(
+      thrust::counting_iterator(0), thrust::counting_iterator(num_threads), [&](auto const tid) {
+        threads.emplace_back([&, tid = tid]() {
+          auto const start_col = std::min(tid * cols_per_thread, num_columns);
+          auto const end_col   = std::min(start_col + cols_per_thread, num_columns);
+          std::for_each(thrust::counting_iterator(start_col),
+                        thrust::counting_iterator(end_col),
+                        [&](auto const col_idx) {
+                          thread_results[tid].emplace_back(compute_page_row_offsets(
+                            per_file_metadata, row_group_indices, column_schema_indices[col_idx]));
+                        });
+        });
+      });
 
-    std::for_each(thrust::counting_iterator<size_t>(0),
-                  thrust::counting_iterator(num_columns),
-                  [&](auto const col_idx) {
-                    page_row_offsets_tasks.emplace_back(
-                      cudf::detail::host_worker_pool().submit_task([&, col_idx = col_idx] {
-                        return compute_page_row_offsets(
-                          per_file_metadata, row_group_indices, column_schema_indices[col_idx]);
-                      }));
-                  });
-
-    // Collect results from all tasks
-    std::for_each(page_row_offsets_tasks.begin(), page_row_offsets_tasks.end(), [&](auto& task) {
-      auto [col_page_row_offsets, col_num_pages, col_max_page_size] = std::move(task).get();
-      page_row_offsets.insert(page_row_offsets.end(),
-                              std::make_move_iterator(col_page_row_offsets.begin()),
-                              std::make_move_iterator(col_page_row_offsets.end()));
-      max_page_size = std::max<size_type>(max_page_size, col_max_page_size);
-      // Add 1 to include the the 0th page's offset for each column
-      col_page_offsets.emplace_back(col_page_offsets.back() + col_num_pages + 1);
-    });
+    std::for_each(
+      thrust::counting_iterator(0), thrust::counting_iterator(num_threads), [&](auto const tid) {
+        threads[tid].join();
+        for (auto& [col_page_row_offsets, col_max_page_size] : thread_results[tid]) {
+          page_row_offsets.insert(
+            page_row_offsets.end(), col_page_row_offsets.begin(), col_page_row_offsets.end());
+          max_page_size = std::max<size_type>(max_page_size, col_max_page_size);
+          col_page_offsets.emplace_back(page_row_offsets.size());
+        }
+      });
   }
 
   auto const total_pages = page_row_offsets.size() - num_columns;

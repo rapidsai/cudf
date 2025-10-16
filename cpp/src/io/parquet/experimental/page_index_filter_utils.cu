@@ -34,6 +34,30 @@
 
 namespace cudf::io::parquet::experimental::detail {
 
+namespace {
+
+/**
+ * @brief Find the offset of the column chunk with the given schema index in the row group
+ *
+ * @param row_group Row group
+ * @param schema_idx Schema index
+ * @return Offset of the column chunk iterator
+ */
+[[nodiscard]] auto find_colchunk_iter_offset(RowGroup const& row_group, size_type schema_idx)
+{
+  auto const& colchunk_iter =
+    std::find_if(row_group.columns.begin(), row_group.columns.end(), [schema_idx](auto const& col) {
+      return col.schema_idx == schema_idx;
+    });
+  CUDF_EXPECTS(
+    colchunk_iter != row_group.columns.end(),
+    "Column chunk with schema index " + std::to_string(schema_idx) + " not found in row group",
+    std::invalid_argument);
+  return std::distance(row_group.columns.begin(), colchunk_iter);
+}
+
+}  // namespace
+
 bool compute_has_page_index(cudf::host_span<metadata_base const> file_metadatas,
                             cudf::host_span<std::vector<size_type> const> row_group_indices)
 {
@@ -89,20 +113,16 @@ compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_fil
     thrust::counting_iterator<size_t>(0),
     thrust::counting_iterator(row_group_indices.size()),
     [&](auto src_idx) {
-      auto const& rg_indices = row_group_indices[src_idx];
       // For all column chunks in this data source
+      auto const& rg_indices = row_group_indices[src_idx];
+      std::optional<size_type> colchunk_iter_offset{};
       std::for_each(rg_indices.cbegin(), rg_indices.cend(), [&](auto rg_idx) {
         auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
-        // Find the column chunk with the given schema index
-        auto colchunk_iter = std::find_if(
-          row_group.columns.begin(), row_group.columns.end(), [schema_idx](ColumnChunk const& col) {
-            return col.schema_idx == schema_idx;
-          });
-
-        CUDF_EXPECTS(colchunk_iter != row_group.columns.end(),
-                     "Column chunk with schema index " + std::to_string(schema_idx) +
-                       " not found in row group",
-                     std::invalid_argument);
+        if (not colchunk_iter_offset.has_value() or
+            row_group.columns[colchunk_iter_offset.value()].schema_idx != schema_idx) {
+          colchunk_iter_offset = find_colchunk_iter_offset(row_group, schema_idx);
+        }
+        auto const& colchunk_iter = row_group.columns.begin() + colchunk_iter_offset.value();
 
         // Compute page row counts and offsets if this column chunk has column and offset indexes
         if (colchunk_iter->offset_index.has_value()) {
@@ -136,11 +156,10 @@ compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_fil
     std::move(page_row_counts), std::move(page_row_offsets), std::move(col_chunk_page_offsets)};
 }
 
-std::tuple<std::vector<size_type>, size_type, size_type> compute_page_row_offsets(
+std::pair<std::vector<size_type>, size_type> compute_page_row_offsets(
   cudf::host_span<metadata_base const> per_file_metadata,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  cudf::size_type schema_idx,
-  cudf::size_type row_mask_offset)
+  cudf::size_type schema_idx)
 {
   // Compute total number of row groups
   auto const total_row_groups =
@@ -150,29 +169,26 @@ std::tuple<std::vector<size_type>, size_type, size_type> compute_page_row_offset
                     [](auto sum, auto const& rg_indices) { return sum + rg_indices.size(); });
 
   std::vector<size_type> page_row_offsets;
-  page_row_offsets.push_back(row_mask_offset);
+  page_row_offsets.push_back(0);
   size_type max_page_size = 0;
-  size_type num_pages     = 0;
 
   std::for_each(thrust::counting_iterator<size_t>(0),
                 thrust::counting_iterator(row_group_indices.size()),
                 [&](auto const src_idx) {
-                  auto const& rg_indices = row_group_indices[src_idx];
                   // For all row groups in this source
+                  auto const& rg_indices = row_group_indices[src_idx];
+                  std::optional<size_type> colchunk_iter_offset{};
                   std::for_each(rg_indices.begin(), rg_indices.end(), [&](auto const& rg_idx) {
                     auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
                     // Find the column chunk with the given schema index
-                    auto colchunk_iter = std::find_if(
-                      row_group.columns.begin(),
-                      row_group.columns.end(),
-                      [schema_idx](auto const& col) { return col.schema_idx == schema_idx; });
-                    CUDF_EXPECTS(colchunk_iter != row_group.columns.end(),
-                                 "Column chunk with schema index " + std::to_string(schema_idx) +
-                                   " not found in row group",
-                                 std::invalid_argument);
+                    if (not colchunk_iter_offset.has_value() or
+                        row_group.columns[colchunk_iter_offset.value()].schema_idx != schema_idx) {
+                      colchunk_iter_offset = find_colchunk_iter_offset(row_group, schema_idx);
+                    }
+                    auto const& colchunk_iter =
+                      row_group.columns.begin() + colchunk_iter_offset.value();
                     auto const& offset_index       = colchunk_iter->offset_index.value();
                     auto const row_group_num_pages = offset_index.page_locations.size();
-                    num_pages += static_cast<size_type>(row_group_num_pages);
                     std::for_each(thrust::counting_iterator<size_t>(0),
                                   thrust::counting_iterator(row_group_num_pages),
                                   [&](auto const page_idx) {
@@ -189,7 +205,7 @@ std::tuple<std::vector<size_type>, size_type, size_type> compute_page_row_offset
                   });
                 });
 
-  return {std::move(page_row_offsets), num_pages, max_page_size};
+  return {std::move(page_row_offsets), max_page_size};
 }
 
 rmm::device_uvector<size_type> make_page_indices_async(
