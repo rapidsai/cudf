@@ -120,6 +120,12 @@ cdef class ParquetReaderOptions:
         nrows : int64_t
             Number of rows to read after skip
 
+        Notes
+        -----
+        Although this allows one to request more than `size_type::max()`
+        rows, if any single read would produce a table larger than this row
+        limit, an error is thrown.
+
         Returns
         -------
         None

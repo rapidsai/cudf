@@ -380,6 +380,9 @@ class parquet_reader_options {
   /**
    * @brief Sets number of rows to read.
    *
+   * @note Although this allows one to request more than `size_type::max()` rows, if any
+   * single read would produce a table larger than this row limit, an error is thrown.
+   *
    * @param val Number of rows to read after skip
    */
   void set_num_rows(int64_t val);
@@ -539,6 +542,9 @@ class parquet_reader_options_builder {
 
   /**
    * @brief Sets number of rows to read.
+   *
+   * @note Although this allows one to request more than `size_type::max()` rows, if any
+   * single read would produce a table larger than this row limit, an error is thrown.
    *
    * @param val Number of rows to read after skip
    * @return this for chaining

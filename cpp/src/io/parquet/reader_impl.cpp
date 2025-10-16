@@ -873,7 +873,7 @@ table_with_metadata reader_impl::read()
                "Reading the whole file must not have non-zero byte_limit.");
   CUDF_EXPECTS(!_options.num_rows.has_value() ||
                  _options.num_rows.value() <= std::numeric_limits<size_type>::max(),
-               "Requested number of rows exceeds column size limit",
+               "Requested number of rows to read exceeds column size limit",
                std::overflow_error);
   prepare_data(read_mode::READ_ALL);
   return read_chunk_internal(read_mode::READ_ALL);
