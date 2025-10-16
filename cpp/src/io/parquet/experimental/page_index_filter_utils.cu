@@ -18,6 +18,7 @@
 #include "page_index_filter_utils.hpp"
 
 #include <cudf/detail/utilities/host_vector.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/types.hpp>
 
@@ -239,18 +240,18 @@ std::pair<std::vector<size_type>, size_type> compute_row_mask_levels(cudf::size_
   std::vector<size_type> level_offsets;
   level_offsets.push_back(0);
 
-  size_t current_size  = (num_rows + 1) / 2;
+  size_t current_size  = cudf::util::div_rounding_up_unsafe(num_rows, 2);
   size_t current_level = 1;
 
   while (current_size > 0) {
-    size_t block_size = 1ULL << current_level;
+    size_t block_size = size_t{1} << current_level;
 
     level_offsets.push_back(current_size);
     current_size += num_rows;
 
     if (std::cmp_greater_equal(block_size, max_page_size)) { break; }
 
-    current_size = (current_size + 1) / 2;
+    current_size = cudf::util::div_rounding_up_unsafe(current_size, 2);
     current_level++;
   }
   return {std::move(level_offsets), current_size};
