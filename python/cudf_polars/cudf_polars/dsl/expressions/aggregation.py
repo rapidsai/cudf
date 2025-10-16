@@ -9,14 +9,16 @@ from __future__ import annotations
 from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar
 
+import polars as pl
+
 import pylibcudf as plc
 
-from cudf_polars.containers import Column
+from cudf_polars.containers import Column, DataType
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 
 if TYPE_CHECKING:
-    from cudf_polars.containers import DataFrame, DataType
+    from cudf_polars.containers import DataFrame
 
 __all__ = ["Agg"]
 
@@ -164,28 +166,36 @@ class Agg(Expr):
     def _reduce(
         self, column: Column, *, request: plc.aggregation.Aggregation
     ) -> Column:
-        if (
-            self.name in {"mean", "median"}
-            and plc.traits.is_fixed_point(column.dtype.plc_type)
-            and self.dtype.plc_type.id() in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
-        ):
-            column = column.astype(self.dtype)
+        is_mean_or_median = self.name in {"mean", "median"}
+        is_quantile = self.name == "quantile"
 
+        out_dtype = self.dtype
+        if plc.traits.is_fixed_point(column.dtype.plc_type) and (
+            is_mean_or_median or is_quantile
+        ):
+            cast_to = (
+                self.dtype
+                if is_mean_or_median
+                and plc.traits.is_floating_point(self.dtype.plc_type)
+                else DataType(pl.Float64())
+            )
+            column = column.astype(cast_to)
+            out_dtype = cast_to
         if column.size == 0 or column.null_count == column.size:
-            z = None
+            res = None
             if self.name == "n_unique":
-                z = 0 if column.size == 0 else 1
+                res = 0 if column.size == 0 else 1
             return Column(
-                plc.Column.from_scalar(plc.Scalar.from_py(z, self.dtype.plc_type), 1),
+                plc.Column.from_scalar(plc.Scalar.from_py(res, out_dtype.plc_type), 1),
                 name=column.name,
-                dtype=self.dtype,
+                dtype=out_dtype,
             )
         return Column(
             plc.Column.from_scalar(
-                plc.reduce.reduce(column.obj, request, self.dtype.plc_type), 1
+                plc.reduce.reduce(column.obj, request, out_dtype.plc_type), 1
             ),
             name=column.name,
-            dtype=self.dtype,
+            dtype=out_dtype,
         )
 
     def _count(self, column: Column, *, include_nulls: bool) -> Column:

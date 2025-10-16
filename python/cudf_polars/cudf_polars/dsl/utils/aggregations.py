@@ -198,7 +198,7 @@ def decompose_single_agg(
                     child,
                 )
                 child_dtype = child.dtype.plc_type
-            elif is_quantile and POLARS_VERSION_LT_134:
+            elif is_quantile and POLARS_VERSION_LT_134:  # pragma: no cover
                 decimal_unsupported = True
 
         is_group_quantile_supported = plc.traits.is_integral(
