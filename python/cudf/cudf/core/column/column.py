@@ -1275,7 +1275,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             return ColumnBase.from_pylibcudf(  # type: ignore[return-value]
                 copying.scatter(
-                    [value], key, [self], bounds_check=bounds_check
+                    cast(list[plc.Scalar], [value])
+                    if isinstance(value, plc.Scalar)
+                    else cast(list[ColumnBase], [value]),
+                    key,
+                    [self],
+                    bounds_check=bounds_check,
                 )[0]
             )._with_type_metadata(self.dtype)
 
@@ -1476,7 +1481,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def _find_first_and_last(self, value: ScalarLike) -> tuple[int, int]:
         indices = self.indices_of(value)
         if n := len(indices):
-            return (
+            return (  # type: ignore[return-value]
                 indices.element_indexing(0),
                 indices.element_indexing(n - 1),
             )
@@ -2055,7 +2060,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return np.dtype(np.bool_)
         return self.dtype
 
-    def _with_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
+    def _with_type_metadata(self: ColumnBase, dtype: DtypeObj) -> ColumnBase:
         """
         Copies type metadata from self onto other, returning a new column.
 
