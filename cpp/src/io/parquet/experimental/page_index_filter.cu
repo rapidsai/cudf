@@ -461,69 +461,77 @@ CUDF_KERNEL void probe_hierarchical_masks_kernel(
 
   // Binary Decomposition Loop
   while (M < N) {
-    // 1. M Alignment: Find the largest power-of-two block that starts at M and aligns M up.
-    // Block size is determined by the Least Significant Bit (LSB) of M.
-    // If M=0, the LSB is the full range N, but we handle the LSB only for M>0.
-    // The __ffs intrinsic (Find First Set, 1-based) is the fastest way to get the LSB position (k).
-    size_t m_lsb_position = __ffs(M);                      // Position is 1-based (k+1)
-    size_t m_block_size   = 1ULL << (m_lsb_position - 1);  // Size is 2^k
+    // 1. Calculate the largest power of 2 that can align M up to the boundary.
+    // This is determined by the Least Significant Bit (LSB) of M.
+    // If M=0, LSB is usually defined as the full size, but here M is typically > 0
+    // or we handle M=0 implicitly by the full range check.
+    // The expression (M & -M) gives the value of the LSB, which is the block size (2^k).
+    size_t m_lsb_block_size = (M == 0) ? N : (M & -M);
+    size_t m_next_aligned   = M + m_lsb_block_size;
 
-    // 2. N Alignment: Find the largest power-of-two block that aligns N down.
-    // N & -N gives the LSB block size *if* N were the start, but we use it as the largest
-    // possible size that evenly divides N.
-    size_t n_block_size = N & -N;
+    // 2. Calculate the largest power of 2 block that can align N down to the boundary.
+    // This is determined by the LSB of (N - M), but simpler to use N's alignment for the end.
+    // The expression (N & -N) gives the block size corresponding to N's alignment.
+    // We ensure N_lsb_block_size does not exceed the remaining range size (N-M).
+    size_t n_lsb_block_size = N & -N;
 
-    // The largest block size we can consume from the current range [M, N)
-    size_t max_block_size = 0;
-    size_t mask_level     = 0;  // k (k=0 is 1 row, k=1 is 2 rows, etc.)
-    size_t mask_index     = 0;
+    // --- Decision Logic: Which side to consume? ---
 
-    // --- Core Decomposition Logic ---
+    // Block 1: M-aligned block (from M up to m_next_aligned)
+    size_t block1_size = m_next_aligned - M;
 
-    // Check the M side alignment block: [M, M + m_block_size)
-    // This is only valid if M + m_block_size <= N (the block fits).
-    if (M > 0 && M + m_block_size <= N) {
-      max_block_size = m_block_size;
-      mask_level     = m_lsb_position - 1;
-      mask_index     = M >> mask_level;  // M / 2^k
-    }
+    // Block 2: N-aligned block (from N - n_lsb_block_size up to N)
+    size_t block2_size = n_lsb_block_size;
 
-    // Check the N side alignment block: [N - n_block_size, N)
-    // This is only valid if N - n_block_size >= M and the N block is larger or equal to the M
-    // block.
-    if (n_block_size > 0 && N - n_block_size >= M && n_block_size >= max_block_size) {
-      // If the N block is larger or we are at the end, prioritize the N block
-      max_block_size = n_block_size;
-      mask_level     = __ffs(n_block_size) - 1;
-      mask_index     = (N - n_block_size) >> mask_level;  // (N - 2^k) / 2^k
-    }
+    // Block 3: The remaining central range block
 
-    // Fallback for small, unaligned ranges (e.g., [11, 13) where M and N are close)
-    // If max_block_size is 0 or too large, reduce by 1 row (Level 0)
-    if (max_block_size == 0 || max_block_size > N - M) {
-      max_block_size = 1;
-      mask_level     = 0;
-      mask_index     = M;  // Level 0 index is just M
-    }
+    if (block1_size > 0 && M < m_next_aligned && m_next_aligned <= N) {
+      // If the M-aligned block is fully contained in the range [M, N)
 
-    // --- Query Mask and Advance ---
+      // Check if block1_size is 2^k. k = log2(block1_size).
+      // Since block1_size is based on LSB, it is always a power of 2.
+      size_t k1 = __ffs(block1_size) - 1;
 
-    // Look up the mask value at the determined level and index
-    if (level_ptrs[mask_level][mask_index]) {
-      results[range_idx] = true;
-      return;  // Found a set bit, terminate for this range
-    }
+      // Calculate mask index: The starting point M is divided by the block size.
+      size_t mask_idx = M / block1_size;
 
-    // Advance M or N based on which block was consumed (whichever has the smaller index)
-    if (mask_level == 0) {
-      // Consumed a single row
-      M += max_block_size;
-    } else if (M == mask_index * max_block_size) {
-      // Consumed an M-aligned block (moving M up)
-      M += max_block_size;
+      // Look up the mask value
+      if (level_ptrs[k1][mask_idx]) {
+        results[range_idx] = true;
+        return;  // Found a set bit, terminate for this range
+      }
+
+      // Advance M
+      M = m_next_aligned;
+    } else if (block2_size > 0 && N - block2_size >= M) {
+      // If the N-aligned block is fully contained and does not overlap M's new position
+
+      // Check if block2_size is 2^k. k = log2(block2_size).
+      size_t k2 = __ffs(block2_size) - 1;
+
+      // Calculate mask index
+      size_t mask_idx = (N - block2_size) / block2_size;
+
+      // Look up the mask value
+      if (level_ptrs[k2][mask_idx]) {
+        results[range_idx] = true;
+        return;  // Found a set bit, terminate for this range
+      }
+
+      // Backtrack N
+      N = N - block2_size;
     } else {
-      // Consumed an N-aligned block (moving N down)
-      N -= max_block_size;
+      // The remaining range is unaligned and small (or just 1 element).
+      // This happens when M and N are close and unaligned (e.g., [11, 13]).
+
+      // Prioritize M (1-row check) or N (1-row check) until they meet.
+
+      // Check single row at M (Level 0)
+      if (level_ptrs[0][M]) {
+        results[range_idx] = true;
+        return;
+      }
+      M++;
     }
   }
 }
@@ -768,10 +776,11 @@ std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
       device_level_ptrs, page_offsets, device_data_page_mask.data());
   }
 
-  auto host_results      = cudf::detail::make_host_vector(device_data_page_mask, stream);
-  auto host_results_iter = host_results.begin();
+  auto host_results = cudf::detail::make_host_vector_async(device_data_page_mask, stream);
   std::vector<bool> data_page_mask{};
   data_page_mask.reserve(total_pages);
+  stream.synchronize();
+  auto host_results_iter = host_results.begin();
   std::for_each(thrust::counting_iterator<size_t>(0),
                 thrust::counting_iterator(num_columns),
                 [&](auto col_idx) {
@@ -779,7 +788,7 @@ std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
                     col_page_offsets[col_idx + 1] - col_page_offsets[col_idx] - 1;
                   data_page_mask.insert(
                     data_page_mask.end(), host_results_iter, host_results_iter + col_num_pages);
-                  std::advance(host_results_iter, col_num_pages + 1);
+                  host_results_iter += col_num_pages + 1;
                 });
   return data_page_mask;
 }
