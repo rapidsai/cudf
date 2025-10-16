@@ -496,6 +496,10 @@ class IndexedFrame(Frame):
         2   6  24
         3  10  34
         """
+        if "numeric_only" in kwargs:
+            raise TypeError(
+                "got an unexpected keyword argument 'numeric_only'"
+            )
         cast_to_int = op in ("cumsum", "cumprod")
         skipna = True if skipna is None else skipna
 
