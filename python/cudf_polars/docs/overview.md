@@ -613,6 +613,78 @@ style](https://en.wikipedia.org/wiki/Fluent_interface). It makes it
 much easier to write iteration over objects and collect the results if
 everyone always returns a value.
 
+# CUDA Streams
+
+CUDA [Streams](https://docs.nvidia.com/cuda/cuda-c-programming-guide/#streams)
+are used to manage concurrent operations. These build on libcudf's and
+pylibcudf's usage of streams when performing operations on pylibcudf `Column`s
+and `Table`s.
+
+In `cudf-polars`, we attach a `Stream` to `cudf_polars.containers.DataFrame`.
+This stream (or a new stream that it's joined into) is used for all pylibcudf
+operations on the data backing that `DataFrame`.
+
+When creating a `cudf_polars.containers.DataFrame` you *must* ensure that all
+the provided pylibcudf Tables / Columns are valid on the provided `stream`.
+
+Take special care when creating a `DataFrame` that combines pylibcudf `Table`s
+or `Column`s from multiple `DataFrame`s, or "bare" pylibcudf objects that don't
+come from a `DataFrame` at all. This also applies to `DataFrame` methods like
+`DataFrame.with_columns` and `DataFrame.filter` which accept
+`cudf_polars.containers.Column` objects that might not be valid on the
+`DataFrame`'s original stream.
+
+Here's an example of the simpler case where a `pylibcudf.Table` is created
+on some CUDA stream and that same stream is used for the `DataFrame`:
+
+```python
+import polars as pl
+import pyarrow as pa
+import pylibcudf as plc
+from rmm.pylibrmm.stream import Stream
+
+from cudf_polars.containers import DataFrame, DataType
+
+stream = Stream()
+t = plc.Table.from_arrow(
+    pa.Table.from_pylist([{"a": 1, "b": 0}, {"a": 1, "b": 1}, {"a": 2, "b": 0}]),
+    stream=stream
+)
+# t is valid on `stream`. So we must provide `stream` or some CUDA Stream that's
+# downstream of it
+df = DataFrame.from_table(
+    t,
+    names=['a', 'b'],
+    dtypes=[DataType(pl.Int64()), DataType(pl.Int64())],
+    stream=stream
+)
+```
+
+Managing multiple containers, which are potentially valid on different streams,
+is more challenging. We have some utilities that can help correctly handle data
+from multiple independent sources. For example, to add a new `Column` to `df`
+that's valid on some independent CUDA stream, we'd use
+`cudf_polars.utils.cuda_stream.get_joined_cuda_stream` to get a new CUDA stream
+that's downstream of both the original `stream` and `stream_b`.
+
+
+```python
+from cudf_polars.containers import Column
+from cudf_polars.utils.cuda_stream import get_joined_cuda_stream
+
+stream_b = Stream()
+col = Column(plc.Column.from_arrow(pa.array([1, 2, 3]), stream=stream_b), dtype=pl.Int64(), name="c")
+
+new_stream = get_joined_cuda_stream(upstreams=(stream, stream_b))
+df2 = df.with_columns([col], stream=new_stream)
+```
+
+The same principle applies to using the `cudf_polars.containers.DataFrame`
+constructor with multiple `cudf_polars.containers.Column` objects that are valid
+on multiple streams. It's the caller's responsibility to provide a stream that
+all the `Column`s are valid on, likely by joining together the streams that each
+individual stream is valid on.
+
 # Writing tests
 
 We use `pytest`, tests live in the `tests/` subdirectory,
