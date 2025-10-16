@@ -43,13 +43,13 @@ void bench_intcast(nvbench::state& state)
   if (from_num) {
     state.add_global_memory_reads<int64_t>(num_rows);
     state.add_global_memory_writes<int8_t>(column->alloc_size());
-    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
       auto result = cudf::strings::cast_from_integer(numbers->view(), endian);
     });
   } else {
     state.add_global_memory_reads<int8_t>(column->alloc_size());
     state.add_global_memory_writes<int64_t>(num_rows);
-    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
       auto result = cudf::strings::cast_to_integer(sv, data_type, endian);
     });
   }
@@ -57,6 +57,6 @@ void bench_intcast(nvbench::state& state)
 
 NVBENCH_BENCH(bench_intcast)
   .set_name("intcast")
-  .add_string_axis("dir", {"to", "from"})
-  .add_int64_axis("num_rows", {32768, 262144, 2097152})
-  .add_string_axis("endian", {"little", "big"});
+  .add_int64_axis("num_rows", {262144, 2097152, 8388608})
+  .add_string_axis("endian", {"little", "big"})
+  .add_string_axis("dir", {"to", "from"});
