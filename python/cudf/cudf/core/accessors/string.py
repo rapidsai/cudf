@@ -2990,12 +2990,14 @@ class StringMethods(BaseAccessor):
             raise TypeError(msg)
 
         try:
-            side = plc.strings.side_type.SideType[side.upper()]
+            side_type = plc.strings.side_type.SideType[side.upper()]
         except KeyError:
             raise ValueError(
                 "side has to be either one of {'left', 'right', 'both'}"
             )
-        return self._return_or_inplace(self._column.pad(width, side, fillchar))
+        return self._return_or_inplace(
+            self._column.pad(width, side_type, fillchar)
+        )
 
     def zfill(self, width: int) -> Series | Index:
         """

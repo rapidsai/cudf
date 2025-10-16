@@ -302,6 +302,17 @@ DataFrame = make_final_proxy_type(
         "__iter__": custom_iter,
         "attrs": _FastSlowAttribute("attrs"),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+        "style": _FastSlowAttribute("style", private=True),
+        "_mgr": _FastSlowAttribute("_mgr", private=True),
+        "plot": _FastSlowAttribute("plot", private=True),
+        "sparse": _FastSlowAttribute("sparse", private=True),
+        "expanding": _FastSlowAttribute("expanding", private=True),
+        "_AXIS_LEN": _FastSlowAttribute("_AXIS_LEN", private=True),
+        "_AXIS_TO_AXIS_NUMBER": _FastSlowAttribute(
+            "_AXIS_TO_AXIS_NUMBER", private=True
+        ),
+        "_AXIS_ORDERS": _FastSlowAttribute("_AXIS_ORDERS", private=True),
+        "flags": _FastSlowAttribute("flags", private=True),
     },
 )
 
@@ -350,6 +361,15 @@ Series = make_final_proxy_type(
         "_accessors": set(),
         "dtype": property(_Series_dtype),
         "attrs": _FastSlowAttribute("attrs"),
+        "_mgr": _FastSlowAttribute("_mgr", private=True),
+        "array": _FastSlowAttribute("array", private=True),
+        "sparse": _FastSlowAttribute("sparse", private=True),
+        "_AXIS_LEN": _FastSlowAttribute("_AXIS_LEN", private=True),
+        "_AXIS_TO_AXIS_NUMBER": _FastSlowAttribute(
+            "_AXIS_TO_AXIS_NUMBER", private=True
+        ),
+        "_AXIS_ORDERS": _FastSlowAttribute("_AXIS_ORDERS", private=True),
+        "flags": _FastSlowAttribute("flags", private=True),
     },
 )
 
@@ -405,6 +425,8 @@ Index = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "name": _FastSlowAttribute("name"),
+        "nbytes": _FastSlowAttribute("nbytes", private=True),
+        "array": _FastSlowAttribute("array", private=True),
     },
 )
 
@@ -419,6 +441,8 @@ RangeIndex = make_final_proxy_type(
         "__init__": _DELETE,
         "__setattr__": Index__setattr__,
         "name": _FastSlowAttribute("name"),
+        "nbytes": _FastSlowAttribute("nbytes", private=True),
+        "array": _FastSlowAttribute("array", private=True),
     },
 )
 
@@ -468,6 +492,8 @@ CategoricalIndex = make_final_proxy_type(
         "__init__": _DELETE,
         "__setattr__": Index__setattr__,
         "name": _FastSlowAttribute("name"),
+        "nbytes": _FastSlowAttribute("nbytes", private=True),
+        "array": _FastSlowAttribute("array", private=True),
     },
 )
 
@@ -503,6 +529,8 @@ DatetimeIndex = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "name": _FastSlowAttribute("name"),
+        "nbytes": _FastSlowAttribute("nbytes", private=True),
+        "array": _FastSlowAttribute("array", private=True),
     },
 )
 
@@ -542,6 +570,8 @@ TimedeltaIndex = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "name": _FastSlowAttribute("name"),
+        "nbytes": _FastSlowAttribute("nbytes", private=True),
+        "array": _FastSlowAttribute("array", private=True),
     },
 )
 
@@ -667,14 +697,14 @@ Grouper = make_final_proxy_type(
         **{
             k: getattr(fast, k)
             for k in {"key", "level", "freq", "closed", "label"}
-            if getattr(fast, k) is not None
+            if getattr(fast, k, None) is not None
         }
     ),
     slow_to_fast=lambda slow: cudf.Grouper(
         **{
             k: getattr(slow, k)
             for k in {"key", "level", "freq", "closed", "label"}
-            if getattr(slow, k) is not None
+            if getattr(slow, k, None) is not None
         }
     ),
 )
