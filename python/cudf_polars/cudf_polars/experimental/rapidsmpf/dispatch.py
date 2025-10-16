@@ -58,12 +58,16 @@ class GenState(TypedDict):
         Partition information.
     output_ch_count
         Output channel count.
+    union_dependency
+        Whether a Union node depends on sub-network output.
+        This value is used to tune multicasting behavior.
     """
 
     ctx: Context
     config_options: ConfigOptions
     partition_info: MutableMapping[IR, PartitionInfo]
     output_ch_count: MutableMapping[IR, int]
+    union_dependency: bool
 
 
 SubNetGenerator: TypeAlias = GenericTransformer[

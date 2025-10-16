@@ -77,6 +77,7 @@ def _(
     # Pass-through all child chunks in channel order.
 
     # Process children
+    rec.state["union_dependency"] = True
     _nodes, _channels = zip(*(rec(c) for c in ir.children), strict=True)
     nodes = reduce(operator.or_, _nodes)
     channels = reduce(operator.or_, _channels)

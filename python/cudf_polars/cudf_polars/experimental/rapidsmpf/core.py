@@ -216,6 +216,7 @@ def generate_network(
         "config_options": config_options,
         "partition_info": partition_info,
         "output_ch_count": output_ch_count,
+        "union_dependency": False,
     }
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state

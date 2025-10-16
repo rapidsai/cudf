@@ -25,8 +25,6 @@ if TYPE_CHECKING:
 
     from rapidsmpf.streaming.core.context import Context
 
-    import pylibcudf as plc
-
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
 
 
@@ -211,41 +209,6 @@ async def default_node_multi(
         await ch_out.drain(ctx)
 
 
-async def forward_to_channel(
-    ctx: Context,
-    chunks: list[plc.Table],
-    ch_out: Channel[TableChunk],
-    channel_id: int = 0,
-) -> None:
-    """
-    Send all chunks to a single output channel, then drain it.
-
-    This ensures atomic processing: all sends to this channel complete
-    before the channel is drained.
-
-    Parameters
-    ----------
-    ctx
-        The context.
-    chunks
-        The chunks to send.
-    ch_out
-        The output channel.
-    channel_id
-        Identifier for debugging.
-    """
-    for seq_num, chunk in enumerate(chunks):
-        await ch_out.send(
-            ctx,
-            Message(
-                TableChunk.from_pylibcudf_table(
-                    seq_num, chunk, DEFAULT_STREAM, exclusive_view=False
-                )
-            ),
-        )
-    await ch_out.drain(ctx)
-
-
 @define_py_node()
 async def multicast_node(
     ctx: Context,
@@ -266,20 +229,60 @@ async def multicast_node(
     """
     # TODO: Use multiple streams
     async with shutdown_on_error(ctx, ch_in, *chs_out):
-        # Collect all chunks from input channel
-        chunks: list[TableChunk] = []
         while (msg := await ch_in.recv(ctx)) is not None:
-            chunks.append(TableChunk.from_message(msg).table_view())
+            table_chunk = TableChunk.from_message(msg)
+            for ch_out in chs_out:
+                await ch_out.send(
+                    ctx,
+                    Message(
+                        TableChunk.from_pylibcudf_table(
+                            table_chunk.sequence_number,
+                            table_chunk.table_view(),
+                            table_chunk.stream,
+                            # NOTE: Should we just copy the table chunk?
+                            exclusive_view=False,
+                        )
+                    ),
+                )
+        await asyncio.gather(*(ch.drain(ctx) for ch in chs_out))
 
-        # Send chunks to all output channels using atomic per-channel processing
-        # This ensures that channels consuming at different rates don't block each other
-        # (e.g., streaming operations vs fallback repartition operations)
-        await asyncio.gather(
-            *(
-                forward_to_channel(ctx, chunks, ch_out, channel_id=i)
-                for i, ch_out in enumerate(chs_out)
-            )
-        )
+
+@define_py_node()
+async def passthrough_node(
+    ctx: Context,
+    ch_out: Channel[TableChunk],
+    ch_in: Channel[TableChunk],
+    *,
+    union_dependency: bool,
+) -> None:
+    """
+    Passthrough node for rapidsmpf.
+
+    Parameters
+    ----------
+    ctx
+        The context.
+    ch_out
+        The output channel.
+    ch_in
+        The input channel.
+    union_dependency
+        Whether a Union node depends on this passthrough node.
+        If so, we must forward all chunks immediately
+        to avoid blocking progress in a multicast node.
+    """
+    async with shutdown_on_error(ctx, ch_in, ch_out):
+        # Unfortunately, we must forward all chunks immediately.
+        # Otherwise, we may block progress in a multicast node.
+        sends = []
+        while (msg := await ch_in.recv(ctx)) is not None:
+            if union_dependency:
+                sends.append(asyncio.create_task(ch_out.send(ctx, msg)))
+            else:
+                await ch_out.send(ctx, msg)
+        if sends:
+            await asyncio.gather(*sends)
+        await ch_out.drain(ctx)
 
 
 @generate_ir_sub_network.register(IR)
@@ -394,7 +397,19 @@ def generate_ir_sub_network_wrapper(
     """
     nodes, channels = generate_ir_sub_network(ir, rec)
     if (count := rec.state["output_ch_count"][ir]) > 1:
+        inter_chs = [Channel() for _ in range(count)]
         output_chs = [Channel() for _ in range(count)]
-        nodes[ir].append(multicast_node(rec.state["ctx"], channels[ir][0], *output_chs))
+        nodes[ir].append(multicast_node(rec.state["ctx"], channels[ir][0], *inter_chs))
+        for ch_in, ch_out in zip(inter_chs, output_chs, strict=True):
+            # We need a passthrough node to ensure that downstram
+            # consumers can recv chunks at different rates
+            nodes[ir].append(
+                passthrough_node(
+                    rec.state["ctx"],
+                    ch_out,
+                    ch_in,
+                    union_dependency=rec.state["union_dependency"],
+                )
+            )
         channels[ir] = output_chs
     return nodes, channels
