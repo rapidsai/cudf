@@ -29,9 +29,9 @@ from cudf.utils.dtypes import (
 )
 
 if PANDAS_GE_210:
-    PANDAS_NUMPY_DTYPE = pd.core.dtypes.dtypes.NumpyEADtype
+    PANDAS_NUMPY_DTYPE = pd.core.dtypes.dtypes.NumpyEADtype  # type: ignore[attr-defined]
 else:
-    PANDAS_NUMPY_DTYPE = pd.core.dtypes.dtypes.PandasDtype
+    PANDAS_NUMPY_DTYPE = pd.core.dtypes.dtypes.PandasDtype  # type: ignore[attr-defined]
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -103,13 +103,13 @@ def dtype(arbitrary: Any) -> DtypeObj:
         elif isinstance(pd_dtype, pd.StringDtype):
             return CUDF_STRING_DTYPE
         else:
-            return dtype(pd_dtype.numpy_dtype)
+            return dtype(pd_dtype.numpy_dtype)  # type: ignore[attr-defined]
     elif isinstance(pd_dtype, PANDAS_NUMPY_DTYPE):
-        return dtype(pd_dtype.numpy_dtype)
+        return dtype(pd_dtype.numpy_dtype)  # type: ignore[attr-defined]
     elif isinstance(pd_dtype, pd.CategoricalDtype):
         return CategoricalDtype(pd_dtype.categories, pd_dtype.ordered)
     elif isinstance(pd_dtype, pd.IntervalDtype):
-        return IntervalDtype(pd_dtype.subtype, pd_dtype.closed)
+        return IntervalDtype(pd_dtype.subtype, pd_dtype.closed)  # type: ignore[attr-defined]
     elif isinstance(pd_dtype, pd.DatetimeTZDtype):
         return pd_dtype
     else:
@@ -537,7 +537,7 @@ class ListDtype(_BaseDtype):
 
     @cached_property
     def itemsize(self) -> int:
-        return self.element_type.itemsize
+        return self.element_type.itemsize  # type: ignore[union-attr]
 
     def _recursively_replace_fields(self, result: list) -> list:
         """
@@ -703,7 +703,7 @@ class StructDtype(_BaseDtype):
                 )
                 frames.extend(dtype_frames)
             else:
-                fields[k] = dtype.str
+                fields[k] = dtype.str  # type: ignore[union-attr]
         header["fields"] = fields
         header["frame_count"] = len(frames)
         return header, frames
@@ -725,7 +725,7 @@ class StructDtype(_BaseDtype):
 
     @cached_property
     def itemsize(self) -> int:
-        return sum(field.itemsize for field in self.fields.values())
+        return sum(field.itemsize for field in self.fields.values())  # type: ignore[union-attr]
 
     def _recursively_replace_fields(self, result: dict) -> dict:
         """
@@ -843,7 +843,7 @@ class DecimalDtype(_BaseDtype):
         """
         Length of one column element in bytes.
         """
-        return self.ITEMSIZE
+        return self.ITEMSIZE  # type: ignore[attr-defined]
 
     @property
     def type(self):
@@ -896,10 +896,10 @@ class DecimalDtype(_BaseDtype):
 
     @classmethod
     def _validate(cls, precision: int, scale: int) -> None:
-        if precision > cls.MAX_PRECISION:
+        if precision > cls.MAX_PRECISION:  # type: ignore[attr-defined]
             raise ValueError(
                 f"Cannot construct a {cls.__name__}"
-                f" with precision > {cls.MAX_PRECISION}"
+                f" with precision > {cls.MAX_PRECISION}"  # type: ignore[attr-defined]
             )
         if abs(scale) > precision:
             raise ValueError(f"{scale=} cannot exceed {precision=}")
@@ -1043,18 +1043,18 @@ class IntervalDtype(StructDtype):
         )
         return cls(
             subtype=pd_dtype.subtype,
-            closed="right" if pd_dtype.closed is None else pd_dtype.closed,
+            closed="right" if pd_dtype.closed is None else pd_dtype.closed,  # type: ignore[attr-defined]
         )
 
     def to_pandas(self) -> pd.IntervalDtype:
         if cudf.get_option("mode.pandas_compatible"):
             return pd.IntervalDtype(
-                subtype=self.subtype.numpy_dtype
+                subtype=self.subtype.numpy_dtype  # type: ignore[attr-defined]
                 if is_pandas_nullable_extension_dtype(self.subtype)
                 else self.subtype,
-                closed=self.closed,
+                closed=self.closed,  # type: ignore[call-arg]
             )
-        return pd.IntervalDtype(subtype=self.subtype, closed=self.closed)
+        return pd.IntervalDtype(subtype=self.subtype, closed=self.closed)  # type: ignore[call-arg]
 
     def __eq__(self, other) -> bool:
         if isinstance(other, str):
@@ -1074,7 +1074,7 @@ class IntervalDtype(StructDtype):
     def serialize(self) -> tuple[dict, list]:
         header = {
             "fields": (
-                self.subtype.str if self.subtype is not None else self.subtype,
+                self.subtype.str if self.subtype is not None else self.subtype,  # type: ignore[union-attr]
                 self.closed,
             ),
             "frame_count": 0,

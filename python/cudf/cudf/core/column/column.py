@@ -98,7 +98,7 @@ if TYPE_CHECKING:
     from cudf.core.index import Index
 
 if PANDAS_GE_210:
-    NumpyExtensionArray = pd.arrays.NumpyExtensionArray
+    NumpyExtensionArray = pd.arrays.NumpyExtensionArray  # type: ignore[attr-defined]
 else:
     NumpyExtensionArray = pd.arrays.PandasArray
 
@@ -735,7 +735,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             cudf.get_option("mode.pandas_compatible")
             and isinstance(self.dtype, pd.ArrowDtype)
         ):
-            return pd.Index(pd.arrays.ArrowExtensionArray(pa_array))
+            return pd.Index(pd.arrays.ArrowExtensionArray(pa_array))  # type: ignore[attr-defined]
         elif (
             nullable
             or (
