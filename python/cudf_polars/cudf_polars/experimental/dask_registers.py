@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 __all__ = ["DaskRegisterManager", "register"]
 
 
-class DaskRegisterManager:  # pragma: no cover; Only used with Distributed scheduler
+class DaskRegisterManager:  # pragma: no cover; Only used with Distributed cluster
     """Manager to ensure ensure serializer is only registered once."""
 
     _registered: bool = False
