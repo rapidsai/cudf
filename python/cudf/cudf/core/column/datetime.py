@@ -622,12 +622,14 @@ class DatetimeColumn(TemporalBaseColumn):
         if out_dtype is None:
             return NotImplemented
 
-        if isinstance(lhs, pa.Scalar):
-            lhs = pa_scalar_to_plc_scalar(lhs)
-        elif isinstance(rhs, pa.Scalar):
-            rhs = pa_scalar_to_plc_scalar(rhs)
+        lhs_binop: plc.Scalar | ColumnBase = (
+            pa_scalar_to_plc_scalar(lhs) if isinstance(lhs, pa.Scalar) else lhs
+        )  # type: ignore[assignment]
+        rhs_binop: plc.Scalar | ColumnBase = (
+            pa_scalar_to_plc_scalar(rhs) if isinstance(rhs, pa.Scalar) else rhs
+        )  # type: ignore[assignment]
 
-        result_col = binaryop.binaryop(lhs, rhs, op, out_dtype)
+        result_col = binaryop.binaryop(lhs_binop, rhs_binop, op, out_dtype)
         if out_dtype.kind != "b" and op == "__add__":
             return result_col
         elif (

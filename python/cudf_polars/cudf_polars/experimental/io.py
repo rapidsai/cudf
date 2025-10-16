@@ -466,12 +466,14 @@ def _sink_to_file(
             mode = "ab"
             use_options["include_header"] = False
         with Path.open(Path(path), mode) as f:
-            sink = plc.io.types.SinkInfo([f])
+            # Path.open returns IO[Any] but SinkInfo needs more specific IO types
+            sink = plc.io.types.SinkInfo([f])  # type: ignore[arg-type]
             Sink._write_csv(sink, use_options, df)
     elif kind == "Json":
         mode = "wb" if writer_state is None else "ab"
         with Path.open(Path(path), mode) as f:
-            sink = plc.io.types.SinkInfo([f])
+            # Path.open returns IO[Any] but SinkInfo needs more specific IO types
+            sink = plc.io.types.SinkInfo([f])  # type: ignore[arg-type]
             Sink._write_json(sink, df)
     else:  # pragma: no cover; Shouldn't get here.
         raise NotImplementedError(f"{kind} not yet supported in _sink_to_file")
@@ -741,7 +743,9 @@ class ParquetSourceInfo(DataSourceInfo):
         tbl_w_meta = plc.io.parquet.read_parquet(options)
         row_group_num_rows = tbl_w_meta.tbl.num_rows()
         for name, column in zip(
-            tbl_w_meta.column_names(), tbl_w_meta.columns, strict=True
+            tbl_w_meta.column_names(include_children=False),
+            tbl_w_meta.columns,
+            strict=True,
         ):
             row_group_unique_count = plc.stream_compaction.distinct_count(
                 column,

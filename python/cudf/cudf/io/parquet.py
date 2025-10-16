@@ -10,6 +10,7 @@ import shutil
 import tempfile
 import warnings
 from collections import defaultdict
+from collections.abc import Hashable, Sequence
 from contextlib import ExitStack
 from functools import partial, reduce
 from typing import TYPE_CHECKING, Any, Literal
@@ -44,7 +45,7 @@ except ImportError:
     import json
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Hashable
+    from collections.abc import Callable, Hashable, Sequence
 
     from typing_extensions import Self
 
@@ -129,9 +130,14 @@ def _plc_write_parquet(
         )
         tbl_meta = plc.io.types.TableInputMetadata(plc_table)
         for level, idx_name in enumerate(table.index.names):
-            tbl_meta.column_metadata[level].set_name(
-                ioutils._index_level_name(idx_name, level, table._column_names)
+            idx_name_str = ioutils._index_level_name(
+                idx_name, level, table._column_names
             )
+            if not isinstance(idx_name_str, str):
+                raise ValueError(
+                    f"Index name must be a string, got {type(idx_name_str)}"
+                )
+            tbl_meta.column_metadata[level].set_name(idx_name_str)
         num_index_cols_meta = table.index.nlevels
     else:
         plc_table = plc.Table(
@@ -216,7 +222,7 @@ def _plc_write_parquet(
         )
     if metadata_file_path is not None:
         if is_list_like(metadata_file_path):
-            options.set_column_chunks_file_paths(metadata_file_path)
+            options.set_column_chunks_file_paths(metadata_file_path)  # type: ignore[arg-type]
         else:
             options.set_column_chunks_file_paths([metadata_file_path])
     if row_group_size_bytes is not None:
@@ -691,7 +697,7 @@ def _parse_metadata(meta) -> tuple[bool, Any, None | np.dtype]:
 @_performance_tracking
 def read_parquet_metadata(
     filepath_or_buffer,
-) -> tuple[int, int, list[Hashable], int, list[dict[str, int]]]:
+) -> tuple[int, int, Sequence[Hashable], int, Sequence[dict[str, int]]]:
     """{docstring}"""
 
     # List of filepaths or buffers
@@ -1378,14 +1384,12 @@ def _read_parquet(
             del tbl_w_meta
 
             while reader.has_next():
-                tbl = reader.read_chunk().tbl
-
-                for i in range(tbl.num_columns()):
+                columns = reader.read_chunk().tbl.columns()
+                # Iterate in reverse to avoid O(n²) cost from popping
+                for i in range(len(concatenated_columns) - 1, -1, -1):
                     concatenated_columns[i] = plc.concatenate.concatenate(
-                        [concatenated_columns[i], tbl._columns[i]]
+                        [concatenated_columns[i], columns.pop()]
                     )
-                    # Drop residual columns to save memory
-                    tbl._columns[i] = None
 
             data = {
                 name: ColumnBase.from_pylibcudf(col)
@@ -2389,7 +2393,7 @@ def _get_stat_freq(
 
 def _process_metadata(
     df: DataFrame,
-    names: list[Hashable],
+    names: Sequence[Hashable],
     per_file_user_data: list,
     row_groups,
     filepaths_or_buffers,
