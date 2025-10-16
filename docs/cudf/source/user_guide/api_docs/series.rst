@@ -20,7 +20,6 @@ Attributes
    Series.axes
    Series.index
    Series.values
-   Series.data
    Series.dtype
    Series.dtypes
    Series.shape
