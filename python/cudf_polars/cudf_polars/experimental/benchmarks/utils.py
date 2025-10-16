@@ -1071,17 +1071,9 @@ def execute_duckdb_query(query: str, dataset_path: Path) -> pl.DataFrame:
     """Execute a query with DuckDB."""
     if duckdb is None:
         raise ImportError(duckdb_err)
-    ds = Path(dataset_path)
-    groups = defaultdict(list)
-
-    for f in ds.glob("*.parquet"):
-        base = f.stem.split("_", 1)[0]
-        groups[base].append(str(f.resolve()))
-
     statements = [
-        f"CREATE OR REPLACE VIEW {base} AS "
-        f"SELECT * FROM read_parquet([{', '.join(f"'{p}'" for p in paths)}]);"
-        for base, paths in groups.items()
+        f"CREATE VIEW {table.stem} as SELECT * FROM read_parquet('{table.absolute()}');"
+        for table in Path(dataset_path).glob("*.parquet")
     ]
     statements.append(query)
 
