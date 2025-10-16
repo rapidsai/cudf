@@ -381,8 +381,6 @@ class GroupedRollingWindow(Expr):
             ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
             for ne in named_exprs
         ]
-        # TODO: Now handling order_index being None, whereas before we were
-        # assuming it was always non-None via _gather_columns call
         if op.order_index is not None:
             vals_tbl = plc.copying.gather(
                 plc.Table(plc_cols),
@@ -390,7 +388,7 @@ class GroupedRollingWindow(Expr):
                 plc.copying.OutOfBoundsPolicy.NULLIFY,
             )
         else:
-            vals_tbl = plc.Table(plc_cols)  # pragma: no cover
+            vals_tbl = plc.Table(plc_cols)
         local_grouper = op.local_grouper
         assert isinstance(local_grouper, plc.groupby.GroupBy)
         _, filled_tbl = local_grouper.replace_nulls(
@@ -430,11 +428,10 @@ class GroupedRollingWindow(Expr):
                 plc.copying.OutOfBoundsPolicy.NULLIFY,
             ).columns()
         else:
-            # TODO: Now handling order_index being None whereas before we were assuming it was always non-None
-            val_cols = [  # pragma: no cover
+            val_cols = [
                 ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
                 for ne in cum_named
-            ]  # pragma: no cover
+            ]
         agg = plc.aggregation.sum()
 
         for ne, val_col in zip(cum_named, val_cols, strict=True):
@@ -577,6 +574,31 @@ class GroupedRollingWindow(Expr):
             for gathered, c in zip(gathered_tbl.columns(), cols, strict=True)
         ]
 
+    def _grouped_window_scan_setup(
+        self,
+        by_cols: list[Column],
+        *,
+        row_id: plc.Column,
+        order_by_col: Column | None,
+        ob_desc: bool,
+        ob_nulls_last: bool,
+        grouper: plc.groupby.GroupBy,
+    ) -> tuple[plc.Column | None, list[Column] | None, plc.groupby.GroupBy]:
+        if order_by_col is None:
+            # keep the original ordering
+            return None, None, grouper
+        order_index = self._build_window_order_index(
+            by_cols,
+            row_id=row_id,
+            order_by_col=order_by_col,
+            ob_desc=ob_desc,
+            ob_nulls_last=ob_nulls_last,
+        )
+        by_cols_for_scan = self._gather_columns(by_cols, order_index)
+        assert by_cols_for_scan is not None
+        local = self._sorted_grouper(by_cols_for_scan)
+        return order_index, by_cols_for_scan, local
+
     def do_evaluate(  # noqa: D102
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
@@ -700,13 +722,13 @@ class GroupedRollingWindow(Expr):
                         ).obj,
                         value_desc=desc,
                     )
-                    by_cols_for_scan = self._gather_columns(by_cols, order_index)
-                    local = GroupedRollingWindow._sorted_grouper(by_cols_for_scan)
+                    rank_by_cols_for_scan = self._gather_columns(by_cols, order_index)
+                    local = GroupedRollingWindow._sorted_grouper(rank_by_cols_for_scan)
                     names, dtypes, tables = self._apply_unary_op(
                         RankOp(
                             named_exprs=[ne],
                             order_index=order_index,
-                            by_cols_for_scan=by_cols_for_scan,
+                            by_cols_for_scan=rank_by_cols_for_scan,
                             local_grouper=local,
                         ),
                         df,
@@ -738,17 +760,22 @@ class GroupedRollingWindow(Expr):
                 )
 
         if fill_named := unary_window_ops["fill_null_with_strategy"]:
-            order_index = self._build_window_order_index(
-                by_cols,
-                row_id=row_id,
-                order_by_col=order_by_col if self._order_by_expr is not None else None,
-                ob_desc=self.options[2] if self._order_by_expr is not None else False,
-                ob_nulls_last=self.options[3]
-                if self._order_by_expr is not None
-                else False,
+            order_index, fill_null_by_cols_for_scan, local = (
+                self._grouped_window_scan_setup(
+                    by_cols,
+                    row_id=row_id,
+                    order_by_col=order_by_col
+                    if self._order_by_expr is not None
+                    else None,
+                    ob_desc=self.options[2]
+                    if self._order_by_expr is not None
+                    else False,
+                    ob_nulls_last=self.options[3]
+                    if self._order_by_expr is not None
+                    else False,
+                    grouper=grouper,
+                )
             )
-            by_cols_for_scan = self._gather_columns(by_cols, order_index)
-            local = self._sorted_grouper(by_cols_for_scan)
 
             strategy_exprs: dict[str, list[expr.NamedExpr]] = defaultdict(list)
             for ne in fill_named:
@@ -766,7 +793,7 @@ class GroupedRollingWindow(Expr):
                     FillNullWithStrategyOp(
                         named_exprs=fill_exprs,
                         order_index=order_index,
-                        by_cols_for_scan=by_cols_for_scan,
+                        by_cols_for_scan=fill_null_by_cols_for_scan,
                         local_grouper=local,
                         policy=replace_policy[strategy],
                     ),
@@ -786,22 +813,27 @@ class GroupedRollingWindow(Expr):
                 )
 
         if cum_named := unary_window_ops["cum_sum"]:
-            order_index = self._build_window_order_index(
-                by_cols,
-                row_id=row_id,
-                order_by_col=order_by_col if self._order_by_expr is not None else None,
-                ob_desc=self.options[2] if self._order_by_expr is not None else False,
-                ob_nulls_last=self.options[3]
-                if self._order_by_expr is not None
-                else False,
+            order_index, cum_sum_by_cols_for_scan, local = (
+                self._grouped_window_scan_setup(
+                    by_cols,
+                    row_id=row_id,
+                    order_by_col=order_by_col
+                    if self._order_by_expr is not None
+                    else None,
+                    ob_desc=self.options[2]
+                    if self._order_by_expr is not None
+                    else False,
+                    ob_nulls_last=self.options[3]
+                    if self._order_by_expr is not None
+                    else False,
+                    grouper=grouper,
+                )
             )
-            by_cols_for_scan = self._gather_columns(by_cols, order_index)
-            local = self._sorted_grouper(by_cols_for_scan)
             names, dtypes, tables = self._apply_unary_op(
                 CumSumOp(
                     named_exprs=cum_named,
                     order_index=order_index,
-                    by_cols_for_scan=by_cols_for_scan,
+                    by_cols_for_scan=cum_sum_by_cols_for_scan,
                     local_grouper=local,
                 ),
                 df,
