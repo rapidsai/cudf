@@ -9,7 +9,7 @@ It's the recommended tool for profiling CUDA applications and understanding kern
 
 ### Installation
 
-Nsight Systems is included with the CUDA Toolkit. The command-line tool is `nsys`. Verify installation:
+Nsight Systems is included with the CUDA Toolkit, or can be downloaded from https://developer.nvidia.com/nsight-systems. The command-line tool is `nsys`. Verify installation:
 
 ```bash
 nsys --version
