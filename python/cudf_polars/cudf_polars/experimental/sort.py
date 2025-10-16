@@ -69,8 +69,8 @@ def find_sort_splits(
 
     # We now need to find the local split points.  To do this, first split out
     # the partition id and the local row number of the final split values
-    *sort_boundaries, split_part_id, split_local_row = sort_boundaries.columns()
-    sort_boundaries = plc.Table(sort_boundaries)
+    *boundary_cols, split_part_id, split_local_row = sort_boundaries.columns()
+    sort_boundaries = plc.Table(boundary_cols)
     # Now we find the first and last row in the local table corresponding to the split value
     # (first and last, because there may be multiple rows with the same split value)
     split_first_col = plc.search.lower_bound(
@@ -80,17 +80,21 @@ def find_sort_splits(
         tbl, sort_boundaries, column_order, null_order
     )
     # And convert to list for final processing
-    split_first_col = pl.Series(split_first_col).to_list()
-    split_last_col = pl.Series(split_last_col).to_list()
-    split_part_id = pl.Series(split_part_id).to_list()
-    split_local_row = pl.Series(split_local_row).to_list()
+    split_first_list = pl.Series(split_first_col).to_list()
+    split_last_list = pl.Series(split_last_col).to_list()
+    split_part_id_list = pl.Series(split_part_id).to_list()
+    split_local_row_list = pl.Series(split_local_row).to_list()
 
     # Find the final split points.  This is slightly tricky because of the possibility
     # of equal values, which is why we need the part_id and local_row.
     # Consider for example the case when all data is equal.
     split_points = []
     for first, last, part_id, local_row in zip(
-        split_first_col, split_last_col, split_part_id, split_local_row, strict=False
+        split_first_list,
+        split_last_list,
+        split_part_id_list,
+        split_local_row_list,
+        strict=False,
     ):
         if part_id < my_part_id:
             # Local data is globally later so split at first valid row.
@@ -161,7 +165,7 @@ def _get_final_sort_boundaries(
     column_order: Sequence[plc.types.Order],
     null_order: Sequence[plc.types.NullOrder],
     num_partitions: int,
-) -> plc.Table:
+) -> DataFrame:
     """
     Find the global sort split boundaries from all gathered split candidates.
 

@@ -38,7 +38,7 @@ from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import _is_null_host_scalar, is_na_like
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -213,7 +213,7 @@ class NumericalColumn(NumericalBaseColumn):
         plc_column = plc.transform.transform(
             [self.to_pylibcudf(mode="read")],
             compiled_op[0],
-            plc.column._datatype_from_dtype_desc(np_dtype.str[1:]),
+            dtype_to_pylibcudf_type(np_dtype),
             True,
         )
         return type(self).from_pylibcudf(plc_column)
@@ -362,12 +362,14 @@ class NumericalColumn(NumericalBaseColumn):
                 and isinstance(rhs, NumericalColumn)
             ):
                 rhs = rhs.nans_to_nulls()
-        if isinstance(lhs, pa.Scalar):
-            lhs = pa_scalar_to_plc_scalar(lhs)
-        elif isinstance(rhs, pa.Scalar):
-            rhs = pa_scalar_to_plc_scalar(rhs)
+        lhs_binaryop: plc.Scalar | ColumnBase = (
+            pa_scalar_to_plc_scalar(lhs) if isinstance(lhs, pa.Scalar) else lhs
+        )
+        rhs_binaryop: plc.Scalar | ColumnBase = (
+            pa_scalar_to_plc_scalar(rhs) if isinstance(rhs, pa.Scalar) else rhs
+        )  # type: ignore[assignment]
 
-        res = binaryop.binaryop(lhs, rhs, op, out_dtype)
+        res = binaryop.binaryop(lhs_binaryop, rhs_binaryop, op, out_dtype)
         if (
             is_pandas_nullable_extension_dtype(out_dtype)
             and out_dtype.kind == "f"
@@ -381,12 +383,12 @@ class NumericalColumn(NumericalBaseColumn):
             )
         elif op == "INT_POW" and res.null_count:
             if (
-                isinstance(lhs, plc.Scalar)
-                and lhs.to_py() == 1
-                and isinstance(rhs, ColumnBase)
-                and rhs.null_count > 0
+                isinstance(lhs_binaryop, plc.Scalar)
+                and lhs_binaryop.to_py() == 1
+                and isinstance(rhs_binaryop, ColumnBase)
+                and rhs_binaryop.null_count > 0
             ):
-                res = res.fillna(lhs.to_py())
+                res = res.fillna(lhs_binaryop.to_py())
         elif (
             cudf.get_option("mode.pandas_compatible")
             and op in cmp_ops
@@ -491,7 +493,9 @@ class NumericalColumn(NumericalBaseColumn):
                 cudf.core.column.StringColumn,
                 column_empty(0, dtype=CUDF_STRING_DTYPE),
             )
-        elif self.dtype.kind == "b":
+
+        conv_func: Callable[[plc.Column], plc.Column]
+        if self.dtype.kind == "b":
             conv_func = functools.partial(
                 plc.strings.convert.convert_booleans.from_booleans,
                 true_string=pa_scalar_to_plc_scalar(pa.scalar("True")),
