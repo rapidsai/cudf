@@ -25,7 +25,7 @@ from cudf.utils.docutils import docfmt_partial
 from cudf.utils.dtypes import cudf_dtype_to_pa_type, np_dtypes_to_pandas_dtypes
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Hashable
+    from collections.abc import Callable, Hashable, Mapping
 
     from cudf.core.dataframe import DataFrame
 
@@ -2384,7 +2384,9 @@ def _prefetch_remote_buffers(
         return paths
 
 
-def _add_df_col_struct_names(df: DataFrame, child_names_dict: dict) -> None:
+def _add_df_col_struct_names(
+    df: DataFrame, child_names_dict: Mapping[Any, Any]
+) -> None:
     for name, child_names in child_names_dict.items():
         col = df._data[name]
         df._data[name] = col._with_type_metadata(
