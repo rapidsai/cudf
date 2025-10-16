@@ -88,17 +88,6 @@ def to_request(
     return plc.rolling.RollingRequest(col.obj, min_periods, value.agg_request)
 
 
-def _by_exprs(b: Expr | tuple) -> Generator[Expr]:
-    if isinstance(b, Expr):
-        yield b
-    elif isinstance(b, tuple):  # pragma: no cover; tests cover this path when
-        # run with the distributed cluster only
-        for item in b:
-            yield from _by_exprs(item)
-    else:
-        yield expr.Literal(DataType(pl.Int64()), b)  # pragma: no cover
-
-
 class RollingWindow(Expr):
     __slots__ = (
         "closed_window",
