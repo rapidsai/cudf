@@ -209,7 +209,6 @@ class GroupedRollingWindow(Expr):
     __slots__ = (
         "_order_by_expr",
         "by_count",
-        "has_order_by",
         "named_aggs",
         "options",
         "post",
@@ -237,7 +236,6 @@ class GroupedRollingWindow(Expr):
         self.post = post
         self.by_count = by_count
         has_order_by = self.options[1]
-        self.has_order_by = has_order_by
         self.is_pointwise = False
         self.children = tuple(children)
         self._order_by_expr = children[by_count] if has_order_by else None
