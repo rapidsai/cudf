@@ -10,7 +10,7 @@ import polars as pl
 from cudf_polars import Translator
 from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.experimental.shuffle import Shuffle
-from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
+from cudf_polars.testing.asserts import DEFAULT_CLUSTER, assert_gpu_result_equal
 from cudf_polars.utils.config import ConfigOptions
 
 
@@ -45,7 +45,7 @@ def test_join(left, right, how, reverse, max_rows_per_partition, broadcast_join_
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
             "max_rows_per_partition": max_rows_per_partition,
             "broadcast_join_limit": broadcast_join_limit,
             "shuffle_method": "tasks",
@@ -80,7 +80,7 @@ def test_broadcast_join_limit(left, right, broadcast_join_limit):
         executor_options={
             "max_rows_per_partition": 3,
             "broadcast_join_limit": broadcast_join_limit,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
             "shuffle_method": "tasks",
         },
     )
@@ -125,7 +125,7 @@ def test_join_then_shuffle(left, right):
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
             "max_rows_per_partition": 2,
             "broadcast_join_limit": 1,
         },
@@ -148,7 +148,7 @@ def test_join_conditional(reverse, max_rows_per_partition):
         executor="streaming",
         executor_options={
             "max_rows_per_partition": max_rows_per_partition,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
             "fallback_mode": "warn",
         },
     )
@@ -174,7 +174,7 @@ def test_join_and_slice(zlice):
         executor_options={
             "max_rows_per_partition": 3,
             "broadcast_join_limit": 100,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
             "shuffle_method": "tasks",
             "fallback_mode": "warn",
         },
@@ -224,7 +224,7 @@ def test_join_maintain_order_fallback_streaming(left, right, maintain_order):
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
             "max_rows_per_partition": 3,
             "broadcast_join_limit": 1,
             "shuffle_method": "tasks",

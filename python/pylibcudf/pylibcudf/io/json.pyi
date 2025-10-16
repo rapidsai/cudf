@@ -113,3 +113,16 @@ def chunked_read_json(
     mr: DeviceMemoryResource = None,
 ) -> tuple[list[Column], list[str], ChildNameToTypeMap]: ...
 def is_supported_write_json(type: DataType) -> bool: ...
+def _setup_json_reader_options(
+    source_info: SourceInfo,
+    dtypes: list | None,
+    compression: CompressionType = CompressionType.AUTO,
+    lines: bool = False,
+    byte_range_offset: int = 0,
+    byte_range_size: int = 0,
+    keep_quotes: bool = False,
+    mixed_types_as_string: bool = False,
+    prune_columns: bool = False,
+    recovery_mode: JSONRecoveryMode = JSONRecoveryMode.FAIL,
+    extra_parameters: dict | None = None,
+) -> JsonReaderOptions: ...

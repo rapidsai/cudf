@@ -36,6 +36,7 @@ repos:
         additional_dependencies: [types-cachetools, pyarrow-stubs]
         args: ["--config-file=pyproject.toml",
                "python/cudf/cudf",
+               "python/pylibcudf/pylibcudf",
                "python/custreamz/custreamz",
                "python/cudf_kafka/cudf_kafka",
                "python/cudf_polars/cudf_polars",
