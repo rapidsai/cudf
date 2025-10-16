@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include "join_common_utils.cuh"
 #include "join_common_utils.hpp"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
