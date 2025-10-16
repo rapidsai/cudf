@@ -100,17 +100,19 @@ def register() -> None:
     @overload
     def dask_serialize_column_or_frame(
         x: DataFrame,
-    ) -> tuple[DataFrameHeader, tuple[memoryview, memoryview]]: ...
+    ) -> tuple[DataFrameHeader, tuple[memoryview[bytes], memoryview[bytes]]]: ...
 
     @overload
     def dask_serialize_column_or_frame(
         x: Column,
-    ) -> tuple[ColumnHeader, tuple[memoryview, memoryview]]: ...
+    ) -> tuple[ColumnHeader, tuple[memoryview[bytes], memoryview[bytes]]]: ...
 
     @dask_serialize.register(Column)
     def dask_serialize_column_or_frame(
         x: DataFrame | Column,
-    ) -> tuple[DataFrameHeader | ColumnHeader, tuple[memoryview[bytes], memoryview]]:
+    ) -> tuple[
+        DataFrameHeader | ColumnHeader, tuple[memoryview[bytes], memoryview[bytes]]
+    ]:
         with log_errors():
             header, (metadata, gpudata) = x.serialize()
 
@@ -122,7 +124,7 @@ def register() -> None:
             nbytes = cai["shape"][0]
 
             # Copy the gpudata to host memory
-            gpudata_on_host = memoryview(
+            gpudata_on_host: memoryview[bytes] = memoryview(
                 rmm.DeviceBuffer(ptr=gpudata.ptr, size=nbytes).copy_to_host()
             )
             return header, (metadata, gpudata_on_host)
@@ -141,7 +143,7 @@ def register() -> None:
     @dask_serialize.register(DataFrame)
     def _(
         x: DataFrame, context: Mapping[str, Any] | None = None
-    ) -> tuple[DataFrameHeader, tuple[memoryview, memoryview]]:
+    ) -> tuple[DataFrameHeader, tuple[memoryview[bytes], memoryview[bytes]]]:
         # Do regular serialization if no staging buffer is provided.
         if context is None or "staging_device_buffer" not in context:
             return dask_serialize_column_or_frame(x)
