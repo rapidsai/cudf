@@ -15,7 +15,6 @@
  */
 #pragma once
 
-#include "join_common_utils.cuh"
 #include "join_common_utils.hpp"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
@@ -37,11 +36,13 @@ using row_equality = cudf::detail::row::equality::strong_index_comparator_adapte
   cudf::detail::row::equality::device_row_comparator<false, cudf::nullate::DYNAMIC>>;
 
 /**
- * @brief Equality comparator for use with cuco map methods that require expression evaluation.
+ * @brief Base equality comparator for use with cuco set/multiset methods that require expression
+ * evaluation.
  *
- * This class just defines the construction of the class and the necessary
- * attributes, specifically the equality operator for the non-conditional parts
- * of the operator and the evaluator used for the conditional.
+ * This class provides the common interface and attributes needed for equality
+ * comparators that combine row equality checks with conditional expression evaluation.
+ * It stores the expression evaluator, thread-local storage, table swap flag, and
+ * the row equality comparator used for non-conditional equality checks.
  */
 template <bool has_nulls>
 struct expression_equality {
@@ -64,9 +65,9 @@ struct expression_equality {
 };
 
 /**
- * @brief Equality comparator for cuco::static_map queries.
+ * @brief Equality comparator for cuco::static_set queries.
  *
- * This equality comparator is designed for use with cuco::static_map's APIs. A
+ * This equality comparator is designed for use with cuco::static_set's APIs. A
  * probe hit indicates that the hashes of the keys are equal, at which point
  * this comparator checks whether the keys themselves are equal (using the
  * provided equality_probe) and then evaluates the conditional expression
@@ -102,18 +103,12 @@ struct single_expression_equality : expression_equality<has_nulls> {
 };
 
 /**
- * @brief Equality comparator for cuco::static_multimap queries.
+ * @brief Equality comparator for cuco::static_multiset queries.
  *
- * This equality comparator is designed for use with cuco::static_multimap's
- * pair* APIs, which will compare equality based on comparing (key, value)
- * pairs. In the context of joins, these pairs are of the form
- * (row_hash, row_id). A hash probe hit indicates that hash of a probe row's hash is
- * equal to the hash of the hash of some row in the multimap, at which point we need an
- * equality comparator that will check whether the contents of the rows are
- * identical. This comparator does so by verifying key equality (i.e. that
- * probe_row_hash == build_row_hash) and then using a row_equality_comparator
- * to compare the contents of the row indices that are stored as the payload in
- * the hash map.
+ * This equality comparator is designed for use with cuco::static_multiset's APIs.
+ * A probe hit indicates that the hashes of the keys are equal, at which point
+ * this comparator checks whether the keys themselves are equal (using the
+ * provided row_equality comparator) and then evaluates the conditional expression
  */
 template <bool has_nulls>
 struct pair_expression_equality : public expression_equality<has_nulls> {
@@ -173,7 +168,7 @@ using hash_set_type =
                    cudf::detail::cuco_allocator<char>,
                    cuco::storage<1>>;
 
-// The hash_set_ref_type used by mixed_semi_join kerenels for probing.
+// The hash_set_ref_type used by mixed_semi_join kernels for probing.
 using hash_set_ref_type = hash_set_type::ref_type<cuco::contains_tag>;
 
 /**
