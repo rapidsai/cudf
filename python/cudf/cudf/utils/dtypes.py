@@ -289,26 +289,18 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
     # Early exit for categoricals since they're not hashable and therefore
     # can't be put in a set.
     if any(isinstance(dtype, cudf.CategoricalDtype) for dtype in dtypes):
-        # Filter to only CategoricalDtype for type narrowing
-        cat_dtypes = [
-            d
-            for d in dtypes
-            if isinstance(d, cudf.CategoricalDtype)
-            and d._categories is not None
-        ]
         if all(
-            (not dtype.ordered if hasattr(dtype, "ordered") else True)
-            for dtype in cat_dtypes
+            (
+                isinstance(dtype, cudf.CategoricalDtype)
+                and (not dtype.ordered if hasattr(dtype, "ordered") else True)
+            )
+            for dtype in dtypes
         ):
-            # Extract categories - we know they're not None from the filter above
-            categories_list = []
-            for dtype in cat_dtypes:
-                assert dtype._categories is not None
-                categories_list.append(dtype._categories)
-
-            if len({cat.dtype for cat in categories_list}) == 1:
+            if len({dtype._categories.dtype for dtype in dtypes}) == 1:  # type: ignore[union-attr]
                 return cudf.CategoricalDtype(
-                    cudf.core.column.concat_columns(categories_list).unique()
+                    cudf.core.column.concat_columns(
+                        [dtype._categories for dtype in dtypes]  # type: ignore[union-attr]
+                    ).unique()
                 )
             else:
                 raise NotImplementedError(
