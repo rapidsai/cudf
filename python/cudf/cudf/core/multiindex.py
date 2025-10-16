@@ -1274,7 +1274,7 @@ class MultiIndex(Index):
         return cls(levels=pdi.levels, codes=pdi.codes, names=pdi.names)
 
     @property
-    def dtypes(self):
+    def dtypes(self) -> pd.Series:
         """
         Return the dtypes as a Series for the underlying MultiIndex.
 
