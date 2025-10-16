@@ -57,12 +57,17 @@ static void bench_edit_distance_ascii(nvbench::state& state)
   auto const min_width = static_cast<cudf::size_type>(state.get_int64("min_width"));
   auto const max_width = static_cast<cudf::size_type>(state.get_int64("max_width"));
 
+  auto const max_size     = static_cast<int64_t>(num_rows) * static_cast<int64_t>(max_width);
+  auto const offsets_type = max_size >= std::numeric_limits<cudf::size_type>::max()
+                              ? cudf::type_id::INT64
+                              : cudf::type_id::INT32;
+
   data_profile profile = data_profile_builder().no_validity().cardinality(0).distribution(
-    cudf::type_id::INT32, distribution_id::NORMAL, min_width, max_width);
+    offsets_type, distribution_id::NORMAL, min_width, max_width);
   data_profile ascii_profile = data_profile_builder().no_validity().cardinality(0).distribution(
     cudf::type_id::INT8, distribution_id::UNIFORM, 32, 126);  // nice ASCII range
 
-  auto offsets = create_random_column(cudf::type_id::INT32, row_count{num_rows + 1}, profile);
+  auto offsets = create_random_column(offsets_type, row_count{num_rows + 1}, profile);
   offsets      = cudf::scan(offsets->view(),
                        *cudf::make_sum_aggregation<cudf::scan_aggregation>(),
                        cudf::scan_type::EXCLUSIVE);

@@ -181,7 +181,7 @@ __device__ void compute_distance(Iterator ss1,
     auto it1 = ss1;
     auto it2 = ss2;
 
-    auto tile_count = cudf::util::div_rounding_up_unsafe(n, tile_size);
+    auto tile_count = cudf::util::div_rounding_up_safe(n, tile_size);
     while (tile_count--) {
       auto const offset = (jdx - 1);
       // locate the 2 characters to compare
@@ -216,7 +216,7 @@ __device__ void compute_distance(Iterator ss1,
     auto it1 = ss1;
     auto it2 = ss2;
 
-    auto tile_count = cudf::util::div_rounding_up_unsafe(n, tile_size);
+    auto tile_count = cudf::util::div_rounding_up_safe(n, tile_size);
     while (tile_count--) {
       auto const offset = (jdx - 1);
       // locate the 2 characters to compare
