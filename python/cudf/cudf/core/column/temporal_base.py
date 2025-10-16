@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 import functools
 import warnings
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import cupy as cp
 import numpy as np
@@ -44,8 +44,8 @@ class TemporalBaseColumn(ColumnBase):
     """
 
     _PANDAS_NA_VALUE = pd.NaT
-    _UNDERLYING_DTYPE = np.dtype(np.int64)
-    _NP_SCALAR: np.datetime64 | np.timedelta64
+    _UNDERLYING_DTYPE: np.dtype[np.int64] = np.dtype(np.int64)
+    _NP_SCALAR: ClassVar[type[np.datetime64] | type[np.timedelta64]]
     _PD_SCALAR: pd.Timestamp | pd.Timedelta
 
     def __init__(
@@ -90,7 +90,9 @@ class TemporalBaseColumn(ColumnBase):
         ):
             fill_value = fill_value.astype(self.dtype)
         elif isinstance(fill_value, str) and fill_value.lower() == "nat":
-            fill_value = self._NP_SCALAR(fill_value, self.time_unit)
+            # call-overload must be ignored because numpy stubs only accept literal
+            # time unit strings, but we're passing self.time_unit which is valid at runtime
+            fill_value = self._NP_SCALAR(fill_value, self.time_unit)  # type: ignore[call-overload]
         return super()._validate_fillna_value(fill_value)
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
@@ -157,7 +159,11 @@ class TemporalBaseColumn(ColumnBase):
                     if np.isnat(other):
                         # Workaround for https://github.com/numpy/numpy/issues/28496
                         # Once fixed, can always use the astype below
-                        other = type(other)("NaT", to_unit)
+                        # call-overload must be ignored because numpy stubs only accept literal strings
+                        # for time units (e.g., "ns", "us") to allow compile-time validation,
+                        # but we're passing a variable string (to_unit) with a time unit that
+                        # we know is valid at runtime
+                        other = type(other)("NaT", to_unit)  # type: ignore[call-overload]
                     else:
                         other = other.astype(
                             np.dtype(f"{other.dtype.kind}8[{to_unit}]")
@@ -305,16 +311,21 @@ class TemporalBaseColumn(ColumnBase):
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if to_dtype.kind == self.dtype.kind:  # type: ignore[union-attr]
             to_res, _ = np.datetime_data(to_dtype)
+            # call-overload must be ignored because numpy stubs only accept literal strings
+            # for time units (e.g., "ns", "us") to allow compile-time validation,
+            # but we're passing variables (self.time_unit) with time units that
+            # we know are valid at runtime
             max_dist = np.timedelta64(
                 self.max().astype(self._UNDERLYING_DTYPE, copy=False),
-                self.time_unit,
+                self.time_unit,  # type: ignore[call-overload]
             )
             min_dist = np.timedelta64(
                 self.min().astype(self._UNDERLYING_DTYPE, copy=False),
-                self.time_unit,
+                self.time_unit,  # type: ignore[call-overload]
             )
             max_to_res = np.timedelta64(
-                np.iinfo(self._UNDERLYING_DTYPE).max, to_res
+                np.iinfo(self._UNDERLYING_DTYPE).max,
+                to_res,  # type: ignore[call-overload]
             ).astype(f"m8[{self.time_unit}]", copy=False)
             return bool(max_dist <= max_to_res and min_dist <= max_to_res)
         elif (
