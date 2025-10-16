@@ -504,6 +504,12 @@ def test_default_executor() -> None:
     assert config.executor.name == "streaming"
 
 
+def test_default_runtime() -> None:
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
+    assert config.executor.name == "streaming"
+    assert config.executor.runtime == "tasks"
+
+
 @pytest.mark.parametrize(
     "option",
     [

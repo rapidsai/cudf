@@ -149,20 +149,19 @@ def _(
     ir: Scan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     config_options = rec.state["config_options"]
+    plan = scan_partition_plan(ir, rec.state["stats"], config_options)
     if (
         ir.typ in ("csv", "parquet", "ndjson")
         and ir.n_rows == -1
         and ir.skip_rows == 0
         and ir.row_index is None
     ):
-        plan = scan_partition_plan(ir, rec.state["stats"], config_options)
-        paths = list(ir.paths)
-
         # NOTE: We calculate the expected partition count
         # to help trigger fallback warnings in lower_ir_graph.
         # The generate_ir_sub_network logic is NOT required
         # to obey this partition count. However, the count
         # WILL match after an IO operation (for now).
+        paths = list(ir.paths)
         if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
             count = plan.factor * len(paths)
         else:
@@ -170,7 +169,7 @@ def _(
 
         return ir, {ir: PartitionInfo(count=count, io_plan=plan)}
 
-    return ir, {ir: PartitionInfo(count=1)}  # pragma: no cover
+    return ir, {ir: PartitionInfo(count=1, io_plan=plan)}  # pragma: no cover
 
 
 async def read_chunk(
