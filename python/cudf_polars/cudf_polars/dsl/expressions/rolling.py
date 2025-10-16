@@ -11,8 +11,6 @@ from dataclasses import dataclass
 from functools import singledispatchmethod
 from typing import TYPE_CHECKING, Any
 
-import polars as pl
-
 import pylibcudf as plc
 
 from cudf_polars.containers import Column, DataFrame, DataType
@@ -22,7 +20,7 @@ from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import offsets_to_windows, range_window_bounds
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Sequence
+    from collections.abc import Sequence
 
     from cudf_polars.typing import ClosedInterval, Duration
 
