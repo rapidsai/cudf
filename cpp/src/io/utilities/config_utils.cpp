@@ -16,6 +16,8 @@
 
 #include "getenv_or.hpp"
 
+#include <cudf/detail/utilities/cuda.hpp>
+#include <cudf/io/config_utils.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <kvikio/defaults.hpp>
@@ -74,4 +76,22 @@ enum class usage_policy : uint8_t { OFF, STABLE, ALWAYS };
 }
 
 }  // namespace nvcomp_integration
+
+namespace integrated_memory_optimization {
+
+[[nodiscard]] bool is_enabled()
+{
+  auto const policy = []() {
+    auto const* env_val = std::getenv("LIBCUDF_INTEGRATED_MEMORY_OPTIMIZATION");
+    if (env_val == nullptr) return std::string("AUTO");
+    return std::string(env_val);
+  }();
+
+  if (policy == "OFF") return false;
+  if (policy == "ON") return true;
+  if (policy == "AUTO") return cudf::detail::has_integrated_memory();
+  CUDF_FAIL("Invalid LIBCUDF_INTEGRATED_MEMORY_OPTIMIZATION value: " + policy);
+}
+
+}  // namespace integrated_memory_optimization
 }  // namespace cudf::io
