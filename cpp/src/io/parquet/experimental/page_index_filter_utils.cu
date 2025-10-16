@@ -35,30 +35,22 @@
 namespace cudf::io::parquet::experimental::detail {
 
 bool compute_has_page_index(cudf::host_span<metadata_base const> file_metadatas,
-                            cudf::host_span<std::vector<size_type> const> row_group_indices,
-                            cudf::host_span<size_type const> column_schema_indices)
+                            cudf::host_span<std::vector<size_type> const> row_group_indices)
 {
-  // For all output columns, check all parquet data sources
+  // For all parquet data sources
   return std::all_of(
-    column_schema_indices.begin(), column_schema_indices.end(), [&](auto const schema_idx) {
-      // For all parquet data sources
-      return std::all_of(
-        thrust::counting_iterator<size_t>(0),
-        thrust::counting_iterator(row_group_indices.size()),
-        [&](auto const src_index) {
-          // For all row groups in this parquet data source
-          auto const& rg_indices = row_group_indices[src_index];
-          return std::all_of(rg_indices.begin(), rg_indices.end(), [&](auto const& rg_index) {
-            auto const& row_group = file_metadatas[src_index].row_groups[rg_index];
-            auto col              = std::find_if(
-              row_group.columns.begin(),
-              row_group.columns.end(),
-              [schema_idx](ColumnChunk const& col) { return col.schema_idx == schema_idx; });
-            // Check if the offset_index and column_index are present
-            return col != file_metadatas[src_index].row_groups[rg_index].columns.end() and
-                   col->offset_index.has_value() and col->column_index.has_value();
+    thrust::counting_iterator<size_t>(0),
+    thrust::counting_iterator(row_group_indices.size()),
+    [&](auto const src_index) {
+      // For all row groups in this parquet data source
+      auto const& rg_indices = row_group_indices[src_index];
+      return std::all_of(rg_indices.begin(), rg_indices.end(), [&](auto const& rg_index) {
+        auto const& row_group = file_metadatas[src_index].row_groups[rg_index];
+        return std::any_of(
+          row_group.columns.begin(), row_group.columns.end(), [&](auto const& col) {
+            return col.offset_index.has_value() and col.column_index.has_value();
           });
-        });
+      });
     });
 }
 

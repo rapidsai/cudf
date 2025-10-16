@@ -266,7 +266,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    *
    * @param data_page_mask Input data page mask from page-pruning step
    */
-  void set_pass_page_mask(std::vector<bool> const& data_page_mask);
+  void set_pass_page_mask(cudf::host_span<bool const> data_page_mask);
 
   /**
    * @brief Select the columns to be read based on the read mode
@@ -301,7 +301,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
   void prepare_data(read_mode mode,
                     cudf::host_span<std::vector<size_type> const> row_group_indices,
                     std::vector<rmm::device_buffer>&& column_chunk_buffers,
-                    std::vector<bool> const& data_page_mask);
+                    cudf::host_span<bool const> data_page_mask);
 
   /**
    * @brief Create descriptors for filter column chunks and decode dictionary page headers
@@ -342,8 +342,8 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @param data_page_mask Input data page mask from page-pruning step for the current pass
    */
   void handle_chunking(read_mode mode,
-                       std::vector<rmm::device_buffer> column_chunk_buffers,
-                       std::vector<bool> const& data_page_mask);
+                       std::vector<rmm::device_buffer>&& column_chunk_buffers,
+                       cudf::host_span<bool const> data_page_mask);
 
   /**
    * @brief Setup step for the next input read pass.
@@ -353,7 +353,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    *
    * @param column_chunk_buffers Device buffers containing column chunk data
    */
-  void setup_next_pass(std::vector<rmm::device_buffer> column_chunk_buffers);
+  void setup_next_pass(std::vector<rmm::device_buffer>&& column_chunk_buffers);
 
   /**
    * @brief Setup pointers to columns chunks to be processed for this pass.
@@ -369,7 +369,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    *
    * @param column_chunk_buffers Device buffers containing column chunk data
    */
-  void setup_compressed_data(std::vector<rmm::device_buffer> column_chunk_buffers);
+  void setup_compressed_data(std::vector<rmm::device_buffer>&& column_chunk_buffers);
 
   /**
    * @brief Reset the internal state of the reader.

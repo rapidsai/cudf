@@ -35,14 +35,12 @@ using metadata_base = parquet::detail::metadata;
  *
  * @param file_metadatas Span of parquet footer metadata
  * @param row_group_indices Span of input row group indices
- * @param column_schema_indices Span of input column schema indices
  * @return Boolean indicating if the page index is present in all parquet data sources for all
  * columns
  */
 [[nodiscard]] bool compute_has_page_index(
   cudf::host_span<metadata_base const> file_metadatas,
-  cudf::host_span<std::vector<size_type> const> row_group_indices,
-  cudf::host_span<size_type const> column_schema_indices);
+  cudf::host_span<std::vector<size_type> const> row_group_indices);
 
 /**
  * @brief Compute page row counts and page row offsets and column chunk page (count) offsets for a

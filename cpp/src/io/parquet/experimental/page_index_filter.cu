@@ -539,8 +539,7 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
   if (row_group_indices.empty()) { return cudf::make_empty_column(cudf::type_id::BOOL8); }
 
   // Check if we have page index for all columns in all row groups
-  auto const has_page_index =
-    compute_has_page_index(per_file_metadata, row_group_indices, output_column_schemas);
+  auto const has_page_index = compute_has_page_index(per_file_metadata, row_group_indices);
 
   // Return if page index is not present
   CUDF_EXPECTS(has_page_index,
@@ -617,7 +616,7 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
 }
 
 template <typename ColumnView>
-std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
+cudf::detail::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   ColumnView const& row_mask,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   cudf::host_span<input_column_info const> input_columns,
@@ -637,7 +636,7 @@ std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
                      row_mask.template begin<bool>() + row_mask_offset,
                      row_mask.template begin<bool>() + row_mask_offset + total_rows,
                      cuda::std::identity{})) {
-    return {};
+    return cudf::detail::make_empty_host_vector<bool>(0, stream);
   }
 
   CUDF_EXPECTS(row_mask_offset + total_rows <= row_mask.size(),
@@ -652,13 +651,13 @@ std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
     input_columns.begin(), input_columns.end(), column_schema_indices.begin(), [](auto const& col) {
       return col.schema_idx;
     });
-  auto const has_page_index =
-    compute_has_page_index(per_file_metadata, row_group_indices, column_schema_indices);
+  auto const has_page_index = compute_has_page_index(per_file_metadata, row_group_indices);
 
   // Return early if page index is not present
   if (not has_page_index) {
     CUDF_LOG_WARN("Encountered missing Parquet page index for one or more output columns");
-    return {};  // An empty data page mask indicates all pages are required
+    return cudf::detail::make_empty_host_vector<bool>(
+      0, stream);  // An empty data page mask indicates all pages are required
   }
 
   // Compute page row offsets and column chunk page offsets for each column
@@ -757,11 +756,10 @@ std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
                     device_data_page_mask.begin(),
                     probe_masks_functor{device_level_ptrs.data(), page_offsets.data(), num_ranges});
 
-  auto host_results = cudf::detail::make_host_vector_async(device_data_page_mask, stream);
-  std::vector<bool> data_page_mask{};
-  data_page_mask.reserve(total_pages);
-  stream.synchronize();
+  auto host_results      = cudf::detail::make_host_vector_async(device_data_page_mask, stream);
+  auto data_page_mask    = cudf::detail::make_empty_host_vector<bool>(total_pages, stream);
   auto host_results_iter = host_results.begin();
+  stream.synchronize();
   std::for_each(thrust::counting_iterator<size_t>(0),
                 thrust::counting_iterator(num_columns),
                 [&](auto col_idx) {
@@ -775,14 +773,14 @@ std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
 }
 
 // Instantiate the templates with ColumnView as cudf::column_view and cudf::mutable_column_view
-template std::vector<bool> aggregate_reader_metadata::compute_data_page_mask<cudf::column_view>(
-  cudf::column_view const& row_mask,
-  cudf::host_span<std::vector<size_type> const> row_group_indices,
-  cudf::host_span<input_column_info const> input_columns,
-  cudf::size_type row_mask_offset,
-  rmm::cuda_stream_view stream) const;
+template cudf::detail::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask<
+  cudf::column_view>(cudf::column_view const& row_mask,
+                     cudf::host_span<std::vector<size_type> const> row_group_indices,
+                     cudf::host_span<input_column_info const> input_columns,
+                     cudf::size_type row_mask_offset,
+                     rmm::cuda_stream_view stream) const;
 
-template std::vector<bool> aggregate_reader_metadata::compute_data_page_mask<
+template cudf::detail::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask<
   cudf::mutable_column_view>(cudf::mutable_column_view const& row_mask,
                              cudf::host_span<std::vector<size_type> const> row_group_indices,
                              cudf::host_span<input_column_info const> input_columns,
