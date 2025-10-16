@@ -249,6 +249,7 @@ MultiIndex properties
    MultiIndex.names
    MultiIndex.levels
    MultiIndex.codes
+   MultiIndex.dtypes
    MultiIndex.nlevels
 
 MultiIndex components
