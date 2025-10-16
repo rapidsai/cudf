@@ -1273,6 +1273,32 @@ class MultiIndex(Index):
         )
         return cls(levels=pdi.levels, codes=pdi.codes, names=pdi.names)
 
+    @property
+    def dtypes(self) -> pd.Series:
+        """
+        Return the dtypes as a Series for the underlying MultiIndex.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.MultiIndex.from_product([(0, 1, 2), ('green', 'purple')],
+        ...                                  names=['number', 'color'])
+        >>> idx
+        MultiIndex([(0,  'green'),
+                    (0, 'purple'),
+                    (1,  'green'),
+                    (1, 'purple'),
+                    (2,  'green'),
+                    (2, 'purple')],
+                   names=['number', 'color'])
+        >>> idx.dtypes
+        number     int64
+        color     object
+        dtype: object
+        """
+        # Not using DataFrame.dtypes to avoid expensive invocation of `._data.to_pandas_index`
+        return pd.Series(dict(self.to_frame()._dtypes))
+
     @_performance_tracking
     def to_numpy(self) -> np.ndarray:
         return self.values_host

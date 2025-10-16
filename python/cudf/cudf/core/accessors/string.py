@@ -2990,12 +2990,14 @@ class StringMethods(BaseAccessor):
             raise TypeError(msg)
 
         try:
-            side = plc.strings.side_type.SideType[side.upper()]
+            side_type = plc.strings.side_type.SideType[side.upper()]
         except KeyError:
             raise ValueError(
                 "side has to be either one of {'left', 'right', 'both'}"
             )
-        return self._return_or_inplace(self._column.pad(width, side, fillchar))
+        return self._return_or_inplace(
+            self._column.pad(width, side_type, fillchar)
+        )
 
     def zfill(self, width: int) -> Series | Index:
         """
@@ -4733,7 +4735,7 @@ class StringMethods(BaseAccessor):
         return result
 
     def hash_character_ngrams(
-        self, n: int = 5, as_list: bool = False, seed: np.uint32 = 0
+        self, n: int = 5, as_list: bool = False, seed: int | np.uint32 = 0
     ) -> Series | Index:
         """
         Generate hashes of n-grams from characters in a column of strings.
@@ -5324,7 +5326,7 @@ class StringMethods(BaseAccessor):
                 return self.minhash64(seed, a_column, b_column, width)
 
     def minhash64(
-        self, seed: np.uint64, a: ColumnLike, b: ColumnLike, width: int
+        self, seed: int | np.uint64, a: ColumnLike, b: ColumnLike, width: int
     ) -> Series | Index:
         """
         Compute the minhash of a strings column.
@@ -5375,7 +5377,7 @@ class StringMethods(BaseAccessor):
         )
 
     def minhash_ngrams(
-        self, ngrams: int, seed: np.uint32, a: ColumnLike, b: ColumnLike
+        self, ngrams: int, seed: int | np.uint32, a: ColumnLike, b: ColumnLike
     ) -> Series | Index:
         """
         Compute the minhash of a list column of strings.
@@ -5426,7 +5428,7 @@ class StringMethods(BaseAccessor):
         )
 
     def minhash64_ngrams(
-        self, ngrams: int, seed: np.uint64, a: ColumnLike, b: ColumnLike
+        self, ngrams: int, seed: int | np.uint64, a: ColumnLike, b: ColumnLike
     ) -> Series | Index:
         """
         Compute the minhash of a list column of strings.

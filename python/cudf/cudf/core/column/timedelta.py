@@ -129,7 +129,9 @@ class TimeDeltaColumn(TemporalBaseColumn):
 
     def __contains__(self, item: DatetimeLikeScalar) -> bool:
         try:
-            item = self._NP_SCALAR(item, self.time_unit)
+            # call-overload must be ignored because numpy stubs only accept literal
+            # time unit strings, but we're passing self.time_unit which is valid at runtime
+            item = self._NP_SCALAR(item, self.time_unit)  # type: ignore[call-overload]
         except ValueError:
             # If item cannot be converted to duration type
             # np.timedelta64 raises ValueError, hence `item`
