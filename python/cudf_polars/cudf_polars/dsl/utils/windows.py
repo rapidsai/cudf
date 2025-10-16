@@ -11,6 +11,8 @@ import polars as pl
 
 import pylibcudf as plc
 
+from cudf_polars.utils.cuda_stream import get_stream_for_offset_windows
+
 if TYPE_CHECKING:
     from cudf_polars.typing import ClosedInterval, Duration
 
@@ -92,27 +94,42 @@ def duration_to_scalar(dtype: plc.DataType, value: int) -> plc.Scalar:
     pylibcudf.Scalar
         With datatype matching the provided dtype.
 
+    Notes
+    -----
+    The returned Scalar is constructed on the Stream singleton
+    returned by :func:`get_stream_for_offset_windows`. Users of these values
+    should join that stream into any other streams involved in the operation.
+
     Raises
     ------
     NotImplementedError
         For unsupported durations or datatypes.
     """
+    stream = get_stream_for_offset_windows()
     tid = dtype.id()
     if tid == plc.TypeId.INT64:
-        return plc.Scalar.from_py(value, dtype)
+        return plc.Scalar.from_py(value, dtype, stream=stream)
     elif tid == plc.TypeId.TIMESTAMP_NANOSECONDS:
-        return plc.Scalar.from_py(value, plc.DataType(plc.TypeId.DURATION_NANOSECONDS))
+        return plc.Scalar.from_py(
+            value, plc.DataType(plc.TypeId.DURATION_NANOSECONDS), stream=stream
+        )
     elif tid == plc.TypeId.TIMESTAMP_MICROSECONDS:
         return plc.Scalar.from_py(
-            value // 1000, plc.DataType(plc.TypeId.DURATION_MICROSECONDS)
+            value // 1000,
+            plc.DataType(plc.TypeId.DURATION_MICROSECONDS),
+            stream=stream,
         )
     elif tid == plc.TypeId.TIMESTAMP_MILLISECONDS:
         return plc.Scalar.from_py(
-            value // 1_000_000, plc.DataType(plc.TypeId.DURATION_MILLISECONDS)
+            value // 1_000_000,
+            plc.DataType(plc.TypeId.DURATION_MILLISECONDS),
+            stream=stream,
         )
     elif tid == plc.TypeId.TIMESTAMP_DAYS:
         return plc.Scalar.from_py(
-            value // 86_400_000_000_000, plc.DataType(plc.TypeId.DURATION_DAYS)
+            value // 86_400_000_000_000,
+            plc.DataType(plc.TypeId.DURATION_DAYS),
+            stream=stream,
         )
     else:
         raise NotImplementedError(
@@ -140,6 +157,12 @@ def offsets_to_windows(
     Returns
     -------
     tuple of preceding and following windows as pylibcudf scalars.
+
+    Notes
+    -----
+    The returned Scalar is constructed on the Stream singleton
+    returned by :func:`get_stream_for_offset_windows`. Users of these values
+    should join that stream into any other streams involved in the operation.
     """
     offset_i = duration_to_int(dtype, *offset)
     period_i = duration_to_int(dtype, *period)

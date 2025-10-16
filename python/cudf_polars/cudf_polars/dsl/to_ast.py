@@ -19,6 +19,8 @@ from cudf_polars.typing import GenericTransformer
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from rmm.pylibrmm.stream import Stream
+
 
 # Can't merge these op-mapping dictionaries because scoped enum values
 # are exposed by cython with equality/hash based one their underlying
@@ -103,6 +105,7 @@ class ASTState(TypedDict):
     """
 
     for_parquet: bool
+    stream: Stream
 
 
 class ExprTransformerState(TypedDict):
@@ -170,7 +173,9 @@ def _(node: expr.ColRef, self: Transformer) -> plc_expr.Expression:
 
 @_to_ast.register
 def _(node: expr.Literal, self: Transformer) -> plc_expr.Expression:
-    return plc_expr.Literal(plc.Scalar.from_py(node.value, node.dtype.plc_type))
+    return plc_expr.Literal(
+        plc.Scalar.from_py(node.value, node.dtype.plc_type, stream=self.state["stream"])
+    )
 
 
 @_to_ast.register
@@ -228,7 +233,9 @@ def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
             else:
                 plc_dtype = haystack.dtype.plc_type  # pragma: no cover
             values = (
-                plc_expr.Literal(plc.Scalar.from_py(val, plc_dtype))
+                plc_expr.Literal(
+                    plc.Scalar.from_py(val, plc_dtype, stream=self.state["stream"])
+                )
                 for val in haystack.value
             )
             return reduce(
@@ -265,7 +272,7 @@ def _(node: expr.UnaryFunction, self: Transformer) -> plc_expr.Expression:
     )
 
 
-def to_parquet_filter(node: expr.Expr) -> plc_expr.Expression | None:
+def to_parquet_filter(node: expr.Expr, stream: Stream) -> plc_expr.Expression | None:
     """
     Convert an expression to libcudf AST nodes suitable for parquet filtering.
 
@@ -273,19 +280,23 @@ def to_parquet_filter(node: expr.Expr) -> plc_expr.Expression | None:
     ----------
     node
         Expression to convert.
+    stream
+        CUDA stream used for device memory operations and kernel launches.
 
     Returns
     -------
     pylibcudf Expression if conversion is possible, otherwise None.
     """
-    mapper: Transformer = CachingVisitor(_to_ast, state={"for_parquet": True})
+    mapper: Transformer = CachingVisitor(
+        _to_ast, state={"for_parquet": True, "stream": stream}
+    )
     try:
         return mapper(node)
     except (KeyError, NotImplementedError):
         return None
 
 
-def to_ast(node: expr.Expr) -> plc_expr.Expression | None:
+def to_ast(node: expr.Expr, stream: Stream) -> plc_expr.Expression | None:
     """
     Convert an expression to libcudf AST nodes suitable for compute_column.
 
@@ -293,6 +304,8 @@ def to_ast(node: expr.Expr) -> plc_expr.Expression | None:
     ----------
     node
         Expression to convert.
+    stream
+        CUDA stream used for device memory operations and kernel launches.
 
     Notes
     -----
@@ -304,7 +317,9 @@ def to_ast(node: expr.Expr) -> plc_expr.Expression | None:
     -------
     pylibcudf Expression if conversion is possible, otherwise None.
     """
-    mapper: Transformer = CachingVisitor(_to_ast, state={"for_parquet": False})
+    mapper: Transformer = CachingVisitor(
+        _to_ast, state={"for_parquet": False, "stream": stream}
+    )
     try:
         return mapper(node)
     except (KeyError, NotImplementedError):

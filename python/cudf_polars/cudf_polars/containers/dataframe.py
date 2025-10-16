@@ -252,6 +252,7 @@ class DataFrame:
 
     def serialize(
         self,
+        stream: Stream | None = None,
     ) -> tuple[DataFrameHeader, tuple[memoryview[bytes], plc.gpumemoryview]]:
         """
         Serialize the table into header and frames.
@@ -264,6 +265,12 @@ class DataFrame:
             >>> from cudf_polars.experimental.dask_serialize import register
             >>> register()
 
+        Parameters
+        ----------
+        stream
+            CUDA stream used for device memory operations and kernel launches
+            on this dataframe.
+
         Returns
         -------
         header
@@ -271,7 +278,7 @@ class DataFrame:
         frames
             Two-tuple of frames suitable for passing to `plc.contiguous_split.unpack_from_memoryviews`
         """
-        packed = plc.contiguous_split.pack(self.table, stream=self.stream)
+        packed = plc.contiguous_split.pack(self.table, stream=stream)
 
         # Keyword arguments for `Column.__init__`.
         columns_kwargs: list[ColumnOptions] = [

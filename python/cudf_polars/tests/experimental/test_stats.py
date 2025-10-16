@@ -20,6 +20,7 @@ from cudf_polars.experimental.statistics import (
 from cudf_polars.testing.asserts import DEFAULT_CLUSTER, assert_gpu_result_equal
 from cudf_polars.testing.io import make_lazy_frame, make_partitioned_source
 from cudf_polars.utils.config import ConfigOptions
+from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 
 @pytest.fixture(scope="module")
@@ -71,31 +72,40 @@ def test_base_stats_dataframescan(df, engine):
     # Check unique stats.
     # We need to use force=True to sample unique-value statistics,
     # because nothing in the query requires unique-value statistics.
+    stream = get_cuda_stream()
     assert math.isclose(
-        source_info_x.unique_stats(force=True).count.value, row_count, rel_tol=5e-2
+        source_info_x.unique_stats(force=True, stream=stream).count.value,
+        row_count,
+        rel_tol=5e-2,
     )
     assert math.isclose(
-        source_info_x.unique_stats(force=True).fraction.value, 1.0, abs_tol=1e-2
+        source_info_x.unique_stats(force=True, stream=stream).fraction.value,
+        1.0,
+        abs_tol=1e-2,
     )
-    assert not source_info_x.unique_stats(force=True).count.exact
+    assert not source_info_x.unique_stats(force=True, stream=stream).count.exact
     assert math.isclose(
-        source_info_y.unique_stats(force=True).count.value, 3, rel_tol=5e-2
+        source_info_y.unique_stats(force=True, stream=stream).count.value,
+        3,
+        rel_tol=5e-2,
     )
     assert math.isclose(
-        source_info_y.unique_stats(force=True).fraction.value,
+        source_info_y.unique_stats(force=True, stream=stream).fraction.value,
         3 / row_count,
         abs_tol=1e-2,
     )
-    assert not source_info_y.unique_stats(force=True).count.exact
+    assert not source_info_y.unique_stats(force=True, stream=stream).count.exact
     assert math.isclose(
-        source_info_z.unique_stats(force=True).count.value, 5, rel_tol=5e-2
+        source_info_z.unique_stats(force=True, stream=stream).count.value,
+        5,
+        rel_tol=5e-2,
     )
     assert math.isclose(
-        source_info_z.unique_stats(force=True).fraction.value,
+        source_info_z.unique_stats(force=True, stream=stream).fraction.value,
         5 / row_count,
         abs_tol=1e-2,
     )
-    assert not source_info_z.unique_stats(force=True).count.exact
+    assert not source_info_z.unique_stats(force=True, stream=stream).count.exact
 
 
 @pytest.mark.parametrize("n_files", [1, 3])
@@ -157,14 +167,22 @@ def test_base_stats_parquet(
         assert source_info_y.storage_size.value is None
 
     # source._unique_stats should be empty
+    stream = get_cuda_stream()
     assert set(table_source_info._unique_stats) == set()
 
     if max_footer_samples and max_row_group_samples:
-        assert source_info_x.unique_stats(force=True).count.value == df.height
-        assert source_info_x.unique_stats(force=True).fraction.value == 1.0
+        assert (
+            source_info_x.unique_stats(force=True, stream=stream).count.value
+            == df.height
+        )
+        assert (
+            source_info_x.unique_stats(force=True, stream=stream).fraction.value == 1.0
+        )
     else:
-        assert source_info_x.unique_stats(force=True).count.value is None
-        assert source_info_x.unique_stats(force=True).fraction.value is None
+        assert source_info_x.unique_stats(force=True, stream=stream).count.value is None
+        assert (
+            source_info_x.unique_stats(force=True, stream=stream).fraction.value is None
+        )
 
     # source_info._unique_stats should only contain 'x'
     if max_footer_samples and max_row_group_samples:
@@ -181,10 +199,17 @@ def test_base_stats_parquet(
         # Mark 'z' as a key column, and query 'y' stats
         source_info_z.add_unique_stats_column()
         if n_files == 1 and row_group_size == 10_000:
-            assert source_info_y.unique_stats(force=True).count.value == 3
+            assert (
+                source_info_y.unique_stats(force=True, stream=stream).count.value == 3
+            )
         else:
-            assert source_info_y.unique_stats(force=True).count.value is None
-        assert source_info_y.unique_stats(force=True).fraction.value < 1.0
+            assert (
+                source_info_y.unique_stats(force=True, stream=stream).count.value
+                is None
+            )
+        assert (
+            source_info_y.unique_stats(force=True, stream=stream).fraction.value < 1.0
+        )
 
         # source_info._unique_stats should contain all columns now
         assert set(table_source_info._unique_stats) == {"x", "y", "z"}
@@ -197,10 +222,11 @@ def test_base_stats_csv(engine, tmp_path, df):
     column_stats = stats.column_stats[ir]
 
     # Source info should be empty for CSV
+    stream = get_cuda_stream()
     source_info_x = column_stats["x"].source_info
     assert source_info_x.row_count.value is None
-    assert source_info_x.unique_stats().count.value is None
-    assert source_info_x.unique_stats().fraction.value is None
+    assert source_info_x.unique_stats(stream=stream).count.value is None
+    assert source_info_x.unique_stats(stream=stream).fraction.value is None
 
 
 @pytest.mark.parametrize("max_footer_samples", [1, 3])
@@ -230,11 +256,12 @@ def test_base_stats_parquet_groupby(
     )
 
     # Check simple selection
+    stream = get_cuda_stream()
     q1 = q.select(pl.col("x"), pl.col("y"))
     qir1 = Translator(q1._ldf.visit(), engine).translate_ir()
     stats = collect_base_stats(qir1, ConfigOptions.from_polars_engine(engine))
     source_info_y = stats.column_stats[qir1]["y"].source_info
-    unique_stats_y = source_info_y.unique_stats(force=True)
+    unique_stats_y = source_info_y.unique_stats(force=True, stream=stream)
     y_unique_fraction = unique_stats_y.fraction
     y_row_count = source_info_y.row_count
     assert y_unique_fraction.value < 1.0
@@ -267,7 +294,7 @@ def test_base_stats_parquet_groupby(
     qir2 = Translator(q2._ldf.visit(), engine).translate_ir()
     stats = collect_base_stats(qir2, ConfigOptions.from_polars_engine(engine))
     source_info_y = stats.column_stats[qir2]["y"].source_info
-    assert source_info_y.unique_stats().fraction == y_unique_fraction
+    assert source_info_y.unique_stats(stream=stream).fraction == y_unique_fraction
     assert y_row_count == source_info_y.row_count
     assert_gpu_result_equal(q2.sort(pl.col("y")).slice(0, 2), engine=engine)
 
@@ -412,10 +439,13 @@ def test_base_stats_join_key_info(engine):
     )
 
     # Check basic collect_statistics behavior
-    stats = collect_statistics(ir, config_options)
+    stream = get_cuda_stream()
+    stats = collect_statistics(ir, config_options, stream=stream)
     local_unique_count = stats.column_stats[ir]["cust_id"].unique_count.value
     source_unique_count = (
-        stats.column_stats[ir]["cust_id"].source_info.unique_stats().count.value
+        stats.column_stats[ir]["cust_id"]
+        .source_info.unique_stats(stream=stream)
+        .count.value
     )
     assert local_unique_count == source_unique_count
     assert stats.row_count[ir].value == q.collect().height

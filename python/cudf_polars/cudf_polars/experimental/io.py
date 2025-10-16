@@ -35,6 +35,8 @@ from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 if TYPE_CHECKING:
     from collections.abc import Hashable, MutableMapping
 
+    from rmm.pylibrmm.stream import Stream
+
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.experimental.base import StatsCollector
@@ -423,7 +425,9 @@ def _sink_to_parquet_file(
             plc.io.parquet.ChunkedParquetWriterOptions.builder(sink), options
         )
         writer_options = builder.metadata(metadata).build()
-        writer = plc.io.parquet.ChunkedParquetWriter.from_options(writer_options)
+        writer = plc.io.parquet.ChunkedParquetWriter.from_options(
+            writer_options, stream=df.stream
+        )
 
     # Append to the open Parquet file.
     assert isinstance(writer, plc.io.parquet.ChunkedParquetWriter), (
@@ -695,7 +699,7 @@ class ParquetSourceInfo(DataSourceInfo):
         """Data source row-count estimate."""
         return self.metadata.row_count
 
-    def _sample_row_groups(self) -> None:
+    def _sample_row_groups(self, stream: Stream) -> None:
         """Estimate unique-value statistics from a row-group sample."""
         if (
             self.max_row_group_samples < 1
@@ -740,7 +744,7 @@ class ParquetSourceInfo(DataSourceInfo):
         ).build()
         options.set_columns(key_columns)
         options.set_row_groups(list(samples.values()))
-        tbl_w_meta = plc.io.parquet.read_parquet(options)
+        tbl_w_meta = plc.io.parquet.read_parquet(options, stream=stream)
         row_group_num_rows = tbl_w_meta.tbl.num_rows()
         for name, column in zip(
             tbl_w_meta.column_names(include_children=False),
@@ -751,6 +755,7 @@ class ParquetSourceInfo(DataSourceInfo):
                 column,
                 plc.types.NullPolicy.INCLUDE,
                 plc.types.NanPolicy.NAN_IS_NULL,
+                stream=stream,
             )
             fraction = row_group_unique_count / row_group_num_rows
             # Assume that if every row is unique then this is a
@@ -771,15 +776,15 @@ class ParquetSourceInfo(DataSourceInfo):
                 ColumnStat[float](value=fraction, exact=exact),
             )
 
-    def _update_unique_stats(self, column: str) -> None:
+    def _update_unique_stats(self, column: str, stream: Stream) -> None:
         if column not in self._unique_stats and column in self.metadata.column_names:
             self.add_unique_stats_column(column)
-            self._sample_row_groups()
+            self._sample_row_groups(stream)
             self._key_columns = set()
 
-    def unique_stats(self, column: str) -> UniqueStats:
+    def unique_stats(self, column: str, stream: Stream) -> UniqueStats:
         """Return unique-value statistics for a column."""
-        self._update_unique_stats(column)
+        self._update_unique_stats(column, stream)
         return self._unique_stats.get(column, UniqueStats())
 
     def storage_size(self, column: str) -> ColumnStat[int]:
@@ -879,7 +884,7 @@ class DataFrameSourceInfo(DataSourceInfo):
                 ColumnStat[float](value=unique_fraction),
             )
 
-    def unique_stats(self, column: str) -> UniqueStats:
+    def unique_stats(self, column: str, stream: Stream) -> UniqueStats:
         """Return unique-value statistics for a column."""
         self._update_unique_stats(column)
         return self._unique_stats.get(column, UniqueStats())

@@ -23,18 +23,25 @@ from cudf_polars.experimental.statistics import (
     collect_statistics,
 )
 from cudf_polars.utils.config import ConfigOptions
+from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     import polars as pl
 
+    from rmm.pylibrmm.stream import Stream
+
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
 
 
 def explain_query(
-    q: pl.LazyFrame, engine: pl.GPUEngine, *, physical: bool = True
+    q: pl.LazyFrame,
+    engine: pl.GPUEngine,
+    *,
+    physical: bool = True,
+    stream: Stream | None = None,
 ) -> str:
     """
     Return a formatted string representation of the IR plan.
@@ -48,12 +55,16 @@ def explain_query(
     physical : bool, default True
         If True, show the physical (lowered) plan.
         If False, show the logical (pre-lowering) plan.
+    stream
+        CUDA stream used for device memory operations and kernel launches.
+        By default, a new CUDA stream is used.
 
     Returns
     -------
     str
         A string representation of the IR plan.
     """
+    stream = stream or get_cuda_stream()
     config = ConfigOptions.from_polars_engine(engine)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
 
@@ -63,7 +74,9 @@ def explain_query(
     else:
         if config.executor.name == "streaming":
             # Include row-count statistics for the logical plan
-            return _repr_ir_tree(ir, stats=collect_statistics(ir, config))
+            return _repr_ir_tree(
+                ir, stats=collect_statistics(ir, config, stream=stream)
+            )
         else:
             return _repr_ir_tree(ir)
 

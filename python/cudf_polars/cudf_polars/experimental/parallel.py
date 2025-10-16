@@ -37,6 +37,7 @@ from cudf_polars.experimental.io import _clear_source_info_cache
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat, _contains_over, _lower_ir_fallback
+from cudf_polars.utils.cuda_stream import get_stream_for_stats
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -85,9 +86,10 @@ def lower_ir_graph(
     --------
     lower_ir_node
     """
+    stream = get_stream_for_stats()
     state: State = {
         "config_options": config_options,
-        "stats": collect_statistics(ir, config_options),
+        "stats": collect_statistics(ir, config_options, stream=stream),
     }
     mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
     return mapper(ir)

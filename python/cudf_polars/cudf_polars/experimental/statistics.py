@@ -41,13 +41,17 @@ from cudf_polars.utils import conversion
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    from rmm.pylibrmm.stream import Stream
+
     from cudf_polars.dsl.expr import Expr
     from cudf_polars.experimental.base import JoinInfo
     from cudf_polars.typing import Slice as Zlice
     from cudf_polars.utils.config import ConfigOptions, StatsPlanningOptions
 
 
-def collect_statistics(root: IR, config_options: ConfigOptions) -> StatsCollector:
+def collect_statistics(
+    root: IR, config_options: ConfigOptions, stream: Stream
+) -> StatsCollector:
     """
     Collect column statistics for a query.
 
@@ -57,6 +61,8 @@ def collect_statistics(root: IR, config_options: ConfigOptions) -> StatsCollecto
         Root IR node for collecting column statistics.
     config_options
         GPUEngine configuration options.
+    stream
+        CUDA stream used for device memory operations and kernel launches.
 
     Returns
     -------
@@ -96,7 +102,7 @@ def collect_statistics(root: IR, config_options: ConfigOptions) -> StatsCollecto
             # during the `collect_base_stats` step. We always sample ALL
             # "marked" columns within the same table source at once.
             for node in post_traversal([root]):
-                update_column_stats(node, stats, config_options)
+                update_column_stats(node, stats, config_options, stream=stream)
 
         return stats
 
@@ -574,7 +580,9 @@ def copy_child_unique_counts(column_stats_mapping: dict[str, ColumnStats]) -> No
 
 
 @update_column_stats.register(IR)
-def _(ir: IR, stats: StatsCollector, config_options: ConfigOptions) -> None:
+def _(
+    ir: IR, stats: StatsCollector, config_options: ConfigOptions, stream: Stream
+) -> None:
     # Default `update_column_stats` implementation.
     # Propagate largest child row-count estimate.
     stats.row_count[ir] = ColumnStat[int](
@@ -607,7 +615,12 @@ def _(ir: IR, stats: StatsCollector, config_options: ConfigOptions) -> None:
 
 
 @update_column_stats.register(DataFrameScan)
-def _(ir: DataFrameScan, stats: StatsCollector, config_options: ConfigOptions) -> None:
+def _(
+    ir: DataFrameScan,
+    stats: StatsCollector,
+    config_options: ConfigOptions,
+    stream: Stream,
+) -> None:
     # Use datasource row-count estimate.
     if stats.column_stats[ir]:
         stats.row_count[ir] = next(
@@ -620,7 +633,9 @@ def _(ir: DataFrameScan, stats: StatsCollector, config_options: ConfigOptions) -
     for column_stats in stats.column_stats[ir].values():
         if column_stats.source_info.implied_unique_count.value is None:
             # We don't have a unique-count estimate, so we need to sample the data.
-            source_unique_stats = column_stats.source_info.unique_stats(force=False)
+            source_unique_stats = column_stats.source_info.unique_stats(
+                force=False, stream=stream
+            )
             if source_unique_stats.count.value is not None:
                 column_stats.unique_count = source_unique_stats.count
         else:
@@ -628,7 +643,9 @@ def _(ir: DataFrameScan, stats: StatsCollector, config_options: ConfigOptions) -
 
 
 @update_column_stats.register(Scan)
-def _(ir: Scan, stats: StatsCollector, config_options: ConfigOptions) -> None:
+def _(
+    ir: Scan, stats: StatsCollector, config_options: ConfigOptions, stream: Stream
+) -> None:
     # Use datasource row-count estimate.
     if stats.column_stats[ir]:
         stats.row_count[ir] = next(
@@ -649,7 +666,9 @@ def _(ir: Scan, stats: StatsCollector, config_options: ConfigOptions) -> None:
     for column_stats in stats.column_stats[ir].values():
         if column_stats.source_info.implied_unique_count.value is None:
             # We don't have a unique-count estimate, so we need to sample the data.
-            source_unique_stats = column_stats.source_info.unique_stats(force=False)
+            source_unique_stats = column_stats.source_info.unique_stats(
+                force=False, stream=stream
+            )
             if source_unique_stats.count.value is not None:
                 column_stats.unique_count = source_unique_stats.count
             elif (

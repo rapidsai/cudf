@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Any, Generic, NamedTuple, TypeVar
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterator, MutableMapping
 
+    from rmm.pylibrmm.stream import Stream
+
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.dsl.nodebase import Node
@@ -121,7 +123,9 @@ class DataSourceInfo:
         """Data source row-count estimate."""
         raise NotImplementedError("Sub-class must implement row_count.")
 
-    def unique_stats(self, column: str) -> UniqueStats:  # pragma: no cover
+    def unique_stats(
+        self, column: str, stream: Stream
+    ) -> UniqueStats:  # pragma: no cover
         """Return unique-value statistics for a column."""
         raise NotImplementedError("Sub-class must implement unique_stats.")
 
@@ -198,7 +202,7 @@ class ColumnSourceInfo:
             and self.table_source_pairs[0].table_source.row_count.exact,
         )
 
-    def unique_stats(self, *, force: bool = False) -> UniqueStats:
+    def unique_stats(self, *, force: bool = False, stream: Stream) -> UniqueStats:
         """
         Return unique-value statistics for a column.
 
@@ -207,6 +211,8 @@ class ColumnSourceInfo:
         force
             If True, return unique-value statistics even if the column
             wasn't marked as needing unique-value information.
+        stream
+            CUDA stream used for device memory operations and kernel launches.
         """
         if (force or self.is_unique_stats_column) and len(self.table_source_pairs) == 1:
             # Single table source.
@@ -214,7 +220,7 @@ class ColumnSourceInfo:
             # We may never need to do this if the source unique-value
             # statistics are only "used" by the Scan/DataFrameScan nodes.
             table_source, column_name = self.table_source_pairs[0]
-            return table_source.unique_stats(column_name)
+            return table_source.unique_stats(column_name, stream)
         else:
             # Avoid sampling unique-stats if this column
             # wasn't marked as "needing" unique-stats.
