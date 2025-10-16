@@ -104,7 +104,7 @@ class NumericalColumn(NumericalBaseColumn):
             children=children,
         )
 
-    def _clear_cache(self):
+    def _clear_cache(self) -> None:
         super()._clear_cache()
         try:
             del self.nan_count
@@ -171,7 +171,7 @@ class NumericalColumn(NumericalBaseColumn):
             include_nan and bool(self.nan_count != 0)
         )
 
-    def element_indexing(self, index: int):
+    def element_indexing(self, index: int) -> ScalarLike | None:
         result = super().element_indexing(index)
         if isinstance(result, pa.Scalar):
             return self.dtype.type(result.as_py())
@@ -208,17 +208,7 @@ class NumericalColumn(NumericalBaseColumn):
                 )
             return col.astype(self.dtype)
 
-    @acquire_spill_lock()
-    def transform(self, compiled_op, np_dtype: np.dtype) -> ColumnBase:
-        plc_column = plc.transform.transform(
-            [self.to_pylibcudf(mode="read")],
-            compiled_op[0],
-            dtype_to_pylibcudf_type(np_dtype),
-            True,
-        )
-        return type(self).from_pylibcudf(plc_column)
-
-    def __invert__(self):
+    def __invert__(self) -> ColumnBase:
         if self.dtype.kind in "ui":
             return self.unary_operator("invert")
         elif self.dtype.kind == "b":
@@ -477,7 +467,7 @@ class NumericalColumn(NumericalBaseColumn):
         )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
-    def as_string_column(self, dtype) -> StringColumn:
+    def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         col = self
         if (
             cudf.get_option("mode.pandas_compatible")
