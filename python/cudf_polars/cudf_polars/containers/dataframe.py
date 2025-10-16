@@ -382,7 +382,21 @@ class DataFrame:
         return [c for c in self.columns if c.name in names]
 
     def filter(self, mask: Column) -> Self:
-        """Return a filtered table given a mask."""
+        """
+        Return a filtered table given a mask.
+
+        Parameters
+        ----------
+        mask
+            Boolean mask to apply to the dataframe. It is the caller's
+            responsibility to ensure that ``mask`` is valid on ``self.stream``.
+            A mask that is derived from ``self`` via a computation on ``self.stream``
+            automatically satisfies this requirement.
+
+        Returns
+        -------
+        Filtered dataframe
+        """
         table = plc.stream_compaction.apply_boolean_mask(
             self.table, mask.obj, stream=self.stream
         )

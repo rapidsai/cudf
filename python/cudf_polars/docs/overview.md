@@ -630,8 +630,9 @@ the provided pylibcudf Tables / Columns are valid on the provided `stream`.
 Take special care when creating a `DataFrame` that combines pylibcudf `Table`s
 or `Column`s from multiple `DataFrame`s, or "bare" pylibcudf objects that don't
 from a `DataFrame` at all. This also applies to `DataFrame` methods like
-`DataFrame.with_columns` which accepts `cudf_polars.containers.Column` objects
-that might not be valid on the `DataFrame`'s original stream.
+`DataFrame.with_columns` and `DataFrame.filter` which accept
+`cudf_polars.containers.Column` objects that might not be valid on the
+`DataFrame`'s original stream.
 
 Here's an example of the simpler case where a `pylibcudf.Table` is created
 on some CUDA stream and that same stream is used for the `DataFrame`:
