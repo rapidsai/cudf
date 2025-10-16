@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import pandas as pd
 import pyarrow as pa
@@ -156,7 +156,9 @@ class IntervalColumn(StructColumn):
         pd_type = self.dtype.to_pandas()
         return pd.Index(pd_type.__from_arrow__(self.to_arrow()), dtype=pd_type)
 
-    def element_indexing(self, index: int):
+    def element_indexing(
+        self, index: int
+    ) -> pd.Interval | dict[Any, Any] | None:  # type: ignore[override]
         result = super().element_indexing(index)
         if isinstance(result, dict) and cudf.get_option(
             "mode.pandas_compatible"

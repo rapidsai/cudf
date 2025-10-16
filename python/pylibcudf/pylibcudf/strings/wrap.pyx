@@ -20,7 +20,7 @@ cpdef Column wrap(
     replacing appropriate white space with
     new-line characters (ASCII 0x0A).
 
-    For details, see :cpp:func:`cudf::strings::wrap`.
+    For details, see :cpp:func:`wrap`.
 
     Parameters
     ----------

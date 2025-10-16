@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from cudf._typing import (
         ColumnBinaryOperand,
         DatetimeLikeScalar,
+        DtypeObj,
     )
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.string import StringColumn
@@ -250,7 +251,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
                     )
                 )
 
-    def as_string_column(self, dtype) -> StringColumn:
+    def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         if cudf.get_option("mode.pandas_compatible"):
             if isinstance(dtype, np.dtype) and dtype.kind == "O":
                 raise TypeError(
