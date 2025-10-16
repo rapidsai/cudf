@@ -2,6 +2,9 @@
 
 from typing import Any
 
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
+from rmm.pylibrmm.stream import Stream
+
 from pylibcudf._interop_helpers import ArrowLike
 from pylibcudf.column import Column
 from pylibcudf.types import DataType
@@ -19,5 +22,8 @@ class Table:
     def _to_host_array(self) -> Any: ...
     @staticmethod
     def from_arrow(
-        arrow_like: ArrowLike, dtype: DataType | None = None
+        arrow_like: ArrowLike,
+        dtype: DataType | None = None,
+        stream: Stream | None = None,
+        mr: DeviceMemoryResource | None = None,
     ) -> Table: ...

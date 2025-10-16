@@ -1481,7 +1481,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def _find_first_and_last(self, value: ScalarLike) -> tuple[int, int]:
         indices = self.indices_of(value)
         if n := len(indices):
-            return (
+            return (  # type: ignore[return-value]
                 indices.element_indexing(0),
                 indices.element_indexing(n - 1),
             )
@@ -2060,7 +2060,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return np.dtype(np.bool_)
         return self.dtype
 
-    def _with_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
+    def _with_type_metadata(self: ColumnBase, dtype: DtypeObj) -> ColumnBase:
         """
         Copies type metadata from self onto other, returning a new column.
 
