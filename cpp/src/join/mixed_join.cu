@@ -87,11 +87,11 @@ precompute_mixed_join_data(mixed_multiset_type const& hash_table,
   auto hash_indices = rmm::device_uvector<cuda::std::pair<hash_value_type, hash_value_type>>(
     probe_table_num_rows, stream, mr);
 
-  auto const extent                        = hash_table.capacity();
+  auto const capacity                      = hash_table.capacity();
   auto const probe_hash_fn                 = hash_table.hash_function();
   static constexpr std::size_t bucket_size = mixed_multiset_type::bucket_size;
 
-  auto const num_buckets           = extent / bucket_size;
+  auto const num_buckets           = capacity / bucket_size;
   auto const num_buckets_minus_one = num_buckets - 1;
 
   // Functor to pre-compute both input pairs and initial slots and step sizes for double hashing.

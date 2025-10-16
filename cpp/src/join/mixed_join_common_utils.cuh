@@ -27,8 +27,7 @@
 #include <cub/cub.cuh>
 #include <cuco/static_set.cuh>
 
-namespace cudf {
-namespace detail {
+namespace cudf::detail {
 
 using row_hash = cudf::detail::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
                                                             cudf::nullate::DYNAMIC>;
@@ -185,10 +184,10 @@ using hash_set_ref_type = hash_set_type::ref_type<cuco::contains_tag>;
  */
 template <bool has_nulls>
 struct hash_probe_result {
-  bool first_slot_is_empty;
-  bool second_slot_is_empty;
-  bool first_slot_equals;
-  bool second_slot_equals;
+  bool first_slot_is_empty_;
+  bool second_slot_is_empty_;
+  bool first_slot_equals_;
+  bool second_slot_equals_;
 
   __device__ __forceinline__ hash_probe_result(
     pair_expression_equality<has_nulls> const& key_equal,
@@ -197,30 +196,30 @@ struct hash_probe_result {
     std::size_t probe_idx)
   {
     auto const* data = hash_table_storage.data();
-    auto const bucket_slots =
-      *reinterpret_cast<cuda::std::array<cuco::pair<hash_value_type, cudf::size_type>, 2> const*>(
-        data + probe_idx);
+    __builtin_assume_aligned(data, 2 * sizeof(cuco::pair<hash_value_type, cudf::size_type>));
+    auto const first  = *(data + probe_idx);
+    auto const second = *(data + probe_idx + 1);
 
-    first_slot_is_empty  = bucket_slots[0].second == cudf::detail::JoinNoneValue;
-    second_slot_is_empty = bucket_slots[1].second == cudf::detail::JoinNoneValue;
-    first_slot_equals    = (not first_slot_is_empty and key_equal(probe_key, bucket_slots[0]));
-    second_slot_equals   = (not second_slot_is_empty and key_equal(probe_key, bucket_slots[1]));
+    first_slot_is_empty_  = first.second == cudf::detail::JoinNoneValue;
+    second_slot_is_empty_ = second.second == cudf::detail::JoinNoneValue;
+    first_slot_equals_    = (not first_slot_is_empty_ and key_equal(probe_key, first));
+    second_slot_equals_   = (not second_slot_is_empty_ and key_equal(probe_key, second));
   }
 
   __device__ __forceinline__ bool has_empty_slot() const noexcept
   {
-    return first_slot_is_empty or second_slot_is_empty;
+    return first_slot_is_empty_ or second_slot_is_empty_;
   }
 
   __device__ __forceinline__ cudf::size_type match_count() const noexcept
   {
-    return static_cast<cudf::size_type>(first_slot_equals) +
-           static_cast<cudf::size_type>(second_slot_equals);
+    return static_cast<cudf::size_type>(first_slot_equals_) +
+           static_cast<cudf::size_type>(second_slot_equals_);
   }
 
   __device__ __forceinline__ bool has_match() const noexcept
   {
-    return first_slot_equals or second_slot_equals;
+    return first_slot_equals_ or second_slot_equals_;
   }
 };
 
@@ -232,42 +231,45 @@ struct hash_probe_result {
  */
 template <bool has_nulls>
 struct hash_table_prober {
-  cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage;
-  pair_expression_equality<has_nulls> const& key_equal;
-  cuco::pair<hash_value_type, cudf::size_type> const& probe_key;
-  std::size_t probe_idx;
-  std::size_t step;
-  std::size_t extent;
+  cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage_;
+  pair_expression_equality<has_nulls> const& key_equal_;
+  cuco::pair<hash_value_type, cudf::size_type> const& probe_key_;
+  std::size_t probe_idx_;
+  std::size_t step_;
+  std::size_t extent_;
 
   __device__ __forceinline__ hash_table_prober(
     pair_expression_equality<has_nulls> const& key_equal,
     cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
     cuco::pair<hash_value_type, cudf::size_type> const& probe_key,
     cuda::std::pair<hash_value_type, hash_value_type> const& hash_idx)
-    : hash_table_storage{hash_table_storage},
-      key_equal{key_equal},
-      probe_key{probe_key},
-      probe_idx{static_cast<std::size_t>(hash_idx.first)},
-      step{static_cast<std::size_t>(hash_idx.second)},
-      extent{hash_table_storage.size()}
+    : hash_table_storage_{hash_table_storage},
+      key_equal_{key_equal},
+      probe_key_{probe_key},
+      probe_idx_{static_cast<std::size_t>(hash_idx.first)},
+      step_{static_cast<std::size_t>(hash_idx.second)},
+      extent_{hash_table_storage.size()}
   {
   }
 
   __device__ __forceinline__ hash_probe_result<has_nulls> probe_current_bucket() const
   {
-    return hash_probe_result<has_nulls>{key_equal, hash_table_storage, probe_key, probe_idx};
+    return hash_probe_result<has_nulls>{key_equal_, hash_table_storage_, probe_key_, probe_idx_};
   }
 
-  __device__ __forceinline__ void advance() noexcept { probe_idx = (probe_idx + step) % extent; }
+  __device__ __forceinline__ void advance() noexcept
+  {
+    probe_idx_ = (probe_idx_ + step_) % extent_;
+  }
 
   __device__ __forceinline__ auto get_bucket_slots() const noexcept
   {
-    auto const* data = hash_table_storage.data();
-    return *reinterpret_cast<
-      cuda::std::array<cuco::pair<hash_value_type, cudf::size_type>, 2> const*>(data + probe_idx);
+    auto const* data = hash_table_storage_.data();
+    __builtin_assume_aligned(data, 2 * sizeof(cuco::pair<hash_value_type, cudf::size_type>));
+    auto const first  = *(data + probe_idx_);
+    auto const second = *(data + probe_idx_ + 1);
+    return cuda::std::pair{first, second};
   }
 };
 
-}  // namespace detail
-
-}  // namespace cudf
+}  // namespace cudf::detail

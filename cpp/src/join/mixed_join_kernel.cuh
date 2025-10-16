@@ -56,16 +56,16 @@ __device__ __forceinline__ void retrieve_matches(
     auto const result       = prober.probe_current_bucket();
     auto const bucket_slots = prober.get_bucket_slots();
 
-    if (result.first_slot_equals) {
+    if (result.first_slot_equals_) {
       probe_output[output_idx] = probe_row_index;
-      match_output[output_idx] = bucket_slots[0].second;
+      match_output[output_idx] = bucket_slots.first.second;
       output_idx++;
       found_match = true;
     }
 
-    if (result.second_slot_equals) {
+    if (result.second_slot_equals_) {
       probe_output[output_idx] = probe_row_index;
-      match_output[output_idx] = bucket_slots[1].second;
+      match_output[output_idx] = bucket_slots.second.second;
       output_idx++;
       found_match = true;
     }
