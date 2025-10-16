@@ -38,9 +38,16 @@ from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from typing_extensions import Self
 
-    from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
+    from cudf._typing import (
+        ColumnBinaryOperand,
+        ColumnLike,
+        DtypeObj,
+        ScalarLike,
+    )
     from cudf.core.buffer import Buffer
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.string import StringColumn
@@ -92,7 +99,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         )
 
     @property
-    def __cuda_array_interface__(self):
+    def __cuda_array_interface__(self) -> Mapping[str, Any]:
         raise NotImplementedError(
             "Decimals are not yet supported via `__cuda_array_interface__`"
         )
@@ -141,7 +148,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         column.dtype.precision = data.type.precision
         return column
 
-    def element_indexing(self, index: int):
+    def element_indexing(self, index: int) -> Decimal | None:
         result = super().element_indexing(index)
         if isinstance(result, pa.Scalar):
             return result.as_py()
@@ -161,7 +168,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             return self
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
-    def as_string_column(self, dtype) -> StringColumn:
+    def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         if cudf.get_option("mode.pandas_compatible"):
             if isinstance(dtype, np.dtype) and dtype.kind == "O":
                 raise TypeError(
@@ -181,7 +188,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 cudf.core.column.column_empty(0, dtype=CUDF_STRING_DTYPE),
             )
 
-    def __pow__(self, other):
+    def __pow__(self, other: ColumnBinaryOperand) -> ColumnBase:
         if isinstance(other, int):
             if other == 0:
                 res = cudf.core.column.as_column(
@@ -204,13 +211,13 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
     # Decimals in libcudf don't support truediv, see
     # https://github.com/rapidsai/cudf/pull/7435 for explanation.
-    def __truediv__(self, other):
+    def __truediv__(self, other: ColumnBinaryOperand) -> ColumnBase:
         return self._binaryop(other, "__div__")
 
-    def __rtruediv__(self, other):
+    def __rtruediv__(self, other: ColumnBinaryOperand) -> ColumnBase:
         return self._binaryop(other, "__rdiv__")
 
-    def _binaryop(self, other: ColumnBinaryOperand, op: str):
+    def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
 
         # Inline _normalize_binop_operand functionality
@@ -289,7 +296,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         }:
             lhs_comp: plc.Scalar | ColumnBase = lhs  # type: ignore[assignment]
             rhs_comp: plc.Scalar | ColumnBase = (
-                _to_plc_scalar(rhs, self.dtype)
+                _to_plc_scalar(rhs, self.dtype)  # type: ignore[arg-type]
                 if isinstance(rhs, (int, Decimal))
                 else rhs
             )
@@ -413,10 +420,7 @@ class Decimal32Column(DecimalBaseColumn):
             buffers=[mask_buf, data_buf],  # type: ignore[list-item]
         )
 
-    def _with_type_metadata(
-        self: "cudf.core.column.Decimal32Column",
-        dtype: Dtype,
-    ) -> "cudf.core.column.Decimal32Column":
+    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, Decimal32Dtype):
             self.dtype.precision = dtype.precision
         if cudf.get_option("mode.pandas_compatible"):
@@ -467,10 +471,7 @@ class Decimal128Column(DecimalBaseColumn):
 
         return super().to_arrow().cast(dtype.to_arrow())
 
-    def _with_type_metadata(
-        self: "cudf.core.column.Decimal128Column",
-        dtype: Dtype,
-    ) -> "cudf.core.column.Decimal128Column":
+    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, Decimal128Dtype):
             self.dtype.precision = dtype.precision
         if cudf.get_option("mode.pandas_compatible"):
@@ -532,10 +533,7 @@ class Decimal64Column(DecimalBaseColumn):
             buffers=[mask_buf, data_buf],  # type: ignore[list-item]
         )
 
-    def _with_type_metadata(
-        self: "cudf.core.column.Decimal64Column",
-        dtype: Dtype,
-    ) -> "cudf.core.column.Decimal64Column":
+    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, Decimal64Dtype):
             self.dtype.precision = dtype.precision
         if cudf.get_option("mode.pandas_compatible"):
