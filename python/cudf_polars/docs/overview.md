@@ -617,7 +617,7 @@ everyone always returns a value.
 
 CUDA [Streams](https://docs.nvidia.com/cuda/cuda-c-programming-guide/#streams)
 are used to manage concurrent operations. These build on libcudf's and
-pylibcudf's usage of streams when performing operations on pylibucdf `Column`s
+pylibcudf's usage of streams when performing operations on pylibcudf `Column`s
 and `Table`s.
 
 In `cudf-polars`, we attach a `Stream` to `cudf_polars.containers.DataFrame`.
@@ -629,7 +629,7 @@ the provided pylibcudf Tables / Columns are valid on the provided `stream`.
 
 Take special care when creating a `DataFrame` that combines pylibcudf `Table`s
 or `Column`s from multiple `DataFrame`s, or "bare" pylibcudf objects that don't
-from a `DataFrame` at all. This also applies to `DataFrame` methods like
+come from a `DataFrame` at all. This also applies to `DataFrame` methods like
 `DataFrame.with_columns` and `DataFrame.filter` which accept
 `cudf_polars.containers.Column` objects that might not be valid on the
 `DataFrame`'s original stream.
