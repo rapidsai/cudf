@@ -403,15 +403,15 @@ struct page_stats_caster : public stats_caster_base {
  * Cooperative Groups is used here for robust global thread ID calculation.
  */
 struct compute_next_level_functor {
-  cudf::device_span<bool*> const level_ptrs;
+  bool** const level_ptrs;
   cudf::size_type const current_level;
   cudf::size_type const current_level_size;
   cudf::size_type const next_level_size;
 
   __device__ void operator()(cudf::size_type next_level_index) const noexcept
   {
-    auto const current_level_ptr = level_ptrs.begin()[current_level];
-    auto next_level_ptr          = level_ptrs.begin()[current_level + 1];
+    auto const current_level_ptr = level_ptrs[current_level];
+    auto next_level_ptr          = level_ptrs[current_level + 1];
 
     // Handle the odd-sized remaining element if current_level_size is odd
     if (current_level_size % 2 and next_level_index == (next_level_size - 1)) {
@@ -436,13 +436,12 @@ struct compute_next_level_functor {
  * the range).
  */
 struct probe_masks_functor {
-  cudf::device_span<bool* const> level_ptrs;
-  cudf::device_span<cudf::size_type const> page_offsets;
+  bool** const level_ptrs;
+  cudf::size_type const* const page_offsets;
+  cudf::size_type const num_ranges;
 
   __device__ bool operator()(cudf::size_type range_idx) const noexcept
   {
-    auto const num_ranges = page_offsets.size() - 1;
-
     // Retrieve M and N for the current range [M, N)
     size_type M = page_offsets[range_idx];
     size_type N = page_offsets[range_idx + 1];
@@ -741,11 +740,11 @@ std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   std::for_each(
     thrust::counting_iterator(0), thrust::counting_iterator(num_levels - 1), [&](auto const level) {
       auto const next_level_size = cudf::util::div_rounding_up_unsafe(current_level_size, 2);
-      thrust::for_each(
-        rmm::exec_policy_nosync(stream),
-        thrust::counting_iterator(0),
-        thrust::counting_iterator(next_level_size),
-        compute_next_level_functor{device_level_ptrs, level, current_level_size, next_level_size});
+      thrust::for_each(rmm::exec_policy_nosync(stream),
+                       thrust::counting_iterator(0),
+                       thrust::counting_iterator(next_level_size),
+                       compute_next_level_functor{
+                         device_level_ptrs.data(), level, current_level_size, next_level_size});
       current_level_size = next_level_size;
     });
 
@@ -756,7 +755,7 @@ std::vector<bool> aggregate_reader_metadata::compute_data_page_mask(
                     thrust::counting_iterator(0),
                     thrust::counting_iterator(num_ranges),
                     device_data_page_mask.begin(),
-                    probe_masks_functor{device_level_ptrs, page_offsets});
+                    probe_masks_functor{device_level_ptrs.data(), page_offsets.data(), num_ranges});
 
   auto host_results = cudf::detail::make_host_vector_async(device_data_page_mask, stream);
   std::vector<bool> data_page_mask{};
