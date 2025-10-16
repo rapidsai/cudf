@@ -75,13 +75,7 @@ std::pair<size_type, rmm::device_uvector<size_type>> find_fallback_blocks(
   rmm::device_buffer tmp_storage(storage_bytes, stream);
   exec_copy_if(tmp_storage.data());
 
-  size_type num_fallback_blocks = 0;
-  CUDF_CUDA_TRY(cudaMemcpyAsync(&num_fallback_blocks,
-                                d_num_fallback_blocks.data(),
-                                sizeof(size_type),
-                                cudaMemcpyDefault,
-                                stream.value()));
-  stream.synchronize();
+  auto const num_fallback_blocks = d_num_fallback_blocks.value(stream);
   if (num_fallback_blocks > 0) { fallback_block_ids.resize(num_fallback_blocks, stream); }
 
   return {num_fallback_blocks,

@@ -62,7 +62,8 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   auto const run_aggs_by_global_mem_kernel = [&] {
     auto [agg_results, unique_key_indices] = compute_global_memory_aggs(
       row_bitmask, values, global_set, agg_kinds, d_agg_kinds, stream, mr);
-    finalize_output(values, aggs, agg_results, cache, stream);
+    finalize_output(
+      static_cast<size_type>(unique_key_indices.size()), values, aggs, agg_results, cache);
     return std::pair{std::move(unique_key_indices), has_compound_aggs};
   };
 
@@ -261,7 +262,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
                                                  num_rows});
   }
 
-  finalize_output(values, aggs, agg_results, cache, stream);
+  finalize_output(static_cast<size_type>(unique_keys.size()), values, aggs, agg_results, cache);
   return {std::move(unique_keys), has_compound_aggs};
 }
 }  // namespace cudf::groupby::detail::hash

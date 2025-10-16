@@ -50,7 +50,9 @@ __device__ void find_local_mapping(cooperative_groups::thread_block const& block
       auto const matched_idx = *result.first;
       auto const inserted    = result.second;
       if (inserted) {  // inserted a new element
-        auto const shared_set_index          = atomicAdd(cardinality, 1);
+        auto const ref_cardinality =
+          cuda::atomic_ref<size_type, cuda::thread_scope_block>{*cardinality};
+        auto const shared_set_index = ref_cardinality.fetch_add(1, cuda::std::memory_order_relaxed);
         shared_set_indices[shared_set_index] = idx;
         local_mapping_indices[idx]           = shared_set_index;
       }
