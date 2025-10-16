@@ -1,5 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025,
-# NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -59,5 +58,4 @@ if TYPE_CHECKING:
     ],
 )
 def test_reconstruct(node: Node):
-    rebuilt = node.reconstruct(node.children)
-    assert rebuilt == node
+    assert node.reconstruct(node.children) == node
