@@ -42,7 +42,6 @@ from cudf_polars.utils import dtypes
 from cudf_polars.utils.cuda_stream import (
     get_cuda_stream,
     get_joined_cuda_stream,
-    join_cuda_streams,
 )
 from cudf_polars.utils.versions import POLARS_VERSION_LT_131
 
@@ -2235,9 +2234,6 @@ class Join(IR):
         )
         right_on = DataFrame(
             broadcast(*(e.evaluate(right) for e in right_on_exprs)), stream=stream
-        )
-        join_cuda_streams(
-            downstreams=(stream,), upstreams=(left_on.stream, right_on.stream)
         )
         null_equality = (
             plc.types.NullEquality.EQUAL
