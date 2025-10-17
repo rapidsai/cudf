@@ -27,24 +27,6 @@ def get_cuda_stream() -> Stream:
 
 
 @functools.lru_cache(maxsize=1)
-def get_stream_for_stats() -> Stream:
-    """
-    Get a stream dedicated to reading data for statistics collection.
-
-    Notes
-    -----
-    This function returns a singleton Stream that should only
-    be used for reading data for statistics collection. Calling it multiple
-    times will always return the same Stream.
-
-    Users performing stream-ordered operations on data that combines
-    data on this stream and other streams must join the streams prior
-    to performing the operation.
-    """
-    return get_cuda_stream()
-
-
-@functools.lru_cache(maxsize=1)
 def get_stream_for_conditional_join_predicate() -> Stream:
     """
     Get a stream dedicated to reading data for conditional join predicates.

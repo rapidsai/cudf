@@ -14,8 +14,6 @@ from typing import TYPE_CHECKING, Any, Generic, NamedTuple, TypeVar
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterator, MutableMapping
 
-    from rmm.pylibrmm.stream import Stream
-
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.dsl.nodebase import Node
@@ -124,7 +122,8 @@ class DataSourceInfo:
         raise NotImplementedError("Sub-class must implement row_count.")
 
     def unique_stats(
-        self, column: str, stream: Stream
+        self,
+        column: str,
     ) -> UniqueStats:  # pragma: no cover
         """Return unique-value statistics for a column."""
         raise NotImplementedError("Sub-class must implement unique_stats.")
@@ -202,7 +201,7 @@ class ColumnSourceInfo:
             and self.table_source_pairs[0].table_source.row_count.exact,
         )
 
-    def unique_stats(self, *, force: bool = False, stream: Stream) -> UniqueStats:
+    def unique_stats(self, *, force: bool = False) -> UniqueStats:
         """
         Return unique-value statistics for a column.
 
@@ -220,7 +219,7 @@ class ColumnSourceInfo:
             # We may never need to do this if the source unique-value
             # statistics are only "used" by the Scan/DataFrameScan nodes.
             table_source, column_name = self.table_source_pairs[0]
-            return table_source.unique_stats(column_name, stream)
+            return table_source.unique_stats(column_name)
         else:
             # Avoid sampling unique-stats if this column
             # wasn't marked as "needing" unique-stats.

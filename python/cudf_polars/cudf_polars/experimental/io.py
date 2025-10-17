@@ -31,11 +31,10 @@ from cudf_polars.experimental.base import (
     get_key_name,
 )
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
+from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, MutableMapping
-
-    from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import NamedExpr
@@ -699,7 +698,7 @@ class ParquetSourceInfo(DataSourceInfo):
         """Data source row-count estimate."""
         return self.metadata.row_count
 
-    def _sample_row_groups(self, stream: Stream) -> None:
+    def _sample_row_groups(self) -> None:
         """Estimate unique-value statistics from a row-group sample."""
         if (
             self.max_row_group_samples < 1
@@ -744,6 +743,7 @@ class ParquetSourceInfo(DataSourceInfo):
         ).build()
         options.set_columns(key_columns)
         options.set_row_groups(list(samples.values()))
+        stream = get_cuda_stream()
         tbl_w_meta = plc.io.parquet.read_parquet(options, stream=stream)
         row_group_num_rows = tbl_w_meta.tbl.num_rows()
         for name, column in zip(
@@ -775,16 +775,17 @@ class ParquetSourceInfo(DataSourceInfo):
                 ColumnStat[int](value=count, exact=exact),
                 ColumnStat[float](value=fraction, exact=exact),
             )
+        stream.synchronize()
 
-    def _update_unique_stats(self, column: str, stream: Stream) -> None:
+    def _update_unique_stats(self, column: str) -> None:
         if column not in self._unique_stats and column in self.metadata.column_names:
             self.add_unique_stats_column(column)
-            self._sample_row_groups(stream)
+            self._sample_row_groups()
             self._key_columns = set()
 
-    def unique_stats(self, column: str, stream: Stream) -> UniqueStats:
+    def unique_stats(self, column: str) -> UniqueStats:
         """Return unique-value statistics for a column."""
-        self._update_unique_stats(column, stream)
+        self._update_unique_stats(column)
         return self._unique_stats.get(column, UniqueStats())
 
     def storage_size(self, column: str) -> ColumnStat[int]:
@@ -884,7 +885,7 @@ class DataFrameSourceInfo(DataSourceInfo):
                 ColumnStat[float](value=unique_fraction),
             )
 
-    def unique_stats(self, column: str, stream: Stream) -> UniqueStats:
+    def unique_stats(self, column: str) -> UniqueStats:
         """Return unique-value statistics for a column."""
         self._update_unique_stats(column)
         return self._unique_stats.get(column, UniqueStats())

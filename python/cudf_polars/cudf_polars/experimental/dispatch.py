@@ -12,8 +12,6 @@ from cudf_polars.typing import GenericTransformer
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
-    from rmm.pylibrmm.stream import Stream
-
     from cudf_polars.dsl import ir
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import (
@@ -141,7 +139,9 @@ def initialize_column_stats(
 
 @singledispatch
 def update_column_stats(
-    ir: IR, stats: StatsCollector, config_options: ConfigOptions, stream: Stream
+    ir: IR,
+    stats: StatsCollector,
+    config_options: ConfigOptions,
 ) -> None:
     """
     Finalize local column statistics for an IR node.
