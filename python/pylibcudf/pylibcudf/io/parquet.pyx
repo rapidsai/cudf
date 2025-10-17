@@ -174,6 +174,21 @@ cdef class ParquetReaderOptions:
         """
         self.c_obj.set_filter(<expression &>dereference(filter.c_obj))
 
+    cpdef void set_source(self, SourceInfo src):
+        """
+        Set a new source info location.
+
+        Parameters
+        ----------
+        src : SourceInfo
+            New source information, replacing existing information.
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_source(src.c_obj)
+
 
 cdef class ParquetReaderOptionsBuilder:
     cpdef ParquetReaderOptionsBuilder convert_strings_to_categories(self, bool val):
