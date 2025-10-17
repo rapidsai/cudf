@@ -27,6 +27,7 @@ from pylibcudf.libcudf.io.parquet cimport (
     parquet_reader_options,
     read_parquet as cpp_read_parquet,
     write_parquet as cpp_write_parquet,
+    is_supported_read_parquet as cpp_is_supported_read_parquet,
     is_supported_write_parquet as cpp_is_supported_write_parquet,
     parquet_writer_options,
     chunked_parquet_writer as cpp_chunked_parquet_writer,
@@ -53,6 +54,7 @@ __all__ = [
     "ParquetReaderOptionsBuilder",
     "ParquetWriterOptions",
     "ParquetWriterOptionsBuilder",
+    "is_supported_read_parquet",
     "is_supported_write_parquet",
     "merge_row_group_metadata",
     "read_parquet",
@@ -1042,10 +1044,38 @@ cpdef memoryview write_parquet(ParquetWriterOptions options, Stream stream = Non
     return memoryview(HostBuffer.from_unique_ptr(move(c_result)))
 
 
+cpdef bool is_supported_read_parquet(compression_type compression):
+    """Check if the compression type is supported for reading Parquet files.
+
+    For details, see :cpp:func:`is_supported_read_parquet`.
+
+    Parameters
+    ----------
+    compression : CompressionType
+        The compression type to check
+
+    Returns
+    -------
+    bool
+        True if the compression type is supported for reading Parquet files
+    """
+    return cpp_is_supported_read_parquet(compression)
+
+
 cpdef bool is_supported_write_parquet(compression_type compression):
     """Check if the compression type is supported for writing Parquet files.
 
     For details, see :cpp:func:`is_supported_write_parquet`.
+
+    Parameters
+    ----------
+    compression : CompressionType
+        The compression type to check
+
+    Returns
+    -------
+    bool
+        True if the compression type is supported for writing Parquet files
     """
     return cpp_is_supported_write_parquet(compression)
 

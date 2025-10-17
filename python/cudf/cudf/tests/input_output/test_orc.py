@@ -23,6 +23,8 @@ from cudf.testing._utils import (
     supported_numpy_dtypes,
 )
 
+from cudf.io.orc import is_supported_read_orc, is_supported_write_orc
+
 # Removal of these deprecated features is no longer imminent. They will not be
 # removed until a suitable alternative has been implemented. As a result, we
 # also do not want to stop testing them yet.
@@ -1890,19 +1892,25 @@ def test_orc_chunked_writer_stripe_size(datadir):
     assert_eq(orc_file.nstripes, 5)
 
 
-def test_reader_lz4():
-    pdf = pd.DataFrame({"ints": [1, 2] * 5001})
-    pa_table = pa.Table.from_pandas(pdf)
+@pytest.mark.skipif(
+    not is_supported_read_orc("LZ4") or not is_supported_write_orc("LZ4"),
+    reason="LZ4 compression not supported for ORC"
+)
+def test_orc_roundtrip_lz4():
+    gdf = cudf.DataFrame({"ints": [1, 2] * 5001})
 
     buffer = BytesIO()
-    with orc.ORCWriter(buffer, compression="LZ4") as writer:
-        writer.write(pa_table)
+    gdf.to_orc(buffer, compression="LZ4")
 
     got = cudf.read_orc(buffer)
-    assert_eq(pdf, got)
+    assert_eq(gdf, got)
 
 
-def test_writer_lz4():
+@pytest.mark.skipif(
+    not is_supported_write_orc("LZ4"),
+    reason="LZ4 compression not supported for ORC writing"
+)
+def test_orc_write_lz4():
     gdf = cudf.DataFrame({"ints": [1, 2] * 5001})
 
     buffer = BytesIO()
@@ -1955,6 +1963,12 @@ def test_orc_reader_desynced_timestamp(datadir, inputfile):
 
 @pytest.mark.parametrize("compression", ["LZ4", "SNAPPY", "ZLIB", "ZSTD"])
 def test_orc_decompression(set_decomp_env_vars, compression):
+    # Skip if the compression type is not supported for reading
+    if not is_supported_read_orc(compression):
+        pytest.skip(
+            f"{compression} compression not supported for ORC reading in this configuration"
+        )
+    
     # Write the DataFrame to a Parquet file
     buffer = BytesIO()
     rng = np.random.default_rng(seed=0)

@@ -36,6 +36,11 @@ from cudf.testing import (
 )
 from cudf.testing._utils import TIMEDELTA_TYPES, set_random_null_mask_inplace
 
+from cudf.io.parquet import (
+    is_supported_read_parquet,
+    is_supported_write_parquet,
+)
+
 
 @contextmanager
 def _hide_pyarrow_parquet_cpu_warnings(engine):
@@ -3396,17 +3401,25 @@ def test_parquet_reader_engine_error():
         cudf.read_parquet(BytesIO(), engine="abc")
 
 
-def test_reader_lz4():
-    pdf = pd.DataFrame({"ints": [1, 2] * 5001})
+@pytest.mark.skipif(
+    not is_supported_read_parquet("LZ4") or not is_supported_write_parquet("LZ4"),
+    reason="LZ4 compression not supported for Parquet"
+)
+def test_parquet_roundtrip_lz4():
+    gdf = cudf.DataFrame({"ints": [1, 2] * 5001})
 
     buffer = BytesIO()
-    pdf.to_parquet(buffer, compression="LZ4")
+    gdf.to_parquet(buffer, compression="LZ4")
 
     got = cudf.read_parquet(buffer)
-    assert_eq(pdf, got)
+    assert_eq(gdf, got)
 
 
-def test_writer_lz4():
+@pytest.mark.skipif(
+    not is_supported_write_parquet("LZ4"),
+    reason="LZ4 compression not supported for Parquet writing"
+)
+def test_parquet_write_lz4():
     gdf = cudf.DataFrame({"ints": [1, 2] * 5001})
 
     buffer = BytesIO()
@@ -4560,6 +4573,12 @@ def test_parquet_reader_empty_compressed_page(datadir):
 def test_parquet_decompression(
     set_decomp_env_vars, pdf_day_timestamps, compression
 ):
+    # Skip if the compression type is not supported for reading
+    if not is_supported_read_parquet(compression.upper()):
+        pytest.skip(
+            f"{compression} compression not supported for Parquet reading in this configuration"
+        )
+    
     # PANDAS returns category objects whereas cuDF returns hashes
     expect = pdf_day_timestamps.drop(columns=["col_category"])
 

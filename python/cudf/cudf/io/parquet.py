@@ -2527,3 +2527,51 @@ def _process_metadata(
         df._data.label_dtype = column_index_type
 
     return df
+
+
+def is_supported_read_parquet(
+    compression: Literal["SNAPPY", "GZIP", "BROTLI", "LZ4", "ZSTD", "NONE"],
+) -> bool:
+    """Check if the compression type is supported for reading Parquet files.
+
+    Parameters
+    ----------
+    compression : str
+        The compression type to check (e.g., "SNAPPY", "GZIP", "LZ4")
+
+    Returns
+    -------
+    bool
+        True if the compression type is supported for reading Parquet files
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.io.parquet.is_supported_read_parquet("LZ4")  # doctest: +SKIP
+    True
+    """
+    return plc.io.parquet.is_supported_read_parquet(_get_comp_type(compression))
+
+
+def is_supported_write_parquet(
+    compression: Literal["SNAPPY", "GZIP", "BROTLI", "LZ4", "ZSTD", "NONE"],
+) -> bool:
+    """Check if the compression type is supported for writing Parquet files.
+
+    Parameters
+    ----------
+    compression : str
+        The compression type to check (e.g., "SNAPPY", "GZIP", "LZ4")
+
+    Returns
+    -------
+    bool
+        True if the compression type is supported for writing Parquet files
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.io.parquet.is_supported_write_parquet("SNAPPY")  # doctest: +SKIP
+    True
+    """
+    return plc.io.parquet.is_supported_write_parquet(_get_comp_type(compression))
