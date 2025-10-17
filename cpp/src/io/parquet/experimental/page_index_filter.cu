@@ -445,6 +445,45 @@ struct search_fenwick_tree_functor {
   cudf::size_type const num_ranges;
 
   /**
+   * @brief Enum class to represent which range boundary to align
+   */
+  enum class alignment : uint8_t {
+    START = 0,
+    END   = 1,
+  };
+
+  /**
+   * @brief Checks if a value is a power of two
+   *
+   * @param value Value to check
+   * @return Boolean indicating if the value is a power of two
+   */
+  __device__ bool inline constexpr is_power_of_two(cudf::size_type value) const noexcept
+  {
+    return (value & (value - 1)) == 0;
+  }
+
+  /**
+   * @brief Finds the smallest power of two in the range [start, end); 0 otherwise
+   *
+   * @param start Range start
+   * @param end Range end
+   * @return Largest power of two in the range [start, end); 0 otherwise
+   */
+  __device__ cudf::size_type inline constexpr smallest_power_of_two_in_range(
+    cudf::size_type start, cudf::size_type end) const noexcept
+  {
+    start--;
+    start |= start >> 1;
+    start |= start >> 2;
+    start |= start >> 4;
+    start |= start >> 8;
+    start |= start >> 16;
+    auto const result = start + 1;
+    return result < end ? result : 0;
+  }
+
+  /**
    * @brief Finds the largest power of two in the range (start, end]; 0 otherwise
    *
    * @param start Range start
@@ -457,6 +496,37 @@ struct search_fenwick_tree_functor {
     auto constexpr nbits = cudf::detail::size_in_bits<size_type>() - 1;
     auto const result    = size_type{1} << (nbits - cuda::std::countl_zero<uint32_t>(end));
     return result > start ? result : 0;
+  }
+
+  /**
+   * @brief Aligns a range boundary to the next power-of-two block
+   *
+   * @tparam Alignment The bounday to align
+   * @param start Range start
+   * @param end Range end
+   * @return A pair of the tree level and block size
+   */
+  template <alignment Alignment>
+  __device__
+    cuda::std::pair<cudf::size_type, cudf::size_type> inline constexpr align_range_boundary(
+      cudf::size_type start, cudf::size_type end) const noexcept
+  {
+    if constexpr (Alignment == alignment::START) {
+      if (start == 0 or is_power_of_two(start)) {
+        auto const block_size = largest_power_of_two_in_range(start, end);
+        auto const tree_level = cuda::std::countr_zero<uint32_t>(block_size);
+        return cuda::std::pair{tree_level, block_size};
+      } else {
+        auto const tree_level = cuda::std::countr_zero<uint32_t>(start);
+        return cuda::std::pair{tree_level, size_type{1} << tree_level};
+      }
+    } else {
+      auto block_size = end & -end;
+      if (start > 0 and is_power_of_two(end)) {
+        block_size = end - smallest_power_of_two_in_range(start, end);
+      }
+      return cuda::std::pair{cuda::std::countr_zero<uint32_t>(block_size), block_size};
+    }
   }
 
   /**
@@ -477,33 +547,26 @@ struct search_fenwick_tree_functor {
     // Binary search decomposition loop
     while (start < end) {
       // Find the largest power-of-two block that begins and `start` and aligns it up
-      auto const [start_mask_level, start_block_size] = [&]() {
-        if (start == 0) {
-          auto const block_size = largest_power_of_two_in_range(start, end);
-          auto const mask_level = cuda::std::countr_zero<uint32_t>(block_size);
-          return cuda::std::pair{mask_level, block_size};
-        } else {
-          auto const mask_level = cuda::std::countr_zero<uint32_t>(start);
-          return cuda::std::pair{mask_level, size_type{1} << mask_level};
-        }
-      }();
+      auto const [start_tree_level, start_block_size] =
+        align_range_boundary<alignment::START>(start, end);
 
       // Find the largest power-of-two block that aligns `end` down.
-      auto const end_block_size = end & -end;
+      auto const [end_tree_level, end_block_size] =
+        align_range_boundary<alignment::END>(start, end);
 
       // Check the `start` side alignment block: [M, M + m_block_size) and if it's the larger
       // block
       if (start + start_block_size <= end and start_block_size >= end_block_size) {
-        auto const mask_level = start_mask_level;
-        auto const mask_index = start >> mask_level;
-        if (tree_level_ptrs[mask_level][mask_index]) { return true; }
+        auto const tree_level = start_tree_level;
+        auto const mask_index = start >> tree_level;
+        if (tree_level_ptrs[tree_level][mask_index]) { return true; }
         start += start_block_size;
       }
       // Otherwise, check the `end` side alignment block: [end - end_block_size, end)
       else if (end - end_block_size >= start) {
-        auto const mask_level = cuda::std::countr_zero<uint32_t>(end_block_size);
-        auto const mask_index = (end - end_block_size) >> mask_level;
-        if (tree_level_ptrs[mask_level][mask_index]) { return true; }
+        auto const tree_level = end_tree_level;
+        auto const mask_index = (end - end_block_size) >> tree_level;
+        if (tree_level_ptrs[tree_level][mask_index]) { return true; }
         end -= end_block_size;
       }
       // Fallback for small, unaligned ranges. e.g., [11, 13)
