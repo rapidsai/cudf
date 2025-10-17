@@ -18,6 +18,7 @@
 #include "output_utils.hpp"
 #include "single_pass_functors.cuh"
 
+#include <cudf/detail/gather.hpp>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -78,8 +79,10 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_d
   auto [unique_keys, target_indices] = [&] {
     auto matching_keys =
       compute_matching_keys(row_bitmask, key_set.ref(cuco::op::insert_and_find), num_rows, stream);
-    auto [unique_keys, key_transform_map] = extract_populated_keys(key_set, num_rows, stream, mr);
-    auto target_indices                   = compute_target_indices(
+    auto unique_keys       = extract_populated_keys(key_set, num_rows, stream, mr);
+    auto key_transform_map = compute_key_transform_map(
+      num_rows, unique_keys, stream, cudf::get_current_device_resource_ref());
+    auto target_indices = compute_target_indices(
       matching_keys, key_transform_map, stream, cudf::get_current_device_resource_ref());
     return std::pair{std::move(unique_keys), std::move(target_indices)};
   }();
@@ -92,7 +95,7 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_d
   thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator(int64_t{0}),
                      num_rows * static_cast<int64_t>(h_agg_kinds.size()),
-                     compute_single_pass_aggs_fn{
+                     compute_single_pass_aggs_dense_output_fn{
                        target_indices.begin(), d_agg_kinds.data(), *d_values, *d_results_ptr});
 
   return {std::move(agg_results), std::move(unique_keys)};
@@ -108,28 +111,29 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_s
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  auto const num_rows                = values.num_rows();
-  auto [unique_keys, target_indices] = [&] {
-    auto matching_keys =
-      compute_matching_keys(row_bitmask, key_set.ref(cuco::op::insert_and_find), num_rows, stream);
-    auto [unique_keys, key_transform_map] = extract_populated_keys(key_set, num_rows, stream, mr);
-    auto target_indices                   = compute_target_indices(
-      matching_keys, key_transform_map, stream, cudf::get_current_device_resource_ref());
-    return std::pair{std::move(unique_keys), std::move(target_indices)};
-  }();
-
+  auto const num_rows = values.num_rows();
   auto const d_values = table_device_view::create(values, stream);
-  auto agg_results    = create_results_table(
-    static_cast<size_type>(unique_keys.size()), values, h_agg_kinds, stream, mr);
-  auto d_results_ptr = mutable_table_device_view::create(*agg_results, stream);
+  auto agg_results    = create_results_table(num_rows, values, h_agg_kinds, stream, mr);
+  auto d_results_ptr  = mutable_table_device_view::create(*agg_results, stream);
 
-  thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                     thrust::make_counting_iterator(int64_t{0}),
-                     num_rows * static_cast<int64_t>(h_agg_kinds.size()),
-                     compute_single_pass_aggs_fn{
-                       target_indices.begin(), d_agg_kinds.data(), *d_values, *d_results_ptr});
+  thrust::for_each_n(
+    rmm::exec_policy_nosync(stream),
+    thrust::make_counting_iterator(0),
+    num_rows,
+    compute_single_pass_aggs_sparse_output_fn{key_set.ref(cuco::op::insert_and_find),
+                                              row_bitmask,
+                                              d_agg_kinds.data(),
+                                              *d_values,
+                                              *d_results_ptr});
 
-  return {std::move(agg_results), std::move(unique_keys)};
+  auto unique_keys   = extract_populated_keys(key_set, num_rows, stream, mr);
+  auto dense_results = cudf::detail::gather(agg_results->view(),
+                                            unique_keys,
+                                            out_of_bounds_policy::DONT_CHECK,
+                                            cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                            stream,
+                                            mr);
+  return {std::move(dense_results), std::move(unique_keys)};
 }
 
 }  // namespace

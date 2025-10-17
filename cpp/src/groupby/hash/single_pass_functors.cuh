@@ -196,25 +196,82 @@ struct global_memory_fallback_fn {
 };
 
 /**
- * @brief Functor to compute single-pass aggregations and store the results into an output table,
- * executing for all input rows.
- *
- * All rows in all aggregations are computed concurrently without any order.
+ * @brief Base struct to compute single-pass aggregations and store the results into an output
+ * table, executing for all input rows.
  */
-struct compute_single_pass_aggs_fn {
-  size_type const* target_indices;
+struct compute_single_pass_aggs_base_fn {
   aggregation::Kind const* aggs;
   table_device_view input_values;
   mutable_table_device_view output_values;
 
-  compute_single_pass_aggs_fn(size_type const* target_indices,
-                              aggregation::Kind const* aggs,
-                              table_device_view const& input_values,
-                              mutable_table_device_view const& output_values)
-    : target_indices(target_indices),
-      aggs(aggs),
-      input_values(input_values),
-      output_values(output_values)
+  compute_single_pass_aggs_base_fn(aggregation::Kind const* aggs,
+                                   table_device_view const& input_values,
+                                   mutable_table_device_view const& output_values)
+    : aggs(aggs), input_values(input_values), output_values(output_values)
+  {
+  }
+};
+
+/**
+ * @brief Functor to compute single-pass aggregations and store the results into an output table,
+ * executing for all input rows.
+ *
+ * This functor writes output to the sparse intermediate output table, using the target indices
+ * computed on-the-fly. In addition, aggregations are computed in serial order for each row.
+ *
+ * @tparam SetType Type of the key hash set
+ */
+template <typename SetRef>
+struct compute_single_pass_aggs_sparse_output_fn : compute_single_pass_aggs_base_fn {
+  SetRef set_ref;
+  bitmask_type const* row_bitmask;
+
+  compute_single_pass_aggs_sparse_output_fn(SetRef set_ref,
+                                            bitmask_type const* row_bitmask,
+                                            aggregation::Kind const* aggs,
+                                            table_device_view const& input_values,
+                                            mutable_table_device_view const& output_values)
+    : compute_single_pass_aggs_base_fn(aggs, input_values, output_values),
+      set_ref{set_ref},
+      row_bitmask{row_bitmask}
+  {
+  }
+
+  __device__ void operator()(size_type idx)
+  {
+    if (row_bitmask && !cudf::bit_is_set(row_bitmask, idx)) { return; }
+    auto const target_row_idx = *set_ref.insert_and_find(idx).first;
+
+    for (size_type col_idx = 0; col_idx < input_values.num_columns(); ++col_idx) {
+      auto const& source_col = input_values.column(col_idx);
+      auto const& target_col = output_values.column(col_idx);
+      dispatch_type_and_aggregation(source_col.type(),
+                                    aggs[col_idx],
+                                    cudf::detail::element_aggregator{},
+                                    target_col,
+                                    target_row_idx,
+                                    source_col,
+                                    idx);
+    }
+  }
+};
+
+/**
+ * @brief Functor to compute single-pass aggregations and store the results into an output table,
+ * executing for all input rows.
+ *
+ * This functor writes output to the final dense output table, using the given pre-computed target
+ * indices. In addition, all aggregations for all rows are computed concurrently without any order.
+ */
+struct compute_single_pass_aggs_dense_output_fn : compute_single_pass_aggs_base_fn {
+  size_type const* target_indices;
+
+  compute_single_pass_aggs_dense_output_fn(size_type const* target_indices,
+                                           aggregation::Kind const* aggs,
+                                           table_device_view const& input_values,
+                                           mutable_table_device_view const& output_values)
+    : compute_single_pass_aggs_base_fn(aggs, input_values, output_values),
+      target_indices(target_indices)
   {
   }
 
@@ -237,4 +294,5 @@ struct compute_single_pass_aggs_fn {
     }
   }
 };
+
 }  // namespace cudf::groupby::detail::hash

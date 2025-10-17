@@ -113,40 +113,47 @@ std::unique_ptr<table> create_results_table(size_type output_size,
 }
 
 template <typename SetType>
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> extract_populated_keys(
-  SetType const& key_set,
-  size_type num_keys,
+rmm::device_uvector<size_type> extract_populated_keys(SetType const& key_set,
+                                                      size_type num_total_keys,
+                                                      rmm::cuda_stream_view stream,
+                                                      rmm::device_async_resource_ref mr)
+{
+  rmm::device_uvector<size_type> unique_key_indices(num_total_keys, stream, mr);
+  auto const keys_end = key_set.retrieve_all(unique_key_indices.begin(), stream.value());
+  unique_key_indices.resize(std::distance(unique_key_indices.begin(), keys_end), stream);
+  return unique_key_indices;
+}
+
+template rmm::device_uvector<size_type> extract_populated_keys<global_set_t>(
+  global_set_t const& key_set,
+  size_type num_total_keys,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
+template rmm::device_uvector<size_type> extract_populated_keys<nullable_global_set_t>(
+  nullable_global_set_t const& key_set,
+  size_type num_total_keys,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
+rmm::device_uvector<size_type> compute_key_transform_map(
+  size_type num_total_keys,
+  device_span<size_type const> unique_key_indices,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  rmm::device_uvector<size_type> unique_key_indices(num_keys, stream, mr);
-  auto const keys_end = key_set.retrieve_all(unique_key_indices.begin(), stream.value());
-  unique_key_indices.resize(std::distance(unique_key_indices.begin(), keys_end), stream);
-
   // Map from old key indices (index of the keys in the original input keys table) to new key
   // indices (indices of the keys in the final output table, which contains only the extracted
   // unique keys). Only these extracted unique keys are mapped.
-  rmm::device_uvector<size_type> key_transform_map(num_keys, stream);
+  rmm::device_uvector<size_type> key_transform_map(num_total_keys, stream, mr);
   thrust::scatter(rmm::exec_policy_nosync(stream),
                   thrust::make_counting_iterator(0),
                   thrust::make_counting_iterator(static_cast<size_type>(unique_key_indices.size())),
                   unique_key_indices.begin(),
                   key_transform_map.begin());
 
-  return {std::move(unique_key_indices), std::move(key_transform_map)};
+  return key_transform_map;
 }
-
-template std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
-extract_populated_keys<global_set_t>(global_set_t const& key_set,
-                                     size_type num_keys,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr);
-
-template std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
-extract_populated_keys<nullable_global_set_t>(nullable_global_set_t const& key_set,
-                                              size_type num_keys,
-                                              rmm::cuda_stream_view stream,
-                                              rmm::device_async_resource_ref mr);
 
 rmm::device_uvector<size_type> compute_target_indices(device_span<size_type const> input,
                                                       device_span<size_type const> transform_map,

@@ -45,30 +45,38 @@ std::unique_ptr<table> create_results_table(size_type output_size,
                                             rmm::device_async_resource_ref mr);
 
 /**
- * @brief Compute and return an array containing indices of (unique) keys in `key_set`, along
- * with a mapping array from the original input keys to their positions in that array.
- *
- * Note that in the second mapping array, only the keys with indices store in the first array are
- * mapped, leaving other keys with uninitialized mapping values. Since the first array contains
- * indices of all unique keys, this mapping array should cover all input keys.
- *
- * In addition, the second mapping array is not allocated using the given memory resource.
- * Instead, it is allocated using the current device memory resource.
+ * @brief Return an array containing indices of (unique) keys in `key_set`.
  *
  * @tparam SetType Type of the key hash set
  *
  * @param key_set Key hash set
- * @param num_keys Number of total keys
+ * @param num_total_keys Number of total keys
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned unique key indices
- * @return A pair of arrays, the first one contains indices of unique keys retrieved from `key_set`
- *         and the second one maps each of these unique keys from the input keys table to its
- *         corresponding position in first output array
+ * @param mr Device memory resource used to allocate the returned array
+ * @return An array containing indices of unique keys retrieved from `key_set`
  */
 template <typename SetType>
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> extract_populated_keys(
-  SetType const& key_set,
-  size_type num_keys,
+rmm::device_uvector<size_type> extract_populated_keys(SetType const& key_set,
+                                                      size_type num_total_keys,
+                                                      rmm::cuda_stream_view stream,
+                                                      rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Compute and return a mapping array that maps from the original input keys to their
+ * positions in the input array which contains indices of the unique keys.
+ *
+ * Note that the output mapping array only covers the keys with indices existing in the input array,
+ * leaving other keys with uninitialized mapping values.
+ *
+ * @param num_total_keys Number of total keys
+ * @param unique_key_indices Array containing indices of the unique keys
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned array
+ * @return An array mapping from the original input keys to their positions in the input array
+ */
+rmm::device_uvector<size_type> compute_key_transform_map(
+  size_type num_total_keys,
+  device_span<size_type const> unique_key_indices,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
