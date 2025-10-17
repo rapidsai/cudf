@@ -38,9 +38,16 @@ from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from typing_extensions import Self
 
-    from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
+    from cudf._typing import (
+        ColumnBinaryOperand,
+        ColumnLike,
+        DtypeObj,
+        ScalarLike,
+    )
     from cudf.core.buffer import Buffer
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.string import StringColumn
@@ -92,7 +99,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         )
 
     @property
-    def __cuda_array_interface__(self):
+    def __cuda_array_interface__(self) -> Mapping[str, Any]:
         raise NotImplementedError(
             "Decimals are not yet supported via `__cuda_array_interface__`"
         )
@@ -111,19 +118,31 @@ class DecimalBaseColumn(NumericalBaseColumn):
         if isinstance(data, pa.ChunkedArray):
             data = data.combine_chunks()
         mask_buf, data_buf = data.buffers()
-        rmm_data_buffer = rmm.DeviceBuffer.to_device(
-            np.frombuffer(data_buf)
-            .view(view_type)[::step]
-            .copy()
-            .view("uint8")
-        )
-        plc_column = plc.Column.from_rmm_buffer(
-            rmm_data_buffer,
-            plc.DataType(plc_type, -data.type.scale),
-            len(data),
-            [],
-        )
-        if mask_buf is not None:
+        if data_buf is None:
+            # If data_buf is None, create an empty column
+            plc_column = plc.Column(
+                data_type=plc.DataType(plc_type, -data.type.scale),
+                size=0,
+                data=None,
+                mask=None,
+                null_count=0,
+                offset=0,
+                children=[],
+            )
+        else:
+            rmm_data_buffer = rmm.DeviceBuffer.to_device(
+                np.frombuffer(data_buf)
+                .view(view_type)[::step]
+                .copy()
+                .view("uint8")
+            )
+            plc_column = plc.Column.from_rmm_buffer(
+                rmm_data_buffer,
+                plc.DataType(plc_type, -data.type.scale),
+                len(data),
+                [],
+            )
+        if mask_buf is not None and data_buf is not None:
             mask_size = plc.null_mask.bitmask_allocation_size_bytes(len(data))
             if mask_buf.size < mask_size:
                 rmm_mask_buffer = rmm.DeviceBuffer(size=mask_size)
@@ -141,7 +160,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         column.dtype.precision = data.type.precision
         return column
 
-    def element_indexing(self, index: int):
+    def element_indexing(self, index: int) -> Decimal | None:
         result = super().element_indexing(index)
         if isinstance(result, pa.Scalar):
             return result.as_py()
@@ -161,7 +180,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             return self
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
-    def as_string_column(self, dtype) -> StringColumn:
+    def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         if cudf.get_option("mode.pandas_compatible"):
             if isinstance(dtype, np.dtype) and dtype.kind == "O":
                 raise TypeError(
@@ -181,7 +200,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 cudf.core.column.column_empty(0, dtype=CUDF_STRING_DTYPE),
             )
 
-    def __pow__(self, other):
+    def __pow__(self, other: ColumnBinaryOperand) -> ColumnBase:
         if isinstance(other, int):
             if other == 0:
                 res = cudf.core.column.as_column(
@@ -204,13 +223,13 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
     # Decimals in libcudf don't support truediv, see
     # https://github.com/rapidsai/cudf/pull/7435 for explanation.
-    def __truediv__(self, other):
+    def __truediv__(self, other: ColumnBinaryOperand) -> ColumnBase:
         return self._binaryop(other, "__div__")
 
-    def __rtruediv__(self, other):
+    def __rtruediv__(self, other: ColumnBinaryOperand) -> ColumnBase:
         return self._binaryop(other, "__rdiv__")
 
-    def _binaryop(self, other: ColumnBinaryOperand, op: str):
+    def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
 
         # Inline _normalize_binop_operand functionality
@@ -289,7 +308,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         }:
             lhs_comp: plc.Scalar | ColumnBase = lhs  # type: ignore[assignment]
             rhs_comp: plc.Scalar | ColumnBase = (
-                _to_plc_scalar(rhs, self.dtype)
+                _to_plc_scalar(rhs, self.dtype)  # type: ignore[arg-type]
                 if isinstance(rhs, (int, Decimal))
                 else rhs
             )
@@ -384,7 +403,9 @@ class Decimal32Column(DecimalBaseColumn):
 
     def to_arrow(self) -> pa.Array:
         data_buf_32 = np.array(self.base_data.memoryview()).view("int32")  # type: ignore[union-attr]
-        data_buf_128 = np.empty(len(data_buf_32) * 4, dtype="int32")
+        data_buf_128: np.ndarray = np.empty(
+            len(data_buf_32) * 4, dtype="int32"
+        )
 
         # use striding to set the first 32 bits of each 128-bit chunk:
         data_buf_128[::4] = data_buf_32
@@ -413,10 +434,7 @@ class Decimal32Column(DecimalBaseColumn):
             buffers=[mask_buf, data_buf],  # type: ignore[list-item]
         )
 
-    def _with_type_metadata(
-        self: "cudf.core.column.Decimal32Column",
-        dtype: Dtype,
-    ) -> "cudf.core.column.Decimal32Column":
+    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, Decimal32Dtype):
             self.dtype.precision = dtype.precision
         if cudf.get_option("mode.pandas_compatible"):
@@ -460,17 +478,15 @@ class Decimal128Column(DecimalBaseColumn):
         return result
 
     def to_arrow(self) -> pa.Array:
+        dtype: Decimal128Dtype
         if isinstance(self.dtype, pd.ArrowDtype):
-            dtype = pyarrow_dtype_to_cudf_dtype(self.dtype)
+            dtype = pyarrow_dtype_to_cudf_dtype(self.dtype)  # type: ignore[assignment]
         else:
             dtype = self.dtype
 
         return super().to_arrow().cast(dtype.to_arrow())
 
-    def _with_type_metadata(
-        self: "cudf.core.column.Decimal128Column",
-        dtype: Dtype,
-    ) -> "cudf.core.column.Decimal128Column":
+    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, Decimal128Dtype):
             self.dtype.precision = dtype.precision
         if cudf.get_option("mode.pandas_compatible"):
@@ -509,7 +525,9 @@ class Decimal64Column(DecimalBaseColumn):
 
     def to_arrow(self) -> pa.Array:
         data_buf_64 = np.array(self.base_data.memoryview()).view("int64")  # type: ignore[union-attr]
-        data_buf_128 = np.empty(len(data_buf_64) * 2, dtype="int64")
+        data_buf_128: np.ndarray = np.empty(
+            len(data_buf_64) * 2, dtype="int64"
+        )
 
         # use striding to set the first 64 bits of each 128-bit chunk:
         data_buf_128[::2] = data_buf_64
@@ -532,10 +550,7 @@ class Decimal64Column(DecimalBaseColumn):
             buffers=[mask_buf, data_buf],  # type: ignore[list-item]
         )
 
-    def _with_type_metadata(
-        self: "cudf.core.column.Decimal64Column",
-        dtype: Dtype,
-    ) -> "cudf.core.column.Decimal64Column":
+    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, Decimal64Dtype):
             self.dtype.precision = dtype.precision
         if cudf.get_option("mode.pandas_compatible"):
