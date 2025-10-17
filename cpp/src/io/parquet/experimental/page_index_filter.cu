@@ -397,41 +397,47 @@ struct page_stats_caster : public stats_caster_base {
 };
 
 /**
- * @brief Custom CUDA kernel using Cooperative Groups to perform the paired logical OR reduction.
- * * NOTE: This operation is a map/stride-2-read, not a true block-to-global reduction.
- * CUB's BlockReduce is unsuitable here as it reduces a block to a single element.
- * Cooperative Groups is used here for robust global thread ID calculation.
+ * @brief Functor to build the NEXT Fenwick tree level from the current level data
+ *
+ * @param tree_level_ptrs Pointers to the start of Fenwick tree level data
+ * @param current_level Current tree level
+ * @param current_level_size Size of the current tree level
+ * @param next_level_size Size of the next tree level
  */
-struct build_fenwick_tree_level_functor {
-  bool** const level_ptrs;
+struct build_next_fenwick_tree_level_functor {
+  bool** const tree_level_ptrs;
   cudf::size_type const current_level;
   cudf::size_type const current_level_size;
   cudf::size_type const next_level_size;
 
-  __device__ void operator()(cudf::size_type next_level_index) const noexcept
+  /**
+   * @brief Builds the next Fenwick tree level from the current level data
+   * by ORing the two children of the current level.
+   *
+   * @param next_level_idx Next tree level element index
+   */
+  __device__ void operator()(cudf::size_type next_level_idx) const noexcept
   {
-    auto const current_level_ptr = level_ptrs[current_level];
-    auto next_level_ptr          = level_ptrs[current_level + 1];
+    auto const current_level_ptr = tree_level_ptrs[current_level];
+    auto next_level_ptr          = tree_level_ptrs[current_level + 1];
 
     // Handle the odd-sized remaining element if current_level_size is odd
-    if (current_level_size % 2 and next_level_index == next_level_size - 1) {
-      next_level_ptr[next_level_index] = current_level_ptr[current_level_size - 1];
+    if (current_level_size % 2 and next_level_idx == next_level_size - 1) {
+      next_level_ptr[next_level_idx] = current_level_ptr[current_level_size - 1];
     } else {
-      next_level_ptr[next_level_index] =
-        current_level_ptr[(next_level_index * 2)] or current_level_ptr[(next_level_index * 2) + 1];
+      next_level_ptr[next_level_idx] =
+        current_level_ptr[(next_level_idx * 2)] or current_level_ptr[(next_level_idx * 2) + 1];
     }
   }
 };
 
 /**
- * @brief CUDA kernel to probe multiple ranges against the pre-calculated mask hierarchy.
- * One thread handles the binary decomposition and query for one range [M, N).
- * * @param d_level_ptrs Device array of pointers, where d_level_ptrs[k] points to the start of
- * Level k mask.
- * @param d_range_offsets Device array where range i is [d_range_offsets[i], d_range_offsets[i+1]).
- * @param num_ranges The number of ranges to process.
- * @param d_results Pointer to device memory to store the boolean result (true if a '1' is found in
- * the range).
+ * @brief Functor to binary search a `true` value in the Fenwick tree in range [start, end)
+ *
+ * @param tree_level_ptrs Pointers to the start of Fenwick tree level data
+ * @param page_offsets Pointer to page offsets describing each search range i as [page_offsets[i],
+ * page_offsets[i+1))
+ * @param num_ranges Number of search ranges
  */
 struct search_fenwick_tree_functor {
   bool** const tree_level_ptrs;
@@ -737,7 +743,7 @@ cudf::detail::host_vector<bool> aggregate_reader_metadata::compute_data_page_mas
   auto fenwick_tree_level_ptrs =
     cudf::detail::make_device_uvector_async(host_tree_level_ptrs, stream, mr);
 
-  // Build Fenwick tree levels
+  // Build Fenwick tree levels (zeroth level is just the row mask itself)
   auto current_level_size = total_rows;
   std::for_each(
     thrust::counting_iterator(0), thrust::counting_iterator(num_levels - 1), [&](auto const level) {
@@ -746,7 +752,7 @@ cudf::detail::host_vector<bool> aggregate_reader_metadata::compute_data_page_mas
         rmm::exec_policy_nosync(stream),
         thrust::counting_iterator(0),
         thrust::counting_iterator(next_level_size),
-        build_fenwick_tree_level_functor{
+        build_next_fenwick_tree_level_functor{
           fenwick_tree_level_ptrs.data(), level, current_level_size, next_level_size});
       current_level_size = next_level_size;
     });
