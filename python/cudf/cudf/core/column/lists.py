@@ -34,7 +34,6 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     from cudf._typing import ColumnBinaryOperand, ColumnLike, DtypeObj
-    from cudf.core.buffer import Buffer
     from cudf.core.column.string import StringColumn
 
 
@@ -188,15 +187,6 @@ class ListColumn(ColumnBase):
             buffers,  # type: ignore[arg-type]
             children=[elements],
         )
-
-    def set_base_data(self, value: None | Buffer) -> None:
-        if value is not None:
-            raise RuntimeError(
-                "ListColumn's do not use data attribute of Column, use "
-                "`set_base_children` instead"
-            )
-        else:
-            super().set_base_data(value)
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:

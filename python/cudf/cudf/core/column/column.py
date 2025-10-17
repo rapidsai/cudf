@@ -208,9 +208,97 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self._base_mask = None
         self._data = None
         self._children = None
+        data = self._get_data_buffer_from_pylibcudf_column(
+            self.plc_column, exposed
+        )
+        mask = self._get_mask_buffer_from_pylibcudf_column(
+            self.plc_column, exposed
+        )
+        children = self._get_children_from_pylibcudf_column(
+            self.plc_column, exposed
+        )
         self.set_base_children(children)
         self.set_base_data(data)
         self.set_base_mask(mask)
+
+    def _get_data_buffer_from_pylibcudf_column(
+        self, plc_column: plc.Column, exposed: bool
+    ) -> Buffer | None:
+        """
+        Extract the data buffer from a pylibcudf.Column.
+
+        Necessary to wrap the data buffer in a cuDF Buffer for spilling support.
+
+        Parameters
+        ----------
+        plc_column : plc.Column
+            The pylibcudf.Column to extract the data buffer from.
+        exposed : bool
+            Whether the data buffer is exposed.
+
+        Returns
+        -------
+        Buffer | None
+            The data buffer.
+        """
+        data_view = plc_column.data()
+        return (
+            as_buffer(data_view.obj, exposed=exposed)
+            if data_view is not None
+            else None
+        )
+
+    def _get_mask_buffer_from_pylibcudf_column(
+        self, plc_column: plc.Column, exposed: bool
+    ) -> Buffer | None:
+        """
+        Extract the mask buffer from a pylibcudf.Column.
+
+        Necessary to wrap the mask buffer in a cuDF Buffer for spilling support.
+
+        Parameters
+        ----------
+        plc_column : plc.Column
+            The pylibcudf.Column to extract the mask buffer from.
+        exposed : bool
+            Whether the mask buffer is exposed.
+
+        Returns
+        -------
+        Buffer | None
+            The mask buffer.
+        """
+        mask_view = plc_column.null_mask()
+        return (
+            as_buffer(mask_view.obj, exposed=exposed)
+            if mask_view is not None
+            else None
+        )
+
+    def _get_children_from_pylibcudf_column(
+        self, plc_column: plc.Column, exposed: bool
+    ) -> tuple[ColumnBase, ...]:
+        """
+        Extract the children columns from a pylibcudf.Column.
+
+        ColumnBase currently assumes children are also ColumnBase objects.
+
+        Parameters
+        ----------
+        plc_column : plc.Column
+            The pylibcudf.Column to extract the children columns from.
+        exposed : bool
+            Whether the children columns are exposed.
+
+        Returns
+        -------
+        tuple[ColumnBase, ...]
+            The children columns.
+        """
+        return tuple(
+            type(self).from_pylibcudf(child, data_ptr_exposed=exposed)
+            for child in plc_column.children()
+        )
 
     @property
     def _PANDAS_NA_VALUE(self):

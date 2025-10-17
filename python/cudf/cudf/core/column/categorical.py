@@ -52,18 +52,6 @@ if TYPE_CHECKING:
 _DEFAULT_CATEGORICAL_VALUE = np.int8(-1)
 
 
-def validate_categorical_children(children) -> None:
-    if not (
-        len(children) == 1
-        and isinstance(children[0], cudf.core.column.numerical.NumericalColumn)
-        and children[0].dtype.kind in "iu"
-    ):
-        # TODO: Enforce unsigned integer?
-        raise ValueError(
-            "Must specify exactly one child NumericalColumn of integers for representing the codes."
-        )
-
-
 class CategoricalColumn(column.ColumnBase):
     """
     Implements operations for Columns of Categorical type
@@ -129,6 +117,24 @@ class CategoricalColumn(column.ColumnBase):
         )
         self._codes = self.children[0].set_mask(self.mask)
 
+    def _get_data_from_pylibcudf_column(
+        self, plc_column: plc.Column, exposed: bool
+    ) -> None:
+        """
+        This column considers the plc_column (i.e. codes) as children
+        """
+        return None
+
+    def _get_children_from_pylibcudf_column(
+        self, plc_column: plc.Column, exposed: bool
+    ) -> tuple[ColumnBase]:
+        """
+        This column considers the plc_column (i.e. codes) as children
+        """
+        return (
+            type(self).from_pylibcudf(plc_column, data_ptr_exposed=exposed),
+        )
+
     @property
     def base_size(self) -> int:
         return int(
@@ -142,15 +148,6 @@ class CategoricalColumn(column.ColumnBase):
             return False
         return self._encode(item) in self.codes
 
-    def set_base_data(self, value):
-        if value is not None:
-            raise RuntimeError(
-                "CategoricalColumns do not use data attribute of Column, use "
-                "`set_base_children` instead"
-            )
-        else:
-            super().set_base_data(value)
-
     def _process_values_for_isin(
         self, values: Sequence
     ) -> tuple[ColumnBase, ColumnBase]:
@@ -163,7 +160,6 @@ class CategoricalColumn(column.ColumnBase):
 
     def set_base_children(self, value: tuple[NumericalColumn]) -> None:  # type: ignore[override]
         super().set_base_children(value)
-        validate_categorical_children(value)
         self._codes = value[0].set_mask(self.mask)
 
     @property
