@@ -105,9 +105,9 @@ class TemporalBaseColumn(ColumnBase, Scannable):
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
         if isinstance(value, (np.str_, self._NP_SCALAR)):
-            value = self._PD_SCALAR(value.item())
+            value = self._PD_SCALAR(value.item())  # type: ignore[operator]
         elif isinstance(value, str):
-            value = self._PD_SCALAR(value)
+            value = self._PD_SCALAR(value)  # type: ignore[operator]
         elif value is pd.NaT:
             value = None
         return super()._cast_setitem_value(value)
@@ -192,7 +192,7 @@ class TemporalBaseColumn(ColumnBase, Scannable):
                     common_dtype = find_common_type(
                         (self.dtype, cudf_dtype_from_pa_type(scalar.type))
                     )
-                    scalar = scalar.cast(cudf_dtype_to_pa_type(common_dtype))
+                    scalar = scalar.cast(cudf_dtype_to_pa_type(common_dtype))  # type: ignore[arg-type]
                 return scalar
             elif self.dtype.kind == "m":
                 return scalar
@@ -227,8 +227,8 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             return result
         result = result.as_py()
         if cudf.get_option("mode.pandas_compatible"):
-            return self._PD_SCALAR(result)
-        elif isinstance(result, self._PD_SCALAR):
+            return self._PD_SCALAR(result)  # type: ignore[operator]
+        elif isinstance(result, self._PD_SCALAR):  # type: ignore[arg-type]
             return result.to_numpy()
         return self.dtype.type(result).astype(self.dtype, copy=False)
 
@@ -355,7 +355,7 @@ class TemporalBaseColumn(ColumnBase, Scannable):
     def mean(
         self, skipna: bool = True, min_count: int = 0
     ) -> pd.Timestamp | pd.Timedelta:
-        return self._PD_SCALAR(
+        return self._PD_SCALAR(  # type: ignore[operator]
             self.astype(self._UNDERLYING_DTYPE).mean(  # type:ignore[call-arg]
                 skipna=skipna, min_count=min_count
             ),
@@ -369,11 +369,11 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             self.astype(self._UNDERLYING_DTYPE).std(  # type:ignore[call-arg]
                 skipna=skipna, min_count=min_count, ddof=ddof
             ),
-            unit=self.time_unit,
-        ).as_unit(self.time_unit)
+            unit=self.time_unit,  # type: ignore[arg-type]
+        ).as_unit(self.time_unit)  # type: ignore[arg-type]
 
     def median(self, skipna: bool = True) -> pd.Timestamp | pd.Timedelta:
-        return self._PD_SCALAR(
+        return self._PD_SCALAR(  # type: ignore[operator]
             self.astype(self._UNDERLYING_DTYPE).median(skipna=skipna),  # type:ignore[call-arg]
             unit=self.time_unit,
         ).as_unit(self.time_unit)
@@ -402,7 +402,7 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         interpolation: str,
         exact: bool,
         return_scalar: bool,
-    ) -> ColumnBase | pd.Timestamp | pd.Timedelta:
+    ) -> ColumnBase | pd.Timestamp | pd.Timedelta:  # type: ignore[override]
         result = self.astype(self._UNDERLYING_DTYPE).quantile(
             q=q,
             interpolation=interpolation,
@@ -410,7 +410,7 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             return_scalar=return_scalar,
         )
         if return_scalar:
-            return self._PD_SCALAR(result, unit=self.time_unit).as_unit(
+            return self._PD_SCALAR(result, unit=self.time_unit).as_unit(  # type: ignore[operator]
                 self.time_unit
             )
         return result.astype(self.dtype)

@@ -775,8 +775,8 @@ class DatetimeColumn(TemporalBaseColumn):
         ambiguous, nonexistent = check_ambiguous_and_nonexistent(
             ambiguous, nonexistent
         )
-        dtype = get_compatible_timezone(pd.DatetimeTZDtype(self.time_unit, tz))
-        tzname = dtype.tz.key
+        dtype = get_compatible_timezone(pd.DatetimeTZDtype(self.time_unit, tz))  # type: ignore[arg-type]
+        tzname = dtype.tz.key  # type: ignore[attr-defined]
         ambiguous_col, nonexistent_col = self._find_ambiguous_and_nonexistent(
             tzname
         )
@@ -937,5 +937,5 @@ class DatetimeTZColumn(DatetimeColumn):
             return self.copy()
         utc_time = self._utc_time
         return utc_time._with_type_metadata(
-            pd.DatetimeTZDtype(self.time_unit, tz)
+            pd.DatetimeTZDtype(self.time_unit, tz)  # type: ignore[arg-type]
         )
