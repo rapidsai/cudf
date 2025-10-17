@@ -90,14 +90,12 @@ compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_fil
   rmm::cuda_stream_view stream);
 
 /**
- * @brief Computes the offsets of the Fenwick tree levels (level 1 and higher) until the tree
- * level's block size is greater than the maximum page size (tree search range)
+ * @brief Computes the offsets of the Fenwick tree levels (level 1 and higher)
  *
  * @param level0_size Size of the zeroth tree level (the row mask)
- * @param max_page_size Max page (tree search range) size
  * @return Fenwick tree level offsets
  */
 [[nodiscard]] std::vector<size_type> compute_fenwick_tree_level_offsets(
-  cudf::size_type level0_size, cudf::size_type max_page_size);
+  cudf::size_type level0_size);
 
 }  // namespace cudf::io::parquet::experimental::detail

@@ -242,8 +242,7 @@ rmm::device_uvector<size_type> make_page_indices_async(
   return page_indices;
 }
 
-std::vector<size_type> compute_fenwick_tree_level_offsets(cudf::size_type level0_size,
-                                                          cudf::size_type max_page_size)
+std::vector<size_type> compute_fenwick_tree_level_offsets(cudf::size_type level0_size)
 {
   std::vector<size_type> tree_level_offsets;
   tree_level_offsets.push_back(0);
@@ -252,12 +251,9 @@ std::vector<size_type> compute_fenwick_tree_level_offsets(cudf::size_type level0
   cudf::size_type current_level      = 1;
 
   while (current_level_size > 0) {
-    size_t block_size = size_t{1} << current_level;
     tree_level_offsets.push_back(tree_level_offsets.back() + current_level_size);
-
-    if (std::cmp_greater_equal(block_size, max_page_size)) { break; }
-
-    current_level_size = cudf::util::div_rounding_up_unsafe(current_level_size, 2);
+    current_level_size =
+      current_level_size == 1 ? 0 : cudf::util::div_rounding_up_unsafe(current_level_size, 2);
     current_level++;
   }
   return tree_level_offsets;

@@ -434,74 +434,101 @@ struct build_fenwick_tree_level_functor {
  * the range).
  */
 struct search_fenwick_tree_functor {
-  bool** const level_ptrs;
+  bool** const tree_level_ptrs;
   cudf::size_type const* const page_offsets;
   cudf::size_type const num_ranges;
 
+  /**
+   * @brief Checks if a value is a power of two
+   *
+   * @param value Value to check
+   * @return Boolean indicating if the value is a power of two
+   */
+  __device__ bool constexpr is_power_of_two(size_type value) const noexcept
+  {
+    return (value & (value - 1)) == 0;
+  }
+
+  /**
+   * @brief Finds the largest power of two in the range (start, end]; 0 otherwise
+   *
+   * @param start Range start
+   * @param end Range end
+   * @return Largest power of two in the range (start, end]; 0 otherwise
+   */
+  __device__ size_type constexpr largest_power_of_two_in_range(size_type start,
+                                                               size_type end) const noexcept
+  {
+    auto constexpr nbits = cudf::detail::size_in_bits<size_type>() - 1;
+    auto const result    = size_type{1} << (nbits - cuda::std::countl_zero<uint32_t>(end));
+    return result > start ? result : 0;
+  }
+
+  /**
+   * @brief Searches the Fenwick tree to find a `true` value in range [start, end)
+   *
+   * @param range_idx Index of the range to search
+   * @return Boolean indicating if a `true` value is found in the range
+   */
   __device__ bool operator()(cudf::size_type range_idx) const noexcept
   {
     // Retrieve start and end for the current range [start, end)
-    size_type M = page_offsets[range_idx];
-    size_type N = page_offsets[range_idx + 1];
+    size_type start = page_offsets[range_idx];
+    size_type end   = page_offsets[range_idx + 1];
 
     // Return early if the range is empty or invalid
-    if (M >= N or range_idx >= num_ranges) { return false; }
+    if (start >= end or range_idx >= num_ranges) { return false; }
 
-    // Binary Decomposition Loop
-    while (M < N) {
-      // 1. M Alignment: Find the largest power-of-two block that starts at M and aligns M up.
-      // Block size is determined by the Least Significant Bit (LSB) of M.
-      // If M=0, the LSB is the full range N, but we handle the LSB only for M>0.
-      // The __ffs intrinsic (Find First Set, 1-based) is the fastest way to get the LSB position
-      // (k).
-      size_t m_lsb_position = __ffs(M);                      // Position is 1-based (k+1)
-      size_t m_block_size   = 1ULL << (m_lsb_position - 1);  // Size is 2^k
-
-      // 2. N Alignment: Find the largest power-of-two block that aligns N down.
-      // N & -N gives the LSB block size *if* N were the start, but we use it as the largest
-      // possible size that evenly divides N.
-      size_t n_block_size = N & -N;
-
-      // The largest block size we can consume from the current range [M, N)
-      size_t max_block_size = 0;
-      size_t mask_level     = 0;  // k (k=0 is 1 row, k=1 is 2 rows, etc.)
-      size_t mask_index     = 0;
-
-      // --- Core Decomposition Logic ---
-
-      // Check the M side alignment block: [M, M + m_block_size)
-      // This is only valid if M + m_block_size <= N (the block fits).
-      if (M > 0 && M + m_block_size <= N) {
-        max_block_size = m_block_size;
-        mask_level     = m_lsb_position - 1;
-        mask_index     = M >> mask_level;  // M / 2^k
-        M += max_block_size;
+    // Binary search decomposition loop
+    while (start < end) {
+      // Base case: start is zero or start and/or end are power(s) of two
+      if (start == 0 or is_power_of_two(start)) {
+        auto const block_size = largest_power_of_two_in_range(start, end);
+        if (block_size) {
+          auto const mask_level = cuda::std::countr_zero<uint32_t>(block_size);
+          auto const mask_index = start >> mask_level;
+          if (tree_level_ptrs[mask_level][mask_index]) { return true; }
+          start += block_size;
+        }
+      } else if (is_power_of_two(end)) {
+        auto const block_size = largest_power_of_two_in_range(start, end);
+        if (block_size) {
+          auto const mask_level = cuda::std::countr_zero<uint32_t>(block_size);
+          auto const mask_index = (end - block_size) >> mask_level;
+          if (tree_level_ptrs[mask_level][mask_index]) { return true; }
+          end -= block_size;
+        }
       }
 
-      // Check the N side alignment block: [N - n_block_size, N)
-      // This is only valid if N - n_block_size >= M and the N block is larger or equal to the M
-      // block.
-      else if (n_block_size > 0 && N - n_block_size >= M && n_block_size >= max_block_size) {
-        // If the N block is larger or we are at the end, prioritize the N block
-        max_block_size = n_block_size;
-        mask_level     = __ffs(n_block_size) - 1;
-        mask_index     = (N - n_block_size) >> mask_level;  // (N - 2^k) / 2^k
-        N -= max_block_size;
+      // Return early if start >= end already
+      if (start >= end) { return false; }
+
+      // Find the largest power-of-two block that begins and `start` and aligns it up
+      size_type const start_mask_level = cuda::std::countr_zero<uint32_t>(start);
+      size_type const start_block_size = size_t{1} << (start_mask_level);
+
+      // Find the largest power-of-two block that aligns `end` down.
+      size_type const end_block_size = end & -end;
+
+      // Check the `start` side alignment block: [M, M + m_block_size) and if it's the larger block
+      if (start + start_block_size <= end and start_block_size >= end_block_size) {
+        auto const mask_level = start_mask_level;
+        auto const mask_index = start >> mask_level;
+        if (tree_level_ptrs[mask_level][mask_index]) { return true; }
+        start += start_block_size;
       }
-
-      // Fallback for small, unaligned ranges (e.g., [11, 13) where M and N are close)
-      // If max_block_size is 0 or too large, reduce by 1 row (Level 0)
-      else if (max_block_size == 0 || max_block_size > N - M) {
-        max_block_size = 1;
-        mask_level     = 0;
-        mask_index     = M;  // Level 0 index is just M
-        M++;
+      // Otherwise, check the `end` side alignment block: [end - end_block_size, end)
+      else if (end - end_block_size >= start) {
+        auto const mask_level = cuda::std::countr_zero<uint32_t>(end_block_size);
+        auto const mask_index = (end - end_block_size) >> mask_level;
+        if (tree_level_ptrs[mask_level][mask_index]) { return true; }
+        end -= end_block_size;
       }
-
-      // --- Query Mask and Advance ---
-
-      // Look up the mask value at the determined level and index
-      if (level_ptrs[mask_level][mask_index]) { return true; }
+      // Fallback for small, unaligned ranges. e.g., [11, 13)
+      else {
+        if (tree_level_ptrs[0][start]) { return true; }
+        start++;
+      }
     }
     return false;
   }
@@ -717,7 +744,7 @@ cudf::detail::host_vector<bool> aggregate_reader_metadata::compute_data_page_mas
   auto const mr = cudf::get_current_device_resource_ref();
 
   // Compute fenwick tree level offsets and total size (level 1 and higher)
-  auto const tree_level_offsets = compute_fenwick_tree_level_offsets(total_rows, max_page_size);
+  auto const tree_level_offsets = compute_fenwick_tree_level_offsets(total_rows);
   auto const num_levels         = static_cast<cudf::size_type>(tree_level_offsets.size());
   // Buffer to store Fenwick tree levels (level 1 and higher) data
   auto tree_levels_data = rmm::device_uvector<bool>(tree_level_offsets.back(), stream, mr);
