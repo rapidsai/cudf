@@ -8,10 +8,11 @@ import operator
 from functools import reduce
 from typing import TYPE_CHECKING, Any
 
-from rapidsmpf.streaming.core.channel import Channel, Message
+from rapidsmpf.streaming.core.channel import Message
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 from cudf_polars.dsl.ir import Union
+from cudf_polars.experimental.rapidsmpf.channel_pair import ChannelPair
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
 )
@@ -28,8 +29,8 @@ if TYPE_CHECKING:
 async def union_node(
     ctx: Context,
     ir: Union,
-    ch_out: Channel[TableChunk],
-    *chs_in: Channel[TableChunk],
+    ch_out: ChannelPair,
+    *chs_in: ChannelPair,
 ) -> None:
     """
     Union node for rapidsmpf.
@@ -41,19 +42,19 @@ async def union_node(
     ir
         The Union IR node.
     ch_out
-        The output channel.
+        The output ChannelPair.
     chs_in
-        The input channels.
+        The input ChannelPairs.
     """
     # TODO: Use multiple streams
-    async with shutdown_on_error(ctx, *chs_in, ch_out):
+    async with shutdown_on_error(ctx, *[ch.data for ch in chs_in], ch_out.data):
         seq_num_offset = 0
         for ch_in in chs_in:
             num_ch_chunks = 0
-            while (msg := await ch_in.recv(ctx)) is not None:
+            while (msg := await ch_in.data.recv(ctx)) is not None:
                 table_chunk = TableChunk.from_message(msg)
                 num_ch_chunks += 1
-                await ch_out.send(
+                await ch_out.data.send(
                     ctx,
                     Message(
                         TableChunk.from_pylibcudf_table(
@@ -66,7 +67,7 @@ async def union_node(
                 )
             seq_num_offset += num_ch_chunks
 
-        await ch_out.drain(ctx)
+        await ch_out.data.drain(ctx)
 
 
 @generate_ir_sub_network.register(Union)
@@ -82,8 +83,8 @@ def _(
     nodes = reduce(operator.or_, _nodes)
     channels = reduce(operator.or_, _channels)
 
-    # Create output channel
-    channels[ir] = [Channel()]
+    # Create output ChannelPair
+    channels[ir] = [ChannelPair.create()]
 
     # Add simple python node
     nodes[ir] = [

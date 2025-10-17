@@ -9,7 +9,7 @@ import dataclasses
 import math
 from typing import TYPE_CHECKING, Any
 
-from rapidsmpf.streaming.core.channel import Channel, Message
+from rapidsmpf.streaming.core.channel import Message
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 from rmm.pylibrmm.stream import DEFAULT_STREAM
@@ -21,6 +21,7 @@ from cudf_polars.experimental.base import (
     PartitionInfo,
 )
 from cudf_polars.experimental.io import SplitScan, scan_partition_plan
+from cudf_polars.experimental.rapidsmpf.channel_pair import ChannelPair
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
     lower_ir_node,
@@ -30,6 +31,7 @@ from cudf_polars.experimental.rapidsmpf.nodes import define_py_node, shutdown_on
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
+    from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR
@@ -63,7 +65,7 @@ def _(
 async def dataframescan_node(
     ctx: Context,
     ir: DataFrameScan,
-    ch_out: Channel[TableChunk],
+    ch_out: ChannelPair,
     *,
     max_io_threads: int,
     rows_per_partition: int,
@@ -78,7 +80,7 @@ async def dataframescan_node(
     ir
         The DataFrameScan node.
     ch_out
-        The output channel.
+        The output ChannelPair.
     max_io_threads
         The maximum number of IO threads to use
         concurrently for a single DataFrameScan node.
@@ -97,7 +99,7 @@ async def dataframescan_node(
         local_count = math.ceil(global_count / ctx.comm().nranks)
         local_offset = local_count * ctx.comm().rank
 
-    async with shutdown_on_error(ctx, ch_out):
+    async with shutdown_on_error(ctx, ch_out.data):
         io_throttle = asyncio.Semaphore(max_io_threads)
         for seq_num in range(local_count):
             offset = local_offset * rows_per_partition + seq_num * rows_per_partition
@@ -109,10 +111,10 @@ async def dataframescan_node(
                 ir.df.slice(offset, rows_per_partition),
                 ir.projection,
             )
-            await read_chunk(ctx, io_throttle, ir_slice, seq_num, ch_out)
+            await read_chunk(ctx, io_throttle, ir_slice, seq_num, ch_out.data)
 
-        # Drain the output channel
-        await ch_out.drain(ctx)
+        # Drain data channel
+        await ch_out.data.drain(ctx)
 
 
 @generate_ir_sub_network.register(DataFrameScan)
@@ -127,7 +129,7 @@ def _(
     max_io_threads = 1  # TODO: Make this configurable.
 
     ctx = rec.state["ctx"]
-    ch_out = Channel()
+    ch_out = ChannelPair.create()
     nodes: dict[IR, list[Any]] = {
         ir: [
             dataframescan_node(
@@ -221,7 +223,7 @@ async def read_chunk(
 async def scan_node(
     ctx: Context,
     ir: Scan,
-    ch_out: Channel[TableChunk],
+    ch_out: ChannelPair,
     *,
     max_io_threads: int,
     plan: IOPartitionPlan,
@@ -237,7 +239,7 @@ async def scan_node(
     ir
         The Scan node.
     ch_out
-        The output channel.
+        The output ChannelPair.
     max_io_threads
         The maximum number of IO threads to use
         concurrently for a single Scan node.
@@ -247,7 +249,7 @@ async def scan_node(
         The Parquet options.
     """
     # TODO: Use multiple streams
-    async with shutdown_on_error(ctx, ch_out):
+    async with shutdown_on_error(ctx, ch_out.data):
         # Build a list of local Scan operations
         scans: list[Scan | SplitScan] = []
         if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
@@ -319,11 +321,11 @@ async def scan_node(
         io_throttle = asyncio.Semaphore(max_io_threads)
         tasks = []
         for seq_num, scan in enumerate(scans):
-            tasks.append(read_chunk(ctx, io_throttle, scan, seq_num, ch_out))
+            tasks.append(read_chunk(ctx, io_throttle, scan, seq_num, ch_out.data))
 
-        # Erain the output channel
+        # Drain the output data channel
         await asyncio.gather(*tasks)
-        await ch_out.drain(ctx)
+        await ch_out.data.drain(ctx)
 
 
 @generate_ir_sub_network.register(Scan)
@@ -341,7 +343,7 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any
     if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
         parquet_options = dataclasses.replace(parquet_options, chunked=False)
 
-    ch_out = Channel()
+    ch_out = ChannelPair.create()
     nodes: dict[IR, list[Any]] = {
         ir: [
             scan_node(

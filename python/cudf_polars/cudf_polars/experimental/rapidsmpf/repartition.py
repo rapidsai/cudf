@@ -7,13 +7,14 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any
 
-from rapidsmpf.streaming.core.channel import Channel, Message
+from rapidsmpf.streaming.core.channel import Message
 from rapidsmpf.streaming.core.node import define_py_node
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import pylibcudf as plc
 from rmm.pylibrmm.stream import DEFAULT_STREAM
 
+from cudf_polars.experimental.rapidsmpf.channel_pair import ChannelPair
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
 from cudf_polars.experimental.repartition import Repartition
@@ -29,8 +30,8 @@ if TYPE_CHECKING:
 async def concatenate_node(
     ctx: Context,
     ir: Repartition,
-    ch_out: Channel[TableChunk],
-    ch_in: Channel[TableChunk],
+    ch_out: ChannelPair,
+    ch_in: ChannelPair,
     *,
     max_chunks: int | None,
 ) -> None:
@@ -44,16 +45,16 @@ async def concatenate_node(
     ir
         The Repartition IR node.
     ch_out
-        The output channel.
+        The output ChannelPair.
     ch_in
-        The input channel.
+        The input ChannelPair.
     max_chunks
         The maximum number of chunks to concatenate at once.
         If `None`, concatenate all input chunks.
     """
     # TODO: Use multiple streams
     max_chunks = max(2, max_chunks) if max_chunks else None
-    async with shutdown_on_error(ctx, ch_in, ch_out):
+    async with shutdown_on_error(ctx, ch_in.data, ch_out.data):
         build_stream = DEFAULT_STREAM
 
         seq_num = 0
@@ -68,7 +69,7 @@ async def concatenate_node(
 
             # Collect chunks up to max_chunks or until end of stream
             while len(chunks) < (max_chunks or float("inf")):
-                msg = await ch_in.recv(ctx)
+                msg = await ch_in.data.recv(ctx)
                 if msg is None:
                     break
                 chunk = TableChunk.from_message(msg)
@@ -83,7 +84,7 @@ async def concatenate_node(
                         [chunk.table_view() for chunk in chunks], build_stream
                     )
                 )
-                await ch_out.send(
+                await ch_out.data.send(
                     ctx,
                     Message(
                         TableChunk.from_pylibcudf_table(
@@ -97,8 +98,7 @@ async def concatenate_node(
             if msg is None:
                 break
 
-        # Drain the output channel
-        await ch_out.drain(ctx)
+        await ch_out.data.drain(ctx)
 
 
 @generate_ir_sub_network.register(Repartition)
@@ -120,8 +120,8 @@ def _(
     # Process children
     nodes, channels = rec(ir.children[0])
 
-    # Create output channel
-    channels[ir] = [Channel()]
+    # Create output ChannelPair
+    channels[ir] = [ChannelPair.create()]
 
     # Add python node
     nodes[ir] = [
