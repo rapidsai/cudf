@@ -3752,3 +3752,25 @@ TEST_F(ParquetReaderTest, TableTooLargeChunkedOk)
   }
   EXPECT_EQ(num_rows_read, num_rows_to_read);
 }
+
+TEST_F(ParquetReaderTest, LateBindSourceInfo)
+{
+  srand(31337);
+  auto expected = create_random_fixed_table<int>(4, 4, false);
+
+  auto filepath = temp_env->get_temp_filepath("LateBindSourceInfo.parquet");
+  cudf::io::parquet_writer_options args =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *expected);
+  cudf::io::write_parquet(args);
+
+  cudf::io::parquet_reader_options read_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{});
+
+  EXPECT_THROW(cudf::io::read_parquet(read_opts), cudf::logic_error);
+
+  read_opts.set_source(cudf::io::source_info{filepath});
+
+  auto result = cudf::io::read_parquet(read_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(result.tbl->view(), expected->view());
+}

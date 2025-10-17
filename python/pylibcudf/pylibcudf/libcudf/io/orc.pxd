@@ -29,6 +29,7 @@ cdef extern from "cudf/io/orc.hpp" namespace "cudf::io" nogil:
         bool is_enabled_decimals_as_float64() except +libcudf_exception_handler
         int get_forced_decimals_scale() except +libcudf_exception_handler
 
+        void set_source(cudf_io_types.source_info src) except +libcudf_exception_handler
         void set_columns(vector[string] col_names) except +libcudf_exception_handler
         void set_stripes(
             vector[vector[size_type]] strps
