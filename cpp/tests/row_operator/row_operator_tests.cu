@@ -23,6 +23,7 @@
 
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/row_operator/lexicographic.cuh>
+#include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -290,9 +291,10 @@ TYPED_TEST(NaNTableViewTest, TestEqualityComparatorTwoTableNaNCase)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(nan_equal_expected, nan_equal_got->view());
 }
 
-TEST_F(cudf::test::BaseFixture, TestTwoTableComparatorColumnCountCheck)
+struct RowOperatorTest : public cudf::test::BaseFixture {};
+
+TEST_F(RowOperatorTest, TestTwoTableComparatorColumnCountCheck)
 {
-  // pre-processed table constructor should check column count
   rmm::cuda_stream_view stream{cudf::get_default_stream()};
 
   auto const left_table =
@@ -311,23 +313,34 @@ TEST_F(cudf::test::BaseFixture, TestTwoTableComparatorColumnCountCheck)
     std::invalid_argument);
 }
 
-TEST_F(cudf::test::BaseFixture, TestCheckShapeCompatibility)
+TEST_F(RowOperatorTest, TestCheckShapeCompatibility)
 {
-  // check_shape_compatibility should throw std::invalid_argument
+  rmm::cuda_stream_view stream{cudf::get_default_stream()};
+
   auto const left_table =
     cudf::table_view{{cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2}},
                       cudf::test::fixed_width_column_wrapper<int32_t>{{3, 4}}}};
   auto const right_table =
     cudf::table_view{{cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2}}}};
 
-  // different column counts
-  EXPECT_THROW(check_shape_compatibility(left_table, right_table), std::invalid_argument);
+  EXPECT_THROW(cudf::detail::row::equality::two_table_comparator(left_table, right_table, stream),
+               std::invalid_argument);
 
-  // different column types
   auto const int_table =
     cudf::table_view{{cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2}}}};
   auto const float_table =
     cudf::table_view{{cudf::test::fixed_width_column_wrapper<float>{{1.0f, 2.0f}}}};
 
-  EXPECT_THROW(check_shape_compatibility(int_table, float_table), std::invalid_argument);
+  EXPECT_THROW(cudf::detail::row::equality::two_table_comparator(int_table, float_table, stream),
+               std::invalid_argument);
+
+  std::vector<std::string> string_data{"hello", "world"};
+  auto const string_table =
+    cudf::table_view{{cudf::test::strings_column_wrapper{string_data.begin(), string_data.end()}}};
+  auto const numeric_table =
+    cudf::table_view{{cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2}}}};
+
+  EXPECT_THROW(
+    cudf::detail::row::equality::two_table_comparator(string_table, numeric_table, stream),
+    std::invalid_argument);
 }
