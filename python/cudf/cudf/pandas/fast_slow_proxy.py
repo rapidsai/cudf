@@ -1388,7 +1388,7 @@ PROXY_BASE_CLASSES: set[type] = {
 }
 
 
-NUMPY_TYPES: set[type[np.generic]] = set(np.sctypeDict.values())  # type: ignore[arg-type]
+NUMPY_TYPES: set[type[np.generic]] = set(np.sctypeDict.values())
 
 
 _SPECIAL_METHODS: set[str] = {

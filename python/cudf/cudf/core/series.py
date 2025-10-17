@@ -1053,7 +1053,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         return res
 
     @_performance_tracking
-    def memory_usage(self, index: bool = True, deep: bool = False) -> int:  # type: ignore[override]
+    def memory_usage(self, index: bool = True, deep: bool = False) -> int:
         """
         Return the memory usage of the Series.
 

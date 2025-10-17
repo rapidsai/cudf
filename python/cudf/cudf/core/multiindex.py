@@ -370,7 +370,7 @@ class MultiIndex(Index):
             existing_names[lev] = names[i]
         names = existing_names
 
-        return self._set_names(names=names, inplace=inplace)  # type: ignore[return-value]
+        return self._set_names(names=names, inplace=inplace)
 
     def _maybe_materialize_codes_and_levels(self: Self) -> Self:
         """

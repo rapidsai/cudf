@@ -886,8 +886,8 @@ def run_polars(
                     gather_shuffle_statistics,
                 )
 
-                shuffle_stats = gather_shuffle_statistics(client)  # type: ignore[arg-type]
-                clear_shuffle_statistics(client)  # type: ignore[arg-type]
+                shuffle_stats = gather_shuffle_statistics(client)
+                clear_shuffle_statistics(client)
             else:
                 shuffle_stats = None
 

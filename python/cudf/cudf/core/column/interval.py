@@ -128,7 +128,7 @@ class IntervalColumn(StructColumn):
             IntervalDtype(self.dtype.subtype, closed)
         )
 
-    def as_interval_column(self, dtype: IntervalDtype) -> Self:  # type: ignore[override]
+    def as_interval_column(self, dtype: IntervalDtype) -> Self:
         if isinstance(dtype, IntervalDtype):
             return self._with_type_metadata(dtype)  # type: ignore[return-value]
         else:
@@ -158,7 +158,7 @@ class IntervalColumn(StructColumn):
 
     def element_indexing(
         self, index: int
-    ) -> pd.Interval | dict[Any, Any] | None:  # type: ignore[override]
+    ) -> pd.Interval | dict[Any, Any] | None:
         result = super().element_indexing(index)
         if isinstance(result, dict) and cudf.get_option(
             "mode.pandas_compatible"

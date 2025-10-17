@@ -224,7 +224,7 @@ def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
                 #
                 # the type-ignore is safe because the for plc.TypeID.LIST, we know
                 # we have a polars.List type, which has an inner attribute.
-                plc_dtype = DataType(haystack.dtype.polars_type.inner).plc_type  # type: ignore[attr-defined]
+                plc_dtype = DataType(haystack.dtype.polars_type.inner).plc_type
             else:
                 plc_dtype = haystack.dtype.plc_type  # pragma: no cover
             values = (

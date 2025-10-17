@@ -1627,7 +1627,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         self._drop_column(name)
 
     @_performance_tracking
-    def memory_usage(self, index: bool = True, deep: bool = False) -> Series:  # type: ignore[override]
+    def memory_usage(self, index: bool = True, deep: bool = False) -> Series:
         """
         Return the memory usage of the DataFrame.
 
@@ -2594,7 +2594,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             # Special case needed to avoid converting
             # Series objects into pd.Series
             if not inspect.isclass(into):
-                cons = type(into)  # type: ignore[assignment]
+                cons = type(into)
                 if isinstance(into, defaultdict):
                     cons = functools.partial(cons, into.default_factory)
             elif issubclass(into, Mapping):
@@ -2840,7 +2840,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         """
         return _DataFrameAtIndexer(self)
 
-    @property  # type: ignore[misc]
+    @property
     @_external_only_api(
         "Use _column_names instead, or _data.to_pandas_index if a pandas "
         "index is absolutely necessary. For checking if the columns are a "
@@ -2851,7 +2851,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         """Returns a tuple of columns"""
         return self._data.to_pandas_index
 
-    @columns.setter  # type: ignore[misc]
+    @columns.setter
     @_performance_tracking
     def columns(self, columns):
         multiindex = False

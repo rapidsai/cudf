@@ -175,7 +175,7 @@ def validate_range_arg(arg, arg_name: Literal["start", "stop", "step"]) -> int:
     return int(arg)
 
 
-class Index(SingleColumnFrame):  # type: ignore[misc]
+class Index(SingleColumnFrame):
     """
     Immutable sequence used for indexing and alignment.
 
@@ -2185,7 +2185,7 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
             res = Index._from_column(res, name=self.name)
         return res
 
-    @property  # type: ignore[misc]
+    @property
     @_performance_tracking
     def dtype(self):
         """
@@ -3169,7 +3169,7 @@ class RangeIndex(Index):
             return index
         # Evenly spaced values can return a
         # RangeIndex instead of a materialized Index.
-        if not index._column.has_nulls():  # type: ignore[attr-defined]
+        if not index._column.has_nulls():
             uniques = cupy.unique(cupy.diff(index.values))
             if len(uniques) == 1 and (diff := uniques[0].get()) != 0:
                 new_range = range(index[0], index[-1] + diff, diff)
@@ -5203,7 +5203,7 @@ class IntervalIndex(Index):
             )
 
         if dtype:
-            interval_col = interval_col.astype(dtype)  # type: ignore[assignment]
+            interval_col = interval_col.astype(dtype)
 
         SingleColumnFrame.__init__(
             self, ColumnAccessor({name: interval_col}, verify=False)
@@ -5321,7 +5321,7 @@ class IntervalIndex(Index):
         pidx = pd.IntervalIndex.from_tuples(
             data, closed=closed, name=name, copy=copy, dtype=dtype
         )
-        return cls(pidx, name=name)  # type: ignore[return-value]
+        return cls(pidx, name=name)
 
     def __getitem__(self, index):
         raise NotImplementedError(

@@ -1365,7 +1365,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         if dropna is not None:
             raise NotImplementedError("dropna is not currently supported.")
-        self.obj["__groupbynth_order__"] = range(0, len(self.obj))  # type: ignore[index]
+        self.obj["__groupbynth_order__"] = range(0, len(self.obj))
         # We perform another groupby here to have the grouping columns
         # be a part of dataframe columns.
         result = self.obj.groupby(self.grouping.keys).agg(lambda x: x.nth(n))
