@@ -21,11 +21,9 @@ from cudf_polars.dsl import expr
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import (
-    get_stream_for_offset_windows,
     offsets_to_windows,
     range_window_bounds,
 )
-from cudf_polars.utils.cuda_stream import get_joined_cuda_stream
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Sequence
@@ -163,13 +161,6 @@ class RollingWindow(Expr):
     def do_evaluate(  # noqa: D102
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
-        # The scalars in self.preceding and self.following are constructed on the
-        # stream dedicated to building offset/period scalars. We need to join
-        # our stream into its stream.
-        stream = get_joined_cuda_stream(
-            upstreams=(df.stream, get_stream_for_offset_windows())
-        )
-
         if context != ExecutionContext.FRAME:
             raise RuntimeError(
                 "Rolling aggregation inside groupby/over/rolling"
@@ -182,7 +173,7 @@ class RollingWindow(Expr):
             and orderby.obj.type().id() != plc.TypeId.INT64
         ):
             orderby_obj = plc.unary.cast(
-                orderby.obj, plc.DataType(plc.TypeId.INT64), stream=stream
+                orderby.obj, plc.DataType(plc.TypeId.INT64), stream=df.stream
             )
         else:
             orderby_obj = orderby.obj
@@ -196,7 +187,7 @@ class RollingWindow(Expr):
         if not orderby.check_sorted(
             order=plc.types.Order.ASCENDING,
             null_order=plc.types.NullOrder.BEFORE,
-            stream=stream,
+            stream=df.stream,
         ):
             raise RuntimeError(
                 f"Index column '{self.orderby}' in rolling is not sorted, please sort first"
@@ -209,7 +200,7 @@ class RollingWindow(Expr):
             preceding,
             following,
             [to_request(agg, orderby, df)],
-            stream=stream,
+            stream=df.stream,
         ).columns()
         return Column(result, dtype=self.dtype)
 

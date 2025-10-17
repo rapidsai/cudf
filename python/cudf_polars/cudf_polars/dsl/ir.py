@@ -38,7 +38,6 @@ from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
 from cudf_polars.dsl.tracing import log_do_evaluate, nvtx_annotate_cudf_polars
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import (
-    get_stream_for_offset_windows,
     range_window_bounds,
 )
 from cudf_polars.utils import dtypes
@@ -1513,16 +1512,10 @@ class Rolling(IR):
         df: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        # The scalars in preceding and following are constructed on the
-        # stream dedicated to building offset/period scalars. We need to join
-        # our stream into its stream.
-        stream = get_joined_cuda_stream(
-            upstreams=(df.stream, get_stream_for_offset_windows())
-        )
         keys = broadcast(
             *(k.evaluate(df) for k in keys_in),
             target_length=df.num_rows,
-            stream=stream,
+            stream=df.stream,
         )
         orderby = index.evaluate(df)
         # Polars casts integral orderby to int64, but only for calculating window bounds
@@ -1531,7 +1524,7 @@ class Rolling(IR):
             and orderby.obj.type().id() != plc.TypeId.INT64
         ):
             orderby_obj = plc.unary.cast(
-                orderby.obj, plc.DataType(plc.TypeId.INT64), stream=stream
+                orderby.obj, plc.DataType(plc.TypeId.INT64), stream=df.stream
             )
         else:
             orderby_obj = orderby.obj
@@ -1550,14 +1543,14 @@ class Rolling(IR):
                 table,
                 [plc.types.Order.ASCENDING] * n,
                 [plc.types.NullOrder.BEFORE] * n,
-                stream=stream,
+                stream=df.stream,
             ):
                 raise RuntimeError("Input for grouped rolling is not sorted")
         else:
             if not orderby.check_sorted(
                 order=plc.types.Order.ASCENDING,
                 null_order=plc.types.NullOrder.BEFORE,
-                stream=stream,
+                stream=df.stream,
             ):
                 raise RuntimeError(
                     f"Index column '{index.name}' in rolling is not sorted, please sort first"
@@ -1570,7 +1563,7 @@ class Rolling(IR):
             preceding_window,
             following_window,
             [rolling.to_request(request.value, orderby, df) for request in aggs],
-            stream=stream,
+            stream=df.stream,
         )
         return DataFrame(
             itertools.chain(
@@ -1581,7 +1574,7 @@ class Rolling(IR):
                     for col, request in zip(values.columns(), aggs, strict=True)
                 ),
             ),
-            stream=stream,
+            stream=df.stream,
         ).slice(zlice)
 
 
