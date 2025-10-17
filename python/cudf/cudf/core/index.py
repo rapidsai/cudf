@@ -220,6 +220,10 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
         return None
 
     @property
+    def _constructor(self):
+        return Index
+
+    @property
     def _constructor_expanddim(self):
         return cudf.MultiIndex
 
@@ -1891,6 +1895,34 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
         result.name = name
         return result
 
+    @cached_property
+    def inferred_type(self):
+        """
+        Return a string of the type inferred from the values.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index([1, 2, 3])
+        >>> idx
+        Index([1, 2, 3], dtype='int64')
+        >>> idx.inferred_type
+        'integer'
+        """
+        infer_type = str(self.dtype)
+        if infer_type == "object":
+            if len(self) == 0:
+                return "empty"
+            else:
+                return "string"
+        elif self._is_integer():
+            return "integer"
+        elif self._is_floating():
+            return "floating"
+        elif self._is_boolean():
+            return "boolean"
+        return infer_type
+
     @_performance_tracking
     def memory_usage(self, deep: bool = False) -> int:
         return self._column.memory_usage
@@ -2614,6 +2646,14 @@ class RangeIndex(Index):
     @_performance_tracking
     def name(self, value: Hashable) -> None:
         self._name = value
+
+    @property
+    def _constructor(self):
+        return RangeIndex
+
+    @cached_property
+    def inferred_type(self) -> str:
+        return "integer"
 
     @property
     @_performance_tracking
@@ -3649,6 +3689,14 @@ class DatetimeIndex(Index):
         )
 
     @cached_property
+    def _constructor(self):
+        return DatetimeIndex
+
+    @cached_property
+    def inferred_type(self) -> str:
+        return "datetime64"
+
+    @cached_property
     def asi8(self) -> cupy.ndarray:
         return self._column.astype(np.dtype(np.int64)).values
 
@@ -4560,6 +4608,14 @@ class TimedeltaIndex(Index):
         """
         raise NotImplementedError("as_unit is currently not implemented")
 
+    @cached_property
+    def _constructor(self):
+        return TimedeltaIndex
+
+    @cached_property
+    def inferred_type(self) -> str:
+        return "timedelta64"
+
     @property
     def freq(self) -> DateOffset | None:
         raise NotImplementedError("freq is currently not implemented")
@@ -4857,6 +4913,14 @@ class CategoricalIndex(Index):
     @property
     def ordered(self) -> bool:
         return self._column.ordered
+
+    @cached_property
+    def _constructor(self):
+        return CategoricalIndex
+
+    @cached_property
+    def inferred_type(self) -> str:
+        return "categorical"
 
     @property
     @_performance_tracking
@@ -5213,6 +5277,14 @@ class IntervalIndex(Index):
     def closed(self) -> Literal["left", "right", "neither", "both"]:
         return self.dtype.closed
 
+    @property
+    def closed_left(self):
+        return self.closed in ("left", "both")
+
+    @property
+    def closed_right(self):
+        return self.closed in ("right", "both")
+
     @classmethod
     @_performance_tracking
     def _from_column(
@@ -5297,6 +5369,14 @@ class IntervalIndex(Index):
             plc_column
         )._with_type_metadata(dtype)
         return IntervalIndex._from_column(interval_col, name=name)
+
+    @cached_property
+    def _constructor(self):
+        return IntervalIndex
+
+    @cached_property
+    def inferred_type(self) -> str:
+        return "interval"
 
     @classmethod
     def from_arrays(
