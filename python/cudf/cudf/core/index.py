@@ -2919,7 +2919,7 @@ class RangeIndex(Index):
         By default the dtype is 64 bit signed integer. This is configurable
         via `default_integer_bitwidth` as 32 bit in `cudf.options`
         """
-        dtype = np.dtype(np.int64)
+        dtype: np.dtype = np.dtype(np.int64)
         return _maybe_convert_to_default_type(dtype)
 
     @property
@@ -3405,7 +3405,7 @@ class RangeIndex(Index):
             i = [self._range.index(value)]
         except ValueError:
             i = []
-        return as_column(i, dtype=SIZE_TYPE_DTYPE)
+        return as_column(i, dtype=SIZE_TYPE_DTYPE)  # type: ignore[return-value]
 
     def isin(self, values, level=None) -> cupy.ndarray:
         if level is not None and level > 0:
@@ -5236,7 +5236,7 @@ class IntervalIndex(Index):
 
         if len(data) == 0:
             if not hasattr(data, "dtype"):
-                child_type = np.dtype(np.int64)
+                child_type: Dtype = np.dtype(np.int64)
             elif isinstance(data.dtype, (pd.IntervalDtype, IntervalDtype)):
                 child_type = data.dtype.subtype
             else:
