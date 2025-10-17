@@ -23,12 +23,12 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _is_same_name
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable
+    from collections.abc import Hashable, Mapping
 
     import numpy as np
     import pyarrow as pa
 
-    from cudf._typing import Dtype, NotImplementedType, ScalarLike
+    from cudf._typing import Axis, Dtype, NotImplementedType, ScalarLike
     from cudf.core.dataframe import DataFrame
     from cudf.core.index import Index
 
@@ -43,11 +43,11 @@ class SingleColumnFrame(Frame, NotIterable):
     @_performance_tracking
     def _reduce(
         self,
-        op,
+        op: str,
         axis=no_default,
-        numeric_only=False,
+        numeric_only: bool = False,
         **kwargs,
-    ):
+    ) -> ScalarLike:
         if axis not in (None, 0, no_default):
             raise NotImplementedError("axis parameter is not implemented yet")
 
@@ -62,21 +62,28 @@ class SingleColumnFrame(Frame, NotIterable):
             raise TypeError(f"cannot perform {op} with type {self.dtype}")
 
     @_performance_tracking
-    def _scan(self, op, axis=None, *args, **kwargs):
+    def _scan(
+        self,
+        op: str,
+        axis: Axis | None = None,
+        skipna: bool = True,
+        *args,
+        **kwargs,
+    ) -> Self:
         if axis not in (None, 0):
             raise NotImplementedError("axis parameter is not implemented yet")
 
-        return super()._scan(op, axis=axis, *args, **kwargs)
+        return super()._scan(op, axis=axis, skipna=skipna, *args, **kwargs)
 
     @property
     @_performance_tracking
-    def name(self):
+    def name(self) -> Hashable:
         """Get the name of this object."""
         return next(iter(self._column_names))
 
     @name.setter
     @_performance_tracking
-    def name(self, value):
+    def name(self, value: Hashable) -> None:
         self._data[value] = self._data.pop(self.name)
 
     @property
@@ -108,6 +115,11 @@ class SingleColumnFrame(Frame, NotIterable):
         if col.dtype.kind in {"i", "u", "f", "b"} and not col.has_nulls():
             return cp.asarray(col)
         return col.values
+
+    @property
+    @_performance_tracking
+    def dtype(self) -> Dtype:
+        return self._column.dtype
 
     # TODO: We added fast paths in cudf #18555 to make `to_cupy` and `.values` faster
     # in common cases (like no nulls, no type conversion, no copying). But these fast
@@ -264,7 +276,7 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @property
     @_performance_tracking
-    def __cuda_array_interface__(self):
+    def __cuda_array_interface__(self) -> Mapping[str, Any]:
         # While the parent column class has a `__cuda_array_interface__` method
         # defined, it is not implemented for all column types. When it is not
         # implemented, though, at the Frame level we really want to throw an
@@ -421,7 +433,7 @@ class SingleColumnFrame(Frame, NotIterable):
             raise NotImplementedError(f"Unknown indexer {type(arg)}")
 
     @_performance_tracking
-    def transpose(self):
+    def transpose(self) -> Self:
         """Return the transpose, which is by definition self."""
         return self
 

@@ -1477,12 +1477,6 @@ class Series(SingleColumnFrame, IndexedFrame):
 
     @property
     @_performance_tracking
-    def dtype(self):
-        """The dtype of the Series."""
-        return self._column.dtype
-
-    @property
-    @_performance_tracking
     def dtypes(self):
         """The dtype of the Series.
 

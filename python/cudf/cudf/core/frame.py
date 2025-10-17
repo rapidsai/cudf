@@ -51,7 +51,7 @@ if TYPE_CHECKING:
     )
     from types import ModuleType
 
-    from cudf._typing import Dtype, DtypeObj, ScalarLike
+    from cudf._typing import Axis, Dtype, DtypeObj, ScalarLike
     from cudf.core.series import Series
 
 
@@ -92,7 +92,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         return zip(self._column_names, self._columns, strict=True)
 
     @property
-    def _dtypes(self) -> Generator[tuple[Hashable, Dtype], None, None]:
+    def _dtypes(self) -> Generator[tuple[Hashable, DtypeObj], None, None]:
         for label, col in self._column_labels_and_values:
             yield label, col.dtype
 
@@ -624,8 +624,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                     col.has_nulls() for col in self._columns
                 ):
                     if to_dtype.kind == "b" or any(
-                        dtype.kind == "b"  # type: ignore[union-attr]
-                        for _, dtype in self._dtypes
+                        dtype.kind == "b" for _, dtype in self._dtypes
                     ):
                         if module == cupy:
                             raise ValueError(
@@ -1772,9 +1771,28 @@ class Frame(BinaryOperand, Scannable, Serializable):
         )
 
     @_performance_tracking
-    def _reduce(self, *args, **kwargs):
+    def _reduce(
+        self,
+        op: str,
+        axis=no_default,
+        numeric_only: bool = False,
+        **kwargs,
+    ) -> ScalarLike:
         raise NotImplementedError(
-            f"Reductions are not supported for objects of type {type(self)}."
+            f"Reductions are not supported for objects of type {type(self).__name__}."
+        )
+
+    @_performance_tracking
+    def _scan(
+        self,
+        op: str,
+        axis: Axis | None = None,
+        skipna: bool = True,
+        *args,
+        **kwargs,
+    ) -> Self:
+        raise NotImplementedError(
+            f"Scans are not supported for objects of type {type(self).__name__}."
         )
 
     @_performance_tracking
