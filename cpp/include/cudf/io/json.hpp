@@ -380,6 +380,13 @@ class json_reader_options {
   [[nodiscard]] std::vector<std::string> const& get_na_values() const { return _na_values; }
 
   /**
+   * @brief Sets source info.
+   *
+   * @param src The source info.
+   */
+  void set_source(source_info src) { _source = std::move(src); }
+
+  /**
    * @brief Set data types for columns to be read.
    *
    * @param types Vector of dtypes

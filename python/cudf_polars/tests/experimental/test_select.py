@@ -10,7 +10,7 @@ import pytest
 import polars as pl
 
 from cudf_polars.testing.asserts import (
-    DEFAULT_SCHEDULER,
+    DEFAULT_CLUSTER,
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
@@ -22,7 +22,7 @@ def engine():
     return pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
-        executor_options={"max_rows_per_partition": 3, "scheduler": DEFAULT_SCHEDULER},
+        executor_options={"max_rows_per_partition": 3, "cluster": DEFAULT_CLUSTER},
     )
 
 
@@ -52,7 +52,7 @@ def test_select_reduce_fallback(df, fallback_mode):
         executor_options={
             "fallback_mode": fallback_mode,
             "max_rows_per_partition": 3,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
         },
     )
     match = "This selection is not supported for multiple partitions."
@@ -90,7 +90,7 @@ def test_select_fill_null_with_strategy(df):
         executor_options={
             "fallback_mode": "warn",
             "max_rows_per_partition": 3,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
         },
     )
     q = df.select(pl.col("a").forward_fill())
@@ -125,6 +125,7 @@ def test_select_fill_null_with_strategy(df):
             pl.col("b").n_unique(),
             (pl.col("c").n_unique() + 1),
         ),
+        (pl.col("a").min(), pl.col("b"), pl.col("c").max()),
     ],
 )
 def test_select_aggs(df, engine, aggs):

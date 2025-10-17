@@ -33,7 +33,7 @@ else:
     PANDAS_NUMPY_DTYPE = pd.core.dtypes.dtypes.PandasDtype
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
 
     from typing_extension import Self
 
@@ -691,7 +691,7 @@ class StructDtype(_BaseDtype):
 
         frames: list[Buffer] = []
 
-        fields: dict[str, bytes | tuple[Any, tuple[int, int]]] = {}
+        fields: dict[str, str | tuple[Any, tuple[int, int]]] = {}
 
         for k, dtype in self.fields.items():
             if isinstance(dtype, _BaseDtype):
@@ -1315,3 +1315,34 @@ def is_decimal128_dtype(obj):
             and pa.types.is_decimal128(obj.pyarrow_dtype)
         )
     )
+
+
+def recursively_update_struct_names(
+    dtype: DtypeObj, child_names: Mapping[Any, Any]
+) -> DtypeObj:
+    """
+    Update dtype's field names (namely StructDtype) recursively with child_names.
+
+    Needed for nested types that come from libcudf which do not carry struct field names.
+    """
+    if isinstance(dtype, StructDtype):
+        return StructDtype(
+            {
+                new_name: recursively_update_struct_names(
+                    child_type, new_child_names
+                )
+                for (new_name, new_child_names), child_type in zip(
+                    child_names.items(), dtype.fields.values(), strict=True
+                )
+            }
+        )
+    elif isinstance(dtype, ListDtype):
+        # child_names here should be {"offsets": {}, "<values_key>": {...}}
+        values_key = next(reversed(child_names))
+        return ListDtype(
+            element_type=recursively_update_struct_names(
+                dtype.element_type, child_names[values_key]
+            )
+        )
+    else:
+        return dtype
