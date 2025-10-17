@@ -170,7 +170,7 @@ def _(
             count = math.ceil(len(paths) / plan.factor)
 
         return ir, {ir: PartitionInfo(count=count, io_plan=plan)}
-    else:  # pragma: no cover
+    else:
         plan = IOPartitionPlan(
             flavor=IOPartitionFlavor.SINGLE_READ, factor=len(ir.paths)
         )

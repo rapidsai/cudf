@@ -93,6 +93,7 @@ exclude_also = [
 omit = [
   "cudf_polars/testing/plugin.py",
   "cudf_polars/experimental/benchmarks/**",
+  "cudf_polars/experimental/rapidsmpf/**",
   "cudf_polars/experimental/spilling.py",
   ]
 
