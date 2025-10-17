@@ -25,6 +25,7 @@
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -47,7 +48,6 @@
 
 #include <algorithm>
 #include <limits>
-#include <thread>
 
 namespace cudf::io::parquet::experimental::detail {
 
@@ -405,10 +405,10 @@ struct page_stats_caster : public stats_caster_base {
  * @param next_level_size Size of the next tree level
  */
 struct build_next_fenwick_tree_level_functor {
-  bool** const tree_level_ptrs;
-  cudf::size_type const current_level;
-  cudf::size_type const current_level_size;
-  cudf::size_type const next_level_size;
+  bool** tree_level_ptrs;
+  cudf::size_type current_level;
+  cudf::size_type current_level_size;
+  cudf::size_type next_level_size;
 
   /**
    * @brief Builds the next Fenwick tree level from the current level data
@@ -440,9 +440,9 @@ struct build_next_fenwick_tree_level_functor {
  * @param num_ranges Number of search ranges
  */
 struct search_fenwick_tree_functor {
-  bool** const tree_level_ptrs;
-  cudf::size_type const* const page_offsets;
-  cudf::size_type const num_ranges;
+  bool** tree_level_ptrs;
+  cudf::size_type const* page_offsets;
+  cudf::size_type num_ranges;
 
   /**
    * @brief Enum class to represent which range boundary to align
@@ -735,40 +735,44 @@ cudf::detail::host_vector<bool> aggregate_reader_metadata::compute_data_page_mas
         col_page_offsets.emplace_back(page_row_offsets.size());
       });
   } else {
-    auto constexpr max_data_page_mask_threads = 2;
-    auto const num_threads = std::min<size_type>(max_data_page_mask_threads, num_columns);
-    std::vector<std::thread> threads{};
-    threads.reserve(num_threads);
-    std::vector<std::vector<std::pair<std::vector<size_type>, size_type>>> thread_results(
-      num_threads);
+    auto constexpr num_threads = 2;
+    std::vector<std::future<std::vector<std::pair<std::vector<size_type>, size_type>>>>
+      page_row_offset_tasks{};
+    page_row_offset_tasks.reserve(num_threads);
     auto const cols_per_thread = cudf::util::div_rounding_up_unsafe(num_columns, num_threads);
-    std::for_each(
-      thrust::counting_iterator(0), thrust::counting_iterator(num_threads), [&](auto const tid) {
-        threads.emplace_back([&, tid = tid]() {
+
+    // Submit page row offset compute tasks
+    std::transform(
+      thrust::counting_iterator(0),
+      thrust::counting_iterator(num_threads),
+      std::back_inserter(page_row_offset_tasks),
+      [&](auto const tid) {
+        return cudf::detail::host_worker_pool().submit_task([&, tid = tid]() {
           auto const start_col = std::min(tid * cols_per_thread, num_columns);
           auto const end_col   = std::min(start_col + cols_per_thread, num_columns);
-          std::for_each(thrust::counting_iterator(start_col),
-                        thrust::counting_iterator(end_col),
-                        [&](auto const col_idx) {
-                          thread_results[tid].emplace_back(compute_page_row_offsets(
-                            per_file_metadata, row_group_indices, column_schema_indices[col_idx]));
-                        });
+          std::vector<std::pair<std::vector<size_type>, size_type>> thread_page_row_offsets{};
+          thread_page_row_offsets.reserve(end_col - start_col);
+          std::transform(thrust::counting_iterator(start_col),
+                         thrust::counting_iterator(end_col),
+                         std::back_inserter(thread_page_row_offsets),
+                         [&](auto const col_idx) {
+                           return compute_page_row_offsets(
+                             per_file_metadata, row_group_indices, column_schema_indices[col_idx]);
+                         });
+          return thread_page_row_offsets;
         });
       });
 
-    std::for_each(
-      thrust::counting_iterator(0), thrust::counting_iterator(num_threads), [&](auto const tid) {
-        threads[tid].join();
-        for (auto& [col_page_row_offsets, col_max_page_size] : thread_results[tid]) {
-          page_row_offsets.insert(
-            page_row_offsets.end(), col_page_row_offsets.begin(), col_page_row_offsets.end());
-          max_page_size = std::max<size_type>(max_page_size, col_max_page_size);
-          col_page_offsets.emplace_back(page_row_offsets.size());
-        }
-      });
+    std::for_each(page_row_offset_tasks.begin(), page_row_offset_tasks.end(), [&](auto& task) {
+      auto const& thread_page_row_offsets = task.get();
+      for (auto& [col_page_row_offsets, col_max_page_size] : thread_page_row_offsets) {
+        page_row_offsets.insert(
+          page_row_offsets.end(), col_page_row_offsets.begin(), col_page_row_offsets.end());
+        max_page_size = std::max<size_type>(max_page_size, col_max_page_size);
+        col_page_offsets.emplace_back(page_row_offsets.size());
+      }
+    });
   }
-
-  auto const total_pages = page_row_offsets.size() - num_columns;
 
   // Make sure all row_mask elements contain valid values even if they are nulls
   if constexpr (cuda::std::is_same_v<ColumnView, cudf::mutable_column_view>) {
@@ -833,6 +837,7 @@ cudf::detail::host_vector<bool> aggregate_reader_metadata::compute_data_page_mas
 
   //  Copy over search results to host
   auto host_results      = cudf::detail::make_host_vector_async(device_data_page_mask, stream);
+  auto const total_pages = page_row_offsets.size() - num_columns;
   auto data_page_mask    = cudf::detail::make_empty_host_vector<bool>(total_pages, stream);
   auto host_results_iter = host_results.begin();
   stream.synchronize();
