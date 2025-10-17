@@ -242,27 +242,25 @@ rmm::device_uvector<size_type> make_page_indices_async(
   return page_indices;
 }
 
-std::pair<std::vector<size_type>, size_type> compute_row_mask_levels(cudf::size_type num_rows,
-                                                                     cudf::size_type max_page_size)
+std::vector<size_type> compute_fenwick_tree_level_offsets(cudf::size_type level0_size,
+                                                          cudf::size_type max_page_size)
 {
-  std::vector<size_type> level_offsets;
-  level_offsets.push_back(0);
+  std::vector<size_type> tree_level_offsets;
+  tree_level_offsets.push_back(0);
 
-  size_t current_size  = cudf::util::div_rounding_up_unsafe(num_rows, 2);
-  size_t current_level = 1;
+  cudf::size_type current_level_size = cudf::util::div_rounding_up_unsafe(level0_size, 2);
+  cudf::size_type current_level      = 1;
 
-  while (current_size > 0) {
+  while (current_level_size > 0) {
     size_t block_size = size_t{1} << current_level;
-
-    level_offsets.push_back(current_size);
-    current_size += num_rows;
+    tree_level_offsets.push_back(tree_level_offsets.back() + current_level_size);
 
     if (std::cmp_greater_equal(block_size, max_page_size)) { break; }
 
-    current_size = cudf::util::div_rounding_up_unsafe(current_size, 2);
+    current_level_size = cudf::util::div_rounding_up_unsafe(current_level_size, 2);
     current_level++;
   }
-  return {std::move(level_offsets), current_size};
+  return tree_level_offsets;
 }
 
 }  // namespace cudf::io::parquet::experimental::detail

@@ -402,7 +402,7 @@ struct page_stats_caster : public stats_caster_base {
  * CUB's BlockReduce is unsuitable here as it reduces a block to a single element.
  * Cooperative Groups is used here for robust global thread ID calculation.
  */
-struct compute_next_level_functor {
+struct build_fenwick_tree_level_functor {
   bool** const level_ptrs;
   cudf::size_type const current_level;
   cudf::size_type const current_level_size;
@@ -414,11 +414,9 @@ struct compute_next_level_functor {
     auto next_level_ptr          = level_ptrs[current_level + 1];
 
     // Handle the odd-sized remaining element if current_level_size is odd
-    if (current_level_size % 2 and next_level_index == (next_level_size - 1)) {
-      // The last element is carried forward (ORed with false)
+    if (current_level_size % 2 and next_level_index == next_level_size - 1) {
       next_level_ptr[next_level_index] = current_level_ptr[current_level_size - 1];
     } else {
-      // Perform the logical OR reduction and write to the next level's location
       next_level_ptr[next_level_index] =
         current_level_ptr[(next_level_index * 2)] or current_level_ptr[(next_level_index * 2) + 1];
     }
@@ -435,89 +433,75 @@ struct compute_next_level_functor {
  * @param d_results Pointer to device memory to store the boolean result (true if a '1' is found in
  * the range).
  */
-struct probe_masks_functor {
+struct search_fenwick_tree_functor {
   bool** const level_ptrs;
   cudf::size_type const* const page_offsets;
   cudf::size_type const num_ranges;
 
   __device__ bool operator()(cudf::size_type range_idx) const noexcept
   {
-    // Retrieve M and N for the current range [M, N)
+    // Retrieve start and end for the current range [start, end)
     size_type M = page_offsets[range_idx];
     size_type N = page_offsets[range_idx + 1];
 
-    // If the range is empty or invalid, terminate
-    if (M >= N) { return false; }
+    // Return early if the range is empty or invalid
+    if (M >= N or range_idx >= num_ranges) { return false; }
 
     // Binary Decomposition Loop
     while (M < N) {
-      // 1. Calculate the largest power of 2 that can align M up to the boundary.
-      // This is determined by the Least Significant Bit (LSB) of M.
-      // If M=0, LSB is usually defined as the full size, but here M is typically > 0
-      // or we handle M=0 implicitly by the full range check.
-      // The expression (M & -M) gives the value of the LSB, which is the block size (2^k).
-      size_t m_lsb_block_size = (M == 0) ? N : (M & -M);
-      size_t m_next_aligned   = M + m_lsb_block_size;
+      // 1. M Alignment: Find the largest power-of-two block that starts at M and aligns M up.
+      // Block size is determined by the Least Significant Bit (LSB) of M.
+      // If M=0, the LSB is the full range N, but we handle the LSB only for M>0.
+      // The __ffs intrinsic (Find First Set, 1-based) is the fastest way to get the LSB position
+      // (k).
+      size_t m_lsb_position = __ffs(M);                      // Position is 1-based (k+1)
+      size_t m_block_size   = 1ULL << (m_lsb_position - 1);  // Size is 2^k
 
-      // 2. Calculate the largest power of 2 block that can align N down to the boundary.
-      // This is determined by the LSB of (N - M), but simpler to use N's alignment for the end.
-      // The expression (N & -N) gives the block size corresponding to N's alignment.
-      // We ensure N_lsb_block_size does not exceed the remaining range size (N-M).
-      size_t n_lsb_block_size = N & -N;
+      // 2. N Alignment: Find the largest power-of-two block that aligns N down.
+      // N & -N gives the LSB block size *if* N were the start, but we use it as the largest
+      // possible size that evenly divides N.
+      size_t n_block_size = N & -N;
 
-      // --- Decision Logic: Which side to consume? ---
+      // The largest block size we can consume from the current range [M, N)
+      size_t max_block_size = 0;
+      size_t mask_level     = 0;  // k (k=0 is 1 row, k=1 is 2 rows, etc.)
+      size_t mask_index     = 0;
 
-      // Block 1: M-aligned block (from M up to m_next_aligned)
-      size_t block1_size = m_next_aligned - M;
+      // --- Core Decomposition Logic ---
 
-      // Block 2: N-aligned block (from N - n_lsb_block_size up to N)
-      size_t block2_size = n_lsb_block_size;
+      // Check the M side alignment block: [M, M + m_block_size)
+      // This is only valid if M + m_block_size <= N (the block fits).
+      if (M > 0 && M + m_block_size <= N) {
+        max_block_size = m_block_size;
+        mask_level     = m_lsb_position - 1;
+        mask_index     = M >> mask_level;  // M / 2^k
+        M += max_block_size;
+      }
 
-      // Block 3: The remaining central range block
+      // Check the N side alignment block: [N - n_block_size, N)
+      // This is only valid if N - n_block_size >= M and the N block is larger or equal to the M
+      // block.
+      else if (n_block_size > 0 && N - n_block_size >= M && n_block_size >= max_block_size) {
+        // If the N block is larger or we are at the end, prioritize the N block
+        max_block_size = n_block_size;
+        mask_level     = __ffs(n_block_size) - 1;
+        mask_index     = (N - n_block_size) >> mask_level;  // (N - 2^k) / 2^k
+        N -= max_block_size;
+      }
 
-      if (block1_size > 0 && M < m_next_aligned && m_next_aligned <= N) {
-        // If the M-aligned block is fully contained in the range [M, N)
-
-        // Check if block1_size is 2^k. k = log2(block1_size).
-        // Since block1_size is based on LSB, it is always a power of 2.
-        size_t k1 = __ffs(block1_size) - 1;
-
-        // Calculate mask index: The starting point M is divided by the block size.
-        size_t mask_idx = M / block1_size;
-
-        // Look up the mask value
-        if (level_ptrs[k1][mask_idx]) {
-          return true;  // Found a set bit, terminate for this range
-        }
-
-        // Advance M
-        M = m_next_aligned;
-      } else if (block2_size > 0 && N - block2_size >= M) {
-        // If the N-aligned block is fully contained and does not overlap M's new position
-
-        // Check if block2_size is 2^k. k = log2(block2_size).
-        size_t k2 = __ffs(block2_size) - 1;
-
-        // Calculate mask index
-        size_t mask_idx = (N - block2_size) / block2_size;
-
-        // Look up the mask value
-        if (level_ptrs[k2][mask_idx]) {
-          return true;  // Found a set bit, terminate for this range
-        }
-
-        // Backtrack N
-        N = N - block2_size;
-      } else {
-        // The remaining range is unaligned and small (or just 1 element).
-        // This happens when M and N are close and unaligned (e.g., [11, 13]).
-
-        // Prioritize M (1-row check) or N (1-row check) until they meet.
-
-        // Check single row at M (Level 0)
-        if (level_ptrs[0][M]) { return true; }
+      // Fallback for small, unaligned ranges (e.g., [11, 13) where M and N are close)
+      // If max_block_size is 0 or too large, reduce by 1 row (Level 0)
+      else if (max_block_size == 0 || max_block_size > N - M) {
+        max_block_size = 1;
+        mask_level     = 0;
+        mask_index     = M;  // Level 0 index is just M
         M++;
       }
+
+      // --- Query Mask and Advance ---
+
+      // Look up the mask value at the determined level and index
+      if (level_ptrs[mask_level][mask_index]) { return true; }
     }
     return false;
   }
@@ -643,14 +627,6 @@ cudf::detail::host_vector<bool> aggregate_reader_metadata::compute_data_page_mas
                "Mismatch in total rows in input row mask and row groups",
                std::invalid_argument);
 
-  auto const num_columns = input_columns.size();
-
-  // Collect column schema indices from the input columns.
-  auto column_schema_indices = std::vector<size_type>(input_columns.size());
-  std::transform(
-    input_columns.begin(), input_columns.end(), column_schema_indices.begin(), [](auto const& col) {
-      return col.schema_idx;
-    });
   auto const has_page_index = compute_has_page_index(per_file_metadata, row_group_indices);
 
   // Return early if page index is not present
@@ -660,7 +636,15 @@ cudf::detail::host_vector<bool> aggregate_reader_metadata::compute_data_page_mas
       0, stream);  // An empty data page mask indicates all pages are required
   }
 
+  // Collect column schema indices from the input columns.
+  auto column_schema_indices = std::vector<size_type>(input_columns.size());
+  std::transform(
+    input_columns.begin(), input_columns.end(), column_schema_indices.begin(), [](auto const& col) {
+      return col.schema_idx;
+    });
+
   // Compute page row offsets and column chunk page offsets for each column
+  auto const num_columns = input_columns.size();
   std::vector<size_type> page_row_offsets;
   std::vector<size_type> col_page_offsets;
   col_page_offsets.reserve(num_columns + 1);
@@ -731,45 +715,57 @@ cudf::detail::host_vector<bool> aggregate_reader_metadata::compute_data_page_mas
   }
 
   auto const mr = cudf::get_current_device_resource_ref();
-  auto const [level_offsets, total_levels_size] =
-    compute_row_mask_levels(total_rows, max_page_size);
-  auto const num_levels = static_cast<cudf::size_type>(level_offsets.size());
 
-  auto levels_data = rmm::device_uvector<bool>(total_levels_size, stream, mr);
+  // Compute fenwick tree level offsets and total size (level 1 and higher)
+  auto const tree_level_offsets = compute_fenwick_tree_level_offsets(total_rows, max_page_size);
+  auto const num_levels         = static_cast<cudf::size_type>(tree_level_offsets.size());
+  // Buffer to store Fenwick tree levels (level 1 and higher) data
+  auto tree_levels_data = rmm::device_uvector<bool>(tree_level_offsets.back(), stream, mr);
 
-  auto host_level_ptrs = cudf::detail::make_host_vector<bool*>(num_levels, stream);
-  host_level_ptrs[0]   = const_cast<bool*>(row_mask.template begin<bool>()) + row_mask_offset;
+  // Pointers to each Fenwick tree level data
+  auto host_tree_level_ptrs = cudf::detail::make_host_vector<bool*>(num_levels, stream);
+  // Zeroth level is just the row mask itself
+  host_tree_level_ptrs[0] = const_cast<bool*>(row_mask.template begin<bool>()) + row_mask_offset;
   std::for_each(
     thrust::counting_iterator(1), thrust::counting_iterator(num_levels), [&](auto const level_idx) {
-      host_level_ptrs[level_idx] = levels_data.data() + level_offsets[level_idx - 1];
+      host_tree_level_ptrs[level_idx] = tree_levels_data.data() + tree_level_offsets[level_idx - 1];
     });
 
-  auto device_level_ptrs  = cudf::detail::make_device_uvector_async(host_level_ptrs, stream, mr);
+  auto fenwick_tree_level_ptrs =
+    cudf::detail::make_device_uvector_async(host_tree_level_ptrs, stream, mr);
+
+  // Build Fenwick tree levels
   auto current_level_size = total_rows;
   std::for_each(
     thrust::counting_iterator(0), thrust::counting_iterator(num_levels - 1), [&](auto const level) {
       auto const next_level_size = cudf::util::div_rounding_up_unsafe(current_level_size, 2);
-      thrust::for_each(rmm::exec_policy_nosync(stream),
-                       thrust::counting_iterator(0),
-                       thrust::counting_iterator(next_level_size),
-                       compute_next_level_functor{
-                         device_level_ptrs.data(), level, current_level_size, next_level_size});
+      thrust::for_each(
+        rmm::exec_policy_nosync(stream),
+        thrust::counting_iterator(0),
+        thrust::counting_iterator(next_level_size),
+        build_fenwick_tree_level_functor{
+          fenwick_tree_level_ptrs.data(), level, current_level_size, next_level_size});
       current_level_size = next_level_size;
     });
 
+  //  Search the Fenwick tree to see if there's a surviving row in each page's row range
   auto const num_ranges = static_cast<cudf::size_type>(page_row_offsets.size() - 1);
   rmm::device_uvector<bool> device_data_page_mask(num_ranges, stream, mr);
   auto page_offsets = cudf::detail::make_device_uvector_async(page_row_offsets, stream, mr);
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator(0),
-                    thrust::counting_iterator(num_ranges),
-                    device_data_page_mask.begin(),
-                    probe_masks_functor{device_level_ptrs.data(), page_offsets.data(), num_ranges});
+  thrust::transform(
+    rmm::exec_policy_nosync(stream),
+    thrust::counting_iterator(0),
+    thrust::counting_iterator(num_ranges),
+    device_data_page_mask.begin(),
+    search_fenwick_tree_functor{fenwick_tree_level_ptrs.data(), page_offsets.data(), num_ranges});
 
+  //  Copy over search results to host
   auto host_results      = cudf::detail::make_host_vector_async(device_data_page_mask, stream);
   auto data_page_mask    = cudf::detail::make_empty_host_vector<bool>(total_pages, stream);
   auto host_results_iter = host_results.begin();
   stream.synchronize();
+  // Discard results for invalid ranges. i.e. ranges starting at the last page of a column and
+  // ending at the first page of the next column
   std::for_each(thrust::counting_iterator<size_t>(0),
                 thrust::counting_iterator(num_columns),
                 [&](auto col_idx) {
