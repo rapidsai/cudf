@@ -52,6 +52,7 @@ cdef extern from "cudf/io/json.hpp" namespace "cudf::io" nogil:
         vector[string] get_na_values() except +libcudf_exception_handler
 
         # setter
+        void set_source(cudf_io_types.source_info src) except +libcudf_exception_handler
         void set_dtypes(vector[data_type] types) except +libcudf_exception_handler
         void set_dtypes(map[string, data_type] types) except +libcudf_exception_handler
         void set_dtypes(map[string, schema_element] types)\
