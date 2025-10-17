@@ -128,6 +128,8 @@ cdef class HybridScanReader:
     """
 
     def __init__(self, bytes footer_bytes, ParquetReaderOptions options):
+        # TODO: Check if libcudf requires footer_bytes to remain valid for the lifetime
+        # of the HybridScanReader
         cdef const uint8_t[::1] footer_view = footer_bytes
         self.c_obj = make_unique[cpp_hybrid_scan_reader](
             host_span[const_uint8_t](&footer_view[0], len(footer_bytes)),
@@ -516,7 +518,9 @@ cdef class HybridScanReader:
                 options.c_obj,
                 _get_stream(stream).view()
             )
-        return TableWithMetadata.from_libcudf(c_result, stream, mr)
+        return TableWithMetadata.from_libcudf(
+            c_result, _get_stream(stream), _get_memory_resource(mr)
+        )
 
     def payload_column_chunks_byte_ranges(
         self,
@@ -603,7 +607,9 @@ cdef class HybridScanReader:
                 options.c_obj,
                 _get_stream(stream).view()
             )
-        return TableWithMetadata.from_libcudf(c_result, stream, mr)
+        return TableWithMetadata.from_libcudf(
+            c_result, _get_stream(stream), _get_memory_resource(mr)
+        )
 
     def setup_chunking_for_filter_columns(
         self,
@@ -691,7 +697,9 @@ cdef class HybridScanReader:
                 mask_view,
                 _get_stream(stream).view()
             )
-        return TableWithMetadata.from_libcudf(c_result, stream, mr)
+        return TableWithMetadata.from_libcudf(
+            c_result, _get_stream(stream), _get_memory_resource(mr)
+        )
 
     def setup_chunking_for_payload_columns(
         self,
@@ -779,7 +787,9 @@ cdef class HybridScanReader:
                 mask_view,
                 _get_stream(stream).view()
             )
-        return TableWithMetadata.from_libcudf(c_result, stream, mr)
+        return TableWithMetadata.from_libcudf(
+            c_result, _get_stream(stream), _get_memory_resource(mr)
+        )
 
     def has_next_table_chunk(self):
         """Check if there is any parquet data left to read.
