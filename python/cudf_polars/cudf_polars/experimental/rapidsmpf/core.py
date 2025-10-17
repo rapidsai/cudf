@@ -12,11 +12,9 @@ from rapidsmpf.buffer.resource import BufferResource
 from rapidsmpf.communicator.single import new_communicator
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
-from rapidsmpf.streaming.core.channel import Channel
 from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.leaf_node import pull_from_channel
 from rapidsmpf.streaming.core.node import (
-    define_py_node,
     run_streaming_pipeline,
 )
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
@@ -32,10 +30,7 @@ import cudf_polars.experimental.rapidsmpf.union  # noqa: F401
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.rapidsmpf.dispatch import lower_ir_node
-from cudf_polars.experimental.rapidsmpf.nodes import (
-    generate_ir_sub_network_wrapper,
-    shutdown_on_error,
-)
+from cudf_polars.experimental.rapidsmpf.nodes import generate_ir_sub_network_wrapper
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
 
@@ -47,51 +42,12 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.experimental.parallel import ConfigOptions
-    from cudf_polars.experimental.rapidsmpf.channel_pair import ChannelPair
     from cudf_polars.experimental.rapidsmpf.dispatch import (
         GenState,
         LowerIRTransformer,
         LowerState,
         SubNetGenerator,
     )
-
-
-@define_py_node()
-async def drain_metadata_passthrough_data(
-    ctx: Context,
-    ch_in: ChannelPair,
-    ch_out: Channel[TableChunk],
-) -> None:
-    """
-    Drain metadata channel and pass through data channel.
-
-    This node is used at the end of the pipeline to convert a ChannelPair
-    into a simple data Channel that can be consumed by pull_from_channel.
-
-    Parameters
-    ----------
-    ctx
-        The streaming context.
-    ch_in
-        The input ChannelPair.
-    ch_out
-        The output data channel (metadata is discarded).
-
-    Notes
-    -----
-    This is a placeholder implementation. Metadata handling will be
-    fully implemented in follow-up work.
-    """
-    async with shutdown_on_error(ctx, ch_in.metadata, ch_in.data, ch_out):
-        # TODO: If the incoming data is duplicated, we can
-        # simply drain the channel and return an empty
-        # DataFrame on ranks > 0.
-
-        # Pass through all data messages
-        while (msg := await ch_in.data.recv(ctx)) is not None:
-            await ch_out.send(ctx, msg)
-
-        await ch_out.drain(ctx)
 
 
 def evaluate_logical_plan(ir: IR, config_options: ConfigOptions) -> DataFrame:
@@ -270,23 +226,14 @@ def generate_network(
     nodes = [node for sublist in node_mapping.values() for node in sublist]
     ch_out = channels[ir].pop()
 
-    # TODO: If `ir` corresponds to broadcasted data, we can
-    # inject a node to drain the channel and return an empty
-    # DataFrame on ranks > 0. Eventually, we can push the
-    # drain all the way down to the last AllGather node.
-
-    # Add node to convert ChannelPair to data-only Channel
-    ch_data_only = Channel()
-    nodes.append(
-        drain_metadata_passthrough_data(
-            ctx,
-            ch_in=ch_out,
-            ch_out=ch_data_only,
-        )
-    )
+    # TODO: We will need an additional node here to drain
+    # the metadata channel once we start plumbing metadata
+    # through the network. This node could also drop
+    # "duplicated" data on all but rank 0.
 
     # Add final node to pull from the output data channel
-    output_node, output = pull_from_channel(ctx, ch_in=ch_data_only)
+    # (metadata channel is unused)
+    output_node, output = pull_from_channel(ctx, ch_in=ch_out.data)
     nodes.append(output_node)
 
     # Return network and output hook
