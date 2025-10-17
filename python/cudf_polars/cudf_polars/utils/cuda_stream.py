@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import functools
 from typing import TYPE_CHECKING
 
 from rmm.pylibrmm.stream import DEFAULT_STREAM
@@ -24,24 +23,6 @@ def get_dask_cuda_stream() -> Stream:
 def get_cuda_stream() -> Stream:
     """Get the default CUDA stream for the current thread."""
     return DEFAULT_STREAM
-
-
-@functools.lru_cache(maxsize=1)
-def get_stream_for_conditional_join_predicate() -> Stream:
-    """
-    Get a stream dedicated to reading data for conditional join predicates.
-
-    Notes
-    -----
-    This function returns a singleton Stream that should only
-    be used for ConditionalJoin.predicate AST generation. Calling it multiple
-    times will always return the same Stream.
-
-    Users performing stream-ordered operations on data that combines
-    data on this stream and other streams must join the streams prior
-    to performing the operation.
-    """
-    return get_cuda_stream()
 
 
 def join_cuda_streams(

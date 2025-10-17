@@ -44,7 +44,6 @@ from cudf_polars.utils import dtypes
 from cudf_polars.utils.cuda_stream import (
     get_cuda_stream,
     get_joined_cuda_stream,
-    get_stream_for_conditional_join_predicate,
 )
 from cudf_polars.utils.versions import POLARS_VERSION_LT_131
 
@@ -1859,9 +1858,9 @@ class ConditionalJoin(IR):
 
         def __init__(self, predicate: expr.Expr):
             self.predicate = predicate
-            ast_result = to_ast(
-                predicate, stream=get_stream_for_conditional_join_predicate()
-            )
+            stream = get_cuda_stream()
+            ast_result = to_ast(predicate, stream=stream)
+            stream.synchronize()
             if ast_result is None:
                 raise NotImplementedError(
                     f"Conditional join with predicate {predicate}"
@@ -1935,7 +1934,6 @@ class ConditionalJoin(IR):
             upstreams=(
                 left.stream,
                 right.stream,
-                get_stream_for_conditional_join_predicate(),
             )
         )
         left_casts, right_casts = _collect_decimal_binop_casts(
