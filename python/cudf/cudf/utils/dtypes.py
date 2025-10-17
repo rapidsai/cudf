@@ -124,7 +124,7 @@ def cudf_dtype_to_pa_type(dtype: DtypeObj) -> pa.DataType:
     elif dtype == CUDF_STRING_DTYPE or isinstance(dtype, pd.StringDtype):
         return pa.string()
     else:
-        return pa.from_numpy_dtype(dtype)
+        return pa.from_numpy_dtype(dtype)  # type: ignore[arg-type]
 
 
 def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:
@@ -432,7 +432,7 @@ def pyarrow_dtype_to_cudf_dtype(dtype: pd.ArrowDtype) -> DtypeObj:
     elif pyarrow_dtype is pa.date32():
         raise TypeError("Unsupported type")
     elif isinstance(pyarrow_dtype, pa.DataType):
-        return pyarrow_dtype.to_pandas_dtype()
+        return pyarrow_dtype.to_pandas_dtype()  # type: ignore[return-value]
     else:
         raise TypeError(f"Unsupported Arrow type: {pyarrow_dtype}")
 
@@ -580,7 +580,7 @@ def dtype_from_pylibcudf_column(col: plc.Column) -> DtypeObj:
             str(i): dtype_from_pylibcudf_column(col.child(i))
             for i in range(col.num_children())
         }
-        return cudf.StructDtype(fields)
+        return cudf.StructDtype(fields)  # type: ignore[arg-type]
     elif tid == plc.TypeId.DECIMAL64:
         return cudf.Decimal64Dtype(
             precision=cudf.Decimal64Dtype.MAX_PRECISION, scale=-type_.scale()

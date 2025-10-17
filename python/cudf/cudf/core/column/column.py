@@ -747,7 +747,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 self.dtype, self.dtype
             )
         ):
-            pandas_array = pandas_nullable_dtype.__from_arrow__(pa_array)
+            pandas_array = pandas_nullable_dtype.__from_arrow__(pa_array)  # type: ignore[attr-defined]
             return pd.Index(pandas_array, copy=False)
         else:
             return pd.Index(pa_array.to_pandas())
@@ -1765,9 +1765,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             elif is_dtype_obj_decimal(dtype):
                 result = self.as_decimal_column(dtype)  # type: ignore[arg-type]
             elif dtype.kind == "M":
-                result = self.as_datetime_column(dtype)
+                result = self.as_datetime_column(dtype)  # type: ignore[arg-type]
             elif dtype.kind == "m":
-                result = self.as_timedelta_column(dtype)
+                result = self.as_timedelta_column(dtype)  # type: ignore[arg-type]
             elif dtype.kind in {"O", "U"}:
                 if (
                     cudf.get_option("mode.pandas_compatible")
@@ -1777,7 +1777,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     raise TypeError(f"Unsupported dtype for astype: {dtype}")
                 result = self.as_string_column(dtype)
             else:
-                result = self.as_numerical_column(dtype)
+                result = self.as_numerical_column(dtype)  # type: ignore[arg-type]
 
         if copy and result is self:
             return result.copy(deep=copy)
@@ -2585,7 +2585,7 @@ def build_column(
     elif dtype.kind == "M":
         return cudf.core.column.DatetimeColumn(
             data=data,  # type: ignore[arg-type]
-            dtype=dtype,
+            dtype=dtype,  # type: ignore[arg-type]
             mask=mask,
             size=size,
             offset=offset,
@@ -2595,7 +2595,7 @@ def build_column(
     elif dtype.kind == "m":
         return cudf.core.column.TimeDeltaColumn(
             data=data,  # type: ignore[arg-type]
-            dtype=dtype,
+            dtype=dtype,  # type: ignore[arg-type]
             mask=mask,
             size=size,
             offset=offset,
@@ -2611,7 +2611,7 @@ def build_column(
         return cudf.core.column.StringColumn(
             data=data,  # type: ignore[arg-type]
             size=size,
-            dtype=dtype,
+            dtype=dtype,  # type: ignore[arg-type]
             mask=mask,
             offset=offset,
             children=children,  # type: ignore[arg-type]
@@ -2680,7 +2680,7 @@ def build_column(
     elif dtype.kind in "iufb":
         return cudf.core.column.NumericalColumn(
             data=data,  # type: ignore[arg-type]
-            dtype=dtype,
+            dtype=dtype,  # type: ignore[arg-type]
             mask=mask,
             size=size,
             offset=offset,
@@ -2781,7 +2781,7 @@ def as_column(
                 f"i{cudf.get_option('default_integer_bitwidth') // 8}"
             )
         if dtype is not None:
-            return column.astype(dtype)
+            return column.astype(dtype)  # type: ignore[arg-type]
         return column
     elif isinstance(arbitrary, (ColumnBase, cudf.Series, cudf.Index)):
         # Ignoring nan_as_null per the docstring
@@ -3380,7 +3380,7 @@ def concat_columns(objs: Sequence[ColumnBase]) -> ColumnBase:
     ):
         common_dtype = find_common_type(not_null_col_dtypes)
         # Cast all columns to the common dtype
-        objs = [obj.astype(common_dtype) for obj in objs]
+        objs = [obj.astype(common_dtype) for obj in objs]  # type: ignore[arg-type]
 
     # Find the first non-null column:
     head = next((obj for obj in objs if obj.null_count != len(obj)), objs[0])

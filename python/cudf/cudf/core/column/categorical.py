@@ -875,8 +875,8 @@ class CategoricalColumn(column.ColumnBase):
             [old_categories.dtype, new_categories.dtype]
         )
 
-        new_categories = new_categories.astype(common_dtype)
-        old_categories = old_categories.astype(common_dtype)
+        new_categories = new_categories.astype(common_dtype)  # type: ignore[arg-type]
+        old_categories = old_categories.astype(common_dtype)  # type: ignore[arg-type]
 
         if old_categories.isin(new_categories).any():
             raise ValueError("new categories must not include old categories")

@@ -324,7 +324,7 @@ class ColumnAccessor(MutableMapping):
                 self.names,
                 name=self.name,
                 tupleize_cols=False,
-                dtype=self.label_dtype,
+                dtype=self.label_dtype,  # type: ignore[arg-type]
             )
         return result
 
@@ -365,7 +365,8 @@ class ColumnAccessor(MutableMapping):
         if cudf.get_option("mode.pandas_compatible"):
             try:
                 pd_idx1 = pd.Index(
-                    [*list(self.names), name], dtype=self.label_dtype
+                    [*list(self.names), name],
+                    dtype=self.label_dtype,  # type: ignore[arg-type]
                 )
                 pd_idx2 = pd.Index([*list(self.names), name])
                 if (
