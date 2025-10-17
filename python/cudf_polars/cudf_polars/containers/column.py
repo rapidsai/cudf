@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from cudf_polars.typing import (
         ColumnHeader,
         ColumnOptions,
+        DecimalDataTypeOptions,
         DeserializedColumnOptions,
         Slice,
     )
@@ -113,9 +114,12 @@ class Column:
         column_kwargs: ColumnOptions,
     ) -> DeserializedColumnOptions:
         """Deserialize the constructor kwargs for a Column."""
-        dtype = DataType(  # pragma: no cover
-            _dtype_short_repr_to_dtype(column_kwargs["dtype"])
-        )
+        dtype_kwarg = column_kwargs["dtype"]
+        if isinstance(dtype_kwarg, dict):
+            dtype = DataType(pl.Decimal(dtype_kwarg["precision"], dtype_kwarg["scale"]))
+        else:
+            dtype = DataType(_dtype_short_repr_to_dtype(dtype_kwarg))
+
         return {
             "is_sorted": column_kwargs["is_sorted"],
             "order": column_kwargs["order"],
@@ -154,12 +158,21 @@ class Column:
 
     def serialize_ctor_kwargs(self) -> ColumnOptions:
         """Serialize the constructor kwargs for self."""
+        polars_type = self.dtype.polars_type
+        if isinstance(polars_type, pl.Decimal):
+            dtype: DecimalDataTypeOptions = {
+                "precision": polars_type.precision,
+                "scale": polars_type.scale,
+            }
+        else:
+            dtype = pl.polars.dtype_str_repr(polars_type)
+
         return {
             "is_sorted": self.is_sorted,
             "order": self.order,
             "null_order": self.null_order,
             "name": self.name,
-            "dtype": pl.polars.dtype_str_repr(self.dtype.polars_type),
+            "dtype": dtype,
         }
 
     @functools.cached_property
