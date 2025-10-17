@@ -691,7 +691,7 @@ class StructDtype(_BaseDtype):
 
         frames: list[Buffer] = []
 
-        fields: dict[str, bytes | tuple[Any, tuple[int, int]]] = {}
+        fields: dict[str, str | tuple[Any, tuple[int, int]]] = {}
 
         for k, dtype in self.fields.items():
             if isinstance(dtype, _BaseDtype):
