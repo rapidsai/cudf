@@ -72,9 +72,10 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _EQUALITY_OPS, _is_same_name
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable, MutableMapping
+    from collections.abc import Hashable, Iterable, MutableMapping
 
     from cudf._typing import (
+        Axis,
         DataFrameOrSeries,
         Dtype,
         NotImplementedType,
@@ -83,11 +84,11 @@ if TYPE_CHECKING:
     from cudf.core.dataframe import DataFrame
 
 
-def _format_percentile_names(percentiles):
+def _format_percentile_names(percentiles: Iterable) -> list[str]:
     return [f"{int(x * 100)}%" for x in percentiles]
 
 
-def _describe_numeric(obj, percentiles):
+def _describe_numeric(obj: Series, percentiles: Iterable) -> dict[str, Any]:
     # Helper for Series.describe with numerical data.
     return {
         "count": obj.count(),
@@ -105,7 +106,11 @@ def _describe_numeric(obj, percentiles):
     }
 
 
-def _describe_timetype(obj, percentiles, typ):
+def _describe_timetype(
+    obj: Series,
+    percentiles: Iterable,
+    typ: type[pd.Timestamp] | type[pd.Timedelta],
+) -> dict[str, Any]:
     # Common helper for Series.describe with timedelta/timestamp data.
     data = {
         "count": str(obj.count()),
@@ -132,17 +137,19 @@ def _describe_timetype(obj, percentiles, typ):
     return data
 
 
-def _describe_timedelta(obj, percentiles):
+def _describe_timedelta(obj: Series, percentiles: Iterable) -> dict[str, Any]:
     # Helper for Series.describe with timedelta data.
     return _describe_timetype(obj, percentiles, pd.Timedelta)
 
 
-def _describe_timestamp(obj, percentiles):
+def _describe_timestamp(obj: Series, percentiles: Iterable) -> dict[str, Any]:
     # Helper for Series.describe with timestamp data.
     return _describe_timetype(obj, percentiles, pd.Timestamp)
 
 
-def _describe_categorical(obj, percentiles):
+def _describe_categorical(
+    obj: Series, percentiles: Iterable
+) -> dict[str, Any]:
     # Helper for Series.describe with categorical data.
     data = {
         "count": obj.count(),
@@ -620,18 +627,18 @@ class Series(SingleColumnFrame, IndexedFrame):
         return out
 
     @_performance_tracking
-    def _from_data_like_self(self, data: MutableMapping):
+    def _from_data_like_self(self, data: MutableMapping) -> Self:
         out = super()._from_data_like_self(data)
         out.name = self.name
         return out
 
     @_performance_tracking
-    def __contains__(self, item):
+    def __contains__(self, item) -> bool:
         return item in self.index
 
     @classmethod
     @_performance_tracking
-    def from_pandas(cls, s: pd.Series, nan_as_null=no_default):
+    def from_pandas(cls, s: pd.Series, nan_as_null=no_default) -> Series:
         """
         Convert from a Pandas Series.
 
@@ -685,7 +692,7 @@ class Series(SingleColumnFrame, IndexedFrame):
 
     @property  # type: ignore
     @_performance_tracking
-    def is_unique(self):
+    def is_unique(self) -> bool:
         """Return boolean if values in the object are unique.
 
         Returns
@@ -696,7 +703,7 @@ class Series(SingleColumnFrame, IndexedFrame):
 
     @property  # type: ignore
     @_performance_tracking
-    def dt(self):
+    def dt(self) -> DatetimeProperties | TimedeltaProperties:
         """
         Accessor object for datetime-like properties of the Series values.
 
@@ -741,7 +748,7 @@ class Series(SingleColumnFrame, IndexedFrame):
 
     @property  # type: ignore
     @_performance_tracking
-    def hasnans(self):
+    def hasnans(self) -> bool:
         """
         Return True if there are any NaNs or nulls.
 
@@ -845,14 +852,14 @@ class Series(SingleColumnFrame, IndexedFrame):
         self,
         index=None,
         *,
-        axis=None,
+        axis: Axis | None = None,
         method: str | None = None,
         copy: bool = True,
         level=None,
         fill_value: ScalarLike | None = None,
         limit: int | None = None,
         tolerance=None,
-    ):
+    ) -> Self:
         """
         Conform Series to new index.
 
@@ -988,11 +995,11 @@ class Series(SingleColumnFrame, IndexedFrame):
     def reset_index(
         self,
         level=None,
-        drop=False,
+        drop: bool = False,
         name=no_default,
-        inplace=False,
-        allow_duplicates=False,
-    ):
+        inplace: bool = False,
+        allow_duplicates: bool = False,
+    ) -> Self | None:
         if not drop and inplace:
             raise TypeError(
                 "Cannot reset_index inplace on a Series to create a DataFrame"
@@ -1325,13 +1332,13 @@ class Series(SingleColumnFrame, IndexedFrame):
     items = SingleColumnFrame.__iter__
 
     @_performance_tracking
-    def __setitem__(self, key, value):
+    def __setitem__(self, key, value) -> None:
         if isinstance(key, slice):
             self.iloc[key] = value
         else:
             self.loc[key] = value
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         _, height = get_terminal_size()
         max_rows = (
             height
@@ -1454,25 +1461,25 @@ class Series(SingleColumnFrame, IndexedFrame):
     @copy_docstring(CategoricalAccessor)  # type: ignore
     @property
     @_performance_tracking
-    def cat(self):
+    def cat(self) -> CategoricalAccessor:
         return CategoricalAccessor(parent=self)
 
     @copy_docstring(StringMethods)  # type: ignore
     @property
     @_performance_tracking
-    def str(self):
+    def str(self) -> StringMethods:
         return StringMethods(parent=self)
 
     @copy_docstring(ListMethods)  # type: ignore
     @property
     @_performance_tracking
-    def list(self):
+    def list(self) -> ListMethods:
         return ListMethods(parent=self)
 
     @copy_docstring(StructMethods)  # type: ignore
     @property
     @_performance_tracking
-    def struct(self):
+    def struct(self) -> StructMethods:
         return StructMethods(parent=self)
 
     @property  # type: ignore
@@ -1486,7 +1493,7 @@ class Series(SingleColumnFrame, IndexedFrame):
 
     @classmethod
     @_performance_tracking
-    def _concat(cls, objs, axis=0, index: bool = True):
+    def _concat(cls, objs, axis: Axis = 0, index: bool = True) -> Self:
         # Concatenate index if not provided
         if index is True:
             if isinstance(objs[0].index, cudf.MultiIndex):
@@ -1546,19 +1553,19 @@ class Series(SingleColumnFrame, IndexedFrame):
 
     @property  # type: ignore
     @_performance_tracking
-    def valid_count(self):
+    def valid_count(self) -> int:
         """Number of non-null values"""
         return len(self) - self._column.null_count
 
     @property  # type: ignore
     @_performance_tracking
-    def null_count(self):
+    def null_count(self) -> int:
         """Number of null values"""
         return self._column.null_count
 
     @property  # type: ignore
     @_performance_tracking
-    def has_nulls(self):
+    def has_nulls(self) -> bool:
         """
         Indicator whether Series contains null values.
 
@@ -1588,8 +1595,12 @@ class Series(SingleColumnFrame, IndexedFrame):
 
     @_performance_tracking
     def dropna(
-        self, axis=0, inplace=False, how=None, ignore_index: bool = False
-    ):
+        self,
+        axis: Axis = 0,
+        inplace: bool = False,
+        how: Literal["any", "all"] | None = None,
+        ignore_index: bool = False,
+    ) -> Self | None:
         """
         Return a Series with null values removed.
 
@@ -1754,8 +1765,13 @@ class Series(SingleColumnFrame, IndexedFrame):
 
     @_performance_tracking
     def fillna(
-        self, value=None, method=None, axis=None, inplace=False, limit=None
-    ):
+        self,
+        value: None | ScalarLike | Series = None,
+        method: Literal["ffill", "bfill", "pad", "backfill", None] = None,
+        axis: Axis | None = None,
+        inplace: bool = False,
+        limit: int | None = None,
+    ) -> Self | None:
         if isinstance(value, (pd.Series, Mapping)):
             value = Series(value)
         if isinstance(value, cudf.Series):
@@ -1766,7 +1782,12 @@ class Series(SingleColumnFrame, IndexedFrame):
             value=value, method=method, axis=axis, inplace=inplace, limit=limit
         )
 
-    def between(self, left, right, inclusive="both") -> Series:
+    def between(
+        self,
+        left,
+        right,
+        inclusive: Literal["both", "neither", "left", "right"] = "both",
+    ) -> Self:
         """
         Return boolean Series equivalent to left <= series <= right.
 
@@ -1858,7 +1879,13 @@ class Series(SingleColumnFrame, IndexedFrame):
         )
 
     @_performance_tracking
-    def all(self, axis=0, bool_only=None, skipna=True, **kwargs):
+    def all(
+        self,
+        axis: Axis = 0,
+        bool_only: bool | None = None,
+        skipna: bool = True,
+        **kwargs,
+    ) -> bool:
         if bool_only not in (None, True):
             raise NotImplementedError(
                 "The bool_only parameter is not supported for Series."
@@ -1866,7 +1893,13 @@ class Series(SingleColumnFrame, IndexedFrame):
         return super().all(axis, skipna, **kwargs)
 
     @_performance_tracking
-    def any(self, axis=0, bool_only=None, skipna=True, **kwargs):
+    def any(
+        self,
+        axis: Axis = 0,
+        bool_only: bool | None = None,
+        skipna: bool = True,
+        **kwargs,
+    ) -> bool:
         if bool_only not in (None, True):
             raise NotImplementedError(
                 "The bool_only parameter is not supported for Series."
@@ -2023,16 +2056,16 @@ class Series(SingleColumnFrame, IndexedFrame):
     @_performance_tracking
     def sort_index(
         self,
-        axis=0,
+        axis: Axis = 0,
         level=None,
-        ascending=True,
-        inplace=False,
-        kind=None,
-        na_position="last",
-        sort_remaining=True,
-        ignore_index=False,
+        ascending: bool | Iterable[bool] = True,
+        inplace: bool = False,
+        kind: str = "quicksort",  # type: ignore[valid-type]
+        na_position: Literal["first", "last"] = "last",
+        sort_remaining: bool = True,
+        ignore_index: bool = False,
         key=None,
-    ):
+    ) -> Self | None:
         if axis not in (0, "index"):
             raise ValueError("Only axis=0 is valid for Series.")
         return super().sort_index(
@@ -2050,14 +2083,14 @@ class Series(SingleColumnFrame, IndexedFrame):
     @_performance_tracking
     def sort_values(
         self,
-        axis=0,
-        ascending=True,
-        inplace=False,
-        kind="quicksort",
-        na_position="last",
-        ignore_index=False,
+        axis: Axis = 0,
+        ascending: bool | Iterable[bool] = True,
+        inplace: bool = False,
+        kind: str = "quicksort",  # type: ignore[valid-type]
+        na_position: Literal["first", "last"] = "last",
+        ignore_index: bool = False,
         key=None,
-    ):
+    ) -> Self | None:
         """Sort by the values along either axis.
 
         Parameters
@@ -2113,7 +2146,9 @@ class Series(SingleColumnFrame, IndexedFrame):
         )
 
     @_performance_tracking
-    def nlargest(self, n=5, keep="first"):
+    def nlargest(
+        self, n: int = 5, keep: Literal["first", "last"] = "first"
+    ) -> Self:
         """Returns a new Series of the *n* largest element.
 
         Parameters
@@ -2176,7 +2211,9 @@ class Series(SingleColumnFrame, IndexedFrame):
         return self._n_largest_or_smallest(True, n, [self.name], keep)
 
     @_performance_tracking
-    def nsmallest(self, n=5, keep="first"):
+    def nsmallest(
+        self, n: int = 5, keep: Literal["first", "last"] = "first"
+    ) -> Self:
         """
         Returns a new Series of the *n* smallest element.
 
