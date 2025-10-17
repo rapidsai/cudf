@@ -215,7 +215,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             self.plc_column, exposed
         )
         children = self._get_children_from_pylibcudf_column(
-            self.plc_column, exposed
+            self.plc_column,
+            exposed,
         )
         self.set_base_children(children)
         self.set_base_data(data)
@@ -276,7 +277,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
 
     def _get_children_from_pylibcudf_column(
-        self, plc_column: plc.Column, exposed: bool
+        self,
+        plc_column: plc.Column,
+        exposed: bool,
     ) -> tuple[ColumnBase, ...]:
         """
         Extract the children columns from a pylibcudf.Column.
