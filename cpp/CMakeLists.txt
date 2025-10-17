@@ -634,6 +634,8 @@ add_library(
   src/quantiles/quantiles.cu
   src/reductions/all.cu
   src/reductions/any.cu
+  src/reductions/argmax.cu
+  src/reductions/argmin.cu
   src/reductions/bitwise.cu
   src/reductions/collect_ops.cu
   src/reductions/count.cpp

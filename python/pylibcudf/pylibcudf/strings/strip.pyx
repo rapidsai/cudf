@@ -28,7 +28,7 @@ cpdef Column strip(
     """Removes the specified characters from the beginning
     or end (or both) of each string.
 
-    For details, see :cpp:func:`cudf::strings::strip`.
+    For details, see :cpp:func:`strip`.
 
     Parameters
     ----------

@@ -2,7 +2,7 @@
 
 import sys
 from collections.abc import Callable, Iterable
-from typing import TYPE_CHECKING, Any, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Literal, TypeVar, Union
 
 import numpy as np
 from pandas import Period, Timedelta, Timestamp
@@ -22,7 +22,9 @@ else:
 # Many of these are from
 # https://github.com/pandas-dev/pandas/blob/master/pandas/_typing.py
 
+# Dtype should ideally only used for public facing APIs
 Dtype = Union["ExtensionDtype", str, np.dtype]
+# DtypeObj should be used otherwise
 DtypeObj = Union["ExtensionDtype", np.dtype]
 
 # scalars
@@ -46,3 +48,5 @@ AggType = Union[str, Callable]  # noqa: UP007
 MultiColumnAggType = Union[  # noqa: UP007
     AggType, Iterable[AggType], dict[Any, Iterable[AggType]]
 ]
+
+Axis = Literal[0, 1, "index", "columns"]

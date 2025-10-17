@@ -221,6 +221,11 @@ cdef class OrcColumnStatistics:
 
 
 cdef class ParsedOrcStatistics:
+    """
+    Holds column names and parsed file-level and stripe-level statistics.
+
+    For details, see :cpp:class:`cudf::io::parsed_orc_statistics`
+    """
 
     __hash__ = None
 
@@ -390,6 +395,21 @@ cdef class OrcReaderOptions:
                 raise TypeError("Column names must be strings!")
             c_column_names.push_back(col.encode())
         self.c_obj.set_columns(c_column_names)
+
+    cpdef void set_source(self, SourceInfo src):
+        """
+        Set a new source info location.
+
+        Parameters
+        ----------
+        src : SourceInfo
+            New source information, replacing existing information.
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_source(src.c_obj)
 
 cdef class OrcReaderOptionsBuilder:
     cpdef OrcReaderOptionsBuilder use_index(self, bool use):

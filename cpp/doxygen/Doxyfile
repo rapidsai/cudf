@@ -861,6 +861,7 @@ INPUT                  = main_page.md \
                          developer_guide/BENCHMARKING.md \
                          developer_guide/DOCUMENTATION.md \
                          developer_guide/DEVELOPER_GUIDE.md \
+                         developer_guide/PROFILING.md \
                          developer_guide/TESTING.md \
                          ../include \
                          ../include/cudf_test/column_wrapper.hpp \
