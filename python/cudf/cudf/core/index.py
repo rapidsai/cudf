@@ -2217,14 +2217,6 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
             res = Index._from_column(res, name=self.name)
         return res
 
-    @property  # type: ignore
-    @_performance_tracking
-    def dtype(self):
-        """
-        `dtype` of the underlying values in Index.
-        """
-        return self._column.dtype
-
     @_performance_tracking
     def isna(self) -> cupy.ndarray:
         return self._column.isnull().values
