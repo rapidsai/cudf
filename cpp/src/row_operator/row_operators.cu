@@ -880,7 +880,6 @@ two_table_comparator::two_table_comparator(std::shared_ptr<preprocessed_table> l
                                            std::shared_ptr<preprocessed_table> right)
   : d_left_table{std::move(left)}, d_right_table{std::move(right)}
 {
-  // Simple column count check for preprocessed tables
   CUDF_EXPECTS(d_left_table->_t->num_columns() == d_right_table->_t->num_columns(),
                "Cannot compare tables with different number of columns",
                std::invalid_argument);
