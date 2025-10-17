@@ -709,7 +709,7 @@ cudf::detail::host_vector<bool> aggregate_reader_metadata::compute_data_page_mas
 
   // Make sure all row_mask elements contain valid values even if they are nulls
   if constexpr (cuda::std::is_same_v<ColumnView, cudf::mutable_column_view>) {
-    if (row_mask.nullable()) {
+    if (row_mask.nullable() and row_mask.null_count() > 0) {
       thrust::for_each(rmm::exec_policy_nosync(stream),
                        thrust::counting_iterator(row_mask_offset),
                        thrust::counting_iterator(row_mask_offset + total_rows),
@@ -726,7 +726,7 @@ cudf::detail::host_vector<bool> aggregate_reader_metadata::compute_data_page_mas
   auto const mr = cudf::get_current_device_resource_ref();
 
   // Compute fenwick tree level offsets and total size (level 1 and higher)
-  auto const tree_level_offsets = compute_fenwick_tree_level_offsets(total_rows);
+  auto const tree_level_offsets = compute_fenwick_tree_level_offsets(total_rows, max_page_size);
   auto const num_levels         = static_cast<cudf::size_type>(tree_level_offsets.size());
   // Buffer to store Fenwick tree levels (level 1 and higher) data
   auto tree_levels_data = rmm::device_uvector<bool>(tree_level_offsets.back(), stream, mr);
