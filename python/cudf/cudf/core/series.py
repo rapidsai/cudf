@@ -703,7 +703,7 @@ class Series(SingleColumnFrame, IndexedFrame):
 
     @property  # type: ignore
     @_performance_tracking
-    def dt(self) -> DatetimeProperties | TimedeltaProperties:
+    def dt(self):
         """
         Accessor object for datetime-like properties of the Series values.
 
@@ -1461,25 +1461,25 @@ class Series(SingleColumnFrame, IndexedFrame):
     @copy_docstring(CategoricalAccessor)  # type: ignore
     @property
     @_performance_tracking
-    def cat(self) -> CategoricalAccessor:
+    def cat(self):
         return CategoricalAccessor(parent=self)
 
     @copy_docstring(StringMethods)  # type: ignore
     @property
     @_performance_tracking
-    def str(self) -> StringMethods:
+    def str(self):
         return StringMethods(parent=self)
 
     @copy_docstring(ListMethods)  # type: ignore
     @property
     @_performance_tracking
-    def list(self) -> ListMethods:
+    def list(self):
         return ListMethods(parent=self)
 
     @copy_docstring(StructMethods)  # type: ignore
     @property
     @_performance_tracking
-    def struct(self) -> StructMethods:
+    def struct(self):
         return StructMethods(parent=self)
 
     @property  # type: ignore
