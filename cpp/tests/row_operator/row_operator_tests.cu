@@ -289,3 +289,45 @@ TYPED_TEST(NaNTableViewTest, TestEqualityComparatorTwoTableNaNCase)
     lhs, rhs, column_order, cudf::detail::row::equality::nan_equal_physical_equality_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(nan_equal_expected, nan_equal_got->view());
 }
+
+TEST_F(cudf::test::BaseFixture, TestTwoTableComparatorColumnCountCheck)
+{
+  // pre-processed table constructor should check column count
+  rmm::cuda_stream_view stream{cudf::get_default_stream()};
+
+  auto const left_table =
+    cudf::table_view{{cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2}},
+                      cudf::test::fixed_width_column_wrapper<int32_t>{{3, 4}}}};
+  auto const right_table =
+    cudf::table_view{{cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2}}}};
+
+  auto left_preprocessed =
+    cudf::detail::row::equality::preprocessed_table::create(left_table, stream);
+  auto right_preprocessed =
+    cudf::detail::row::equality::preprocessed_table::create(right_table, stream);
+
+  EXPECT_THROW(
+    cudf::detail::row::equality::two_table_comparator(left_preprocessed, right_preprocessed),
+    std::invalid_argument);
+}
+
+TEST_F(cudf::test::BaseFixture, TestCheckShapeCompatibility)
+{
+  // check_shape_compatibility should throw std::invalid_argument
+  auto const left_table =
+    cudf::table_view{{cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2}},
+                      cudf::test::fixed_width_column_wrapper<int32_t>{{3, 4}}}};
+  auto const right_table =
+    cudf::table_view{{cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2}}}};
+
+  // different column counts
+  EXPECT_THROW(check_shape_compatibility(left_table, right_table), std::invalid_argument);
+
+  // different column types
+  auto const int_table =
+    cudf::table_view{{cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2}}}};
+  auto const float_table =
+    cudf::table_view{{cudf::test::fixed_width_column_wrapper<float>{{1.0f, 2.0f}}}};
+
+  EXPECT_THROW(check_shape_compatibility(int_table, float_table), std::invalid_argument);
+}

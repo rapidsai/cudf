@@ -383,10 +383,12 @@ void check_eq_compatibility(table_view const& input)
 void check_shape_compatibility(table_view const& lhs, table_view const& rhs)
 {
   CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(),
-               "Cannot compare tables with different number of columns");
+               "Cannot compare tables with different number of columns",
+               std::invalid_argument);
   for (size_type i = 0; i < lhs.num_columns(); ++i) {
     CUDF_EXPECTS(column_types_equivalent(lhs.column(i), rhs.column(i)),
-                 "Cannot compare tables with different column types");
+                 "Cannot compare tables with different column types",
+                 std::invalid_argument);
   }
 }
 
@@ -872,6 +874,16 @@ two_table_comparator::two_table_comparator(table_view const& left,
     d_right_table{preprocessed_table::create(right, stream)}
 {
   check_shape_compatibility(left, right);
+}
+
+two_table_comparator::two_table_comparator(std::shared_ptr<preprocessed_table> left,
+                                           std::shared_ptr<preprocessed_table> right)
+  : d_left_table{std::move(left)}, d_right_table{std::move(right)}
+{
+  // Simple column count check for preprocessed tables
+  CUDF_EXPECTS(d_left_table->_t->num_columns() == d_right_table->_t->num_columns(),
+               "Cannot compare tables with different number of columns",
+               std::invalid_argument);
 }
 
 }  // namespace equality
