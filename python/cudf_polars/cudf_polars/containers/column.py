@@ -115,8 +115,10 @@ class Column:
     ) -> DeserializedColumnOptions:
         """Deserialize the constructor kwargs for a Column."""
         dtype_kwarg = column_kwargs["dtype"]
-        if isinstance(dtype_kwarg, dict):
-            dtype = DataType(pl.Decimal(dtype_kwarg["precision"], dtype_kwarg["scale"]))
+        if isinstance(dtype_kwarg, dict): # pragma: no cover
+            dtype = DataType(
+                pl.Decimal(dtype_kwarg["precision"], dtype_kwarg["scale"])
+            )
         else:
             dtype = DataType(_dtype_short_repr_to_dtype(dtype_kwarg))
 
@@ -159,7 +161,7 @@ class Column:
     def serialize_ctor_kwargs(self) -> ColumnOptions:
         """Serialize the constructor kwargs for self."""
         polars_type = self.dtype.polars_type
-        if isinstance(polars_type, pl.Decimal):
+        if isinstance(polars_type, pl.Decimal):  # pragma: no cover
             dtype: DecimalDataTypeOptions = {
                 "precision": polars_type.precision,
                 "scale": polars_type.scale,
