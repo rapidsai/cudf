@@ -554,8 +554,8 @@ struct search_fenwick_tree_functor {
       auto const [end_tree_level, end_block_size] =
         align_range_boundary<alignment::END>(start, end);
 
-      // Check the `start` side alignment block: [start, start + start_block_size) and if it's the larger
-      // block
+      // Check the `start` side alignment block: [start, start + start_block_size) and if it's the
+      // larger block
       if (start + start_block_size <= end and start_block_size >= end_block_size) {
         auto const tree_level = start_tree_level;
         auto const mask_index = start >> tree_level;
