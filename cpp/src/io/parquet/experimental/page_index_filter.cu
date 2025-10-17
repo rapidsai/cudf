@@ -501,7 +501,7 @@ struct search_fenwick_tree_functor {
   /**
    * @brief Aligns a range boundary to the next power-of-two block
    *
-   * @tparam Alignment The bounday to align
+   * @tparam Alignment The boundary (start or end) to align
    * @param start Range start
    * @param end Range end
    * @return A pair of the tree level and block size
