@@ -2,6 +2,7 @@
 
 from enum import IntEnum
 
+from rmm.pylibrmm.device_buffer import DeviceBuffer
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
@@ -126,5 +127,3 @@ class HybridScanReader:
         self, row_mask: Column, stream: Stream = None
     ) -> TableWithMetadata: ...
     def has_next_table_chunk(self) -> bool: ...
-
-class DeviceBuffer: ...

@@ -7,6 +7,7 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from rmm.librmm.device_buffer cimport device_buffer
+from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
@@ -319,8 +320,18 @@ cdef class HybridScanReader:
             Filtered row group indices
         """
         cdef vector[device_buffer] buffers_vec
+        cdef DeviceBuffer dev_buf
+        cdef const device_buffer* c_dev_buf_ptr
         for buf in dictionary_page_data:
-            buffers_vec.push_back(move((<DeviceBuffer>buf).c_obj))
+            dev_buf = <DeviceBuffer>buf
+            c_dev_buf_ptr = dev_buf.c_obj.get()
+            # Create a new device_buffer by copying from the source device buffer
+            buffers_vec.emplace_back(
+                c_dev_buf_ptr.data(),  # source device pointer
+                c_dev_buf_ptr.size(),  # size in bytes
+                _get_stream(stream).view(),
+                _get_memory_resource(None).get_mr()
+            )
 
         cdef vector[size_type] indices_vec = row_group_indices
 
@@ -359,8 +370,18 @@ cdef class HybridScanReader:
             Filtered row group indices
         """
         cdef vector[device_buffer] buffers_vec
+        cdef DeviceBuffer dev_buf
+        cdef const device_buffer* c_dev_buf_ptr
         for buf in bloom_filter_data:
-            buffers_vec.push_back(move((<DeviceBuffer>buf).c_obj))
+            dev_buf = <DeviceBuffer>buf
+            c_dev_buf_ptr = dev_buf.c_obj.get()
+            # Create a new device_buffer by copying from the source device buffer
+            buffers_vec.emplace_back(
+                c_dev_buf_ptr.data(),  # source device pointer
+                c_dev_buf_ptr.size(),  # size in bytes
+                _get_stream(stream).view(),
+                _get_memory_resource(None).get_mr()
+            )
 
         cdef vector[size_type] indices_vec = row_group_indices
 
@@ -472,8 +493,18 @@ cdef class HybridScanReader:
         cdef vector[size_type] indices_vec = row_group_indices
 
         cdef vector[device_buffer] buffers_vec
+        cdef DeviceBuffer dev_buf
+        cdef const device_buffer* c_dev_buf_ptr
         for buf in column_chunk_buffers:
-            buffers_vec.push_back(move((<DeviceBuffer>buf).c_obj))
+            dev_buf = <DeviceBuffer>buf
+            c_dev_buf_ptr = dev_buf.c_obj.get()
+            # Create a new device_buffer by copying from the source device buffer
+            buffers_vec.emplace_back(
+                c_dev_buf_ptr.data(),  # source device pointer
+                c_dev_buf_ptr.size(),  # size in bytes
+                _get_stream(stream).view(),
+                _get_memory_resource(mr).get_mr()
+            )
 
         cdef mutable_column_view mask_view = row_mask.mutable_view()
         cdef table_with_metadata c_result = \
@@ -549,8 +580,18 @@ cdef class HybridScanReader:
         cdef vector[size_type] indices_vec = row_group_indices
 
         cdef vector[device_buffer] buffers_vec
+        cdef DeviceBuffer dev_buf
+        cdef const device_buffer* c_dev_buf_ptr
         for buf in column_chunk_buffers:
-            buffers_vec.push_back(move((<DeviceBuffer>buf).c_obj))
+            dev_buf = <DeviceBuffer>buf
+            c_dev_buf_ptr = dev_buf.c_obj.get()
+            # Create a new device_buffer by copying from the source device buffer
+            buffers_vec.emplace_back(
+                c_dev_buf_ptr.data(),  # source device pointer
+                c_dev_buf_ptr.size(),  # size in bytes
+                _get_stream(stream).view(),
+                _get_memory_resource(mr).get_mr()
+            )
 
         cdef column_view mask_view = row_mask.view()
         cdef table_with_metadata c_result = \
@@ -599,8 +640,18 @@ cdef class HybridScanReader:
         cdef vector[size_type] indices_vec = row_group_indices
 
         cdef vector[device_buffer] buffers_vec
+        cdef DeviceBuffer dev_buf
+        cdef const device_buffer* c_dev_buf_ptr
         for buf in column_chunk_buffers:
-            buffers_vec.push_back(move((<DeviceBuffer>buf).c_obj))
+            dev_buf = <DeviceBuffer>buf
+            c_dev_buf_ptr = dev_buf.c_obj.get()
+            # Create a new device_buffer by copying from the source device buffer
+            buffers_vec.emplace_back(
+                c_dev_buf_ptr.data(),  # source device pointer
+                c_dev_buf_ptr.size(),  # size in bytes
+                _get_stream(stream).view(),
+                _get_memory_resource(None).get_mr()
+            )
 
         cdef column_view mask_view = row_mask.view()
         self.c_obj.get()[0].setup_chunking_for_filter_columns(
@@ -677,8 +728,18 @@ cdef class HybridScanReader:
         cdef vector[size_type] indices_vec = row_group_indices
 
         cdef vector[device_buffer] buffers_vec
+        cdef DeviceBuffer dev_buf
+        cdef const device_buffer* c_dev_buf_ptr
         for buf in column_chunk_buffers:
-            buffers_vec.push_back(move((<DeviceBuffer>buf).c_obj))
+            dev_buf = <DeviceBuffer>buf
+            c_dev_buf_ptr = dev_buf.c_obj.get()
+            # Create a new device_buffer by copying from the source device buffer
+            buffers_vec.emplace_back(
+                c_dev_buf_ptr.data(),  # source device pointer
+                c_dev_buf_ptr.size(),  # size in bytes
+                _get_stream(stream).view(),
+                _get_memory_resource(None).get_mr()
+            )
 
         cdef column_view mask_view = row_mask.view()
         self.c_obj.get()[0].setup_chunking_for_payload_columns(
@@ -729,15 +790,6 @@ cdef class HybridScanReader:
             True if there is data left to read
         """
         return self.c_obj.get()[0].has_next_table_chunk()
-
-
-# Helper wrapper for RMM device_buffer to make it accessible from Python
-cdef class DeviceBuffer:
-    """Wrapper for rmm::device_buffer to use in Python."""
-
-    def __init__(self):
-        """DeviceBuffer should be created from existing RMM buffers."""
-        pass
 
 
 UseDataPageMask.__str__ = UseDataPageMask.__repr__
