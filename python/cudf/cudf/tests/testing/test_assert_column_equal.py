@@ -54,25 +54,23 @@ def test_assert_column_memory_slice(arrow_arrays):
 
 def test_assert_column_memory_basic_same(arrow_arrays):
     data = cudf.core.column.ColumnBase.from_arrow(arrow_arrays)
-    buf = cudf.core.buffer.as_buffer(data.base_data)
+    plc_col = data.to_pylibcudf(mode="read")
 
     left = cudf.core.column.build_column(
-        buf,
+        plc_column=plc_col,
         dtype=np.dtype(np.int8),
         size=len(arrow_arrays),
-        mask=None,
         offset=0,
         null_count=data.null_count,
-        children=(),
+        exposed=False,
     )
     right = cudf.core.column.build_column(
-        buf,
+        plc_column=plc_col,
         dtype=np.dtype(np.int8),
         size=len(arrow_arrays),
-        mask=None,
         offset=0,
         null_count=data.null_count,
-        children=(),
+        exposed=False,
     )
 
     assert_column_memory_eq(left, right)

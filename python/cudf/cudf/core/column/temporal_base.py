@@ -16,7 +16,6 @@ import pylibcudf as plc
 
 import cudf
 from cudf.api.types import is_scalar
-from cudf.core.buffer.buffer import Buffer
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
@@ -47,30 +46,6 @@ class TemporalBaseColumn(ColumnBase):
     _UNDERLYING_DTYPE: np.dtype[np.int64] = np.dtype(np.int64)
     _NP_SCALAR: ClassVar[type[np.datetime64] | type[np.timedelta64]]
     _PD_SCALAR: pd.Timestamp | pd.Timedelta
-
-    def __init__(
-        self,
-        data: Buffer,
-        size: int,
-        dtype: np.dtype | pd.DatetimeTZDtype,
-        mask: Buffer | None,
-        offset: int,
-        null_count: int,
-        children: tuple,
-    ):
-        if not isinstance(data, Buffer):
-            raise ValueError("data must be a Buffer.")
-        if len(children) != 0:
-            raise ValueError(f"{type(self).__name__} must have no children.")
-        super().__init__(
-            data=data,
-            size=size,
-            dtype=dtype,
-            mask=mask,
-            offset=offset,
-            null_count=null_count,
-            children=children,
-        )
 
     def __contains__(self, item: np.datetime64 | np.timedelta64) -> bool:
         """

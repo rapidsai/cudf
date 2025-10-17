@@ -10,7 +10,7 @@ import numpy as np
 import pylibcudf as plc
 
 import cudf
-from cudf.core.buffer import Buffer, acquire_spill_lock
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, column_empty
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
@@ -18,7 +18,6 @@ from cudf.utils.dtypes import _get_nan_for_dtype
 
 if TYPE_CHECKING:
     from cudf._typing import ScalarLike
-    from cudf.core.column.decimal import DecimalDtype
 
 
 _unaryop_map = {
@@ -54,30 +53,6 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         "cummin",
         "cummax",
     }
-
-    def __init__(
-        self,
-        data: Buffer,
-        size: int,
-        dtype: DecimalDtype | np.dtype,
-        mask: Buffer | None,
-        offset: int,
-        null_count: int,
-        children: tuple,
-    ):
-        if not isinstance(data, Buffer):
-            raise ValueError("data must be a Buffer instance.")
-        if len(children) != 0:
-            raise ValueError(f"{type(self).__name__} must have no children.")
-        super().__init__(
-            data=data,
-            size=size,
-            dtype=dtype,
-            mask=mask,
-            offset=offset,
-            null_count=null_count,
-            children=children,
-        )
 
     def _can_return_nan(self, skipna: bool | None = None) -> bool:
         return not skipna and self.has_nulls()
