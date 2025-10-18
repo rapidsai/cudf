@@ -67,6 +67,20 @@ class ListColumn(ColumnBase):
             exposed=exposed,
         )
 
+    def _get_children_from_pylibcudf_column(
+        self,
+        plc_column: plc.Column,
+        dtype: ListDtype,  # type: ignore[override]
+        exposed: bool,
+    ) -> tuple[ColumnBase, ColumnBase]:
+        children = super()._get_children_from_pylibcudf_column(
+            plc_column, dtype, exposed
+        )
+        return (
+            children[0],
+            children[1]._with_type_metadata(dtype.element_type),
+        )
+
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """
         Preprocess Column to be compatible with pandas repr, namely handling nulls.

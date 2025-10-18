@@ -35,6 +35,7 @@ if TYPE_CHECKING:
         ColumnBinaryOperand,
         ColumnLike,
         Dtype,
+        DtypeObj,
         ScalarLike,
     )
     from cudf.core.buffer import Buffer
@@ -126,7 +127,7 @@ class CategoricalColumn(column.ColumnBase):
         return None
 
     def _get_children_from_pylibcudf_column(
-        self, plc_column: plc.Column, exposed: bool
+        self, plc_column: plc.Column, dtype: DtypeObj, exposed: bool
     ) -> tuple[ColumnBase]:
         """
         This column considers the plc_column (i.e. codes) as children

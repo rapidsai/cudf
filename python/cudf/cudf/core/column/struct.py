@@ -70,6 +70,23 @@ class StructColumn(ColumnBase):
             exposed=exposed,
         )
 
+    def _get_children_from_pylibcudf_column(
+        self,
+        plc_column: plc.Column,
+        dtype: StructDtype,  # type: ignore[override]
+        exposed: bool,
+    ) -> tuple[ColumnBase, ...]:
+        return tuple(
+            child._with_type_metadata(field_dtype)
+            for child, field_dtype in zip(
+                super()._get_children_from_pylibcudf_column(
+                    plc_column, dtype=dtype, exposed=exposed
+                ),
+                dtype.fields.values(),
+                strict=True,
+            )
+        )
+
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """
         Preprocess Column to be compatible with pandas repr, namely handling nulls.

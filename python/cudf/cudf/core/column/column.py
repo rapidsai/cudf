@@ -216,6 +216,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
         children = self._get_children_from_pylibcudf_column(
             self.plc_column,
+            dtype,
             exposed,
         )
         self.set_base_children(children)
@@ -279,6 +280,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def _get_children_from_pylibcudf_column(
         self,
         plc_column: plc.Column,
+        dtype: DtypeObj,
         exposed: bool,
     ) -> tuple[ColumnBase, ...]:
         """
@@ -661,7 +663,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         pylibcudf.Column
             A new pylibcudf.Column referencing the same data.
         """
-
         # TODO: Categoricals will need to be treated differently eventually.
         # There is no 1-1 correspondence between cudf and libcudf for
         # categoricals because cudf supports ordered and unordered categoricals
