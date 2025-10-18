@@ -821,7 +821,9 @@ class NumericalColumn(NumericalBaseColumn):
                 # Kinds are the same but to_dtype is smaller
                 if "float" in to_dtype_numpy.name:
                     finfo = np.finfo(to_dtype_numpy)
-                    lower_, upper_ = finfo.min, finfo.max
+                    lower_: int | float
+                    upper_: int | float
+                    lower_, upper_ = finfo.min, finfo.max  # type: ignore[assignment]
 
                     # Check specifically for np.pi values when casting to lower precision
                     if self_dtype_numpy.itemsize > to_dtype_numpy.itemsize:

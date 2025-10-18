@@ -1771,7 +1771,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             if isinstance(dtype, CategoricalDtype):
                 result = self.as_categorical_column(dtype)
             elif is_dtype_obj_interval(dtype):
-                result = self.as_interval_column(dtype)
+                result = self.as_interval_column(dtype)  # type: ignore[arg-type]
             elif is_dtype_obj_list(dtype) or is_dtype_obj_struct(dtype):
                 if self.dtype != dtype:
                     raise NotImplementedError(
@@ -1779,7 +1779,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     )
                 result = self
             elif is_dtype_obj_decimal(dtype):
-                result = self.as_decimal_column(dtype)
+                result = self.as_decimal_column(dtype)  # type: ignore[arg-type]
             elif dtype.kind == "M":
                 result = self.as_datetime_column(dtype)
             elif dtype.kind == "m":
@@ -2301,8 +2301,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 plc.TypeId.DECIMAL32,
             }:
                 scale = -plc_scalar.type().scale()
+                # Narrow type for mypy - we know col_dtype is a decimal type from the check above
+                assert isinstance(col_dtype, DecimalDtype)
+                p = col_dtype.precision
                 # https://docs.microsoft.com/en-us/sql/t-sql/data-types/precision-scale-and-length-transact-sql
-                p = col_dtype.precision  # type: ignore[union-attr]
                 nrows = len(self)
                 if reduction_op in {"min", "max"}:
                     new_p = p
@@ -2316,7 +2318,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     raise NotImplementedError(
                         f"{reduction_op} not implemented for decimal types."
                     )
-                precision = max(min(new_p, col_dtype.MAX_PRECISION), 0)  # type: ignore[union-attr]
+                precision = max(min(new_p, col_dtype.MAX_PRECISION), 0)
                 new_dtype = type(col_dtype)(precision, scale)
                 result_col = result_col.astype(new_dtype)
             elif isinstance(col_dtype, IntervalDtype):
@@ -3363,7 +3365,7 @@ def deserialize_columns(headers: list[dict], frames: list) -> list[ColumnBase]:
     return columns
 
 
-def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
+def concat_columns(objs: Sequence[ColumnBase]) -> ColumnBase:
     """Concatenate a sequence of columns."""
     if len(objs) == 0:
         return column_empty(0, dtype=np.dtype(np.float64))
@@ -3384,12 +3386,15 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     # Find the first non-null column:
     head = next((obj for obj in objs if obj.null_count != len(obj)), objs[0])
 
-    for i, obj in enumerate(objs):
+    new_objs = list(objs)
+    for i, obj in enumerate(new_objs):
         # Check that all columns are the same type:
         if not is_dtype_equal(obj.dtype, head.dtype):
             # if all null, cast to appropriate dtype
             if obj.null_count == len(obj):
-                objs[i] = column_empty(row_count=len(obj), dtype=head.dtype)
+                new_objs[i] = column_empty(
+                    row_count=len(obj), dtype=head.dtype
+                )
             else:
                 raise ValueError("All columns must be the same type")
 
@@ -3397,17 +3402,17 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     # ColumnBase._concat so that all subclasses can override necessary
     # behavior. However, at the moment it's not clear what that API should look
     # like, so CategoricalColumn simply implements a minimal working API.
-    if all(isinstance(o.dtype, CategoricalDtype) for o in objs):
+    if all(isinstance(o.dtype, CategoricalDtype) for o in new_objs):
         return cudf.core.column.categorical.CategoricalColumn._concat(
             cast(
                 MutableSequence[
                     cudf.core.column.categorical.CategoricalColumn
                 ],
-                objs,
+                new_objs,
             )
         )
 
-    newsize = sum(map(len, objs))
+    newsize = sum(map(len, new_objs))
     if newsize > np.iinfo(SIZE_TYPE_DTYPE).max:
         raise MemoryError(
             f"Result of concat cannot have size > {SIZE_TYPE_DTYPE}_MAX"
@@ -3416,7 +3421,7 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
         return column_empty(0, head.dtype)
 
     # Filter out inputs that have 0 length, then concatenate.
-    objs_with_len = [o for o in objs if len(o)]
+    objs_with_len = [o for o in new_objs if len(o)]
     with acquire_spill_lock():
         return ColumnBase.from_pylibcudf(
             plc.concatenate.concatenate(
