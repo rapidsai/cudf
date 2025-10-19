@@ -133,4 +133,4 @@ def test_multiply_with_decimals():
     )
 
     q = df.select(pl.col("x") * pl.col("y"))
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, check_dtypes=not POLARS_VERSION_LT_132)
