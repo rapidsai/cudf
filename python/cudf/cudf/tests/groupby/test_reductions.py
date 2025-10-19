@@ -9,7 +9,7 @@ from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
     PANDAS_VERSION,
 )
-from cudf.testing import assert_eq, assert_groupby_results_equal
+from cudf.testing import assert_eq, assert_groupby_results_equal, assert_neq
 from cudf.testing._utils import assert_exceptions_equal
 
 
@@ -105,7 +105,7 @@ def test_groupby_level_zero(groupby_reduction_methods, request):
         )
     )
     pdf = pd.DataFrame({"x": [1, 2, 3]}, index=[2, 5, 5])
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     pdg = pdf.groupby(level=0)
     gdg = gdf.groupby(level=0)
     pdresult = getattr(pdg, groupby_reduction_methods)()
@@ -124,7 +124,7 @@ def test_groupby_series_level_zero(groupby_reduction_methods, request):
         )
     )
     pdf = pd.Series([1, 2, 3], index=[2, 5, 5])
-    gdf = cudf.Series.from_pandas(pdf)
+    gdf = cudf.Series(pdf)
     pdg = pdf.groupby(level=0)
     gdg = gdf.groupby(level=0)
     pdresult = getattr(pdg, groupby_reduction_methods)()
@@ -134,7 +134,7 @@ def test_groupby_series_level_zero(groupby_reduction_methods, request):
 
 def test_groupby_column_name():
     pdf = pd.DataFrame({"xx": [1.0, 2.0, 3.0], "yy": [1, 2, 3]})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     g = gdf.groupby("yy")
     p = pdf.groupby("yy")
     gxx = g["xx"].sum()
@@ -168,7 +168,7 @@ def test_groupby_column_name():
 
 def test_groupby_column_numeral():
     pdf = pd.DataFrame({0: [1.0, 2.0, 3.0], 1: [1, 2, 3]})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     p = pdf.groupby(1)
     g = gdf.groupby(1)
     pxx = p[0].sum()
@@ -176,7 +176,7 @@ def test_groupby_column_numeral():
     assert_groupby_results_equal(pxx, gxx)
 
     pdf = pd.DataFrame({0.5: [1.0, 2.0, 3.0], 1.5: [1, 2, 3]})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     p = pdf.groupby(1.5)
     g = gdf.groupby(1.5)
     pxx = p[0.5].sum()
@@ -199,7 +199,7 @@ def test_groupby_column_numeral():
 )
 def test_groupby_external_series(series):
     pdf = pd.DataFrame({"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     pxx = pdf.groupby(pd.Series(series)).x.sum()
     gxx = gdf.groupby(cudf.Series(series)).x.sum()
     assert_groupby_results_equal(pxx, gxx)
@@ -208,7 +208,7 @@ def test_groupby_external_series(series):
 @pytest.mark.parametrize("series", [[0.0, 1.0], [1.0, 1.0, 1.0, 1.0]])
 def test_groupby_external_series_incorrect_length(series):
     pdf = pd.DataFrame({"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     pxx = pdf.groupby(pd.Series(series)).x.sum()
     gxx = gdf.groupby(cudf.Series(series)).x.sum()
     assert_groupby_results_equal(pxx, gxx)
@@ -459,7 +459,7 @@ def test_groupby_quantile(request, interpolation, q):
     # Pandas>0.25 now casts NaN in quantile operations as a float64
     # # so we are filling with zeros.
     pdf = pd.DataFrame(raw_data).fillna(0)
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     pdg = pdf.groupby("x")
     gdg = gdf.groupby("x")
@@ -476,7 +476,7 @@ def test_groupby_std():
         "y": [None, 1, 2, 3, 4, None, 6, 7, 8, 9],
     }
     pdf = pd.DataFrame(raw_data)
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     pdg = pdf.groupby("x")
     gdg = gdf.groupby("x")
     pdresult = pdg.std()
@@ -985,3 +985,213 @@ def test_group_by_reduce_numeric_only(by, data, groupby_reduction_methods):
         numeric_only=True
     )
     assert_eq(expected, result)
+
+
+def test_multiindex_multiple_groupby():
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(
+        {
+            "a": [4, 17, 4, 9, 5],
+            "b": [1, 4, 4, 3, 2],
+            "x": rng.normal(size=5),
+        }
+    )
+    gdf = cudf.DataFrame(pdf)
+    pdg = pdf.groupby(["a", "b"], sort=True).sum()
+    gdg = gdf.groupby(["a", "b"], sort=True).sum()
+    assert_eq(pdg, gdg)
+    pdg = pdf.groupby(["a", "b"], sort=True).x.sum()
+    gdg = gdf.groupby(["a", "b"], sort=True).x.sum()
+    assert_eq(pdg, gdg)
+
+
+def test_multiindex_equality():
+    # mi made from groupby
+    # mi made manually to be identical
+    # are they equal?
+    gdf = cudf.DataFrame(
+        {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [0, 1, 0, 1, 0]}
+    )
+    mi1 = gdf.groupby(["x", "y"], sort=True).mean().index
+    mi2 = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    assert_eq(mi1, mi2)
+
+    # mi made from two groupbys, are they equal?
+    mi2 = gdf.groupby(["x", "y"], sort=True).max().index
+    assert_eq(mi1, mi2)
+
+    # mi made manually twice are they equal?
+    mi1 = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    mi2 = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    assert_eq(mi1, mi2)
+
+    # mi made from different groupbys are they not equal?
+    mi1 = gdf.groupby(["x", "y"]).mean().index
+    mi2 = gdf.groupby(["x", "z"]).mean().index
+    assert_neq(mi1, mi2)
+
+    # mi made from different manuals are they not equal?
+    mi1 = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    mi2 = cudf.MultiIndex(
+        levels=[[0, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    assert_neq(mi1, mi2)
+
+
+def test_multiindex_equals():
+    # mi made from groupby
+    # mi made manually to be identical
+    # are they equal?
+    gdf = cudf.DataFrame(
+        {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [0, 1, 0, 1, 0]}
+    )
+    mi1 = gdf.groupby(["x", "y"], sort=True).mean().index
+    mi2 = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    assert_eq(mi1.equals(mi2), True)
+
+    # mi made from two groupbys, are they equal?
+    mi2 = gdf.groupby(["x", "y"], sort=True).max().index
+    assert_eq(mi1.equals(mi2), True)
+
+    # mi made manually twice are they equal?
+    mi1 = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    mi2 = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    assert_eq(mi1.equals(mi2), True)
+
+    # mi made from different groupbys are they not equal?
+    mi1 = gdf.groupby(["x", "y"], sort=True).mean().index
+    mi2 = gdf.groupby(["x", "z"], sort=True).mean().index
+    assert_eq(mi1.equals(mi2), False)
+
+    # mi made from different manuals are they not equal?
+    mi1 = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    mi2 = cudf.MultiIndex(
+        levels=[[0, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    assert_eq(mi1.equals(mi2), False)
+
+
+@pytest.mark.parametrize(
+    "str_data", [[], ["a", "b", "c", "d", "e"], [None, None, None, None, None]]
+)
+def test_string_groupby_key(str_data):
+    num_keys = 2
+    other_data = [1, 2, 3, 4, 5][: len(str_data)]
+
+    pdf = pd.DataFrame(
+        {
+            0: pd.Series(str_data, dtype="str"),
+            1: pd.Series(str_data, dtype="str"),
+            "a": other_data,
+        }
+    )
+    gdf = cudf.DataFrame(
+        {
+            0: cudf.Series(str_data, dtype="str"),
+            1: cudf.Series(str_data, dtype="str"),
+            "a": other_data,
+        }
+    )
+
+    expect = pdf.groupby(list(range(num_keys)), as_index=False).count()
+    got = gdf.groupby(list(range(num_keys)), as_index=False).count()
+
+    expect = expect.sort_values([0]).reset_index(drop=True)
+    got = got.sort_values([0]).reset_index(drop=True)
+
+    assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "str_data", [[], ["a", "b", "c", "d", "e"], [None, None, None, None, None]]
+)
+@pytest.mark.parametrize("agg", ["count", "max", "min"])
+def test_string_groupby_non_key(str_data, agg):
+    num_cols = 2
+    other_data = [1, 2, 3, 4, 5][: len(str_data)]
+
+    pdf = pd.DataFrame(
+        {
+            0: pd.Series(str_data, dtype="str"),
+            1: pd.Series(str_data, dtype="str"),
+            "a": other_data,
+        }
+    )
+    gdf = cudf.DataFrame(
+        {
+            0: cudf.Series(str_data, dtype="str"),
+            1: cudf.Series(str_data, dtype="str"),
+            "a": other_data,
+        }
+    )
+
+    expect = getattr(pdf.groupby("a", as_index=False), agg)()
+    got = getattr(gdf.groupby("a", as_index=False), agg)()
+
+    expect = expect.sort_values(["a"]).reset_index(drop=True)
+    got = got.sort_values(["a"]).reset_index(drop=True)
+
+    if agg in ["min", "max"] and len(expect) == 0 and len(got) == 0:
+        for i in range(num_cols):
+            expect[i] = expect[i].astype("str")
+
+    assert_eq(expect, got, check_dtype=False)
+
+
+def test_string_groupby_key_index():
+    str_data = ["a", "b", "c", "d", "e"]
+    other_data = [1, 2, 3, 4, 5]
+
+    pdf = pd.DataFrame(
+        {
+            "a": pd.Series(str_data, dtype="str"),
+            "b": other_data,
+        }
+    )
+    gdf = cudf.DataFrame(
+        {
+            "a": cudf.Series(str_data, dtype="str"),
+            "b": other_data,
+        }
+    )
+
+    expect = pdf.groupby("a", sort=True).count()
+    got = gdf.groupby("a", sort=True).count()
+
+    assert_eq(expect, got, check_dtype=False)

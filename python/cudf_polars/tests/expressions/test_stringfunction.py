@@ -15,10 +15,10 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_129,
     POLARS_VERSION_LT_130,
     POLARS_VERSION_LT_131,
     POLARS_VERSION_LT_132,
+    POLARS_VERSION_LT_133,
 )
 
 
@@ -264,13 +264,17 @@ def test_split_exact_inclusive_unsupported(ldf_split):
 @pytest.mark.parametrize(
     "values, has_invalid_row",
     [
+        (["2024-01-01", "2023-12-31", "2023-06-15"], False),
         (["2024-01-01", "2023-12-31", None], False),
+        (["2024-13-01", "2023-12-31", "2023-06-15"], True),
         (["2024-01-01", "foo", None], True),
+        (["foo", "2023-06-15"], True),
+        ([None, None, None], False),
     ],
-    ids=["valid", "invalid"],
+    ids=["valid", "valid", "invalid", "invalid", "invalid", "valid"],
 )
 def test_to_datetime(values, has_invalid_row, cache, strict, format, exact):
-    df = pl.DataFrame({"a": values})
+    df = pl.DataFrame({"a": pl.Series(values, dtype=pl.String())})
     q = df.lazy().select(
         pl.col("a").str.strptime(
             pl.Datetime("ns"),
@@ -280,15 +284,27 @@ def test_to_datetime(values, has_invalid_row, cache, strict, format, exact):
             exact=exact,
         )
     )
-    if cache or format is None or not exact:
+    if cache or not exact or (not strict and format is None):
+        outcome = "translation_error"
+    elif (values[0] == "foo" and format is None and strict) or (
+        strict and has_invalid_row
+    ):
+        outcome = "collect_error"
+    else:
+        outcome = "success"
+
+    if outcome == "translation_error":
         assert_ir_translation_raises(q, NotImplementedError)
-    elif strict and has_invalid_row:
+    elif outcome == "collect_error":
+        cudf_exc = (
+            pl.exceptions.ComputeError
+            if POLARS_VERSION_LT_130
+            else pl.exceptions.InvalidOperationError
+        )
         assert_collect_raises(
             q,
             polars_except=pl.exceptions.InvalidOperationError,
-            cudf_except=pl.exceptions.ComputeError
-            if POLARS_VERSION_LT_130
-            else pl.exceptions.InvalidOperationError,
+            cudf_except=cudf_exc,
         )
     else:
         assert_gpu_result_equal(q)
@@ -331,7 +347,7 @@ def test_replace_re(ldf):
 def test_replace_many(ldf, target, repl):
     q = ldf.select(pl.col("a").str.replace_many(target, repl))
     _need_support_for_implode_agg = isinstance(repl, list)
-    if POLARS_VERSION_LT_129 or _need_support_for_implode_agg:
+    if _need_support_for_implode_agg:
         assert_gpu_result_equal(q)
     elif POLARS_VERSION_LT_131:
         assert_ir_translation_raises(q, NotImplementedError)
@@ -788,8 +804,9 @@ def test_json_decode(ldf_jsonlike):
     q = ldf_jsonlike.select(pl.col("a").str.json_decode(pl.Struct({"a": pl.String()})))
     assert_gpu_result_equal(q)
 
-    q = ldf_jsonlike.select(pl.col("a").str.json_decode(None))
-    assert_ir_translation_raises(q, NotImplementedError)
+    if POLARS_VERSION_LT_133:
+        q = ldf_jsonlike.select(pl.col("a").str.json_decode(None))
+        assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.mark.parametrize("dtype", [pl.Int64(), pl.Float64()])
@@ -867,4 +884,11 @@ def test_len_bytes(ldf):
 
 def test_len_chars(ldf):
     q = ldf.select(pl.col("a").str.len_chars())
+    assert_gpu_result_equal(q)
+
+
+def test_string_concat_empty_frame():
+    lf = pl.LazyFrame({"a": pl.Series([], dtype=pl.String)})
+    q = lf.select(pl.lit(", ") + pl.col("a"))
+
     assert_gpu_result_equal(q)

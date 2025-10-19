@@ -88,7 +88,7 @@ def test_set_index_multi(drop):
         }
     )
     df["e"] = df["d"].astype("category")
-    gdf = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
 
     assert_eq(gdf.set_index("a", drop=drop), gdf.set_index(["a"], drop=drop))
     assert_eq(
@@ -102,4 +102,82 @@ def test_set_index_multi(drop):
     assert_eq(
         df.set_index(["b", "d", "e"], drop=drop),
         gdf.set_index(["b", "d", "e"], drop=drop),
+    )
+
+
+def test_df_cat_set_index():
+    df = cudf.DataFrame(
+        {
+            "a": pd.Categorical(list("aababcabbc"), categories=list("abc")),
+            "b": np.arange(10),
+        }
+    )
+    got = df.set_index("a")
+
+    pddf = df.to_pandas()
+    expect = pddf.set_index("a")
+
+    assert_eq(got, expect)
+
+
+def test_df_set_index_from_series():
+    df = cudf.DataFrame(
+        {
+            "a": list(range(10)),
+            "b": list(range(0, 20, 2)),
+        }
+    )
+
+    # Check set_index(Series)
+    df2 = df.set_index(df["b"])
+    assert list(df2.columns) == ["a", "b"]
+    sliced_strided = df2.loc[2:6]
+    assert len(sliced_strided) == 3
+    assert list(sliced_strided.index.values) == [2, 4, 6]
+
+
+def test_df_set_index_from_name():
+    df = cudf.DataFrame(
+        {
+            "a": list(range(10)),
+            "b": list(range(0, 20, 2)),
+        }
+    )
+
+    # Check set_index(column_name)
+    df2 = df.set_index("b")
+    # 1 less column because 'b' is used as index
+    assert list(df2.columns) == ["a"]
+    sliced_strided = df2.loc[2:6]
+    assert len(sliced_strided) == 3
+    assert list(sliced_strided.index.values) == [2, 4, 6]
+
+
+def test_categorical_index():
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 3], "index": pd.Categorical(["a", "b", "c"])}
+    )
+    initial_df = cudf.from_pandas(pdf)
+    pdf = pdf.set_index("index")
+    gdf1 = cudf.from_pandas(pdf)
+    gdf2 = cudf.DataFrame(
+        {"a": [1, 2, 3], "index": pd.Categorical(["a", "b", "c"])}
+    )
+    assert_eq(initial_df.index, gdf2.index)
+    gdf2 = gdf2.set_index("index")
+
+    assert isinstance(gdf1.index, cudf.CategoricalIndex)
+    assert_eq(pdf, gdf1)
+    assert_eq(pdf.index, gdf1.index)
+    assert_eq(
+        pdf.index.codes,
+        gdf1.index.codes.astype(pdf.index.codes.dtype).to_numpy(),
+    )
+
+    assert isinstance(gdf2.index, cudf.CategoricalIndex)
+    assert_eq(pdf, gdf2)
+    assert_eq(pdf.index, gdf2.index)
+    assert_eq(
+        pdf.index.codes,
+        gdf2.index.codes.astype(pdf.index.codes.dtype).to_numpy(),
     )

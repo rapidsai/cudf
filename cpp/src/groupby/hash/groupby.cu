@@ -15,15 +15,16 @@
  */
 
 #include "compute_groupby.hpp"
+#include "flatten_single_pass_aggs.hpp"
 #include "groupby/common/utils.hpp"
 #include "helpers.cuh"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/groupby.hpp>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -87,9 +88,9 @@ std::unique_ptr<table> dispatch_groupby(table_view const& keys,
   auto const has_null             = nullate::DYNAMIC{cudf::has_nested_nulls(keys)};
   auto const skip_rows_with_nulls = keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
 
-  auto preprocessed_keys = cudf::experimental::row::hash::preprocessed_table::create(keys, stream);
-  auto const comparator  = cudf::experimental::row::equality::self_comparator{preprocessed_keys};
-  auto const row_hash    = cudf::experimental::row::hash::row_hasher{std::move(preprocessed_keys)};
+  auto preprocessed_keys = cudf::detail::row::hash::preprocessed_table::create(keys, stream);
+  auto const comparator  = cudf::detail::row::equality::self_comparator{preprocessed_keys};
+  auto const row_hash    = cudf::detail::row::hash::row_hasher{std::move(preprocessed_keys)};
   auto const d_row_hash  = row_hash.device_hasher(has_null);
 
   if (cudf::detail::has_nested_columns(keys)) {
@@ -102,6 +103,47 @@ std::unique_ptr<table> dispatch_groupby(table_view const& keys,
       keys, requests, skip_rows_with_nulls, d_row_equal, d_row_hash, cache, stream, mr);
   }
 }
+
+// check if the target_type of the aggregation/type pair supports atomic operations
+struct can_use_hash_groupby_fn {
+  template <typename T, aggregation::Kind K>
+    requires(cudf::is_nested<T>())
+  bool operator()() const
+  {
+    // Currently, input values (not keys) of STRUCT and LIST types are not supported in any of
+    // hash-based aggregations. For those situations, we fallback to sort-based aggregations.
+    return false;
+  }
+
+  template <aggregation::Kind k>
+  constexpr static bool uses_underlying_type()
+  {
+    return k == aggregation::MIN or k == aggregation::MAX or k == aggregation::SUM;
+  }
+
+  template <typename T, aggregation::Kind K>
+    requires(cudf::is_fixed_point<T>())
+  bool operator()() const
+  {
+    using TargetType       = cudf::detail::target_type_t<T, K>;
+    using DeviceTargetType = std::
+      conditional_t<uses_underlying_type<K>(), cudf::device_storage_type_t<TargetType>, TargetType>;
+    if constexpr (not std::is_void_v<DeviceTargetType>) {
+      return cudf::has_atomic_support<DeviceTargetType>();
+    }
+    return false;
+  }
+
+  template <typename T, aggregation::Kind K>
+    requires(not cudf::is_nested<T>() and not cudf::is_fixed_point<T>())
+  bool operator()() const
+  {
+    using TargetType = cudf::detail::target_type_t<T, K>;
+    if constexpr (not std::is_void_v<TargetType>) { return cudf::has_atomic_support<TargetType>(); }
+    return false;
+  }
+};
+
 }  // namespace
 
 /**
@@ -120,13 +162,13 @@ bool can_use_hash_groupby(host_span<aggregation_request const> requests)
                           ? cudf::dictionary_column_view(r.values).keys().type()
                           : r.values.type();
 
-    // Currently, input values (not keys) of STRUCT and LIST types are not supported in any of
-    // hash-based aggregations. For those situations, we fallback to sort-based aggregations.
-    if (v_type.id() == type_id::STRUCT or v_type.id() == type_id::LIST) { return false; }
-
     return std::all_of(r.aggregations.begin(), r.aggregations.end(), [v_type](auto const& a) {
-      return cudf::has_atomic_support(cudf::detail::target_type(v_type, a->kind)) and
-             is_hash_aggregation(a->kind);
+      if (not is_hash_aggregation(a->kind)) { return false; }
+      // compound aggregations are made up of simple aggregations
+      auto const agg_kinds = get_simple_aggregations(*a, v_type);
+      return std::all_of(agg_kinds.begin(), agg_kinds.end(), [v_type = v_type](auto k) {
+        return cudf::detail::dispatch_type_and_aggregation(v_type, k, can_use_hash_groupby_fn{});
+      });
     });
   });
 }

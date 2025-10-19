@@ -185,7 +185,7 @@ class MultiIndex(Index):
 
         new_levels: list[cudf.Index] = []
         for level in levels:
-            new_level = ensure_index(level)
+            new_level = ensure_index(level, nan_as_null=nan_as_null)
             if copy and new_level is level:
                 new_level = new_level.copy(deep=True)
             new_levels.append(new_level)
@@ -1271,7 +1271,33 @@ class MultiIndex(Index):
         pdi = pd.MultiIndex.from_tuples(
             tuples, sortorder=sortorder, names=names
         )
-        return cls.from_pandas(pdi)
+        return cls(levels=pdi.levels, codes=pdi.codes, names=pdi.names)
+
+    @property
+    def dtypes(self) -> pd.Series:
+        """
+        Return the dtypes as a Series for the underlying MultiIndex.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.MultiIndex.from_product([(0, 1, 2), ('green', 'purple')],
+        ...                                  names=['number', 'color'])
+        >>> idx
+        MultiIndex([(0,  'green'),
+                    (0, 'purple'),
+                    (1,  'green'),
+                    (1, 'purple'),
+                    (2,  'green'),
+                    (2, 'purple')],
+                   names=['number', 'color'])
+        >>> idx.dtypes
+        number     int64
+        color     object
+        dtype: object
+        """
+        # Not using DataFrame.dtypes to avoid expensive invocation of `._data.to_pandas_index`
+        return pd.Series(dict(self.to_frame()._dtypes))
 
     @_performance_tracking
     def to_numpy(self) -> np.ndarray:
@@ -1419,7 +1445,7 @@ class MultiIndex(Index):
                    names=['state', 'observation'])
         """
         if isinstance(df, pd.DataFrame):
-            source_data = cudf.DataFrame.from_pandas(df)
+            source_data = cudf.DataFrame(df)
         else:
             source_data = df
         names = names if names is not None else source_data._column_names
@@ -1474,7 +1500,7 @@ class MultiIndex(Index):
         pdi = pd.MultiIndex.from_product(
             iterables, sortorder=sortorder, names=names
         )
-        return cls.from_pandas(pdi)
+        return cls(levels=pdi.levels, codes=pdi.codes, names=pdi.names)
 
     @classmethod
     @_performance_tracking
@@ -1716,18 +1742,19 @@ class MultiIndex(Index):
                     ('b', 'd')],
                    )
         """
+        warnings.warn(
+            "from_pandas is deprecated and will be removed in a future version. "
+            "Pass the MultiIndex names, codes and levels to the MultiIndex constructor instead.",
+            FutureWarning,
+        )
         if not isinstance(multiindex, pd.MultiIndex):
             raise TypeError("not a pandas.MultiIndex")
         if nan_as_null is no_default:
             nan_as_null = (
                 False if cudf.get_option("mode.pandas_compatible") else None
             )
-        levels = [
-            cudf.Index.from_pandas(level, nan_as_null=nan_as_null)
-            for level in multiindex.levels
-        ]
         return cls(
-            levels=levels,
+            levels=multiindex.levels,
             codes=multiindex.codes,
             names=multiindex.names,
             nan_as_null=nan_as_null,

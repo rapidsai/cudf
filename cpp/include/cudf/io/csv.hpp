@@ -487,6 +487,13 @@ class csv_reader_options {
   [[nodiscard]] data_type get_timestamp_type() const { return _timestamp_type; }
 
   /**
+   * @brief Sets source info.
+   *
+   * @param src The source info.
+   */
+  void set_source(source_info src) { _source = std::move(src); }
+
+  /**
    * @brief Sets compression format of the source.
    *
    * @param comp Compression type

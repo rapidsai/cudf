@@ -27,6 +27,13 @@ namespace cudf::io::parquet::detail {
  * all passes/chunks in the file.
  */
 struct file_intermediate_data {
+  file_intermediate_data() = default;
+
+  file_intermediate_data(file_intermediate_data const&)            = delete;
+  file_intermediate_data& operator=(file_intermediate_data const&) = delete;
+  file_intermediate_data(file_intermediate_data&&)                 = default;
+  file_intermediate_data& operator=(file_intermediate_data&&)      = default;
+
   // all row groups to read
   std::vector<row_group_info> row_groups{};
 
@@ -77,6 +84,13 @@ struct row_range {
  * @brief Passes are broken down into subpasses based on temporary memory constraints.
  */
 struct subpass_intermediate_data {
+  subpass_intermediate_data() = default;
+
+  subpass_intermediate_data(subpass_intermediate_data const&)            = delete;
+  subpass_intermediate_data& operator=(subpass_intermediate_data const&) = delete;
+  subpass_intermediate_data(subpass_intermediate_data&&)                 = default;
+  subpass_intermediate_data& operator=(subpass_intermediate_data&&)      = default;
+
   rmm::device_buffer decomp_page_data;
 
   rmm::device_buffer level_decode_data{};
@@ -100,6 +114,12 @@ struct subpass_intermediate_data {
   std::vector<row_range> output_chunk_read_info;
   std::size_t current_output_chunk{0};
 
+  // temporary space for DELTA_BYTE_ARRAY decoding. this only needs to live until
+  // gpu::DecodeDeltaByteArray returns.
+  rmm::device_uvector<uint8_t> delta_temp_buf{0, cudf::get_default_stream()};
+
+  uint32_t kernel_mask{0};
+
   // skip_rows and num_rows values for this particular subpass. in absolute row indices.
   size_t skip_rows;
   size_t num_rows;
@@ -112,6 +132,13 @@ struct subpass_intermediate_data {
  * rowgroups may represent less than all of the rowgroups to be read for the file.
  */
 struct pass_intermediate_data {
+  pass_intermediate_data() = default;
+
+  pass_intermediate_data(pass_intermediate_data const&)            = delete;
+  pass_intermediate_data& operator=(pass_intermediate_data const&) = delete;
+  pass_intermediate_data(pass_intermediate_data&&)                 = default;
+  pass_intermediate_data& operator=(pass_intermediate_data&&)      = default;
+
   std::vector<rmm::device_buffer> raw_page_data;
 
   // rowgroup, chunk and page information for the current pass.

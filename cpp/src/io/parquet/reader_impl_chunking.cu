@@ -19,6 +19,7 @@
 #include "reader_impl_chunking_utils.cuh"
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -344,6 +345,7 @@ void reader_impl::setup_next_subpass(read_mode mode)
 
   // Set the page mask information for the subpass
   set_subpass_page_mask();
+  _subpass_page_mask.host_to_device_async(_stream);
 
   // decompress the data pages in this subpass; also decompress the dictionary pages in this pass,
   // if this is the first subpass in the pass
@@ -634,6 +636,8 @@ void reader_impl::compute_input_passes(read_mode mode)
 
 void reader_impl::compute_output_chunks_for_subpass()
 {
+  CUDF_FUNC_RANGE();
+
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
@@ -677,8 +681,8 @@ void reader_impl::set_subpass_page_mask()
   auto const& pass    = _pass_itm_data;
   auto const& subpass = pass->subpass;
 
-  // Create a host vector to store the subpass page mask
-  _subpass_page_mask = cudf::detail::make_host_vector<bool>(subpass->pages.size(), _stream);
+  // Create a hostdevice vector to store the subpass page mask
+  _subpass_page_mask = cudf::detail::hostdevice_vector<bool>(subpass->pages.size(), _stream);
 
   // Fill with all true if no pass level page mask is available
   if (_pass_page_mask.empty()) {

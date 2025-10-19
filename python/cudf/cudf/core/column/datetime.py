@@ -8,7 +8,7 @@ import locale
 import re
 import warnings
 from locale import nl_langinfo
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -40,6 +40,7 @@ if TYPE_CHECKING:
 
     from cudf._typing import (
         ColumnBinaryOperand,
+        DtypeObj,
         ScalarLike,
     )
     from cudf.core.column.numerical import NumericalColumn
@@ -485,7 +486,7 @@ class DatetimeColumn(TemporalBaseColumn):
                 )
             )
 
-    def as_string_column(self, dtype) -> StringColumn:
+    def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         format = _dtype_to_format_conversion.get(
             self.dtype.name, "%Y-%m-%d %H:%M:%S"
         )
@@ -528,11 +529,11 @@ class DatetimeColumn(TemporalBaseColumn):
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
+        if isinstance(other, cudf.DateOffset):
+            return other._datetime_binop(self, op, reflect=reflect)  # type: ignore[attr-defined]
         other = self._normalize_binop_operand(other)
         if other is NotImplemented:
             return NotImplemented
-        elif isinstance(other, cudf.DateOffset):
-            return other._datetime_binop(self, op, reflect=reflect)  # type: ignore[attr-defined]
 
         if reflect:
             lhs = other
@@ -541,7 +542,7 @@ class DatetimeColumn(TemporalBaseColumn):
                 lhs_unit = lhs.type.unit
                 other_dtype = cudf_dtype_from_pa_type(lhs.type)
             else:
-                lhs_unit = lhs.time_unit  # type: ignore[union-attr]
+                lhs_unit = lhs.time_unit  # type: ignore[attr-defined]
                 other_dtype = lhs.dtype
             rhs_unit = rhs.time_unit
         else:
@@ -622,12 +623,14 @@ class DatetimeColumn(TemporalBaseColumn):
         if out_dtype is None:
             return NotImplemented
 
-        if isinstance(lhs, pa.Scalar):
-            lhs = pa_scalar_to_plc_scalar(lhs)
-        elif isinstance(rhs, pa.Scalar):
-            rhs = pa_scalar_to_plc_scalar(rhs)
+        lhs_binop: plc.Scalar | ColumnBase = (
+            pa_scalar_to_plc_scalar(lhs) if isinstance(lhs, pa.Scalar) else lhs
+        )  # type: ignore[assignment]
+        rhs_binop: plc.Scalar | ColumnBase = (
+            pa_scalar_to_plc_scalar(rhs) if isinstance(rhs, pa.Scalar) else rhs
+        )  # type: ignore[assignment]
 
-        result_col = binaryop.binaryop(lhs, rhs, op, out_dtype)
+        result_col = binaryop.binaryop(lhs_binop, rhs_binop, op, out_dtype)
         if out_dtype.kind != "b" and op == "__add__":
             return result_col
         elif (
@@ -637,7 +640,7 @@ class DatetimeColumn(TemporalBaseColumn):
         else:
             return result_col
 
-    def _with_type_metadata(self, dtype) -> DatetimeColumn:
+    def _with_type_metadata(self, dtype: DtypeObj) -> DatetimeColumn:
         if isinstance(dtype, pd.DatetimeTZDtype):
             return DatetimeTZColumn(
                 data=self.base_data,  # type: ignore[arg-type]
@@ -748,15 +751,9 @@ class DatetimeColumn(TemporalBaseColumn):
         )
         offsets_to_utc = offsets.take(indices, nullify=True)
         gmt_data = localized - offsets_to_utc
-        return DatetimeTZColumn(
-            data=gmt_data.base_data,
-            dtype=dtype,
-            mask=localized.base_mask,
-            size=gmt_data.size,
-            offset=gmt_data.offset,
-        )
+        return gmt_data._with_type_metadata(dtype)
 
-    def tz_convert(self, tz: str | None):
+    def tz_convert(self, tz: str | None) -> DatetimeColumn:
         raise TypeError(
             "Cannot convert tz-naive timestamps, use tz_localize to localize"
         )
@@ -819,9 +816,9 @@ class DatetimeTZColumn(DatetimeColumn):
             )
 
     def to_arrow(self) -> pa.Array:
-        return pa.compute.assume_timezone(
-            self._local_time.to_arrow(), str(self.dtype.tz)
-        )
+        # Cast to expected timestamp array type for assume_timezone
+        local_array = cast(pa.TimestampArray, self._local_time.to_arrow())
+        return pa.compute.assume_timezone(local_array, str(self.dtype.tz))
 
     @functools.cached_property
     def time_unit(self) -> str:
@@ -853,7 +850,7 @@ class DatetimeTZColumn(DatetimeColumn):
         offsets_from_utc = offsets.take(indices, nullify=True)
         return self + offsets_from_utc
 
-    def as_string_column(self, dtype) -> StringColumn:
+    def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         return self._local_time.as_string_column(dtype)
 
     def as_datetime_column(
@@ -890,7 +887,10 @@ class DatetimeTZColumn(DatetimeColumn):
         )
 
     def tz_localize(
-        self, tz: str | None, ambiguous="NaT", nonexistent="NaT"
+        self,
+        tz: str | None,
+        ambiguous: Literal["NaT"] = "NaT",
+        nonexistent: Literal["NaT"] = "NaT",
     ) -> DatetimeColumn:
         if tz is None:
             return self._local_time
@@ -908,10 +908,6 @@ class DatetimeTZColumn(DatetimeColumn):
         elif tz == str(self.dtype.tz):
             return self.copy()
         utc_time = self._utc_time
-        return type(self)(
-            data=utc_time.base_data,  # type: ignore[arg-type]
-            dtype=pd.DatetimeTZDtype(self.time_unit, tz),
-            mask=utc_time.base_mask,
-            size=utc_time.size,
-            offset=utc_time.offset,
+        return utc_time._with_type_metadata(
+            pd.DatetimeTZDtype(self.time_unit, tz)
         )

@@ -732,6 +732,18 @@ class _CallableProxyMixin:
         )
         return result
 
+    @property
+    def __code__(self):
+        return self._fsproxy_slow.__code__
+
+    @property
+    def __defaults__(self):
+        return self._fsproxy_slow.__defaults__
+
+    @property
+    def __kwdefaults__(self):
+        return self._fsproxy_slow.__kwdefaults__
+
 
 class _FunctionProxy(_CallableProxyMixin):
     """
@@ -835,7 +847,10 @@ class _FastSlowAttribute:
                     raise e
 
             if _is_function_or_method(slow_attr):
-                self._attr = _MethodProxy(fast_attr, slow_attr)
+                self._attr = _MethodProxy(
+                    fast_attr,
+                    slow_attr,
+                )
             else:
                 # for anything else, use a fast-slow attribute:
                 self._attr, _ = _fast_slow_function_call(
@@ -867,6 +882,7 @@ class _FastSlowAttribute:
                     instance,
                     self._name,
                 )[0]
+
         return self._attr
 
 
@@ -1147,7 +1163,7 @@ def _transform_arg(
             for k, a in arg.items()
         }
     elif isinstance(arg, np.ndarray) and arg.dtype == "O":
-        transformed = [
+        transformed: list[Any] = [  # type: ignore[var-annotated]
             _transform_arg(a, attribute_name, seen) for a in arg.flat
         ]
         # Keep the same memory layout as arg (the default is C_CONTIGUOUS)
@@ -1155,7 +1171,9 @@ def _transform_arg(
             order = "F"
         else:
             order = "C"
-        result = np.empty(int(np.prod(arg.shape)), dtype=object, order=order)
+        result = np.empty(  # type: ignore[call-overload]
+            int(np.prod(arg.shape)), dtype=np.object_, order=order
+        )
         result[...] = transformed
         return result.reshape(arg.shape)
     elif isinstance(arg, Iterator) and attribute_name == "_fsproxy_fast":
@@ -1370,7 +1388,7 @@ PROXY_BASE_CLASSES: set[type] = {
 }
 
 
-NUMPY_TYPES: set[str] = set(np.sctypeDict.values())
+NUMPY_TYPES: set[type[np.generic]] = set(np.sctypeDict.values())  # type: ignore[arg-type]
 
 
 _SPECIAL_METHODS: set[str] = {

@@ -128,8 +128,8 @@ void codec_stats::add_pages(host_span<ColumnChunkDesc const> chunks,
                             page_selection selection,
                             host_span<bool const> page_mask)
 {
-  // Create a page mask iterator that defaults to true if the page_mask is empty
-  auto page_mask_iter = thrust::make_constant_iterator(true);
+  auto page_mask_iter = cudf::detail::make_counting_transform_iterator(
+    0, [&](size_t page_idx) { return page_mask.empty() ? true : page_mask[page_idx]; });
 
   // Zip iterator for iterating over pages and the page mask
   auto zip_iter = thrust::make_zip_iterator(pages.begin(), page_mask_iter);
@@ -537,8 +537,8 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
                             bool select_dict_pages,
                             size_t& decomp_offset) {
     // Create a page mask iterator that defaults to true if the page_mask is empty
-    auto page_mask_iter =
-      page_mask.empty() ? thrust::make_constant_iterator(true) : page_mask.begin();
+    auto page_mask_iter = cudf::detail::make_counting_transform_iterator(
+      0, [&](size_t page_idx) { return page_mask.empty() ? true : page_mask[page_idx]; });
 
     for (auto page_idx = 0; std::cmp_less(page_idx, pages.size()); ++page_idx) {
       auto& page                = pages[page_idx];

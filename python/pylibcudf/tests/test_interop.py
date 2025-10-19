@@ -12,6 +12,8 @@ import pytest
 from packaging.version import parse
 from utils import assert_column_eq, assert_table_eq
 
+import rmm
+
 import pylibcudf as plc
 
 
@@ -22,11 +24,9 @@ def test_list_dtype_roundtrip():
     assert plc_type == plc.types.DataType(plc.types.TypeId.LIST)
 
     with pytest.raises(ValueError):
-        plc.interop.to_arrow(plc_type)
+        plc_type.to_arrow()
 
-    arrow_type = plc.interop.to_arrow(
-        plc_type, value_type=list_type.value_type
-    )
+    arrow_type = plc_type.to_arrow(value_type=list_type.value_type)
     assert arrow_type == list_type
 
 
@@ -37,19 +37,18 @@ def test_struct_dtype_roundtrip():
     assert plc_type == plc.types.DataType(plc.types.TypeId.STRUCT)
 
     with pytest.raises(ValueError):
-        plc.interop.to_arrow(plc_type)
+        plc_type.to_arrow()
 
-    arrow_type = plc.interop.to_arrow(
-        plc_type,
+    arrow_type = plc_type.to_arrow(
         fields=[struct_type.field(i) for i in range(struct_type.num_fields)],
     )
     assert arrow_type == struct_type
 
 
 def test_table_with_nested_dtype_to_arrow():
-    pa_array = pa.array([[{"": 1}]])
-    plc_table = plc.Table([plc.Column.from_arrow(pa_array)])
-    result = plc.interop.to_arrow(plc_table)
+    result = plc.Table(
+        [plc.Column.from_arrow(pa.array([[{"": 1}]]))]
+    ).to_arrow()
     expected_schema = pa.schema(
         [
             pa.field(
@@ -75,11 +74,9 @@ def test_decimal128_roundtrip():
     assert plc_type.id() == plc.types.TypeId.DECIMAL128
 
     with pytest.raises(ValueError):
-        plc.interop.to_arrow(plc_type)
+        plc_type.to_arrow()
 
-    arrow_type = plc.interop.to_arrow(
-        plc_type, precision=decimal_type.precision
-    )
+    arrow_type = plc_type.to_arrow(precision=decimal_type.precision)
     assert arrow_type == decimal_type
 
 
@@ -94,9 +91,9 @@ def test_decimal_other(data_type):
     precision = 3
 
     with pytest.raises(ValueError):
-        plc.interop.to_arrow(data_type)
+        data_type.to_arrow()
 
-    arrow_type = plc.interop.to_arrow(data_type, precision=precision)
+    arrow_type = data_type.to_arrow(precision=precision)
     assert arrow_type == pa.decimal128(precision, 0)
 
 
@@ -121,8 +118,8 @@ def test_decimal_respect_metadata_precision(plc_type, request):
     plc_column = plc.unary.cast(
         plc.Column.from_arrow(expected), plc.DataType(plc_type, scale=-scale)
     )
-    result = plc.interop.to_arrow(
-        plc_column, metadata=plc.interop.ColumnMetadata(precision=precision)
+    result = plc_column.to_arrow(
+        metadata=plc.interop.ColumnMetadata(precision=precision)
     )
     if parse(pa.__version__) >= parse("19.0.0"):
         if plc_type == plc.TypeId.DECIMAL64:
@@ -143,8 +140,7 @@ def test_decimal_precision_metadata_out_of_range(precision):
         plc.DataType(plc.TypeId.DECIMAL128, scale=-scale),
     )
     with pytest.raises(TypeError):
-        plc.interop.to_arrow(
-            plc_column,
+        plc_column.to_arrow(
             metadata=plc.interop.ColumnMetadata(precision=precision),
         )
 
@@ -235,3 +231,25 @@ def test_column_from_arrow_stream(data):
     pa_arr = pa.chunked_array(data)
     col = plc.Column.from_arrow(pa_arr)
     assert_column_eq(pa_arr, col)
+
+
+def test_arrow_object_lifetime():
+    def f():
+        # Store a temporary so it is cached in the frame when the exception is raised
+        t = plc.interop.from_arrow(pa.Table.from_pydict({"a": [1]}))  # noqa: F841
+        raise ValueError("test exception")
+
+    # Nested try-excepts are necessary for Python to extend the lifetime of the stack
+    # frame of f enough to be problematic.
+    try:
+        try:
+            previous = rmm.mr.get_current_device_resource()
+            rmm.mr.set_current_device_resource(
+                rmm.mr.CudaAsyncMemoryResource()
+            )
+            f()
+        finally:
+            rmm.mr.set_current_device_resource(previous)
+    except ValueError:
+        # Ignore the exception. A failure in this test is a seg fault
+        pass

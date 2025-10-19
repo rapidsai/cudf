@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -13,6 +14,9 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.utils.versions import POLARS_VERSION_LT_132
+
+if TYPE_CHECKING:
+    from cudf_polars.typing import RankMethod, RoundMethod
 
 
 @pytest.fixture(
@@ -120,9 +124,11 @@ def test_null_count():
 
 @pytest.mark.parametrize("method", ["ordinal", "dense", "min", "max", "average"])
 @pytest.mark.parametrize("descending", [False, True])
-def test_rank_supported(request, ldf: pl.LazyFrame, method: str, *, descending: bool):
+def test_rank_supported(
+    request, ldf: pl.LazyFrame, method: RankMethod, *, descending: bool
+):
     request.applymarker(
-        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="nested loop join")
+        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="rank unsupported")
     )
     expr = pl.col("a").rank(method=method, descending=descending)
     q = ldf.select(expr)
@@ -133,10 +139,10 @@ def test_rank_supported(request, ldf: pl.LazyFrame, method: str, *, descending: 
 @pytest.mark.parametrize("descending", [False, True])
 @pytest.mark.parametrize("test", ["with_nulls", "with_ties"])
 def test_rank_methods_with_nulls_or_ties(
-    request, ldf: pl.LazyFrame, method: str, *, descending: bool, test: str
+    request, ldf: pl.LazyFrame, method: RankMethod, *, descending: bool, test: str
 ) -> None:
     request.applymarker(
-        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="nested loop join")
+        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="rank unsupported")
     )
 
     base = pl.col("a")
@@ -151,7 +157,13 @@ def test_rank_methods_with_nulls_or_ties(
 
 @pytest.mark.parametrize("seed", [42])
 @pytest.mark.parametrize("method", ["random"])
-def test_rank_unsupported(ldf: pl.LazyFrame, method: str, seed: int) -> None:
+def test_rank_unsupported(ldf: pl.LazyFrame, method: RankMethod, seed: int) -> None:
     expr = pl.col("a").rank(method=method, seed=seed)
     q = ldf.select(expr)
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.parametrize("mode", ["half_to_even", "half_away_from_zero"])
+def test_round(ldf: pl.LazyFrame, mode: RoundMethod) -> None:
+    q = ldf.select(pl.col("a").sin().round(2, mode=mode))
+    assert_gpu_result_equal(q)

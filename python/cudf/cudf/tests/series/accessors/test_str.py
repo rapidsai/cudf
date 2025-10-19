@@ -1387,25 +1387,16 @@ def test_string_starts_ends(data, pat):
     ],
 )
 def test_string_starts_ends_list_like_pat(data, pat):
-    gs = cudf.Series(data)
+    pd_data = pd.Series(data)
+    cudf_data = cudf.Series(data)
 
-    starts_expected = []
-    ends_expected = []
-    for i in range(len(pat)):
-        if data[i] is None:
-            starts_expected.append(None)
-            ends_expected.append(None)
-        else:
-            if pat[i] is None:
-                starts_expected.append(False)
-                ends_expected.append(False)
-            else:
-                starts_expected.append(data[i].startswith(pat[i]))
-                ends_expected.append(data[i].endswith(pat[i]))
-    starts_expected = pd.Series(starts_expected)
-    ends_expected = pd.Series(ends_expected)
-    assert_eq(starts_expected, gs.str.startswith(pat), check_dtype=False)
-    assert_eq(ends_expected, gs.str.endswith(pat), check_dtype=False)
+    result = cudf_data.str.startswith(pat)
+    expected = pd_data.str.startswith(pat)
+    assert_eq(result, expected)
+
+    result = cudf_data.str.endswith(pat)
+    expected = pd_data.str.endswith(pat)
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize(
@@ -1530,14 +1521,14 @@ def test_string_replace_multi():
     assert_eq(expect, got)
 
     ps = pd.Series(["foo", "fuz", np.nan])
-    gs = cudf.Series.from_pandas(ps)
+    gs = cudf.Series(ps)
 
     expect = ps.str.replace("f.", "ba", regex=True)
     got = gs.str.replace(["f."], ["ba"], regex=True)
     assert_eq(expect, got)
 
     ps = pd.Series(["f.o", "fuz", np.nan])
-    gs = cudf.Series.from_pandas(ps)
+    gs = cudf.Series(ps)
 
     expect = ps.str.replace("f.", "ba", regex=False)
     got = gs.str.replace(["f."], ["ba"], regex=False)
@@ -2293,6 +2284,14 @@ def test_string_replace_zero_length(ps_gs, pat):
     expect = ps.str.replace(pat, "_", regex=True)
     got = gs.str.replace(pat, "_", regex=True)
 
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("n", [-1, 0, 1])
+def test_string_replace_n(n):
+    data = ["a,b,c", "d,e,f,g"]
+    expect = pd.Series(data).str.replace(pat=",", repl="_", n=n)
+    got = cudf.Series(data).str.replace(pat=",", repl="_", n=n)
     assert_eq(expect, got)
 
 

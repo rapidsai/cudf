@@ -74,6 +74,7 @@ struct stripe_level_comp_info {
   std::size_t num_compressed_blocks{0};
   std::size_t num_uncompressed_blocks{0};
   std::size_t total_decomp_size{0};
+  std::size_t max_uncompressed_block_size{0};
 };
 
 /**
@@ -127,6 +128,13 @@ struct orc_stream_info {
  * @brief Struct storing intermediate processing data loaded from data sources.
  */
 struct file_intermediate_data {
+  file_intermediate_data() = default;
+
+  file_intermediate_data(file_intermediate_data const&)            = delete;
+  file_intermediate_data& operator=(file_intermediate_data const&) = delete;
+  file_intermediate_data(file_intermediate_data&&)                 = default;
+  file_intermediate_data& operator=(file_intermediate_data&&)      = default;
+
   int64_t rows_to_skip;
   int64_t rows_to_read;
   std::vector<metadata::orc_stripe_info> selected_stripes;

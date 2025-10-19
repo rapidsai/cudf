@@ -29,7 +29,11 @@ from cudf.io.parquet import (
     ParquetWriter,
     merge_parquet_filemetadata,
 )
-from cudf.testing import assert_eq, dataset_generator as dg
+from cudf.testing import (
+    assert_arrow_table_equal,
+    assert_eq,
+    dataset_generator as dg,
+)
 from cudf.testing._utils import TIMEDELTA_TYPES, set_random_null_mask_inplace
 
 
@@ -88,7 +92,7 @@ def simple_pdf():
 
 @pytest.fixture
 def simple_gdf(simple_pdf):
-    return cudf.DataFrame.from_pandas(simple_pdf)
+    return cudf.DataFrame(simple_pdf)
 
 
 def build_pdf(num_columns, day_resolution_timestamps):
@@ -175,12 +179,12 @@ def pdf_day_timestamps(request):
 
 @pytest.fixture
 def gdf(pdf):
-    return cudf.DataFrame.from_pandas(pdf)
+    return cudf.DataFrame(pdf)
 
 
 @pytest.fixture
 def gdf_day_timestamps(pdf_day_timestamps):
-    return cudf.DataFrame.from_pandas(pdf_day_timestamps)
+    return cudf.DataFrame(pdf_day_timestamps)
 
 
 @pytest.fixture
@@ -213,7 +217,7 @@ def parquet_path_or_buf(datadir):
 
 @pytest.fixture(scope="module")
 def large_int64_gdf():
-    return cudf.DataFrame.from_pandas(pd.DataFrame({"col": range(0, 1 << 20)}))
+    return cudf.DataFrame(pd.DataFrame({"col": range(0, 1 << 20)}))
 
 
 @pytest.fixture(params=["pyarrow", "cudf"])
@@ -1110,7 +1114,7 @@ def test_parquet_reader_struct_basic(tmp_path, data):
     pa.parquet.write_table(expect, fname)
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
-    assert expect.equals(got.to_arrow())
+    assert_arrow_table_equal(expect, got.to_arrow())
 
 
 def select_columns_params():
@@ -1188,7 +1192,7 @@ def test_parquet_reader_struct_select_columns(data, columns):
 
     expect = pq.ParquetFile(buff).read(columns=columns)
     got = cudf.read_parquet(buff, columns=columns)
-    assert expect.equals(got.to_arrow())
+    assert_arrow_table_equal(expect, got.to_arrow())
 
 
 def test_parquet_reader_struct_los_large(tmp_path):
@@ -1205,7 +1209,7 @@ def test_parquet_reader_struct_los_large(tmp_path):
     pa.parquet.write_table(expect, fname)
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
-    assert expect.equals(got.to_arrow())
+    assert_arrow_table_equal(expect, got.to_arrow())
 
 
 @pytest.mark.parametrize(
@@ -1243,7 +1247,7 @@ def test_parquet_reader_struct_sol_table(tmp_path, params):
     pa.parquet.write_table(expect, fname)
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
-    assert expect.equals(got.to_arrow())
+    assert_arrow_table_equal(expect, got.to_arrow())
 
 
 def test_parquet_reader_v2(tmp_path, simple_pdf):
@@ -2403,7 +2407,7 @@ def test_parquet_writer_list_chunked(tmp_path, store_schema):
     got = pq.read_table(fname)
     # compare with pyarrow since pandas doesn't
     # have a list or struct dtype
-    assert expect.to_arrow().equals(got)
+    assert_arrow_table_equal(expect.to_arrow(), got)
 
 
 def test_parquet_nullable_boolean(tmp_path, engine):
@@ -3636,7 +3640,7 @@ def test_parquet_writer_roundtrip_with_arrow_schema(index):
 
     # Read parquet with pyarrow, pandas and cudf readers
     got = cudf.DataFrame.from_arrow(pq.read_table(buffer))
-    got2 = cudf.DataFrame.from_pandas(pd.read_parquet(buffer))
+    got2 = cudf.DataFrame(pd.read_parquet(buffer))
     got3 = cudf.read_parquet(buffer)
 
     # drop the index column for comparison: __index_level_0__
@@ -4438,7 +4442,7 @@ def test_parquet_reader_mismatched_nullability_structs(tmp_path):
 
 @pytest.mark.skipif(
     pa.__version__ == "19.0.0",
-    reason="https://github.com/rapidsai/cudf/issues/17806",
+    reason="https://github.com/apache/arrow/issues/45283, https://github.com/rapidsai/cudf/issues/17806",
 )
 @pytest.mark.parametrize(
     "stats_fname,bloom_filter_fname",

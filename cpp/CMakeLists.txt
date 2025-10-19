@@ -292,6 +292,9 @@ include(cmake/thirdparty/get_cccl.cmake)
 # find rmm
 include(cmake/thirdparty/get_rmm.cmake)
 
+# find croaring
+include(cmake/thirdparty/get_croaring.cmake)
+
 # find flatbuffers
 include(cmake/thirdparty/get_flatbuffers.cmake)
 
@@ -536,6 +539,7 @@ add_library(
   src/io/parquet/compact_protocol_writer.cpp
   src/io/parquet/decode_preprocess.cu
   src/io/parquet/experimental/dictionary_page_filter.cu
+  src/io/parquet/experimental/deletion_vectors.cu
   src/io/parquet/experimental/hybrid_scan.cpp
   src/io/parquet/experimental/hybrid_scan_chunking.cu
   src/io/parquet/experimental/hybrid_scan_helpers.cpp
@@ -578,11 +582,14 @@ add_library(
   src/io/utilities/type_inference.cu
   src/io/utilities/trie.cu
   src/jit/cache.cpp
+  src/jit/helpers.cpp
   src/jit/parser.cpp
+  src/jit/row_ir.cpp
   src/jit/util.cpp
   src/join/conditional_join.cu
   src/join/cross_join.cu
   src/join/distinct_hash_join.cu
+  src/join/filtered_join.cu
   src/join/hash_join.cu
   src/join/join.cu
   src/join/join_utils.cu
@@ -628,6 +635,8 @@ add_library(
   src/quantiles/quantiles.cu
   src/reductions/all.cu
   src/reductions/any.cu
+  src/reductions/argmax.cu
+  src/reductions/argmin.cu
   src/reductions/bitwise.cu
   src/reductions/collect_ops.cu
   src/reductions/count.cpp
@@ -683,6 +692,8 @@ add_library(
   src/rolling/range_window_bounds.cpp
   src/rolling/rolling.cpp
   src/round/round.cu
+  src/row_operator/primitive_row_operators.cu
+  src/row_operator/row_operators.cu
   src/runtime/context.cpp
   src/scalar/scalar.cpp
   src/scalar/scalar_factories.cpp
@@ -735,6 +746,7 @@ add_library(
   src/strings/convert/convert_ipv4.cu
   src/strings/convert/convert_urls.cu
   src/strings/convert/convert_lists.cu
+  src/strings/convert/int_cast.cu
   src/strings/copying/concatenate.cu
   src/strings/copying/copying.cu
   src/strings/copying/copy_range.cu
@@ -785,8 +797,6 @@ add_library(
   src/structs/structs_column_factories.cu
   src/structs/structs_column_view.cpp
   src/structs/utilities.cu
-  src/table/primitive_row_operators.cu
-  src/table/row_operators.cu
   src/table/table.cpp
   src/table/table_device_view.cu
   src/table/table_view.cpp
@@ -1077,13 +1087,13 @@ if(CUDF_BUILD_TESTUTIL)
               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/debug_utilities.cu>
               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/random_seed.cpp>
               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/table_utilities.cu>
-              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/tdigest_utilities.cu>
+              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/tdigest_utilities.cpp>
               $<INSTALL_INTERFACE:src/cudftestutil/io/metadata_utilities.cpp>
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/column_utilities.cu>
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/debug_utilities.cu>
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/random_seed.cpp>
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/table_utilities.cu>
-              $<INSTALL_INTERFACE:src/cudftestutil/utilities/tdigest_utilities.cu>
+              $<INSTALL_INTERFACE:src/cudftestutil/utilities/tdigest_utilities.cpp>
   )
   target_link_libraries(cudftestutil_impl INTERFACE cudf::cudftestutil)
   target_compile_features(cudftestutil_impl INTERFACE cxx_std_20)
@@ -1105,7 +1115,7 @@ if(CUDF_BUILD_TESTUTIL)
           tests/utilities/debug_utilities.cu
           tests/utilities/random_seed.cpp
           tests/utilities/table_utilities.cu
-          tests/utilities/tdigest_utilities.cu
+          tests/utilities/tdigest_utilities.cpp
     DESTINATION src/cudftestutil/utilities
   )
 endif()

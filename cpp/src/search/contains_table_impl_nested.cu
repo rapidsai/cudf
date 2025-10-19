@@ -16,18 +16,17 @@
 
 #include "contains_table_impl.cuh"
 
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/hashing/detail/helper_functions.cuh>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 namespace cudf::detail {
 
 // Explicit instantiations to reduce build time
 using hasher_adapter_t = hasher_adapter<
-  cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
-                                                   nullate::DYNAMIC>,
-  cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
-                                                   nullate::DYNAMIC>>;
+  cudf::detail::row::hash::device_row_hasher<cudf::hashing::detail::default_hash, nullate::DYNAMIC>,
+  cudf::detail::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
+                                             nullate::DYNAMIC>>;
 
 template void dispatch_nan_comparator<true, hasher_adapter_t>(
   table_view const& haystack,
@@ -37,8 +36,8 @@ template void dispatch_nan_comparator<true, hasher_adapter_t>(
   bool haystack_has_nulls,
   bool needles_has_nulls,
   bool has_any_nulls,
-  cudf::experimental::row::equality::self_comparator self_equal,
-  cudf::experimental::row::equality::two_table_comparator two_table_equal,
+  cudf::detail::row::equality::self_comparator self_equal,
+  cudf::detail::row::equality::two_table_comparator two_table_equal,
   hasher_adapter_t const& d_hasher,
   rmm::device_uvector<bool>& contained,
   rmm::cuda_stream_view stream);
@@ -46,14 +45,13 @@ template void dispatch_nan_comparator<true, hasher_adapter_t>(
 // Explicit instantiations for perform_contains with nested types (experimental row operations)
 
 // For HasNested=true (nested columns) with nan_equal_comparator
-using nan_equal_self_comparator_nested = cudf::experimental::row::equality::device_row_comparator<
+using nan_equal_self_comparator_nested = cudf::detail::row::equality::device_row_comparator<
   true,
   cudf::nullate::DYNAMIC,
-  cudf::experimental::row::equality::nan_equal_physical_equality_comparator>;
+  cudf::detail::row::equality::nan_equal_physical_equality_comparator>;
 
 using nan_equal_two_table_comparator_nested =
-  cudf::experimental::row::equality::strong_index_comparator_adapter<
-    nan_equal_self_comparator_nested>;
+  cudf::detail::row::equality::strong_index_comparator_adapter<nan_equal_self_comparator_nested>;
 
 using nan_equal_comparator_adapter_nested =
   comparator_adapter<nan_equal_self_comparator_nested, nan_equal_two_table_comparator_nested>;
@@ -69,14 +67,13 @@ template void perform_contains(table_view const& haystack,
                                rmm::cuda_stream_view stream);
 
 // For HasNested=true (nested columns) with nan_unequal_comparator
-using nan_unequal_self_comparator_nested = cudf::experimental::row::equality::device_row_comparator<
+using nan_unequal_self_comparator_nested = cudf::detail::row::equality::device_row_comparator<
   true,
   cudf::nullate::DYNAMIC,
-  cudf::experimental::row::equality::physical_equality_comparator>;
+  cudf::detail::row::equality::physical_equality_comparator>;
 
 using nan_unequal_two_table_comparator_nested =
-  cudf::experimental::row::equality::strong_index_comparator_adapter<
-    nan_unequal_self_comparator_nested>;
+  cudf::detail::row::equality::strong_index_comparator_adapter<nan_unequal_self_comparator_nested>;
 
 using nan_unequal_comparator_adapter_nested =
   comparator_adapter<nan_unequal_self_comparator_nested, nan_unequal_two_table_comparator_nested>;

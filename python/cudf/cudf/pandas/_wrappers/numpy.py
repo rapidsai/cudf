@@ -95,7 +95,11 @@ def wrap_ndarray(cls, arr: cupy.ndarray | numpy.ndarray, constructor):
         and arr.shape == ()
         and constructor not in _CONSTRUCTORS
     ):
-        return arr.dtype.type(arr.item())
+        value = arr.item()
+        if arr.dtype.kind in "mM":
+            unit, _ = numpy.datetime_data(arr.dtype)
+            return arr.dtype.type(value, unit)
+        return arr.dtype.type(value)
     else:
         # Note, this super call means that the constructed ndarray
         # class cannot be subclassed (because then super(cls,
@@ -187,7 +191,9 @@ if version.parse(numpy.__version__) >= version.parse("2.0"):
     # NumPy 2 introduced `_core` and gives warnings for access to `core`.
     from numpy._core.multiarray import flagsobj as _numpy_flagsobj
 else:
-    from numpy.core.multiarray import flagsobj as _numpy_flagsobj
+    from numpy.core.multiarray import (  # type: ignore[no-redef]
+        flagsobj as _numpy_flagsobj,
+    )
 
 # Mapping flags between slow and fast types
 _ndarray_flags = make_intermediate_proxy_type(

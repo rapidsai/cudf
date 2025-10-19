@@ -96,6 +96,9 @@ class orc_reader_options {
   // Columns that should be read as Decimal128
   std::vector<std::string> _decimal128_columns;
 
+  // Ignore writer timezone in the stripe footer, read as UTC timezone
+  bool _ignore_timezone_in_stripe_footer = false;
+
   friend orc_reader_options_builder;
 
   /**
@@ -188,7 +191,24 @@ class orc_reader_options {
     return _decimal128_columns;
   }
 
+  /**
+   * @brief Returns whether to ignore writer timezone in the stripe footer.
+   *
+   * @return `true` if the writer timezone in the stripe footer is ignored.
+   */
+  [[nodiscard]] bool get_ignore_timezone_in_stripe_footer() const
+  {
+    return _ignore_timezone_in_stripe_footer;
+  }
+
   // Setters
+
+  /**
+   * @brief Sets source info.
+   *
+   * @param src The source info.
+   */
+  void set_source(source_info src) { _source = std::move(src); }
 
   /**
    * @brief Sets names of the column to read.
@@ -391,6 +411,18 @@ class orc_reader_options_builder {
   orc_reader_options_builder& decimal128_columns(std::vector<std::string> val)
   {
     options._decimal128_columns = std::move(val);
+    return *this;
+  }
+
+  /**
+   * @brief Set whether to ignore writer timezone in the stripe footer.
+   *
+   * @param ignore Boolean value to enable/disable ignoring writer timezone
+   * @return this for chaining
+   */
+  orc_reader_options_builder& ignore_timezone_in_stripe_footer(bool ignore)
+  {
+    options._ignore_timezone_in_stripe_footer = ignore;
     return *this;
   }
 

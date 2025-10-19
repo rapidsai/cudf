@@ -35,6 +35,7 @@ from cudf_polars.experimental.dispatch import (
 )
 from cudf_polars.experimental.io import _clear_source_info_cache
 from cudf_polars.experimental.repartition import Repartition
+from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat, _contains_over, _lower_ir_fallback
 
 if TYPE_CHECKING:
@@ -42,7 +43,7 @@ if TYPE_CHECKING:
     from typing import Any
 
     from cudf_polars.containers import DataFrame
-    from cudf_polars.experimental.dispatch import LowerIRTransformer
+    from cudf_polars.experimental.dispatch import LowerIRTransformer, State
     from cudf_polars.utils.config import ConfigOptions
 
 
@@ -84,9 +85,11 @@ def lower_ir_graph(
     --------
     lower_ir_node
     """
-    mapper: LowerIRTransformer = CachingVisitor(
-        lower_ir_node, state={"config_options": config_options}
-    )
+    state: State = {
+        "config_options": config_options,
+        "stats": collect_statistics(ir, config_options),
+    }
+    mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
     return mapper(ir)
 
 
@@ -155,10 +158,10 @@ def get_scheduler(config_options: ConfigOptions) -> Any:
         "'in-memory' executor not supported in 'generate_ir_tasks'"
     )
 
-    scheduler = config_options.executor.scheduler
+    cluster = config_options.executor.cluster
 
     if (
-        scheduler == "distributed"
+        cluster == "distributed"
     ):  # pragma: no cover; block depends on executor type and Distributed cluster
         from distributed import get_client
 
@@ -168,12 +171,12 @@ def get_scheduler(config_options: ConfigOptions) -> Any:
         DaskRegisterManager.register_once()
         DaskRegisterManager.run_on_cluster(client)
         return client.get
-    elif scheduler == "synchronous":
+    elif cluster == "single":
         from cudf_polars.experimental.scheduler import synchronous_scheduler
 
         return synchronous_scheduler
     else:  # pragma: no cover
-        raise ValueError(f"{scheduler} not a supported scheduler option.")
+        raise ValueError(f"{cluster} not a supported cluster option.")
 
 
 def post_process_task_graph(
@@ -365,6 +368,15 @@ def _(
                 "over(...) inside filter is not supported for multiple partitions; "
                 "falling back to in-memory evaluation."
             ),
+        )
+
+    if partition_info[child].count > 1 and not all(
+        expr.is_pointwise for expr in traversal([ir.mask.value])
+    ):
+        # TODO: Use expression decomposition to lower Filter
+        # See: https://github.com/rapidsai/cudf/issues/20076
+        return _lower_ir_fallback(
+            ir, rec, msg="This filter is not supported for multiple partitions."
         )
 
     new_node = ir.reconstruct([child])

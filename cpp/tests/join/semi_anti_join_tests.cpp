@@ -22,7 +22,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/join/join.hpp>
+#include <cudf/join/filtered_join.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -31,8 +31,11 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
+
+#include <memory>
 
 template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
@@ -49,13 +52,9 @@ namespace {
 // they were modified in https://github.com/rapidsai/cudf/pull/7454. This
 // helper function allows us to avoid rewriting all our tests in terms of
 // gather maps.
-template <std::unique_ptr<rmm::device_uvector<cudf::size_type>> (*join_impl)(
-  cudf::table_view const& left_keys,
-  cudf::table_view const& right_keys,
-  cudf::null_equality compare_nulls,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)>
+template <typename Func>
 std::unique_ptr<cudf::table> join_and_gather(
+  Func join_impl,
   cudf::table_view const& left_input,
   cudf::table_view const& right_input,
   std::vector<cudf::size_type> const& left_on,
@@ -81,8 +80,20 @@ std::unique_ptr<cudf::table> left_semi_join(
   std::vector<cudf::size_type> const& right_on,
   cudf::null_equality compare_nulls = cudf::null_equality::EQUAL)
 {
-  return join_and_gather<cudf::left_semi_join>(
-    left_input, right_input, left_on, right_on, compare_nulls);
+  return join_and_gather(
+    [](cudf::table_view const& left,
+       cudf::table_view const& right,
+       cudf::null_equality compare_nulls,
+       rmm::cuda_stream_view stream,
+       rmm::device_async_resource_ref mr) {
+      cudf::filtered_join obj(right, compare_nulls, cudf::set_as_build_table::RIGHT, stream);
+      return obj.semi_join(left, stream, mr);
+    },
+    left_input,
+    right_input,
+    left_on,
+    right_on,
+    compare_nulls);
 }
 
 std::unique_ptr<cudf::table> left_anti_join(
@@ -92,8 +103,20 @@ std::unique_ptr<cudf::table> left_anti_join(
   std::vector<cudf::size_type> const& right_on,
   cudf::null_equality compare_nulls = cudf::null_equality::EQUAL)
 {
-  return join_and_gather<cudf::left_anti_join>(
-    left_input, right_input, left_on, right_on, compare_nulls);
+  return join_and_gather(
+    [](cudf::table_view const& left,
+       cudf::table_view const& right,
+       cudf::null_equality compare_nulls,
+       rmm::cuda_stream_view stream,
+       rmm::device_async_resource_ref mr) {
+      cudf::filtered_join obj(right, compare_nulls, cudf::set_as_build_table::RIGHT, stream);
+      return obj.anti_join(left, stream, mr);
+    },
+    left_input,
+    right_input,
+    left_on,
+    right_on,
+    compare_nulls);
 }
 
 TEST_F(JoinTest, TestSimple)
@@ -104,14 +127,10 @@ TEST_F(JoinTest, TestSimple)
   auto left  = cudf::table_view{{left_col0}};
   auto right = cudf::table_view{{right_col0}};
 
-  auto result    = left_semi_join(left, right);
-  auto result_cv = cudf::column_view(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
-                                     result->size(),
-                                     result->data(),
-                                     nullptr,
-                                     0);
-  column_wrapper<cudf::size_type> expected{0, 1};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result_cv);
+  auto result = left_semi_join(left, right, {0}, {0}, cudf::null_equality::EQUAL);
+  column_wrapper<cudf::size_type> expected_column{0, 1};
+  auto expected = cudf::table_view{{expected_column}};
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, *result);
 }
 
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> get_saj_tables(
@@ -309,9 +328,8 @@ TEST_F(JoinTest, AntiJoinWithStructsAndNullsOnOneSide)
   auto left  = cudf::table_view{{left_col0}};
   auto right = cudf::table_view{{right_col0}};
 
-  auto result      = cudf::left_anti_join(left, right);
-  auto result_span = cudf::device_span<cudf::size_type const>{*result};
-  auto result_col  = cudf::column_view{result_span};
-  auto expected    = column_wrapper<cudf::size_type>{1};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result_col);
+  auto result               = left_anti_join(left, right, {0}, {0});
+  auto expected_indices_col = column_wrapper<cudf::size_type>{1};
+  auto expected             = cudf::gather(left, expected_indices_col);
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*expected, *result);
 }
