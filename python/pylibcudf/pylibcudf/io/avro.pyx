@@ -70,6 +70,21 @@ cdef class AvroReaderOptions:
             vec.push_back(str(name).encode())
         self.c_obj.set_columns(vec)
 
+    cpdef void set_source(self, SourceInfo src):
+        """
+        Set a new source info location.
+
+        Parameters
+        ----------
+        src : SourceInfo
+            New source information, replacing existing information.
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_source(src.c_obj)
+
 
 cdef class AvroReaderOptionsBuilder:
     cpdef AvroReaderOptionsBuilder columns(self, list col_names):

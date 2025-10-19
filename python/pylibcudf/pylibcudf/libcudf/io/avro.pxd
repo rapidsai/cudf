@@ -19,6 +19,7 @@ cdef extern from "cudf/io/avro.hpp" namespace "cudf::io" nogil:
 
         # setters
 
+        void set_source(cudf_io_types.source_info src) except +libcudf_exception_handler
         void set_columns(vector[string] col_names) except +libcudf_exception_handler
         void set_skip_rows(size_type val) except +libcudf_exception_handler
         void set_num_rows(size_type val) except +libcudf_exception_handler
