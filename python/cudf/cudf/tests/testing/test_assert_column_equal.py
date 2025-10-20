@@ -1,6 +1,5 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
 
-import numpy as np
 import pyarrow as pa
 import pytest
 
@@ -58,16 +57,16 @@ def test_assert_column_memory_basic_same(arrow_arrays):
 
     left = cudf.core.column.build_column(
         plc_column=plc_col,
-        dtype=np.dtype(np.int8),
-        size=len(arrow_arrays),
+        dtype=data.dtype,
+        size=data.size,
         offset=0,
         null_count=data.null_count,
         exposed=False,
     )
     right = cudf.core.column.build_column(
         plc_column=plc_col,
-        dtype=np.dtype(np.int8),
-        size=len(arrow_arrays),
+        dtype=data.dtype,
+        size=data.size,
         offset=0,
         null_count=data.null_count,
         exposed=False,
