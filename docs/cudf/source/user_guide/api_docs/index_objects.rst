@@ -25,6 +25,7 @@ Properties
    Index.empty
    Index.has_duplicates
    Index.hasnans
+   Index.inferred_type
    Index.is_monotonic_increasing
    Index.is_monotonic_decreasing
    Index.is_unique
@@ -249,6 +250,7 @@ MultiIndex properties
    MultiIndex.names
    MultiIndex.levels
    MultiIndex.codes
+   MultiIndex.dtypes
    MultiIndex.nlevels
 
 MultiIndex components

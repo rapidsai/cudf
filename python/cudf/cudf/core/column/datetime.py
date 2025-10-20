@@ -40,6 +40,7 @@ if TYPE_CHECKING:
 
     from cudf._typing import (
         ColumnBinaryOperand,
+        DtypeObj,
         ScalarLike,
     )
     from cudf.core.column.numerical import NumericalColumn
@@ -485,7 +486,7 @@ class DatetimeColumn(TemporalBaseColumn):
                 )
             )
 
-    def as_string_column(self, dtype) -> StringColumn:
+    def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         format = _dtype_to_format_conversion.get(
             self.dtype.name, "%Y-%m-%d %H:%M:%S"
         )
@@ -639,7 +640,7 @@ class DatetimeColumn(TemporalBaseColumn):
         else:
             return result_col
 
-    def _with_type_metadata(self, dtype) -> DatetimeColumn:
+    def _with_type_metadata(self, dtype: DtypeObj) -> DatetimeColumn:
         if isinstance(dtype, pd.DatetimeTZDtype):
             return DatetimeTZColumn(
                 data=self.base_data,  # type: ignore[arg-type]
@@ -752,7 +753,7 @@ class DatetimeColumn(TemporalBaseColumn):
         gmt_data = localized - offsets_to_utc
         return gmt_data._with_type_metadata(dtype)
 
-    def tz_convert(self, tz: str | None):
+    def tz_convert(self, tz: str | None) -> DatetimeColumn:
         raise TypeError(
             "Cannot convert tz-naive timestamps, use tz_localize to localize"
         )
@@ -849,7 +850,7 @@ class DatetimeTZColumn(DatetimeColumn):
         offsets_from_utc = offsets.take(indices, nullify=True)
         return self + offsets_from_utc
 
-    def as_string_column(self, dtype) -> StringColumn:
+    def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         return self._local_time.as_string_column(dtype)
 
     def as_datetime_column(
@@ -886,7 +887,10 @@ class DatetimeTZColumn(DatetimeColumn):
         )
 
     def tz_localize(
-        self, tz: str | None, ambiguous="NaT", nonexistent="NaT"
+        self,
+        tz: str | None,
+        ambiguous: Literal["NaT"] = "NaT",
+        nonexistent: Literal["NaT"] = "NaT",
     ) -> DatetimeColumn:
         if tz is None:
             return self._local_time

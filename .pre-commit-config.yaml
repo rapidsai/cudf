@@ -6,7 +6,7 @@ ci:
   autoupdate_branch: ""
   autoupdate_commit_msg: "[pre-commit.ci] pre-commit autoupdate"
   autoupdate_schedule: quarterly
-  skip: ["verify-alpha-spec"]
+  skip: ["mypy", "verify-alpha-spec"]
   submodules: false
 
 repos:
@@ -33,7 +33,7 @@ repos:
     rev: 'v1.13.0'
     hooks:
       - id: mypy
-        additional_dependencies: [types-cachetools, pyarrow-stubs]
+        additional_dependencies: [types-cachetools, pyarrow-stubs, numpy]
         args: ["--config-file=pyproject.toml",
                "python/cudf/cudf",
                "python/pylibcudf/pylibcudf",

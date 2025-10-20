@@ -1,5 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import abc
 import copyreg
@@ -235,6 +234,12 @@ ListMethods = make_intermediate_proxy_type(
     "ListMethods",
     cudf.core.accessors.lists.ListMethods,
     pd_ListAccessor,
+)
+
+SparseAccessor = make_intermediate_proxy_type(
+    "SparseAccessor",
+    _Unusable,
+    pd.core.arrays.sparse.accessor.SparseAccessor,
 )
 
 StructAccessor = make_intermediate_proxy_type(

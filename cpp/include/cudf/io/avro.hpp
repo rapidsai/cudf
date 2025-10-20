@@ -96,6 +96,13 @@ class avro_reader_options {
   [[nodiscard]] size_type get_num_rows() const { return _num_rows; }
 
   /**
+   * @brief Sets source info.
+   *
+   * @param src The source info.
+   */
+  void set_source(source_info src) { _source = std::move(src); }
+
+  /**
    * @brief Set names of the column to be read.
    *
    * @param col_names Vector of column names
