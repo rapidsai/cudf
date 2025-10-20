@@ -4559,24 +4559,24 @@ class DatetimeProperties(BaseDatelikeProperties):
     daysinmonth = days_in_month
 
     @property
-    def freq(self) -> str | None:
-        raise NotImplementedError("freq is not yet implemented.")
-
-    @property
     def tz(self) -> str | None:
         return self.series._column.tz
 
     @property
+    def freq(self) -> str | None:
+        return self.series._column.freq
+
+    @property
     def date(self):
-        raise NotImplementedError("date is not yet implemented.")
+        return self.series._column.date
 
     @property
     def time(self):
-        raise NotImplementedError("time is not yet implemented.")
+        return self.series._column.time
 
     @property
     def timetz(self):
-        raise NotImplementedError("timetz is not yet implemented.")
+        return self.series._column.timetz
 
     @property
     def unit(self) -> str:

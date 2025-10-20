@@ -307,6 +307,22 @@ class DatetimeColumn(TemporalBaseColumn):
         return np.datetime_data(self.dtype)[0]
 
     @functools.cached_property
+    def freq(self) -> str | None:
+        raise NotImplementedError("freq is not yet implemented.")
+
+    @functools.cached_property
+    def date(self):
+        raise NotImplementedError("date is not yet implemented.")
+
+    @functools.cached_property
+    def time(self):
+        raise NotImplementedError("time is not yet implemented.")
+
+    @functools.cached_property
+    def timetz(self):
+        raise NotImplementedError("timetz is not yet implemented.")
+
+    @functools.cached_property
     def is_normalized(self) -> bool:
         raise NotImplementedError(
             "is_normalized is currently not implemented."
