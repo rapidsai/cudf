@@ -5278,11 +5278,11 @@ class IntervalIndex(Index):
         return self.dtype.closed
 
     @property
-    def closed_left(self):
+    def closed_left(self) -> bool:
         return self.closed in ("left", "both")
 
     @property
-    def closed_right(self):
+    def closed_right(self) -> bool:
         return self.closed in ("right", "both")
 
     @classmethod
