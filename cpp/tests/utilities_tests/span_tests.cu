@@ -386,8 +386,9 @@ TEST(HostDeviceSpanTest, CanGetSize)
 
 TEST(HostDeviceSpanTest, CanGetSizeBytes)
 {
-  auto doubles     = std::vector<double>({6, 3, 2});
-  auto doubles_hdv = cudf::detail::hostdevice_vector<double>(doubles.size(), cudf::get_default_stream());
+  auto doubles = std::vector<double>({6, 3, 2});
+  auto doubles_hdv =
+    cudf::detail::hostdevice_vector<double>(doubles.size(), cudf::get_default_stream());
   std::memcpy(doubles_hdv.host_ptr(), doubles.data(), doubles.size() * sizeof(double));
 
   auto const doubles_span = cudf::detail::hostdevice_span<double>(doubles_hdv);
