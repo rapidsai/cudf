@@ -27,6 +27,8 @@ from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.io.parquet import (
     ParquetDatasetWriter,
     ParquetWriter,
+    is_supported_read_parquet,
+    is_supported_write_parquet,
     merge_parquet_filemetadata,
 )
 from cudf.testing import (
@@ -35,11 +37,6 @@ from cudf.testing import (
     dataset_generator as dg,
 )
 from cudf.testing._utils import TIMEDELTA_TYPES, set_random_null_mask_inplace
-
-from cudf.io.parquet import (
-    is_supported_read_parquet,
-    is_supported_write_parquet,
-)
 
 
 @contextmanager
@@ -3402,8 +3399,9 @@ def test_parquet_reader_engine_error():
 
 
 @pytest.mark.skipif(
-    not is_supported_read_parquet("LZ4") or not is_supported_write_parquet("LZ4"),
-    reason="LZ4 compression not supported for Parquet"
+    not is_supported_read_parquet("LZ4")
+    or not is_supported_write_parquet("LZ4"),
+    reason="LZ4 compression not supported for Parquet",
 )
 def test_parquet_roundtrip_lz4():
     gdf = cudf.DataFrame({"ints": [1, 2] * 5001})
@@ -3417,7 +3415,7 @@ def test_parquet_roundtrip_lz4():
 
 @pytest.mark.skipif(
     not is_supported_write_parquet("LZ4"),
-    reason="LZ4 compression not supported for Parquet writing"
+    reason="LZ4 compression not supported for Parquet writing",
 )
 def test_parquet_write_lz4():
     gdf = cudf.DataFrame({"ints": [1, 2] * 5001})
@@ -4578,7 +4576,7 @@ def test_parquet_decompression(
         pytest.skip(
             f"{compression} compression not supported for Parquet reading in this configuration"
         )
-    
+
     # PANDAS returns category objects whereas cuDF returns hashes
     expect = pdf_day_timestamps.drop(columns=["col_category"])
 

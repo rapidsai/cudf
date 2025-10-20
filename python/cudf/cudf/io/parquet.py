@@ -2550,7 +2550,9 @@ def is_supported_read_parquet(
     >>> cudf.io.parquet.is_supported_read_parquet("LZ4")  # doctest: +SKIP
     True
     """
-    return plc.io.parquet.is_supported_read_parquet(_get_comp_type(compression))
+    return plc.io.parquet.is_supported_read_parquet(
+        _get_comp_type(compression)
+    )
 
 
 def is_supported_write_parquet(
@@ -2574,4 +2576,6 @@ def is_supported_write_parquet(
     >>> cudf.io.parquet.is_supported_write_parquet("SNAPPY")  # doctest: +SKIP
     True
     """
-    return plc.io.parquet.is_supported_write_parquet(_get_comp_type(compression))
+    return plc.io.parquet.is_supported_write_parquet(
+        _get_comp_type(compression)
+    )

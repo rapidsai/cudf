@@ -15,15 +15,17 @@ from pyarrow import orc
 
 import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
-from cudf.io.orc import ORCWriter
+from cudf.io.orc import (
+    ORCWriter,
+    is_supported_read_orc,
+    is_supported_write_orc,
+)
 from cudf.testing import assert_eq, assert_frame_equal
 from cudf.testing._utils import (
     expect_warning_if,
     gen_rand_series,
     supported_numpy_dtypes,
 )
-
-from cudf.io.orc import is_supported_read_orc, is_supported_write_orc
 
 # Removal of these deprecated features is no longer imminent. They will not be
 # removed until a suitable alternative has been implemented. As a result, we
@@ -1894,7 +1896,7 @@ def test_orc_chunked_writer_stripe_size(datadir):
 
 @pytest.mark.skipif(
     not is_supported_read_orc("LZ4") or not is_supported_write_orc("LZ4"),
-    reason="LZ4 compression not supported for ORC"
+    reason="LZ4 compression not supported for ORC",
 )
 def test_orc_roundtrip_lz4():
     gdf = cudf.DataFrame({"ints": [1, 2] * 5001})
@@ -1908,7 +1910,7 @@ def test_orc_roundtrip_lz4():
 
 @pytest.mark.skipif(
     not is_supported_write_orc("LZ4"),
-    reason="LZ4 compression not supported for ORC writing"
+    reason="LZ4 compression not supported for ORC writing",
 )
 def test_orc_write_lz4():
     gdf = cudf.DataFrame({"ints": [1, 2] * 5001})
@@ -1968,7 +1970,7 @@ def test_orc_decompression(set_decomp_env_vars, compression):
         pytest.skip(
             f"{compression} compression not supported for ORC reading in this configuration"
         )
-    
+
     # Write the DataFrame to a Parquet file
     buffer = BytesIO()
     rng = np.random.default_rng(seed=0)
