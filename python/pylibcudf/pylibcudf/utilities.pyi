@@ -1,1 +1,6 @@
+from collections.abc import Sequence
+
+from rmm.pylibrmm.stream import Stream
+
 def is_ptds_enabled() -> bool: ...
+def join_streams(streams: Sequence[Stream], stream: Stream) -> None: ...
