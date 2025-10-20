@@ -6,12 +6,13 @@ def join_streams(streams: list[Stream], stream: Stream) -> None:
     """
     Synchronize a stream to an event on a set of streams.
 
-    For details, see :cpp:func:`join_streams`.
+    After joining the streams, data that is valid on any of the
+    streams in ``streams`` is also valid on ``stream``.
 
     Parameters
     ----------
-    streams : list[Stream]
+    streams
         Streams to wait on.
-    stream : Stream
+    stream
         Joined stream that synchronizes with the waited-on streams.
     """

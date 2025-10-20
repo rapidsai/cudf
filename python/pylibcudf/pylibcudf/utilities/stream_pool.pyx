@@ -13,11 +13,14 @@ __all__ = ["join_streams"]
 cpdef void join_streams(list streams, Stream stream):
     """Synchronize a stream to an event on a set of streams.
 
+    After joining the streams, data that is valid on any of the
+    streams in ``streams`` is also valid on ``stream``.
+
     Parameters
     ----------
-    streams : list[Stream]
+    streams
         Streams to wait on.
-    stream : Stream
+    stream
         Joined stream that synchronizes with the waited-on streams.
     """
     if stream is None:
