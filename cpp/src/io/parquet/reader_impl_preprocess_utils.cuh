@@ -23,6 +23,8 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/functional>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/logical.h>
 
 #include <future>
 #include <vector>

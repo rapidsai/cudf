@@ -169,7 +169,7 @@ cpdef Column multibyte_split(
     """
     Splits the source text into a strings column using a multiple byte delimiter.
 
-    For details, see :cpp:func:`cudf::io::text::multibyte_split`
+    For details, see :cpp:func:`multibyte_split`
 
     Parameters
     ----------

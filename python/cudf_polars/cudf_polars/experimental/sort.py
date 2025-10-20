@@ -69,8 +69,8 @@ def find_sort_splits(
 
     # We now need to find the local split points.  To do this, first split out
     # the partition id and the local row number of the final split values
-    *sort_boundaries, split_part_id, split_local_row = sort_boundaries.columns()
-    sort_boundaries = plc.Table(sort_boundaries)
+    *boundary_cols, split_part_id, split_local_row = sort_boundaries.columns()
+    sort_boundaries = plc.Table(boundary_cols)
     # Now we find the first and last row in the local table corresponding to the split value
     # (first and last, because there may be multiple rows with the same split value)
     split_first_col = plc.search.lower_bound(
@@ -80,17 +80,21 @@ def find_sort_splits(
         tbl, sort_boundaries, column_order, null_order
     )
     # And convert to list for final processing
-    split_first_col = pl.Series(split_first_col).to_list()
-    split_last_col = pl.Series(split_last_col).to_list()
-    split_part_id = pl.Series(split_part_id).to_list()
-    split_local_row = pl.Series(split_local_row).to_list()
+    split_first_list = pl.Series(split_first_col).to_list()
+    split_last_list = pl.Series(split_last_col).to_list()
+    split_part_id_list = pl.Series(split_part_id).to_list()
+    split_local_row_list = pl.Series(split_local_row).to_list()
 
     # Find the final split points.  This is slightly tricky because of the possibility
     # of equal values, which is why we need the part_id and local_row.
     # Consider for example the case when all data is equal.
     split_points = []
     for first, last, part_id, local_row in zip(
-        split_first_col, split_last_col, split_part_id, split_local_row, strict=False
+        split_first_list,
+        split_last_list,
+        split_part_id_list,
+        split_local_row_list,
+        strict=False,
     ):
         if part_id < my_part_id:
             # Local data is globally later so split at first valid row.
@@ -135,7 +139,8 @@ def _select_local_split_candidates(
                     dtype=part_id_dtype,
                     name=next(name_gen),
                 ),
-            ]
+            ],
+            stream=df.stream,
         )
 
     candidates = [i * df.num_rows // num_partitions for i in range(num_partitions)]
@@ -151,6 +156,7 @@ def _select_local_split_candidates(
         plc.Table([*res.columns(), part_id, row_id]),
         [*df.column_names, next(name_gen), next(name_gen)],
         [*df.dtypes, part_id_dtype, part_id_dtype],
+        stream=df.stream,
     )
 
 
@@ -159,7 +165,7 @@ def _get_final_sort_boundaries(
     column_order: Sequence[plc.types.Order],
     null_order: Sequence[plc.types.NullOrder],
     num_partitions: int,
-) -> plc.Table:
+) -> DataFrame:
     """
     Find the global sort split boundaries from all gathered split candidates.
 
@@ -202,6 +208,7 @@ def _get_final_sort_boundaries(
         sort_boundaries,
         sort_boundaries_candidates.column_names,
         sort_boundaries_candidates.dtypes,
+        stream=sort_boundaries_candidates.stream,
     )
 
 
@@ -316,6 +323,8 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
         column_names = options["column_names"]
         column_dtypes = options["column_dtypes"]
 
+        stream = DEFAULT_STREAM
+
         # TODO: When sorting, this step should finalize with a merge (unless we
         # require stability, as cudf merge is not stable).
         return DataFrame.from_table(
@@ -327,10 +336,11 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
                     statistics=context.statistics,
                 ),
                 br=context.br,
-                stream=DEFAULT_STREAM,
+                stream=stream,
             ),
             column_names,
             column_dtypes,
+            stream=stream,
         )
 
 
@@ -359,7 +369,7 @@ def _sort_partition_dataframe(
     """
     if df.num_rows == 0:  # pragma: no cover
         # Fast path for empty DataFrame
-        return {i: df for i in range(partition_count)}
+        return dict.fromkeys(range(partition_count), df)
 
     splits = find_sort_splits(
         df.select(options["by"]).table,
@@ -375,6 +385,7 @@ def _sort_partition_dataframe(
             split,
             df.column_names,
             df.dtypes,
+            stream=df.stream,
         )
         for i, split in enumerate(plc.copying.split(df.table, splits))
     }

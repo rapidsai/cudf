@@ -46,6 +46,8 @@ cdef class ParquetReaderOptions:
     cpdef void set_skip_rows(self, int64_t skip_rows)
     cpdef void set_columns(self, list col_names)
     cpdef void set_filter(self, Expression filter)
+    cpdef void set_source(self, SourceInfo src)
+
 
 cdef class ParquetReaderOptionsBuilder:
     cdef parquet_reader_options_builder c_obj
@@ -92,7 +94,7 @@ cdef class ChunkedParquetWriterOptionsBuilder:
 
     cpdef ChunkedParquetWriterOptionsBuilder metadata(self, TableInputMetadata metadata)
 
-    cpdef ChunkedParquetWriterOptionsBuilder key_value_metadata(self, list metadata)
+    cpdef ChunkedParquetWriterOptionsBuilder key_value_metadata(self, metadata)
 
     cpdef ChunkedParquetWriterOptionsBuilder compression(
         self,
@@ -123,7 +125,7 @@ cdef class ParquetWriterOptions:
 
     cpdef void set_partitions(self, list partitions)
 
-    cpdef void set_column_chunks_file_paths(self, list file_paths)
+    cpdef void set_column_chunks_file_paths(self, file_paths)
 
     cpdef void set_row_group_size_bytes(self, size_t size_bytes)
 
@@ -142,7 +144,7 @@ cdef class ParquetWriterOptionsBuilder:
 
     cpdef ParquetWriterOptionsBuilder metadata(self, TableInputMetadata metadata)
 
-    cpdef ParquetWriterOptionsBuilder key_value_metadata(self, list metadata)
+    cpdef ParquetWriterOptionsBuilder key_value_metadata(self, metadata)
 
     cpdef ParquetWriterOptionsBuilder compression(self, compression_type compression)
 

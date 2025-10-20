@@ -133,9 +133,10 @@ class Aggregation:
             "linear", "lower", "higher", "midpoint", "nearest"
         ] = "linear",
     ) -> Self:
+        q_list: list[float] = [q] if is_scalar(q) else q  # type: ignore[assignment,list-item]
         return cls(
             plc.aggregation.quantile(
-                [q] if is_scalar(q) else q,
+                q_list,
                 plc.types.Interpolation[interpolation.upper()],
             )
         )
