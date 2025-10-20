@@ -1896,7 +1896,7 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
         return result
 
     @cached_property
-    def inferred_type(self):
+    def inferred_type(self) -> str:
         """
         Return a string of the type inferred from the values.
 
@@ -1909,8 +1909,7 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
         >>> idx.inferred_type
         'integer'
         """
-        infer_type = str(self.dtype)
-        if infer_type == "object":
+        if self._is_object():
             if len(self) == 0:
                 return "empty"
             else:
@@ -1921,7 +1920,9 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
             return "floating"
         elif self._is_boolean():
             return "boolean"
-        return infer_type
+        raise NotImplementedError(
+            f"inferred_type not implemented for dtype {self.dtype}"
+        )
 
     @_performance_tracking
     def memory_usage(self, deep: bool = False) -> int:
