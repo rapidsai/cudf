@@ -204,9 +204,9 @@ class stats_caster_base {
       return {std::move(d_chars), std::move(d_offsets), std::move(d_sizes)};
     }
 
-    std::unique_ptr<column> inline to_device(cudf::data_type dtype,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr) const
+    [[nodiscard]] std::unique_ptr<column> inline to_device(cudf::data_type dtype,
+                                                           rmm::cuda_stream_view stream,
+                                                           rmm::device_async_resource_ref mr) const
     {
       if constexpr (std::is_same_v<T, string_view>) {
         auto [d_chars, d_offsets, _] = make_strings_children(val, chars, stream, mr);
