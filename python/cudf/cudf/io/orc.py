@@ -481,7 +481,8 @@ def _plc_write_orc(
     for i, (name, col) in enumerate(
         table._column_labels_and_values, start=num_index_cols_meta
     ):
-        tbl_meta.column_metadata[i].set_name(name)
+        # generate_pandas_metadata will reject tables with non-string column names
+        tbl_meta.column_metadata[i].set_name(name)  # type: ignore[arg-type]
         _set_col_children_metadata(
             col,
             tbl_meta.column_metadata[i],

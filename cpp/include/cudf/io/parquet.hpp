@@ -258,6 +258,13 @@ class parquet_reader_options {
   [[nodiscard]] bool is_enabled_use_jit_filter() const { return _use_jit_filter; }
 
   /**
+   * @brief Set a new source location
+   *
+   * @param src New `source_info`.
+   */
+  void set_source(source_info src) { _source = std::move(src); }
+
+  /**
    * @brief Sets the names of columns to be read from all input sources.
    *
    * Applies the same list of column names across all sources. Unlike `set_row_groups`,
