@@ -257,7 +257,7 @@ async def passthrough_node(
     ch_out: ChannelPair,
     ch_in: ChannelPair,
     *,
-    union_dependency: bool,
+    balanced_consumer: bool,
 ) -> None:
     """
     Passthrough node for rapidsmpf.
@@ -270,20 +270,21 @@ async def passthrough_node(
         The output ChannelPair.
     ch_in
         The input ChannelPair.
-    union_dependency
-        Whether a Union node depends on this passthrough node.
-        If so, we must forward all chunks immediately
+    balanced_consumer
+        Whether all down-stream nodes are pulling
+        data from multiple channels at the same rate.
+        If not, we must forward all chunks immediately
         to avoid blocking progress in a multicast node.
     """
     async with shutdown_on_error(ctx, ch_in.data, ch_out.data):
-        # Unfortunately, we must forward all chunks immediately.
-        # Otherwise, we may block progress in a multicast node.
         sends = []
         while (msg := await ch_in.data.recv(ctx)) is not None:
-            if union_dependency:
-                sends.append(asyncio.create_task(ch_out.data.send(ctx, msg)))
-            else:
+            if balanced_consumer:
                 await ch_out.data.send(ctx, msg)
+            else:
+                # Unfortunately, we must forward all chunks immediately.
+                # Otherwise, we may block progress in a multicast node.
+                sends.append(asyncio.create_task(ch_out.data.send(ctx, msg)))
         if sends:
             await asyncio.gather(*sends)
 
@@ -294,6 +295,19 @@ async def passthrough_node(
 def _(ir: IR, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]:
     # Default generate_ir_sub_network logic.
     # Use simple pointwise node.
+
+    # Check if we are broadcasting any children
+    bcast_indices: list[int] = []
+    if len(ir.children) > 1:
+        counts = [rec.state["partition_info"][c].count for c in ir.children]
+        if bcast_indices := (
+            []
+            if all(c == 1 for c in counts)
+            else [i for i, c in enumerate(counts) if c == 1]
+        ):
+            # When we broadcast, we must make sure upstream
+            # multicast nodes make "all" data available.
+            rec.state["balanced_consumer"] = False
 
     # Process children
     nodes: dict[IR, list[Any]] = {}
@@ -318,12 +332,6 @@ def _(ir: IR, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]
         ]
     else:
         # Multi-channel default node
-        counts = [rec.state["partition_info"][c].count for c in ir.children]
-        bcast_indices = (
-            []
-            if all(c == 1 for c in counts)
-            else [i for i, c in enumerate(counts) if c == 1]
-        )
         nodes[ir] = [
             default_node_multi(
                 rec.state["ctx"],
@@ -413,7 +421,7 @@ def generate_ir_sub_network_wrapper(
                     rec.state["ctx"],
                     ch_out,
                     ch_in,
-                    union_dependency=rec.state["union_dependency"],
+                    balanced_consumer=rec.state["balanced_consumer"],
                 )
             )
         channels[ir] = output_chs

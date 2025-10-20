@@ -923,7 +923,10 @@ def run_polars(
             if args.print_results:
                 print(result)
 
-            print(f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s")
+            print(
+                f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s",
+                flush=True,
+            )
             records[q_id].append(record)
 
     run_config = dataclasses.replace(run_config, records=dict(records))

@@ -197,6 +197,13 @@ def _(
         and right_count == output_count
     )
 
+    # When we broadcast, we must make sure upstream
+    # multicast nodes make "all" data available.
+    if not (
+        pwise_join := output_count == 1 or (left_partitioned and right_partitioned)
+    ):
+        rec.state["balanced_consumer"] = False
+
     # Process children
     nodes: dict[IR, list[Any]] = {}
     channels: dict[IR, list[Any]] = {}
@@ -208,7 +215,7 @@ def _(
     # Create output ChannelPair
     channels[ir] = [ChannelPair.create()]
 
-    if output_count == 1 or (left_partitioned and right_partitioned):
+    if pwise_join:
         # Partition-wise join (use default_node_multi)
         nodes[ir] = [
             default_node_multi(
