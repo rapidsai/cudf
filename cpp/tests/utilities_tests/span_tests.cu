@@ -326,8 +326,8 @@ TEST(MdSpanTest, CanGetCount)
 
 auto get_test_hostdevice_vector()
 {
-  auto v         = cudf::detail::hostdevice_vector<char>(11, cudf::get_default_stream());
   auto const msg = create_hello_world_message();
+  auto v         = cudf::detail::hostdevice_vector<char>(msg.size(), cudf::get_default_stream());
   std::memcpy(v.host_ptr(), msg.data(), msg.size());
 
   return v;
