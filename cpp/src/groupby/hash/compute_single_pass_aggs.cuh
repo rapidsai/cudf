@@ -82,10 +82,10 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   // empty: empty input should already been handled before reaching here.
   if (grid_size <= 0) { return run_aggs_by_global_mem_kernel(); }
 
-  auto const [can_run_by_shared_mem_kernel, available_shmem_size] =
+  auto const [can_use_shared_mem_kernel, available_shmem_size] =
     is_shared_memory_compatible(agg_kinds, values, grid_size);
 
-  if (!can_run_by_shared_mem_kernel) { return run_aggs_by_global_mem_kernel(); }
+  if (!can_use_shared_mem_kernel) { return run_aggs_by_global_mem_kernel(); }
 
   // Maps from the global row index of the input table to its block-wise rank.
   rmm::device_uvector<size_type> local_mapping_indices(num_rows, stream);

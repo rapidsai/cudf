@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include "compute_global_memory_aggs.hpp"
 #include "output_utils.hpp"
 #include "single_pass_functors.cuh"
