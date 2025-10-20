@@ -60,6 +60,31 @@ __forceinline__ __device__ uint4 load_uint4(char const* ptr)
   return regs;
 }
 
+// Load of 4B, assuming ptr may not be 4B aligned, so we need to mask the result
+// use for start of string char column
+__device__ uint32_t load_uint32_masked(char const* ptr, char const* head, char const* tail) {
+  uint32_t result = 0;
+  auto offset = reinterpret_cast<std::uintptr_t>(ptr) % sizeof(uint32_t);
+
+  // chunk start is the aligned address of the chunk
+  auto const* chunk_start = reinterpret_cast<unsigned int const*>(ptr - offset);
+
+  // Is the 4B load valid
+  if (chunk_start >= head && chunk_start + sizeof(uint32_t) <= tail) {
+    return *reinterpret_cast<uint32_t const*>(chunk_start);
+  }
+
+  // If the 4B load is not valid, we need to load the chunk byte by byte
+  // ptr to the first byte of the chunk that is readable
+  auto start_ptr = chunk_start < head ? head : chunk_start;
+  auto end_ptr = chunk_start + sizeof(uint32_t) > tail ? tail : chunk_start + sizeof(uint32_t);
+  auto byte_read_offset = start_ptr % sizeof(uint32_t);
+  for (auto i = start_ptr; i < end_ptr; i++) {
+    result |= (*i << (byte_read_offset + (i - start_ptr) * 8));
+  }
+  return result;
+}
+
 /**
  * @brief Gather characters from the input iterator, with string parallel strategy.
  *
@@ -158,7 +183,7 @@ CUDF_KERNEL void gather_chars_fn_string_parallel(StringIterator strings_begin,
  * @param string_indices Start of index iterator.
  * @param total_out_strings Number of output strings to be gathered.
  */
-template <int strings_per_threadblock, typename StringIterator, typename MapIterator>
+template <int block_size, int strings_per_threadblock, typename StringIterator, typename MapIterator>
 CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
                                                char* out_chars,
                                                cudf::detail::input_offsetalator const out_offsets,
@@ -166,6 +191,9 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
                                                size_type total_out_strings)
 {
   __shared__ int64_t out_offsets_threadblock[strings_per_threadblock + 1];
+  __shared__ uint32_t string_scratch[block_size]; // scratch for loading string chunks
+  __shared__ uint32_t string_start_offset[strings_per_threadblock]; // store where to start reading the string in string_scratch
+  __shared__ uint32_t string_read_offset[strings_per_threadblock];
 
   // Current thread block will process output strings starting at `begin_out_string_idx`.
   size_type begin_out_string_idx = blockIdx.x * strings_per_threadblock;
@@ -182,21 +210,70 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
   }
   __syncthreads();
 
+  for (int64_t in_ibyte = threadIdx.x * sizeof(uint32_t) + out_offsets_threadblock[0];
+       in_ibyte < out_offsets_threadblock[strings_current_threadblock];
+       in_ibyte += blockDim.x * sizeof(uint32_t)) {
+    // binary search for the string index corresponding to in_ibyte
+
+    // out_offsets_threadblock contains the out offsets of the string to be written
+    // When we do binary serarch on in_ibyte, we are trying to find which string this thread should load from
+    auto const string_idx_iter =
+      cuda::std::prev(thrust::upper_bound(thrust::seq,
+                                          out_offsets_threadblock,
+                                          out_offsets_threadblock + strings_current_threadblock,
+                                          in_ibyte));
+    // each entry in out_offsets_threadblock is a different string start, so the distance gives the string index
+    size_type string_idx = cuda::std::distance(out_offsets_threadblock, string_idx_iter);
+
+    // string_idx is local to threadblock, so add begin_out_string_idx to it
+    // when we then use that as index to string_indices, we get the string index to read
+    size_type in_string_idx = string_indices[begin_out_string_idx + string_idx];
+
+    // calculate which character to load within the string
+    auto const icharacter = in_ibyte - out_offsets_threadblock[string_idx];
+    
+    // FIXME: we should check if this the first character of the first string in the string char column
+    // in_string_idx == 0 does not mean that this is the first string in the string char column
+    if (in_string_idx == 0 && in_ibyte == 0) {
+      string_scratch[threadIdx.x] = load_uint32_masked(strings_begin[in_string_idx].data() + icharacter);
+    } else {
+      string_scratch[threadIdx.x] = load_aligned_uint32(strings_begin[in_string_idx].data() + icharacter);
+    }
+    if (icharacter - string_read_offset[string_idx] < sizeof(uint32_t)) {
+      string_start_offset[string_idx] = threadIdx.x * sizeof(uint32_t) - icharacter;
+    }
+  }
+  __syncthreads();
+
+  /**TODO: 
+   1.out_ibyte should have a stride of 4
+  2. check length of in_string_idx
+   1. if len
+  **/
+  // out_ibyte is the byte index into the global output buffer
   for (int64_t out_ibyte = threadIdx.x + out_offsets_threadblock[0];
        out_ibyte < out_offsets_threadblock[strings_current_threadblock];
        out_ibyte += blockDim.x) {
     // binary search for the string index corresponding to out_ibyte
+
+    // out_offsets_threadblock contains the out offsets of the string to be written
+    // When we do binary serarch on out_ibyte, we are trying to find which string this thread should load from
     auto const string_idx_iter =
       cuda::std::prev(thrust::upper_bound(thrust::seq,
                                           out_offsets_threadblock,
                                           out_offsets_threadblock + strings_current_threadblock,
                                           out_ibyte));
+    // each entry in out_offsets_threadblock is a different string start, so the distance gives the string index
     size_type string_idx = cuda::std::distance(out_offsets_threadblock, string_idx_iter);
 
     // calculate which character to load within the string
     auto const icharacter = out_ibyte - out_offsets_threadblock[string_idx];
 
+    // string_idx is local to threadblock, so add begin_out_string_idx to it
+    // when we then use that as index to string_indices, we get the string index to read
     size_type in_string_idx = string_indices[begin_out_string_idx + string_idx];
+
+    // read the character from the input string and write it to the output buffer
     out_chars[out_ibyte]    = strings_begin[in_string_idx].data()[icharacter];
   }
 }
@@ -253,9 +330,10 @@ rmm::device_uvector<char> gather_chars(StringIterator strings_begin,
       stream.value()>>>(strings_begin, d_chars, offsets, map_begin, output_count);
   } else {
     constexpr int strings_per_threadblock = 32;
-    gather_chars_fn_char_parallel<strings_per_threadblock>
+    const int block_size = warps_per_threadblock * cudf::detail::warp_size;
+    gather_chars_fn_char_parallel<block_size, strings_per_threadblock>
       <<<(output_count + strings_per_threadblock - 1) / strings_per_threadblock,
-         warps_per_threadblock * cudf::detail::warp_size,
+         block_size,
          0,
          stream.value()>>>(strings_begin, d_chars, offsets, map_begin, output_count);
   }
