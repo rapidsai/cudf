@@ -813,6 +813,10 @@ class DatetimeTZColumn(DatetimeColumn):
             raise ValueError("dtype must be a pandas.DatetimeTZDtype")
         return get_compatible_timezone(dtype)
 
+    @functools.cached_property
+    def time_unit(self) -> str:
+        return self.dtype.unit
+
     def to_pandas(
         self,
         *,
