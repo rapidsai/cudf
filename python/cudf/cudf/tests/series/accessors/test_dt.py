@@ -567,6 +567,8 @@ def test_datetime_strftime_not_implemented_formats(date_format):
         "day_of_week",
         "dayofyear",
         "day_of_year",
+        "unit",
+        "tz",
     ],
 )
 def test_dt_series_datetime_fields(data, field):

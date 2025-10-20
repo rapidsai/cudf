@@ -4564,7 +4564,7 @@ class DatetimeProperties(BaseDatelikeProperties):
 
     @property
     def tz(self) -> str | None:
-        raise self.series._column.tz
+        return self.series._column.tz
 
     @property
     def date(self):

@@ -289,6 +289,24 @@ class DatetimeColumn(TemporalBaseColumn):
         raise NotImplementedError("day_of_week is currently not implemented.")
 
     @functools.cached_property
+    def tz(self):
+        """
+        Return the timezone.
+
+        Returns
+        -------
+        datetime.tzinfo or None
+            Returns None when the array is tz-naive.
+        """
+        if isinstance(self.dtype, pd.DatetimeTZDtype):
+            return self.dtype.tz
+        return None
+
+    @functools.cached_property
+    def time_unit(self) -> str:
+        return np.datetime_data(self.dtype)[0]
+
+    @functools.cached_property
     def is_normalized(self) -> bool:
         raise NotImplementedError(
             "is_normalized is currently not implemented."
@@ -819,24 +837,6 @@ class DatetimeTZColumn(DatetimeColumn):
         # Cast to expected timestamp array type for assume_timezone
         local_array = cast(pa.TimestampArray, self._local_time.to_arrow())
         return pa.compute.assume_timezone(local_array, str(self.dtype.tz))
-
-    @functools.cached_property
-    def time_unit(self) -> str:
-        return self.dtype.unit
-
-    @property
-    def tz(self):
-        """
-        Return the timezone.
-
-        Returns
-        -------
-        datetime.tzinfo or None
-            Returns None when the array is tz-naive.
-        """
-        if isinstance(self.dtype, pd.DatetimeTZDtype):
-            return self.dtype.tz
-        return None
 
     @property
     def _utc_time(self) -> DatetimeColumn:
