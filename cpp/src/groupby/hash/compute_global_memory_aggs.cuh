@@ -67,8 +67,17 @@ rmm::device_uvector<size_type> compute_matching_keys(bitmask_type const* row_bit
   return key_indices;
 }
 
+/**
+ * @brief Compute aggregations and write the results directly to a dense output table.
+ *
+ * The target indices in the dense output table are computed by firstly inserting all keys into the
+ * hash set then extracting the unique keys and computing a transform map from the input key
+ * indices to the output key indices. This incurs some overhead, but it allows us to avoid
+ * allocating extra memory for the sparse table and gathering the results from the sparse table into
+ * the final dense table.
+ */
 template <typename SetType>
-std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_direct_output(
+std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_dense_output(
   bitmask_type const* row_bitmask,
   table_view const& values,
   SetType const& key_set,
@@ -103,6 +112,14 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_d
   return {std::move(agg_results), std::move(unique_keys)};
 }
 
+/**
+ * @brief Compute aggregations and write the results to a sparse intermediate output table, then
+ * generate the final output table by gathering the relevant rows from it.
+ *
+ * During computing the aggregations, we write the results to a sparse intermediate output table
+ * using the target indices as indices of the input keys. Such input key indices are computed by
+ * inserting keys into the hash set on-the-fly.
+ */
 template <typename SetType>
 std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_sparse_output_gather(
   bitmask_type const* row_bitmask,
@@ -151,7 +168,7 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_global
   rmm::device_async_resource_ref mr)
 {
   return h_agg_kinds.size() > GROUPBY_DENSE_OUTPUT_THRESHOLD
-           ? compute_aggs_direct_output(
+           ? compute_aggs_dense_output(
                row_bitmask, values, key_set, h_agg_kinds, d_agg_kinds, stream, mr)
            : compute_aggs_sparse_output_gather(
                row_bitmask, values, key_set, h_agg_kinds, d_agg_kinds, stream, mr);
