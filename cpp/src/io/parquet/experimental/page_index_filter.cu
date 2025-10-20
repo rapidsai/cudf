@@ -320,19 +320,20 @@ struct page_stats_caster : public stats_caster_base {
    *
    * @return A pair containing the output data buffer and nullmask
    */
-  [[nodiscard]] std::optional<std::unique_ptr<column>> build_is_null_device_column(
-    std::optional<host_column<bool>>& is_null,
+  [[nodiscard]] std::unique_ptr<column> build_is_null_device_column(
+    host_column<bool> const& is_null,
     cudf::device_span<size_type const> page_indices,
     cudf::host_span<size_type const> page_row_offsets,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const
   {
-    CUDF_EXPECTS(has_is_null_operator and is_null.has_value(),
-                 "is_null host column must be present");
-    auto const dtype               = cudf::data_type{cudf::type_id::BOOL8};
-    auto is_nullcol                = is_null->to_device(dtype, stream, mr);
+    CUDF_EXPECTS(
+      has_is_null_operator,
+      "The filter expression must have an IS_NULL operator to build is_null device column");
+    auto const dtype = cudf::data_type{cudf::type_id::BOOL8};
+    auto is_nullcol  = is_null.to_device(dtype, stream, cudf::get_current_device_resource_ref());
     auto [null_data, null_bitmask] = build_data_and_nullmask<bool>(is_nullcol->mutable_view(),
-                                                                   is_null->null_mask.data(),
+                                                                   is_null.null_mask.data(),
                                                                    page_indices,
                                                                    page_row_offsets,
                                                                    dtype,
@@ -340,8 +341,8 @@ struct page_stats_caster : public stats_caster_base {
                                                                    mr);
     auto const null_nulls          = cudf::detail::null_count(
       reinterpret_cast<bitmask_type*>(null_bitmask.data()), 0, total_rows, stream);
-    return std::make_optional(std::make_unique<column>(
-      dtype, total_rows, std::move(null_data), std::move(null_bitmask), null_nulls));
+    return std::make_unique<column>(
+      dtype, total_rows, std::move(null_data), std::move(null_bitmask), null_nulls);
   }
 
   /**
@@ -599,7 +600,8 @@ struct page_stats_caster : public stats_caster_base {
                 std::make_unique<column>(
                   dtype, total_rows, std::move(max_data), std::move(max_bitmask), max_nulls),
                 has_is_null_operator
-                  ? build_is_null_device_column(is_null, page_indices, page_row_offsets, stream, mr)
+                  ? std::make_optional(build_is_null_device_column(
+                      is_null.value(), page_indices, page_row_offsets, stream, mr))
                   : std::nullopt};
       }
       // For strings columns, gather the page-level string offsets and bitmask to row-level
@@ -630,9 +632,9 @@ struct page_stats_caster : public stats_caster_base {
             std::move(max_data),
             max_nulls,
             std::move(max_nullmask)),
-          has_is_null_operator
-            ? build_is_null_device_column(is_null, page_indices, page_row_offsets, stream, mr)
-            : std::nullopt};
+          has_is_null_operator ? std::make_optional(build_is_null_device_column(
+                                   is_null.value(), page_indices, page_row_offsets, stream, mr))
+                               : std::nullopt};
       }
     }
   }

@@ -206,7 +206,7 @@ class stats_caster_base {
 
     std::unique_ptr<column> inline to_device(cudf::data_type dtype,
                                              rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr)
+                                             rmm::device_async_resource_ref mr) const
     {
       if constexpr (std::is_same_v<T, string_view>) {
         auto [d_chars, d_offsets, _] = make_strings_children(val, chars, stream, mr);
