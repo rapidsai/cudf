@@ -605,6 +605,7 @@ nitpick_ignore = [
     ("py:class", "StringColumn"),
     ("py:class", "ColumnLike"),
     ("py:class", "DtypeObj"),
+    ("py:class", "Axis"),
     ("py:class", "ArrowLike"),
 ]
 
