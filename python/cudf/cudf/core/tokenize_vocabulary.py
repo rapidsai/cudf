@@ -23,7 +23,7 @@ class TokenizeVocabulary:
         )
 
     def tokenize(
-        self, text, delimiter: str = "", default_id: int = -1
+        self, text: Series, delimiter: str = "", default_id: int = -1
     ) -> Series:
         """
         Parameters

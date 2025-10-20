@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from cudf._typing import (
         ColumnBinaryOperand,
         DatetimeLikeScalar,
+        DtypeObj,
     )
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.string import StringColumn
@@ -128,7 +129,9 @@ class TimeDeltaColumn(TemporalBaseColumn):
 
     def __contains__(self, item: DatetimeLikeScalar) -> bool:
         try:
-            item = self._NP_SCALAR(item, self.time_unit)
+            # call-overload must be ignored because numpy stubs only accept literal
+            # time unit strings, but we're passing self.time_unit which is valid at runtime
+            item = self._NP_SCALAR(item, self.time_unit)  # type: ignore[call-overload]
         except ValueError:
             # If item cannot be converted to duration type
             # np.timedelta64 raises ValueError, hence `item`
@@ -250,7 +253,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
                     )
                 )
 
-    def as_string_column(self, dtype) -> StringColumn:
+    def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         if cudf.get_option("mode.pandas_compatible"):
             if isinstance(dtype, np.dtype) and dtype.kind == "O":
                 raise TypeError(

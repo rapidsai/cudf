@@ -19,7 +19,7 @@ size_type = types.int32
 
 # String object definitions
 class UDFString(types.Type):
-    np_dtype = np.dtype("object")
+    np_dtype: np.dtype[np.object_] = np.dtype("object")
 
     def __init__(self):
         super().__init__(name="udf_string")
@@ -30,7 +30,7 @@ class UDFString(types.Type):
 
 
 class ManagedUDFString(types.Type):
-    np_dtype = np.dtype("object")
+    np_dtype: np.dtype[np.object_] = np.dtype("object")
 
     def __init__(self):
         super().__init__(name="managed_udf_string")
@@ -41,7 +41,7 @@ class ManagedUDFString(types.Type):
 
 
 class StringView(types.Type):
-    np_dtype = np.dtype("object")
+    np_dtype: np.dtype[np.object_] = np.dtype("object")
 
     def __init__(self):
         super().__init__(name="string_view")
