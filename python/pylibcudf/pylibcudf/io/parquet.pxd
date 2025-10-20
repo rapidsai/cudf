@@ -46,6 +46,8 @@ cdef class ParquetReaderOptions:
     cpdef void set_skip_rows(self, int64_t skip_rows)
     cpdef void set_columns(self, list col_names)
     cpdef void set_filter(self, Expression filter)
+    cpdef void set_source(self, SourceInfo src)
+
 
 cdef class ParquetReaderOptionsBuilder:
     cdef parquet_reader_options_builder c_obj

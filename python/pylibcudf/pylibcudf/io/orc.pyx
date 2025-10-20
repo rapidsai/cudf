@@ -400,6 +400,21 @@ cdef class OrcReaderOptions:
             c_column_names.push_back(col.encode())
         self.c_obj.set_columns(c_column_names)
 
+    cpdef void set_source(self, SourceInfo src):
+        """
+        Set a new source info location.
+
+        Parameters
+        ----------
+        src : SourceInfo
+            New source information, replacing existing information.
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_source(src.c_obj)
+
 cdef class OrcReaderOptionsBuilder:
     cpdef OrcReaderOptionsBuilder use_index(self, bool use):
         """
