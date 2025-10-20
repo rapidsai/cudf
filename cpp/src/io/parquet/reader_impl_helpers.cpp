@@ -386,7 +386,7 @@ metadata::metadata(datasource* source, bool read_page_indexes)
         constexpr std::size_t min_tasks = 4;
         constexpr std::size_t max_tasks = 32;
         auto const ratio                = static_cast<double>(total_columns) / parallel_threshold;
-        // Scale the number of tasks and task size evenly (e.g. quardupling the number of elements
+        // Scale the number of tasks and task size evenly (e.g. quadrupling the number of elements
         // doubles both the number of tasks and the task size)
         auto const multiplier = std::size_t(1) << (static_cast<size_t>(std::log2(ratio)) / 2);
 
