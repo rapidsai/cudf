@@ -69,6 +69,11 @@ option(DISABLE_DEPRECATION_WARNINGS "Disable warnings generated from deprecated 
 option(CUDA_ENABLE_LINEINFO
        "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler)" OFF
 )
+# Option to enable NVTX debug range utility macros to allow more precise performance profiling.
+option(CUDF_ENABLE_NVTX_DEBUG_RANGE
+    "Enable cudf's NVTX debug ranges for more precise performance profiling" OFF
+)
+
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
@@ -129,8 +134,13 @@ endif()
 
 set(CUDF_CXX_FLAGS "")
 set(CUDF_CUDA_FLAGS "")
-set(CUDF_CXX_DEFINITIONS "")
-set(CUDF_CUDA_DEFINITIONS "")
+if(CUDF_ENABLE_NVTX_DEBUG_RANGE)
+  set(CUDF_CXX_DEFINITIONS "CUDF_ENABLE_NVTX_DEBUG_RANGE")
+  set(CUDF_CUDA_DEFINITIONS "CUDF_ENABLE_NVTX_DEBUG_RANGE")
+else()
+  set(CUDF_CXX_DEFINITIONS "")
+  set(CUDF_CUDA_DEFINITIONS "")
+endif()
 
 # For now, disable CMake's automatic module scanning for C++ files. There is an sccache bug in the
 # version RAPIDS uses in CI that causes it to handle the resulting -M* flags incorrectly with
