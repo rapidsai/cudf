@@ -1,5 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -1163,7 +1162,7 @@ def _transform_arg(
             for k, a in arg.items()
         }
     elif isinstance(arg, np.ndarray) and arg.dtype == "O":
-        transformed = [
+        transformed: list[Any] = [  # type: ignore[var-annotated]
             _transform_arg(a, attribute_name, seen) for a in arg.flat
         ]
         # Keep the same memory layout as arg (the default is C_CONTIGUOUS)
@@ -1171,7 +1170,9 @@ def _transform_arg(
             order = "F"
         else:
             order = "C"
-        result = np.empty(int(np.prod(arg.shape)), dtype=object, order=order)
+        result = np.empty(  # type: ignore[call-overload]
+            int(np.prod(arg.shape)), dtype=np.object_, order=order
+        )
         result[...] = transformed
         return result.reshape(arg.shape)
     elif isinstance(arg, Iterator) and attribute_name == "_fsproxy_fast":
@@ -1386,7 +1387,7 @@ PROXY_BASE_CLASSES: set[type] = {
 }
 
 
-NUMPY_TYPES: set[str] = set(np.sctypeDict.values())
+NUMPY_TYPES: set[type[np.generic]] = set(np.sctypeDict.values())  # type: ignore[arg-type]
 
 
 _SPECIAL_METHODS: set[str] = {
