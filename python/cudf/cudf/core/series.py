@@ -4579,8 +4579,8 @@ class DatetimeProperties(BaseDatelikeProperties):
         raise NotImplementedError("timetz is not yet implemented.")
 
     @property
-    def unit(self):
-        raise NotImplementedError("unit is not yet implemented.")
+    def unit(self) -> str:
+        return self.series._column.time_unit
 
     @property  # type: ignore
     @_performance_tracking

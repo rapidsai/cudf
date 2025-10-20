@@ -3681,9 +3681,7 @@ class DatetimeIndex(Index):
         datetime.tzinfo or None
             Returns None when the array is tz-naive.
         """
-        if isinstance(self.dtype, pd.DatetimeTZDtype):
-            return self.dtype.tz
-        return None
+        return self._column.tz
 
     @property
     def tzinfo(self) -> tzinfo | None:

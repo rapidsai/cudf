@@ -825,6 +825,20 @@ class DatetimeTZColumn(DatetimeColumn):
         return self.dtype.unit
 
     @property
+    def tz(self):
+        """
+        Return the timezone.
+
+        Returns
+        -------
+        datetime.tzinfo or None
+            Returns None when the array is tz-naive.
+        """
+        if isinstance(self.dtype, pd.DatetimeTZDtype):
+            return self.dtype.tz
+        return None
+
+    @property
     def _utc_time(self) -> DatetimeColumn:
         """Return UTC time as naive timestamps."""
         return DatetimeColumn(
