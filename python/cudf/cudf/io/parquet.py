@@ -2370,9 +2370,19 @@ def _set_col_metadata(
 
 
 def _get_comp_type(
-    compression: Literal["snappy", "ZSTD", "ZLIB", "LZ4", None],
+    compression: Literal[
+        "snappy",
+        "SNAPPY",
+        "GZIP",
+        "BROTLI",
+        "LZ4",
+        "ZSTD",
+        "ZLIB",
+        "NONE",
+        None,
+    ],
 ) -> plc.io.types.CompressionType:
-    if compression is None:
+    if compression is None or compression == "NONE":
         return plc.io.types.CompressionType.NONE
     result = getattr(plc.io.types.CompressionType, compression.upper(), None)
     if result is None:

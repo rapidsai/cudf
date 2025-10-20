@@ -652,9 +652,9 @@ class ORCWriter:
 
 
 def _get_comp_type(
-    compression: Literal[False, None, "SNAPPY", "ZLIB", "ZSTD", "LZ4"],
+    compression: Literal[False, None, "SNAPPY", "ZLIB", "ZSTD", "LZ4", "NONE"],
 ) -> plc.io.types.CompressionType:
-    if compression is None or compression is False:
+    if compression is None or compression is False or compression == "NONE":
         return plc.io.types.CompressionType.NONE
 
     normed_compression = compression.upper()
