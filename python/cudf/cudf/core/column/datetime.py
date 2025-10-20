@@ -813,10 +813,6 @@ class DatetimeTZColumn(DatetimeColumn):
             raise ValueError("dtype must be a pandas.DatetimeTZDtype")
         return get_compatible_timezone(dtype)
 
-    @functools.cached_property
-    def time_unit(self) -> str:
-        return self.dtype.unit
-
     def to_pandas(
         self,
         *,
@@ -841,6 +837,10 @@ class DatetimeTZColumn(DatetimeColumn):
         # Cast to expected timestamp array type for assume_timezone
         local_array = cast(pa.TimestampArray, self._local_time.to_arrow())
         return pa.compute.assume_timezone(local_array, str(self.dtype.tz))
+
+    @functools.cached_property
+    def time_unit(self) -> str:
+        return self.dtype.unit
 
     @property
     def _utc_time(self) -> DatetimeColumn:
