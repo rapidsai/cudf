@@ -18,7 +18,7 @@ def test_join_streams_basic():
     main_stream = Stream()
 
     # join_streams should synchronize main_stream with stream1 and stream2
-    plc.utilities.join_streams([stream1, stream2], main_stream)
+    plc.utilities.stream_pool.join_streams([stream1, stream2], main_stream)
 
     # The function should complete without error
     # We can't easily verify the synchronization directly,
@@ -30,7 +30,7 @@ def test_join_streams_empty_list():
     main_stream = Stream()
 
     # Should handle empty list gracefully
-    plc.utilities.join_streams([], main_stream)
+    plc.utilities.stream_pool.join_streams([], main_stream)
 
 
 def test_join_streams_single_stream():
@@ -38,7 +38,7 @@ def test_join_streams_single_stream():
     stream1 = Stream()
     main_stream = Stream()
 
-    plc.utilities.join_streams([stream1], main_stream)
+    plc.utilities.stream_pool.join_streams([stream1], main_stream)
 
 
 def test_join_streams_multiple_streams():
@@ -46,7 +46,7 @@ def test_join_streams_multiple_streams():
     streams = [Stream() for _ in range(10)]
     main_stream = Stream()
 
-    plc.utilities.join_streams(streams, main_stream)
+    plc.utilities.stream_pool.join_streams(streams, main_stream)
 
 
 def test_join_streams_type_error():
@@ -55,12 +55,12 @@ def test_join_streams_type_error():
 
     # Test with non-list input
     with pytest.raises(TypeError):
-        plc.utilities.join_streams(None, main_stream)
+        plc.utilities.stream_pool.join_streams(None, main_stream)
 
     # Test with non-Stream in list
     with pytest.raises(TypeError):
-        plc.utilities.join_streams([None], main_stream)
+        plc.utilities.stream_pool.join_streams([None], main_stream)
 
     # Test with non-Stream as main stream
     with pytest.raises(TypeError):
-        plc.utilities.join_streams([Stream()], None)
+        plc.utilities.stream_pool.join_streams([Stream()], None)

@@ -1,7 +1,5 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
-from libcpp cimport bool
 from libcpp.vector cimport vector
-from pylibcudf.libcudf.utilities cimport default_stream
 from pylibcudf.libcudf.utilities cimport stream_pool as cpp_stream_pool
 from pylibcudf.libcudf.utilities.span cimport host_span
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
@@ -9,21 +7,11 @@ from rmm.pylibrmm.stream cimport Stream
 
 ctypedef const cuda_stream_view const_cuda_stream_view
 
-__all__ = ["is_ptds_enabled", "join_streams"]
-
-
-cpdef bool is_ptds_enabled():
-    """Checks if per-thread default stream is enabled.
-
-    For details, see :cpp:func:`is_ptds_enabled`.
-    """
-    return default_stream.is_ptds_enabled()
+__all__ = ["join_streams"]
 
 
 cpdef void join_streams(list streams, Stream stream):
     """Synchronize a stream to an event on a set of streams.
-
-    For details, see :cpp:func:`join_streams`.
 
     Parameters
     ----------

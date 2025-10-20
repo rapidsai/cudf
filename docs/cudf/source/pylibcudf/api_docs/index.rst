@@ -45,7 +45,6 @@ This page provides API documentation for pylibcudf.
     transpose
     types
     unary
-    utilities
 
 .. toctree::
     :maxdepth: 2
@@ -54,3 +53,4 @@ This page provides API documentation for pylibcudf.
     io/index.rst
     strings/index.rst
     nvtext/index.rst
+    utilities/index.rst
