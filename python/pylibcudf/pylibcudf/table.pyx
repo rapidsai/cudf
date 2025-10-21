@@ -319,10 +319,12 @@ cdef class Table:
 
         return PyCapsule_New(<void*>raw_schema_ptr, "arrow_schema", _release_schema)
 
-    def _to_host_array(self):
+    def _to_host_array(self, Stream stream=None):
         cdef ArrowArray* raw_host_array_ptr
+        stream = _get_stream(stream)
+
         with nogil:
-            raw_host_array_ptr = to_arrow_host_raw(self.view())
+            raw_host_array_ptr = to_arrow_host_raw(self.view(), stream.view())
 
         return PyCapsule_New(<void*>raw_host_array_ptr, "arrow_array", _release_array)
 
