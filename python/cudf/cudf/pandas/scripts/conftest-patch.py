@@ -4422,7 +4422,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/frame/methods/test_sort_values.py::TestDataFrameSortValues::test_sort_values_by_empty_list",
     "tests/frame/methods/test_sort_values.py::TestDataFrameSortValues::test_sort_values_frame_column_inplace_sort_exception",
     "tests/frame/methods/test_sort_values.py::TestDataFrameSortValues::test_sort_values_item_cache",
-    "tests/frame/methods/test_sort_values.py::TestSortValuesLevelAsStr::test_sort_index_level_and_column_label[df_idx1-inner-True]",
     "tests/frame/methods/test_to_csv.py::TestDataFrameToCSV::test_gz_lineend",
     "tests/frame/methods/test_to_csv.py::TestDataFrameToCSV::test_multi_index_header",
     "tests/frame/methods/test_to_csv.py::TestDataFrameToCSV::test_to_csv_from_csv1",
