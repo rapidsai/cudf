@@ -100,16 +100,15 @@ struct identity_initializer {
       auto sum_col      = col.child(0);
       auto overflow_col = col.child(1);
 
-      // Initialize both columns using device storage type
-      cudf::type_dispatcher(sum_col.type(), [&]<typename SumType>() {
-        using DeviceType = device_storage_type_t<SumType>;
-        auto zip_it =
-          thrust::make_zip_iterator(sum_col.begin<DeviceType>(), overflow_col.begin<bool>());
-        thrust::fill_n(rmm::exec_policy_nosync(stream),
-                       zip_it,
-                       col.size(),
-                       thrust::make_tuple(DeviceType{0}, false));
-      });
+      // Initialize overflow column to false
+      thrust::fill(rmm::exec_policy_nosync(stream),
+                   overflow_col.begin<bool>(),
+                   overflow_col.end<bool>(),
+                   false);
+
+      // Initialize sum column based on its actual type
+      dispatch_type_and_aggregation(
+        sum_col.type(), aggregation::SUM, identity_initializer{}, sum_col, stream);
     } else if constexpr (std::is_same_v<T, cudf::struct_view>) {
       // This should only happen for SUM_WITH_OVERFLOW, but handle it just in case
       CUDF_FAIL("Struct columns are only supported for SUM_WITH_OVERFLOW aggregation");
