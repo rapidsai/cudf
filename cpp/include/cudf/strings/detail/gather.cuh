@@ -38,6 +38,8 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <__clang_cuda_builtin_vars.h>
 
+#include <cub/cub.cuh>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -168,6 +170,32 @@ CUDF_KERNEL void gather_chars_fn_string_parallel(StringIterator strings_begin,
   }
 }
 
+// A stateful callback functor that maintains a running prefix to be applied
+// during consecutive scan operations.
+struct BlockPrefixCallbackOp
+{
+    // Running prefix
+    int running_total;
+
+    // Constructor
+    __device__ BlockPrefixCallbackOp(int running_total) : running_total(running_total) {}
+
+    // Callback operator to be entered by the first warp of threads in the block.
+    // Thread-0 is responsible for returning a value for seeding the block-wide scan.
+    __device__ int operator()(int block_aggregate)
+    {
+        int old_prefix = running_total;
+        running_total += block_aggregate;
+        return old_prefix;
+    }
+};
+
+/** Number of chunk which need to be scheduled for the grid */
+template<typename T, typename U>
+uint64_t calculate_waves(T grid_size, U chunk_size) {
+  return ((grid_size - 1)/ chunk_size) + 1;
+}
+
 /**
  * @brief Gather characters from the input iterator, with char parallel strategy.
  *
@@ -194,11 +222,17 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
                                                size_type total_out_strings)
 {
   __shared__ int64_t out_offsets_threadblock[strings_per_threadblock + 1]; // measured in characters
-  __shared__ int64_t in_offsets_threadblock[strings_per_threadblock + 1] {0}; // measured in chunks
+  __shared__ int64_t in_offsets_threadblock[strings_per_threadblock + 1]; // measured in chunks
   __shared__ uint32_t string_scratch[block_size]; // scratch for loading string chunks
   __shared__ uint32_t string_start_offset[strings_per_threadblock]; // store where to start reading the string in string_scratch
   __shared__ uint32_t string_read_offset[strings_per_threadblock];
   __shared__ int64_t last_out_ibyte_threadblock = 0; // The last loaded character in our scratch that can be written out to GMEM
+
+  using BlockScan = cub::BlockScan<int, block_size>;
+  __shared__ typename BlockScan::TempStorage temp_storage;
+
+  // Initialize running total
+  BlockPrefixCallbackOp prefix_op(0);
 
   // Current thread block will process output strings starting at `begin_out_string_idx`.
   size_type begin_out_string_idx = blockIdx.x * strings_per_threadblock;
@@ -210,15 +244,27 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
   if (strings_current_threadblock <= 0) return;
 
   // Collectively load offsets of strings processed by the current thread block.
-  // FIXME: Separate out loops for in_offset_threadblock and out_offset_threadblock to remove loop dependency for out_offset.
   for (size_type idx = threadIdx.x; idx <= strings_current_threadblock; idx += blockDim.x) {
     auto const& curr_string_idx = idx + begin_out_string_idx;
-    auto const& curr_string = strings_begin[string_indices[curr_string_idx]];
-    auto const& curr_string_num_chunks = (((curr_string.size_bytes() - 1) / sizeof(uint32_t)) * sizeof(uint32_t)) + 1;
-    if (curr_string.data() % sizeof(uint32_t) != 0) curr_string_num_chunks++; // need extra chunk to account for non-alignment
     out_offsets_threadblock[idx] = out_offsets[curr_string_idx];
+  }
+
+  // Generate chunked load offsets for the strings processed in current thread block
+  for (size_type idx = threadIdx.x; idx <= calculate_waves(strings_current_threadblock, blockDim.x); idx += blockDim.x) {
+    auto curr_string_num_chunks {0}; // default for the block scan
+
     if (idx < strings_current_threadblock) {
-      in_offsets_threadblock[idx + 1] = in_offsets_threadblock[idx] + curr_string_num_chunks;
+      auto const& curr_string_idx = idx + begin_out_string_idx;
+      auto const& curr_string = strings_begin[string_indices[curr_string_idx]];
+      curr_string_num_chunks = calculate_waves(curr_string.size_bytes(), sizeof(uint32_t));
+      if (curr_string.data() % sizeof(uint32_t) != 0) curr_string_num_chunks++; // need extra chunk to account for non-alignment
+    }
+
+    // Collectively compute the block-wide exclusive prefix sum
+    BlockScan(temp_storage).ExclusiveSum(curr_string_num_chunks, curr_string_num_chunks, prefix_op);
+    __syncthreads();
+    if (idx < strings_current_threadblock) {
+      in_offsets_threadblock[idx] = curr_string_num_chunks;
     }
   }
   __syncthreads();
