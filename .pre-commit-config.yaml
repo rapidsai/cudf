@@ -163,7 +163,8 @@ repos:
               cpp/src/io/parquet/ipc/schema/.*[.]fbs$|
               java/pom[.]xml$|
               java/buildscripts/build-info$|
-              java/ci/Dockerfile[.]rocky$
+              java/ci/Dockerfile[.]rocky$|
+              recipe[.]yaml$
         exclude: |
           (?x)^(
             cpp/include/cudf_test/cxxopts[.]hpp$|
