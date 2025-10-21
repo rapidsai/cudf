@@ -146,9 +146,24 @@ repos:
         args: ["--fix"]
       - id: ruff-format
   - repo: https://github.com/rapidsai/pre-commit-hooks
-    rev: v0.7.0
+    rev: v1.0.0
     hooks:
       - id: verify-copyright
+        args: [--fix, --spdx]
+        files: |
+          (?x)
+              [.](cmake|cpp|cu|cuh|h|hpp|sh|pxd|py|pyx|rs|java)$|
+              CMakeLists[.]txt$|
+              CMakeLists_standalone[.]txt$|
+              meta[.]yaml$|
+              pyproject[.]toml$|
+              setup[.]cfg$|
+              cpp/src/text/detail/codepoint_metadata[.]ah$|
+              cpp/src/strings/regex/regex[.]inl$|
+              cpp/src/io/parquet/ipc/schema/.*[.]fbs$|
+              java/pom[.]xml$|
+              java/buildscripts/build-info$|
+              java/ci/Dockerfile[.]rocky$
         exclude: |
           (?x)^(
             cpp/include/cudf_test/cxxopts[.]hpp$|
