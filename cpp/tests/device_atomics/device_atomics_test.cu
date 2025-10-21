@@ -296,7 +296,7 @@ TEST_F(Atomic128Test, CarryPropagation)
 TEST_F(Atomic128Test, NegativeNumbers)
 {
   constexpr int total_threads = 32 * 256;
-  run_atomic_add_test(total_threads * 100, -50, total_threads * 50);
+  run_atomic_add_test(0 - 50, -total_threads * 50);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
