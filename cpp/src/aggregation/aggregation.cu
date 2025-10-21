@@ -44,6 +44,7 @@ namespace {
  *
  * Only works on columns of fixed-width types.
  */
+
 struct identity_initializer {
  private:
   template <typename T, aggregation::Kind k>
@@ -100,15 +101,12 @@ struct identity_initializer {
       auto sum_col      = col.child(0);
       auto overflow_col = col.child(1);
 
-      // Initialize overflow column to false
-      thrust::fill(rmm::exec_policy_nosync(stream),
-                   overflow_col.begin<bool>(),
-                   overflow_col.end<bool>(),
-                   false);
-
-      // Initialize sum column based on its actual type
+      // Initialize sum column using SUM aggregation dispatch (same supported types)
+      // and overflow column separately
       dispatch_type_and_aggregation(
         sum_col.type(), aggregation::SUM, identity_initializer{}, sum_col, stream);
+      thrust::fill_n(
+        rmm::exec_policy_nosync(stream), overflow_col.begin<bool>(), col.size(), false);
     } else if constexpr (std::is_same_v<T, cudf::struct_view>) {
       // This should only happen for SUM_WITH_OVERFLOW, but handle it just in case
       CUDF_FAIL("Struct columns are only supported for SUM_WITH_OVERFLOW aggregation");
