@@ -158,10 +158,10 @@ def get_scheduler(config_options: ConfigOptions) -> Any:
         "'in-memory' executor not supported in 'generate_ir_tasks'"
     )
 
-    scheduler = config_options.executor.scheduler
+    cluster = config_options.executor.cluster
 
     if (
-        scheduler == "distributed"
+        cluster == "distributed"
     ):  # pragma: no cover; block depends on executor type and Distributed cluster
         from distributed import get_client
 
@@ -171,12 +171,12 @@ def get_scheduler(config_options: ConfigOptions) -> Any:
         DaskRegisterManager.register_once()
         DaskRegisterManager.run_on_cluster(client)
         return client.get
-    elif scheduler == "synchronous":
+    elif cluster == "single":
         from cudf_polars.experimental.scheduler import synchronous_scheduler
 
         return synchronous_scheduler
     else:  # pragma: no cover
-        raise ValueError(f"{scheduler} not a supported scheduler option.")
+        raise ValueError(f"{cluster} not a supported cluster option.")
 
 
 def post_process_task_graph(
