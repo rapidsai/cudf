@@ -101,8 +101,7 @@ struct identity_initializer {
       auto sum_col      = col.child(0);
       auto overflow_col = col.child(1);
 
-      // Initialize sum column using SUM aggregation dispatch (same supported types)
-      // and overflow column separately
+      // Initialize sum column using standard SUM aggregation dispatch
       dispatch_type_and_aggregation(
         sum_col.type(), aggregation::SUM, identity_initializer{}, sum_col, stream);
       thrust::fill_n(

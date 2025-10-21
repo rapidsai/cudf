@@ -220,10 +220,8 @@ void verify_valid_requests(host_span<RequestType const> requests)
       if (agg->kind == aggregation::SUM_WITH_OVERFLOW) {
         CUDF_EXPECTS(
           cudf::detail::is_valid_aggregation(request.values.type(), aggregation::SUM_WITH_OVERFLOW),
-          "SUM_WITH_OVERFLOW aggregation only supports signed integer types (int8_t, int16_t, "
-          "int32_t, int64_t) and decimal types (decimal32, decimal64). "
-          "decimal128, unsigned integers, bool, dictionary columns, and other types are not "
-          "supported.");
+          "SUM_WITH_OVERFLOW aggregation only supports signed integer types and decimal types. "
+          "Unsigned integers, bool, dictionary columns, and other types are not supported.");
       }
     }
   }

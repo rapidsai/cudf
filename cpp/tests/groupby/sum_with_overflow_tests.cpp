@@ -30,13 +30,13 @@ using namespace numeric;
 
 using K = int32_t;
 
-// SUM_WITH_OVERFLOW tests - supports all integer and decimal types
+// SUM_WITH_OVERFLOW tests - supports signed integer and decimal types (excluding decimal128)
 template <typename V>
 struct groupby_sum_with_overflow_test : public cudf::test::BaseFixture {};
 
 using sum_with_overflow_supported_types =
   cudf::test::Concat<cudf::test::Types<int8_t, int16_t, int32_t, int64_t>,
-                     cudf::test::FixedPointTypes>;
+                     cudf::test::Types<numeric::decimal32, numeric::decimal64>>;
 
 TYPED_TEST_SUITE(groupby_sum_with_overflow_test, sum_with_overflow_supported_types);
 
