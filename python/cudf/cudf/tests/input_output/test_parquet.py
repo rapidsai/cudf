@@ -733,6 +733,20 @@ def test_parquet_reader_multiple_files(tmp_path, src):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("empty_df_indices", [[0], [0, 1], [2, 3]])
+def test_parquet_reader_multiple_files_some_empty(tmp_path, empty_df_indices):
+    df = pd.DataFrame({"a": [1, 2, 3]})
+    for idx in range(5):
+        if idx in empty_df_indices:
+            df = df.iloc[:0]
+        df.to_parquet(tmp_path / f"df_{idx}.parquet")
+
+    got = cudf.read_parquet([tmp_path])
+    expected = pd.read_parquet(tmp_path)
+
+    assert_eq(expected, got)
+
+
 def test_parquet_reader_reordered_columns(tmp_path):
     src = pd.DataFrame(
         {"name": ["cow", None, "duck", "fish", None], "id": [0, 1, 2, 3, 4]}

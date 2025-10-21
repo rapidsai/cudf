@@ -622,9 +622,14 @@ aggregate_reader_metadata::aggregate_reader_metadata(
 {
   if (per_file_metadata.size() > 1) {
     auto& first_meta = per_file_metadata.front();
-    auto const num_cols =
-      first_meta.row_groups.size() > 0 ? first_meta.row_groups.front().columns.size() : 0;
-    auto& schema = first_meta.schema;
+    auto const first_nonempty_source_iter =
+      std::find_if(per_file_metadata.begin(), per_file_metadata.end(), [&](auto const& pfm) {
+        return pfm.row_groups.size() > 0;
+      });
+    auto const num_cols = first_nonempty_source_iter != per_file_metadata.end()
+                            ? first_nonempty_source_iter->row_groups.front().columns.size()
+                            : 0;
+    auto& schema        = first_meta.schema;
 
     // Validate that all sources have the same schema unless we are reading select columns
     // from mismatched sources, in which case, we will only check the projected columns later.
@@ -632,8 +637,8 @@ aggregate_reader_metadata::aggregate_reader_metadata(
       // Verify that the input files have matching numbers of columns and schema.
       for (auto const& pfm : per_file_metadata) {
         if (pfm.row_groups.size() > 0) {
-          CUDF_EXPECTS(num_cols == pfm.row_groups.front().columns.size(),
-                       "All sources must have the same number of columns");
+          CUDF_EXPECTS(pfm.row_groups.empty() or num_cols == pfm.row_groups.front().columns.size(),
+                       "All non-empty sources must have the same number of columns");
         }
         CUDF_EXPECTS(schema == pfm.schema, "All sources must have the same schema");
       }
