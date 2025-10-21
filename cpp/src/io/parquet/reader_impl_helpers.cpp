@@ -22,6 +22,8 @@
 #include "ipc/Message_generated.h"
 #include "ipc/Schema_generated.h"
 
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/host_memory.hpp>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/logger.hpp>
@@ -29,7 +31,9 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 
+#include <cmath>
 #include <functional>
+#include <future>
 #include <numeric>
 #include <optional>
 #include <regex>
@@ -349,30 +353,97 @@ metadata::metadata(datasource* source, bool read_page_indexes)
     if (max_offset > 0) {
       int64_t const length = max_offset - min_offset;
       auto const idx_buf   = source->host_read(min_offset, length);
-
-      // now loop over row groups
+      // Flatten all columns into a single vector for easier task distribution
+      std::vector<std::reference_wrapper<ColumnChunk>> all_columns;
+      all_columns.reserve(row_groups.size() * row_groups.front().columns.size());
       for (auto& rg : row_groups) {
         for (auto& col : rg.columns) {
-          if (col.column_index_length > 0 && col.column_index_offset > 0) {
-            int64_t const offset = col.column_index_offset - min_offset;
-            cp.init(idx_buf->data() + offset, col.column_index_length);
-            ColumnIndex ci;
-            cp.read(&ci);
-            col.column_index = std::move(ci);
-          }
-          if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
-            int64_t const offset = col.offset_index_offset - min_offset;
-            cp.init(idx_buf->data() + offset, col.offset_index_length);
-            OffsetIndex oi;
-            cp.read(&oi);
-            col.offset_index = std::move(oi);
-          }
+          all_columns.emplace_back(std::ref(col));
+        }
+      }
+
+      auto read_column_indexes = [&idx_buf, min_offset](CompactProtocolReader& reader,
+                                                        ColumnChunk& col) {
+        if (col.column_index_length > 0 && col.column_index_offset > 0) {
+          int64_t const offset = col.column_index_offset - min_offset;
+          reader.init(idx_buf->data() + offset, col.column_index_length);
+          col.column_index = ColumnIndex();
+          reader.read(&col.column_index.value());
+        }
+        if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
+          int64_t const offset = col.offset_index_offset - min_offset;
+          reader.init(idx_buf->data() + offset, col.offset_index_length);
+          col.offset_index = OffsetIndex();
+          reader.read(&col.offset_index.value());
+        }
+      };
+
+      // Use parallel processing only if we have enough columns to justify the overhead
+      constexpr std::size_t parallel_threshold = 512;
+      auto const total_columns                 = all_columns.size();
+      if (total_columns >= parallel_threshold) {
+        // Dynamically calculate number of tasks based the number or row groups and columns
+        constexpr std::size_t min_tasks = 4;
+        constexpr std::size_t max_tasks = 32;
+        auto const ratio                = static_cast<double>(total_columns) / parallel_threshold;
+        // Scale the number of tasks and task size evenly (e.g. quadrupling the number of elements
+        // doubles both the number of tasks and the task size)
+        auto const multiplier = std::size_t(1) << (static_cast<size_t>(std::log2(ratio)) / 2);
+
+        auto const num_tasks        = std::clamp(min_tasks * multiplier, min_tasks, max_tasks);
+        auto const columns_per_task = total_columns / num_tasks;
+        auto const remainder        = total_columns % num_tasks;
+
+        std::vector<std::future<void>> tasks;
+        tasks.reserve(num_tasks);
+
+        std::size_t start_idx = 0;
+        for (std::size_t task_id = 0; task_id < num_tasks; ++task_id) {
+          auto const task_size = columns_per_task + (task_id < remainder ? 1 : 0);
+          auto const end_idx   = start_idx + task_size;
+
+          if (start_idx >= total_columns) break;
+
+          tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
+            [&all_columns, &read_column_indexes, start_idx, end_idx]() {
+              CompactProtocolReader local_cp;
+
+              for (size_t i = start_idx; i < end_idx && i < all_columns.size(); ++i) {
+                read_column_indexes(local_cp, all_columns[i].get());
+              }
+            }));
+
+          start_idx = end_idx;
+        }
+
+        for (auto& task : tasks) {
+          task.get();
+        }
+      } else {
+        // For small numbers of columns, use sequential processing to avoid overhead
+        for (auto& col_ref : all_columns) {
+          read_column_indexes(cp, col_ref.get());
         }
       }
     }
   }
 
   sanitize_schema();
+}
+
+metadata::~metadata()
+{
+  constexpr auto defer_threshold = 512;
+  if (row_groups.size() > 0 and
+      row_groups.front().columns.size() * row_groups.size() > defer_threshold) {
+    // Defer destruction to the worker pool when there are many vectors to destroy
+    cudf::detail::host_worker_pool().detach_task(
+      [schema_to_destroy        = std::move(schema),
+       row_groups_to_destroy    = std::move(row_groups),
+       key_value_to_destroy     = std::move(key_value_metadata),
+       created_by_to_destroy    = std::move(created_by),
+       column_orders_to_destroy = std::move(column_orders)] {});
+  }
 }
 
 std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
