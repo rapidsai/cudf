@@ -92,6 +92,7 @@ if TYPE_CHECKING:
     )
 
     from cudf._typing import (
+        Axis,
         ColumnLike,
         DataFrameOrSeries,
         Dtype,
@@ -448,7 +449,14 @@ class IndexedFrame(Frame):
         return super()._mimic_inplace(result, inplace)
 
     @_performance_tracking
-    def _scan(self, op, axis=None, skipna=True):
+    def _scan(
+        self,
+        op: str,
+        axis: Axis | None = None,
+        skipna: bool = True,
+        *args,
+        **kwargs,
+    ) -> Self:
         """
         Return {op_name} of the {cls}.
 
@@ -488,6 +496,10 @@ class IndexedFrame(Frame):
         2   6  24
         3  10  34
         """
+        if "numeric_only" in kwargs:
+            raise TypeError(
+                "got an unexpected keyword argument 'numeric_only'"
+            )
         cast_to_int = op in ("cumsum", "cumprod")
         skipna = True if skipna is None else skipna
 

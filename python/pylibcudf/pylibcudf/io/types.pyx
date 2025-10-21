@@ -468,11 +468,13 @@ cdef class SourceInfo:
     ]]
         A homogeneous list of sources to read from. Mixing
         different types of sources will raise a `ValueError`.
+        If an empty list, constructs an empty SourceInfo.
     """
 
     def __init__(self, sources):
         if not sources:
-            raise ValueError("Need to pass at least one source")
+            self.c_obj = move(source_info())
+            return
 
         cdef vector[string] c_files
         cdef vector[datasource*] c_datasources
