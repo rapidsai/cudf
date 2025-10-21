@@ -218,8 +218,7 @@ pre-evaluated child nodes (`DataFrame` objects), and finally a
 keyword-only `context` argument (an `IRExecutionContext` object
 containing runtime execution context). To perform the
 evaluation, one should use the base class (generic) `evaluate` method
-which handles the recursive evaluation of child nodes and creates
-the execution context.
+which handles the recursive evaluation of child nodes.
 
 To translate the plan node, add a case handler in `translate_ir` that
 lives in `cudf_polars/dsl/translate.py`.
