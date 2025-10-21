@@ -86,7 +86,7 @@ struct scoped_range_sync : scoped_range {
  * Example:
  * ```
  * {
- *    CUDF_SCOPED_RANGE_DEBUG("Search keys", stream);
+ *    CUDF_SCOPED_RANGE_SYNC_DEBUG("Search keys", stream);
  *    ...
  * }
  * ```
@@ -112,7 +112,7 @@ struct scoped_range_sync : scoped_range {
  * Example:
  * ```
  * void some_function(rmm::cuda_stream_view stream){
- *    CUDF_FUNC_RANGE_DEBUG(stream);
+ *    CUDF_FUNC_RANGE_SYNC_DEBUG(stream);
  *    ...
  * }
  * ```
