@@ -222,11 +222,11 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
                                                size_type total_out_strings)
 {
   __shared__ int64_t out_offsets_threadblock[strings_per_threadblock + 1]; // measured in characters
-  __shared__ int64_t in_offsets_threadblock[strings_per_threadblock + 1]; // measured in chunks
-  __shared__ uint32_t string_scratch[block_size]; // scratch for loading string chunks
-  __shared__ uint32_t string_start_offset[strings_per_threadblock]; // store where to start reading the string in string_scratch
-  __shared__ uint32_t string_read_offset[strings_per_threadblock];
-  __shared__ int64_t last_out_ibyte_threadblock = 0; // The last loaded character in our scratch that can be written out to GMEM
+
+  // stores the size in chunks(4B) required to store a string in the scratch. accounts for alignment
+  __shared__ int64_t in_offsets_threadblock[strings_per_threadblock + 1];
+  __shared__ char string_scratch[block_size*sizeof(uint32_t)]; // scratch for loading string chunks
+
 
   using BlockScan = cub::BlockScan<int, block_size>;
   __shared__ typename BlockScan::TempStorage temp_storage;
@@ -249,6 +249,9 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
     out_offsets_threadblock[idx] = out_offsets[curr_string_idx];
   }
 
+  uint64_t first_ibyte_threadblock = out_offsets_threadblock[0]; 
+  __shared__ uint64_t last_ibyte_threadblock = 0; // The last loaded character in our scratch that can be written out to GMEM
+
   // Generate chunked load offsets for the strings processed in current thread block
   for (size_type idx = threadIdx.x; idx <= calculate_waves(strings_current_threadblock, blockDim.x); idx += blockDim.x) {
     auto curr_string_num_chunks {0}; // default for the block scan
@@ -260,22 +263,22 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
       if (curr_string.data() % sizeof(uint32_t) != 0) curr_string_num_chunks++; // need extra chunk to account for non-alignment
     }
 
-    // Collectively compute the block-wide exclusive prefix sum
-    BlockScan(temp_storage).ExclusiveSum(curr_string_num_chunks, curr_string_num_chunks, prefix_op);
+    BlockScan(temp_storage).InclusiveSum(curr_string_num_chunks, curr_string_num_chunks, prefix_op);
     __syncthreads();
-    if (idx < strings_current_threadblock) {
+    if (idx <= strings_current_threadblock) {
       in_offsets_threadblock[idx] = curr_string_num_chunks;
     }
   }
   __syncthreads();
 
-  // This is the last wave of chunks we need to load
   // On each iteration we fill in the string_scratch which is of size block_size where each element is a chunk
-  auto const load_waves = (((in_offsets_threadblock[strings_current_threadblock] - 1) / block_size) * block_size) + 1;
-  auto last_loaded_chunk = 0;
+  auto const load_waves = calculate_waves(in_offsets_threadblock[strings_current_threadblock], block_size);
 
+
+  // Outer loop: Load data from GMEM into SHMEM in 4B chunks
+  // Data reuse: Chars from SHMEM are used by more then 1 thread.
+  // Keep more 4B chunks in flight at the same time, i.e. keep more bytes in flight
   for (int in_ichunk = threadIdx.x; in_ichunk < load_waves; in_ichunk += blockDim.x) {
-
     if (in_ichunk < in_offsets_threadblock[strings_per_threadblock]) {
       auto const string_idx_iter =
         cuda::std::prev(thrust::upper_bound(thrust::seq,
@@ -291,91 +294,74 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
       auto const& curr_string = strings_begin[in_string_idx].data();
       auto const curr_string_alignment_offset = curr_string % sizeof(uint32_t);
 
+      // offset to in the first chunk for string_idx in the shared scratch space
+      auto const curr_string_first_chunk = string_idx == 0 ? 0 : (in_offsets_threadblock[string_idx - 1]);
+
+      auto const load_offset = 
+        in_ichunk * sizeof(uint32_t)  // first character in current chunk
+        - curr_string_first_chunk * sizeof(uint32_t)     // first chararacter in first chunk
+        - curr_string_alignment_offset;
+      
+      assert(load_offset < curr_string.size_bytes() && load_offset > -(sizeof(uint32_t)));
+
       // calculate which character to load within the string
-      // for a string which is not aligned on 4 bytes, we need to account for the additional load
-      auto const aligned_offset = in_ichunk * sizeof(uint32_t) - in_offsets_threadblock[string_idx] - curr_string_alignment_offset;
       auto const i_character = max(0, aligned_offset) // character in the string to load
+      
+      // we dont need to align the curr_string pointer with load_offset here. Using just for easier understanding. 
+      *(reinterpret_cast<uint32_t*>(string_scratch) + threadIdx.x) = load_uint32_masked(curr_string + load_offset, d_chars_begin, d_chars_end);
 
-      string_scratch[threadIdx.x] = load_uint32_masked(curr_string + i_character, d_chars_begin, d_chars_end);
+        // if this is the last chunk loaded in each wave
+      if (in_ichunk % block_size == 0 || in_ichunk == in_offsets_threadblock[strings_per_threadblock]) {
+        // number of output characters that are part of the last chunk
+        // we can have atmost 4, if we are loading i_chaacter we can have atmost the number of char in the string.
+        auto const loaded_characters = min(sizeof(uint32_t), curr_string.size_bytes() - i_character);
+        last_ibyte_threadblock = out_offsets_threadblock[string_idx] + i_character + loaded_characters;
+      }
     }
 
-    // if this is the last chunk loaded in each wave
-    if (in_ichunk % block_size == 0 || in_ichunk == in_offsets_threadblock[strings_per_threadblock]) {
-      // number of output characters that are part of the last chunk
-      // we can have atmost 4, if we are loading i_chaacter we can have atmost the number of char in the string.
-      auto const loaded_characters = min(sizeof(uint32_t), curr_string.size_bytes() - i_character);
-      last_out_ibyte_threadblock = out_offsets_threadblock[string_idx] + i_character + loaded_characters;
-    }
+    // make sure tile is loaded to SHMEM
     __syncthreads();
-    last_loaded_chunk += block_size;
-
-  }
 
 
-  // for (int64_t curr_in_ibyte = in_ibyte;
-  //   in_ibyte < out_offsets_threadblock[strings_current_threadblock];
-  //   in_ibyte += blockDim.x * sizeof(uint32_t)) 
+    // Read loaded tile/s from SHMEM and write to GMEM
+    for (int64_t out_ibyte = threadIdx.x + first_ibyte_threadblock;
+      out_ibyte < last_ibyte_threadblock && out_ibyte < out_offsets_threadblock[strings_current_threadblock];
+      out_ibyte += blockDim.x) {
+      // binary search for the string index corresponding to out_ibyte
 
-  // Load char bytes into SHMEM in a chunked manner
-  while(in_ichunk < out_offsets_threadblock[strings_current_threadblock]) {
-    // binary search for the string index corresponding to in_ibyte
+      // out_offsets_threadblock contains the out offsets of the string to be written
+      // When we do binary serarch on out_ibyte, we are trying to find which string this thread should load from
+      auto const string_idx_iter =
+        cuda::std::prev(thrust::upper_bound(thrust::seq,
+                                            out_offsets_threadblock,
+                                            out_offsets_threadblock + strings_current_threadblock,
+                                            out_ibyte));
+      // each entry in out_offsets_threadblock is a different string start, so the distance gives the string index
+      size_type string_idx = cuda::std::distance(out_offsets_threadblock, string_idx_iter);
 
-    // out_offsets_threadblock contains the out offsets of the string to be written
-    // When we do binary serarch on in_ibyte, we are trying to find which string this thread should load from
-    auto const string_idx_iter =
-      cuda::std::prev(thrust::upper_bound(thrust::seq,
-                                          out_offsets_threadblock,
-                                          out_offsets_threadblock + strings_current_threadblock,
-                                          in_ibyte));
-    // each entry in out_offsets_threadblock is a different string start, so the distance gives the string index
-    size_type string_idx = cuda::std::distance(out_offsets_threadblock, string_idx_iter);
+      // string_idx is local to threadblock, so add begin_out_string_idx to it
+      // when we then use that as index to string_indices, we get the string index to read
+      size_type in_string_idx = string_indices[begin_out_string_idx + string_idx];
 
-    // string_idx is local to threadblock, so add begin_out_string_idx to it
-    // when we then use that as index to string_indices, we get the string index to read
-    size_type in_string_idx = string_indices[begin_out_string_idx + string_idx];
+      // calculate which character to load within the string
+      auto const icharacter = out_ibyte - out_offsets_threadblock[string_idx];
 
-    // calculate which character to load within the string
-    auto const icharacter = in_ibyte - out_offsets_threadblock[string_idx];
-    
-    string_scratch[threadIdx.x] = load_uint32_masked(strings_begin[in_string_idx].data() + icharacter, d_chars_begin, d_chars_end);
-    if (icharacter - string_read_offset[string_idx] < sizeof(uint32_t)) {
-      string_start_offset[string_idx] = threadIdx.x * sizeof(uint32_t) - icharacter;
+      // offset to first charater in the first chunk for string_idx in the shared scratch space
+      
+      auto const& curr_string = strings_begin[in_string_idx].data();
+      auto const curr_string_first_chunk = string_idx == 0 ? 0 : (in_offsets_threadblock[string_idx - 1]);
+      auto const curr_string_alignment_offset = curr_string % sizeof(uint32_t);
+      auto load_offset = (curr_string_first_chunk * sizeof(uint32_t)) + icharacter; 
+
+      // read the character from the input string and write it to the output buffer
+      out_chars[out_ibyte]    = string_scratch[load_offset % block_size*sizeof(uint32_t)];
     }
+
+    first_ibyte_threadblock = last_ibyte_threadblock + 1;
   }
 
+  // Ensure scratch buffer is flushed before we overwrite with new data
   __syncthreads();
-
-  /**TODO: 
-   1.out_ibyte should have a stride of 4
-  2. check length of in_string_idx
-   1. if len
-  **/
-  // out_ibyte is the byte index into the global output buffer
-  for (int64_t out_ibyte = threadIdx.x + out_offsets_threadblock[0];
-       out_ibyte < out_offsets_threadblock[strings_current_threadblock];
-       out_ibyte += blockDim.x) {
-    // binary search for the string index corresponding to out_ibyte
-
-    // out_offsets_threadblock contains the out offsets of the string to be written
-    // When we do binary serarch on out_ibyte, we are trying to find which string this thread should load from
-    auto const string_idx_iter =
-      cuda::std::prev(thrust::upper_bound(thrust::seq,
-                                          out_offsets_threadblock,
-                                          out_offsets_threadblock + strings_current_threadblock,
-                                          out_ibyte));
-    // each entry in out_offsets_threadblock is a different string start, so the distance gives the string index
-    size_type string_idx = cuda::std::distance(out_offsets_threadblock, string_idx_iter);
-
-    // calculate which character to load within the string
-    auto const icharacter = out_ibyte - out_offsets_threadblock[string_idx];
-
-    // string_idx is local to threadblock, so add begin_out_string_idx to it
-    // when we then use that as index to string_indices, we get the string index to read
-    size_type in_string_idx = string_indices[begin_out_string_idx + string_idx];
-
-    // read the character from the input string and write it to the output buffer
-    out_chars[out_ibyte]    = strings_begin[in_string_idx].data()[icharacter];
-  }
 }
 
 /**
