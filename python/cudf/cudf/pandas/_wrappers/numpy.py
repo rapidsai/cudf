@@ -1,5 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -191,7 +190,9 @@ if version.parse(numpy.__version__) >= version.parse("2.0"):
     # NumPy 2 introduced `_core` and gives warnings for access to `core`.
     from numpy._core.multiarray import flagsobj as _numpy_flagsobj
 else:
-    from numpy.core.multiarray import flagsobj as _numpy_flagsobj
+    from numpy.core.multiarray import (  # type: ignore[no-redef]
+        flagsobj as _numpy_flagsobj,
+    )
 
 # Mapping flags between slow and fast types
 _ndarray_flags = make_intermediate_proxy_type(

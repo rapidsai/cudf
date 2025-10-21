@@ -172,12 +172,12 @@ def to_numeric(
                 np.dtype(np.float64).char,
             ]
         elif downcast in ("integer", "signed"):
-            type_set = list(np.typecodes["Integer"])
+            type_set = list(np.typecodes["Integer"])  # type: ignore[arg-type]
         elif downcast == "unsigned":
-            type_set = list(np.typecodes["UnsignedInteger"])
+            type_set = list(np.typecodes["UnsignedInteger"])  # type: ignore[arg-type]
 
         for t in type_set:
-            downcast_dtype = np.dtype(t)
+            downcast_dtype: np.dtype = np.dtype(t)
             if downcast_dtype.itemsize <= col.dtype.itemsize:
                 if col.can_cast_safely(downcast_dtype):
                     col = col.cast(downcast_dtype)

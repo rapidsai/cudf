@@ -204,6 +204,13 @@ class orc_reader_options {
   // Setters
 
   /**
+   * @brief Sets source info.
+   *
+   * @param src The source info.
+   */
+  void set_source(source_info src) { _source = std::move(src); }
+
+  /**
    * @brief Sets names of the column to read.
    *
    * @param col_names Vector of column names
