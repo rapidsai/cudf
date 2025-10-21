@@ -467,6 +467,145 @@ TYPED_TEST(MixedInnerJoinTest, BasicInequality)
              {{3, 3}});
 }
 
+// This test is designed to prevent https://github.com/NVIDIA/spark-rapids/issues/13416 from
+// happening again, where the block atomic counter was improperly set, causing illegal memory access
+// when the input data is large enough that multiple blocks are needed for the kernel.
+TYPED_TEST(MixedInnerJoinTest, LargeDataMultiBlockCoordination)
+{
+  using T = TypeParam;
+
+  // These sizes are large enough to ensure the kernel launches with multiple blocks
+  constexpr int left_size  = 5000;
+  constexpr int right_size = 20;
+
+  std::vector<T> left_col0(left_size);
+  std::vector<T> left_col1(left_size);
+
+  for (int i = 0; i < left_size; ++i) {
+    left_col0[i] = static_cast<T>(i % 10);
+    left_col1[i] = static_cast<T>(i % 20);
+  }
+
+  std::vector<T> right_col0(right_size);
+  std::vector<T> right_col1(right_size);
+  for (int i = 0; i < right_size; ++i) {
+    right_col0[i] = static_cast<T>(i % 10);
+    right_col1[i] = static_cast<T>(i);
+  }
+
+  auto const col_ref_left  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+  auto condition =
+    cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref_left, col_ref_right);
+
+  ColumnVector<T> left_data                        = {left_col0, left_col1};
+  ColumnVector<T> right_data                       = {right_col0, right_col1};
+  std::vector<cudf::size_type> equality_columns    = {0};
+  std::vector<cudf::size_type> conditional_columns = {1};
+
+  auto [left_wrappers,
+        right_wrappers,
+        left_columns,
+        right_columns,
+        left_equality,
+        right_equality,
+        left_conditional,
+        right_conditional] =
+    this->parse_input(left_data, right_data, equality_columns, conditional_columns);
+
+  auto expected_size_pair =
+    this->join_size(left_equality, right_equality, left_conditional, right_conditional, condition);
+  auto expected_size = expected_size_pair.first;
+
+  auto result =
+    this->join(left_equality, right_equality, left_conditional, right_conditional, condition);
+
+  EXPECT_EQ(result.first->size(), expected_size);
+  EXPECT_EQ(result.second->size(), expected_size);
+  EXPECT_GT(expected_size, 0);
+
+  auto to_sorted_pairs = [](const PairJoinReturn& join_result) {
+    std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
+    for (size_t i = 0; i < join_result.first->size(); ++i) {
+      result_pairs.emplace_back(join_result.first->element(i, cudf::get_default_stream()),
+                                join_result.second->element(i, cudf::get_default_stream()));
+    }
+    std::sort(result_pairs.begin(), result_pairs.end());
+    return result_pairs;
+  };
+
+  auto result2 =
+    this->join(left_equality, right_equality, left_conditional, right_conditional, condition);
+  auto result3 =
+    this->join(left_equality, right_equality, left_conditional, right_conditional, condition);
+
+  EXPECT_EQ(result.first->size(), result2.first->size());
+  EXPECT_EQ(result.first->size(), result3.first->size());
+
+  auto pairs1 = to_sorted_pairs(result);
+  auto pairs2 = to_sorted_pairs(result2);
+  auto pairs3 = to_sorted_pairs(result3);
+
+  EXPECT_TRUE(std::equal(pairs1.begin(), pairs1.end(), pairs2.begin()));
+  EXPECT_TRUE(std::equal(pairs1.begin(), pairs1.end(), pairs3.begin()));
+
+  for (size_t i = 0; i < result.first->size(); ++i) {
+    auto left_idx  = result.first->element(i, cudf::get_default_stream());
+    auto right_idx = result.second->element(i, cudf::get_default_stream());
+
+    EXPECT_GE(left_idx, 0);
+    EXPECT_LT(left_idx, left_size);
+    EXPECT_GE(right_idx, 0);
+    EXPECT_LT(right_idx, right_size);
+  }
+}
+
+TYPED_TEST(MixedInnerJoinTest, SizeBasedInnerJoinRegression)
+{
+  // Regression test for bug where mixed_inner_join with size data would fail
+  // with RMM out-of-bounds error due to accessing uninitialized matches_per_row
+  using T = TypeParam;
+
+  auto const col_ref_left_1  = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_1 = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
+  auto condition =
+    cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_left_1, col_ref_right_1);
+
+  cudf::test::fixed_width_column_wrapper<T> left_col0{0, 1, 2, 3, 4};
+  cudf::test::fixed_width_column_wrapper<T> left_col1{5, 6, 7, 8, 9};
+
+  cudf::test::fixed_width_column_wrapper<T> right_col0{0, 1, 2};
+  cudf::test::fixed_width_column_wrapper<T> right_col1{1, 2, 3};
+
+  cudf::table_view left_table{{left_col0, left_col1}};
+  cudf::table_view right_table{{right_col0, right_col1}};
+
+  cudf::table_view left_equality{{left_col0}};
+  cudf::table_view right_equality{{right_col0}};
+
+  auto [output_size, matches_per_row] =
+    cudf::mixed_inner_join_size(left_equality, right_equality, left_table, right_table, condition);
+
+  cudf::device_span<cudf::size_type const> matches_span{matches_per_row->data(),
+                                                        matches_per_row->size()};
+  auto size_data = std::make_pair(output_size, matches_span);
+
+  auto [left_indices, right_indices] = cudf::mixed_inner_join(left_equality,
+                                                              right_equality,
+                                                              left_table,
+                                                              right_table,
+                                                              condition,
+                                                              cudf::null_equality::EQUAL,
+                                                              size_data);
+
+  auto [left_indices_no_size, right_indices_no_size] =
+    cudf::mixed_inner_join(left_equality, right_equality, left_table, right_table, condition);
+
+  EXPECT_EQ(left_indices->size(), left_indices_no_size->size());
+  EXPECT_EQ(right_indices->size(), right_indices_no_size->size());
+  EXPECT_EQ(left_indices->size(), output_size);
+}
+
 using MixedInnerJoinTest2 = MixedInnerJoinTest<int32_t>;
 TEST_F(MixedInnerJoinTest2, UnaryRightTableColumnReference)
 {
@@ -579,6 +718,52 @@ TYPED_TEST(MixedLeftJoinTest, Basic2)
              predicate,
              {1, 1, 1, 1},
              {{0, JoinNoneValue}, {1, JoinNoneValue}, {2, JoinNoneValue}, {3, 3}});
+}
+
+TYPED_TEST(MixedLeftJoinTest, SizeBasedLeftJoinRegression)
+{
+  // Regression test for bug where mixed_left_join with size data would fail
+  // with RMM out-of-bounds error due to accessing uninitialized matches_per_row
+  using T = TypeParam;
+
+  auto const col_ref_left_1  = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_1 = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
+  auto condition =
+    cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_left_1, col_ref_right_1);
+
+  cudf::test::fixed_width_column_wrapper<T> left_col0{0, 1, 2, 3, 4};
+  cudf::test::fixed_width_column_wrapper<T> left_col1{5, 6, 7, 8, 9};
+
+  cudf::test::fixed_width_column_wrapper<T> right_col0{0, 1, 2};
+  cudf::test::fixed_width_column_wrapper<T> right_col1{1, 2, 3};
+
+  cudf::table_view left_table{{left_col0, left_col1}};
+  cudf::table_view right_table{{right_col0, right_col1}};
+
+  cudf::table_view left_equality{{left_col0}};
+  cudf::table_view right_equality{{right_col0}};
+
+  auto [output_size, matches_per_row] =
+    cudf::mixed_left_join_size(left_equality, right_equality, left_table, right_table, condition);
+
+  cudf::device_span<cudf::size_type const> matches_span{matches_per_row->data(),
+                                                        matches_per_row->size()};
+  auto size_data = std::make_pair(output_size, matches_span);
+
+  auto [left_indices, right_indices] = cudf::mixed_left_join(left_equality,
+                                                             right_equality,
+                                                             left_table,
+                                                             right_table,
+                                                             condition,
+                                                             cudf::null_equality::EQUAL,
+                                                             size_data);
+
+  auto [left_indices_no_size, right_indices_no_size] =
+    cudf::mixed_left_join(left_equality, right_equality, left_table, right_table, condition);
+
+  EXPECT_EQ(left_indices->size(), left_indices_no_size->size());
+  EXPECT_EQ(right_indices->size(), right_indices_no_size->size());
+  EXPECT_EQ(left_indices->size(), output_size);
 }
 
 /**
