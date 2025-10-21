@@ -59,11 +59,11 @@ void write_parquet_file(std::string const& filepath,
   stream.synchronize();
 }
 
-std::string construct_file_path(std::string const &input_dir, int filenum) {
+std::string construct_file_path(std::string const& input_dir, int filenum)
+{
   std::string filepath = input_dir + "/part." + std::to_string(filenum) + ".parquet";
   return filepath;
 }
-
 
 }  // namespace examples
 }  // namespace cudf
