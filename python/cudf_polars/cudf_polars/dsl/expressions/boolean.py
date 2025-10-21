@@ -153,31 +153,31 @@ class BooleanFunction(Expr):
         ):
             # Avoid evaluating the child if the dtype tells us it's unnecessary.
             (child,) = self.children
-            needles = child.evaluate(df, context=context)
-            is_float = needles.obj.type().id() in (
+            values = child.evaluate(df, context=context)
+            is_float = values.obj.type().id() in (
                 plc.TypeId.FLOAT32,
                 plc.TypeId.FLOAT64,
             )
             is_finite = self.name is BooleanFunction.Name.IsFinite
             if not is_float:
                 base = plc.Column.from_scalar(
-                    plc.Scalar.from_py(py_val=is_finite), needles.size
+                    plc.Scalar.from_py(py_val=is_finite), values.size
                 )
-                out = base.with_mask(needles.obj.null_mask(), needles.null_count)
+                out = base.with_mask(values.obj.null_mask(), values.null_count)
                 return Column(out, dtype=self.dtype)
             to_search = [-float("inf"), float("inf")]
             if is_finite:
                 # NaN is neither finite not infinite
                 to_search.append(float("nan"))
-            haystack = plc.Column.from_iterable_of_py(
+            nonfinite_values = plc.Column.from_iterable_of_py(
                 to_search,
-                dtype=needles.obj.type(),
+                dtype=values.obj.type(),
             )
-            result = plc.search.contains(haystack, needles.obj)
+            result = plc.search.contains(nonfinite_values, values.obj)
             if is_finite:
                 result = plc.unary.unary_operation(result, plc.unary.UnaryOperator.NOT)
             return Column(
-                result.with_mask(needles.obj.null_mask(), needles.null_count),
+                result.with_mask(values.obj.null_mask(), values.null_count),
                 dtype=self.dtype,
             )
         columns = [child.evaluate(df, context=context) for child in self.children]
@@ -188,7 +188,7 @@ class BooleanFunction(Expr):
             (column,) = columns
             is_any = self.name is BooleanFunction.Name.Any
             agg = plc.aggregation.any() if is_any else plc.aggregation.all()
-            result = plc.reduce.reduce(column.obj, agg, self.dtype.plc_type)
+            scalar_result = plc.reduce.reduce(column.obj, agg, self.dtype.plc_type)
             if not ignore_nulls and column.null_count > 0:
                 #      Truth tables
                 #     Any         All
@@ -200,14 +200,14 @@ class BooleanFunction(Expr):
                 #
                 # If the input null count was non-zero, we must
                 # post-process the result to insert the correct value.
-                h_result = result.to_py()
+                h_result = scalar_result.to_py()
                 if (is_any and not h_result) or (not is_any and h_result):
                     # Any                     All
                     # False || Null => Null   True && Null => Null
                     return Column(
                         plc.Column.all_null_like(column.obj, 1), dtype=self.dtype
                     )
-            return Column(plc.Column.from_scalar(result, 1), dtype=self.dtype)
+            return Column(plc.Column.from_scalar(scalar_result, 1), dtype=self.dtype)
         if self.name is BooleanFunction.Name.IsNull:
             (column,) = columns
             return Column(plc.unary.is_null(column.obj), dtype=self.dtype)
@@ -308,15 +308,17 @@ class BooleanFunction(Expr):
             needles, haystack = columns
             if haystack.obj.type().id() == plc.TypeId.LIST:
                 # Unwrap values from the list column
-                # the type: ignore is safe because we know that the type ID is LIST,
-                # which always has an inner attribute.
                 haystack = Column(
                     haystack.obj.children()[1],
-                    dtype=DataType(haystack.dtype.polars_type.inner),  # type: ignore[attr-defined]
+                    dtype=DataType(haystack.dtype.polars_type.inner),
                 ).astype(needles.dtype)
             if haystack.size:
                 return Column(
-                    plc.search.contains(haystack.obj, needles.obj), dtype=self.dtype
+                    plc.search.contains(
+                        haystack.obj,
+                        needles.obj,
+                    ),
+                    dtype=self.dtype,
                 )
             return Column(
                 plc.Column.from_scalar(plc.Scalar.from_py(py_val=False), needles.size),
