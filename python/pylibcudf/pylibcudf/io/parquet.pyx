@@ -174,6 +174,21 @@ cdef class ParquetReaderOptions:
         """
         self.c_obj.set_filter(<expression &>dereference(filter.c_obj))
 
+    cpdef void set_source(self, SourceInfo src):
+        """
+        Set a new source info location.
+
+        Parameters
+        ----------
+        src : SourceInfo
+            New source information, replacing existing information.
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_source(src.c_obj)
+
 
 cdef class ParquetReaderOptionsBuilder:
     cpdef ParquetReaderOptionsBuilder convert_strings_to_categories(self, bool val):
@@ -430,15 +445,12 @@ cdef class ChunkedParquetWriter:
         -------
         None
         """
-        if partitions_info is None:
-            with nogil:
-                self.c_obj.get()[0].write(table.view())
-            return
         cdef vector[partition_info] partitions
-        for part in partitions_info:
-            partitions.push_back(
-                partition_info(part[0], part[1])
-            )
+        if partitions_info is not None:
+            for part in partitions_info:
+                partitions.push_back(
+                    partition_info(part[0], part[1])
+                )
         with nogil:
             self.c_obj.get()[0].write(table.view(), partitions)
 
@@ -516,7 +528,7 @@ cdef class ChunkedParquetWriterOptionsBuilder:
         self.c_obj.metadata(metadata.c_obj)
         return self
 
-    cpdef ChunkedParquetWriterOptionsBuilder key_value_metadata(self, list metadata):
+    cpdef ChunkedParquetWriterOptionsBuilder key_value_metadata(self, metadata):
         """
         Sets Key-Value footer metadata.
 
@@ -727,7 +739,7 @@ cdef class ParquetWriterOptions:
 
         self.c_obj.set_partitions(c_partions)
 
-    cpdef void set_column_chunks_file_paths(self, list file_paths):
+    cpdef void set_column_chunks_file_paths(self, file_paths):
         """
         Sets column chunks file path to be set in the raw output metadata.
 
@@ -836,7 +848,7 @@ cdef class ParquetWriterOptionsBuilder:
         self.c_obj.metadata(metadata.c_obj)
         return self
 
-    cpdef ParquetWriterOptionsBuilder key_value_metadata(self, list metadata):
+    cpdef ParquetWriterOptionsBuilder key_value_metadata(self, metadata):
         """
         Sets Key-Value footer metadata.
 

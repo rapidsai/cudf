@@ -6,7 +6,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
-from numba.np import numpy_support
 
 import pylibcudf as plc
 
@@ -15,12 +14,9 @@ from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, column_empty
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
-from cudf.core.udf.utils import compile_udf
 from cudf.utils.dtypes import _get_nan_for_dtype
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from cudf._typing import ScalarLike
     from cudf.core.column.decimal import DecimalDtype
 
@@ -90,12 +86,12 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         skipna = True if skipna is None else skipna
 
         if len(self) == 0 or self._can_return_nan(skipna=skipna):
-            return _get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
 
         self = self.nans_to_nulls().dropna()
 
         if len(self) < 4:
-            return _get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
 
         n = len(self)
         miu = self.mean()
@@ -182,7 +178,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                 except (TypeError, ValueError):
                     pass
             return (
-                _get_nan_for_dtype(self.dtype)
+                _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
                 if scalar_result is NA
                 else scalar_result
             )
@@ -192,15 +188,15 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         self,
         skipna: bool | None = None,
         min_count: int = 0,
-    ):
+    ) -> ScalarLike:
         return self._reduce("mean", skipna=skipna, min_count=min_count)
 
     def var(
         self,
         skipna: bool | None = None,
         min_count: int = 0,
-        ddof=1,
-    ):
+        ddof: int = 1,
+    ) -> ScalarLike:
         result = self._reduce(
             "var", skipna=skipna, min_count=min_count, ddof=ddof
         )
@@ -212,8 +208,8 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         self,
         skipna: bool | None = None,
         min_count: int = 0,
-        ddof=1,
-    ):
+        ddof: int = 1,
+    ) -> ScalarLike:
         result = self._reduce(
             "std", skipna=skipna, min_count=min_count, ddof=ddof
         )
@@ -225,7 +221,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         skipna = True if skipna is None else skipna
 
         if self._can_return_nan(skipna=skipna):
-            return _get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
 
         # enforce linear in case the default ever changes
         result = self.quantile(
@@ -244,7 +240,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             or len(other) == 0
             or (len(self) == 1 and len(other) == 1)
         ):
-            return _get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
 
         result = (self - self.mean()) * (other - other.mean())
         cov_sample = result.sum() / (len(self) - 1)
@@ -252,13 +248,13 @@ class NumericalBaseColumn(ColumnBase, Scannable):
 
     def corr(self, other: NumericalBaseColumn) -> float:
         if len(self) == 0 or len(other) == 0:
-            return _get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
 
         cov = self.cov(other)
         lhs_std, rhs_std = self.std(), other.std()
 
         if not cov or lhs_std == 0 or rhs_std == 0:
-            return _get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
         return cov / lhs_std / rhs_std
 
     def round(
@@ -283,25 +279,13 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             self.dtype
         )
 
-    def unary_operator(self, unaryop: str | Callable) -> ColumnBase:
-        if callable(unaryop):
-            nb_type = numpy_support.from_dtype(self.dtype)
-            nb_signature = (nb_type,)
-            compiled_op = compile_udf(unaryop, nb_signature)
-            np_dtype = np.dtype(compiled_op[1])
-            return self.transform(compiled_op, np_dtype)
-
-        unaryop = unaryop.upper()
-        unaryop = _unaryop_map.get(unaryop, unaryop)
-        unaryop = plc.unary.UnaryOperator[unaryop]
+    def unary_operator(self, unaryop: str) -> ColumnBase:
+        unaryop_str = unaryop.upper()
+        unaryop_str = _unaryop_map.get(unaryop_str, unaryop_str)
+        unaryop_enum = plc.unary.UnaryOperator[unaryop_str]
         with acquire_spill_lock():
             return type(self).from_pylibcudf(
                 plc.unary.unary_operation(
-                    self.to_pylibcudf(mode="read"), unaryop
+                    self.to_pylibcudf(mode="read"), unaryop_enum
                 )
             )
-
-    def transform(self, compiled_op, np_dtype: np.dtype) -> ColumnBase:
-        raise NotImplementedError(
-            "transform is not implemented for NumericalBaseColumn"
-        )

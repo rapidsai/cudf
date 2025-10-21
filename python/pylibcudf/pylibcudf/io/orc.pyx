@@ -221,6 +221,11 @@ cdef class OrcColumnStatistics:
 
 
 cdef class ParsedOrcStatistics:
+    """
+    Holds column names and parsed file-level and stripe-level statistics.
+
+    For details, see :cpp:class:`cudf::io::parsed_orc_statistics`
+    """
 
     __hash__ = None
 
@@ -391,6 +396,21 @@ cdef class OrcReaderOptions:
             c_column_names.push_back(col.encode())
         self.c_obj.set_columns(c_column_names)
 
+    cpdef void set_source(self, SourceInfo src):
+        """
+        Set a new source info location.
+
+        Parameters
+        ----------
+        src : SourceInfo
+            New source information, replacing existing information.
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_source(src.c_obj)
+
 cdef class OrcReaderOptionsBuilder:
     cpdef OrcReaderOptionsBuilder use_index(self, bool use):
         """
@@ -449,11 +469,28 @@ cpdef TableWithMetadata read_orc(
 
 
 cpdef ParsedOrcStatistics read_parsed_orc_statistics(
-    SourceInfo source_info
+    SourceInfo source_info,
+    Stream stream=None
 ):
-    cdef parsed_orc_statistics parsed = (
-        cpp_read_parsed_orc_statistics(source_info.c_obj)
-    )
+    """
+    Read ORC statistics from a source.
+
+    Parameters
+    ----------
+    source_info : SourceInfo
+        The source to read statistics from.
+    stream : Stream | None
+        CUDA stream used for device memory operations and kernel launches.
+
+    Returns
+    -------
+    ParsedOrcStatistics
+        The parsed ORC statistics.
+    """
+    cdef Stream s = _get_stream(stream)
+    cdef parsed_orc_statistics parsed
+    with nogil:
+        parsed = cpp_read_parsed_orc_statistics(source_info.c_obj, s.view())
     return ParsedOrcStatistics.from_libcudf(parsed)
 
 

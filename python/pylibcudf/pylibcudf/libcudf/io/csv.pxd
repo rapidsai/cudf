@@ -68,6 +68,7 @@ cdef extern from "cudf/io/csv.hpp" \
 
         # setter
 
+        void set_source(cudf_io_types.source_info src) except +libcudf_exception_handler
         # Reader settings
         void set_compression(
             cudf_io_types.compression_type comp
@@ -260,10 +261,6 @@ cdef extern from "cudf/io/csv.hpp" \
         csv_reader_options build() except +libcudf_exception_handler
 
     cdef cudf_io_types.table_with_metadata read_csv(
-        csv_reader_options &options
-    ) except +libcudf_exception_handler
-
-    cdef cudf_io_types.table_with_metadata read_csv(
         csv_reader_options &options,
         cuda_stream_view stream,
         device_memory_resource* mr
@@ -336,10 +333,6 @@ cdef extern from "cudf/io/csv.hpp" \
         ) except +libcudf_exception_handler
 
         csv_writer_options build() except +libcudf_exception_handler
-
-    cdef void write_csv(
-        csv_writer_options args
-    ) except +libcudf_exception_handler
 
     cdef void write_csv(
         csv_writer_options args,

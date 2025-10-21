@@ -23,7 +23,7 @@ cpdef Table extract(
     corresponds to the matching group specified in the given
     egex_program object.
 
-    For details, see :cpp:func:`cudf::strings::extract`.
+    For details, see :cpp:func:`extract`.
 
     Parameters
     ----------
@@ -62,7 +62,7 @@ cpdef Column extract_all_record(
     row corresponds to the matching group specified in the given
     regex_program object.
 
-    For details, see :cpp:func:`cudf::strings::extract_all_record`.
+    For details, see :cpp:func:`extract_all_record`.
 
     Parameters
     ----------
@@ -104,7 +104,7 @@ cpdef Column extract_single(
     Returns a column of strings where each string corresponds to the
     matching group specified in the given regex_program object.
 
-    For details, see :cpp:func:`cudf::strings::extract_single`.
+    For details, see :cpp:func:`extract_single`.
 
     Parameters
     ----------

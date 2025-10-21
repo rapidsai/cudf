@@ -38,10 +38,7 @@
 
 namespace cudf::io::parquet::detail {
 
-void reader_impl::decode_page_data(read_mode mode,
-                                   size_t skip_rows,
-                                   size_t num_rows,
-                                   cudf::device_span<bool const> page_mask)
+void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_rows)
 {
   CUDF_FUNC_RANGE();
 
@@ -220,7 +217,7 @@ void reader_impl::decode_page_data(read_mode mode,
                              skip_rows,
                              level_type_size,
                              decoder_mask,
-                             page_mask,
+                             _subpass_page_mask,
                              initial_str_offsets,
                              error_code.data(),
                              streams[s_idx++]);
@@ -278,7 +275,7 @@ void reader_impl::decode_page_data(read_mode mode,
                             num_rows,
                             skip_rows,
                             level_type_size,
-                            page_mask,
+                            _subpass_page_mask,
                             initial_str_offsets,
                             error_code.data(),
                             streams[s_idx++]);
@@ -291,7 +288,7 @@ void reader_impl::decode_page_data(read_mode mode,
                                    num_rows,
                                    skip_rows,
                                    level_type_size,
-                                   page_mask,
+                                   _subpass_page_mask,
                                    initial_str_offsets,
                                    error_code.data(),
                                    streams[s_idx++]);
@@ -304,7 +301,7 @@ void reader_impl::decode_page_data(read_mode mode,
                         num_rows,
                         skip_rows,
                         level_type_size,
-                        page_mask,
+                        _subpass_page_mask,
                         error_code.data(),
                         streams[s_idx++]);
   }
@@ -331,7 +328,7 @@ void reader_impl::decode_page_data(read_mode mode,
                            num_rows,
                            skip_rows,
                            level_type_size,
-                           page_mask,
+                           _subpass_page_mask,
                            error_code.data(),
                            streams[s_idx++]);
   }
@@ -388,7 +385,7 @@ void reader_impl::decode_page_data(read_mode mode,
                              num_rows,
                              skip_rows,
                              level_type_size,
-                             page_mask,
+                             _subpass_page_mask,
                              error_code.data(),
                              streams[s_idx++]);
   }
@@ -487,7 +484,7 @@ void reader_impl::decode_page_data(read_mode mode,
 reader_impl::reader_impl()
   : _options{},
     _pass_page_mask{cudf::detail::make_host_vector<bool>(0, cudf::get_default_stream())},
-    _subpass_page_mask{cudf::detail::make_host_vector<bool>(0, cudf::get_default_stream())}
+    _subpass_page_mask{cudf::detail::hostdevice_vector<bool>(0, cudf::get_default_stream())}
 {
 }
 
@@ -521,7 +518,7 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
              options.is_enabled_use_jit_filter()},
     _sources{std::move(sources)},
     _pass_page_mask{cudf::detail::make_host_vector<bool>(0, _stream)},
-    _subpass_page_mask{cudf::detail::make_host_vector<bool>(0, _stream)},
+    _subpass_page_mask{cudf::detail::hostdevice_vector<bool>(0, _stream)},
     _output_chunk_read_limit{chunk_read_limit},
     _input_pass_read_limit{pass_read_limit}
 {
@@ -603,9 +600,7 @@ void reader_impl::populate_metadata(table_metadata& out_metadata)
                                      out_metadata.per_file_user_data[0].end()};
 }
 
-void reader_impl::preprocess_chunk_strings(read_mode mode,
-                                           row_range const& read_info,
-                                           cudf::device_span<bool const> page_mask)
+void reader_impl::preprocess_chunk_strings(read_mode mode, row_range const& read_info)
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
@@ -635,7 +630,7 @@ void reader_impl::preprocess_chunk_strings(read_mode mode,
     constexpr bool compute_all_string_sizes = false;
     compute_page_string_sizes_pass1(subpass.pages,
                                     pass.chunks,
-                                    page_mask,
+                                    _subpass_page_mask,
                                     read_info.skip_rows,
                                     read_info.num_rows,
                                     subpass.kernel_mask,
@@ -686,10 +681,6 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
   auto& subpass         = *pass.subpass;
   auto const& read_info = subpass.output_chunk_read_info[subpass.current_output_chunk];
 
-  CUDF_EXPECTS(_subpass_page_mask.size() == subpass.pages.size(),
-               "Page mask size must be equal to the number of pages in the subpass");
-  auto page_mask = cudf::detail::make_device_uvector_async(_subpass_page_mask, _stream, _mr);
-
   // computes:
   // PageNestingInfo::batch_size for each level of nesting, for each page, taking row bounds into
   // account. PageInfo::skipped_values, which tells us where to start decoding in the input to
@@ -698,6 +689,7 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
   if (uses_custom_row_bounds(mode)) {
     compute_page_sizes(subpass.pages,
                        pass.chunks,
+                       _subpass_page_mask,
                        read_info.skip_rows,
                        read_info.num_rows,
                        false,  // num_rows is already computed
@@ -706,13 +698,13 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
   }
 
   // preprocess strings
-  preprocess_chunk_strings(mode, read_info, page_mask);
+  preprocess_chunk_strings(mode, read_info);
 
   // Allocate memory buffers for the output columns.
   allocate_columns(mode, read_info.skip_rows, read_info.num_rows);
 
   // Parse data into the output buffers.
-  decode_page_data(mode, read_info.skip_rows, read_info.num_rows, page_mask);
+  decode_page_data(mode, read_info.skip_rows, read_info.num_rows);
 
   // Create the final output cudf columns.
   for (size_t i = 0; i < _output_buffers.size(); ++i) {

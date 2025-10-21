@@ -12,8 +12,11 @@ import pytest
 
 import polars
 
+from cudf_polars.utils.config import StreamingFallbackMode
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from typing import Any
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -26,17 +29,50 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         action="store_true",
         help="Turn off fallback to CPU when running tests (default use fallback)",
     )
+    group.addoption(
+        "--executor",
+        action="store",
+        default="in-memory",
+        choices=("in-memory", "streaming"),
+        help="Executor to use for GPUEngine.",
+    )
+    group.addoption(
+        "--blocksize-mode",
+        action="store",
+        default="default",
+        choices=("small", "default"),
+        help=(
+            "Blocksize to use for 'streaming' executor. Set to 'small' "
+            "to run most tests with multiple partitions."
+        ),
+    )
 
 
 def pytest_configure(config: pytest.Config) -> None:
     """Enable use of this module as a pytest plugin to enable GPU collection."""
     no_fallback = config.getoption("--cudf-polars-no-fallback")
+    executor = config.getoption("--executor")
+    blocksize_mode = config.getoption("--blocksize-mode")
     if no_fallback:
         collect = polars.LazyFrame.collect
         engine = polars.GPUEngine(raise_on_fail=no_fallback)
         # https://github.com/python/mypy/issues/2427
         polars.LazyFrame.collect = partialmethod(collect, engine=engine)  # type: ignore[method-assign,assignment]
+    elif executor == "in-memory":
+        collect = polars.LazyFrame.collect
+        engine = polars.GPUEngine(executor=executor)
+        polars.LazyFrame.collect = partialmethod(collect, engine=engine)  # type: ignore[method-assign,assignment]
+    elif executor == "streaming" and blocksize_mode == "small":
+        executor_options: dict[str, Any] = {}
+        executor_options["max_rows_per_partition"] = 4
+        executor_options["target_partition_size"] = 10
+        # We expect many tests to fall back, so silence the warnings
+        executor_options["fallback_mode"] = StreamingFallbackMode.SILENT
+        collect = polars.LazyFrame.collect
+        engine = polars.GPUEngine(executor=executor, executor_options=executor_options)
+        polars.LazyFrame.collect = partialmethod(collect, engine=engine)  # type: ignore[method-assign,assignment]
     else:
+        # run with streaming executor and default blocksize
         polars.Config.set_engine_affinity("gpu")
     config.addinivalue_line(
         "filterwarnings",
@@ -112,11 +148,6 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_parquet.py::test_allow_missing_columns[projection0-True-columns]": "Mismatching column read cudf#16394",
     "tests/unit/io/test_parquet.py::test_allow_missing_columns[projection1-True-columns]": "Mismatching column read cudf#16394",
     "tests/unit/io/test_parquet.py::test_scan_parquet_filter_statistics_load_missing_column_21391": "Mismatching column read cudf#16394",
-    "tests/unit/io/test_parquet.py::test_field_overwrites_metadata": "cannot serialize in-memory sink target.",
-    "tests/unit/io/test_parquet_field_overwrites.py::test_required_flat": "cannot serialize in-memory sink target.",
-    "tests/unit/io/test_parquet_field_overwrites.py::test_required_list[dtype0]": "cannot serialize in-memory sink target.",
-    "tests/unit/io/test_parquet_field_overwrites.py::test_required_list[dtype1]": "cannot serialize in-memory sink target.",
-    "tests/unit/io/test_parquet_field_overwrites.py::test_required_struct": "cannot serialize in-memory sink target.",
     "tests/unit/lazyframe/test_engine_selection.py::test_engine_import_error_raises[gpu]": "Expect this to pass because cudf-polars is installed",
     "tests/unit/lazyframe/test_engine_selection.py::test_engine_import_error_raises[engine1]": "Expect this to pass because cudf-polars is installed",
     "tests/unit/lazyframe/test_lazyframe.py::test_round[dtype1-123.55-1-123.6]": "Rounding midpoints is handled incorrectly",
@@ -161,10 +192,6 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/test_predicates.py::test_predicate_pushdown_split_pushable": "Casting that raises not supported on GPU",
     "tests/unit/io/test_scan_row_deletion.py::test_scan_row_deletion_skips_file_with_all_rows_deleted": "The test intentionally corrupts the parquet file, so we cannot read the row count from the header.",
     "tests/unit/io/test_multiscan.py::test_multiscan_row_index[scan_csv-write_csv-csv]": "Debug output on stderr doesn't match",
-    "tests/unit/functions/range/test_linear_space.py::test_linear_space_date": "Needs https://github.com/pola-rs/polars/issues/23020",
-    "tests/unit/sql/test_temporal.py::test_implicit_temporal_strings[dt IN ('1960-01-07','2077-01-01','2222-02-22')-expected15]": "Needs https://github.com/pola-rs/polars/issues/23020",
-    "tests/unit/sql/test_operators.py::test_in_not_in[dt NOT IN ('1950-12-24', '1997-07-05')]": "Needs https://github.com/pola-rs/polars/issues/23020",
-    "tests/unit/sql/test_operators.py::test_in_not_in[dt IN ('2020-10-10', '2077-03-18')]": "Needs https://github.com/pola-rs/polars/issues/23020",
     "tests/unit/datatypes/test_struct.py::test_struct_agg_all": "Needs nested list[struct] support",
     "tests/unit/constructors/test_structs.py::test_constructor_non_strict_schema_17956": "Needs nested list[struct] support",
     "tests/unit/io/test_delta.py::test_read_delta_arrow_map_type": "Needs nested list[struct] support",
@@ -180,6 +207,31 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_lazy_parquet.py::test_parquet_schema_arg[False-none]": "allow_missing_columns argument in read_parquet not translated in IR",
     "tests/unit/datatypes/test_decimal.py::test_decimal_aggregations": "https://github.com/pola-rs/polars/issues/23899",
     "tests/unit/datatypes/test_decimal.py::test_decimal_arithmetic_schema": "https://github.com/pola-rs/polars/issues/23899",
+    "tests/unit/test_cse.py::test_cse_predicate_self_join[False]": "polars removed the refcount in the logical plan",
+    "tests/unit/io/test_multiscan.py::test_multiscan_row_index[scan_csv-write_csv]": "CSV multiscan with row_index and no row limit is not yet supported.",
+    "tests/unit/io/test_scan.py::test_scan_empty_paths_friendly_error[scan_parquet-failed to retrieve first file schema (parquet)-'parquet scan']": "Debug output on stderr doesn't match",
+    "tests/unit/io/test_scan.py::test_scan_empty_paths_friendly_error[scan_ipc-failed to retrieve first file schema (ipc)-'ipc scan']": "Debug output on stderr doesn't match",
+    "tests/unit/io/test_scan.py::test_scan_empty_paths_friendly_error[scan_csv-failed to retrieve file schemas (csv)-'csv scan']": "Debug output on stderr doesn't match",
+    "tests/unit/io/test_scan.py::test_scan_empty_paths_friendly_error[scan_ndjson-failed to retrieve first file schema (ndjson)-'ndjson scan']": "Debug output on stderr doesn't match",
+    "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit1-idx2-False]": "Aggregating a list literal: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit2-idx2-False]": "Aggregating a list literal: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit1-0-False]": "Aggregating a list literal: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit1-idx1-False]": "Aggregating a list literal: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit2-0-False]": "Aggregating a list literal: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit2-idx1-False]": "Aggregating a list literal: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_head_tail_on_literal_24102[lit1-1-False]": "Aggregating a list literal: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_head_tail_on_literal_24102[lit1-len1-False]": "Aggregating a list literal: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_head_tail_on_literal_24102[lit2-1-False]": "Aggregating a list literal: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_head_tail_on_literal_24102[lit2-len1-False]": "Aggregating a list literal: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit2-offset1-0-False]": "Aggregating a list literal: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit2-offset1-len1-False]": "Aggregating a list literal: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-0-len1-False]": "Aggregating a list literal: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-offset1-0-False]": "Aggregating a list literal: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-offset1-len1-False]": "Aggregating a list literal: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit2-0-0-False]": "Aggregating a list literal: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit2-0-len1-False]": "Aggregating a list literal: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-0-0-False]": "Aggregating a list literal: cudf#19610",
+    "tests/unit/operations/test_top_k.py::test_top_k_non_elementwise_by_24163": "Ternary with scalar predicate does not broadcast mask cudf#20210",
 }
 
 
@@ -216,6 +268,15 @@ TESTS_TO_SKIP: Mapping[str, str] = {
 }
 
 
+STREAMING_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
+    "tests/unit/io/test_parquet.py::test_field_overwrites_metadata": "cannot serialize in-memory sink target.",
+    "tests/unit/io/test_parquet_field_overwrites.py::test_required_flat": "cannot serialize in-memory sink target.",
+    "tests/unit/io/test_parquet_field_overwrites.py::test_required_list[dtype0]": "cannot serialize in-memory sink target.",
+    "tests/unit/io/test_parquet_field_overwrites.py::test_required_list[dtype1]": "cannot serialize in-memory sink target.",
+    "tests/unit/io/test_parquet_field_overwrites.py::test_required_struct": "cannot serialize in-memory sink target.",
+}
+
+
 def pytest_collection_modifyitems(
     session: pytest.Session, config: pytest.Config, items: list[pytest.Item]
 ) -> None:
@@ -226,6 +287,12 @@ def pytest_collection_modifyitems(
     for item in items:
         if (reason := TESTS_TO_SKIP.get(item.nodeid, None)) is not None:
             item.add_marker(pytest.mark.skip(reason=reason))
+        elif (
+            config.getoption("--executor") == "streaming"
+            and (s_reason := STREAMING_ONLY_EXPECTED_FAILURES.get(item.nodeid, None))
+            is not None
+        ):
+            item.add_marker(pytest.mark.xfail(reason=s_reason))
         elif (entry := EXPECTED_FAILURES.get(item.nodeid, None)) is not None:
             if isinstance(entry, tuple):
                 # the second entry in the tuple is the condition to xfail on

@@ -24,7 +24,7 @@ cpdef Column to_booleans(
     Returns a new bool column by parsing boolean values from the strings
     in the provided strings column.
 
-    For details, see :cpp:func:`cudf::strings::to_booleans`.
+    For details, see :cpp:func:`to_booleans`.
 
     Parameters
     ----------
@@ -70,7 +70,7 @@ cpdef Column from_booleans(
     Returns a new strings column converting the boolean values from the
     provided column into strings.
 
-    For details, see :cpp:func:`cudf::strings::from_booleans`.
+    For details, see :cpp:func:`from_booleans`.
 
     Parameters
     ----------

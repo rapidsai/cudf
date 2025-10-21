@@ -2990,12 +2990,14 @@ class StringMethods(BaseAccessor):
             raise TypeError(msg)
 
         try:
-            side = plc.strings.side_type.SideType[side.upper()]
+            side_type = plc.strings.side_type.SideType[side.upper()]
         except KeyError:
             raise ValueError(
                 "side has to be either one of {'left', 'right', 'both'}"
             )
-        return self._return_or_inplace(self._column.pad(width, side, fillchar))
+        return self._return_or_inplace(
+            self._column.pad(width, side_type, fillchar)
+        )
 
     def zfill(self, width: int) -> Series | Index:
         """
@@ -3790,12 +3792,6 @@ class StringMethods(BaseAccessor):
         method: Callable[[plc.Column, plc.Column | plc.Scalar], plc.Column],
         pat: str | tuple[str, ...],
     ) -> Series | Index:
-        if isinstance(pat, tuple) and all(isinstance(p, str) for p in pat):
-            pat = as_column(pat, dtype=CUDF_STRING_DTYPE)  # type: ignore[assignment]
-        elif not isinstance(pat, str):
-            raise TypeError(
-                f"expected a string or tuple, not {type(pat).__name__}"
-            )
         return self._return_or_inplace(
             self._column.starts_ends_with(method, pat)  # type: ignore[arg-type]
         )
@@ -3806,12 +3802,8 @@ class StringMethods(BaseAccessor):
 
         Parameters
         ----------
-        pat : str or list-like
-            If `str` is an `str`, evaluates whether each string of
-            series ends with `pat`.
-            If `pat` is a list-like, evaluates whether `self[i]`
-            ends with `pat[i]`.
-            Regular expressions are not accepted.
+        pat : str or tuple[str, ...]
+            String pattern or tuple of patterns. Regular expressions are not accepted.
 
         Returns
         -------
@@ -3853,12 +3845,8 @@ class StringMethods(BaseAccessor):
 
         Parameters
         ----------
-        pat : str or list-like
-            If `str` is an `str`, evaluates whether each string of
-            series starts with `pat`.
-            If `pat` is a list-like, evaluates whether `self[i]`
-            starts with `pat[i]`.
-            Regular expressions are not accepted.
+        pat : str or tuple[str, ...]
+            String pattern or tuple of patterns. Regular expressions are not accepted.
 
         Returns
         -------
@@ -4747,7 +4735,7 @@ class StringMethods(BaseAccessor):
         return result
 
     def hash_character_ngrams(
-        self, n: int = 5, as_list: bool = False, seed: np.uint32 = 0
+        self, n: int = 5, as_list: bool = False, seed: int | np.uint32 = 0
     ) -> Series | Index:
         """
         Generate hashes of n-grams from characters in a column of strings.
@@ -5338,7 +5326,7 @@ class StringMethods(BaseAccessor):
                 return self.minhash64(seed, a_column, b_column, width)
 
     def minhash64(
-        self, seed: np.uint64, a: ColumnLike, b: ColumnLike, width: int
+        self, seed: int | np.uint64, a: ColumnLike, b: ColumnLike, width: int
     ) -> Series | Index:
         """
         Compute the minhash of a strings column.
@@ -5389,7 +5377,7 @@ class StringMethods(BaseAccessor):
         )
 
     def minhash_ngrams(
-        self, ngrams: int, seed: np.uint32, a: ColumnLike, b: ColumnLike
+        self, ngrams: int, seed: int | np.uint32, a: ColumnLike, b: ColumnLike
     ) -> Series | Index:
         """
         Compute the minhash of a list column of strings.
@@ -5440,7 +5428,7 @@ class StringMethods(BaseAccessor):
         )
 
     def minhash64_ngrams(
-        self, ngrams: int, seed: np.uint64, a: ColumnLike, b: ColumnLike
+        self, ngrams: int, seed: int | np.uint64, a: ColumnLike, b: ColumnLike
     ) -> Series | Index:
         """
         Compute the minhash of a list column of strings.

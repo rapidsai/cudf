@@ -334,6 +334,21 @@ cdef class JsonReaderOptions:
                 vec.push_back(val.encode())
         self.c_obj.set_na_values(vec)
 
+    cpdef void set_source(self, SourceInfo src):
+        """
+        Set a new source info location.
+
+        Parameters
+        ----------
+        src : SourceInfo
+            New source information, replacing existing information.
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_source(src.c_obj)
+
 
 cdef class JsonReaderOptionsBuilder:
     cpdef JsonReaderOptionsBuilder byte_range_offset(self, size_t byte_range_offset):
@@ -854,7 +869,7 @@ cpdef TableWithMetadata read_json_from_string_column(
 
     # Create a new source from the joined string data
     cdef SourceInfo joined_source = SourceInfo(
-            [DeviceBuffer.c_from_unique_ptr(move(c_contents.data), stream)])
+            [DeviceBuffer.c_from_unique_ptr(move(c_contents.data), stream, mr)])
 
     # Create new options using the joined string as source
     cdef JsonReaderOptions options = (

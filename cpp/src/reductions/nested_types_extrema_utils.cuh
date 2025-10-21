@@ -17,7 +17,7 @@
 #pragma once
 
 #include <cudf/aggregation.hpp>
-#include <cudf/detail/row_operator/row_operators.cuh>
+#include <cudf/detail/row_operator/lexicographic.cuh>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/reduction/detail/reduction_operators.cuh>
@@ -79,7 +79,7 @@ auto static constexpr DEFAULT_NULL_ORDER = cudf::null_order::BEFORE;
  * finding for ARGMAX. This helps achieve the results of finding the min or max element when nulls
  * are excluded from the operations, returning null only when all the input elements are nulls.
  */
-class comparison_binop_generator {
+class arg_minmax_binop_generator {
  private:
   cudf::table_view const input_tview;
   bool const has_nulls;
@@ -92,7 +92,7 @@ class comparison_binop_generator {
   // Contains data used in the returned binop, thus needs to be kept alive as a member variable.
   cudf::detail::row::lexicographic::self_comparator row_comparator;
 
-  comparison_binop_generator(column_view const& input_,
+  arg_minmax_binop_generator(column_view const& input_,
                              bool is_min_op_,
                              rmm::cuda_stream_view stream_)
     : input_tview{cudf::table_view{{input_}}},
@@ -151,18 +151,24 @@ class comparison_binop_generator {
   }
 
  public:
-  auto binop() const
-  {
-    auto const device_comp = row_comparator.less<true>(cudf::nullate::DYNAMIC{has_nulls});
-    return row_arg_minmax_fn(input_tview.num_rows(), device_comp, is_min_op);
-  }
+  /**
+   * @brief Generate the `less` comparator for the input table.
+   * @return The `less` comparator
+   */
+  auto less() const { return row_comparator.less<true>(cudf::nullate::DYNAMIC{has_nulls}); }
+
+  /**
+   * @brief Generate the binary operator for ARGMIN/ARGMAX with index values into the input table.
+   * @return The binary operator for ARGMIN/ARGMAX
+   */
+  auto binop() const { return row_arg_minmax_fn(input_tview.num_rows(), less(), is_min_op); }
 
   template <typename BinOp>
   static auto create(column_view const& input, rmm::cuda_stream_view stream)
   {
     CUDF_EXPECTS(cudf::is_nested(input.type()),
                  "This utility class is designed exclusively for nested input types.");
-    return comparison_binop_generator(input,
+    return arg_minmax_binop_generator(input,
                                       std::is_same_v<BinOp, cudf::reduction::detail::op::min> ||
                                         std::is_same_v<BinOp, cudf::DeviceMin>,
                                       stream);
@@ -173,7 +179,7 @@ class comparison_binop_generator {
   {
     CUDF_EXPECTS(cudf::is_nested(input.type()),
                  "This utility class is designed exclusively for nested input types.");
-    return comparison_binop_generator(
+    return arg_minmax_binop_generator(
       input, K == cudf::aggregation::MIN || K == cudf::aggregation::ARGMIN, stream);
   }
 };
