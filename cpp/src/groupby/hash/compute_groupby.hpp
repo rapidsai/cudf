@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -23,24 +23,9 @@ namespace cudf::groupby::detail::hash {
  * `keys`. The upper limit on the number of values in this map is the number
  * of rows in `keys`.
  *
- * To store the results of aggregations, we create temporary sparse columns
- * which have the same size as input value columns. Using the hash map, we
- * determine the location within the sparse column to write the result of the
- * aggregation into.
- *
- * The sparse column results of all aggregations are stored into the cache
- * `sparse_results`. This enables the use of previously calculated results in
- * other aggregations.
- *
- * All the aggregations which can be computed in a single pass are computed
- * first, in a combined kernel. Then using these results, aggregations that
- * require multiple passes, will be computed.
- *
- * Finally, using the hash map, we generate a vector of indices of populated
- * values in sparse result columns. Then, for each aggregation originally
- * requested in `requests`, we gather sparse results into a column of dense
- * results using the aforementioned index vector. Dense results are stored into
- * the in/out parameter `cache`.
+ * All the aggregations which can be computed in a single pass are computed first by the same set
+ * of kernels. Then using these results, compound aggregations that require multiple passes will be
+ * computed on top of them. All results are stored into the in/out parameter `cache`.
  *
  * @tparam Equal Device row comparator type
  * @tparam Hash Device row hasher type

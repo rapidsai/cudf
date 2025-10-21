@@ -117,7 +117,7 @@ struct identity_initializer {
 };
 }  // namespace
 
-void initialize_with_identity(mutable_table_view& table,
+void initialize_with_identity(mutable_table_view const& table,
                               host_span<cudf::aggregation::Kind const> aggs,
                               rmm::cuda_stream_view stream)
 {

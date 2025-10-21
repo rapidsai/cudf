@@ -4,7 +4,7 @@
  */
 
 #include "compute_groupby.hpp"
-#include "flatten_single_pass_aggs.hpp"
+#include "extract_single_pass_aggs.hpp"
 #include "groupby/common/utils.hpp"
 #include "helpers.cuh"
 
