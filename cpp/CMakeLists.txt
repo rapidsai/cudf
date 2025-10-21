@@ -70,7 +70,8 @@ option(CUDA_ENABLE_LINEINFO
        "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler)" OFF
 )
 # Option to enable NVTX development utility macros to allow more precise performance profiling.
-option(CUDF_ENABLE_NVTX_DEV_UTILS
+option(
+  CUDF_ENABLE_NVTX_DEV_UTILS
   "Enable cuDF's NVTX development utility macros to allow more precise performance profiling" OFF
 )
 
