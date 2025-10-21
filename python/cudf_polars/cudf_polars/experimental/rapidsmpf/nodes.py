@@ -213,13 +213,16 @@ async def default_node_multi(
 
 
 @define_py_node()
-async def multicast_node(
+async def multicast_node_bounded(
     ctx: Context,
     ch_in: ChannelPair,
     *chs_out: ChannelPair,
 ) -> None:
     """
-    Multicast node for rapidsmpf.
+    Bounded multicast node for rapidsmpf.
+
+    Each chunk is broadcasted to all output channels
+    as it arrives.
 
     Parameters
     ----------
@@ -242,7 +245,6 @@ async def multicast_node(
                             table_chunk.sequence_number,
                             table_chunk.table_view(),
                             table_chunk.stream,
-                            # NOTE: Should we just copy the table chunk?
                             exclusive_view=False,
                         )
                     ),
@@ -251,44 +253,54 @@ async def multicast_node(
         await asyncio.gather(*(ch.data.drain(ctx) for ch in chs_out))
 
 
-@define_py_node()
-async def passthrough_node(
+async def _send_table_chunks(
     ctx: Context,
-    ch_out: ChannelPair,
+    table_chunks: list[TableChunk],
+    ch_out: Channel,
+) -> None:
+    """Send a list of table chunks to the output channel."""
+    async with shutdown_on_error(ctx, ch_out):
+        for table_chunk in table_chunks:
+            msg = Message(
+                TableChunk.from_pylibcudf_table(
+                    table_chunk.sequence_number,
+                    table_chunk.table_view(),
+                    table_chunk.stream,
+                    exclusive_view=False,
+                )
+            )
+            await ch_out.send(ctx, msg)
+        await ch_out.drain(ctx)
+
+
+@define_py_node()
+async def multicast_node_unbounded(
+    ctx: Context,
     ch_in: ChannelPair,
-    *,
-    balanced_consumer: bool,
+    *chs_out: ChannelPair,
 ) -> None:
     """
-    Passthrough node for rapidsmpf.
+    Unbounded multicast node for rapidsmpf.
+
+    All incoming chunks are buffered in memory before
+    sending to all output channels.
 
     Parameters
     ----------
     ctx
         The context.
-    ch_out
-        The output ChannelPair.
     ch_in
         The input ChannelPair.
-    balanced_consumer
-        Whether all down-stream nodes are pulling
-        data from multiple channels at the same rate.
-        If not, we must forward all chunks immediately
-        to avoid blocking progress in a multicast node.
+    chs_out
+        The output ChannelPairs.
     """
-    async with shutdown_on_error(ctx, ch_in.data, ch_out.data):
-        sends = []
+    async with shutdown_on_error(ctx, ch_in.data, *[ch.data for ch in chs_out]):
+        table_chunks: list[Message] = []
         while (msg := await ch_in.data.recv(ctx)) is not None:
-            if balanced_consumer:
-                await ch_out.data.send(ctx, msg)
-            else:
-                # Unfortunately, we must forward all chunks immediately.
-                # Otherwise, we may block progress in a multicast node.
-                sends.append(asyncio.create_task(ch_out.data.send(ctx, msg)))
-        if sends:
-            await asyncio.gather(*sends)
-
-        await ch_out.data.drain(ctx)
+            table_chunks.append(TableChunk.from_message(msg))
+        await asyncio.gather(
+            *(_send_table_chunks(ctx, table_chunks, ch.data) for ch in chs_out)
+        )
 
 
 @generate_ir_sub_network.register(IR)
@@ -410,19 +422,15 @@ def generate_ir_sub_network_wrapper(
     """
     nodes, channels = generate_ir_sub_network(ir, rec)
     if (count := rec.state["output_ch_count"][ir]) > 1:
-        inter_chs = [ChannelPair.create() for _ in range(count)]
         output_chs = [ChannelPair.create() for _ in range(count)]
-        nodes[ir].append(multicast_node(rec.state["ctx"], channels[ir][0], *inter_chs))
-        for ch_in, ch_out in zip(inter_chs, output_chs, strict=True):
-            # We need a passthrough node to ensure that downstram
-            # consumers can recv chunks at different rates
+        if rec.state["balanced_consumer"]:
+            # TODO: Do we _know_ if this is safe?
             nodes[ir].append(
-                passthrough_node(
-                    rec.state["ctx"],
-                    ch_out,
-                    ch_in,
-                    balanced_consumer=rec.state["balanced_consumer"],
-                )
+                multicast_node_bounded(rec.state["ctx"], channels[ir][0], *output_chs)
+            )
+        else:
+            nodes[ir].append(
+                multicast_node_unbounded(rec.state["ctx"], channels[ir][0], *output_chs)
             )
         channels[ir] = output_chs
     return nodes, channels
