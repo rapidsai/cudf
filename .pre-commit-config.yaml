@@ -151,7 +151,7 @@ repos:
     hooks:
       - id: verify-copyright
         name: verify-copyright-cudf
-        args: [--fix, --force-spdx]
+        args: [--fix, --spdx]
         files: |
           (?x)
             [.](cmake|cpp|cu|cuh|h|hpp|sh|pxd|py|pyx|pyi|rs|java|bat)$|
