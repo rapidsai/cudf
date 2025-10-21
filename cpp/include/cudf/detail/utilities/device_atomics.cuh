@@ -365,11 +365,11 @@ __device__ __forceinline__ uint64_t calculate_carry_64(uint64_t old_val,
 }
 
 /**
- * @brief Atomic addition for __int128_t with GPU architecture optimization
+ * @brief Atomic addition for __int128_t with architecture-specific optimization
  *
- * Uses native atomicAdd on Hopper+ GPUs (compute capability 9.0+) where 128-bit
- * atomic operations are supported. Falls back to two 64-bit atomic CAS operations
- * with carry propagation on older GPU architectures.
+ * Uses native 128-bit CAS on Hopper+ GPUs (compute capability 9.0+) for optimal
+ * performance. Falls back to two 64-bit atomic CAS operations with carry propagation
+ * on older GPU architectures.
  *
  * @param address Pointer to the __int128_t value
  * @param val Value to add
@@ -378,7 +378,14 @@ __device__ __forceinline__ uint64_t calculate_carry_64(uint64_t old_val,
 __forceinline__ __device__ __int128_t atomic_add(__int128_t* address, __int128_t val)
 {
 #if __CUDA_ARCH__ >= 900
-  return atomicAdd(address, val);
+  __int128_t expected, desired;
+
+  do {
+    expected = *address;
+    desired  = expected + val;
+  } while (atomicCAS(address, expected, desired) != expected);
+
+  return expected;
 #else
   uint64_t* const target_ptr         = reinterpret_cast<uint64_t*>(address);
   __uint128_t const add_val_unsigned = static_cast<__uint128_t>(val);
