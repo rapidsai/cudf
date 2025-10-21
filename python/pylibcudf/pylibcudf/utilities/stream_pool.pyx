@@ -31,11 +31,8 @@ cpdef void join_streams(list streams, Stream stream):
     for s in streams:
         c_streams.push_back((<Stream?>s).view())
 
-    cdef host_span[const_cuda_stream_view] c_streams_span = (
-        host_span[const_cuda_stream_view](
-            c_streams.data(), c_streams.size()
-        )
-    )
-
     with nogil:
-        cpp_stream_pool.join_streams(c_streams_span, c_stream.view())
+        cpp_stream_pool.join_streams(
+            host_span[const_cuda_stream_view](c_streams.data(), c_streams.size()),
+            c_stream.view()
+        )
