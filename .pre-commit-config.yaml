@@ -154,7 +154,7 @@ repos:
         args: [--fix, --spdx]
         files: |
           (?x)
-            [.](cmake|cpp|cu|cuh|h|hpp|sh|pxd|py|pyx|pyi|rs|java)$|
+            [.](cmake|cpp|cu|cuh|h|hpp|sh|pxd|py|pyx|pyi|rs|java|bat)$|
             CMakeLists[.]txt$|
             CMakeLists_standalone[.]txt$|
             meta[.]yaml$|
