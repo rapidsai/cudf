@@ -46,6 +46,7 @@ void write_parquet_file(std::string const& filepath,
 {
   auto sink_info = cudf::io::sink_info(filepath);
   auto builder   = cudf::io::parquet_writer_options::builder(sink_info, table_view);
+  std::cout << "Writing: " << filepath << std::endl;
 
   // Create metadata for better compression
   auto table_metadata = cudf::io::table_input_metadata{table_view};

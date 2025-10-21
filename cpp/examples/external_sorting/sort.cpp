@@ -33,7 +33,6 @@
  * sorts each individually, and demonstrates external sorting with sample sort.
  */
 
-#include "../utilities/timer.hpp"
 #include "cusort.hpp"
 #include "parquet_io.hpp"
 #include "random_table_generator.hpp"
@@ -50,6 +49,7 @@
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -61,6 +61,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 /**
@@ -96,65 +97,21 @@ void print_usage()
     << "and demonstrates external sorting with sample sort algorithm.\n\n";
 }
 
-struct scalar_accessor {
- private:
-  template <typename ResultType>
-  static constexpr bool is_supported()
-  {
-    return cudf::is_numeric<ResultType>() && !std::is_same_v<ResultType, bool>;
-  }
-
+struct make_ast_literal {
  public:
-  template <typename ResultType>
-  cudf::ast::literal operator()(std::vector<std::byte>& splitters,
-                                int pos,
-                                rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr)
-    requires(is_supported<ResultType>())
+  template <typename InputType>
+  std::unique_ptr<cudf::ast::literal> operator()(cudf::scalar &scalar)
+    requires(cudf::is_numeric<InputType>())
   {
-    auto casted_splitters = reinterpret_cast<ResultType*>(splitters.data());
-    auto scalar_val       = casted_splitters[pos];
-    using ScalarType      = cudf::scalar_type_t<ResultType>;
-    auto literal_bound    = cudf::numeric_scalar<ResultType>(scalar_val, true, stream, mr);
-    return cudf::ast::literal(literal_bound);
-  }
-  template <typename ResultType>
-  cudf::ast::literal operator()(std::vector<std::byte>& splitters,
-                                int pos,
-                                rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr)
-    requires(not is_supported<ResultType>())
-  {
-    CUDF_FAIL("AST literal not implemented for nested types");
-  }
-};
-
-struct to_host {
- private:
-  template <typename T>
-  static constexpr bool is_supported()
-  {
-    return cudf::is_numeric<T>() && !std::is_same_v<T, bool>;
+    auto& typed_scalar = static_cast<cudf::numeric_scalar<InputType>&>(scalar);  
+    return std::make_unique<cudf::ast::literal>(typed_scalar);
   }
 
- public:
-  template <typename T>
-  void operator()(cudf::column_view c,
-                  std::vector<std::byte>& host_data,
-                  rmm::cuda_stream_view stream)
-    requires(is_supported<T>())
+  template <typename InputType>
+  std::unique_ptr<cudf::ast::literal> operator()(cudf::scalar &scalar)
+    requires(not cudf::is_numeric<InputType>())
   {
-    auto col_span   = cudf::device_span<T const>(c.data<T>(), c.size());
-    auto host_data_ = cudf::detail::make_std_vector(col_span, stream);
-    std::memcpy(host_data.data(), host_data_.data(), host_data_.size() * sizeof(T));
-  }
-  template <typename T>
-  void operator()(cudf::column_view c,
-                  std::vector<std::byte>& host_data,
-                  rmm::cuda_stream_view stream)
-    requires(not is_supported<T>())
-  {
-    CUDF_FAIL("AST literal not implemented for nested types");
+    CUDF_FAIL("AST literal not implemented for non-numeric types");
   }
 };
 
@@ -185,8 +142,8 @@ int main(int argc, char** argv)
   // Default parameters
   std::string input_dir    = "./sort_data";
   int num_files            = 4;
-  cudf::size_type num_cols = 5;
-  cudf::size_type num_rows = 1000;
+  cudf::size_type num_cols = 10;
+  cudf::size_type num_rows = 5000000;
 
   // Parse command line arguments
   if (argc >= 2) {
@@ -213,15 +170,16 @@ int main(int argc, char** argv)
     cudf::examples::write_random_table(input_dir, num_files, num_rows, num_cols, stream, mr);
   }
 
-  cudf::examples::timer perf_timer;
-
   std::vector<std::unique_ptr<cudf::column>> per_table_splitters;
+  cudf::data_type sort_col_type;
   for (int i = 0; i < num_files; i++) {
     auto const filepath = input_dir + "/data_" + std::to_string(i) + ".parquet";
     auto table          = cudf::examples::read_parquet_file(filepath, stream, mr);
+    sort_col_type = table->view().column(0).type();
     per_table_splitters.push_back(
       cudf::examples::sample_splitters(table->view(), num_files, stream, mr));
   }
+  auto sort_col_element_size = cudf::size_of(sort_col_type);
   std::vector<cudf::column_view> per_table_splitters_view;
   for (auto const& c : per_table_splitters) {
     per_table_splitters_view.push_back(c->view());
@@ -231,42 +189,41 @@ int main(int argc, char** argv)
   auto num_splitters = num_files - 1;
   auto splitters     = cudf::examples::sample_splitters(
     cudf::table_view({concatenated_splitters->view()}), num_splitters, stream, mr);
-  auto sort_col_type = splitters->type();
-  std::vector<std::byte> h_splitters(num_splitters * 8);
-  cudf::type_dispatcher(sort_col_type, to_host{}, splitters->view(), h_splitters, stream);
-
+  
   auto col_ref = cudf::ast::column_reference(0);
   std::vector<std::vector<std::unique_ptr<cudf::table>>> table_splits(num_splitters + 1);
+  std::unique_ptr<cudf::scalar> ub_scalar_literal, lb_scalar_literal;
+  std::unique_ptr<cudf::ast::literal> upper_bound, lower_bound;
   for (int i = 0; i < num_files; i++) {
     auto const filepath = input_dir + "/data_" + std::to_string(i) + ".parquet";
     auto table          = cudf::examples::read_parquet_file(filepath, stream, mr);
-    auto upper_bound =
-      cudf::type_dispatcher(sort_col_type, scalar_accessor{}, h_splitters, 0, stream, mr);
-    auto less_expr    = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, upper_bound);
-    auto boolean_mask = cudf::compute_column(table->view(), less_expr);
-    table_splits[0].push_back(cudf::apply_boolean_mask(table->view(), boolean_mask->view()));
+    ub_scalar_literal       = cudf::get_element(splitters->view(), 0, stream, mr);
+    upper_bound = cudf::type_dispatcher(sort_col_type, make_ast_literal{}, *ub_scalar_literal);
+    auto less_expr    = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, *upper_bound);
+    auto boolean_mask = cudf::compute_column(table->view(), less_expr, stream, mr);
+    table_splits[0].push_back(cudf::apply_boolean_mask(table->view(), boolean_mask->view(), stream, mr));
 
     for (int j = 1; j < num_splitters; j++) {
-      auto lower_bound =
-        cudf::type_dispatcher(sort_col_type, scalar_accessor{}, h_splitters, j - 1, stream, mr);
-      auto upper_bound =
-        cudf::type_dispatcher(sort_col_type, scalar_accessor{}, h_splitters, j, stream, mr);
+      lb_scalar_literal       = std::move(ub_scalar_literal);
+      lower_bound = cudf::type_dispatcher(sort_col_type, make_ast_literal{}, *lb_scalar_literal);
+      ub_scalar_literal = cudf::get_element(splitters->view(), j, stream, mr);
+      upper_bound = cudf::type_dispatcher(sort_col_type, make_ast_literal{}, *ub_scalar_literal);
       auto greater_expr =
-        cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref, lower_bound);
-      auto less_expr = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, upper_bound);
+        cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref, *lower_bound);
+      less_expr = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, *upper_bound);
       auto filter_expr =
         cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, less_expr, greater_expr);
-      auto boolean_mask = cudf::compute_column(table->view(), filter_expr);
-      table_splits[j].push_back(cudf::apply_boolean_mask(table->view(), boolean_mask->view()));
+      auto boolean_mask = cudf::compute_column(table->view(), filter_expr, stream, mr);
+      table_splits[j].push_back(cudf::apply_boolean_mask(table->view(), boolean_mask->view(), stream, mr));
     }
 
-    auto lower_bound = cudf::type_dispatcher(
-      sort_col_type, scalar_accessor{}, h_splitters, num_splitters, stream, mr);
+    lb_scalar_literal       = std::move(ub_scalar_literal);
+    lower_bound = cudf::type_dispatcher(sort_col_type, make_ast_literal{}, *lb_scalar_literal);
     auto greater_expr =
-      cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref, lower_bound);
-    boolean_mask = cudf::compute_column(table->view(), greater_expr);
+      cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref, *lower_bound);
+    boolean_mask = cudf::compute_column(table->view(), greater_expr, stream, mr);
     table_splits[num_splitters].push_back(
-      cudf::apply_boolean_mask(table->view(), boolean_mask->view()));
+      cudf::apply_boolean_mask(table->view(), boolean_mask->view(), stream, mr));
   }
 
   for (int i = 0; i <= num_splitters; i++) {
@@ -281,9 +238,6 @@ int main(int argc, char** argv)
                                              stream,
                                              mr);
   }
-
-  perf_timer.print_elapsed_millis();
-  perf_timer.reset();
 
   return 0;
 }
