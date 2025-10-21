@@ -71,7 +71,7 @@ option(CUDA_ENABLE_LINEINFO
 )
 # Option to enable NVTX development utility macros to allow more precise performance profiling.
 option(CUDF_ENABLE_NVTX_DEV_UTILS
-       "Enable cuDF's NVTX development utility macros to allow more precise performance profiling" OFF
+  "Enable cuDF's NVTX development utility macros to allow more precise performance profiling" OFF
 )
 
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
