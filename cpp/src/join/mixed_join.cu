@@ -189,7 +189,7 @@ mixed_join_setup_data setup_mixed_join_common(table_view const& left_equality,
     {},
     {},
     {},
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+    rmm::mr::polymorphic_allocator<char>{},
     stream.value()};
 
   // TODO: To add support for nested columns we will need to flatten in many
