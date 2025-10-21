@@ -871,6 +871,11 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
       std::move(current_child_column),
       profile.get_null_probability().has_value() ? null_count : 0,
       profile.get_null_probability().has_value() ? std::move(null_mask) : rmm::device_buffer{});
+    if (auto const cv = list_column->view();
+        cudf::has_nonempty_nulls(cv, cudf::get_default_stream())) {
+      list_column = cudf::purge_nonempty_nulls(
+        cv, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+    }
   }
   return list_column;  // return the top-level column
 }
@@ -887,6 +892,11 @@ std::unique_ptr<cudf::column> create_distinct_rows_column<cudf::list_view>(
     auto offsets_column = cudf::sequence(num_rows + 1, *zero);
     auto list_column    = cudf::make_lists_column(
       num_rows, std::move(offsets_column), std::move(child_column), 0, rmm::device_buffer{});
+    if (auto const cv = list_column->view();
+        cudf::has_nonempty_nulls(cv, cudf::get_default_stream())) {
+      list_column = cudf::purge_nonempty_nulls(
+        cv, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+    }
     std::swap(child_column, list_column);
   }
   auto lists_col =
