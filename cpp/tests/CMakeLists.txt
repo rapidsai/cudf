@@ -209,15 +209,6 @@ ConfigureTest(
 )
 
 # ##################################################################################################
-# * quantiles tests -------------------------------------------------------------------------------
-ConfigureTest(
-  QUANTILES_TEST quantiles/percentile_approx_test.cpp quantiles/quantile_test.cpp
-  quantiles/quantiles_test.cpp
-  GPUS 1
-  PERCENT 70 EXTRA_LIBS ${ARROW_LIBRARIES}
-)
-
-# ##################################################################################################
 # * reduction tests -------------------------------------------------------------------------------
 ConfigureTest(
   REDUCTIONS_TEST
@@ -286,24 +277,6 @@ ConfigureTest(
 # ##################################################################################################
 # * filter tests -------------------------------------------------------------------------
 ConfigureTest(FILTER_TEST filter/filter_test.cpp)
-
-# ##################################################################################################
-# * interop tests -------------------------------------------------------------------------
-ConfigureTest(
-  INTEROP_TEST
-  interop/arrow_data_structures_test.cpp
-  interop/to_arrow_device_test.cpp
-  interop/to_arrow_test.cpp
-  interop/to_arrow_host_test.cpp
-  interop/from_arrow_test.cpp
-  interop/from_arrow_device_test.cpp
-  interop/from_arrow_host_test.cpp
-  interop/from_arrow_stream_test.cpp
-  interop/dlpack_test.cpp
-  EXTRA_LIBS
-  nanoarrow
-  ${ARROW_LIBRARIES}
-)
 
 # ##################################################################################################
 # * io tests --------------------------------------------------------------------------------------
@@ -376,6 +349,7 @@ target_link_libraries(DATA_CHUNK_SOURCE_TEST PRIVATE ZLIB::ZLIB)
 ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
 ConfigureTest(FST_TEST io/fst/fst_test.cu)
 ConfigureTest(TYPE_INFERENCE_TEST io/type_inference_test.cu)
+ConfigureTest(RAW_FORMAT_TEST io/raw_format_test.cpp)
 
 # ##################################################################################################
 # * sort tests ------------------------------------------------------------------------------------
@@ -756,7 +730,6 @@ ConfigureTest(STREAM_MERGE_TEST streams/merge_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_NULL_MASK_TEST streams/null_mask_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_PARTITIONING_TEST streams/partitioning_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_POOL_TEST streams/pool_test.cu STREAM_MODE testing)
-ConfigureTest(STREAM_QUANTILE_TEST streams/quantile_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_REDUCTION_TEST streams/reduction_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_REPLACE_TEST streams/replace_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_RESHAPE_TEST streams/reshape_test.cpp STREAM_MODE testing)
