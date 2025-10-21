@@ -44,7 +44,6 @@ namespace {
  *
  * Only works on columns of fixed-width types.
  */
-
 struct identity_initializer {
  private:
   template <typename T, aggregation::Kind k>
