@@ -15,17 +15,16 @@
  */
 
 #include "compute_global_memory_aggs.cuh"
-#include "compute_global_memory_aggs.hpp"
 
 namespace cudf::groupby::detail::hash {
-template rmm::device_uvector<cudf::size_type> compute_global_memory_aggs<nullable_global_set_t>(
-  cudf::size_type num_rows,
-  bitmask_type const* row_bitmask,
-  cudf::table_view const& flattened_values,
-  cudf::aggregation::Kind const* d_agg_kinds,
-  host_span<cudf::aggregation::Kind const> agg_kinds,
-  nullable_global_set_t& global_set,
-  std::vector<std::unique_ptr<aggregation>>& aggregations,
-  cudf::detail::result_cache* sparse_results,
-  rmm::cuda_stream_view stream);
+
+template std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>>
+compute_global_memory_aggs<nullable_global_set_t>(bitmask_type const* row_bitmask,
+                                                  table_view const& values,
+                                                  nullable_global_set_t const& key_set,
+                                                  host_span<aggregation::Kind const> h_agg_kinds,
+                                                  device_span<aggregation::Kind const> d_agg_kinds,
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::device_async_resource_ref mr);
+
 }  // namespace cudf::groupby::detail::hash
