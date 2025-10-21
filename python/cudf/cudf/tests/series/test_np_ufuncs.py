@@ -60,10 +60,11 @@ def test_ufunc_series(request, numpy_ufunc, has_nulls, indexed):
     # Avoid zeros in either array to skip division by 0 errors. Also limit the
     # scale to avoid issues with overflow, etc. We use ints because some
     # operations (like bitwise ops) are not defined for floats.
+    rng = np.random.default_rng(0)
     pandas_args = args = [
         cudf.Series(
-            cp.random.randint(low=1, high=10, size=N),
-            index=cp.random.choice(range(N), N, False) if indexed else None,
+            rng.integers(low=1, high=10, size=N),
+            index=rng.choice(range(N), N, False) if indexed else None,
         )
         for _ in range(numpy_ufunc.nin)
     ]
@@ -157,10 +158,11 @@ def test_binary_ufunc_series_array(
     # Avoid zeros in either array to skip division by 0 errors. Also limit the
     # scale to avoid issues with overflow, etc. We use ints because some
     # operations (like bitwise ops) are not defined for floats.
+    rng = np.random.default_rng(0)
     args = [
         cudf.Series(
-            cp.random.rand(N),
-            index=cp.random.choice(range(N), N, False) if indexed else None,
+            rng.random(N),
+            index=rng.choice(range(N), N, False) if indexed else None,
         )
         for _ in range(ufunc.nin)
     ]
