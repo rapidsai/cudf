@@ -92,10 +92,10 @@ struct scoped_range_sync : scoped_range {
  * ```
  */
 #ifdef CUDF_ENABLE_NVTX_DEBUG_RANGE
-#define CUDF_SCOPED_RANGE_DEBUG(str, stream) \
+#define CUDF_SCOPED_RANGE_SYNC_DEBUG(str, stream) \
   [[maybe_unused]] cudf::scoped_range_sync __range_sync{str, stream};
 #else  // no-op
-#define CUDF_SCOPED_RANGE_DEBUG(str, stream)
+#define CUDF_SCOPED_RANGE_SYNC_DEBUG(str, stream)
 #endif
 
 /**
@@ -118,8 +118,8 @@ struct scoped_range_sync : scoped_range {
  * ```
  */
 #ifdef CUDF_ENABLE_NVTX_DEBUG_RANGE
-#define CUDF_FUNC_RANGE_DEBUG(stream) \
+#define CUDF_FUNC_RANGE_SYNC_DEBUG(stream) \
   [[maybe_unused]] cudf::scoped_range_sync __range_sync{__func__, stream};
 #else  // no-op
-#define CUDF_FUNC_RANGE_DEBUG(stream)
+#define CUDF_FUNC_RANGE_SYNC_DEBUG(stream)
 #endif
