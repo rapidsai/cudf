@@ -450,6 +450,9 @@ class two_table_comparator {
    * The left and right table are expected to have the same number of columns and data types for
    * each column.
    *
+   * @throws std::invalid_argument if the tables have different number of columns or incompatible
+   * column types
+   *
    * @param left The left table to compare.
    * @param right The right table to compare.
    * @param stream The stream to construct this object on. Not the stream that will be used for
@@ -466,14 +469,13 @@ class two_table_comparator {
    * This constructor allows independently constructing a `preprocessed_table` and sharing it among
    * multiple comparators.
    *
+   * @throws std::invalid_argument if the tables have different number of columns
+   *
    * @param left The left table preprocessed for equality comparison.
    * @param right The right table preprocessed for equality comparison.
    */
   two_table_comparator(std::shared_ptr<preprocessed_table> left,
-                       std::shared_ptr<preprocessed_table> right)
-    : d_left_table{std::move(left)}, d_right_table{std::move(right)}
-  {
-  }
+                       std::shared_ptr<preprocessed_table> right);
 
   /**
    * @brief Return the binary operator for comparing rows in the table.
