@@ -33,9 +33,15 @@ def test_join_streams_type_error():
         plc.utilities.stream_pool.join_streams(None, main_stream)
 
     # Test with non-Stream in list
-    with pytest.raises(TypeError):
+    with pytest.raises(
+        TypeError,
+        match="Cannot convert NoneType to rmm.pylibrmm.stream.Stream",
+    ):
         plc.utilities.stream_pool.join_streams([None], main_stream)
 
     # Test with non-Stream as main stream
-    with pytest.raises(TypeError):
+    with pytest.raises(
+        TypeError,
+        match="Cannot convert NoneType to rmm.pylibrmm.stream.Stream",
+    ):
         plc.utilities.stream_pool.join_streams([Stream()], None)

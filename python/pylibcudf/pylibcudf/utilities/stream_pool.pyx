@@ -23,19 +23,12 @@ cpdef void join_streams(list streams, Stream stream):
     stream
         Joined stream that synchronizes with the waited-on streams.
     """
-    if stream is None:
-        raise TypeError(
-            f"stream must be a Stream, got {type(stream).__name__} instead."
-        )
-
     cdef vector[cuda_stream_view] c_streams
     cdef Stream s
-    cdef Stream main_stream = <Stream>stream
+    cdef Stream main_stream = <Stream?>stream
     c_streams.reserve(len(streams))
     for item in streams:
-        if not isinstance(item, Stream):
-            raise TypeError(f"Expected Stream, got {type(item).__name__}")
-        s = <Stream>item
+        s = <Stream?>item
         c_streams.push_back(s.view())
 
     cdef host_span[const_cuda_stream_view] streams_span = (
