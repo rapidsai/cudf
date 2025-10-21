@@ -13,9 +13,9 @@ from polars.testing import assert_frame_equal
 
 from cudf_polars import Translator
 from cudf_polars.dsl.expressions.base import Col, NamedExpr
+from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.parallel import (
-    IRExecutionContext,
     get_scheduler,
     lower_ir_graph,
     task_graph,
