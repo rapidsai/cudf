@@ -140,7 +140,7 @@ def _(
         ):
             # Taask engine case
             scan_child = child.children[0]
-        elif isinstance(child, Scan):
+        elif isinstance(child, Scan):  # pragma: no cover; Requires rapidsmpf runtime
             # RapidsMPF case
             scan_child = child
 

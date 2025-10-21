@@ -217,6 +217,9 @@ def generate_network(
         "config_options": config_options,
         "partition_info": partition_info,
         "output_ch_count": output_ch_count,
+        # TODO: The "balanced_consumer" flag is a temporary
+        # hack to avoid hanging in multicast nodes. We definitely
+        # need to revisit this.
         "balanced_consumer": True,
     }
     mapper: SubNetGenerator = CachingVisitor(

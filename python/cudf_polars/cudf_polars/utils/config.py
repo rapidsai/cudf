@@ -596,7 +596,9 @@ class StreamingExecutor:
 
     def __post_init__(self) -> None:  # noqa: D105
         # Check for rapidsmpf runtime
-        if self.runtime == "rapidsmpf":
+        if (
+            self.runtime == "rapidsmpf"
+        ):  # pragma: no cover; rapidsmpf runtime not tested in CI yet
             if not rapidsmpf_single_available():
                 raise ValueError("The rapidsmpf streaming engine requires rapidsmpf.")
             if self.shuffle_method == "tasks":
