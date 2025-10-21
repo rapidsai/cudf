@@ -461,7 +461,8 @@ struct page_stats_caster : public stats_caster_base {
 
   /**
    * @brief Builds two device columns storing the corresponding page-level statistics (min, max)
-   *        respectively of a column at each row index.
+  * @brief Builds three device columns storing the corresponding page-level statistics
+  *        (min, max, is_null) respectively of a column at each row index
    *
    * @tparam T underlying type of the column
    * @param schema_idx Column schema index
