@@ -53,10 +53,14 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/cuda_stream_pool.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 #include <rmm/resource_ref.hpp>
+
+#include <BS_thread_pool.hpp>
+#include <BS_thread_pool_utils.hpp>
 
 #include <filesystem>
 #include <iostream>
@@ -162,7 +166,11 @@ int main(int argc, char** argv)
   int num_files            = 4;
   cudf::size_type num_cols = 13;
   cudf::size_type num_rows = 5000000;
-  timer watch;
+  auto default_stream      = cudf::get_default_stream();
+  auto mr                  = cudf::get_current_device_resource_ref();
+  int thread_count         = 8;
+  auto stream_pool         = rmm::cuda_stream_pool(thread_count);
+  static BS::thread_pool thread_pool(thread_count);
 
   // Parse command line arguments
   if (argc >= 2) {
@@ -182,88 +190,122 @@ int main(int argc, char** argv)
   std::cout << "Input directory: " << input_dir << std::endl;
   std::cout << "Number of files: " << num_files << std::endl << std::endl;
 
-  auto stream = cudf::get_default_stream();
-  auto mr     = cudf::get_current_device_resource_ref();
-
   if (!input_files_exist(input_dir, num_files)) {
-    cudf::examples::write_random_table(input_dir, num_files, num_rows, num_cols, stream, mr);
+    cudf::examples::write_random_table(
+      input_dir, num_files, num_rows, num_cols, default_stream, mr);
   }
 
+  timer watch;
   std::vector<std::unique_ptr<cudf::column>> per_table_splitters;
-  cudf::data_type sort_col_type;
+  std::vector<std::future<std::unique_ptr<cudf::column>>> thread_sample_tasks;
   for (int i = 0; i < num_files; i++) {
-    auto const filepath = cudf::examples::construct_file_path(input_dir, i);
-    auto table          = cudf::examples::read_parquet_file(filepath, stream, mr);
-    sort_col_type       = table->view().column(0).type();
-    per_table_splitters.push_back(
-      cudf::examples::sample_splitters(table->view(), num_files, stream, mr));
+    thread_sample_tasks.emplace_back(
+      thread_pool.submit_task([&input_dir, i, num_files, &stream_pool, &mr] {
+        auto const filepath = cudf::examples::construct_file_path(input_dir, i);
+        auto stream         = stream_pool.get_stream();
+        auto table          = cudf::examples::read_parquet_file(filepath, stream, mr);
+        return cudf::examples::sample_splitters(table->view(), num_files, stream, mr);
+      }));
   }
+  std::transform(thread_sample_tasks.begin(),
+                 thread_sample_tasks.end(),
+                 std::back_inserter(per_table_splitters),
+                 [](auto& task) { return task.get(); });
+  auto sort_col_type         = per_table_splitters[0]->type();
+  auto sort_col_element_size = cudf::size_of(sort_col_type);
+  std::cout << "Reading parquet files to sample splitters:\n";
   watch.print_elapsed_millis();
 
-  auto sort_col_element_size = cudf::size_of(sort_col_type);
   std::vector<cudf::column_view> per_table_splitters_view;
   for (auto const& c : per_table_splitters) {
     per_table_splitters_view.push_back(c->view());
   }
-  auto concatenated_splitters = cudf::concatenate(per_table_splitters_view, stream, mr);
+  auto concatenated_splitters = cudf::concatenate(per_table_splitters_view, default_stream, mr);
 
   auto num_splitters = num_files - 1;
   auto splitters     = cudf::examples::sample_splitters(
-    cudf::table_view({concatenated_splitters->view()}), num_splitters, stream, mr);
+    cudf::table_view({concatenated_splitters->view()}), num_splitters, default_stream, mr);
 
   watch.reset();
-  auto col_ref = cudf::ast::column_reference(0);
-  std::vector<std::vector<std::unique_ptr<cudf::table>>> table_splits(num_splitters + 1);
-  std::unique_ptr<cudf::scalar> ub_scalar_literal, lb_scalar_literal;
-  std::unique_ptr<cudf::ast::literal> upper_bound, lower_bound;
+  std::vector<std::vector<std::unique_ptr<cudf::table>>> table_splits;
+  std::vector<std::future<std::vector<std::unique_ptr<cudf::table>>>> thread_tasks;
   for (int i = 0; i < num_files; i++) {
-    auto const filepath = cudf::examples::construct_file_path(input_dir, i);
-    auto table          = cudf::examples::read_parquet_file(filepath, stream, mr);
-    ub_scalar_literal   = cudf::get_element(splitters->view(), 0, stream, mr);
-    upper_bound    = cudf::type_dispatcher(sort_col_type, make_ast_literal{}, *ub_scalar_literal);
-    auto less_expr = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, *upper_bound);
-    auto boolean_mask = cudf::compute_column(table->view(), less_expr, stream, mr);
-    table_splits[0].push_back(
-      cudf::apply_boolean_mask(table->view(), boolean_mask->view(), stream, mr));
+    thread_tasks.emplace_back(thread_pool.submit_task(
+      [&input_dir, i, &splitters, &sort_col_type, num_splitters, &stream_pool, &mr] {
+        auto const filepath = cudf::examples::construct_file_path(input_dir, i);
+        std::unique_ptr<cudf::scalar> ub_scalar_literal, lb_scalar_literal;
+        std::unique_ptr<cudf::ast::literal> upper_bound, lower_bound;
+        auto col_ref = cudf::ast::column_reference(0);
+        auto stream  = stream_pool.get_stream();
+        std::vector<std::unique_ptr<cudf::table>> table_splits;
 
-    for (int j = 1; j < num_splitters; j++) {
-      lb_scalar_literal = std::move(ub_scalar_literal);
-      lower_bound = cudf::type_dispatcher(sort_col_type, make_ast_literal{}, *lb_scalar_literal);
-      ub_scalar_literal = cudf::get_element(splitters->view(), j, stream, mr);
-      upper_bound = cudf::type_dispatcher(sort_col_type, make_ast_literal{}, *ub_scalar_literal);
-      auto greater_expr =
-        cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref, *lower_bound);
-      less_expr = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, *upper_bound);
-      auto filter_expr =
-        cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, less_expr, greater_expr);
-      auto boolean_mask = cudf::compute_column(table->view(), filter_expr, stream, mr);
-      table_splits[j].push_back(
-        cudf::apply_boolean_mask(table->view(), boolean_mask->view(), stream, mr));
-    }
+        auto table        = cudf::examples::read_parquet_file(filepath, stream, mr);
+        ub_scalar_literal = cudf::get_element(splitters->view(), 0, stream, mr);
+        upper_bound = cudf::type_dispatcher(sort_col_type, make_ast_literal{}, *ub_scalar_literal);
+        auto less_expr = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, *upper_bound);
+        auto boolean_mask = cudf::compute_column(table->view(), less_expr, stream, mr);
+        table_splits.push_back(
+          cudf::apply_boolean_mask(table->view(), boolean_mask->view(), stream, mr));
 
-    lb_scalar_literal = std::move(ub_scalar_literal);
-    lower_bound = cudf::type_dispatcher(sort_col_type, make_ast_literal{}, *lb_scalar_literal);
-    auto greater_expr =
-      cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref, *lower_bound);
-    boolean_mask = cudf::compute_column(table->view(), greater_expr, stream, mr);
-    table_splits[num_splitters].push_back(
-      cudf::apply_boolean_mask(table->view(), boolean_mask->view(), stream, mr));
+        for (int j = 1; j < num_splitters; j++) {
+          lb_scalar_literal = std::move(ub_scalar_literal);
+          lower_bound =
+            cudf::type_dispatcher(sort_col_type, make_ast_literal{}, *lb_scalar_literal);
+          ub_scalar_literal = cudf::get_element(splitters->view(), j, stream, mr);
+          upper_bound =
+            cudf::type_dispatcher(sort_col_type, make_ast_literal{}, *ub_scalar_literal);
+          auto greater_expr =
+            cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref, *lower_bound);
+          less_expr = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, *upper_bound);
+          auto filter_expr =
+            cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, less_expr, greater_expr);
+          auto boolean_mask = cudf::compute_column(table->view(), filter_expr, stream, mr);
+          table_splits.push_back(
+            cudf::apply_boolean_mask(table->view(), boolean_mask->view(), stream, mr));
+        }
+
+        lb_scalar_literal = std::move(ub_scalar_literal);
+        lower_bound = cudf::type_dispatcher(sort_col_type, make_ast_literal{}, *lb_scalar_literal);
+        auto greater_expr =
+          cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref, *lower_bound);
+        boolean_mask = cudf::compute_column(table->view(), greater_expr, stream, mr);
+        table_splits.push_back(
+          cudf::apply_boolean_mask(table->view(), boolean_mask->view(), stream, mr));
+
+        return std::move(table_splits);
+      }));
   }
+  std::transform(
+    thread_tasks.begin(), thread_tasks.end(), std::back_inserter(table_splits), [](auto& task) {
+      return task.get();
+    });
+  std::cout
+    << "Re-reading parquet files to create ranged partitions according to selected splitters:\n";
   watch.print_elapsed_millis();
 
   watch.reset();
+  std::vector<std::vector<std::unique_ptr<cudf::table>>> table_splits_transpose(num_splitters + 1);
+  for (auto i = 0; i <= num_splitters; ++i) {
+    table_splits_transpose[i].resize(num_files);
+  }
+  for (auto i = 0; i < num_files; ++i) {
+    for (auto j = 0; j <= num_splitters; ++j) {
+      table_splits_transpose[j][i] = std::move(table_splits[i][j]);
+    }
+  }
   for (int i = 0; i <= num_splitters; i++) {
     std::vector<cudf::table_view> views;
-    for (auto const& t : table_splits[i]) {
+    for (auto const& t : table_splits_transpose[i]) {
       views.push_back(t->view());
     }
-    auto partition      = cudf::concatenate(views, stream, mr);
+    auto partition      = cudf::concatenate(views, default_stream, mr);
     auto sorted_indices = cudf::sorted_order(partition->view().select({0}),
                                              std::vector<cudf::order>{cudf::order::ASCENDING},
                                              std::vector<cudf::null_order>{cudf::null_order::AFTER},
-                                             stream,
+                                             default_stream,
                                              mr);
   }
+  std::cout << "Sorting partitions\n";
   watch.print_elapsed_millis();
 
   return 0;

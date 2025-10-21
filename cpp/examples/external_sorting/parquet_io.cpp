@@ -34,7 +34,6 @@ std::unique_ptr<cudf::table> read_parquet_file(std::string const& filepath,
                                                rmm::device_async_resource_ref mr)
 {
   std::unique_ptr<cudf::table> table;
-  std::cout << "Reading: " << filepath << std::endl;
   return cudf::io::read_parquet(
            cudf::io::parquet_reader_options::builder(cudf::io::source_info(filepath)), stream)
     .tbl;
@@ -46,7 +45,6 @@ void write_parquet_file(std::string const& filepath,
 {
   auto sink_info = cudf::io::sink_info(filepath);
   auto builder   = cudf::io::parquet_writer_options::builder(sink_info, table_view);
-  std::cout << "Writing: " << filepath << std::endl;
 
   // Create metadata for better compression
   auto table_metadata = cudf::io::table_input_metadata{table_view};
