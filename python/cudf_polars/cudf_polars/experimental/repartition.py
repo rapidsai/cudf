@@ -68,6 +68,9 @@ def _(
     offsets = [0, *itertools.accumulate(n + (i < remainder) for i in range(count_out))]
     child_keys = tuple(partition_info[child].keys(child))
     return {
-        (key_name, i): (partial(_concat, context=context), *child_keys[offsets[i] : offsets[i + 1]])
+        (key_name, i): (
+            partial(_concat, context=context),
+            *child_keys[offsets[i] : offsets[i + 1]],
+        )
         for i in range(count_out)
     }

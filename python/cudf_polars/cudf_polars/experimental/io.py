@@ -10,8 +10,8 @@ import itertools
 import math
 import statistics
 from collections import defaultdict
-from pathlib import Path
 from functools import partial
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
@@ -22,7 +22,6 @@ from cudf_polars.dsl.ir import (
     IR,
     DataFrameScan,
     Empty,
-    IRExecutionContext,
     Scan,
     Sink,
     Union,
@@ -46,6 +45,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import NamedExpr
+    from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.base import StatsCollector
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
@@ -500,7 +500,9 @@ def _sink_to_file(
 
 
 def _file_sink_graph(
-    ir: StreamingSink, partition_info: MutableMapping[IR, PartitionInfo], context: IRExecutionContext
+    ir: StreamingSink,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     """Sink to a single file."""
     name = get_key_name(ir)
@@ -536,7 +538,9 @@ def _file_sink_graph(
 
 
 def _directory_sink_graph(
-    ir: StreamingSink, partition_info: MutableMapping[IR, PartitionInfo], context: IRExecutionContext
+    ir: StreamingSink,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     """Sink to a directory of files."""
     name = get_key_name(ir)
