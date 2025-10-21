@@ -218,17 +218,12 @@ void verify_valid_requests(host_span<RequestType const> requests)
   for (auto const& request : requests) {
     for (auto const& agg : request.aggregations) {
       if (agg->kind == aggregation::SUM_WITH_OVERFLOW) {
-        auto const type_id = request.values.type().id();
-        bool is_supported =
-          (type_id == type_id::INT8 || type_id == type_id::INT16 || type_id == type_id::INT32 ||
-           type_id == type_id::INT64 || type_id == type_id::DECIMAL32 ||
-           type_id == type_id::DECIMAL64 || type_id == type_id::DECIMAL128);
-
         CUDF_EXPECTS(
-          is_supported,
+          cudf::detail::is_valid_aggregation(request.values.type(), aggregation::SUM_WITH_OVERFLOW),
           "SUM_WITH_OVERFLOW aggregation only supports signed integer types (int8_t, int16_t, "
-          "int32_t, int64_t) and decimal types (decimal32, decimal64, decimal128). "
-          "Unsigned integers, bool, dictionary columns, and other types are not supported.");
+          "int32_t, int64_t) and decimal types (decimal32, decimal64). "
+          "decimal128, unsigned integers, bool, dictionary columns, and other types are not "
+          "supported.");
       }
     }
   }
