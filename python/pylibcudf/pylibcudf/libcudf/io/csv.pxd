@@ -68,6 +68,7 @@ cdef extern from "cudf/io/csv.hpp" \
 
         # setter
 
+        void set_source(cudf_io_types.source_info src) except +libcudf_exception_handler
         # Reader settings
         void set_compression(
             cudf_io_types.compression_type comp
