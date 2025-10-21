@@ -38,7 +38,7 @@ from typing import TYPE_CHECKING, TypeAlias, TypedDict
 import pylibcudf as plc
 
 from cudf_polars.dsl.expressions.aggregation import Agg
-from cudf_polars.dsl.expressions.base import Col, Expr, NamedExpr
+from cudf_polars.dsl.expressions.base import Col, ExecutionContext, Expr, NamedExpr
 from cudf_polars.dsl.expressions.binaryop import BinOp
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.dsl.expressions.unary import Cast, UnaryFunction
@@ -286,7 +286,7 @@ def _decompose_agg_node(
         # Combined stage
         (column,) = columns
         columns, input_ir, partition_info = select(
-            [Agg(agg.dtype, "sum", None, column)],
+            [Agg(agg.dtype, "sum", None, ExecutionContext.FRAME, column)],
             input_ir,
             partition_info,
             names=names,
@@ -295,8 +295,8 @@ def _decompose_agg_node(
     elif agg.name == "mean":
         # Chunkwise stage
         exprs = [
-            Agg(agg.dtype, "sum", None, *agg.children),
-            Agg(agg.dtype, "count", None, *agg.children),
+            Agg(agg.dtype, "sum", None, ExecutionContext.FRAME, *agg.children),
+            Agg(agg.dtype, "count", None, ExecutionContext.FRAME, *agg.children),
         ]
         columns, input_ir, partition_info = select(
             exprs,
@@ -311,7 +311,10 @@ def _decompose_agg_node(
             BinOp(
                 agg.dtype,
                 plc.binaryop.BinaryOperator.DIV,
-                *(Agg(agg.dtype, "sum", None, column) for column in columns),
+                *(
+                    Agg(agg.dtype, "sum", None, ExecutionContext.FRAME, column)
+                    for column in columns
+                ),
             )
         ]
         columns, input_ir, partition_info = select(
@@ -367,7 +370,7 @@ def _decompose_agg_node(
         # Combined stage
         (column,) = columns
         columns, input_ir, partition_info = select(
-            [Agg(agg.dtype, "sum", None, column)],
+            [Agg(agg.dtype, "sum", None, ExecutionContext.FRAME, column)],
             input_ir,
             partition_info,
             names=names,
@@ -386,7 +389,7 @@ def _decompose_agg_node(
         # Combined stage
         (column,) = columns
         columns, input_ir, partition_info = select(
-            [Agg(agg.dtype, agg.name, agg.options, column)],
+            [Agg(agg.dtype, agg.name, agg.options, ExecutionContext.FRAME, column)],
             input_ir,
             partition_info,
             names=names,

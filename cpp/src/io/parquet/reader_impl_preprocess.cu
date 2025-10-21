@@ -561,6 +561,7 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
     // - we will be doing a chunked read
     compute_page_sizes(subpass.pages,
                        pass.chunks,
+                       _subpass_page_mask,
                        0,  // 0-max size_t. process all possible rows
                        std::numeric_limits<size_t>::max(),
                        true,  // compute num_rows
@@ -613,7 +614,7 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
       constexpr bool compute_all_string_sizes = true;
       compute_page_string_sizes_pass1(subpass.pages,
                                       pass.chunks,
-                                      {},
+                                      _subpass_page_mask,
                                       pass.skip_rows,
                                       pass.num_rows,
                                       subpass.kernel_mask,
@@ -779,6 +780,7 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
 
     // To keep track of the starting key of an iteration
     size_t key_start = 0;
+
     // Loop until all keys are processed
     while (key_start < num_keys) {
       // Number of keys processed in this iteration

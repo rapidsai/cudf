@@ -38,6 +38,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         bool is_enabled_allow_mismatched_pq_schemas() except +libcudf_exception_handler
         # setter
 
+        void set_source(source_info src) except +libcudf_exception_handler
         void set_filter(expression &filter) except +libcudf_exception_handler
         void set_columns(vector[string] col_names) except +libcudf_exception_handler
         void set_num_rows(size_type val) except +libcudf_exception_handler
@@ -87,10 +88,6 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             const expression & f
         ) except +libcudf_exception_handler
         parquet_reader_options build() except +libcudf_exception_handler
-
-    cdef table_with_metadata read_parquet(
-        parquet_reader_options args
-    ) except +libcudf_exception_handler
 
     cdef table_with_metadata read_parquet(
         parquet_reader_options args,
@@ -221,10 +218,6 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except +libcudf_exception_handler
 
     cdef unique_ptr[vector[uint8_t]] write_parquet(
-        parquet_writer_options options
-    ) except +libcudf_exception_handler
-
-    cdef unique_ptr[vector[uint8_t]] write_parquet(
         parquet_writer_options options,
         cuda_stream_view stream,
     ) except +libcudf_exception_handler
@@ -253,18 +246,12 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
     cdef cppclass chunked_parquet_writer:
         chunked_parquet_writer() except +libcudf_exception_handler
         chunked_parquet_writer(
-            chunked_parquet_writer_options args
-        ) except +libcudf_exception_handler
-        chunked_parquet_writer(
-            chunked_parquet_writer_options args,
-            cuda_stream_view stream,
-        ) except +libcudf_exception_handler
-        chunked_parquet_writer& write(
-            table_view table_,
+            const chunked_parquet_writer_options& args,
+            cuda_stream_view stream
         ) except +libcudf_exception_handler
         chunked_parquet_writer& write(
             const table_view& table_,
-            const vector[partition_info]& partitions,
+            const vector[partition_info]& partitions
         ) except +libcudf_exception_handler
         unique_ptr[vector[uint8_t]] close(
             vector[string] column_chunks_file_paths,
@@ -274,11 +261,10 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         chunked_parquet_reader() except +libcudf_exception_handler
         chunked_parquet_reader(
             size_t chunk_read_limit,
-            const parquet_reader_options& options) except +libcudf_exception_handler
-        chunked_parquet_reader(
-            size_t chunk_read_limit,
-            size_t pass_read_limit,
-            const parquet_reader_options& options) except +libcudf_exception_handler
+            const parquet_reader_options& options,
+            cuda_stream_view stream,
+            device_memory_resource* mr
+        ) except +libcudf_exception_handler
         chunked_parquet_reader(
             size_t chunk_read_limit,
             size_t pass_read_limit,

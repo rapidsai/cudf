@@ -16,7 +16,8 @@
 #pragma once
 
 #include <cudf/detail/cuco_helpers.hpp>
-#include <cudf/detail/row_operator/row_operators.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
+#include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/types.hpp>
 
@@ -35,6 +36,11 @@ CUDF_HOST_DEVICE auto constexpr GROUPBY_BLOCK_SIZE = 128;
 /// Threshold cardinality to switch between shared memory aggregations and global memory
 /// aggregations
 CUDF_HOST_DEVICE auto constexpr GROUPBY_CARDINALITY_THRESHOLD = 128;
+
+/// Threshold to switch between two strategies: one is to output the aggregation results directly to
+/// the final dense output columns, the other is to output the results to sparse intermediate
+/// buffers then gather to the final dense output columns.
+auto constexpr GROUPBY_DENSE_OUTPUT_THRESHOLD = 2;
 
 // We add additional `block_size`, because after the number of elements in the local hash set
 // exceeds the threshold, all threads in the thread block can still insert one more element.

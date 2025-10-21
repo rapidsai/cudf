@@ -13,23 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#pragma once
 
-#include <cudf/aggregation.hpp>
-#include <cudf/detail/utilities/host_vector.hpp>
-#include <cudf/groupby.hpp>
-
-#include <memory>
-#include <tuple>
-#include <vector>
+#include "compute_single_pass_aggs.cuh"
+#include "compute_single_pass_aggs.hpp"
 
 namespace cudf::groupby::detail::hash {
-
-// flatten aggs to filter in single pass aggs
-std::tuple<table_view,
-           cudf::detail::host_vector<aggregation::Kind>,
-           std::vector<std::unique_ptr<aggregation>>>
-flatten_single_pass_aggs(host_span<aggregation_request const> requests,
-                         rmm::cuda_stream_view stream);
-
+template std::pair<rmm::device_uvector<size_type>, bool>
+compute_single_pass_aggs<nullable_global_set_t>(nullable_global_set_t& global_set,
+                                                bitmask_type const* row_bitmask,
+                                                host_span<aggregation_request const> requests,
+                                                cudf::detail::result_cache* cache,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::device_async_resource_ref mr);
 }  // namespace cudf::groupby::detail::hash

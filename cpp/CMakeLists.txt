@@ -428,19 +428,18 @@ add_library(
   src/filling/sequence.cu
   src/groupby/common/m2_var_std.cu
   src/groupby/groupby.cu
-  src/groupby/hash/compute_aggregations.cu
-  src/groupby/hash/compute_aggregations_null.cu
   src/groupby/hash/compute_global_memory_aggs.cu
   src/groupby/hash/compute_global_memory_aggs_null.cu
   src/groupby/hash/compute_groupby.cu
   src/groupby/hash/compute_mapping_indices.cu
   src/groupby/hash/compute_mapping_indices_null.cu
   src/groupby/hash/compute_shared_memory_aggs.cu
-  src/groupby/hash/create_sparse_results_table.cu
-  src/groupby/hash/flatten_single_pass_aggs.cpp
+  src/groupby/hash/compute_single_pass_aggs.cu
+  src/groupby/hash/compute_single_pass_aggs_null.cu
+  src/groupby/hash/extract_single_pass_aggs.cpp
   src/groupby/hash/groupby.cu
   src/groupby/hash/hash_compound_agg_finalizer.cu
-  src/groupby/hash/sparse_to_dense_results.cu
+  src/groupby/hash/output_utils.cu
   src/groupby/sort/aggregate.cpp
   src/groupby/sort/group_argmax.cu
   src/groupby/sort/group_argmin.cu
@@ -635,6 +634,8 @@ add_library(
   src/quantiles/quantiles.cu
   src/reductions/all.cu
   src/reductions/any.cu
+  src/reductions/argmax.cu
+  src/reductions/argmin.cu
   src/reductions/bitwise.cu
   src/reductions/collect_ops.cu
   src/reductions/count.cpp
@@ -1085,13 +1086,13 @@ if(CUDF_BUILD_TESTUTIL)
               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/debug_utilities.cu>
               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/random_seed.cpp>
               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/table_utilities.cu>
-              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/tdigest_utilities.cu>
+              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/tdigest_utilities.cpp>
               $<INSTALL_INTERFACE:src/cudftestutil/io/metadata_utilities.cpp>
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/column_utilities.cu>
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/debug_utilities.cu>
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/random_seed.cpp>
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/table_utilities.cu>
-              $<INSTALL_INTERFACE:src/cudftestutil/utilities/tdigest_utilities.cu>
+              $<INSTALL_INTERFACE:src/cudftestutil/utilities/tdigest_utilities.cpp>
   )
   target_link_libraries(cudftestutil_impl INTERFACE cudf::cudftestutil)
   target_compile_features(cudftestutil_impl INTERFACE cxx_std_20)
@@ -1113,7 +1114,7 @@ if(CUDF_BUILD_TESTUTIL)
           tests/utilities/debug_utilities.cu
           tests/utilities/random_seed.cpp
           tests/utilities/table_utilities.cu
-          tests/utilities/tdigest_utilities.cu
+          tests/utilities/tdigest_utilities.cpp
     DESTINATION src/cudftestutil/utilities
   )
 endif()

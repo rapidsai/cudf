@@ -116,6 +116,8 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
 
 class aggregation_finalizer {  // Declares the interface for the finalizer
  public:
+  virtual ~aggregation_finalizer() = default;
+
   // Declare overloads for each kind of a agg to dispatch
   virtual void visit(aggregation const& agg);
   virtual void visit(class sum_aggregation const& agg);
@@ -561,7 +563,9 @@ class quantile_aggregation final : public groupby_aggregation, public reduce_agg
 /**
  * @brief Derived class for specifying an argmax aggregation
  */
-class argmax_aggregation final : public rolling_aggregation, public groupby_aggregation {
+class argmax_aggregation final : public rolling_aggregation,
+                                 public groupby_aggregation,
+                                 public reduce_aggregation {
  public:
   argmax_aggregation() : aggregation(ARGMAX) {}
 
@@ -580,7 +584,9 @@ class argmax_aggregation final : public rolling_aggregation, public groupby_aggr
 /**
  * @brief Derived class for specifying an argmin aggregation
  */
-class argmin_aggregation final : public rolling_aggregation, public groupby_aggregation {
+class argmin_aggregation final : public rolling_aggregation,
+                                 public groupby_aggregation,
+                                 public reduce_aggregation {
  public:
   argmin_aggregation() : aggregation(ARGMIN) {}
 
@@ -1813,7 +1819,7 @@ bool is_valid_aggregation(data_type source, aggregation::Kind k);
  * columns. The aggregations determine the identity value for each column.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-void initialize_with_identity(mutable_table_view& table,
+void initialize_with_identity(mutable_table_view const& table,
                               host_span<cudf::aggregation::Kind const> aggs,
                               rmm::cuda_stream_view stream);
 

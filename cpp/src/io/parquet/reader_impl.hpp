@@ -113,6 +113,11 @@ class reader_impl {
                        rmm::cuda_stream_view stream,
                        rmm::device_async_resource_ref mr);
 
+  reader_impl(reader_impl const&)            = delete;
+  reader_impl& operator=(reader_impl const&) = delete;
+  reader_impl(reader_impl&&)                 = delete;
+  reader_impl& operator=(reader_impl&&)      = delete;
+
   /**
    * @copydoc cudf::io::chunked_parquet_reader::has_next
    */
@@ -186,11 +191,8 @@ class reader_impl {
    *
    * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param read_info The range of rows to be read in the subpass
-   * @param page_mask Boolean vector indicating if a page needs to be decoded or is pruned
    */
-  void preprocess_chunk_strings(read_mode mode,
-                                row_range const& read_info,
-                                cudf::device_span<bool const> page_mask);
+  void preprocess_chunk_strings(read_mode mode, row_range const& read_info);
 
   /**
    * @brief Copies over the relevant page mask information for the subpass
@@ -319,12 +321,8 @@ class reader_impl {
    * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to decode
-   * @param page_mask Boolean vector indicating if a page needs to be decoded or is pruned
    */
-  void decode_page_data(read_mode mode,
-                        size_t skip_rows,
-                        size_t num_rows,
-                        cudf::device_span<bool const> page_mask);
+  void decode_page_data(read_mode mode, size_t skip_rows, size_t num_rows);
 
   /**
    * @brief Invalidate output buffer nullmask for rows spanned by the pruned pages
@@ -452,7 +450,7 @@ class reader_impl {
   cudf::detail::host_vector<bool> _pass_page_mask;
 
   // Page mask for filtering out subpass data pages
-  cudf::detail::host_vector<bool> _subpass_page_mask;
+  cudf::detail::hostdevice_vector<bool> _subpass_page_mask;
 
   // _output_buffers associated metadata
   std::unique_ptr<table_metadata> _output_metadata;

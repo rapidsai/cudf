@@ -314,7 +314,7 @@ void reader_impl::setup_next_subpass(read_mode mode)
   // copy the appropriate subset of pages from each column and store the mapping back to the source
   // (pass) pages
   else {
-    subpass.page_buf = cudf::detail::hostdevice_vector<PageInfo>(total_pages, total_pages, _stream);
+    subpass.page_buf       = cudf::detail::hostdevice_vector<PageInfo>(total_pages, _stream);
     subpass.page_src_index = rmm::device_uvector<size_t>(total_pages, _stream);
     auto iter              = thrust::make_counting_iterator(0);
     rmm::device_uvector<size_t> dst_offsets(num_columns + 1, _stream);
@@ -345,6 +345,7 @@ void reader_impl::setup_next_subpass(read_mode mode)
 
   // Set the page mask information for the subpass
   set_subpass_page_mask();
+  _subpass_page_mask.host_to_device_async(_stream);
 
   // decompress the data pages in this subpass; also decompress the dictionary pages in this pass,
   // if this is the first subpass in the pass
@@ -359,11 +360,11 @@ void reader_impl::setup_next_subpass(read_mode mode)
 
     if (is_first_subpass) {
       pass.decomp_dict_data = std::move(pass_data);
-      pass.pages.host_to_device(_stream);
+      pass.pages.host_to_device_async(_stream);
     }
 
     subpass.decomp_page_data = std::move(subpass_data);
-    subpass.pages.host_to_device(_stream);
+    subpass.pages.host_to_device_async(_stream);
   }
 
   // since there is only ever 1 dictionary per chunk (the first page), do it at the
@@ -680,8 +681,8 @@ void reader_impl::set_subpass_page_mask()
   auto const& pass    = _pass_itm_data;
   auto const& subpass = pass->subpass;
 
-  // Create a host vector to store the subpass page mask
-  _subpass_page_mask = cudf::detail::make_host_vector<bool>(subpass->pages.size(), _stream);
+  // Create a hostdevice vector to store the subpass page mask
+  _subpass_page_mask = cudf::detail::hostdevice_vector<bool>(subpass->pages.size(), _stream);
 
   // Fill with all true if no pass level page mask is available
   if (_pass_page_mask.empty()) {
