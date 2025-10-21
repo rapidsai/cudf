@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -42,7 +42,7 @@ struct contains_fn {
 
     size_type end = beginning_only ? 1    // match only the beginning of the string;
                                    : -1;  // match anywhere in the string
-    return prog.find(thread_idx, d_str, d_str.begin(), end).has_value();
+    return prog.find<positional::END_ONLY>(thread_idx, d_str, d_str.begin(), end).has_value();
   }
 };
 
