@@ -147,6 +147,7 @@
  *   @defgroup io_writers Writers
  *   @defgroup io_datasources Data Sources
  *   @defgroup io_datasinks Data Sinks
+ *   @defgroup io_utilities IO Utilities
  * @}
  * @defgroup json_apis JSON
  * @{
