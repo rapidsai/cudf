@@ -158,7 +158,8 @@ class hostdevice_span {
     cudf::detail::cuda_memcpy_async<T>(device_span<T>{device_ptr(), size()}, _host_data, stream);
   }
 
-  void host_to_device(rmm::cuda_stream_view stream) const
+  [[deprecated("Use host_to_device_async instead")]] void host_to_device(
+    rmm::cuda_stream_view stream) const
   {
     host_to_device_async(stream);
     stream.synchronize();

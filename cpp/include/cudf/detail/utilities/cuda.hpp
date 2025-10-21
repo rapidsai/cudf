@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,6 +18,11 @@ namespace detail {
  * @brief Get the number of multiprocessors on the device
  */
 cudf::size_type num_multiprocessors();
+
+/**
+ * @brief Check if the current device has integrated memory.
+ */
+[[nodiscard]] bool has_integrated_memory();
 
 /**
  * @brief Get the number of elements that can be processed per thread.

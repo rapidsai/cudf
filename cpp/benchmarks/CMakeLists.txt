@@ -423,6 +423,7 @@ ConfigureNVBench(
   string/find.cpp
   string/find_instance.cpp
   string/find_multiple.cpp
+  string/intcast.cpp
   string/join_strings.cpp
   string/lengths.cpp
   string/like.cpp
