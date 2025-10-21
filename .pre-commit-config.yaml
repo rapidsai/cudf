@@ -169,7 +169,8 @@ repos:
             recipe[.]yaml$|
             dependencies[.]yaml$|
             pytest[.]ini$|
-            [.]pre-commit-config[.]yaml$
+            ^[.]pre-commit-config[.]yaml$|
+            Makefile$
         exclude: |
           (?x)^(
             cpp/include/cudf_test/cxxopts[.]hpp$|
