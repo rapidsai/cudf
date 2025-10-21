@@ -3706,45 +3706,17 @@ TEST_F(ParquetReaderTest, TableTooLargeOverflows)
     std::ignore = cudf::io::write_parquet(options);
   }
   std::vector<std::string> files{{filepath, filepath}};
-  auto source   = cudf::io::source_info(files);
-  auto metadata = cudf::io::read_parquet_metadata(source);
+  auto source                 = cudf::io::source_info(files);
+  auto metadata               = cudf::io::read_parquet_metadata(source);
+  auto const num_rows_to_read = metadata.num_rows() - 1000;
   EXPECT_EQ(metadata.num_rows(), per_file_num_rows * 2);
   auto options = cudf::io::parquet_reader_options::builder(source)
-                   .num_rows(static_cast<int64_t>(std::numeric_limits<cudf::size_type>::max()) + 10)
+                   .num_rows(num_rows_to_read)
+                   .skip_rows(10)
                    .build();
 
   EXPECT_THROW(cudf::io::read_parquet(options), std::overflow_error);
-}
-
-TEST_F(ParquetReaderTest, TableTooLargeChunkedOk)
-{
-  using T                             = bool;
-  constexpr int64_t per_file_num_rows = std::numeric_limits<cudf::size_type>::max() / 2 + 1000;
-  auto value                          = thrust::make_constant_iterator(true);
-  auto column = cudf::test::fixed_width_column_wrapper<T>(value, value + per_file_num_rows);
-  static_assert(per_file_num_rows <= std::numeric_limits<cudf::size_type>::max(),
-                "Number of rows per file should be less than size_type::max()");
-  static_assert(2 * per_file_num_rows > std::numeric_limits<cudf::size_type>::max(),
-                "Twice number of rows per file should be greather than size_type::max()");
-
-  auto filepath = temp_env->get_temp_filepath("TableTooLargeChunkedOk.parquet");
-  {
-    auto sink = cudf::io::sink_info{filepath};
-    auto options =
-      cudf::io::parquet_writer_options::builder(sink, cudf::table_view{{column}}).build();
-    std::ignore = cudf::io::write_parquet(options);
-  }
-  std::vector<std::string> files{{filepath, filepath}};
-  auto source   = cudf::io::source_info(files);
-  auto metadata = cudf::io::read_parquet_metadata(source);
-  EXPECT_EQ(metadata.num_rows(), 2 * per_file_num_rows);
-  int64_t const num_rows_to_read{metadata.num_rows() - 10};
-  auto options =
-    cudf::io::parquet_reader_options::builder(source).num_rows(num_rows_to_read).build();
-  // Since the column is of type bool, this corresponds (approximately) to requesting this number of
-  // rows per chunk.
-  auto reader =
-    cudf::io::chunked_parquet_reader(std::numeric_limits<cudf::size_type>::max() / 4, 0, options);
+  auto reader = cudf::io::chunked_parquet_reader(0, 0, options);
   int64_t num_rows_read{0};
   while (reader.has_next()) {
     auto chunk = reader.read_chunk();
