@@ -111,7 +111,7 @@ struct scoped_range_sync : scoped_range {
  *
  * Example:
  * ```
- * void some_function(rmm::cuda_stream_view stream){
+ * void some_function(rmm::cuda_stream_view stream) {
  *    CUDF_FUNC_RANGE_SYNC_DEBUG(stream);
  *    ...
  * }
