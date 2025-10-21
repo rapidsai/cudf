@@ -4661,3 +4661,16 @@ def test_dataframe_parquet_roundtrip(index, write_index, empty):
     gpu_read = cudf.read_parquet(gpu_buf)
     cpu_read = cudf.read_parquet(cpu_buf)
     assert_eq(gpu_read, cpu_read)
+
+
+def test_read_many_colchunks_with_threadpool():
+    nrows = 1000
+    ncols = 100
+    table_data = {}
+    for i in range(ncols):
+        table_data[f"col_{i:04d}"] = [f"row_{j}" for j in range(nrows)]
+    expected = pa.table(table_data)
+    buffer = BytesIO()
+    pq.write_table(expected, buffer, row_group_size=100, write_page_index=True)
+
+    assert_eq(expected, cudf.read_parquet(buffer))
