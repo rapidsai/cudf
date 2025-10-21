@@ -89,6 +89,7 @@ auto metadatas_from_sources(std::vector<std::unique_ptr<datasource>> const& sour
                             rmm::cuda_stream_view stream)
 {
   std::vector<metadata> metadatas;
+  metadatas.reserve(sources.size());
   std::transform(
     sources.cbegin(), sources.cend(), std::back_inserter(metadatas), [stream](auto const& source) {
       return metadata(source.get(), stream);

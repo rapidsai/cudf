@@ -108,7 +108,7 @@ struct metadata : public FileMetaData {
   metadata(metadata&& other)                 = default;
   metadata& operator=(metadata const& other) = delete;
   metadata& operator=(metadata&& other)      = default;
-  ~metadata()                                = default;
+  ~metadata();
 
   void sanitize_schema();
 };
