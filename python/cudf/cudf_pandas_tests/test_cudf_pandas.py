@@ -1,5 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import collections
@@ -719,10 +718,6 @@ def test_rolling_win_type():
     tm.assert_equal(result, expected)
 
 
-@pytest.mark.skipif(
-    version.parse(numba_version) < version.parse("0.59"),
-    reason="Requires Numba 0.59 to fix segfaults on ARM. See https://github.com/numba/llvmlite/pull/1009",
-)
 @pytest.mark.xfail(
     version.parse(numba_version) >= version.parse("0.59")
     and PANDAS_VERSION < version.parse("2.1"),
@@ -791,14 +786,14 @@ def test_chunked_json_reader(tmpdir, data):
         pd.read_json(file_path, lines=True, chunksize=1) as pd_reader,
         xpd.read_json(file_path, lines=True, chunksize=1) as xpd_reader,
     ):
-        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader):
+        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader, strict=True):
             tm.assert_equal(pd_chunk, xpd_chunk)
 
     with (
         pd.read_json(StringIO(data), lines=True, chunksize=1) as pd_reader,
         xpd.read_json(StringIO(data), lines=True, chunksize=1) as xpd_reader,
     ):
-        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader):
+        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader, strict=True):
             tm.assert_equal(pd_chunk, xpd_chunk)
 
 
@@ -818,14 +813,14 @@ def test_chunked_csv_reader(tmpdir, data):
         pd.read_csv(file_path, chunksize=1) as pd_reader,
         xpd.read_csv(file_path, chunksize=1) as xpd_reader,
     ):
-        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader):
+        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader, strict=True):
             tm.assert_equal(pd_chunk, xpd_chunk, check_index_type=False)
 
     with (
         pd.read_json(StringIO(data), lines=True, chunksize=1) as pd_reader,
         xpd.read_json(StringIO(data), lines=True, chunksize=1) as xpd_reader,
     ):
-        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader):
+        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader, strict=True):
             tm.assert_equal(pd_chunk, xpd_chunk, check_index_type=False)
 
 

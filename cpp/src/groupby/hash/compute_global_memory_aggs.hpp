@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,29 +15,22 @@
  */
 #pragma once
 
-#include <cudf/detail/aggregation/result_cache.hpp>
-#include <cudf/groupby.hpp>
-#include <cudf/table/table_view.hpp>
+#include <cudf/aggregation.hpp>
+#include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
-
-#include <memory>
-#include <vector>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf::groupby::detail::hash {
 template <typename SetType>
-rmm::device_uvector<cudf::size_type> compute_global_memory_aggs(
-  cudf::size_type num_rows,
-  bool skip_rows_with_nulls,
+std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_global_memory_aggs(
   bitmask_type const* row_bitmask,
-  cudf::table_view const& flattened_values,
-  cudf::aggregation::Kind const* d_agg_kinds,
-  host_span<cudf::aggregation::Kind const> agg_kinds,
-  SetType& global_set,
-  std::vector<std::unique_ptr<aggregation>>& aggregations,
-  cudf::detail::result_cache* sparse_results,
-  rmm::cuda_stream_view stream);
+  table_view const& values,
+  SetType const& key_set,
+  host_span<aggregation::Kind const> h_agg_kinds,
+  device_span<aggregation::Kind const> d_agg_kinds,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 }  // namespace cudf::groupby::detail::hash

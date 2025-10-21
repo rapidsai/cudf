@@ -39,7 +39,8 @@ struct update_target_element_gmem {
 };
 
 template <typename Source>
-  requires(cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>())
+  requires(cudf::is_fixed_width<Source>() &&
+           cudf::has_atomic_support<device_storage_type_t<Source>>())
 struct update_target_element_gmem<Source, cudf::aggregation::MIN> {
   __device__ void operator()(cudf::mutable_column_device_view target,
                              cudf::size_type target_index,
@@ -47,7 +48,8 @@ struct update_target_element_gmem<Source, cudf::aggregation::MIN> {
                              cuda::std::byte* source,
                              cudf::size_type source_index) const noexcept
   {
-    using DeviceType          = cudf::detail::underlying_target_t<Source, aggregation::MIN>;
+    using DeviceType =
+      cudf::device_storage_type_t<cudf::detail::target_type_t<Source, cudf::aggregation::MIN>>;
     DeviceType* source_casted = reinterpret_cast<DeviceType*>(source);
     cudf::detail::atomic_min(&target.element<DeviceType>(target_index),
                              static_cast<DeviceType>(source_casted[source_index]));
@@ -55,7 +57,8 @@ struct update_target_element_gmem<Source, cudf::aggregation::MIN> {
 };
 
 template <typename Source>
-  requires(cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>())
+  requires(cudf::is_fixed_width<Source>() &&
+           cudf::has_atomic_support<device_storage_type_t<Source>>())
 struct update_target_element_gmem<Source, cudf::aggregation::MAX> {
   __device__ void operator()(cudf::mutable_column_device_view target,
                              cudf::size_type target_index,
@@ -63,7 +66,8 @@ struct update_target_element_gmem<Source, cudf::aggregation::MAX> {
                              cuda::std::byte* source,
                              cudf::size_type source_index) const noexcept
   {
-    using DeviceType          = cudf::detail::underlying_target_t<Source, aggregation::MAX>;
+    using DeviceType =
+      cudf::device_storage_type_t<cudf::detail::target_type_t<Source, cudf::aggregation::MAX>>;
     DeviceType* source_casted = reinterpret_cast<DeviceType*>(source);
     cudf::detail::atomic_max(&target.element<DeviceType>(target_index),
                              static_cast<DeviceType>(source_casted[source_index]));
@@ -71,7 +75,8 @@ struct update_target_element_gmem<Source, cudf::aggregation::MAX> {
 };
 
 template <typename Source>
-  requires(cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
+  requires(cudf::is_fixed_width<Source>() &&
+           cudf::has_atomic_support<device_storage_type_t<Source>>() &&
            !cudf::is_timestamp<Source>())
 struct update_target_element_gmem<Source, cudf::aggregation::SUM> {
   __device__ void operator()(cudf::mutable_column_device_view target,
@@ -80,7 +85,8 @@ struct update_target_element_gmem<Source, cudf::aggregation::SUM> {
                              cuda::std::byte* source,
                              cudf::size_type source_index) const noexcept
   {
-    using DeviceType          = cudf::detail::underlying_target_t<Source, aggregation::SUM>;
+    using DeviceType =
+      cudf::device_storage_type_t<cudf::detail::target_type_t<Source, cudf::aggregation::SUM>>;
     DeviceType* source_casted = reinterpret_cast<DeviceType*>(source);
     cudf::detail::atomic_add(&target.element<DeviceType>(target_index),
                              static_cast<DeviceType>(source_casted[source_index]));

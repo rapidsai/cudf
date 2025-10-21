@@ -23,11 +23,12 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/row_operator/equality.cuh>
+#include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/stream_compaction.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -136,11 +137,10 @@ cudf::size_type distinct_count(table_view const& keys,
   if (num_rows == 0) { return 0; }  // early exit for empty input
   auto const has_nulls = nullate::DYNAMIC{cudf::has_nested_nulls(keys)};
 
-  auto const preprocessed_input =
-    cudf::experimental::row::hash::preprocessed_table::create(keys, stream);
-  auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
-  auto const hash_key   = row_hasher.device_hasher(has_nulls);
-  auto const row_comp   = cudf::experimental::row::equality::self_comparator(preprocessed_input);
+  auto const preprocessed_input = cudf::detail::row::hash::preprocessed_table::create(keys, stream);
+  auto const row_hasher         = cudf::detail::row::hash::row_hasher(preprocessed_input);
+  auto const hash_key           = row_hasher.device_hasher(has_nulls);
+  auto const row_comp           = cudf::detail::row::equality::self_comparator(preprocessed_input);
 
   auto const comparator_helper = [&](auto const row_equal) {
     using hasher_type = decltype(hash_key);

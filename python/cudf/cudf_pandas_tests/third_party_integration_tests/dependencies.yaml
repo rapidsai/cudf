@@ -161,6 +161,10 @@ dependencies:
               cuda: "12.9"
             packages:
               - cuda-version=12.9
+          - matrix:
+              cuda: "13.0"
+            packages:
+              - cuda-version=13.0
   py_version:
     specific:
       - output_types: conda
@@ -188,7 +192,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - cudf==25.10.*,>=0.0.0a0
+          - cudf==25.12.*,>=0.0.0a0
           - pandas
           - pytest
           - pytest-xdist
@@ -264,13 +268,13 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - cuml==25.10.*,>=0.0.0a0
+          - cuml==25.12.*,>=0.0.0a0
           - scikit-learn
   test_cugraph:
     common:
       - output_types: conda
         packages:
-          - cugraph==25.10.*,>=0.0.0a0
+          - cugraph==25.12.*,>=0.0.0a0
           - networkx
   test_ibis:
     common:
@@ -278,7 +282,9 @@ dependencies:
         packages:
           - pip
           - pip:
-              - ibis-framework[duckdb]
+              # ibis 11 is the first version that supports duckdb 1.4.0
+              - ibis-framework[duckdb]>=11.0.0
+              - duckdb>=1.4.0
   test_hvplot:
     common:
       - output_types: conda

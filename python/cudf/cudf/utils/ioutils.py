@@ -20,13 +20,13 @@ import pyarrow as pa
 import cudf
 from cudf.api.types import is_list_like
 from cudf.core._compat import PANDAS_LT_300
+from cudf.core.dtypes import recursively_update_struct_names
 from cudf.utils.docutils import docfmt_partial
 from cudf.utils.dtypes import cudf_dtype_to_pa_type, np_dtypes_to_pandas_dtypes
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Hashable
+    from collections.abc import Callable, Hashable, Mapping
 
-    from cudf.core.column import ColumnBase
     from cudf.core.dataframe import DataFrame
 
 
@@ -1506,7 +1506,7 @@ def _index_level_name(
 
 def generate_pandas_metadata(table: DataFrame, index: bool | None) -> str:
     col_names: list[Hashable] = []
-    types = []
+    types: list[pa.DataType] = []
     index_levels = []
     index_descriptors = []
     df_meta = table.head(0)
@@ -1577,7 +1577,7 @@ def generate_pandas_metadata(table: DataFrame, index: bool | None) -> str:
                 index_levels.append(idx)
             index_descriptors.append(descr)
 
-    metadata = pa.pandas_compat.construct_metadata(
+    metadata = pa.pandas_compat.construct_metadata(  # type: ignore[attr-defined]
         columns_to_convert=columns_to_convert,
         # It is OKAY to do `.to_pandas()` because
         # this method will extract `.columns` metadata only
@@ -2295,9 +2295,10 @@ def _get_remote_bytes_all(
             zip(
                 *(
                     (r, j, min(j + blocksize, s))
-                    for r, s in zip(remote_paths, sizes)
+                    for r, s in zip(remote_paths, sizes, strict=True)
                     for j in range(0, s, blocksize)
-                )
+                ),
+                strict=True,
             ),
         )
 
@@ -2306,7 +2307,9 @@ def _get_remote_bytes_all(
 
         # Construct local byte buffers
         # (Need to make sure path offsets are ordered correctly)
-        unique_count = dict(zip(*np.unique(paths, return_counts=True)))
+        unique_count = dict(
+            zip(*np.unique(paths, return_counts=True), strict=True)
+        )
         offset = np.cumsum([0] + [unique_count[p] for p in remote_paths])
         buffers = [
             functools.reduce(operator.add, chunks[offset[i] : offset[i + 1]])
@@ -2340,7 +2343,7 @@ def _get_remote_bytes_parquet(
     )
 
     buffers = []
-    for size, path in zip(sizes, remote_paths):
+    for size, path in zip(sizes, remote_paths, strict=True):
         path_data = data[path]
         buf = np.empty(size, dtype="b")
         for range_offset in path_data.keys():
@@ -2381,24 +2384,11 @@ def _prefetch_remote_buffers(
         return paths
 
 
-def _add_df_col_struct_names(df: DataFrame, child_names_dict: dict) -> None:
+def _add_df_col_struct_names(
+    df: DataFrame, child_names_dict: Mapping[Any, Any]
+) -> None:
     for name, child_names in child_names_dict.items():
         col = df._data[name]
-        df._data[name] = _update_col_struct_field_names(col, child_names)
-
-
-def _update_col_struct_field_names(
-    col: ColumnBase, child_names: dict
-) -> ColumnBase:
-    if col.children:
-        children = list(col.children)
-        for i, (child, names) in enumerate(
-            zip(children, child_names.values())
-        ):
-            children[i] = _update_col_struct_field_names(child, names)
-        col.set_base_children(tuple(children))
-
-    if isinstance(col.dtype, cudf.StructDtype):
-        col = col._rename_fields(child_names.keys())  # type: ignore[attr-defined]
-
-    return col
+        df._data[name] = col._with_type_metadata(
+            recursively_update_struct_names(col.dtype, child_names)
+        )

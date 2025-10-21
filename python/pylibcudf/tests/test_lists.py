@@ -52,7 +52,9 @@ def test_concatenate_rows(test_data):
 
     got = plc.lists.concatenate_rows(plc_tbl)
 
-    expect = pa.array([pair[0] + pair[1] for pair in zip(*test_data[0])])
+    expect = pa.array(
+        [pair[0] + pair[1] for pair in zip(*test_data[0], strict=True)]
+    )
 
     assert_column_eq(expect, got)
 

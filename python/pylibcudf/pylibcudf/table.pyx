@@ -12,6 +12,7 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.interop cimport (
@@ -29,14 +30,22 @@ from pylibcudf.libcudf.table.table cimport table
 
 from .column cimport Column
 from .types cimport DataType
-from .utils cimport _get_stream
+from .utils cimport _get_stream, _get_memory_resource
 from pylibcudf._interop_helpers cimport (
     _release_schema,
     _release_array,
     _release_device_array,
     _metadata_to_libcudf,
 )
-from ._interop_helpers import ArrowLike, ColumnMetadata
+from ._interop_helpers import ArrowLike, ColumnMetadata, _ObjectWithArrowMetadata
+
+try:
+    import pyarrow as pa
+    pa_err = None
+except ImportError as e:
+    pa = None
+    pa_err = e
+
 
 __all__ = ["Table"]
 
@@ -44,6 +53,7 @@ __all__ = ["Table"]
 cdef class _ArrowTableHolder:
     """A holder for an Arrow table for gpumemoryview lifetime management."""
     cdef unique_ptr[arrow_table] tbl
+    cdef DeviceMemoryResource mr
 
 
 cdef class Table:
@@ -61,8 +71,39 @@ cdef class Table:
             raise ValueError("All columns must be pylibcudf Column objects")
         self._columns = columns
 
+    def to_arrow(
+        self,
+        metadata: list[ColumnMetadata | str] | None = None
+    ) -> ArrowLike:
+        """Create a pyarrow table from a pylibcudf table.
+
+        Parameters
+        ----------
+        metadata : list[ColumnMetadata | str] | None
+            The metadata to attach to the columns of the table.
+
+        Returns
+        -------
+        pyarrow.Table
+        """
+        if pa_err is not None:
+            raise RuntimeError(
+                "pyarrow was not found on your system. Please "
+                "pip install pylibcudf with the [pyarrow] extra for a "
+                "compatible pyarrow version."
+            ) from pa_err
+        # TODO: Once the arrow C device interface registers more
+        # types that it supports, we can call pa.table(self) if
+        # no metadata is passed.
+        return pa.table(_ObjectWithArrowMetadata(self, metadata))
+
     @staticmethod
-    def from_arrow(obj: ArrowLike, dtype: DataType | None = None) -> Table:
+    def from_arrow(
+        obj: ArrowLike,
+        dtype: DataType | None = None,
+        Stream stream=None,
+        DeviceMemoryResource mr=None
+    ) -> Table:
         """
         Create a Table from an Arrow-like object using the Arrow C data interface.
 
@@ -82,6 +123,10 @@ cdef class Table:
             An object implementing one of the Arrow C data interface methods.
         dtype: DataType
             The pylibcudf data type.
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
+        mr : DeviceMemoryResource | None
+            Device memory resource for allocations.
 
         Returns
         -------
@@ -104,6 +149,10 @@ cdef class Table:
         cdef ArrowDeviceArray* c_array
         cdef _ArrowTableHolder result
         cdef unique_ptr[arrow_table] c_result
+
+        stream = _get_stream(stream)
+        mr = _get_memory_resource(mr)
+
         if hasattr(obj, "__arrow_c_device_array__"):
             schema, array = obj.__arrow_c_device_array__()
             c_schema = <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
@@ -112,22 +161,33 @@ cdef class Table:
             )
 
             result = _ArrowTableHolder()
+            result.mr = mr
             with nogil:
                 c_result = make_unique[arrow_table](
-                    move(dereference(c_schema)), move(dereference(c_array))
+                    move(dereference(c_schema)),
+                    move(dereference(c_array)),
+                    stream.view(),
+                    result.mr.get_mr(),
                 )
             result.tbl.swap(c_result)
 
             return Table.from_table_view_of_arbitrary(result.tbl.get().view(), result)
         elif hasattr(obj, "__arrow_c_stream__"):
-            stream = obj.__arrow_c_stream__()
+            arrow_stream = obj.__arrow_c_stream__()
             c_stream = (
-                <ArrowArrayStream*>PyCapsule_GetPointer(stream, "arrow_array_stream")
+                <ArrowArrayStream*>PyCapsule_GetPointer(
+                    arrow_stream, "arrow_array_stream"
+                )
             )
 
             result = _ArrowTableHolder()
+            result.mr = mr
             with nogil:
-                c_result = make_unique[arrow_table](move(dereference(c_stream)))
+                c_result = make_unique[arrow_table](
+                    move(dereference(c_stream)),
+                    stream.view(),
+                    result.mr.get_mr(),
+                )
             result.tbl.swap(c_result)
 
             return Table.from_table_view_of_arbitrary(result.tbl.get().view(), result)
@@ -159,7 +219,11 @@ cdef class Table:
         return table_view(c_columns)
 
     @staticmethod
-    cdef Table from_libcudf(unique_ptr[table] libcudf_tbl, Stream stream=None):
+    cdef Table from_libcudf(
+        unique_ptr[table] libcudf_tbl,
+        Stream stream,
+        DeviceMemoryResource mr
+    ):
         """Create a Table from a libcudf table.
 
         This method is for pylibcudf's functions to use to ingest outputs of
@@ -169,9 +233,8 @@ cdef class Table:
         cdef vector[unique_ptr[column]] c_columns = dereference(libcudf_tbl).release()
 
         cdef vector[unique_ptr[column]].size_type i
-        stream = _get_stream(stream)
         return Table([
-            Column.from_libcudf(move(c_columns[i]), stream)
+            Column.from_libcudf(move(c_columns[i]), stream, mr)
             for i in range(c_columns.size())
         ])
 

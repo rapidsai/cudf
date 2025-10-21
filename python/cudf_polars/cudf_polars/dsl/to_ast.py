@@ -170,7 +170,7 @@ def _(node: expr.ColRef, self: Transformer) -> plc_expr.Expression:
 
 @_to_ast.register
 def _(node: expr.Literal, self: Transformer) -> plc_expr.Expression:
-    return plc_expr.Literal(plc.Scalar.from_py(node.value, node.dtype.plc))
+    return plc_expr.Literal(plc.Scalar.from_py(node.value, node.dtype.plc_type))
 
 
 @_to_ast.register
@@ -190,7 +190,7 @@ def _(node: expr.BinOp, self: Transformer) -> plc_expr.Expression:
     if self.state["for_parquet"]:
         op1_col, op2_col = (isinstance(op, expr.Col) for op in node.children)
         if op1_col ^ op2_col:
-            op = node.op
+            op: plc.binaryop.BinaryOperator = node.op
             if op not in SUPPORTED_STATISTICS_BINOPS:
                 raise NotImplementedError(
                     f"Parquet filter binop with column doesn't support {node.op!r}"
@@ -224,9 +224,9 @@ def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
                 #
                 # the type-ignore is safe because the for plc.TypeID.LIST, we know
                 # we have a polars.List type, which has an inner attribute.
-                plc_dtype = DataType(haystack.dtype.polars.inner).plc  # type: ignore[attr-defined]
+                plc_dtype = DataType(haystack.dtype.polars_type.inner).plc_type  # type: ignore[attr-defined]
             else:
-                plc_dtype = haystack.dtype.plc  # pragma: no cover
+                plc_dtype = haystack.dtype.plc_type  # pragma: no cover
             values = (
                 plc_expr.Literal(plc.Scalar.from_py(val, plc_dtype))
                 for val in haystack.value

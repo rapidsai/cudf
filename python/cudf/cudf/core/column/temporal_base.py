@@ -5,23 +5,26 @@ from __future__ import annotations
 import datetime
 import functools
 import warnings
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+import pylibcudf as plc
+
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core.buffer.buffer import Buffer
 from cudf.core.column.column import ColumnBase, as_column, column_empty
-from cudf.core.column.numerical import NumericalColumn
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
+    dtype_to_pylibcudf_type,
     find_common_type,
+    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.utils import is_na_like
 
@@ -30,9 +33,8 @@ if TYPE_CHECKING:
 
     from typing_extensions import Self
 
-    import pylibcudf as plc
-
     from cudf._typing import ColumnLike, DtypeObj, ScalarLike
+    from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.string import StringColumn
 
 
@@ -42,8 +44,8 @@ class TemporalBaseColumn(ColumnBase):
     """
 
     _PANDAS_NA_VALUE = pd.NaT
-    _UNDERLYING_DTYPE = np.dtype(np.int64)
-    _NP_SCALAR: np.datetime64 | np.timedelta64
+    _UNDERLYING_DTYPE: np.dtype[np.int64] = np.dtype(np.int64)
+    _NP_SCALAR: ClassVar[type[np.datetime64] | type[np.timedelta64]]
     _PD_SCALAR: pd.Timestamp | pd.Timedelta
 
     def __init__(
@@ -93,7 +95,9 @@ class TemporalBaseColumn(ColumnBase):
         ):
             fill_value = fill_value.astype(self.dtype)
         elif isinstance(fill_value, str) and fill_value.lower() == "nat":
-            fill_value = self._NP_SCALAR(fill_value, self.time_unit)
+            # call-overload must be ignored because numpy stubs only accept literal
+            # time unit strings, but we're passing self.time_unit which is valid at runtime
+            fill_value = self._NP_SCALAR(fill_value, self.time_unit)  # type: ignore[call-overload]
         return super()._validate_fillna_value(fill_value)
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
@@ -130,14 +134,12 @@ class TemporalBaseColumn(ColumnBase):
     def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if isinstance(other, ColumnBase):
             return other
-        elif self.dtype.kind == "M" and isinstance(other, cudf.DateOffset):
-            return other
         elif isinstance(other, (cp.ndarray, np.ndarray)) and other.ndim == 0:
             other = other[()]
 
         if is_scalar(other):
             if is_na_like(other):
-                return super()._normalize_binop_operand(other)
+                return pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
             elif self.dtype.kind == "M" and isinstance(other, pd.Timestamp):
                 if other.tz is not None:
                     raise NotImplementedError(
@@ -162,7 +164,11 @@ class TemporalBaseColumn(ColumnBase):
                     if np.isnat(other):
                         # Workaround for https://github.com/numpy/numpy/issues/28496
                         # Once fixed, can always use the astype below
-                        other = type(other)("NaT", to_unit)
+                        # call-overload must be ignored because numpy stubs only accept literal strings
+                        # for time units (e.g., "ns", "us") to allow compile-time validation,
+                        # but we're passing a variable string (to_unit) with a time unit that
+                        # we know is valid at runtime
+                        other = type(other)("NaT", to_unit)  # type: ignore[call-overload]
                     else:
                         other = other.astype(
                             np.dtype(f"{other.dtype.kind}8[{to_unit}]")
@@ -198,9 +204,19 @@ class TemporalBaseColumn(ColumnBase):
     @property
     def values(self) -> cp.ndarray:
         """
-        Return a CuPy representation of the DateTimeColumn.
+        Return a CuPy representation of the TemporalBaseColumn.
         """
-        raise NotImplementedError(f"cupy does not support {self.dtype}")
+        if is_pandas_nullable_extension_dtype(self.dtype):
+            dtype = getattr(self.dtype, "numpy_dtype", self.dtype)
+        else:
+            dtype = self.dtype
+
+        if len(self) == 0:
+            return cp.empty(0, dtype=self._UNDERLYING_DTYPE).view(dtype)
+
+        if self.has_nulls():
+            raise ValueError("cupy does not support NaT.")
+        return cp.asarray(self.data).view(dtype)
 
     def element_indexing(self, index: int) -> ScalarLike:
         result = super().element_indexing(index)
@@ -242,14 +258,18 @@ class TemporalBaseColumn(ColumnBase):
             )
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
-        col = NumericalColumn(
-            data=self.base_data,  # type: ignore[arg-type]
-            dtype=self._UNDERLYING_DTYPE,
-            mask=self.base_mask,
-            offset=self.offset,
+        new_plc_column = plc.Column(
+            data_type=dtype_to_pylibcudf_type(self._UNDERLYING_DTYPE),
             size=self.size,
+            data=plc.gpumemoryview(self.base_data),
+            mask=plc.gpumemoryview(self.base_mask)
+            if self.base_mask is not None
+            else None,
+            null_count=self.null_count,
+            offset=self.offset,
+            children=[],
         )
-        return col.astype(dtype)  # type:ignore[return-value]
+        return type(self).from_pylibcudf(new_plc_column).astype(dtype)  # type:ignore[return-value]
 
     def ceil(self, freq: str) -> ColumnBase:
         raise NotImplementedError("ceil is currently not implemented")
@@ -296,16 +316,21 @@ class TemporalBaseColumn(ColumnBase):
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if to_dtype.kind == self.dtype.kind:  # type: ignore[union-attr]
             to_res, _ = np.datetime_data(to_dtype)
+            # call-overload must be ignored because numpy stubs only accept literal strings
+            # for time units (e.g., "ns", "us") to allow compile-time validation,
+            # but we're passing variables (self.time_unit) with time units that
+            # we know are valid at runtime
             max_dist = np.timedelta64(
                 self.max().astype(self._UNDERLYING_DTYPE, copy=False),
-                self.time_unit,
+                self.time_unit,  # type: ignore[call-overload]
             )
             min_dist = np.timedelta64(
                 self.min().astype(self._UNDERLYING_DTYPE, copy=False),
-                self.time_unit,
+                self.time_unit,  # type: ignore[call-overload]
             )
             max_to_res = np.timedelta64(
-                np.iinfo(self._UNDERLYING_DTYPE).max, to_res
+                np.iinfo(self._UNDERLYING_DTYPE).max,
+                to_res,  # type: ignore[call-overload]
             ).astype(f"m8[{self.time_unit}]", copy=False)
             return bool(max_dist <= max_to_res and min_dist <= max_to_res)
         elif (

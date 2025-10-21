@@ -18,7 +18,6 @@ from . import (
     contiguous_split,
     copying,
     datetime,
-    experimental,
     expressions,
     filling,
     groupby,
@@ -33,6 +32,7 @@ from . import (
     null_mask,
     nvtext,
     partitioning,
+    prefetch,
     quantiles,
     reduce,
     replace,
@@ -49,6 +49,7 @@ from . import (
     types,
     unary,
     utilities,
+    utils,
 )
 from .column import Column
 from .gpumemoryview import gpumemoryview
@@ -70,7 +71,6 @@ __all__ = [
     "contiguous_split",
     "copying",
     "datetime",
-    "experimental",
     "expressions",
     "filling",
     "gpumemoryview",
@@ -86,6 +86,7 @@ __all__ = [
     "null_mask",
     "nvtext",
     "partitioning",
+    "prefetch",
     "quantiles",
     "reduce",
     "replace",
@@ -102,4 +103,5 @@ __all__ = [
     "types",
     "unary",
     "utilities",
+    "utils",
 ]

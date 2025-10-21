@@ -19,11 +19,11 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/row_operator/lexicographic.cuh>
 #include <cudf/join/sort_merge_join.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -106,9 +106,9 @@ class merge {
     __device__ bool operator()(size_type lhs_index, size_type rhs_index) const noexcept
     {
       if (*_d_ptr == bound_type::UPPER) {
-        return ub_comparator(lhs_index, rhs_index) == weak_ordering::LESS;
+        return ub_comparator(lhs_index, rhs_index) == cudf::detail::weak_ordering::LESS;
       }
-      return lb_comparator(lhs_index, rhs_index) == weak_ordering::LESS;
+      return lb_comparator(lhs_index, rhs_index) == cudf::detail::weak_ordering::LESS;
     }
 
     bound_type* _d_ptr;
@@ -118,8 +118,8 @@ class merge {
     table_device_view _rhs;
     device_span<detail::dremel_device_view const> _lhs_dremel;
     device_span<detail::dremel_device_view const> _rhs_dremel;
-    cudf::experimental::row::lexicographic::device_row_comparator<true, bool> ub_comparator;
-    cudf::experimental::row::lexicographic::device_row_comparator<true, bool> lb_comparator;
+    cudf::detail::row::lexicographic::device_row_comparator<true, bool> ub_comparator;
+    cudf::detail::row::lexicographic::device_row_comparator<true, bool> lb_comparator;
   };
 
   merge(table_view const& smaller,
@@ -174,8 +174,8 @@ merge<LargerIterator, SmallerIterator>::matches_per_row(rmm::cuda_stream_view st
 
   // naive: iterate through larger table and binary search on smaller table
   auto const larger_numrows = larger.num_rows();
-  rmm::device_scalar<bound_type> d_lb_type(bound_type::LOWER, stream, temp_mr);
-  rmm::device_scalar<bound_type> d_ub_type(bound_type::UPPER, stream, temp_mr);
+  cudf::detail::device_scalar<bound_type> d_lb_type(bound_type::LOWER, stream, temp_mr);
+  cudf::detail::device_scalar<bound_type> d_ub_type(bound_type::UPPER, stream, temp_mr);
 
   auto match_counts =
     cudf::detail::make_zeroed_device_uvector_async<size_type>(larger_numrows + 1, stream, temp_mr);
@@ -408,7 +408,8 @@ sort_merge_join::sort_merge_join(table_view const& right,
   cudf::scoped_range range{"sort_merge_join::sort_merge_join"};
   // Sanity checks
   CUDF_EXPECTS(right.num_columns() != 0,
-               "Number of columns the keys table must be non-zero for a join");
+               "Number of columns the keys table must be non-zero for a join",
+               std::invalid_argument);
 
   this->compare_nulls = compare_nulls;
 
@@ -528,9 +529,11 @@ sort_merge_join::inner_join(table_view const& left,
   cudf::scoped_range range{"sort_merge_join::inner_join"};
   // Sanity checks
   CUDF_EXPECTS(left.num_columns() != 0,
-               "Number of columns in left keys must be non-zero for a join");
+               "Number of columns in left keys must be non-zero for a join",
+               std::invalid_argument);
   CUDF_EXPECTS(left.num_columns() == preprocessed_right._null_processed_table_view.num_columns(),
-               "Number of columns must match for a join");
+               "Number of columns must match for a join",
+               std::invalid_argument);
 
   // Preprocessing the left table
   preprocessed_left._table_view = left;
@@ -558,7 +561,7 @@ sort_merge_join::inner_join(table_view const& left,
     });
 }
 
-sort_merge_join::match_context sort_merge_join::inner_join_match_context(
+cudf::join_match_context sort_merge_join::inner_join_match_context(
   table_view const& left,
   sorted is_left_sorted,
   rmm::cuda_stream_view stream,
@@ -567,9 +570,11 @@ sort_merge_join::match_context sort_merge_join::inner_join_match_context(
   cudf::scoped_range range{"sort_merge_join::inner_join_match_context"};
   // Sanity checks
   CUDF_EXPECTS(left.num_columns() != 0,
-               "Number of columns in left keys must be non-zero for a join");
+               "Number of columns in left keys must be non-zero for a join",
+               std::invalid_argument);
   CUDF_EXPECTS(left.num_columns() == preprocessed_right._null_processed_table_view.num_columns(),
-               "Number of columns must match for a join");
+               "Number of columns must match for a join",
+               std::invalid_argument);
 
   // Preprocessing the left table
   preprocessed_left._table_view = left;
@@ -606,18 +611,18 @@ sort_merge_join::match_context sort_merge_join::inner_join_match_context(
                         mapping.begin(),
                         unprocessed_matches_per_row.begin());
         stream.synchronize();
-        return match_context{
+        return join_match_context{
           left,
           std::make_unique<rmm::device_uvector<size_type>>(std::move(unprocessed_matches_per_row))};
       }
-      return match_context{left, std::move(matches_per_row)};
+      return join_match_context{left, std::move(matches_per_row)};
     });
 }
 
 // left_partition_end exclusive
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-sort_merge_join::partitioned_inner_join(sort_merge_join::partition_context const& context,
+sort_merge_join::partitioned_inner_join(cudf::join_partition_context const& context,
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
 {

@@ -75,7 +75,7 @@ def read_orc_statistics(
         file_statistics = {
             column_name: column_stats
             for column_name, column_stats in zip(
-                column_names, parsed_file_statistics
+                column_names, parsed_file_statistics, strict=True
             )
             if columns is None or column_name in columns
         }
@@ -86,7 +86,7 @@ def read_orc_statistics(
             stripe_statistics = {
                 column_name: column_stats
                 for column_name, column_stats in zip(
-                    column_names, parsed_stripe_statistics
+                    column_names, parsed_stripe_statistics, strict=True
                 )
                 if columns is None or column_name in columns
             }
@@ -481,7 +481,8 @@ def _plc_write_orc(
     for i, (name, col) in enumerate(
         table._column_labels_and_values, start=num_index_cols_meta
     ):
-        tbl_meta.column_metadata[i].set_name(name)
+        # generate_pandas_metadata will reject tables with non-string column names
+        tbl_meta.column_metadata[i].set_name(name)  # type: ignore[arg-type]
         _set_col_children_metadata(
             col,
             tbl_meta.column_metadata[i],
@@ -544,6 +545,13 @@ class ORCWriter:
         self.stripe_size_rows = stripe_size_rows
         self.row_index_stride = row_index_stride
         self.initialized = False
+        self.writer = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
 
     def write_table(self, table):
         """Writes a single table to the file"""
@@ -688,7 +696,7 @@ def _set_col_children_metadata(
 ) -> None:
     if isinstance(col.dtype, StructDtype):
         for i, (child_col, name) in enumerate(
-            zip(col.children, list(col.dtype.fields))
+            zip(col.children, list(col.dtype.fields), strict=True)
         ):
             col_meta.child(i).set_name(name)
             _set_col_children_metadata(

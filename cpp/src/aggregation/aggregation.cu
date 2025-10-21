@@ -53,7 +53,7 @@ struct identity_initializer {
             (k == aggregation::SUM or k == aggregation::MIN or k == aggregation::MAX or
              k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL or
              k == aggregation::ARGMAX or k == aggregation::ARGMIN or
-             k == aggregation::SUM_OF_SQUARES or k == aggregation::STD or
+             k == aggregation::SUM_OF_SQUARES or k == aggregation::M2 or k == aggregation::STD or
              k == aggregation::VARIANCE or
              (k == aggregation::PRODUCT and is_product_supported<T>()))) or
            (k == aggregation::SUM_WITH_OVERFLOW and std::is_same_v<T, cudf::struct_view>);
@@ -133,7 +133,7 @@ struct identity_initializer {
 };
 }  // namespace
 
-void initialize_with_identity(mutable_table_view& table,
+void initialize_with_identity(mutable_table_view const& table,
                               host_span<cudf::aggregation::Kind const> aggs,
                               rmm::cuda_stream_view stream)
 {

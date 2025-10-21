@@ -6,12 +6,12 @@ ci:
   autoupdate_branch: ""
   autoupdate_commit_msg: "[pre-commit.ci] pre-commit autoupdate"
   autoupdate_schedule: quarterly
-  skip: ["verify-alpha-spec"]
+  skip: ["mypy", "verify-alpha-spec"]
   submodules: false
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
         exclude: |
@@ -26,16 +26,17 @@ repos:
             ^python/cudf/cudf/tests/data/vocab.txt
           )
   - repo: https://github.com/MarcoGorelli/cython-lint
-    rev: v0.16.7
+    rev: v0.17.0
     hooks:
       - id: cython-lint
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: 'v1.13.0'
     hooks:
       - id: mypy
-        additional_dependencies: [types-cachetools]
+        additional_dependencies: [types-cachetools, pyarrow-stubs, numpy]
         args: ["--config-file=pyproject.toml",
                "python/cudf/cudf",
+               "python/pylibcudf/pylibcudf",
                "python/custreamz/custreamz",
                "python/cudf_kafka/cudf_kafka",
                "python/cudf_polars/cudf_polars",
@@ -55,7 +56,7 @@ repos:
             ^cpp/include/cudf_test/cxxopts.hpp
           )
   - repo: https://github.com/sirosen/texthooks
-    rev: 0.6.8
+    rev: 0.7.1
     hooks:
       - id: fix-smartquotes
         exclude: |
@@ -63,7 +64,7 @@ repos:
             ^cpp/src/io/parquet/ipc/Schema_generated.h|
             ^cpp/src/io/parquet/ipc/Message_generated.h|
             ^cpp/include/cudf_test/cxxopts.hpp|
-            ^python/cudf/cudf/tests/data/vocab.txt|
+            ^python/cudf/cudf/tests/data/text/vocab.txt|
             ^python/cudf/cudf/tests/text/test_text_methods.py
           )
   - repo: local
@@ -158,12 +159,12 @@ repos:
       - id: verify-codeowners
         args: [--fix, --project-prefix=cudf]
   - repo: https://github.com/rapidsai/dependency-file-generator
-    rev: v1.19.1
+    rev: v1.20.0
     hooks:
       - id: rapids-dependency-file-generator
-        args: ["--clean"]
+        args: ["--clean", "--warn-all", "--strict"]
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.10.0.1
+    rev: v0.11.0.1
     hooks:
       - id: shellcheck
         args: ["--severity=warning"]

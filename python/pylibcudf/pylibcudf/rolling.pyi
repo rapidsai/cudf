@@ -1,5 +1,8 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
+from rmm.pylibrmm.stream import Stream
+
 from pylibcudf.aggregation import Aggregation
 from pylibcudf.column import Column
 from pylibcudf.scalar import Scalar
@@ -32,6 +35,8 @@ def grouped_range_rolling_window(
     preceding: RangeWindowType,
     following: RangeWindowType,
     requests: list[RollingRequest],
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
 def rolling_window[WindowType: (Column, int)](
     source: Column,
@@ -39,6 +44,8 @@ def rolling_window[WindowType: (Column, int)](
     following_window: WindowType,
     min_periods: int,
     agg: Aggregation,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def is_valid_rolling_aggregation(
     source: DataType, agg: Aggregation
@@ -50,4 +57,6 @@ def make_range_windows(
     null_order: NullOrder,
     preceding: RangeWindowType,
     following: RangeWindowType,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> tuple[Column, Column]: ...

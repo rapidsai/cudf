@@ -228,11 +228,18 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
                             rmm::cuda_stream_view stream);
 
 /**
+ * @brief Computes the per-page scratch space required for decompression.
+ */
+rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
+  device_span<ColumnChunkDesc const> chunks,
+  device_span<PageInfo const> pages,
+  rmm::cuda_stream_view stream);
+
+/**
  * @brief Add the cost of decompression codec scratch space to the per-page cumulative
  * size information
  */
-void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunks,
-                                        device_span<PageInfo const> pages,
+void include_decompression_scratch_size(device_span<size_t const> pages,
                                         device_span<cumulative_page_info> c_info,
                                         rmm::cuda_stream_view stream);
 
@@ -473,7 +480,7 @@ struct get_page_output_size {
       }));
     return {
       0,
-      thrust::reduce(thrust::seq, iter, iter + page.num_output_nesting_levels) + page.str_bytes,
+      thrust::reduce(thrust::seq, iter, iter + page.num_output_nesting_levels) + page.str_bytes_all,
       page.src_col_schema};
   }
 };

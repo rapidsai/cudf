@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,18 +18,15 @@
 #include "compute_mapping_indices.hpp"
 
 namespace cudf::groupby::detail::hash {
-template cudf::size_type max_occupancy_grid_size<hash_set_ref_t<cuco::insert_and_find_tag>>(
-  cudf::size_type n);
+template int32_t max_active_blocks_mapping_kernel<hash_set_ref_t<cuco::insert_and_find_tag>>();
 
 template void compute_mapping_indices<hash_set_ref_t<cuco::insert_and_find_tag>>(
-  cudf::size_type grid_size,
-  cudf::size_type num,
+  size_type grid_size,
+  size_type num_rows,
   hash_set_ref_t<cuco::insert_and_find_tag> global_set,
   bitmask_type const* row_bitmask,
-  bool skip_rows_with_nulls,
-  cudf::size_type* local_mapping_index,
-  cudf::size_type* global_mapping_index,
-  cudf::size_type* block_cardinality,
-  cuda::std::atomic_flag* needs_global_memory_fallback,
+  size_type* local_mapping_index,
+  size_type* global_mapping_index,
+  size_type* block_cardinality,
   rmm::cuda_stream_view stream);
 }  // namespace cudf::groupby::detail::hash

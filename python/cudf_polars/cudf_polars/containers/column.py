@@ -85,7 +85,7 @@ class Column:
 
     @classmethod
     def deserialize(
-        cls, header: ColumnHeader, frames: tuple[memoryview, plc.gpumemoryview]
+        cls, header: ColumnHeader, frames: tuple[memoryview[bytes], plc.gpumemoryview]
     ) -> Self:
         """
         Create a Column from a serialized representation returned by `.serialize()`.
@@ -126,7 +126,7 @@ class Column:
 
     def serialize(
         self,
-    ) -> tuple[ColumnHeader, tuple[memoryview, plc.gpumemoryview]]:
+    ) -> tuple[ColumnHeader, tuple[memoryview[bytes], plc.gpumemoryview]]:
         """
         Serialize the Column into header and frames.
 
@@ -159,7 +159,7 @@ class Column:
             "order": self.order,
             "null_order": self.null_order,
             "name": self.name,
-            "dtype": pl.polars.dtype_str_repr(self.dtype.polars),
+            "dtype": pl.polars.dtype_str_repr(self.dtype.polars_type),
         }
 
     @functools.cached_property
@@ -284,7 +284,7 @@ class Column:
         This only produces a copy if the requested dtype doesn't match
         the current one.
         """
-        plc_dtype = dtype.plc
+        plc_dtype = dtype.plc_type
         if self.obj.type() == plc_dtype:
             return self
 
@@ -293,6 +293,35 @@ class Column:
             or self.obj.type().id() == plc.TypeId.STRING
         ):
             return Column(self._handle_string_cast(plc_dtype), dtype=dtype)
+        elif plc.traits.is_integral_not_bool(
+            self.obj.type()
+        ) and plc.traits.is_timestamp(plc_dtype):
+            upcasted = plc.unary.cast(self.obj, plc.DataType(plc.TypeId.INT64))
+            plc_col = plc.column.Column(
+                plc_dtype,
+                upcasted.size(),
+                upcasted.data(),
+                upcasted.null_mask(),
+                upcasted.null_count(),
+                upcasted.offset(),
+                upcasted.children(),
+            )
+            return Column(plc_col, dtype=dtype).sorted_like(self)
+        elif plc.traits.is_integral_not_bool(plc_dtype) and plc.traits.is_timestamp(
+            self.obj.type()
+        ):
+            plc_col = plc.column.Column(
+                plc.DataType(plc.TypeId.INT64),
+                self.obj.size(),
+                self.obj.data(),
+                self.obj.null_mask(),
+                self.obj.null_count(),
+                self.obj.offset(),
+                self.obj.children(),
+            )
+            return Column(plc.unary.cast(plc_col, plc_dtype), dtype=dtype).sorted_like(
+                self
+            )
         else:
             result = Column(plc.unary.cast(self.obj, plc_dtype), dtype=dtype)
             if is_order_preserving_cast(self.obj.type(), plc_dtype):
@@ -425,11 +454,12 @@ class Column:
     def nan_count(self) -> int:
         """Return the number of NaN values in the column."""
         if self.size > 0 and plc.traits.is_floating_point(self.obj.type()):
+            # See https://github.com/rapidsai/cudf/issues/20202 for we type ignore
             return plc.reduce.reduce(
                 plc.unary.is_nan(self.obj),
                 plc.aggregation.sum(),
                 plc.types.SIZE_TYPE,
-            ).to_py()
+            ).to_py()  # type: ignore[return-value]
         return 0
 
     @property

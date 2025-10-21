@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, TypeGuard
 
 import numpy as np
 import pandas as pd
@@ -20,7 +20,9 @@ if TYPE_CHECKING:
     from cudf._typing import DtypeObj
     from cudf.core.dtypes import DecimalDtype
 
-np_dtypes_to_pandas_dtypes = {
+np_dtypes_to_pandas_dtypes: dict[
+    np.dtype[Any], pd.core.dtypes.base.ExtensionDtype
+] = {
     np.dtype("uint8"): pd.UInt8Dtype(),
     np.dtype("uint16"): pd.UInt16Dtype(),
     np.dtype("uint32"): pd.UInt32Dtype(),
@@ -133,6 +135,8 @@ def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:
     elif pa.types.is_struct(typ):
         return cudf.core.dtypes.StructDtype.from_arrow(typ)
     elif pa.types.is_decimal(typ):
+        if isinstance(typ, pa.Decimal256Type):
+            raise NotImplementedError("cudf does not support Decimal256Type")
         return cudf.core.dtypes.Decimal128Dtype.from_arrow(typ)
     elif pa.types.is_large_string(typ) or pa.types.is_string(typ):
         return CUDF_STRING_DTYPE
@@ -200,7 +204,7 @@ def min_signed_type(x: int, min_size: int = 8) -> np.dtype:
     that can represent the integer ``x``
     """
     for int_dtype in (np.int8, np.int16, np.int32, np.int64):
-        dtype = np.dtype(int_dtype)
+        dtype: np.dtype[Any] = np.dtype(int_dtype)
         if (dtype.itemsize * 8) >= min_size:
             if np.iinfo(int_dtype).min <= x <= np.iinfo(int_dtype).max:
                 return dtype
@@ -214,7 +218,7 @@ def min_unsigned_type(x: int, min_size: int = 8) -> np.dtype:
     that can represent the integer ``x``
     """
     for int_dtype in (np.uint8, np.uint16, np.uint32, np.uint64):
-        dtype = np.dtype(int_dtype)
+        dtype: np.dtype[Any] = np.dtype(int_dtype)
         if (dtype.itemsize * 8) >= min_size:
             if 0 <= x <= np.iinfo(int_dtype).max:
                 return dtype
@@ -228,12 +232,26 @@ def is_mixed_with_object_dtype(lhs, rhs):
     elif isinstance(rhs.dtype, cudf.CategoricalDtype):
         return is_mixed_with_object_dtype(lhs, rhs.dtype.categories)
 
-    return (lhs.dtype == "object" and rhs.dtype != "object") or (
+    res = (lhs.dtype == "object" and rhs.dtype != "object") or (
         rhs.dtype == "object" and lhs.dtype != "object"
+    )
+    if res:
+        return res
+    return (
+        cudf.api.types.is_string_dtype(lhs.dtype)
+        and not cudf.api.types.is_string_dtype(rhs.dtype)
+    ) or (
+        cudf.api.types.is_string_dtype(rhs.dtype)
+        and not cudf.api.types.is_string_dtype(lhs.dtype)
     )
 
 
-def _get_nan_for_dtype(dtype: DtypeObj) -> DtypeObj:
+def _get_nan_for_dtype(dtype: DtypeObj) -> np.generic:
+    """Return the appropriate NaN/NaT value for the given dtype.
+
+    Returns a numpy scalar (np.generic subclass) representing the
+    null value for the dtype (e.g., np.float64('nan'), np.datetime64('NaT')).
+    """
     if dtype.kind in "mM":
         time_unit, _ = np.datetime_data(dtype)
         return dtype.type("nat", time_unit)
@@ -278,10 +296,10 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
             )
             for dtype in dtypes
         ):
-            if len({dtype._categories.dtype for dtype in dtypes}) == 1:
+            if len({dtype._categories.dtype for dtype in dtypes}) == 1:  # type: ignore[union-attr]
                 return cudf.CategoricalDtype(
                     cudf.core.column.concat_columns(
-                        [dtype._categories for dtype in dtypes]
+                        [dtype._categories for dtype in dtypes]  # type: ignore[union-attr]
                     ).unique()
                 )
             else:
@@ -388,8 +406,8 @@ pa_decimal32type = getattr(pa, "Decimal32Type", None)
 pa_decimal64type = getattr(pa, "Decimal64Type", None)
 
 
-def pyarrow_dtype_to_cudf_dtype(dtype: pa.DataType) -> DtypeObj:
-    """Given a pyarrow dtype, converts it into the equivalent cudf pandas
+def pyarrow_dtype_to_cudf_dtype(dtype: pd.ArrowDtype) -> DtypeObj:
+    """Given a pandas ArrowDtype, converts it into the equivalent cudf pandas
     dtype.
     """
 
@@ -438,7 +456,9 @@ def is_pandas_nullable_numpy_dtype(dtype_to_check) -> bool:
     )
 
 
-def is_pandas_nullable_extension_dtype(dtype_to_check) -> bool:
+def is_pandas_nullable_extension_dtype(
+    dtype_to_check: Any,
+) -> TypeGuard[pd.core.dtypes.base.ExtensionDtype]:
     if is_pandas_nullable_numpy_dtype(dtype_to_check) or isinstance(
         dtype_to_check, pd.ArrowDtype
     ):
@@ -749,7 +769,7 @@ def is_dtype_obj_decimal128(obj):
     )
 
 
-SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES = {
+SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES: dict[np.dtype[Any], plc.types.TypeId] = {
     np.dtype("int8"): plc.types.TypeId.INT8,
     np.dtype("int16"): plc.types.TypeId.INT16,
     np.dtype("int32"): plc.types.TypeId.INT32,

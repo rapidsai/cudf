@@ -4,7 +4,7 @@ from __future__ import annotations
 import functools
 import itertools
 import warnings
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -28,6 +28,9 @@ if TYPE_CHECKING:
     from cudf.core.dataframe import DataFrame
     from cudf.core.index import Index
     from cudf.core.series import Series
+
+WindowType = TypeVar("WindowType", int, plc.Column)
+WindowTypePair = tuple[WindowType, WindowType]
 
 
 class _RollingBase:
@@ -222,6 +225,8 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         step: int | None = None,
         method: str = "single",
     ) -> None:
+        if not isinstance(center, bool):
+            raise ValueError("center must be a boolean")
         self.center = center
         if axis != 0:
             warnings.warn(
@@ -265,7 +270,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         )
 
     @functools.cached_property
-    def _plc_windows(self) -> tuple[plc.Column, plc.Column] | tuple[int, int]:
+    def _plc_windows(self) -> WindowTypePair:
         """
         Return the preceding and following windows to pass into
         pylibcudf.rolling.rolling_window
@@ -517,6 +522,8 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                 raise ValueError("window cannot be zero or negative")
             if min_periods is None:
                 return window, window
+            elif not is_integer(min_periods):
+                raise ValueError("min_periods must be an integer")
             else:
                 return window, min_periods
         elif isinstance(window, BaseIndexer):

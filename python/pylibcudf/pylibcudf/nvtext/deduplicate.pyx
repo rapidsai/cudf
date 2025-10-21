@@ -13,8 +13,10 @@ from pylibcudf.libcudf.nvtext.deduplicate cimport (
     resolve_duplicates_pair as cpp_resolve_duplicates_pair,
 )
 from pylibcudf.libcudf.types cimport size_type
-
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.librmm.device_buffer cimport device_buffer
+from rmm.pylibrmm.stream cimport Stream
 
 __all__ = [
     "build_suffix_array",
@@ -22,7 +24,9 @@ __all__ = [
     "resolve_duplicates_pair",
 ]
 
-cdef Column _column_from_suffix_array(cpp_suffix_array_type suffix_array):
+cdef Column _column_from_suffix_array(
+    cpp_suffix_array_type suffix_array, Stream stream, DeviceMemoryResource mr
+):
     # helper to convert a suffix array to a Column
     return Column.from_libcudf(
         move(
@@ -31,11 +35,15 @@ cdef Column _column_from_suffix_array(cpp_suffix_array_type suffix_array):
                 device_buffer(),
                 0
             )
-        )
+        ),
+        stream,
+        mr
     )
 
 
-cpdef Column build_suffix_array(Column input, size_type min_width):
+cpdef Column build_suffix_array(
+    Column input, size_type min_width, Stream stream=None, DeviceMemoryResource mr=None
+):
     """
     Builds a suffix array for the input strings column.
     A suffix array is the indices of the sorted set of substrings
@@ -50,6 +58,8 @@ cpdef Column build_suffix_array(Column input, size_type min_width):
     ----------
     input : Column
         Strings column of text
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -57,14 +67,24 @@ cpdef Column build_suffix_array(Column input, size_type min_width):
         New column of suffix array
     """
     cdef cpp_suffix_array_type c_result
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_build_suffix_array(input.view(), min_width)
+        c_result = cpp_build_suffix_array(
+            input.view(), min_width, stream.view(), mr.get_mr()
+        )
 
-    return _column_from_suffix_array(move(c_result))
+    return _column_from_suffix_array(move(c_result), stream, mr)
 
 
-cpdef Column resolve_duplicates(Column input, Column indices, size_type min_width):
+cpdef Column resolve_duplicates(
+    Column input,
+    Column indices,
+    size_type min_width,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
+):
     """
     Returns duplicate strings found in the input column
     with min_width minimum number of bytes.
@@ -81,6 +101,8 @@ cpdef Column resolve_duplicates(Column input, Column indices, size_type min_widt
         Suffix array from :cpp:func:`build_suffix_array`
     min_width : size_type
         Minimum width of bytes to detect duplicates
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -88,15 +110,25 @@ cpdef Column resolve_duplicates(Column input, Column indices, size_type min_widt
         New column of duplicate strings
     """
     cdef unique_ptr[column] c_result
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_resolve_duplicates(input.view(), indices.view(), min_width)
+        c_result = cpp_resolve_duplicates(
+            input.view(), indices.view(), min_width, stream.view(), mr.get_mr()
+        )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Column resolve_duplicates_pair(
-    Column input1, Column indices1, Column input2, Column indices2, size_type min_width
+    Column input1,
+    Column indices1,
+    Column input2,
+    Column indices2,
+    size_type min_width,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Returns duplicate strings in input1 found in input2
@@ -118,6 +150,8 @@ cpdef Column resolve_duplicates_pair(
         Suffix array from :cpp:func:`build_suffix_array` for input2
     min_width : size_type
         Minimum width of bytes to detect duplicates
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -126,10 +160,18 @@ cpdef Column resolve_duplicates_pair(
 
     """
     cdef unique_ptr[column] c_result
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_resolve_duplicates_pair(
-            input1.view(), indices1.view(), input2.view(), indices2.view(), min_width
+            input1.view(),
+            indices1.view(),
+            input2.view(),
+            indices2.view(),
+            min_width,
+            stream.view(),
+            mr.get_mr(),
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream, mr)

@@ -14,6 +14,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.expr import Agg, BinOp, Col, Len, NamedExpr
+from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.ir import GroupBy, Select, Slice
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.naming import unique_names
@@ -95,7 +96,12 @@ def decompose(
     if isinstance(expr, Len):
         selection = NamedExpr(name, Col(dtype, name))
         aggregation = [NamedExpr(name, expr)]
-        reduction = [NamedExpr(name, Agg(dtype, "sum", None, Col(dtype, name)))]
+        reduction = [
+            NamedExpr(
+                name,
+                Agg(dtype, "sum", None, ExecutionContext.GROUPBY, Col(dtype, name)),
+            )
+        ]
         return selection, aggregation, reduction, False
     if isinstance(expr, Agg):
         if expr.name in ("sum", "count", "min", "max", "n_unique"):
@@ -105,19 +111,32 @@ def decompose(
                 aggfunc = expr.name
             selection = NamedExpr(name, Col(dtype, name))
             aggregation = [NamedExpr(name, expr)]
-            reduction = [NamedExpr(name, Agg(dtype, aggfunc, None, Col(dtype, name)))]
+            reduction = [
+                NamedExpr(
+                    name,
+                    Agg(
+                        dtype, aggfunc, None, ExecutionContext.GROUPBY, Col(dtype, name)
+                    ),
+                )
+            ]
             return selection, aggregation, reduction, expr.name == "n_unique"
         elif expr.name == "mean":
             (child,) = expr.children
             (sum, count), aggregations, reductions, need_preshuffle = combine(
                 decompose(
                     f"{next(names)}__mean_sum",
-                    Agg(dtype, "sum", None, child),
+                    Agg(dtype, "sum", None, ExecutionContext.GROUPBY, child),
                     names=names,
                 ),
                 decompose(
                     f"{next(names)}__mean_count",
-                    Agg(DataType(pl.Int32()), "count", False, child),  # noqa: FBT003
+                    Agg(
+                        DataType(pl.Int32()),
+                        "count",
+                        False,  # noqa: FBT003
+                        ExecutionContext.GROUPBY,
+                        child,
+                    ),
                     names=names,
                 ),
             )
@@ -163,6 +182,7 @@ def _(
         return rec(Slice(ir.schema, offset, length, new_join))
 
     # Extract child partitioning
+    original_child = ir.children[0]
     child, partition_info = rec(ir.children[0])
 
     # Handle single-partition case
@@ -195,6 +215,8 @@ def _(
     if unique_fraction_dict := _get_unique_fractions(
         groupby_key_columns,
         config_options.executor.unique_fraction,
+        row_count=rec.state["stats"].row_count.get(original_child),
+        column_stats=rec.state["stats"].column_stats.get(original_child),
     ):
         # Use unique_fraction to determine output partitioning
         unique_fraction = max(unique_fraction_dict.values())

@@ -18,7 +18,7 @@
 cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
 
 # Allow users to control which version is used
-if(NOT rapids-cmake-branch OR NOT rapids-cmake-version)
+if(NOT (rapids-cmake-branch OR rapids-cmake-version))
   message(
     FATAL_ERROR "The CMake variable `rapids-cmake-branch` or `rapids-cmake-version` must be defined"
   )

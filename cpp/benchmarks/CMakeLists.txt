@@ -174,6 +174,10 @@ ConfigureNVBench(NDSH_Q09_NVBENCH ndsh/q09.cpp ndsh/utilities.cpp)
 ConfigureNVBench(NDSH_Q10_NVBENCH ndsh/q10.cpp ndsh/utilities.cpp)
 
 # ##################################################################################################
+# * filter benchmark -------------------------------------------------------------------
+ConfigureNVBench(FILTER_NVBENCH filter/minmax_filter.cpp)
+
+# ##################################################################################################
 # * stream_compaction benchmark -------------------------------------------------------------------
 ConfigureNVBench(
   STREAM_COMPACTION_NVBENCH
@@ -205,8 +209,17 @@ ConfigureNVBench(SEARCH_NVBENCH search/contains_scalar.cpp search/contains_table
 # ##################################################################################################
 # * sort benchmark --------------------------------------------------------------------------------
 ConfigureNVBench(
-  SORT_NVBENCH sort/rank.cpp sort/rank_lists.cpp sort/rank_structs.cpp sort/segmented_sort.cpp
-  sort/sort.cpp sort/sort_lists.cpp sort/sort_strings.cpp sort/sort_structs.cpp sort/top_k.cpp
+  SORT_NVBENCH
+  sort/rank.cpp
+  sort/rank_lists.cpp
+  sort/rank_structs.cpp
+  sort/segmented_top_k.cpp
+  sort/segmented_sort.cpp
+  sort/sort.cpp
+  sort/sort_lists.cpp
+  sort/sort_strings.cpp
+  sort/sort_structs.cpp
+  sort/top_k.cpp
 )
 
 # ##################################################################################################
@@ -217,7 +230,7 @@ ConfigureNVBench(STRUCT_CREATION_NVBENCH structs/create_structs.cpp)
 # ##################################################################################################
 # * quantiles benchmark
 # --------------------------------------------------------------------------------
-ConfigureBench(QUANTILES_BENCH quantiles/quantiles.cpp)
+ConfigureNVBench(QUANTILES_NVBENCH quantiles/quantiles.cpp)
 
 # ##################################################################################################
 # * tdigest benchmark
@@ -254,19 +267,22 @@ ConfigureNVBench(FILL_NVBENCH filling/repeat.cpp)
 
 # ##################################################################################################
 # * groupby benchmark -----------------------------------------------------------------------------
-ConfigureBench(
-  GROUPBY_BENCH groupby/group_sum.cpp groupby/group_nth.cpp groupby/group_shift.cpp
-  groupby/group_struct_values.cpp groupby/group_no_requests.cpp groupby/group_scan.cpp
-)
-
 ConfigureNVBench(
   GROUPBY_NVBENCH
+  groupby/group_complex_keys.cpp
   groupby/group_histogram.cpp
+  groupby/group_m2_var_std.cpp
   groupby/group_max.cpp
   groupby/group_max_multithreaded.cpp
+  groupby/group_no_requests.cpp
+  groupby/group_nth.cpp
   groupby/group_nunique.cpp
   groupby/group_rank.cpp
+  groupby/group_scan.cpp
+  groupby/group_shift.cpp
   groupby/group_struct_keys.cpp
+  groupby/group_struct_values.cpp
+  groupby/group_sum.cpp
 )
 
 # ##################################################################################################
@@ -307,11 +323,29 @@ ConfigureNVBench(
 )
 
 # ##################################################################################################
+# * parquet reader filter benchmark
+# ----------------------------------------------------------------------
+ConfigureNVBench(PARQUET_READER_FILTER_NVBENCH io/parquet/parquet_reader_filter.cpp)
+
+# ##################################################################################################
 # * parquet experimental reader benchmark
 # ----------------------------------------------------------------------
 ConfigureNVBench(
   PARQUET_EXPERIMENTAL_READER_NVBENCH io/parquet/experimental/parquet_dictionary_page_filter.cpp
 )
+
+# ##################################################################################################
+# * parquet deletion vector benchmark
+# ----------------------------------------------------------------------
+ConfigureNVBench(
+  PARQUET_DELETION_VECTORS_NVBENCH io/parquet/experimental/parquet_deletion_vectors.cpp
+)
+target_compile_definitions(
+  PARQUET_DELETION_VECTORS_NVBENCH
+  PRIVATE DISABLENEON=1 ROARING_DISABLE_X64=1 ROARING_DISABLE_AVX=1
+          CROARING_COMPILER_SUPPORTS_AVX512=0
+)
+target_link_libraries(PARQUET_DELETION_VECTORS_NVBENCH PRIVATE roaring)
 
 # ##################################################################################################
 # * parquet multithread reader benchmark
@@ -352,7 +386,9 @@ ConfigureNVBench(
 # ##################################################################################################
 # * transform benchmark
 # ---------------------------------------------------------------------------------
-ConfigureNVBench(TRANSFORM_NVBENCH transform/polynomials.cpp transform/transform.cpp)
+ConfigureNVBench(
+  TRANSFORM_NVBENCH transform/encode.cpp transform/polynomials.cpp transform/transform.cpp
+)
 
 # ##################################################################################################
 # * nvtext benchmark -------------------------------------------------------------------
@@ -394,6 +430,7 @@ ConfigureNVBench(
   string/find.cpp
   string/find_instance.cpp
   string/find_multiple.cpp
+  string/intcast.cpp
   string/join_strings.cpp
   string/lengths.cpp
   string/like.cpp
@@ -408,6 +445,11 @@ ConfigureNVBench(
   string/translate.cpp
   string/url_decode.cu
 )
+
+# ##################################################################################################
+# * strings experimental benchmark ---------------------------------------------------
+ConfigureNVBench(STRINGS_EXPERIMENTAL_NVBENCH string/experimental/stringview_compare.cu)
+target_link_libraries(STRINGS_EXPERIMENTAL_NVBENCH PRIVATE nanoarrow)
 
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------

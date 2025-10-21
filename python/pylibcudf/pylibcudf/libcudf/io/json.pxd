@@ -11,10 +11,10 @@ from libcpp.vector cimport vector
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.types cimport data_type, size_type
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.memory_resource cimport device_memory_resource
 
 
-cdef extern from "cudf/io/json.hpp" \
-        namespace "cudf::io" nogil:
+cdef extern from "cudf/io/json.hpp" namespace "cudf::io" nogil:
 
     cdef struct schema_element:
         data_type type
@@ -52,6 +52,7 @@ cdef extern from "cudf/io/json.hpp" \
         vector[string] get_na_values() except +libcudf_exception_handler
 
         # setter
+        void set_source(cudf_io_types.source_info src) except +libcudf_exception_handler
         void set_dtypes(vector[data_type] types) except +libcudf_exception_handler
         void set_dtypes(map[string, data_type] types) except +libcudf_exception_handler
         void set_dtypes(map[string, schema_element] types)\
@@ -155,12 +156,9 @@ cdef extern from "cudf/io/json.hpp" \
         json_reader_options build() except +libcudf_exception_handler
 
     cdef cudf_io_types.table_with_metadata read_json(
-        json_reader_options &options
-    ) except +libcudf_exception_handler
-
-    cdef cudf_io_types.table_with_metadata read_json(
         json_reader_options &options,
         cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef cppclass json_writer_options:
@@ -240,12 +238,8 @@ cdef extern from "cudf/io/json.hpp" \
         json_writer_options build() except +libcudf_exception_handler
 
     cdef cudf_io_types.table_with_metadata write_json(
-        json_writer_options &options
-    ) except +libcudf_exception_handler
-
-    cdef cudf_io_types.table_with_metadata write_json(
         json_writer_options &options,
-        cuda_stream_view stream,
+        cuda_stream_view stream
     ) except +libcudf_exception_handler
 
     cdef bool is_supported_write_json(

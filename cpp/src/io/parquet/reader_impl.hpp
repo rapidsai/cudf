@@ -113,6 +113,11 @@ class reader_impl {
                        rmm::cuda_stream_view stream,
                        rmm::device_async_resource_ref mr);
 
+  reader_impl(reader_impl const&)            = delete;
+  reader_impl& operator=(reader_impl const&) = delete;
+  reader_impl(reader_impl&&)                 = delete;
+  reader_impl& operator=(reader_impl&&)      = delete;
+
   /**
    * @copydoc cudf::io::chunked_parquet_reader::has_next
    */
@@ -176,6 +181,18 @@ class reader_impl {
    *
    */
   void setup_next_subpass(read_mode mode);
+
+  /**
+   * @brief Preprocess string length and bounds information for the subpass.
+   *
+   * At the end of this process, the `str_bytes` field of the the PageInfo struct
+   * will be populated, and if applicable, the delta_temp_buf in the subpass struct will
+   * be allocated and the pages in the subpass will point into it properly.
+   *
+   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param read_info The range of rows to be read in the subpass
+   */
+  void preprocess_chunk_strings(read_mode mode, row_range const& read_info);
 
   /**
    * @brief Copies over the relevant page mask information for the subpass
@@ -287,7 +304,7 @@ class reader_impl {
    *
    * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param skip_rows Crop all rows below skip_rows
-   * @param num_rows Maximum number of rows to read
+   * @param num_rows Number of rows to read
    */
   void allocate_columns(read_mode mode, size_t skip_rows, size_t num_rows);
 
@@ -302,8 +319,8 @@ class reader_impl {
    * @brief Converts the page data and outputs to columns.
    *
    * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
-   * @param skip_rows Minimum number of rows from start
-   * @param num_rows Number of rows to output
+   * @param skip_rows Number of rows to skip from the start
+   * @param num_rows Number of rows to decode
    */
   void decode_page_data(read_mode mode, size_t skip_rows, size_t num_rows);
 
@@ -311,8 +328,12 @@ class reader_impl {
    * @brief Invalidate output buffer nullmask for rows spanned by the pruned pages
    *
    * @param page_mask Boolean vector indicating if a page needs to be decoded or is pruned
+   * @param skip_rows Offset of the first row in the table chunk
+   * @param num_rows Number of rows in the table chunk
    */
-  void update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> page_mask);
+  void update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> page_mask,
+                                                size_t skip_rows,
+                                                size_t num_rows);
 
   /**
    * @brief Creates file-wide parquet chunk information.
@@ -398,7 +419,10 @@ class reader_impl {
     // User specified reading rows/stripes selection.
     int64_t const skip_rows;
     std::optional<int64_t> num_rows;
+    size_t skip_bytes;
+    std::optional<size_t> num_bytes;
     std::vector<std::vector<size_type>> row_group_indices;
+    bool use_jit_filter = false;
   } _options;
 
   // name to reference converter to extract AST output filter
@@ -426,7 +450,7 @@ class reader_impl {
   cudf::detail::host_vector<bool> _pass_page_mask;
 
   // Page mask for filtering out subpass data pages
-  cudf::detail::host_vector<bool> _subpass_page_mask;
+  cudf::detail::hostdevice_vector<bool> _subpass_page_mask;
 
   // _output_buffers associated metadata
   std::unique_ptr<table_metadata> _output_metadata;

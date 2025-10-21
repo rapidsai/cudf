@@ -1,8 +1,10 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from pylibcudf.column cimport Column
+from pylibcudf.io.types cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from pylibcudf.libcudf.io.text cimport parse_options, data_chunk_source
 
 cdef class ParseOptions:
@@ -16,7 +18,9 @@ cdef class DataChunkSource:
 cpdef Column multibyte_split(
     DataChunkSource source,
     str delimiter,
-    ParseOptions options=*
+    ParseOptions options=*,
+    Stream stream=*,
+    DeviceMemoryResource mr=*
 )
 
 cpdef DataChunkSource make_source(str data)

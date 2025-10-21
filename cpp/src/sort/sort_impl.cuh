@@ -20,6 +20,7 @@
 #include "sort_column_impl.cuh"
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/row_operator/lexicographic.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <thrust/sequence.h>
@@ -90,8 +91,8 @@ std::unique_ptr<column> sorted_order(table_view input,
     }
   };
 
-  auto const comp = cudf::experimental::row::lexicographic::self_comparator(
-    input, column_order, null_precedence, stream);
+  auto const comp =
+    cudf::detail::row::lexicographic::self_comparator(input, column_order, null_precedence, stream);
   if (cudf::detail::has_nested_columns(input)) {
     auto const comparator = comp.less<true>(nullate::DYNAMIC{has_nested_nulls(input)});
     do_sort(comparator);

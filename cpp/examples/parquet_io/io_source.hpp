@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,7 +69,7 @@ struct pinned_allocator : public std::allocator<T> {
     return static_cast<T*>(ptr);
   }
 
-  void deallocate(T* ptr, std::size_t n)
+  void deallocate(T* ptr, std::size_t n) noexcept
   {
     mr.deallocate_async(ptr, n * sizeof(T), rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream);
   }

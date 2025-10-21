@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import cudf
 from cudf import DataFrame, option_context
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
@@ -69,7 +70,7 @@ def test_dataframe_sort_values_sliced(sliceobj):
     df = pd.DataFrame({"a": rng.random(20)})
 
     expect = df[sliceobj]["a"].sort_values()
-    gdf = DataFrame.from_pandas(df)
+    gdf = DataFrame(df)
     got = gdf[sliceobj]["a"].sort_values()
     assert (got.to_pandas() == expect).all()
 
@@ -91,7 +92,7 @@ def test_dataframe_multi_column(
         )
         pdf[colname] = data
 
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = DataFrame(pdf)
 
     got = gdf.sort_values(by, ascending=ascending, na_position=na_position)
     expect = pdf.sort_values(by, ascending=ascending, na_position=na_position)
@@ -125,7 +126,7 @@ def test_dataframe_multi_column_nulls(
             data[:] = np.nan
         pdf[colname] = data
 
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = DataFrame(pdf)
 
     got = gdf.sort_values(by, ascending=ascending, na_position=na_position)
     expect = pdf.sort_values(by, ascending=ascending, na_position=na_position)
@@ -145,7 +146,7 @@ def test_dataframe_multi_column_nulls_multiple_ascending(
     pdf = pd.DataFrame(
         {"a": [3, 1, None, 2, 2, None, 1], "b": [1, 2, 3, 4, 5, 6, 7]}
     )
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = DataFrame(pdf)
     expect = pdf.sort_values(
         by=["a", "b"], ascending=ascending, na_position=na_position
     )
@@ -176,7 +177,7 @@ def test_dataframe_sort_values_kind(numeric_types_as_str, kind):
 
 def test_sort_values_by_index_level():
     df = pd.DataFrame({"a": [1, 3, 2]}, index=pd.Index([1, 3, 2], name="b"))
-    cudf_df = DataFrame.from_pandas(df)
+    cudf_df = DataFrame(df)
     result = cudf_df.sort_values("b")
     expected = df.sort_values("b")
     assert_eq(result, expected)
@@ -184,7 +185,7 @@ def test_sort_values_by_index_level():
 
 def test_sort_values_by_ambiguous():
     df = pd.DataFrame({"a": [1, 3, 2]}, index=pd.Index([1, 3, 2], name="a"))
-    cudf_df = DataFrame.from_pandas(df)
+    cudf_df = DataFrame(df)
 
     assert_exceptions_equal(
         lfunc=df.sort_values,
@@ -192,3 +193,38 @@ def test_sort_values_by_ambiguous():
         lfunc_args_and_kwargs=(["a"], {}),
         rfunc_args_and_kwargs=(["a"], {}),
     )
+
+
+def test_sort_values_datetime():
+    rng = np.random.default_rng(seed=0)
+    df = pd.DataFrame(
+        {
+            "date": np.array(
+                [
+                    np.datetime64("2016-11-20"),
+                    np.datetime64("2020-11-20"),
+                    np.datetime64("2019-11-20"),
+                    np.datetime64("1918-11-20"),
+                    np.datetime64("2118-11-20"),
+                ]
+            ),
+            "vals": rng.random(5),
+        }
+    )
+
+    gdf = cudf.from_pandas(df)
+
+    s_df = df.sort_values(by="date")
+    s_gdf = gdf.sort_values(by="date")
+
+    assert_eq(s_df, s_gdf)
+
+
+def test_dataframe_loc_duplicate_index_scalar():
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5]}, index=[1, 2, 1, 4, 2])
+    gdf = cudf.DataFrame(pdf)
+
+    pdf_sorted = pdf.sort_values(by=list(pdf.columns), axis=0)
+    gdf_sorted = gdf.sort_values(by=list(gdf.columns), axis=0)
+
+    assert_eq(pdf_sorted, gdf_sorted)

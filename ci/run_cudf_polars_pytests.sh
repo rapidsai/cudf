@@ -12,7 +12,7 @@ cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/cudf_polars/
 python -m pytest --cache-clear "$@" tests --executor in-memory
 
 # Test the default "streaming" executor
-python -m pytest --cache-clear "$@" tests
+python -m pytest --cache-clear "$@" tests --executor streaming
 
 # Test the "streaming" executor with small blocksize
 python -m pytest --cache-clear "$@" tests --executor streaming --blocksize-mode small
@@ -20,5 +20,5 @@ python -m pytest --cache-clear "$@" tests --executor streaming --blocksize-mode 
 # Run experimental tests with Distributed cluster
 python -m pytest --cache-clear "$@" "tests/experimental" \
     --executor streaming \
-    --scheduler distributed \
+    --cluster distributed \
     --cov-fail-under=0  # No code-coverage requirement for these tests.

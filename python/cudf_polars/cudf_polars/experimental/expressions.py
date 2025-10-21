@@ -38,7 +38,7 @@ from typing import TYPE_CHECKING, TypeAlias, TypedDict
 import pylibcudf as plc
 
 from cudf_polars.dsl.expressions.aggregation import Agg
-from cudf_polars.dsl.expressions.base import Col, Expr, NamedExpr
+from cudf_polars.dsl.expressions.base import Col, ExecutionContext, Expr, NamedExpr
 from cudf_polars.dsl.expressions.binaryop import BinOp
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.dsl.expressions.unary import Cast, UnaryFunction
@@ -56,6 +56,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.expressions.base import Expr
     from cudf_polars.dsl.ir import IR
+    from cudf_polars.experimental.base import ColumnStat, ColumnStats
     from cudf_polars.typing import GenericTransformer, Schema
     from cudf_polars.utils.config import ConfigOptions
 
@@ -70,12 +71,22 @@ class State(TypedDict):
         IR of the input expression.
     input_partition_info
         Partition info of the input expression.
+    config_options
+        GPUEngine configuration options.
+    unique_names
+        Generator of unique names for temporaries.
+    row_count_estimate
+        row-count estimate for the input IR.
+    column_stats
+        Column statistics for the input IR.
     """
 
     input_ir: IR
     input_partition_info: PartitionInfo
     config_options: ConfigOptions
     unique_names: Generator[str, None, None]
+    row_count_estimate: ColumnStat[int]
+    column_stats: dict[str, ColumnStats]
 
 
 ExprDecomposer: TypeAlias = "GenericTransformer[Expr, tuple[Expr, IR, MutableMapping[IR, PartitionInfo]], State]"
@@ -144,6 +155,8 @@ def _decompose_unique(
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
+    row_count_estimate: ColumnStat[int],
+    column_stats: dict[str, ColumnStats],
     *,
     names: Generator[str, None, None],
 ) -> tuple[Expr, IR, MutableMapping[IR, PartitionInfo]]:
@@ -161,6 +174,10 @@ def _decompose_unique(
         associated partitioning information.
     config_options
         GPUEngine configuration options.
+    row_count_estimate
+        row-count estimate for the input IR.
+    column_stats
+        Column statistics for the input IR.
     names
         Generator of unique names for temporaries.
 
@@ -193,6 +210,8 @@ def _decompose_unique(
     unique_fraction_dict = _get_unique_fractions(
         _leaf_column_names(child),
         config_options.executor.unique_fraction,
+        row_count=row_count_estimate,
+        column_stats=column_stats,
     )
 
     unique_fraction = (
@@ -267,7 +286,7 @@ def _decompose_agg_node(
         # Combined stage
         (column,) = columns
         columns, input_ir, partition_info = select(
-            [Agg(agg.dtype, "sum", None, column)],
+            [Agg(agg.dtype, "sum", None, ExecutionContext.FRAME, column)],
             input_ir,
             partition_info,
             names=names,
@@ -276,8 +295,8 @@ def _decompose_agg_node(
     elif agg.name == "mean":
         # Chunkwise stage
         exprs = [
-            Agg(agg.dtype, "sum", None, *agg.children),
-            Agg(agg.dtype, "count", None, *agg.children),
+            Agg(agg.dtype, "sum", None, ExecutionContext.FRAME, *agg.children),
+            Agg(agg.dtype, "count", None, ExecutionContext.FRAME, *agg.children),
         ]
         columns, input_ir, partition_info = select(
             exprs,
@@ -292,7 +311,10 @@ def _decompose_agg_node(
             BinOp(
                 agg.dtype,
                 plc.binaryop.BinaryOperator.DIV,
-                *(Agg(agg.dtype, "sum", None, column) for column in columns),
+                *(
+                    Agg(agg.dtype, "sum", None, ExecutionContext.FRAME, column)
+                    for column in columns
+                ),
             )
         ]
         columns, input_ir, partition_info = select(
@@ -348,7 +370,7 @@ def _decompose_agg_node(
         # Combined stage
         (column,) = columns
         columns, input_ir, partition_info = select(
-            [Agg(agg.dtype, "sum", None, column)],
+            [Agg(agg.dtype, "sum", None, ExecutionContext.FRAME, column)],
             input_ir,
             partition_info,
             names=names,
@@ -367,7 +389,7 @@ def _decompose_agg_node(
         # Combined stage
         (column,) = columns
         columns, input_ir, partition_info = select(
-            [Agg(agg.dtype, agg.name, agg.options, column)],
+            [Agg(agg.dtype, agg.name, agg.options, ExecutionContext.FRAME, column)],
             input_ir,
             partition_info,
             names=names,
@@ -385,6 +407,8 @@ def _decompose_expr_node(
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
+    row_count_estimate: ColumnStat[int],
+    column_stats: dict[str, ColumnStats],
     *,
     names: Generator[str, None, None],
 ) -> tuple[Expr, IR, MutableMapping[IR, PartitionInfo]]:
@@ -402,6 +426,10 @@ def _decompose_expr_node(
         associated partitioning information.
     config_options
         GPUEngine configuration options.
+    row_count_estimate
+        row-count estimate for the input IR.
+    column_stats
+        Column statistics for the input IR.
     names
         Generator of unique names for temporaries.
 
@@ -419,7 +447,7 @@ def _decompose_expr_node(
         # For Literal nodes, we don't actually want an
         # input IR with real columns, because it will
         # mess up the result of ``HConcat``.
-        input_ir = Empty()
+        input_ir = Empty({})
         partition_info[input_ir] = PartitionInfo(count=1)
 
     partition_count = partition_info[input_ir].count
@@ -433,7 +461,13 @@ def _decompose_expr_node(
         )
     elif isinstance(expr, UnaryFunction) and expr.name == "unique":
         return _decompose_unique(
-            expr, input_ir, partition_info, config_options, names=names
+            expr,
+            input_ir,
+            partition_info,
+            config_options,
+            row_count_estimate,
+            column_stats,
+            names=names,
         )
     else:
         # This is an un-supported expression - raise.
@@ -454,6 +488,8 @@ def _decompose(
             rec.state["input_ir"],
             {rec.state["input_ir"]: rec.state["input_partition_info"]},
             rec.state["config_options"],
+            rec.state["row_count_estimate"],
+            rec.state["column_stats"],
             names=rec.state["unique_names"],
         )
 
@@ -491,6 +527,8 @@ def _decompose(
         input_ir,
         partition_info,
         rec.state["config_options"],
+        rec.state["row_count_estimate"],
+        rec.state["column_stats"],
         names=rec.state["unique_names"],
     )
 
@@ -500,6 +538,8 @@ def decompose_expr_graph(
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
+    row_count_estimate: ColumnStat[int],
+    column_stats: dict[str, ColumnStats],
 ) -> tuple[NamedExpr, IR, MutableMapping[IR, PartitionInfo]]:
     """
     Decompose a NamedExpr into stages.
@@ -516,6 +556,10 @@ def decompose_expr_graph(
         associated partitioning information.
     config_options
         GPUEngine configuration options.
+    row_count_estimate
+        Row-count estimate for the input IR.
+    column_stats
+        Column statistics for the input IR.
 
     Returns
     -------
@@ -541,6 +585,8 @@ def decompose_expr_graph(
             "input_partition_info": partition_info[input_ir],
             "config_options": config_options,
             "unique_names": unique_names((named_expr.name, *input_ir.schema.keys())),
+            "row_count_estimate": row_count_estimate,
+            "column_stats": column_stats,
         },
     )
     expr, input_ir, partition_info = mapper(named_expr.value)
