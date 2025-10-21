@@ -1,6 +1,8 @@
 # =============================================================================
-# SPDX-FileCopyrightText: Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
 # =============================================================================
 
 # This function finds rdkafka and sets any additional necessary environment variables.

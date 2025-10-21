@@ -1,6 +1,8 @@
 # =============================================================================
-# SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
 # =============================================================================
 
 set(cython_sources avro.pyx csv.pyx datasource.pyx json.pyx orc.pyx parquet.pyx

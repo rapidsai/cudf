@@ -1,6 +1,8 @@
 # =============================================================================
+# cmake-format: off
 # SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
 # =============================================================================
 
 # Finding arrow is far more complex than it should be, and as a result we violate multiple linting

@@ -1,6 +1,8 @@
 # =============================================================================
-# SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
 # =============================================================================
 
 set(cython_sources char_types.pyx combine.pyx regex_flags.pyx side_type.pyx translate.pyx)
