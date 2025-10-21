@@ -2844,14 +2844,245 @@ void filter_typed_test()
   }
 }
 
+template <typename T>
+void filter_unary_operation_typed_test()
+{
+  std::mt19937 gen(0xd00dL);
+  auto [src, filepath, null_count] = [&]() {
+    auto constexpr num_rows            = num_ordered_rows;
+    auto constexpr row_group_size_rows = num_rows / 4;
+    auto _col0                         = testdata::ascending<T>().release();
+    // Add nulls to col0
+    std::bernoulli_distribution bn(0.7f);
+    auto valids =
+      cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
+    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
+    _col0->set_null_mask(std::move(null_mask), null_count);
+    auto col0                = cudf::purge_nonempty_nulls(_col0->view());
+    auto col1                = testdata::descending<T>();
+    auto col2                = testdata::unordered<T>();
+    auto const written_table = table_view{{col0->view(), col1, col2}};
+    auto const filepath      = temp_env->get_temp_filepath("FilterUnaryOperationTyped.parquet");
+    {
+      cudf::io::table_input_metadata expected_metadata(written_table);
+      expected_metadata.column_metadata[0].set_name("col0");
+      expected_metadata.column_metadata[1].set_name("col1");
+      expected_metadata.column_metadata[2].set_name("col2");
+
+      const cudf::io::parquet_writer_options out_opts =
+        cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, written_table)
+          .metadata(std::move(expected_metadata))
+          .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+          .row_group_size_rows(row_group_size_rows);
+      cudf::io::write_parquet(out_opts);
+    }
+
+    std::vector<std::unique_ptr<column>> columns;
+    columns.push_back(std::move(col0));
+    columns.push_back(col1.release());
+    columns.push_back(col2.release());
+
+    return std::tuple{cudf::table{std::move(columns)}, filepath, null_count};
+  }();
+
+  auto const written_table           = src.view();
+  auto const test_predicate_pushdown = [&](cudf::ast::operation const& filter_expression,
+                                           cudf::ast::operation const& ref_filter,
+                                           cudf::size_type expected_total_row_groups,
+                                           cudf::size_type expected_stats_filtered_row_groups,
+                                           std::optional<cudf::size_type> expected_num_rows =
+                                             std::nullopt) {
+    // Expected result
+    auto const predicate = cudf::compute_column(written_table, ref_filter);
+    EXPECT_EQ(predicate->view().type().id(), cudf::type_id::BOOL8)
+      << "Predicate filter should return a boolean";
+    auto const expected = cudf::apply_boolean_mask(written_table, *predicate);
+
+    // JIT does not support nullness-dependent operators such as IS_NULL
+    // Ref: https://github.com/rapidsai/cudf/issues/20177
+    auto constexpr use_jit = false;
+
+    // Reading with Predicate Pushdown
+    cudf::io::parquet_reader_options read_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+        .filter(filter_expression)
+        .use_jit_filter(use_jit);
+    auto const result       = cudf::io::read_parquet(read_opts);
+    auto const result_table = result.tbl->view();
+
+    // Tests
+    if (expected_num_rows.has_value()) {
+      EXPECT_EQ(expected->num_rows(), expected_num_rows.value());
+      EXPECT_EQ(result_table.num_rows(), expected_num_rows.value());
+    }
+    EXPECT_EQ(static_cast<int>(written_table.column(0).type().id()),
+              static_cast<int>(result_table.column(0).type().id()))
+      << "col0 type mismatch";
+    // To make sure AST filters out some elements if row groups must be filtered
+    if (expected_stats_filtered_row_groups < expected_total_row_groups) {
+      EXPECT_LT(expected->num_rows(), written_table.num_rows());
+    } else {
+      EXPECT_LE(expected->num_rows(), written_table.num_rows());
+    }
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result_table);
+    EXPECT_EQ(result.metadata.num_input_row_groups, expected_total_row_groups);
+    EXPECT_TRUE(result.metadata.num_row_groups_after_stats_filter.has_value());
+    EXPECT_EQ(result.metadata.num_row_groups_after_stats_filter.value(),
+              expected_stats_filtered_row_groups);
+    EXPECT_FALSE(result.metadata.num_row_groups_after_bloom_filter.has_value());
+  };
+
+  auto const col_name_0 = cudf::ast::column_name_reference("col0");
+  auto const col_ref_0  = cudf::ast::column_reference(0);
+
+  // Unary operation `IS_NULL` should not filter any row groups and yield exactly `null_count` rows
+  {
+    auto constexpr expected_total_row_groups          = 4;
+    auto constexpr expected_stats_filtered_row_groups = 4;
+
+    auto const filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_name_0);
+    auto const ref_filter = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_ref_0);
+    test_predicate_pushdown(filter_expression,
+                            ref_filter,
+                            expected_total_row_groups,
+                            expected_stats_filtered_row_groups,
+                            null_count);
+  }
+
+  // Expression `NOT(NOT(IS_NULL))` should not filter any row groups and yield exactly
+  // `null_count` rows
+  {
+    auto constexpr expected_total_row_groups          = 4;
+    auto constexpr expected_stats_filtered_row_groups = 4;
+
+    auto const is_null_expr = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_name_0);
+    auto const not_is_null_expr = cudf::ast::operation(cudf::ast::ast_operator::NOT, is_null_expr);
+    auto const filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::NOT, not_is_null_expr);
+
+    auto const is_null_ref_expr = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_ref_0);
+    auto const not_is_null_ref_expr =
+      cudf::ast::operation(cudf::ast::ast_operator::NOT, is_null_ref_expr);
+    auto const ref_filter =
+      cudf::ast::operation(cudf::ast::ast_operator::NOT, not_is_null_ref_expr);
+    test_predicate_pushdown(filter_expression,
+                            ref_filter,
+                            expected_total_row_groups,
+                            expected_stats_filtered_row_groups,
+                            null_count);
+  }
+
+  // Unary operation `NOT(IS_NULL)` should not filter any row groups and yield exactly `num_rows -
+  // null_count` rows
+  {
+    auto constexpr expected_total_row_groups          = 4;
+    auto constexpr expected_stats_filtered_row_groups = 4;
+
+    auto const is_null_expr = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_name_0);
+    auto const filter_expression = cudf::ast::operation(cudf::ast::ast_operator::NOT, is_null_expr);
+    auto const is_null_ref_expr = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_ref_0);
+    auto const ref_filter = cudf::ast::operation(cudf::ast::ast_operator::NOT, is_null_ref_expr);
+
+    test_predicate_pushdown(filter_expression,
+                            ref_filter,
+                            expected_total_row_groups,
+                            expected_stats_filtered_row_groups,
+                            num_ordered_rows - null_count);
+  }
+
+  // Unary operation `NOT(NOT(NOT(IS_NULL)))` should not filter any row groups and yield exactly
+  // `num_rows - null_count` rows
+  {
+    auto constexpr expected_total_row_groups          = 4;
+    auto constexpr expected_stats_filtered_row_groups = 4;
+
+    auto const is_null_expr = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_name_0);
+    auto const not_is_null_expr = cudf::ast::operation(cudf::ast::ast_operator::NOT, is_null_expr);
+    auto const not_not_is_null_expr =
+      cudf::ast::operation(cudf::ast::ast_operator::NOT, not_is_null_expr);
+    auto const filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::NOT, not_not_is_null_expr);
+
+    auto const is_null_ref_expr = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_ref_0);
+    auto const not_is_null_ref_expr =
+      cudf::ast::operation(cudf::ast::ast_operator::NOT, is_null_ref_expr);
+    auto const not_not_is_null_ref_expr =
+      cudf::ast::operation(cudf::ast::ast_operator::NOT, not_is_null_ref_expr);
+    auto const ref_filter =
+      cudf::ast::operation(cudf::ast::ast_operator::NOT, not_not_is_null_ref_expr);
+
+    test_predicate_pushdown(filter_expression,
+                            ref_filter,
+                            expected_total_row_groups,
+                            expected_stats_filtered_row_groups,
+                            num_ordered_rows - null_count);
+  }
+
+  // Unary operation `IS_NULL` should not affect anything when ANDing with another expression, and
+  // should short circuit when ORing with another expression
+  {
+    auto constexpr expected_total_row_groups = 4;
+
+    // Filtering AST
+    auto literal_value = []() {
+      if constexpr (cudf::is_timestamp<T>()) {
+        // table[0] < 10000 timestamp days/seconds/milliseconds/microseconds/nanoseconds
+        return cudf::timestamp_scalar<T>(T(typename T::duration(10000)));  // i (0-20,000)
+      } else if constexpr (cudf::is_duration<T>()) {
+        // table[0] < 10000 day/seconds/milliseconds/microseconds/nanoseconds
+        return cudf::duration_scalar<T>(T(10000));  // i (0-20,000)
+      } else if constexpr (std::is_same_v<T, cudf::string_view>) {
+        // table[0] < "000010000"
+        return cudf::string_scalar("000010000");  // i (0-20,000)
+      } else {
+        // table[0] < 0 or 100u
+        return cudf::numeric_scalar<T>(
+          (100 - 100 * std::is_signed_v<T>));  // i/100 (-100-100/ 0-200)
+      }
+    }();
+
+    auto const literal = cudf::ast::literal(literal_value);
+    auto const expr1   = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_name_0, literal);
+    auto const expr2   = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_name_0);
+
+    auto const ref_expr1 = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+    auto const ref_expr2 = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_ref_0);
+
+    // Filter expression AND unary operation
+    auto filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, expr1, expr2);
+    auto ref_filter =
+      cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, ref_expr1, ref_expr2);
+    auto constexpr expected_filtered_row_groups_with_unary_and = 2;
+    test_predicate_pushdown(filter_expression,
+                            ref_filter,
+                            expected_total_row_groups,
+                            expected_filtered_row_groups_with_unary_and);
+
+    // Filter expression OR unary operation
+    filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, expr1, expr2);
+    ref_filter = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, ref_expr1, ref_expr2);
+    auto constexpr expected_filtered_row_groups_with_unary_or = 4;
+    test_predicate_pushdown(filter_expression,
+                            ref_filter,
+                            expected_total_row_groups,
+                            expected_filtered_row_groups_with_unary_or);
+  }
+}
+
 TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
 {
   filter_typed_test<TypeParam, false>();
+  filter_unary_operation_typed_test<TypeParam>();
 }
 
 TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTypedJIT)
 {
   filter_typed_test<TypeParam, true>();
+  // JIT does not support nullness-dependent operators such as IS_NULL so we can't call
+  // `filter_unary_operation_typed_test`
+  // Ref: https://github.com/rapidsai/cudf/issues/20177
 }
 
 TEST_P(ParquetDecompressionTest, RoundTripBasic)
@@ -3449,4 +3680,26 @@ TEST_F(ParquetReaderTest, ByteBoundsAndFilters)
 
     CUDF_TEST_EXPECT_TABLES_EQUAL(read->view(), expected->view());
   }
+}
+
+TEST_F(ParquetReaderTest, LateBindSourceInfo)
+{
+  srand(31337);
+  auto expected = create_random_fixed_table<int>(4, 4, false);
+
+  auto filepath = temp_env->get_temp_filepath("LateBindSourceInfo.parquet");
+  cudf::io::parquet_writer_options args =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *expected);
+  cudf::io::write_parquet(args);
+
+  cudf::io::parquet_reader_options read_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{});
+
+  EXPECT_THROW(cudf::io::read_parquet(read_opts), cudf::logic_error);
+
+  read_opts.set_source(cudf::io::source_info{filepath});
+
+  auto result = cudf::io::read_parquet(read_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(result.tbl->view(), expected->view());
 }

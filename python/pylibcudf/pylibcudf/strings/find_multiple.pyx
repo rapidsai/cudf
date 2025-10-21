@@ -23,7 +23,7 @@ cpdef Column find_multiple(
     Returns a lists column with character position values where each
     of the target strings are found in each string.
 
-    For details, see :cpp:func:`cudf::strings::find_multiple`.
+    For details, see :cpp:func:`find_multiple`.
 
     Parameters
     ----------
@@ -64,7 +64,7 @@ cpdef Table contains_multiple(
     Returns a table of boolean values where each column indicates
     whether the corresponding target is found at that row.
 
-    For details, see :cpp:func:`cudf::strings::contains_multiple`.
+    For details, see :cpp:func:`contains_multiple`.
 
     Parameters
     ----------

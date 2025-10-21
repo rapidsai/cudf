@@ -28,7 +28,7 @@ import importlib.util
 import json
 import os
 import warnings
-from typing import TYPE_CHECKING, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -39,10 +39,11 @@ if TYPE_CHECKING:
 
 
 __all__ = [
+    "Cluster",
     "ConfigOptions",
     "InMemoryExecutor",
     "ParquetOptions",
-    "Scheduler",
+    "Scheduler",  # Deprecated, kept for backward compatibility
     "ShuffleMethod",
     "StatsPlanningOptions",
     "StreamingExecutor",
@@ -57,8 +58,9 @@ def _env_get_int(name: str, default: int) -> int:
         return default  # pragma: no cover
 
 
-def get_total_device_memory() -> int | None:
-    """Return the total memory of the current device."""
+@functools.cache
+def get_device_handle() -> Any:
+    # Gets called for each IR.do_evaluate node, so we'll cache it.
     import pynvml
 
     try:
@@ -74,11 +76,26 @@ def get_total_device_memory() -> int | None:
                 handle = pynvml.nvmlDeviceGetDeviceHandleFromMigDeviceHandle(handle)
         else:
             handle = pynvml.nvmlDeviceGetHandleByIndex(int(index))
-
-        return pynvml.nvmlDeviceGetMemoryInfo(handle).total
-
     except pynvml.NVMLError_NotSupported:  # pragma: no cover
         # System doesn't have proper "GPU memory".
+        return None
+    else:
+        return handle
+
+
+def get_total_device_memory() -> int | None:
+    """Return the total memory of the current device."""
+    import pynvml
+
+    maybe_handle = get_device_handle()
+
+    if maybe_handle is not None:
+        try:
+            return pynvml.nvmlDeviceGetMemoryInfo(maybe_handle).total
+        except pynvml.NVMLError_NotSupported:  # pragma: no cover
+            # System doesn't have proper "GPU memory".
+            return None
+    else:  # pragma: no cover
         return None
 
 
@@ -120,14 +137,29 @@ class StreamingFallbackMode(str, enum.Enum):
     SILENT = "silent"
 
 
+class Cluster(str, enum.Enum):
+    """
+    The cluster configuration for the streaming executor.
+
+    * ``Cluster.SINGLE`` : Single-GPU execution. Currently uses a zero-dependency,
+      synchronous, single-threaded task scheduler.
+    * ``Cluster.DISTRIBUTED`` : Multi-GPU distributed execution. Currently
+      uses a Dask-based distributed scheduler and requires an
+      active Dask cluster.
+    """
+
+    SINGLE = "single"
+    DISTRIBUTED = "distributed"
+
+
 class Scheduler(str, enum.Enum):
     """
-    The scheduler to use for the streaming executor.
+    **Deprecated**: Use :class:`Cluster` instead.
 
-    * ``Scheduler.SYNCHRONOUS`` : A zero-dependency, synchronous,
-      single-threaded scheduler.
-    * ``Scheduler.DISTRIBUTED`` : A Dask-based distributed scheduler.
-      Using this scheduler requires an active Dask cluster.
+    The scheduler to use for the task-based streaming executor.
+
+    * ``Scheduler.SYNCHRONOUS`` : Single-GPU execution (use ``Cluster.SINGLE`` instead)
+    * ``Scheduler.DISTRIBUTED`` : Multi-GPU execution (use ``Cluster.DISTRIBUTED`` instead)
     """
 
     SYNCHRONOUS = "synchronous"
@@ -143,12 +175,12 @@ class ShuffleMethod(str, enum.Enum):
     * ``ShuffleMethod._RAPIDSMPF_SINGLE`` : Use the single-process rapidsmpf shuffler.
 
     With :class:`cudf_polars.utils.config.StreamingExecutor`, the default of ``None``
-    will attempt to use ``ShuffleMethod.RAPIDSMPF`` for the distributed scheduler,
+    will attempt to use ``ShuffleMethod.RAPIDSMPF`` for a distributed cluster,
     but will fall back to ``ShuffleMethod.TASKS`` if rapidsmpf is not installed.
 
     The user should **not** specify ``ShuffleMethod._RAPIDSMPF_SINGLE`` directly.
     A setting of ``ShuffleMethod.RAPIDSMPF`` will be converted to the single-process
-    shuffler automatically when the 'synchronous' scheduler is active.
+    shuffler automatically when using single-GPU execution.
     """
 
     TASKS = "tasks"
@@ -265,7 +297,7 @@ class ParquetOptions:
             raise TypeError("max_row_group_samples must be an int")
 
 
-def default_blocksize(scheduler: str) -> int:
+def default_blocksize(cluster: str) -> int:
     """Return the default blocksize."""
     device_size = get_total_device_memory()
     if device_size is None:  # pragma: no cover
@@ -274,7 +306,7 @@ def default_blocksize(scheduler: str) -> int:
         return 1_000_000_000
 
     if (
-        scheduler == "distributed"
+        cluster == "distributed"
         or _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) == 0
     ):
         # Distributed execution requires a conservative
@@ -380,11 +412,22 @@ class StreamingExecutor:
 
     Parameters
     ----------
-    scheduler
-        The scheduler to use for the streaming executor. ``Scheduler.SYNCHRONOUS``
-        by default.
+    cluster
+        The cluster configuration for the streaming executor.
+        ``Cluster.SINGLE`` by default.
 
-        Note ``scheduler="distributed"`` requires a Dask cluster to be running.
+        This setting applies to both task-based and rapidsmpf execution models:
+
+        * ``Cluster.SINGLE``: Single-GPU execution
+        * ``Cluster.DISTRIBUTED``: Multi-GPU distributed execution (requires
+          an active Dask cluster)
+
+    scheduler
+        **Deprecated**: Use ``cluster`` instead.
+
+        For backward compatibility:
+        * ``Scheduler.SYNCHRONOUS`` maps to ``Cluster.SINGLE``
+        * ``Scheduler.DISTRIBUTED`` maps to ``Cluster.DISTRIBUTED``
     fallback_mode
         How to handle errors when the GPU engine fails to execute a query.
         ``StreamingFallbackMode.WARN`` by default.
@@ -414,10 +457,10 @@ class StreamingExecutor:
         - the ``CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE`` environment variable
 
         By default, cudf-polars uses a target partition size that's a fraction
-        of the device memory, where the fraction depends on the scheduler:
+        of the device memory, where the fraction depends on the cluster:
 
         - distributed: 1/40th of the device memory
-        - synchronous: 1/16th of the device memory
+        - single: 1/16th of the device memory
 
         The optional pynvml dependency is used to query the device memory size. If
         pynvml is not available, a warning is emitted and the device size is assumed
@@ -434,16 +477,16 @@ class StreamingExecutor:
         a broadcast join.
     shuffle_method
         The method to use for shuffling data between workers. Defaults to
-        'rapidsmpf' for distributed scheduler if available (otherwise 'tasks'),
-        and 'tasks' for synchronous scheduler.
+        'rapidsmpf' for distributed cluster if available (otherwise 'tasks'),
+        and 'tasks' for single-GPU cluster.
     rapidsmpf_spill
         Whether to wrap task arguments and output in objects that are
         spillable by 'rapidsmpf'.
     sink_to_directory
         Whether multi-partition sink operations should write to a directory
         rather than a single file. By default, this will be set to True for
-        the 'distributed' scheduler and False otherwise. The 'distrubuted'
-        scheduler does not currently support ``sink_to_directory=False``.
+        the 'distributed' cluster and False otherwise. The 'distributed'
+        cluster does not currently support ``sink_to_directory=False``.
     stats_planning
         Options controlling statistics-based query planning. See
         :class:`~cudf_polars.utils.config.StatsPlanningOptions` for more.
@@ -452,18 +495,25 @@ class StreamingExecutor:
     -----
     The streaming executor does not currently support profiling a query via
     the ``.profile()`` method. We recommend using nsys to profile queries
-    with the 'synchronous' scheduler and Dask's built-in profiling tools
-    with the 'distributed' scheduler.
+    with single-GPU execution and Dask's built-in profiling tools
+    with distributed execution.
     """
 
     _env_prefix = "CUDF_POLARS__EXECUTOR"
 
     name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
-    scheduler: Scheduler = dataclasses.field(
+    cluster: Cluster | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__CLUSTER",
+            Cluster.__call__,
+            default=None,
+        )
+    )
+    scheduler: Scheduler | None = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__SCHEDULER",
             Scheduler.__call__,
-            default=Scheduler.SYNCHRONOUS,
+            default=None,
         )
     )
     fallback_mode: StreamingFallbackMode = dataclasses.field(
@@ -520,10 +570,37 @@ class StreamingExecutor:
     )
 
     def __post_init__(self) -> None:  # noqa: D105
+        # Handle backward compatibility for deprecated scheduler parameter
+        if self.scheduler is not None:
+            if self.cluster is not None:
+                raise ValueError(
+                    "Cannot specify both 'scheduler' and 'cluster'. "
+                    "The 'scheduler' parameter is deprecated. "
+                    "Please use only 'cluster' instead."
+                )
+            else:
+                warnings.warn(
+                    """The 'scheduler' parameter is deprecated. Please use 'cluster' instead.
+                    Use 'cluster="single"' instead of 'scheduler="synchronous"' and "
+                    'cluster="distributed"' instead of 'scheduler="distributed"'.""",
+                    FutureWarning,
+                    stacklevel=2,
+                )
+            # Map old scheduler values to new cluster values
+            if self.scheduler == "synchronous":
+                object.__setattr__(self, "cluster", Cluster.SINGLE)
+            elif self.scheduler == "distributed":
+                object.__setattr__(self, "cluster", Cluster.DISTRIBUTED)
+            # Clear scheduler to avoid confusion
+            object.__setattr__(self, "scheduler", None)
+        elif self.cluster is None:
+            object.__setattr__(self, "cluster", Cluster.SINGLE)
+        assert self.cluster is not None, "Expected cluster to be set."
+
         # Handle shuffle_method defaults for streaming executor
         if self.shuffle_method is None:
-            if self.scheduler == "distributed" and rapidsmpf_distributed_available():
-                # For distributed scheduler, prefer rapidsmpf if available
+            if self.cluster == "distributed" and rapidsmpf_distributed_available():
+                # For distributed cluster, prefer rapidsmpf if available
                 object.__setattr__(self, "shuffle_method", "rapidsmpf")
             else:
                 # Otherwise, use task-based shuffle for now.
@@ -534,19 +611,16 @@ class StreamingExecutor:
             raise ValueError("rapidsmpf-single is not a supported shuffle method.")
         elif self.shuffle_method == "rapidsmpf":
             # Check that we have rapidsmpf installed
-            if (
-                self.scheduler == "distributed"
-                and not rapidsmpf_distributed_available()
-            ):
+            if self.cluster == "distributed" and not rapidsmpf_distributed_available():
                 raise ValueError(
                     "rapidsmpf shuffle method requested, but rapidsmpf.integrations.dask is not installed."
                 )
-            elif self.scheduler == "synchronous" and not rapidsmpf_single_available():
+            elif self.cluster == "single" and not rapidsmpf_single_available():
                 raise ValueError(
                     "rapidsmpf shuffle method requested, but rapidsmpf is not installed."
                 )
-            # Select "rapidsmpf-single" for the synchronous
-            if self.scheduler == "synchronous":
+            # Select "rapidsmpf-single" for single-GPU
+            if self.cluster == "single":
                 object.__setattr__(self, "shuffle_method", "rapidsmpf-single")
 
         # frozen dataclass, so use object.__setattr__
@@ -555,16 +629,16 @@ class StreamingExecutor:
         )
         if self.target_partition_size == 0:
             object.__setattr__(
-                self, "target_partition_size", default_blocksize(self.scheduler)
+                self, "target_partition_size", default_blocksize(self.cluster)
             )
         if self.broadcast_join_limit == 0:
             object.__setattr__(
                 self,
                 "broadcast_join_limit",
                 # Usually better to avoid shuffling for single gpu
-                2 if self.scheduler == "distributed" else 32,
+                2 if self.cluster == "distributed" else 32,
             )
-        object.__setattr__(self, "scheduler", Scheduler(self.scheduler))
+        object.__setattr__(self, "cluster", Cluster(self.cluster))
         object.__setattr__(self, "shuffle_method", ShuffleMethod(self.shuffle_method))
 
         # Make sure stats_planning is a dataclass
@@ -575,10 +649,10 @@ class StreamingExecutor:
                 StatsPlanningOptions(**self.stats_planning),
             )
 
-        if self.scheduler == "distributed":
+        if self.cluster == "distributed":
             if self.sink_to_directory is False:
                 raise ValueError(
-                    "The distributed scheduler requires sink_to_directory=True"
+                    "The distributed cluster requires sink_to_directory=True"
                 )
             object.__setattr__(self, "sink_to_directory", True)
         elif self.sink_to_directory is None:
@@ -600,12 +674,12 @@ class StreamingExecutor:
         if not isinstance(self.sink_to_directory, bool):
             raise TypeError("sink_to_directory must be bool")
 
-        # RapidsMPF spill is only supported for the distributed scheduler for now.
+        # RapidsMPF spill is only supported for distributed clusters for now.
         # This is because the spilling API is still within the RMPF-Dask integration.
         # (See https://github.com/rapidsai/rapidsmpf/issues/439)
-        if self.scheduler == "synchronous" and self.rapidsmpf_spill:  # pragma: no cover
+        if self.cluster == "single" and self.rapidsmpf_spill:  # pragma: no cover
             raise ValueError(
-                "rapidsmpf_spill is not supported for the synchronous scheduler."
+                "rapidsmpf_spill is not supported for single-GPU execution."
             )
 
     def __hash__(self) -> int:  # noqa: D105
@@ -622,11 +696,7 @@ class InMemoryExecutor:
     """
     Configuration for the cudf-polars in-memory executor.
 
-    Parameters
-    ----------
-    scheduler:
-        The scheduler to use for the in-memory executor. Currently
-        only ``Scheduler.SYNCHRONOUS`` is supported for the in-memory executor.
+    The in-memory executor only supports single-GPU execution.
     """
 
     name: Literal["in-memory"] = dataclasses.field(default="in-memory", init=False)
@@ -717,7 +787,7 @@ class ConfigOptions:
             case "streaming":
                 user_executor_options = user_executor_options.copy()
                 # Handle the interaction between the default shuffle method, the
-                # scheduler, and whether rapidsmpf is available.
+                # cluster, and whether rapidsmpf is available.
                 env_shuffle_method = os.environ.get(
                     "CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD", None
                 )

@@ -7,7 +7,7 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
+from cudf_polars.testing.asserts import DEFAULT_CLUSTER, assert_gpu_result_equal
 from cudf_polars.utils.config import StreamingFallbackMode
 
 
@@ -30,7 +30,7 @@ def test_rolling_datetime():
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 3,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
             "fallback_mode": StreamingFallbackMode.WARN,
         },
     )
@@ -54,7 +54,7 @@ def test_over_in_filter_unsupported() -> None:
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 1,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
             "fallback_mode": StreamingFallbackMode.WARN,
         },
     )

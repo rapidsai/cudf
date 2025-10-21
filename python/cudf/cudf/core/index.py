@@ -55,6 +55,7 @@ from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
+    dtype_to_pylibcudf_type,
     find_common_type,
     is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
@@ -217,6 +218,10 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
         # Subclasses should initialize with
         # SingleColumnFrame.__init__(self, {name: column})
         return None
+
+    @property
+    def _constructor(self):
+        return Index
 
     @property
     def _constructor_expanddim(self):
@@ -1890,6 +1895,35 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
         result.name = name
         return result
 
+    @cached_property
+    def inferred_type(self) -> str:
+        """
+        Return a string of the type inferred from the values.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index([1, 2, 3])
+        >>> idx
+        Index([1, 2, 3], dtype='int64')
+        >>> idx.inferred_type
+        'integer'
+        """
+        if self._is_object():
+            if len(self) == 0:
+                return "empty"
+            else:
+                return "string"
+        elif self._is_integer():
+            return "integer"
+        elif self._is_floating():
+            return "floating"
+        elif self._is_boolean():
+            return "boolean"
+        raise NotImplementedError(
+            f"inferred_type not implemented for dtype {self.dtype}"
+        )
+
     @_performance_tracking
     def memory_usage(self, deep: bool = False) -> int:
         return self._column.memory_usage
@@ -2183,14 +2217,6 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
         if isinstance(res, ColumnBase):
             res = Index._from_column(res, name=self.name)
         return res
-
-    @property  # type: ignore
-    @_performance_tracking
-    def dtype(self):
-        """
-        `dtype` of the underlying values in Index.
-        """
-        return self._column.dtype
 
     @_performance_tracking
     def isna(self) -> cupy.ndarray:
@@ -2615,6 +2641,14 @@ class RangeIndex(Index):
         self._name = value
 
     @property
+    def _constructor(self):
+        return RangeIndex
+
+    @cached_property
+    def inferred_type(self) -> str:
+        return "integer"
+
+    @property
     @_performance_tracking
     def _num_rows(self) -> int:
         return len(self)
@@ -2878,7 +2912,7 @@ class RangeIndex(Index):
         By default the dtype is 64 bit signed integer. This is configurable
         via `default_integer_bitwidth` as 32 bit in `cudf.options`
         """
-        dtype = np.dtype(np.int64)
+        dtype: np.dtype = np.dtype(np.int64)
         return _maybe_convert_to_default_type(dtype)
 
     @property
@@ -3364,7 +3398,7 @@ class RangeIndex(Index):
             i = [self._range.index(value)]
         except ValueError:
             i = []
-        return as_column(i, dtype=SIZE_TYPE_DTYPE)
+        return as_column(i, dtype=SIZE_TYPE_DTYPE)  # type: ignore[return-value]
 
     def isin(self, values, level=None) -> cupy.ndarray:
         if level is not None and level > 0:
@@ -3646,6 +3680,14 @@ class DatetimeIndex(Index):
         return Index._from_column(
             self._column.strftime(date_format), name=self.name
         )
+
+    @cached_property
+    def _constructor(self):
+        return DatetimeIndex
+
+    @cached_property
+    def inferred_type(self) -> str:
+        return "datetime64"
 
     @cached_property
     def asi8(self) -> cupy.ndarray:
@@ -4559,6 +4601,14 @@ class TimedeltaIndex(Index):
         """
         raise NotImplementedError("as_unit is currently not implemented")
 
+    @cached_property
+    def _constructor(self):
+        return TimedeltaIndex
+
+    @cached_property
+    def inferred_type(self) -> str:
+        return "timedelta64"
+
     @property
     def freq(self) -> DateOffset | None:
         raise NotImplementedError("freq is currently not implemented")
@@ -4856,6 +4906,14 @@ class CategoricalIndex(Index):
     @property
     def ordered(self) -> bool:
         return self._column.ordered
+
+    @cached_property
+    def _constructor(self):
+        return CategoricalIndex
+
+    @cached_property
+    def inferred_type(self) -> str:
+        return "categorical"
 
     @property
     @_performance_tracking
@@ -5171,29 +5229,34 @@ class IntervalIndex(Index):
 
         if len(data) == 0:
             if not hasattr(data, "dtype"):
-                data = np.array([], dtype=np.int64)
+                child_type: Dtype = np.dtype(np.int64)
             elif isinstance(data.dtype, (pd.IntervalDtype, IntervalDtype)):
-                data = np.array([], dtype=data.dtype.subtype)
-            interval_col = IntervalColumn(
+                child_type = data.dtype.subtype
+            else:
+                child_type = data.dtype
+            child_plc_type = dtype_to_pylibcudf_type(child_type)
+            left = plc.column_factories.make_empty_column(child_plc_type)
+            right = plc.column_factories.make_empty_column(child_plc_type)
+            plc_column = plc.Column(
+                plc.DataType(plc.TypeId.STRUCT),
+                0,
                 None,
-                dtype=IntervalDtype(data.dtype, closed),
-                size=len(data),
-                children=(as_column(data), as_column(data)),
+                None,
+                0,
+                0,
+                [left, right],
             )
+            interval_col = ColumnBase.from_pylibcudf(
+                plc_column
+            )._with_type_metadata(IntervalDtype(child_type, closed))
         else:
             col = as_column(data)
             if not isinstance(col, IntervalColumn):
                 raise TypeError("data must be an iterable of Interval data")
             if copy:
                 col = col.copy()
-            interval_col = IntervalColumn(
-                data=None,
-                dtype=IntervalDtype(col.dtype.subtype, closed),
-                mask=col.mask,
-                size=col.size,
-                offset=col.offset,
-                null_count=col.null_count,
-                children=col.children,  # type: ignore[arg-type]
+            interval_col = col._with_type_metadata(
+                IntervalDtype(col.dtype.subtype, closed)
             )
 
         if dtype:
@@ -5206,6 +5269,14 @@ class IntervalIndex(Index):
     @property
     def closed(self) -> Literal["left", "right", "neither", "both"]:
         return self.dtype.closed
+
+    @property
+    def closed_left(self) -> bool:
+        return self.closed in ("left", "both")
+
+    @property
+    def closed_right(self) -> bool:
+        return self.closed in ("right", "both")
 
     @classmethod
     @_performance_tracking
@@ -5263,26 +5334,42 @@ class IntervalIndex(Index):
             breaks = breaks.astype(np.dtype(np.int64))
         if copy:
             breaks = breaks.copy()
-        left_col = breaks.slice(0, len(breaks) - 1)
-        right_col = breaks.slice(1, len(breaks))
+        left_col = breaks.slice(0, len(breaks) - 1).to_pylibcudf(mode="read")
+        right_col = (
+            breaks.slice(1, len(breaks)).copy().to_pylibcudf(mode="read")
+        )
         # For indexing, children should both have 0 offset
-        right_col = type(right_col)(
-            data=right_col.data,
-            dtype=right_col.dtype,
-            size=right_col.size,
-            mask=right_col.mask,
-            offset=0,
-            null_count=right_col.null_count,
-            children=right_col.children,
+        right_col = plc.Column(
+            right_col.type(),
+            right_col.size(),
+            right_col.data(),
+            right_col.null_mask(),
+            right_col.null_count(),
+            0,
+            right_col.children(),
         )
-
-        interval_col = IntervalColumn(
-            data=None,
-            dtype=IntervalDtype(left_col.dtype, closed),
-            size=len(left_col),
-            children=(left_col, right_col),
+        plc_column = plc.Column(
+            plc.DataType(plc.TypeId.STRUCT),
+            left_col.size(),
+            None,
+            None,
+            0,
+            0,
+            [left_col, right_col],
         )
+        dtype = IntervalDtype(breaks.dtype, closed)
+        interval_col = ColumnBase.from_pylibcudf(
+            plc_column
+        )._with_type_metadata(dtype)
         return IntervalIndex._from_column(interval_col, name=name)
+
+    @cached_property
+    def _constructor(self):
+        return IntervalIndex
+
+    @cached_property
+    def inferred_type(self) -> str:
+        return "interval"
 
     @classmethod
     def from_arrays(

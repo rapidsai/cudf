@@ -23,7 +23,7 @@ jobs:
       - conda-python-build
       - conda-python-cudf-tests
       - conda-python-other-tests
-#     - conda-java-tests
+      - conda-java-tests
       - conda-notebook-tests
       - docs-build
       - wheel-build-libcudf
@@ -132,7 +132,7 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@branch-25.12
     with:
       enable_check_generated_files: false
-      ignored_pr_jobs: "telemetry-summarize spark-rapids-jni conda-java-tests"
+      ignored_pr_jobs: "telemetry-summarize spark-rapids-jni"
   conda-cpp-build:
     needs: checks
     secrets: inherit
@@ -335,8 +335,8 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-25.12
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cudf_pandas
     with:
-      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
-      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+      # This selects the latest supported Python + CUDA minor versions for each ARCH/CUDA major version combo
+      matrix_filter: group_by([(.ARCH), (.CUDA_VER|split(".")|map(tonumber)|.[0])]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: ci/cudf_pandas_scripts/run_tests.sh
   third-party-integration-tests-cudf-pandas:

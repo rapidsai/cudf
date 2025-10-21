@@ -9,7 +9,7 @@ For the most part, the public API of `cudf-polars` is the polars API.
       ConfigOptions,
       InMemoryExecutor,
       ParquetOptions,
-      Scheduler,
+      Cluster,
       ShuffleMethod,
       StatsPlanningOptions,
       StreamingExecutor,

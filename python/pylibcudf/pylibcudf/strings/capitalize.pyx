@@ -29,7 +29,7 @@ cpdef Column capitalize(
 ):
     """Returns a column of capitalized strings.
 
-    For details, see :cpp:func:`cudf::strings::capitalize`.
+    For details, see :cpp:func:`capitalize`.
 
     Parameters
     ----------
@@ -49,7 +49,7 @@ cpdef Column capitalize(
 
     if delimiters is None:
         delimiters = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view())
+            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
         )
 
     cdef const string_scalar* cpp_delimiters = <const string_scalar*>(
@@ -76,7 +76,7 @@ cpdef Column title(
     """Modifies first character of each word to upper-case and lower-cases
     the rest.
 
-    For details, see :cpp:func:`cudf::strings::title`.
+    For details, see :cpp:func:`title`.
 
     Parameters
     ----------
@@ -104,7 +104,7 @@ cpdef Column title(
 cpdef Column is_title(Column input, Stream stream=None, DeviceMemoryResource mr=None):
     """Checks if the strings in the input column are title formatted.
 
-    For details, see :cpp:func:`cudf::strings::is_title`.
+    For details, see :cpp:func:`is_title`.
 
     Parameters
     ----------

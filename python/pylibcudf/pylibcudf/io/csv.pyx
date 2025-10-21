@@ -333,6 +333,21 @@ cdef class CsvReaderOptions:
             vec.push_back(val.encode())
         self.c_obj.set_na_values(vec)
 
+    cpdef void set_source(self, SourceInfo src):
+        """
+        Set a new source info location.
+
+        Parameters
+        ----------
+        src : SourceInfo
+            New source information, replacing existing information.
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_source(src.c_obj)
+
 
 cdef class CsvReaderOptionsBuilder:
     """
@@ -682,7 +697,7 @@ cpdef TableWithMetadata read_csv(
     with nogil:
         c_result = move(cpp_read_csv(options.c_obj, s.view(), mr.get_mr()))
 
-    cdef TableWithMetadata tbl_meta = TableWithMetadata.from_libcudf(c_result, s)
+    cdef TableWithMetadata tbl_meta = TableWithMetadata.from_libcudf(c_result, s, mr)
     return tbl_meta
 
 

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import pandas as pd
 import pyarrow as pa
@@ -124,29 +124,13 @@ class IntervalColumn(StructColumn):
     def set_closed(
         self, closed: Literal["left", "right", "both", "neither"]
     ) -> Self:
-        return IntervalColumn(  # type: ignore[return-value]
-            data=None,
-            size=self.size,
-            dtype=IntervalDtype(self.dtype.subtype, closed),
-            mask=self.base_mask,
-            offset=self.offset,
-            null_count=self.null_count,
-            children=self.base_children,  # type: ignore[arg-type]
+        return self._with_type_metadata(  # type: ignore[return-value]
+            IntervalDtype(self.dtype.subtype, closed)
         )
 
     def as_interval_column(self, dtype: IntervalDtype) -> Self:  # type: ignore[override]
         if isinstance(dtype, IntervalDtype):
-            return IntervalColumn(  # type: ignore[return-value]
-                data=None,
-                size=self.size,
-                dtype=dtype,
-                mask=self.mask,
-                offset=self.offset,
-                null_count=self.null_count,
-                children=tuple(  # type: ignore[arg-type]
-                    child.astype(dtype.subtype) for child in self.children
-                ),
-            )
+            return self._with_type_metadata(dtype)  # type: ignore[return-value]
         else:
             raise ValueError("dtype must be IntervalDtype")
 
@@ -172,7 +156,9 @@ class IntervalColumn(StructColumn):
         pd_type = self.dtype.to_pandas()
         return pd.Index(pd_type.__from_arrow__(self.to_arrow()), dtype=pd_type)
 
-    def element_indexing(self, index: int):
+    def element_indexing(
+        self, index: int
+    ) -> pd.Interval | dict[Any, Any] | None:  # type: ignore[override]
         result = super().element_indexing(index)
         if isinstance(result, dict) and cudf.get_option(
             "mode.pandas_compatible"

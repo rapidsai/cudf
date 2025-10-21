@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import itertools
-from functools import cached_property
-from typing import TYPE_CHECKING, cast
+import re
+from functools import cached_property, lru_cache
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
@@ -19,7 +20,6 @@ from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.errors import MixedTypeError
-from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
@@ -34,7 +34,7 @@ from cudf.utils.temporal import infer_format
 from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable, Iterable, Mapping
 
     import cupy as cp
 
@@ -51,6 +51,29 @@ if TYPE_CHECKING:
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.timedelta import TimeDeltaColumn
     from cudf.core.dtypes import DecimalDtype
+
+
+# For now all supported re flags have matching names in libcudf. If that ever changes
+# this construction will need to be updated with more explicit mapping.
+_FLAG_MAP = {
+    getattr(re, flag): getattr(plc.strings.regex_flags.RegexFlags, flag)
+    for flag in ("MULTILINE", "DOTALL")
+}
+
+
+@lru_cache
+def plc_flags_from_re_flags(
+    flags: re.RegexFlag,
+) -> plc.strings.regex_flags.RegexFlags:
+    # Convert Python re flags to pylibcudf RegexFlags
+    plc_flags = plc.strings.regex_flags.RegexFlags(0)
+    for re_flag, plc_flag in _FLAG_MAP.items():
+        if flags & re_flag:
+            plc_flags |= plc_flag
+            flags &= ~re_flag
+    if flags:
+        raise ValueError(f"Unsupported re flags: {flags}")
+    return plc_flags
 
 
 class StringColumn(ColumnBase):
@@ -155,7 +178,7 @@ class StringColumn(ColumnBase):
         self._start_offset = None
         self._end_offset = None
 
-    def copy(self, deep: bool = True):
+    def copy(self, deep: bool = True) -> Self:
         # Since string columns are immutable, both deep
         # and shallow copies share the underlying device data and mask.
         return super().copy(deep=False)
@@ -210,18 +233,18 @@ class StringColumn(ColumnBase):
         else:
             return self.base_children[0].size - 1
 
-    # override for string column
     @property
-    def data(self):
+    def data(self) -> None | Buffer:
         if self._data is None:
+            assert self.base_data is not None
             if (
                 self.offset == 0
                 and len(self.base_children) > 0
                 and self.size == self.base_children[0].size - 1
             ):
-                self._data = self.base_data
+                self._data = self.base_data  # type: ignore[assignment]
             else:
-                self._data = self.base_data[
+                self._data = self.base_data[  # type: ignore[assignment]
                     self.start_offset : self.end_offset
                 ]
         return self._data
@@ -242,7 +265,7 @@ class StringColumn(ColumnBase):
         raise NotImplementedError("`any` not implemented for `StringColumn`")
 
     @property
-    def __cuda_array_interface__(self):
+    def __cuda_array_interface__(self) -> Mapping[str, Any]:
         raise NotImplementedError(
             f"dtype {self.dtype} is not yet supported via "
             "`__cuda_array_interface__`"
@@ -260,7 +283,7 @@ class StringColumn(ColumnBase):
             raise MixedTypeError("Cannot fill `np.nan` in string column")
         return super()._validate_fillna_value(fill_value)
 
-    def element_indexing(self, index: int):
+    def element_indexing(self, index: int) -> str | None:
         result = super().element_indexing(index)
         if isinstance(result, pa.Scalar):
             return result.as_py()
@@ -294,7 +317,7 @@ class StringColumn(ColumnBase):
         skipna: bool | None = None,
         dtype: Dtype | None = None,
         min_count: int = 0,
-    ):
+    ) -> ScalarLike:
         result_col = self._process_for_reduction(
             skipna=skipna, min_count=min_count
         )
@@ -307,7 +330,7 @@ class StringColumn(ColumnBase):
         other = [item] if is_scalar(item) else item
         return self.contains(as_column(other, dtype=self.dtype)).any()
 
-    def _with_type_metadata(self: StringColumn, dtype: Dtype) -> StringColumn:
+    def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
         """
         Copies type metadata from self onto other, returning a new column.
         """
@@ -324,7 +347,9 @@ class StringColumn(ColumnBase):
             if not is_pandas_nullable_extension_dtype(dtype):
                 result = result.fillna(False)
             return result._with_type_metadata(dtype)  # type: ignore[return-value]
-        elif dtype.kind in {"i", "u"}:
+
+        cast_func: Callable[[plc.Column, plc.DataType], plc.Column]
+        if dtype.kind in {"i", "u"}:
             if not self.is_integer().all():
                 raise ValueError(
                     "Could not convert strings to integer "
@@ -363,7 +388,9 @@ class StringColumn(ColumnBase):
             raise ValueError(
                 "Cannot convert `None` value to datetime or timedelta."
             )
-        elif dtype.kind == "M":  # type: ignore[union-attr]
+
+        casting_func: Callable[[plc.Column, plc.DataType, str], plc.Column]
+        if dtype.kind == "M":  # type: ignore[union-attr]
             if format.endswith("%z"):
                 raise NotImplementedError(
                     "cuDF does not yet support timezone-aware datetimes"
@@ -425,7 +452,7 @@ class StringColumn(ColumnBase):
         result.dtype.precision = dtype.precision  # type: ignore[union-attr]
         return result  # type: ignore[return-value]
 
-    def as_string_column(self, dtype) -> StringColumn:
+    def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         col = self
         if dtype != self.dtype:
             if isinstance(dtype, pd.StringDtype) or (
@@ -588,10 +615,10 @@ class StringColumn(ColumnBase):
             }:
                 if isinstance(other, pa.Scalar):
                     other = pa_scalar_to_plc_scalar(other)
-                lhs, rhs = (other, self) if reflect else (self, other)
+                lhs_op, rhs_op = (other, self) if reflect else (self, other)
                 return binaryop.binaryop(
-                    lhs=lhs,
-                    rhs=rhs,
+                    lhs=lhs_op,
+                    rhs=rhs_op,
                     op=op,
                     dtype=get_dtype_of_same_kind(
                         self.dtype, np.dtype(np.bool_)
@@ -599,36 +626,21 @@ class StringColumn(ColumnBase):
                 )
         return NotImplemented
 
-    @copy_docstring(ColumnBase.view)
-    def view(self, dtype: DtypeObj) -> ColumnBase:
-        if self.null_count > 0:
-            raise ValueError(
-                "Can not produce a view of a string column with nulls"
-            )
-        str_byte_offset = self.base_children[0].element_indexing(self.offset)
-        str_end_byte_offset = self.base_children[0].element_indexing(
-            self.offset + self.size
-        )
-
-        n_bytes_to_view = str_end_byte_offset - str_byte_offset
-
-        to_view = cudf.core.column.NumericalColumn(
-            self.base_data,  # type: ignore[arg-type]
-            dtype=np.dtype(np.int8),
-            offset=str_byte_offset,
-            size=n_bytes_to_view,
-        )
-
-        return to_view.view(dtype)
-
     @acquire_spill_lock()
     def minhash(
         self,
-        seed: np.uint32,
+        seed: int | np.uint32,
         a: NumericalColumn,
         b: NumericalColumn,
         width: int,
     ) -> ListColumn:
+        # Convert int to np.uint32 with validation
+        if isinstance(seed, int):
+            if seed < 0 or seed > np.iinfo(np.uint32).max:
+                raise ValueError(
+                    f"seed must be in range [0, {np.iinfo(np.uint32).max}]"
+                )
+            seed = np.uint32(seed)
         return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.nvtext.minhash.minhash(
                 self.to_pylibcudf(mode="read"),
@@ -642,11 +654,18 @@ class StringColumn(ColumnBase):
     @acquire_spill_lock()
     def minhash64(
         self,
-        seed: np.uint64,
+        seed: int | np.uint64,
         a: NumericalColumn,
         b: NumericalColumn,
         width: int,
     ) -> ListColumn:
+        # Convert int to np.uint64 with validation
+        if isinstance(seed, int):
+            if seed < 0 or seed > np.iinfo(np.uint64).max:
+                raise ValueError(
+                    f"seed must be in range [0, {np.iinfo(np.uint64).max}]"
+                )
+            seed = np.uint64(seed)
         return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.nvtext.minhash.minhash64(
                 self.to_pylibcudf(mode="read"),
@@ -684,8 +703,15 @@ class StringColumn(ColumnBase):
 
     @acquire_spill_lock()
     def hash_character_ngrams(
-        self, ngrams: int, seed: np.uint32
+        self, ngrams: int, seed: int | np.uint32
     ) -> ListColumn:
+        # Convert int to np.uint32 with validation
+        if isinstance(seed, int):
+            if seed < 0 or seed > np.iinfo(np.uint32).max:
+                raise ValueError(
+                    f"seed must be in range [0, {np.iinfo(np.uint32).max}]"
+                )
+            seed = np.uint32(seed)
         result = plc.nvtext.generate_ngrams.hash_character_ngrams(
             self.to_pylibcudf(mode="read"), ngrams, seed
         )
@@ -699,7 +725,7 @@ class StringColumn(ColumnBase):
         return type(self).from_pylibcudf(result)  # type: ignore[return-value]
 
     @acquire_spill_lock()
-    def resolve_duplicates(self, sa, min_width: int) -> Self:
+    def resolve_duplicates(self, sa: Self, min_width: int) -> Self:
         result = plc.nvtext.deduplicate.resolve_duplicates(
             self.to_pylibcudf(mode="read"),
             sa.to_pylibcudf(mode="read"),
@@ -709,7 +735,7 @@ class StringColumn(ColumnBase):
 
     @acquire_spill_lock()
     def resolve_duplicates_pair(
-        self, sa1, input2, sa2, min_width: int
+        self, sa1: Self, input2: Self, sa2: Self, min_width: int
     ) -> Self:
         result = plc.nvtext.deduplicate.resolve_duplicates_pair(
             self.to_pylibcudf(mode="read"),
@@ -1085,7 +1111,7 @@ class StringColumn(ColumnBase):
         self,
         delimiter: plc.Scalar,
         maxsplit: int,
-        method: Callable[[plc.Column, plc.Scalar, int], plc.Column],
+        method: Callable[[plc.Column, plc.Scalar, int], plc.Table],
     ) -> dict[int, Self]:
         plc_table = method(
             self.to_pylibcudf(mode="read"),
@@ -1109,7 +1135,7 @@ class StringColumn(ColumnBase):
     def _partition(
         self,
         delimiter: plc.Scalar,
-        method: Callable[[plc.Column, plc.Scalar], plc.Column],
+        method: Callable[[plc.Column, plc.Scalar], plc.Table],
     ) -> dict[int, Self]:
         plc_table = method(
             self.to_pylibcudf(mode="read"),
@@ -1203,7 +1229,10 @@ class StringColumn(ColumnBase):
     def extract(self, pattern: str, flags: int) -> dict[int, Self]:
         plc_table = plc.strings.extract.extract(
             self.to_pylibcudf(mode="read"),
-            plc.strings.regex_program.RegexProgram.create(pattern, flags),
+            plc.strings.regex_program.RegexProgram.create(
+                pattern,
+                plc_flags_from_re_flags(flags),
+            ),
         )
         return dict(
             enumerate(
@@ -1215,19 +1244,23 @@ class StringColumn(ColumnBase):
     def contains_re(self, pattern: str, flags: int) -> Self:
         plc_column = plc.strings.contains.contains_re(
             self.to_pylibcudf(mode="read"),
-            plc.strings.regex_program.RegexProgram.create(pattern, flags),
+            plc.strings.regex_program.RegexProgram.create(
+                pattern,
+                plc_flags_from_re_flags(flags),
+            ),
         )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     @acquire_spill_lock()
     def str_contains(self, pattern: str | Self) -> Self:
-        if isinstance(pattern, str):
-            pattern = pa_scalar_to_plc_scalar(pa.scalar(pattern))
-        else:
-            pattern = pattern.to_pylibcudf(mode="read")
+        plc_pattern = (
+            pa_scalar_to_plc_scalar(pa.scalar(pattern))
+            if isinstance(pattern, str)
+            else pattern.to_pylibcudf(mode="read")
+        )
         plc_column = plc.strings.find.contains(
             self.to_pylibcudf(mode="read"),
-            pattern,
+            plc_pattern,
         )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
@@ -1242,11 +1275,14 @@ class StringColumn(ColumnBase):
 
     @acquire_spill_lock()
     def repeat_strings(self, repeats: int | ColumnBase) -> Self:
-        if isinstance(repeats, ColumnBase):
-            repeats = repeats.to_pylibcudf(mode="read")
+        plc_repeats = (
+            repeats.to_pylibcudf(mode="read")
+            if isinstance(repeats, ColumnBase)
+            else repeats
+        )
         plc_column = plc.strings.repeat.repeat_strings(
             self.to_pylibcudf(mode="read"),
-            repeats,
+            plc_repeats,
         )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
@@ -1258,21 +1294,24 @@ class StringColumn(ColumnBase):
         max_replace_count: int = -1,
     ) -> Self:
         if isinstance(pattern, list) and isinstance(replacement, type(self)):
-            replacement = replacement.to_pylibcudf(mode="read")
-        elif isinstance(pattern, str) and isinstance(replacement, pa.Scalar):
-            pattern = plc.strings.regex_program.RegexProgram.create(
+            plc_column = plc.strings.replace_re.replace_re(
+                self.to_pylibcudf(mode="read"),
                 pattern,
-                plc.strings.regex_flags.RegexFlags.DEFAULT,
+                replacement.to_pylibcudf(mode="read"),
+                max_replace_count,
             )
-            replacement = pa_scalar_to_plc_scalar(replacement)
+        elif isinstance(pattern, str) and isinstance(replacement, pa.Scalar):
+            plc_column = plc.strings.replace_re.replace_re(
+                self.to_pylibcudf(mode="read"),
+                plc.strings.regex_program.RegexProgram.create(
+                    pattern,
+                    plc.strings.regex_flags.RegexFlags.DEFAULT,
+                ),
+                pa_scalar_to_plc_scalar(replacement),
+                max_replace_count,
+            )
         else:
             raise ValueError("Invalid pattern and replacement types")
-        plc_column = plc.strings.replace_re.replace_re(
-            self.to_pylibcudf(mode="read"),
-            pattern,
-            replacement,
-            max_replace_count,
-        )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     @acquire_spill_lock()
@@ -1306,17 +1345,26 @@ class StringColumn(ColumnBase):
         step: int | None = None,
     ) -> Self:
         if isinstance(start, ColumnBase) and isinstance(stop, ColumnBase):
-            start = start.to_pylibcudf(mode="read")
-            stop = stop.to_pylibcudf(mode="read")
+            plc_start: plc.Column | plc.Scalar = start.to_pylibcudf(
+                mode="read"
+            )
+            plc_stop: plc.Column | plc.Scalar = stop.to_pylibcudf(mode="read")
+            plc_step: plc.Scalar | None = None
         elif all(isinstance(x, int) or x is None for x in (start, stop)):
             param_dtype = pa.int32()
-            start = pa_scalar_to_plc_scalar(pa.scalar(start, type=param_dtype))
-            stop = pa_scalar_to_plc_scalar(pa.scalar(stop, type=param_dtype))
-            step = pa_scalar_to_plc_scalar(pa.scalar(step, type=param_dtype))
+            plc_start = pa_scalar_to_plc_scalar(
+                pa.scalar(start, type=param_dtype)
+            )
+            plc_stop = pa_scalar_to_plc_scalar(
+                pa.scalar(stop, type=param_dtype)
+            )
+            plc_step = pa_scalar_to_plc_scalar(
+                pa.scalar(step, type=param_dtype)
+            )
         else:
             raise ValueError("Invalid start and stop types")
         plc_result = plc.strings.slice.slice_strings(
-            self.to_pylibcudf(mode="read"), start, stop, step
+            self.to_pylibcudf(mode="read"), plc_start, plc_stop, plc_step
         )
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 
@@ -1423,7 +1471,9 @@ class StringColumn(ColumnBase):
     def count_re(self, pattern: str, flags: int) -> NumericalColumn:
         plc_result = plc.strings.contains.count_re(
             self.to_pylibcudf(mode="read"),
-            plc.strings.regex_program.RegexProgram.create(pattern, flags),
+            plc.strings.regex_program.RegexProgram.create(
+                pattern, plc_flags_from_re_flags(flags)
+            ),
         )
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 
@@ -1438,7 +1488,9 @@ class StringColumn(ColumnBase):
     ) -> Self:
         plc_result = method(
             self.to_pylibcudf(mode="read"),
-            plc.strings.regex_program.RegexProgram.create(pat, flags),
+            plc.strings.regex_program.RegexProgram.create(
+                pat, plc_flags_from_re_flags(flags)
+            ),
         )
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 
@@ -1454,17 +1506,32 @@ class StringColumn(ColumnBase):
     def starts_ends_with(
         self,
         method: Callable[[plc.Column, plc.Column | plc.Scalar], plc.Column],
-        pat: str | Self,
+        pat: str | tuple[str, ...],
     ) -> Self:
         if isinstance(pat, str):
             plc_pat = pa_scalar_to_plc_scalar(pa.scalar(pat, type=pa.string()))
-        elif isinstance(pat, type(self)):
-            plc_pat = pat.to_pylibcudf(mode="read")
+            plc_result = method(self.to_pylibcudf(mode="read"), plc_pat)
+        elif isinstance(pat, tuple) and all(isinstance(p, str) for p in pat):
+            plc_self = self.to_pylibcudf(mode="read")
+            plc_pat = pa_scalar_to_plc_scalar(
+                pa.scalar(pat[0], type=pa.string())
+            )
+            plc_result = method(plc_self, plc_pat)
+            for next_pat in pat[1:]:
+                plc_pat = pa_scalar_to_plc_scalar(
+                    pa.scalar(next_pat, type=pa.string())
+                )
+                plc_next_result = method(plc_self, plc_pat)
+                plc_result = plc.binaryop.binary_operation(
+                    plc_result,
+                    plc_next_result,
+                    plc.binaryop.BinaryOperator.BITWISE_OR,
+                    plc.DataType(plc.TypeId.BOOL8),
+                )
         else:
             raise TypeError(
-                f"expected a str or {type(self).__name__}, not {type(pat).__name__}"
+                f"expected a str or tuple[str, ...], not {type(pat).__name__}"
             )
-        plc_result = method(self.to_pylibcudf(mode="read"), plc_pat)
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 
     @acquire_spill_lock()
@@ -1487,7 +1554,9 @@ class StringColumn(ColumnBase):
     def matches_re(self, pattern: str, flags: int) -> Self:
         plc_result = plc.strings.contains.matches_re(
             self.to_pylibcudf(mode="read"),
-            plc.strings.regex_program.RegexProgram.create(pattern, flags),
+            plc.strings.regex_program.RegexProgram.create(
+                pattern, plc_flags_from_re_flags(flags)
+            ),
         )
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 
@@ -1502,17 +1571,20 @@ class StringColumn(ColumnBase):
     def translate(self, table: dict) -> Self:
         plc_result = plc.strings.translate.translate(
             self.to_pylibcudf(mode="read"),
-            str.maketrans(table),
+            str.maketrans(table),  # type: ignore[arg-type]
         )
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 
     @acquire_spill_lock()
     def filter_characters(
-        self, table: dict, keep: bool = True, repl: str | None = None
+        self,
+        table: dict,
+        keep: bool = True,
+        repl: str | None = None,
     ) -> Self:
         plc_result = plc.strings.translate.filter_characters(
             self.to_pylibcudf(mode="read"),
-            str.maketrans(table),
+            str.maketrans(table),  # type: ignore[arg-type]
             plc.strings.translate.FilterType.KEEP
             if keep
             else plc.strings.translate.FilterType.REMOVE,

@@ -38,7 +38,7 @@ cpdef Table split(
     Returns a list of columns by splitting each string using the
     specified delimiter.
 
-    For details, see :cpp:func:`cudf::strings::split`.
+    For details, see :cpp:func:`split`.
 
     Parameters
     ----------
@@ -90,7 +90,7 @@ cpdef Table rsplit(
     Returns a list of columns by splitting each string using the
     specified delimiter starting from the end of each string.
 
-    For details, see :cpp:func:`cudf::strings::rsplit`.
+    For details, see :cpp:func:`rsplit`.
 
     Parameters
     ----------
@@ -140,7 +140,7 @@ cpdef Column split_record(
     """
     Splits individual strings elements into a list of strings.
 
-    For details, see :cpp:func:`cudf::strings::split_record`.
+    For details, see :cpp:func:`split_record`.
 
     Parameters
     ----------
@@ -189,7 +189,7 @@ cpdef Column rsplit_record(
     Splits individual strings elements into a list of strings starting
     from the end of each string.
 
-    For details, see :cpp:func:`cudf::strings::rsplit_record`.
+    For details, see :cpp:func:`rsplit_record`.
 
     Parameters
     ----------
@@ -238,7 +238,7 @@ cpdef Table split_re(
     Splits strings elements into a table of strings columns
     using a regex_program's pattern to delimit each string.
 
-    For details, see :cpp:func:`cudf::strings::split_re`.
+    For details, see :cpp:func:`split_re`.
 
     Parameters
     ----------
@@ -284,7 +284,7 @@ cpdef Table rsplit_re(
     using a regex_program's pattern to delimit each string starting from
     the end of the string.
 
-    For details, see :cpp:func:`cudf::strings::rsplit_re`.
+    For details, see :cpp:func:`rsplit_re`.
 
     Parameters
     ----------
@@ -329,7 +329,7 @@ cpdef Column split_record_re(
     Splits strings elements into a list column of strings using the given
     regex_program to delimit each string.
 
-    For details, see :cpp:func:`cudf::strings::split_record_re`.
+    For details, see :cpp:func:`split_record_re`.
 
     Parameters
     ----------
@@ -371,7 +371,7 @@ cpdef Column rsplit_record_re(
     Splits strings elements into a list column of strings using the given
     regex_program to delimit each string starting from the end of the string.
 
-    For details, see :cpp:func:`cudf::strings::rsplit_record_re`.
+    For details, see :cpp:func:`rsplit_record_re`.
 
     Parameters
     ----------

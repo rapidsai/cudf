@@ -14,16 +14,21 @@
  * limitations under the License.
  */
 
-#include <cudf/table/primitive_row_operators.cuh>
-#include <cudf/types.hpp>
+#include "extrema_utils.cuh"
+
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <algorithm>
+namespace cudf::reduction::detail {
 
-namespace cudf {
-bool is_primitive_row_op_compatible(cudf::table_view const& table)
+std::unique_ptr<scalar> argmin(column_view const& input,
+                               rmm::cuda_stream_view stream,
+                               rmm::device_async_resource_ref mr)
 {
-  return std::all_of(
-    table.begin(), table.end(), [](auto const& col) { return cudf::is_numeric(col.type()); });
+  auto const dispatch_type =
+    is_dictionary(input.type()) ? dictionary_column_view(input).indices().type() : input.type();
+  return type_dispatcher(
+    dispatch_type, simple::detail::arg_minmax_dispatcher<aggregation::ARGMIN>{}, input, stream, mr);
 }
-}  // namespace cudf
+
+}  // namespace cudf::reduction::detail
