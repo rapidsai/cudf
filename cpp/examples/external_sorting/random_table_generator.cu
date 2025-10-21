@@ -149,6 +149,81 @@ std::unique_ptr<cudf::table> generate_random_table(std::vector<cudf::data_type> 
                                                   stream,
                                                   mr));
         break;
+      case cudf::type_id::TIMESTAMP_SECONDS: {
+        // Generate timestamps from 2020-01-01 to 2024-12-31
+        int64_t start_timestamp = 1577836800;  // 2020-01-01 00:00:00 UTC
+        int64_t end_timestamp = 1735689600;    // 2024-12-31 00:00:00 UTC
+        columns.emplace_back(generate_random_numeric_column<int64_t>(
+          start_timestamp + i * 86400, end_timestamp - i * 86400, m_rows, stream, mr));
+        break;
+      }
+      case cudf::type_id::TIMESTAMP_MILLISECONDS: {
+        // Generate timestamps in milliseconds from 2020-01-01 to 2024-12-31
+        int64_t start_timestamp_ms = 1577836800000LL;  // 2020-01-01 00:00:00 UTC
+        int64_t end_timestamp_ms = 1735689600000LL;    // 2024-12-31 00:00:00 UTC
+        columns.emplace_back(generate_random_numeric_column<int64_t>(
+          start_timestamp_ms + i * 86400000LL, end_timestamp_ms - i * 86400000LL, m_rows, stream, mr));
+        break;
+      }
+      case cudf::type_id::TIMESTAMP_MICROSECONDS: {
+        // Generate timestamps in microseconds from 2020-01-01 to 2024-12-31
+        int64_t start_timestamp_us = 1577836800000000LL;  // 2020-01-01 00:00:00 UTC
+        int64_t end_timestamp_us = 1735689600000000LL;    // 2024-12-31 00:00:00 UTC
+        columns.emplace_back(generate_random_numeric_column<int64_t>(
+          start_timestamp_us + i * 86400000000LL, end_timestamp_us - i * 86400000000LL, m_rows, stream, mr));
+        break;
+      }
+      case cudf::type_id::TIMESTAMP_NANOSECONDS: {
+        // Generate timestamps in nanoseconds from 2020-01-01 to 2024-12-31
+        int64_t start_timestamp_ns = 1577836800000000000LL;  // 2020-01-01 00:00:00 UTC
+        int64_t end_timestamp_ns = 1735689600000000000LL;    // 2024-12-31 00:00:00 UTC
+        columns.emplace_back(generate_random_numeric_column<int64_t>(
+          start_timestamp_ns + i * 86400000000000LL, end_timestamp_ns - i * 86400000000000LL, m_rows, stream, mr));
+        break;
+      }
+      case cudf::type_id::TIMESTAMP_DAYS: {
+        // Generate timestamp days from 2020-01-01 to 2024-12-31
+        int32_t start_days = 18262;  // Days since Unix epoch for 2020-01-01
+        int32_t end_days = 20088;    // Days since Unix epoch for 2024-12-31
+        columns.emplace_back(generate_random_numeric_column<int32_t>(
+          start_days + i, end_days - i, m_rows, stream, mr));
+        break;
+      }
+      case cudf::type_id::DURATION_SECONDS: {
+        // Generate duration in seconds (e.g., 0 to 1 year)
+        int64_t max_duration = 365LL * 24 * 60 * 60;  // 1 year in seconds
+        columns.emplace_back(generate_random_numeric_column<int64_t>(
+          0, max_duration + i * 86400, m_rows, stream, mr));
+        break;
+      }
+      case cudf::type_id::DURATION_MILLISECONDS: {
+        // Generate duration in milliseconds (e.g., 0 to 1 year)
+        int64_t max_duration_ms = 365LL * 24 * 60 * 60 * 1000;  // 1 year in ms
+        columns.emplace_back(generate_random_numeric_column<int64_t>(
+          0, max_duration_ms + i * 86400000LL, m_rows, stream, mr));
+        break;
+      }
+      case cudf::type_id::DURATION_MICROSECONDS: {
+        // Generate duration in microseconds (e.g., 0 to 1 year)
+        int64_t max_duration_us = 365LL * 24 * 60 * 60 * 1000000;  // 1 year in us
+        columns.emplace_back(generate_random_numeric_column<int64_t>(
+          0, max_duration_us + i * 86400000000LL, m_rows, stream, mr));
+        break;
+      }
+      case cudf::type_id::DURATION_NANOSECONDS: {
+        // Generate duration in nanoseconds (e.g., 0 to 1 year)
+        int64_t max_duration_ns = 365LL * 24 * 60 * 60 * 1000000000;  // 1 year in ns
+        columns.emplace_back(generate_random_numeric_column<int64_t>(
+          0, max_duration_ns + i * 86400000000000LL, m_rows, stream, mr));
+        break;
+      }
+      case cudf::type_id::DURATION_DAYS: {
+        // Generate duration in days (e.g., 0 to 365 days)
+        int32_t max_duration_days = 365;  // 1 year in days
+        columns.emplace_back(generate_random_numeric_column<int32_t>(
+          0, max_duration_days + i, m_rows, stream, mr));
+        break;
+      }
       default: CUDF_FAIL("Unsupported data type");
     }
   }
@@ -164,11 +239,15 @@ void write_random_table(std::string const& directory,
                         rmm::device_async_resource_ref mr)
 {
   std::vector<cudf::data_type> types = {
-    cudf::data_type{cudf::type_id::INT32},    // Integer column for primary sorting
-    cudf::data_type{cudf::type_id::FLOAT64},  // Double precision floating point
-    cudf::data_type{cudf::type_id::INT64},    // Long integer
-    cudf::data_type{cudf::type_id::FLOAT32},  // Single precision floating point
-    cudf::data_type{cudf::type_id::INT16}     // Short integer
+    cudf::data_type{cudf::type_id::TIMESTAMP_SECONDS},      // Timestamp in seconds
+    cudf::data_type{cudf::type_id::TIMESTAMP_MILLISECONDS}, // Timestamp in milliseconds  
+    cudf::data_type{cudf::type_id::TIMESTAMP_DAYS},         // Timestamp in days
+    cudf::data_type{cudf::type_id::DURATION_SECONDS},       // Duration in seconds
+    cudf::data_type{cudf::type_id::INT32},                  // Integer column for primary sorting
+    cudf::data_type{cudf::type_id::FLOAT64},                // Double precision floating point
+    cudf::data_type{cudf::type_id::INT64},                  // Long integer
+    cudf::data_type{cudf::type_id::FLOAT32},                // Single precision floating point
+    cudf::data_type{cudf::type_id::INT16}                   // Short integer
   };
 
   for (int i = 0; i < num_files; i++) {

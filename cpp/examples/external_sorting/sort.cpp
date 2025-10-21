@@ -36,6 +36,7 @@
 #include "cusort.hpp"
 #include "parquet_io.hpp"
 #include "random_table_generator.hpp"
+#include "timer.hpp"
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/concatenate.hpp>
@@ -107,9 +108,23 @@ struct make_ast_literal {
     return std::make_unique<cudf::ast::literal>(typed_scalar);
   }
 
+  template <typename InputType>  
+  std::unique_ptr<cudf::ast::literal> operator()(cudf::scalar& scalar)  
+    requires(cudf::is_timestamp<InputType>()) {  
+    auto& typed_scalar = static_cast<cudf::timestamp_scalar<InputType>&>(scalar);  
+    return std::make_unique<cudf::ast::literal>(typed_scalar);  
+  }  
+    
+  template <typename InputType>  
+  std::unique_ptr<cudf::ast::literal> operator()(cudf::scalar& scalar)  
+    requires(cudf::is_duration<InputType>()) {  
+    auto& typed_scalar = static_cast<cudf::duration_scalar<InputType>&>(scalar);  
+    return std::make_unique<cudf::ast::literal>(typed_scalar);  
+  }
+
   template <typename InputType>
   std::unique_ptr<cudf::ast::literal> operator()(cudf::scalar &scalar)
-    requires(not cudf::is_numeric<InputType>())
+    requires(not cudf::is_numeric<InputType>() and not cudf::is_timestamp<InputType>() and not cudf::is_duration<InputType>())
   {
     CUDF_FAIL("AST literal not implemented for non-numeric types");
   }
@@ -142,8 +157,9 @@ int main(int argc, char** argv)
   // Default parameters
   std::string input_dir    = "./sort_data";
   int num_files            = 4;
-  cudf::size_type num_cols = 10;
+  cudf::size_type num_cols = 13;
   cudf::size_type num_rows = 5000000;
+  timer watch;
 
   // Parse command line arguments
   if (argc >= 2) {
@@ -179,6 +195,8 @@ int main(int argc, char** argv)
     per_table_splitters.push_back(
       cudf::examples::sample_splitters(table->view(), num_files, stream, mr));
   }
+  watch.print_elapsed_millis();
+
   auto sort_col_element_size = cudf::size_of(sort_col_type);
   std::vector<cudf::column_view> per_table_splitters_view;
   for (auto const& c : per_table_splitters) {
@@ -190,6 +208,7 @@ int main(int argc, char** argv)
   auto splitters     = cudf::examples::sample_splitters(
     cudf::table_view({concatenated_splitters->view()}), num_splitters, stream, mr);
   
+  watch.reset();
   auto col_ref = cudf::ast::column_reference(0);
   std::vector<std::vector<std::unique_ptr<cudf::table>>> table_splits(num_splitters + 1);
   std::unique_ptr<cudf::scalar> ub_scalar_literal, lb_scalar_literal;
@@ -225,7 +244,9 @@ int main(int argc, char** argv)
     table_splits[num_splitters].push_back(
       cudf::apply_boolean_mask(table->view(), boolean_mask->view(), stream, mr));
   }
+  watch.print_elapsed_millis();
 
+  watch.reset();
   for (int i = 0; i <= num_splitters; i++) {
     std::vector<cudf::table_view> views;
     for (auto const& t : table_splits[i]) {
@@ -238,6 +259,7 @@ int main(int argc, char** argv)
                                              stream,
                                              mr);
   }
+  watch.print_elapsed_millis();
 
   return 0;
 }
