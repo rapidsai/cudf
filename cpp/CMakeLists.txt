@@ -428,19 +428,18 @@ add_library(
   src/filling/sequence.cu
   src/groupby/common/m2_var_std.cu
   src/groupby/groupby.cu
-  src/groupby/hash/compute_aggregations.cu
-  src/groupby/hash/compute_aggregations_null.cu
   src/groupby/hash/compute_global_memory_aggs.cu
   src/groupby/hash/compute_global_memory_aggs_null.cu
   src/groupby/hash/compute_groupby.cu
   src/groupby/hash/compute_mapping_indices.cu
   src/groupby/hash/compute_mapping_indices_null.cu
   src/groupby/hash/compute_shared_memory_aggs.cu
-  src/groupby/hash/create_sparse_results_table.cu
-  src/groupby/hash/flatten_single_pass_aggs.cpp
+  src/groupby/hash/compute_single_pass_aggs.cu
+  src/groupby/hash/compute_single_pass_aggs_null.cu
+  src/groupby/hash/extract_single_pass_aggs.cpp
   src/groupby/hash/groupby.cu
   src/groupby/hash/hash_compound_agg_finalizer.cu
-  src/groupby/hash/sparse_to_dense_results.cu
+  src/groupby/hash/output_utils.cu
   src/groupby/sort/aggregate.cpp
   src/groupby/sort/group_argmax.cu
   src/groupby/sort/group_argmin.cu
