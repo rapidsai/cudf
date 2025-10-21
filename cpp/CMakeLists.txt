@@ -69,9 +69,9 @@ option(DISABLE_DEPRECATION_WARNINGS "Disable warnings generated from deprecated 
 option(CUDA_ENABLE_LINEINFO
        "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler)" OFF
 )
-# Option to enable NVTX debug range utility macros to allow more precise performance profiling.
-option(CUDF_ENABLE_NVTX_DEBUG_RANGE
-       "Enable cuDF's NVTX debug ranges for more precise performance profiling" OFF
+# Option to enable NVTX development utility macros to allow more precise performance profiling.
+option(CUDF_ENABLE_NVTX_DEV_UTILS
+       "Enable cuDF's NVTX development utility macros to allow more precise performance profiling" OFF
 )
 
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
