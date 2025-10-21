@@ -39,6 +39,7 @@
 
 #include <cuda/atomic>
 #include <cuda/std/type_traits>
+#include <cuda/utility>
 
 namespace cudf {
 namespace detail {
@@ -376,51 +377,37 @@ __device__ __forceinline__ uint64_t calculate_carry_64(uint64_t old_val,
  */
 __forceinline__ __device__ __int128_t atomic_add(__int128_t* address, __int128_t val)
 {
-#if __CUDA_ARCH__ >= 900  // Hopper and newer (compute capability 9.0+)
-  // Use native 128-bit atomic support on Hopper+ GPUs
+#if __CUDA_ARCH__ >= 900
   return atomicAdd(address, val);
 #else
-  // Fall back to two 64-bit atomic implementation for older GPUs
-
-  // Cast to signed for atomic_cas compatibility and treat as array of two int64_t
-  auto* target_ptr      = reinterpret_cast<int64_t*>(address);
-  auto add_val_unsigned = static_cast<__uint128_t>(val);
+  uint64_t* const target_ptr         = reinterpret_cast<uint64_t*>(address);
+  __uint128_t const add_val_unsigned = static_cast<__uint128_t>(val);
 
   // Split the 128-bit add value into two 64-bit parts
-  int64_t add_low  = static_cast<int64_t>(static_cast<uint64_t>(add_val_unsigned));
-  int64_t add_high = static_cast<int64_t>(static_cast<uint64_t>(add_val_unsigned >> 64));
+  uint64_t const add_low  = static_cast<uint64_t>(add_val_unsigned);
+  uint64_t const add_high = static_cast<uint64_t>(add_val_unsigned >> 64);
 
-  int64_t carry = 0;
-  int64_t old_parts[2];
+  uint64_t carry = 0;
+  uint64_t old_parts[2];
 
-  // Process both 64-bit parts with carry propagation
-  for (int i = 0; i < 2; ++i) {
-    int64_t current_add = (i == 0) ? add_low : add_high;
-    int64_t old_part, new_part, expected_part;
+  cuda::static_for<0, 2>([&](auto i) {
+    uint64_t const current_add = (i == 0) ? add_low : add_high;
+    uint64_t expected_part, new_part;
 
-    // Atomic compare-and-swap loop for this 64-bit part
+    cuda::atomic_ref<uint64_t, cuda::thread_scope_device> atomic_part{target_ptr[i]};
+
     do {
-      expected_part = target_ptr[i];
+      expected_part = atomic_part.load();
       new_part      = expected_part + current_add + carry;
-      old_part      = atomicCAS(reinterpret_cast<unsigned long long*>(&target_ptr[i]),
-                           static_cast<unsigned long long>(expected_part),
-                           static_cast<unsigned long long>(new_part));
-      old_part      = static_cast<int64_t>(old_part);
-    } while (old_part != expected_part);
+    } while (
+      !atomic_part.compare_exchange_weak(expected_part, new_part, cuda::memory_order_relaxed));
 
-    // Store the old value for result reconstruction
-    old_parts[i] = old_part;
+    old_parts[i] = expected_part;
+    carry        = calculate_carry_64(expected_part, current_add, carry);
+  });
 
-    // Calculate carry for next iteration (convert back to unsigned for carry calculation)
-    carry = static_cast<int64_t>(calculate_carry_64(static_cast<uint64_t>(old_part),
-                                                    static_cast<uint64_t>(current_add),
-                                                    static_cast<uint64_t>(carry)));
-  }
-
-  // Reconstruct the original 128-bit value from the old parts
-  __uint128_t old_val_unsigned =
-    (static_cast<__uint128_t>(static_cast<uint64_t>(old_parts[1])) << 64) |
-    static_cast<uint64_t>(old_parts[0]);
+  __uint128_t const old_val_unsigned =
+    (static_cast<__uint128_t>(old_parts[1]) << 64) | old_parts[0];
   return static_cast<__int128_t>(old_val_unsigned);
 #endif
 }

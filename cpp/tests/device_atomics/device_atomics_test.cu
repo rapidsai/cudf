@@ -288,15 +288,23 @@ TEST_F(Atomic128Test, BasicAddition) { run_atomic_add_test(0, 1, 32 * 256 * 1); 
 TEST_F(Atomic128Test, CarryPropagation)
 {
   constexpr int total_threads = 32 * 256;
-  __int128_t initial_value    = cuda::std::numeric_limits<uint64_t>::max() - total_threads + 1;
-  __int128_t expected = static_cast<__int128_t>(cuda::std::numeric_limits<uint64_t>::max()) + 1;
+  __int128_t initial_value    = cuda::std::numeric_limits<int64_t>::max() - total_threads + 1;
+  __int128_t expected = static_cast<__int128_t>(cuda::std::numeric_limits<int64_t>::max()) + 1;
   run_atomic_add_test(initial_value, 1, expected);
 }
 
 TEST_F(Atomic128Test, NegativeNumbers)
 {
   constexpr int total_threads = 32 * 256;
-  run_atomic_add_test(0 - 50, -total_threads * 50);
+  run_atomic_add_test(0, -50, -total_threads * 50);
+}
+
+TEST_F(Atomic128Test, NegativeCarryPropagation)
+{
+  constexpr int total_threads = 32 * 256;
+  __int128_t initial_value    = cuda::std::numeric_limits<int64_t>::min() + total_threads - 1;
+  __int128_t expected = static_cast<__int128_t>(cuda::std::numeric_limits<int64_t>::min()) - 1;
+  run_atomic_add_test(initial_value, -1, expected);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
