@@ -54,3 +54,15 @@ def test_from_pandas_rangeindex():
 
     assert_eq(idx1.values, idx2.values)
     assert idx1.name == idx2.name
+
+
+def test_rangeindex_constructor():
+    gidx = cudf.RangeIndex(10)
+
+    assert gidx._constructor is cudf.RangeIndex
+
+
+def test_rangeindex_inferred_type():
+    gidx = cudf.RangeIndex(10)
+    pidx = pd.RangeIndex(10)
+    assert_eq(gidx.inferred_type, pidx.inferred_type)
