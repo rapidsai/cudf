@@ -178,6 +178,45 @@ struct update_target_element<Source, aggregation::SUM_WITH_OVERFLOW> {
 };
 
 /**
+ * @brief Specialization of update_target_element for SUM_WITH_OVERFLOW with decimal128
+ *
+ * Uses two-64-bit atomic operations to provide atomic addition for __int128_t.
+ * This enables SUM_WITH_OVERFLOW for decimal128 on all GPU architectures.
+ */
+template <>
+struct update_target_element<numeric::decimal128, aggregation::SUM_WITH_OVERFLOW> {
+  using DeviceType               = device_storage_type_t<numeric::decimal128>;  // __int128_t
+  static constexpr auto type_max = cuda::std::numeric_limits<DeviceType>::max();
+  static constexpr auto type_min = cuda::std::numeric_limits<DeviceType>::min();
+
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index,
+                             column_device_view source,
+                             size_type source_index) const noexcept
+  {
+    auto sum_column      = target.child(0);
+    auto overflow_column = target.child(1);
+
+    auto const source_value = source.element<DeviceType>(source_index);
+
+    // Use the new 128-bit atomic addition implementation
+    auto const old_sum =
+      cudf::detail::atomic_add(&sum_column.element<DeviceType>(target_index), source_value);
+
+    // Early exit if overflow is already set
+    auto bool_ref = cuda::atomic_ref<bool, cuda::thread_scope_device>{
+      *(overflow_column.data<bool>() + target_index)};
+    if (bool_ref.load(cuda::memory_order_relaxed)) { return; }
+
+    // Check for overflow using the improved logic
+    auto const overflow = ((old_sum > 0 && source_value > 0 && old_sum > type_max - source_value) ||
+                           (old_sum < 0 && source_value < 0 && old_sum < type_min - source_value));
+
+    if (overflow) { cudf::detail::atomic_max(&overflow_column.element<bool>(target_index), true); }
+  }
+};
+
+/**
  * @brief Function object to update a single element in a target column using
  * the dictionary key addressed by the specific index.
  *

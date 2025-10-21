@@ -346,5 +346,84 @@ __forceinline__ __device__ T atomic_cas(T* address, T compare, T val)
   return cudf::detail::typesAtomicCASImpl<T>()(address, compare, val);
 }
 
+/**
+ * @brief Helper function to calculate carry for 64-bit addition
+ *
+ * @param old_val The original 64-bit value
+ * @param add_val The value being added
+ * @param carry_in Carry from previous addition
+ * @return 1 if carry is generated, 0 otherwise
+ */
+__device__ __forceinline__ uint64_t calculate_carry_64(uint64_t old_val,
+                                                       uint64_t add_val,
+                                                       uint64_t carry_in)
+{
+  // Use __uint128_t to detect overflow beyond 64-bit range
+  __uint128_t sum = static_cast<__uint128_t>(old_val) + add_val + carry_in;
+  return (sum > cuda::std::numeric_limits<uint64_t>::max()) ? 1 : 0;
+}
+
+/**
+ * @brief Atomic addition for __int128_t with GPU architecture optimization
+ *
+ * Uses native atomicAdd on Hopper+ GPUs (compute capability 9.0+) where 128-bit
+ * atomic operations are supported. Falls back to two 64-bit atomic CAS operations
+ * with carry propagation on older GPU architectures.
+ *
+ * @param address Pointer to the __int128_t value
+ * @param val Value to add
+ * @return The old value before addition
+ */
+__forceinline__ __device__ __int128_t atomic_add(__int128_t* address, __int128_t val)
+{
+#if __CUDA_ARCH__ >= 900  // Hopper and newer (compute capability 9.0+)
+  // Use native 128-bit atomic support on Hopper+ GPUs
+  return atomicAdd(address, val);
+#else
+  // Fall back to two 64-bit atomic implementation for older GPUs
+
+  // Cast to signed for atomic_cas compatibility and treat as array of two int64_t
+  auto* target_ptr      = reinterpret_cast<int64_t*>(address);
+  auto add_val_unsigned = static_cast<__uint128_t>(val);
+
+  // Split the 128-bit add value into two 64-bit parts
+  int64_t add_low  = static_cast<int64_t>(static_cast<uint64_t>(add_val_unsigned));
+  int64_t add_high = static_cast<int64_t>(static_cast<uint64_t>(add_val_unsigned >> 64));
+
+  int64_t carry = 0;
+  int64_t old_parts[2];
+
+  // Process both 64-bit parts with carry propagation
+  for (int i = 0; i < 2; ++i) {
+    int64_t current_add = (i == 0) ? add_low : add_high;
+    int64_t old_part, new_part, expected_part;
+
+    // Atomic compare-and-swap loop for this 64-bit part
+    do {
+      expected_part = target_ptr[i];
+      new_part      = expected_part + current_add + carry;
+      old_part      = atomicCAS(reinterpret_cast<unsigned long long*>(&target_ptr[i]),
+                           static_cast<unsigned long long>(expected_part),
+                           static_cast<unsigned long long>(new_part));
+      old_part      = static_cast<int64_t>(old_part);
+    } while (old_part != expected_part);
+
+    // Store the old value for result reconstruction
+    old_parts[i] = old_part;
+
+    // Calculate carry for next iteration (convert back to unsigned for carry calculation)
+    carry = static_cast<int64_t>(calculate_carry_64(static_cast<uint64_t>(old_part),
+                                                    static_cast<uint64_t>(current_add),
+                                                    static_cast<uint64_t>(carry)));
+  }
+
+  // Reconstruct the original 128-bit value from the old parts
+  __uint128_t old_val_unsigned =
+    (static_cast<__uint128_t>(static_cast<uint64_t>(old_parts[1])) << 64) |
+    static_cast<uint64_t>(old_parts[0]);
+  return static_cast<__int128_t>(old_val_unsigned);
+#endif
+}
+
 }  // namespace detail
 }  // namespace cudf

@@ -30,13 +30,13 @@ using namespace numeric;
 
 using K = int32_t;
 
-// SUM_WITH_OVERFLOW tests - supports signed integer and decimal types (excluding decimal128)
+// SUM_WITH_OVERFLOW tests - supports signed integer and decimal types
 template <typename V>
 struct groupby_sum_with_overflow_test : public cudf::test::BaseFixture {};
 
 using sum_with_overflow_supported_types =
   cudf::test::Concat<cudf::test::Types<int8_t, int16_t, int32_t, int64_t>,
-                     cudf::test::Types<numeric::decimal32, numeric::decimal64>>;
+                     cudf::test::FixedPointTypes>;
 
 TYPED_TEST_SUITE(groupby_sum_with_overflow_test, sum_with_overflow_supported_types);
 
@@ -216,81 +216,75 @@ TYPED_TEST(groupby_sum_with_overflow_test, overflow_detection)
     using namespace numeric;
     using RepType = cudf::device_storage_type_t<V>;
 
-    // Skip only decimal128 since it doesn't have atomic support
-    if constexpr (std::is_same_v<V, numeric::decimal128>) {
-      GTEST_SKIP()
-        << "decimal128 overflow detection test skipped - no atomic support for __int128_t";
-    } else {
-      // Test decimal32 and decimal64 overflow detection
-      auto constexpr scale = scale_type{0};  // Use scale 0 for simplicity
+    // Test decimal overflow detection for all decimal types
+    auto constexpr scale = scale_type{0};  // Use scale 0 for simplicity
 
-      // Use type-specific values that will cause overflow for decimal types
-      auto constexpr type_max = cuda::std::numeric_limits<RepType>::max();
-      auto constexpr type_min = cuda::std::numeric_limits<RepType>::min();
+    // Use type-specific values that will cause overflow for decimal types
+    auto constexpr type_max = cuda::std::numeric_limits<RepType>::max();
+    auto constexpr type_min = cuda::std::numeric_limits<RepType>::min();
 
-      cudf::test::fixed_width_column_wrapper<K> keys{1, 2, 3, 4, 1, 2, 2, 1, 3, 3, 2, 4, 4};
+    cudf::test::fixed_width_column_wrapper<K> keys{1, 2, 3, 4, 1, 2, 2, 1, 3, 3, 2, 4, 4};
 
-      // Create values that will cause overflow for this specific decimal type
-      RepType large_positive  = type_max - 5;  // Close to max
-      RepType small_increment = 10;            // Will cause overflow when added to large_positive
-      RepType large_negative  = type_min + 5;  // Close to min (decimal types are always signed)
-      RepType small_decrement = -10;           // Will cause underflow when added to large_negative
+    // Create values that will cause overflow for this specific decimal type
+    RepType large_positive  = type_max - 5;  // Close to max
+    RepType small_increment = 10;            // Will cause overflow when added to large_positive
+    RepType large_negative  = type_min + 5;  // Close to min (decimal types are always signed)
+    RepType small_decrement = -10;           // Will cause underflow when added to large_negative
 
-      // Use values that fit within the type range for non-overflowing groups
-      RepType small_val1 = 10;
-      RepType small_val2 = 20;
-      RepType small_val3 = 30;
-      RepType small_val4 = 40;
+    // Use values that fit within the type range for non-overflowing groups
+    RepType small_val1 = 10;
+    RepType small_val2 = 20;
+    RepType small_val3 = 30;
+    RepType small_val4 = 40;
 
-      cudf::test::fixed_point_column_wrapper<RepType> vals{
-        {large_positive,   // Group 1: Close to max
-         small_val1,       // Group 2: Small value
-         small_val2,       // Group 3: Small value
-         large_negative,   // Group 4: Close to min
-         small_increment,  // Group 1: Will cause positive overflow
-         small_val2,       // Group 2: Small value
-         small_val3,       // Group 2: Small value
-         large_positive,   // Group 1: Close to max (second occurrence)
-         large_positive,   // Group 3: Close to max
-         1,                // Group 3: Small value
-         small_val4,       // Group 2: Small value
-         small_decrement,  // Group 4: Will cause negative overflow
-         large_negative},  // Group 4: Close to min (second occurrence)
-        scale};
+    cudf::test::fixed_point_column_wrapper<RepType> vals{
+      {large_positive,   // Group 1: Close to max
+       small_val1,       // Group 2: Small value
+       small_val2,       // Group 3: Small value
+       large_negative,   // Group 4: Close to min
+       small_increment,  // Group 1: Will cause positive overflow
+       small_val2,       // Group 2: Small value
+       small_val3,       // Group 2: Small value
+       large_positive,   // Group 1: Close to max (second occurrence)
+       large_positive,   // Group 3: Close to max
+       1,                // Group 3: Small value
+       small_val4,       // Group 2: Small value
+       small_decrement,  // Group 4: Will cause negative overflow
+       large_negative},  // Group 4: Close to min (second occurrence)
+      scale};
 
-      cudf::test::fixed_width_column_wrapper<K> expect_keys{1, 2, 3, 4};
+    cudf::test::fixed_width_column_wrapper<K> expect_keys{1, 2, 3, 4};
 
-      // Expected sums (with overflow handled by wrapping)
-      auto overflow_sum_1 = static_cast<RepType>(static_cast<RepType>(large_positive) +
-                                                 static_cast<RepType>(small_increment) +
-                                                 static_cast<RepType>(large_positive));
-      auto normal_sum_2   = static_cast<RepType>(small_val1 + small_val2 + small_val3 + small_val4);
-      auto overflow_sum_3 =
-        static_cast<RepType>(static_cast<RepType>(small_val2) +
-                             static_cast<RepType>(large_positive) + static_cast<RepType>(1));
-      auto overflow_sum_4 = static_cast<RepType>(static_cast<RepType>(large_negative) +
-                                                 static_cast<RepType>(small_decrement) +
-                                                 static_cast<RepType>(large_negative));
+    // Expected sums (with overflow handled by wrapping)
+    auto overflow_sum_1 = static_cast<RepType>(static_cast<RepType>(large_positive) +
+                                               static_cast<RepType>(small_increment) +
+                                               static_cast<RepType>(large_positive));
+    auto normal_sum_2   = static_cast<RepType>(small_val1 + small_val2 + small_val3 + small_val4);
+    auto overflow_sum_3 =
+      static_cast<RepType>(static_cast<RepType>(small_val2) + static_cast<RepType>(large_positive) +
+                           static_cast<RepType>(1));
+    auto overflow_sum_4 = static_cast<RepType>(static_cast<RepType>(large_negative) +
+                                               static_cast<RepType>(small_decrement) +
+                                               static_cast<RepType>(large_negative));
 
-      cudf::test::fixed_point_column_wrapper<RepType> expect_sum_vals{
-        {overflow_sum_1, normal_sum_2, overflow_sum_3, overflow_sum_4}, scale};
-      cudf::test::fixed_width_column_wrapper<bool> expect_overflow_vals{true, false, true, true};
+    cudf::test::fixed_point_column_wrapper<RepType> expect_sum_vals{
+      {overflow_sum_1, normal_sum_2, overflow_sum_3, overflow_sum_4}, scale};
+    cudf::test::fixed_width_column_wrapper<bool> expect_overflow_vals{true, false, true, true};
 
-      std::vector<std::unique_ptr<cudf::column>> children;
-      children.push_back(expect_sum_vals.release());
-      children.push_back(expect_overflow_vals.release());
-      auto expect_vals = cudf::create_structs_hierarchy(4, std::move(children), 0, {});
+    std::vector<std::unique_ptr<cudf::column>> children;
+    children.push_back(expect_sum_vals.release());
+    children.push_back(expect_overflow_vals.release());
+    auto expect_vals = cudf::create_structs_hierarchy(4, std::move(children), 0, {});
 
-      auto agg = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
-      test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg));
+    auto agg = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
+    test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg));
 
-      // Verify that sort-based groupby throws for decimals
-      auto agg2 = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
-      EXPECT_THROW(
-        test_single_agg(
-          keys, vals, expect_keys, *expect_vals, std::move(agg2), force_use_sort_impl::YES),
-        cudf::logic_error);
-    }
+    // Verify that sort-based groupby throws for decimals
+    auto agg2 = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
+    EXPECT_THROW(
+      test_single_agg(
+        keys, vals, expect_keys, *expect_vals, std::move(agg2), force_use_sort_impl::YES),
+      cudf::logic_error);
   } else {
     using DeviceType = cudf::device_storage_type_t<V>;
 

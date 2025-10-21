@@ -23,11 +23,14 @@
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-#include <thrust/host_vector.h>
+#include <rmm/device_scalar.hpp>
+
+#include <cuda/std/limits>
 
 #include <algorithm>
 
@@ -259,6 +262,41 @@ TYPED_TEST(AtomicsTest, atomicCASRandom)
   std::generate(input_array.begin(), input_array.end(), [&]() { return dist(engine); });
 
   this->atomic_test(input_array, is_cas_test, block_size, grid_size);
+}
+
+__global__ void test_single_atomic_add_kernel(__int128_t* target, __int128_t value)
+{
+  cudf::detail::atomic_add(target, value);
+}
+
+class Atomic128Test : public cudf::test::BaseFixture {
+ public:
+  void run_atomic_add_test(__int128_t initial_value,
+                           __int128_t add_value,
+                           __int128_t expected_result)
+  {
+    rmm::device_scalar<__int128_t> d_target(initial_value, cudf::test::get_default_stream());
+    test_single_atomic_add_kernel<<<32, 256>>>(d_target.data(), add_value);
+    CUDF_CHECK_CUDA(cudf::test::get_default_stream().value());
+    __int128_t result = d_target.value(cudf::test::get_default_stream());
+    EXPECT_EQ(result, expected_result);
+  }
+};
+
+TEST_F(Atomic128Test, BasicAddition) { run_atomic_add_test(0, 1, 32 * 256 * 1); }
+
+TEST_F(Atomic128Test, CarryPropagation)
+{
+  constexpr int total_threads = 32 * 256;
+  __int128_t initial_value    = cuda::std::numeric_limits<uint64_t>::max() - total_threads + 1;
+  __int128_t expected = static_cast<__int128_t>(cuda::std::numeric_limits<uint64_t>::max()) + 1;
+  run_atomic_add_test(initial_value, 1, expected);
+}
+
+TEST_F(Atomic128Test, NegativeNumbers)
+{
+  constexpr int total_threads = 32 * 256;
+  run_atomic_add_test(total_threads * 100, -50, total_threads * 50);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
