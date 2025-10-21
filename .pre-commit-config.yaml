@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 ci:
   autofix_commit_msg: "[pre-commit.ci] auto code formatting"
@@ -153,24 +154,34 @@ repos:
         args: [--fix, --spdx]
         files: |
           (?x)
-              [.](cmake|cpp|cu|cuh|h|hpp|sh|pxd|py|pyx|rs|java)$|
-              CMakeLists[.]txt$|
-              CMakeLists_standalone[.]txt$|
-              meta[.]yaml$|
-              pyproject[.]toml$|
-              setup[.]cfg$|
-              cpp/src/text/detail/codepoint_metadata[.]ah$|
-              cpp/src/strings/regex/regex[.]inl$|
-              cpp/src/io/parquet/ipc/schema/.*[.]fbs$|
-              java/pom[.]xml$|
-              java/buildscripts/build-info$|
-              java/ci/Dockerfile[.]rocky$|
-              recipe[.]yaml$
+            [.](cmake|cpp|cu|cuh|h|hpp|sh|pxd|py|pyx|pyi|rs|java)$|
+            CMakeLists[.]txt$|
+            CMakeLists_standalone[.]txt$|
+            meta[.]yaml$|
+            pyproject[.]toml$|
+            setup[.]cfg$|
+            ^cpp/src/text/detail/codepoint_metadata[.]ah$|
+            ^cpp/src/strings/regex/regex[.]inl$|
+            ^cpp/src/io/parquet/ipc/schema/.*[.]fbs$|
+            ^java/pom[.]xml$|
+            ^java/buildscripts/build-info$|
+            ^java/ci/Dockerfile[.]rocky$|
+            recipe[.]yaml$|
+            dependencies[.]yaml$|
+            pytest[.]ini$|
+            [.]pre-commit-config[.]yaml$
         exclude: |
           (?x)^(
             cpp/include/cudf_test/cxxopts[.]hpp$|
             cpp/src/io/parquet/ipc/Message_generated[.]h$|
-            cpp/src/io/parquet/ipc/Schema_generated[.]h$
+            cpp/src/io/parquet/ipc/Schema_generated[.]h$|
+            cpp/src/io/comp/brotli_dict[.]cpp$|
+            cpp/src/io/comp/brotli_dict[.]hpp$|
+            cpp/src/io/comp/brotli_tables[.]hpp$|
+            cpp/src/io/comp/debrotli[.]cu$|
+            cpp/src/io/comp/cpu_unbz2[.]cpp$|
+            cpp/src/io/comp/unbz2[.]hpp$|
+            cpp/src/io/comp/gpuinflate[.]cu$
           )
       - id: verify-copyright
         name: verify-copyright-brotli
