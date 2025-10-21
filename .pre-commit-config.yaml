@@ -174,7 +174,7 @@ repos:
           )
       - id: verify-copyright
         name: verify-copyright-brotli
-        args: [--fix, --force-spdx, "--spdx-license-identifier=Apache-2.0 AND MIT"]
+        args: [--fix, --spdx, "--spdx-license-identifier=Apache-2.0 AND MIT"]
         files: |
           (?x)^(
             cpp/src/io/comp/brotli_dict[.]cpp$|
@@ -184,7 +184,7 @@ repos:
           )
       - id: verify-copyright
         name: verify-copyright-bzip2
-        args: [--fix, --force-spdx, "--spdx-license-identifier=Apache-2.0 AND bzip2-1.0.6"]
+        args: [--fix, --spdx, "--spdx-license-identifier=Apache-2.0 AND bzip2-1.0.6"]
         files: |
           (?x)^(
             cpp/src/io/comp/cpu_unbz2[.]cpp$|
@@ -192,7 +192,7 @@ repos:
           )
       - id: verify-copyright
         name: verify-copyright-zlib
-        args: [--fix, --force-spdx, "--spdx-license-identifier=Apache-2.0 AND Zlib"]
+        args: [--fix, --spdx, "--spdx-license-identifier=Apache-2.0 AND Zlib"]
         files: |
           (?x)^(
             cpp/src/io/comp/gpuinflate[.]cu$
