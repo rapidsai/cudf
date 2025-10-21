@@ -3413,6 +3413,10 @@ class RangeIndex(Index):
 
         return self._column.isin(values).values
 
+    @_performance_tracking
+    def nans_to_nulls(self) -> Self:
+        return self.copy()
+
     def __pos__(self) -> Self:
         return self.copy()
 
