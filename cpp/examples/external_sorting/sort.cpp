@@ -71,7 +71,7 @@
 bool input_files_exist(std::string const& input_dir, int num_files)
 {
   for (int i = 0; i < num_files; ++i) {
-    std::string filepath = input_dir + "/data_" + std::to_string(i) + ".parquet";
+    std::string filepath = cudf::examples::construct_file_path(input_dir, i);
     if (!std::filesystem::exists(filepath)) { return false; }
   }
   return true;
@@ -192,7 +192,7 @@ int main(int argc, char** argv)
   std::vector<std::unique_ptr<cudf::column>> per_table_splitters;
   cudf::data_type sort_col_type;
   for (int i = 0; i < num_files; i++) {
-    auto const filepath = input_dir + "/data_" + std::to_string(i) + ".parquet";
+    auto const filepath = cudf::examples::construct_file_path(input_dir, i);
     auto table          = cudf::examples::read_parquet_file(filepath, stream, mr);
     sort_col_type       = table->view().column(0).type();
     per_table_splitters.push_back(
@@ -217,7 +217,7 @@ int main(int argc, char** argv)
   std::unique_ptr<cudf::scalar> ub_scalar_literal, lb_scalar_literal;
   std::unique_ptr<cudf::ast::literal> upper_bound, lower_bound;
   for (int i = 0; i < num_files; i++) {
-    auto const filepath = input_dir + "/data_" + std::to_string(i) + ".parquet";
+    auto const filepath = cudf::examples::construct_file_path(input_dir, i);
     auto table          = cudf::examples::read_parquet_file(filepath, stream, mr);
     ub_scalar_literal   = cudf::get_element(splitters->view(), 0, stream, mr);
     upper_bound    = cudf::type_dispatcher(sort_col_type, make_ast_literal{}, *ub_scalar_literal);

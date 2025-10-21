@@ -54,5 +54,7 @@ void write_parquet_file(std::string const& filepath,
                         cudf::table_view table_view,
                         rmm::cuda_stream_view stream);
 
+std::string construct_file_path(std::string const &input_dir, int filenum);
+
 }  // namespace examples
 }  // namespace cudf

@@ -263,7 +263,7 @@ void write_random_table(std::string const& directory,
   };
 
   for (int i = 0; i < num_files; i++) {
-    std::string filepath = directory + "/data_" + std::to_string(i) + ".parquet";
+    std::string filepath = construct_file_path(directory, i);
     auto partition       = generate_random_table(types, num_cols, num_rows, stream, mr);
     cudf::examples::write_parquet_file(filepath, partition->view(), stream);
   }
