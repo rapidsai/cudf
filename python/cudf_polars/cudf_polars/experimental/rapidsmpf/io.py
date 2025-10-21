@@ -21,12 +21,12 @@ from cudf_polars.experimental.base import (
     PartitionInfo,
 )
 from cudf_polars.experimental.io import SplitScan, scan_partition_plan
-from cudf_polars.experimental.rapidsmpf.channel_pair import ChannelPair
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
     lower_ir_node,
 )
 from cudf_polars.experimental.rapidsmpf.nodes import define_py_node, shutdown_on_error
+from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.dispatch import LowerIRTransformer
+    from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
     from cudf_polars.utils.config import ParquetOptions
 
 
@@ -120,7 +121,7 @@ async def dataframescan_node(
 @generate_ir_sub_network.register(DataFrameScan)
 def _(
     ir: DataFrameScan, rec: SubNetGenerator
-) -> tuple[dict[IR, list[Any]], dict[IR, Any]]:
+) -> tuple[list[Any], dict[IR, ChannelManager]]:
     config_options = rec.state["config_options"]
     assert config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'generate_ir_sub_network'"
@@ -129,20 +130,17 @@ def _(
     max_io_threads = 1  # TODO: Make this configurable.
 
     ctx = rec.state["ctx"]
-    ch_out = ChannelPair.create()
-    nodes: dict[IR, list[Any]] = {
-        ir: [
-            dataframescan_node(
-                ctx,
-                ir,
-                ch_out,
-                max_io_threads=max_io_threads,
-                rows_per_partition=rows_per_partition,
-            )
-        ]
-    }
+    channels: dict[IR, ChannelManager] = {ir: ChannelManager()}
+    nodes: list[Any] = [
+        dataframescan_node(
+            ctx,
+            ir,
+            channels[ir].reserve_input_slot(),
+            max_io_threads=max_io_threads,
+            rows_per_partition=rows_per_partition,
+        )
+    ]
 
-    channels: dict[IR, list[Any]] = {ir: [ch_out]}
     return nodes, channels
 
 
@@ -329,7 +327,7 @@ async def scan_node(
 
 
 @generate_ir_sub_network.register(Scan)
-def _(ir: Scan, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]:
+def _(ir: Scan, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]]:
     config_options = rec.state["config_options"]
     assert config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'generate_ir_sub_network'"
@@ -343,18 +341,15 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any
     if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
         parquet_options = dataclasses.replace(parquet_options, chunked=False)
 
-    ch_out = ChannelPair.create()
-    nodes: dict[IR, list[Any]] = {
-        ir: [
-            scan_node(
-                rec.state["ctx"],
-                ir,
-                ch_out,
-                max_io_threads=max_io_threads,
-                plan=plan,
-                parquet_options=parquet_options,
-            )
-        ]
-    }
-    channels: dict[IR, list[Any]] = {ir: [ch_out]}
+    channels: dict[IR, ChannelManager] = {ir: ChannelManager()}
+    nodes: list[Any] = [
+        scan_node(
+            rec.state["ctx"],
+            ir,
+            channels[ir].reserve_input_slot(),
+            max_io_threads=max_io_threads,
+            plan=plan,
+            parquet_options=parquet_options,
+        )
+    ]
     return nodes, channels

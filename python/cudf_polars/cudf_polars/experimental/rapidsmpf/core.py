@@ -225,9 +225,8 @@ def generate_network(
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state
     )
-    node_mapping, channels = mapper(ir)
-    nodes = [node for sublist in node_mapping.values() for node in sublist]
-    ch_out = channels[ir].pop()
+    nodes, channels = mapper(ir)
+    ch_out = channels[ir].reserve_output_slot()
 
     # TODO: We will need an additional node here to drain
     # the metadata channel once we start plumbing metadata

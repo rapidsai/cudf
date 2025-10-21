@@ -14,9 +14,9 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 import pylibcudf as plc
 from rmm.pylibrmm.stream import DEFAULT_STREAM
 
-from cudf_polars.experimental.rapidsmpf.channel_pair import ChannelPair
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
+from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
 from cudf_polars.experimental.repartition import Repartition
 
 if TYPE_CHECKING:
@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
+    from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
 
 
 @define_py_node()
@@ -104,7 +105,7 @@ async def concatenate_node(
 @generate_ir_sub_network.register(Repartition)
 def _(
     ir: Repartition, rec: SubNetGenerator
-) -> tuple[dict[IR, list[Any]], dict[IR, list[Any]]]:
+) -> tuple[list[Any], dict[IR, ChannelManager]]:
     # Repartition node.
 
     partition_info = rec.state["partition_info"]
@@ -120,17 +121,17 @@ def _(
     # Process children
     nodes, channels = rec(ir.children[0])
 
-    # Create output ChannelPair
-    channels[ir] = [ChannelPair.create()]
+    # Create output ChannelManager
+    channels[ir] = ChannelManager()
 
     # Add python node
-    nodes[ir] = [
+    nodes.append(
         concatenate_node(
             rec.state["ctx"],
             ir,
-            channels[ir][0],
-            channels[ir.children[0]].pop(),
+            channels[ir].reserve_input_slot(),
+            channels[ir.children[0]].reserve_output_slot(),
             max_chunks=max_chunks,
         )
-    ]
+    )
     return nodes, channels

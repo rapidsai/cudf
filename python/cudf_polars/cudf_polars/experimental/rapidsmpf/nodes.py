@@ -5,9 +5,7 @@
 from __future__ import annotations
 
 import asyncio
-import operator
 from contextlib import asynccontextmanager
-from functools import reduce
 from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.streaming.core.channel import Message
@@ -18,8 +16,11 @@ from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Empty
-from cudf_polars.experimental.rapidsmpf.channel_pair import ChannelPair
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
+from cudf_polars.experimental.rapidsmpf.utils import (
+    ChannelManager,
+    process_children,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -28,6 +29,7 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
+    from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
 
 
 @asynccontextmanager
@@ -304,7 +306,7 @@ async def multicast_node_unbounded(
 
 
 @generate_ir_sub_network.register(IR)
-def _(ir: IR, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]:
+def _(ir: IR, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]]:
     # Default generate_ir_sub_network logic.
     # Use simple pointwise node.
 
@@ -322,37 +324,32 @@ def _(ir: IR, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]
             rec.state["balanced_consumer"] = False
 
     # Process children
-    nodes: dict[IR, list[Any]] = {}
-    channels: dict[IR, list[Any]] = {}
-    if ir.children:
-        _nodes, _channels = zip(*(rec(c) for c in ir.children), strict=True)
-        nodes = reduce(operator.or_, _nodes)
-        channels = reduce(operator.or_, _channels)
+    nodes, channels = process_children(ir, rec)
 
-    # Create output ChannelPair
-    channels[ir] = [ChannelPair.create()]
+    # Create output ChannelManager
+    channels[ir] = ChannelManager()
 
     if len(ir.children) == 1:
         # Single-channel default node
-        nodes[ir] = [
+        nodes.append(
             default_node_single(
                 rec.state["ctx"],
                 ir,
-                channels[ir][0],
-                channels[ir.children[0]].pop(),
+                channels[ir].reserve_input_slot(),
+                channels[ir.children[0]].reserve_output_slot(),
             )
-        ]
+        )
     else:
         # Multi-channel default node
-        nodes[ir] = [
+        nodes.append(
             default_node_multi(
                 rec.state["ctx"],
                 ir,
-                channels[ir][0],
-                tuple(channels[c].pop() for c in ir.children),
+                channels[ir].reserve_input_slot(),
+                tuple(channels[c].reserve_output_slot() for c in ir.children),
                 bcast_indices=bcast_indices,
             )
-        ]
+        )
 
     return nodes, channels
 
@@ -389,18 +386,17 @@ async def empty_node(
 
 
 @generate_ir_sub_network.register(Empty)
-def _(ir: Empty, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]:
+def _(ir: Empty, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]]:
     """Generate network for Empty node - produces one empty chunk."""
     ctx = rec.state["ctx"]
-    ch_out = ChannelPair.create()
-    nodes: dict[IR, list[Any]] = {ir: [empty_node(ctx, ir, ch_out)]}
-    channels: dict[IR, list[Any]] = {ir: [ch_out]}
+    channels: dict[IR, ChannelManager] = {ir: ChannelManager()}
+    nodes: list[Any] = [empty_node(ctx, ir, channels[ir].reserve_input_slot())]
     return nodes, channels
 
 
 def generate_ir_sub_network_wrapper(
     ir: IR, rec: SubNetGenerator
-) -> tuple[dict[IR, list[Any]], dict[IR, list[Any]]]:
+) -> tuple[list[Any], dict[IR, ChannelManager]]:
     """
     Generate a sub-network for the RapidsMPF streaming engine.
 
@@ -414,23 +410,30 @@ def generate_ir_sub_network_wrapper(
     Returns
     -------
     nodes
-        Dictionary mapping between each IR node and its
-        corresponding streaming-network node(s).
+        List of streaming-network node(s) for the subgraph.
     channels
         Dictionary mapping between each IR node and its
-        corresponding streaming-network output channels.
+        corresponding streaming-network output ChannelManager.
     """
     nodes, channels = generate_ir_sub_network(ir, rec)
     if (count := rec.state["output_ch_count"][ir]) > 1:
-        output_chs = [ChannelPair.create() for _ in range(count)]
+        manager = ChannelManager(count=count)
         if rec.state["balanced_consumer"]:
             # TODO: Do we _know_ if this is safe?
-            nodes[ir].append(
-                multicast_node_bounded(rec.state["ctx"], channels[ir][0], *output_chs)
+            nodes.append(
+                multicast_node_bounded(
+                    rec.state["ctx"],
+                    channels[ir].reserve_output_slot(),
+                    *[manager.reserve_input_slot() for _ in range(count)],
+                )
             )
         else:
-            nodes[ir].append(
-                multicast_node_unbounded(rec.state["ctx"], channels[ir][0], *output_chs)
+            nodes.append(
+                multicast_node_unbounded(
+                    rec.state["ctx"],
+                    channels[ir].reserve_output_slot(),
+                    *[manager.reserve_input_slot() for _ in range(count)],
+                )
             )
-        channels[ir] = output_chs
+        channels[ir] = manager
     return nodes, channels

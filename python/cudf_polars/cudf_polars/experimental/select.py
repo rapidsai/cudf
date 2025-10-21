@@ -138,7 +138,7 @@ def _(
             and len(child.children) == 1
             and isinstance(child.children[0], Scan)
         ):
-            # Taask engine case
+            # Task engine case
             scan_child = child.children[0]
         elif isinstance(child, Scan):  # pragma: no cover; Requires rapidsmpf runtime
             # RapidsMPF case

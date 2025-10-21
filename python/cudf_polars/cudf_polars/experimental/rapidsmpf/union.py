@@ -4,25 +4,27 @@
 
 from __future__ import annotations
 
-import operator
-from functools import reduce
 from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.streaming.core.channel import Message
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 from cudf_polars.dsl.ir import Union
-from cudf_polars.experimental.rapidsmpf.channel_pair import ChannelPair
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
 )
 from cudf_polars.experimental.rapidsmpf.nodes import define_py_node, shutdown_on_error
+from cudf_polars.experimental.rapidsmpf.utils import (
+    ChannelManager,
+    process_children,
+)
 
 if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
+    from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
 
 
 @define_py_node()
@@ -71,28 +73,24 @@ async def union_node(
 
 
 @generate_ir_sub_network.register(Union)
-def _(
-    ir: Union, rec: SubNetGenerator
-) -> tuple[dict[IR, list[Any]], dict[IR, list[Any]]]:
+def _(ir: Union, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]]:
     # Union operation.
     # Pass-through all child chunks in channel order.
 
     # Process children
     rec.state["balanced_consumer"] = False
-    _nodes, _channels = zip(*(rec(c) for c in ir.children), strict=True)
-    nodes = reduce(operator.or_, _nodes)
-    channels = reduce(operator.or_, _channels)
+    nodes, channels = process_children(ir, rec)
 
-    # Create output ChannelPair
-    channels[ir] = [ChannelPair.create()]
+    # Create output ChannelManager
+    channels[ir] = ChannelManager()
 
     # Add simple python node
-    nodes[ir] = [
+    nodes.append(
         union_node(
             rec.state["ctx"],
             ir,
-            channels[ir][0],
-            *[channels[c].pop() for c in ir.children],
+            channels[ir].reserve_input_slot(),
+            *[channels[c].reserve_output_slot() for c in ir.children],
         )
-    ]
+    )
     return nodes, channels

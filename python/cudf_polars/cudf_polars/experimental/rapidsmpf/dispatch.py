@@ -19,6 +19,7 @@ if TYPE_CHECKING:
         PartitionInfo,
         StatsCollector,
     )
+    from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
     from cudf_polars.utils.config import ConfigOptions
 
 
@@ -71,7 +72,7 @@ class GenState(TypedDict):
 
 
 SubNetGenerator: TypeAlias = GenericTransformer[
-    "IR", "tuple[dict[IR, list[Any]], dict[IR, Any]]", GenState
+    "IR", "tuple[list[Any], dict[IR, ChannelManager]]", GenState
 ]
 """Protocol for Generating a streaming sub-network."""
 
@@ -112,7 +113,7 @@ def lower_ir_node(
 @singledispatch
 def generate_ir_sub_network(
     ir: IR, rec: SubNetGenerator
-) -> tuple[dict[IR, list[Any]], dict[IR, list[Any]]]:
+) -> tuple[list[Any], dict[IR, ChannelManager]]:
     """
     Generate a sub-network for the RapidsMPF streaming engine.
 
@@ -126,10 +127,9 @@ def generate_ir_sub_network(
     Returns
     -------
     nodes
-        Dictionary mapping between each IR node and its
-        corresponding streaming-network node(s).
+        List of streaming-network node(s).
     channels
         Dictionary mapping between each IR node and its
-        corresponding streaming-network output channels.
+        corresponding output ChannelManager object.
     """
     raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover

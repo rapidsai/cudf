@@ -22,11 +22,11 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 from cudf_polars.dsl.expr import Col
-from cudf_polars.experimental.rapidsmpf.channel_pair import ChannelPair
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
 )
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
+from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
 from cudf_polars.experimental.shuffle import Shuffle
 
 if TYPE_CHECKING:
@@ -38,6 +38,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
+    from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
 
 
 # Set of available shuffle IDs
@@ -233,9 +234,7 @@ async def local_shuffle_node(
 
 
 @generate_ir_sub_network.register(Shuffle)
-def _(
-    ir: Shuffle, rec: SubNetGenerator
-) -> tuple[dict[IR, list[Any]], dict[IR, list[Any]]]:
+def _(ir: Shuffle, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]]:
     # Local shuffle operation.
 
     # Process children
@@ -251,24 +250,20 @@ def _(
     columns_to_hash = tuple(column_names.index(k.name) for k in keys)
     num_partitions = rec.state["partition_info"][ir].count
 
-    # Get input and create output ChannelPairs
-    ch_in = channels[child].pop()
-    ch_out = ChannelPair.create()
+    # Create output ChannelManager
+    channels[ir] = ChannelManager()
 
     # Complete shuffle pipeline in a single node
     # LocalShuffle context manager handles shuffle ID lifecycle internally
-    nodes[ir] = [
+    nodes.append(
         local_shuffle_node(
             context,
             ir,
-            ch_in=ch_in,
-            ch_out=ch_out,
+            ch_in=channels[child].reserve_output_slot(),
+            ch_out=channels[ir].reserve_input_slot(),
             columns_to_hash=columns_to_hash,
             num_partitions=num_partitions,
         )
-    ]
-
-    # Return output ChannelPair
-    channels[ir] = [ch_out]
+    )
 
     return nodes, channels

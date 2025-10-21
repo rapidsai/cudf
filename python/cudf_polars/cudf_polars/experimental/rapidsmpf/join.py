@@ -5,8 +5,6 @@
 from __future__ import annotations
 
 import asyncio
-import operator
-from functools import reduce
 from itertools import chain
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -18,7 +16,6 @@ from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Join
-from cudf_polars.experimental.rapidsmpf.channel_pair import ChannelPair
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
 )
@@ -27,6 +24,10 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
     define_py_node,
     shutdown_on_error,
 )
+from cudf_polars.experimental.rapidsmpf.utils import (
+    ChannelManager,
+    process_children,
+)
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
@@ -34,6 +35,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
+    from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
 
 
 async def get_small_table(
@@ -179,9 +181,7 @@ async def broadcast_join_node(
 
 
 @generate_ir_sub_network.register(Join)
-def _(
-    ir: Join, rec: SubNetGenerator
-) -> tuple[dict[IR, list[Any]], dict[IR, list[Any]]]:
+def _(ir: Join, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]]:
     # Join operation.
     left, right = ir.children
     partition_info = rec.state["partition_info"]
@@ -205,27 +205,25 @@ def _(
         rec.state["balanced_consumer"] = False
 
     # Process children
-    nodes: dict[IR, list[Any]] = {}
-    channels: dict[IR, list[Any]] = {}
-    if ir.children:
-        _nodes, _channels = zip(*(rec(c) for c in ir.children), strict=True)
-        nodes = reduce(operator.or_, _nodes)
-        channels = reduce(operator.or_, _channels)
+    nodes, channels = process_children(ir, rec)
 
-    # Create output ChannelPair
-    channels[ir] = [ChannelPair.create()]
+    # Create output ChannelManager
+    channels[ir] = ChannelManager()
 
     if pwise_join:
         # Partition-wise join (use default_node_multi)
-        nodes[ir] = [
+        nodes.append(
             default_node_multi(
                 rec.state["ctx"],
                 ir,
-                channels[ir][0],
-                (channels[left].pop(), channels[right].pop()),
+                channels[ir].reserve_input_slot(),
+                (
+                    channels[left].reserve_output_slot(),
+                    channels[right].reserve_output_slot(),
+                ),
                 bcast_indices=[],
             )
-        ]
+        )
         return nodes, channels
 
     else:
@@ -237,14 +235,14 @@ def _(
         else:
             broadcast_side = "left"
 
-        nodes[ir] = [
+        nodes.append(
             broadcast_join_node(
                 rec.state["ctx"],
                 ir,
-                channels[ir][0],
-                channels[left].pop(),
-                channels[right].pop(),
+                channels[ir].reserve_input_slot(),
+                channels[left].reserve_output_slot(),
+                channels[right].reserve_output_slot(),
                 broadcast_side=broadcast_side,
             )
-        ]
+        )
         return nodes, channels
