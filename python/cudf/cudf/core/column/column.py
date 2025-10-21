@@ -1195,7 +1195,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 )
             return result._with_type_metadata(self.dtype)  # type: ignore[return-value]
         else:
-            return type(self)(
+            col = type(self)(
                 plc_column=self.plc_column,
                 size=self.size,
                 dtype=self.dtype,
@@ -1203,6 +1203,22 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 null_count=self.null_count,
                 exposed=False,
             )
+            # copy-on-write logic tracked on the Buffers
+            # so copy over the Buffers from self
+            col.set_base_children(
+                tuple(child.copy(deep=False) for child in self.base_children)
+            )
+            col.set_base_data(
+                self.base_data.copy(deep=False)
+                if self.base_data is not None
+                else None
+            )
+            col.set_base_mask(
+                self.base_mask.copy(deep=False)
+                if self.base_mask is not None
+                else None
+            )
+            return col
 
     def element_indexing(self, index: int):
         """Default implementation for indexing to an element
