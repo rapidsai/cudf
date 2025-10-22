@@ -182,7 +182,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         return cls._from_data(col_accessor)
 
     @_performance_tracking
-    def nans_to_nulls(self):
+    def nans_to_nulls(self) -> Self:
         result = []
         for col in self._columns:
             converted = col.nans_to_nulls()
