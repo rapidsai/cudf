@@ -86,16 +86,15 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
 
   auto const helper_func = [&](auto const& d_equal) {
     using RowEqual = std::decay_t<decltype(d_equal)>;
-    auto set       = distinct_set_t<RowEqual>{
-      num_rows,
-      0.5,  // desired load factor
-      cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
-      d_equal,
-      {row_hash.device_hasher(has_nulls)},
-      {},
-      {},
-      cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-      stream.value()};
+    auto set       = distinct_set_t<RowEqual>{num_rows,
+                                              0.5,  // desired load factor
+                                              cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
+                                              d_equal,
+                                              {row_hash.device_hasher(has_nulls)},
+                                              {},
+                                              {},
+                                              rmm::mr::polymorphic_allocator<char>{},
+                                              stream.value()};
     return detail::reduce_by_row(set, num_rows, keep, stream, mr);
   };
 

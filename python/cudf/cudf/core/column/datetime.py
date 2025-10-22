@@ -290,6 +290,40 @@ class DatetimeColumn(TemporalBaseColumn):
         raise NotImplementedError("day_of_week is currently not implemented.")
 
     @functools.cached_property
+    def tz(self):
+        """
+        Return the timezone.
+
+        Returns
+        -------
+        datetime.tzinfo or None
+            Returns None when the array is tz-naive.
+        """
+        if isinstance(self.dtype, pd.DatetimeTZDtype):
+            return self.dtype.tz
+        return None
+
+    @functools.cached_property
+    def time_unit(self) -> str:
+        return np.datetime_data(self.dtype)[0]
+
+    @functools.cached_property
+    def freq(self) -> str | None:
+        raise NotImplementedError("freq is not yet implemented.")
+
+    @functools.cached_property
+    def date(self):
+        raise NotImplementedError("date is not yet implemented.")
+
+    @functools.cached_property
+    def time(self):
+        raise NotImplementedError("time is not yet implemented.")
+
+    @functools.cached_property
+    def timetz(self):
+        raise NotImplementedError("timetz is not yet implemented.")
+
+    @functools.cached_property
     def is_normalized(self) -> bool:
         raise NotImplementedError(
             "is_normalized is currently not implemented."

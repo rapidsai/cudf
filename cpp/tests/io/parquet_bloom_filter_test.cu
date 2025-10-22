@@ -48,11 +48,11 @@ TEST_F(ParquetBloomFilterTest, TestStrings)
                      cuco::extent<size_t>,
                      cuda::thread_scope_device,
                      policy_type,
-                     cudf::detail::cuco_allocator<char>>
+                     rmm::mr::polymorphic_allocator<char>>
     filter{num_filter_blocks,
            cuco::thread_scope_device,
            {{cudf::DEFAULT_HASH_SEED}},
-           cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+           rmm::mr::polymorphic_allocator<char>{},
            stream};
 
   // Add strings to the bloom filter

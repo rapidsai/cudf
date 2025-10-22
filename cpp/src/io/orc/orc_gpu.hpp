@@ -39,7 +39,7 @@ auto constexpr occupancy_factor = 1.43f;  ///< cuCollections suggests using a ha
 using storage_type     = cuco::bucket_storage<slot_type,
                                               bucket_size,
                                               cuco::extent<std::size_t>,
-                                              cudf::detail::cuco_allocator<char>>;
+                                              rmm::mr::polymorphic_allocator<char>>;
 using storage_ref_type = typename storage_type::ref_type;
 
 auto constexpr KEY_SENTINEL   = size_type{-1};

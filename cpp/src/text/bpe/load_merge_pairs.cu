@@ -33,18 +33,18 @@ namespace {
 std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
   cudf::column_device_view const& input, rmm::cuda_stream_view stream)
 {
-  auto const elements  = input.size() / 2;
-  auto merge_pairs_map = std::make_unique<merge_pairs_map_type>(
-    static_cast<size_t>(elements),
-    cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
-    cuco::empty_key{-1},
-    cuco::empty_value{-1},
-    bpe_equal{input},
-    bpe_probe_scheme{bpe_hasher{input}},
-    cuco::thread_scope_device,
-    cuco_storage{},
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-    stream.value());
+  auto const elements = input.size() / 2;
+  auto merge_pairs_map =
+    std::make_unique<merge_pairs_map_type>(static_cast<size_t>(elements),
+                                           cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
+                                           cuco::empty_key{-1},
+                                           cuco::empty_value{-1},
+                                           bpe_equal{input},
+                                           bpe_probe_scheme{bpe_hasher{input}},
+                                           cuco::thread_scope_device,
+                                           cuco_storage{},
+                                           rmm::mr::polymorphic_allocator<char>{},
+                                           stream.value());
 
   auto iter = cudf::detail::make_counting_transform_iterator(
     0,
@@ -59,17 +59,16 @@ std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
 std::unique_ptr<detail::mp_table_map_type> initialize_mp_table_map(
   cudf::column_device_view const& input, rmm::cuda_stream_view stream)
 {
-  auto mp_table_map = std::make_unique<mp_table_map_type>(
-    static_cast<size_t>(input.size()),
-    cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
-    cuco::empty_key{-1},
-    cuco::empty_value{-1},
-    mp_equal{input},
-    mp_probe_scheme{mp_hasher{input}},
-    cuco::thread_scope_device,
-    cuco_storage{},
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-    stream.value());
+  auto mp_table_map = std::make_unique<mp_table_map_type>(static_cast<size_t>(input.size()),
+                                                          cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
+                                                          cuco::empty_key{-1},
+                                                          cuco::empty_value{-1},
+                                                          mp_equal{input},
+                                                          mp_probe_scheme{mp_hasher{input}},
+                                                          cuco::thread_scope_device,
+                                                          cuco_storage{},
+                                                          rmm::mr::polymorphic_allocator<char>{},
+                                                          stream.value());
 
   auto iter = cudf::detail::make_counting_transform_iterator(
     0,

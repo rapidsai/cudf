@@ -74,7 +74,7 @@ using mixed_multiset_type =
                         cuda::thread_scope_device,
                         mixed_join_always_not_equal,
                         cuco::double_hashing<1, mixed_join_hasher1, mixed_join_hasher2>,
-                        cudf::detail::cuco_allocator<char>,
+                        rmm::mr::polymorphic_allocator<char>,
                         cuco::storage<2>>;
 
 bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type);

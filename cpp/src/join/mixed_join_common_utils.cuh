@@ -155,7 +155,7 @@ using hash_set_type =
                    cuda::thread_scope_device,
                    double_row_equality_comparator,
                    cuco::linear_probing<DEFAULT_MIXED_SEMI_JOIN_CG_SIZE, row_hash>,
-                   cudf::detail::cuco_allocator<char>,
+                   rmm::mr::polymorphic_allocator<char>,
                    cuco::storage<1>>;
 
 // The hash_set_ref_type used by mixed_semi_join kernels for probing.

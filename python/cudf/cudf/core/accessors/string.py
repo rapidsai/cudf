@@ -17,6 +17,7 @@ import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_scalar
 from cudf.core.accessors.base_accessor import BaseAccessor
+from cudf.core.accessors.lists import ListMethods
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.dtypes import ListDtype
 from cudf.options import get_option
@@ -2314,6 +2315,8 @@ class StringMethods(BaseAccessor):
         2    f
         dtype: object
         """
+        if isinstance(self._column.dtype, ListDtype):
+            return ListMethods(self._parent).get(i)
         str_lens = self.len()
         if i < 0:
             next_index = i - 1

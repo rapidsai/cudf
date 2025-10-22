@@ -166,7 +166,7 @@ distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
                 {},
                 cuco::thread_scope_device,
                 cuco_storage_type{},
-                cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+                rmm::mr::polymorphic_allocator<char>{},
                 stream.value()}
 {
   CUDF_FUNC_RANGE();

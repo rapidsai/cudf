@@ -82,7 +82,7 @@ struct hash_join {
                           cuda::thread_scope_device,
                           always_not_equal,
                           cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, hasher1, hasher2>,
-                          cudf::detail::cuco_allocator<char>,
+                          rmm::mr::polymorphic_allocator<char>,
                           cuco::storage<2>>;
 
   hash_join()                            = delete;

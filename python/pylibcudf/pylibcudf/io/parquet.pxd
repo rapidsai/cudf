@@ -43,7 +43,7 @@ cdef class ParquetReaderOptions:
     cdef parquet_reader_options c_obj
     cdef SourceInfo source
     cpdef void set_row_groups(self, list row_groups)
-    cpdef void set_num_rows(self, size_type nrows)
+    cpdef void set_num_rows(self, int64_t nrows)
     cpdef void set_skip_rows(self, int64_t skip_rows)
     cpdef void set_columns(self, list col_names)
     cpdef void set_filter(self, Expression filter)

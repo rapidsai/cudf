@@ -98,16 +98,16 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     return hashes;
   }();
 
-  auto set = cuco::static_set{
-    cuco::extent<int64_t>{static_cast<int64_t>(num_keys)},
-    cudf::detail::CUCO_DESIRED_LOAD_FACTOR,  // 50% load factor
-    cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
-    d_row_equal,
-    probing_scheme_t{row_hasher_with_cache_t{d_row_hash, cached_hashes.data()}},
-    cuco::thread_scope_device,
-    cuco::storage<GROUPBY_BUCKET_SIZE>{},
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-    stream.value()};
+  auto set =
+    cuco::static_set{cuco::extent<int64_t>{static_cast<int64_t>(num_keys)},
+                     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,  // 50% load factor
+                     cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
+                     d_row_equal,
+                     probing_scheme_t{row_hasher_with_cache_t{d_row_hash, cached_hashes.data()}},
+                     cuco::thread_scope_device,
+                     cuco::storage<GROUPBY_BUCKET_SIZE>{},
+                     rmm::mr::polymorphic_allocator<char>{},
+                     stream.value()};
 
   auto const gather_keys = [&](auto const& gather_map) {
     return cudf::detail::gather(keys,
