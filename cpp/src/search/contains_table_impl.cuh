@@ -143,15 +143,14 @@ void perform_contains(table_view const& haystack,
       return lhs_index_type{idx};
     }));
 
-  auto set = cuco::static_set{
-    cuco::extent{compute_hash_table_size(haystack.num_rows())},
-    cuco::empty_key{rhs_index_type{-1}},
-    d_equal,
-    probing_scheme,
-    {},
-    {},
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-    stream.value()};
+  auto set = cuco::static_set{cuco::extent{compute_hash_table_size(haystack.num_rows())},
+                              cuco::empty_key{rhs_index_type{-1}},
+                              d_equal,
+                              probing_scheme,
+                              {},
+                              {},
+                              rmm::mr::polymorphic_allocator<char>{},
+                              stream.value()};
 
   if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {
     auto const bitmask_buffer_and_ptr = build_row_bitmask(haystack, stream);

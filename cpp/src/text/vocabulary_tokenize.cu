@@ -102,7 +102,7 @@ using vocabulary_map_type = cuco::static_map<cudf::size_type,
                                              cuda::thread_scope_device,
                                              vocab_equal,
                                              probe_scheme,
-                                             cudf::detail::cuco_allocator<char>,
+                                             rmm::mr::polymorphic_allocator<char>,
                                              cuco_storage>;
 }  // namespace
 }  // namespace detail
@@ -154,7 +154,7 @@ tokenize_vocabulary::tokenize_vocabulary(cudf::strings_column_view const& input,
     detail::probe_scheme{detail::vocab_hasher{*d_vocabulary}},
     cuco::thread_scope_device,
     detail::cuco_storage{},
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+    rmm::mr::polymorphic_allocator<char>{},
     stream.value());
 
   // the row index is the token id (value for each key in the map)
