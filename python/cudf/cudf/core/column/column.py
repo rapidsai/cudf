@@ -228,7 +228,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return int(self.base_data.size / self.dtype.itemsize)  # type: ignore[union-attr]
 
     @property
-    def dtype(self):
+    def dtype(self) -> DtypeObj:
         return self._dtype
 
     @property
@@ -691,7 +691,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def __len__(self) -> int:
         return self.size
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
             f"{object.__repr__(self)}\n"
             f"{self.to_arrow().to_string()}\n"
@@ -1547,7 +1547,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         raise TypeError(f"cannot perform quantile with type {self.dtype}")
 
     def take(
-        self, indices: ColumnBase, nullify: bool = False, check_bounds=True
+        self,
+        indices: ColumnBase,
+        nullify: bool = False,
+        check_bounds: bool = True,
     ) -> Self:
         """Return Column by taking values from the corresponding *indices*.
 
@@ -1713,7 +1716,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         raise NotImplementedError()
 
     @acquire_spill_lock()
-    def cast(self, dtype: Dtype) -> ColumnBase:
+    def cast(self, dtype: DtypeObj) -> ColumnBase:
         result = type(self).from_pylibcudf(
             plc.unary.cast(
                 self.to_pylibcudf(mode="read"), dtype_to_pylibcudf_type(dtype)
@@ -1793,14 +1796,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
         raise NotImplementedError
 
-    def as_string_column(self, dtype) -> StringColumn:
+    def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         raise NotImplementedError
 
     def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
         raise NotImplementedError
 
-    def apply_boolean_mask(self, mask) -> ColumnBase:
-        mask = as_column(mask)
+    def apply_boolean_mask(self, mask: ColumnBase) -> ColumnBase:
         if mask.dtype.kind != "b":
             raise ValueError("boolean_mask is not boolean type.")
 
@@ -1833,7 +1835,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 )
             )
 
-    def __arrow_array__(self, type=None):
+    def __arrow_array__(self, type: pa.DataType | None = None) -> None:
         raise TypeError(
             "Implicit conversion to a host PyArrow Array via __arrow_array__ "
             "is not allowed, To explicitly construct a PyArrow Array, "
@@ -1865,7 +1867,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         return _array_ufunc(self, ufunc, method, inputs, kwargs)
 
-    def __invert__(self):
+    def __invert__(self) -> ColumnBase:
         raise TypeError(
             f"Operation `~` not supported on {self.dtype.type.__name__}"
         )
@@ -1927,7 +1929,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         header: dict[Any, Any] = {}
         frames = []
         try:
-            dtype, dtype_frames = self.dtype.device_serialize()
+            dtype, dtype_frames = self.dtype.device_serialize()  # type: ignore[union-attr]
             header["dtype"] = dtype
             frames.extend(dtype_frames)
             header["dtype-is-cudf-serialized"] = True
@@ -2032,7 +2034,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
         return cls.from_pylibcudf(plc_column)._with_type_metadata(dtype)
 
-    def unary_operator(self, unaryop: str):
+    def unary_operator(self, unaryop: str) -> ColumnBase:
         raise TypeError(
             f"Operation {unaryop} not supported for dtype {self.dtype}."
         )
@@ -2115,7 +2117,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def _label_encoding(
         self,
         cats: ColumnBase,
-        dtype: Dtype | None = None,
+        dtype: DtypeObj | None = None,
     ) -> NumericalColumn:
         """
         Convert each value in `self` into an integer code, with `cats`
