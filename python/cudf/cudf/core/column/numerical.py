@@ -16,7 +16,7 @@ import pylibcudf as plc
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
-from cudf.core.buffer import acquire_spill_lock
+from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.core.column.categorical import CategoricalColumn
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.column.numerical_base import NumericalBaseColumn
@@ -390,7 +390,7 @@ class NumericalColumn(NumericalBaseColumn):
             mask, _ = plc.transform.nans_to_nulls(
                 self.to_pylibcudf(mode="read")
             )
-            return self.set_mask(mask)
+            return self.set_mask(as_buffer(mask))
 
     def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if isinstance(other, ColumnBase):
