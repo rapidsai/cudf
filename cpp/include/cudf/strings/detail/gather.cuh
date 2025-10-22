@@ -36,7 +36,6 @@
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <__clang_cuda_builtin_vars.h>
 
 #include <cub/cub.cuh>
 
