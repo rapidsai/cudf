@@ -111,14 +111,20 @@ cdef class ParquetReaderOptions:
 
         self.c_obj.set_row_groups(outer)
 
-    cpdef void set_num_rows(self, size_type nrows):
+    cpdef void set_num_rows(self, int64_t nrows):
         """
         Sets number of rows to read.
 
         Parameters
         ----------
-        nrows : size_type
+        nrows : int64_t
             Number of rows to read after skip
+
+        Notes
+        -----
+        Although this allows one to request more than `size_type::max()`
+        rows, if any single read would produce a table larger than this row
+        limit, an error is thrown.
 
         Returns
         -------

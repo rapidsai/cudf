@@ -345,7 +345,7 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<column_desc>& chunks,
         chunk.valid_map_base = out_buffers[col_idx].null_mask();
       }
     }
-    chunks.host_to_device(stream);
+    chunks.host_to_device_async(stream);
   }
 }
 
