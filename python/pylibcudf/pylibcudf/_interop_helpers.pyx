@@ -32,12 +32,16 @@ class ArrowLike(metaclass=_ArrowLikeMeta):
 
 
 class _ObjectWithArrowMetadata:
-    def __init__(self, obj, metadata=None):
+    def __init__(self, obj, metadata=None, stream=None):
         self.obj = obj
         self.metadata = metadata
+        self.stream = stream
 
     def __arrow_c_array__(self, requested_schema=None):
-        return self.obj._to_schema(self.metadata), self.obj._to_host_array()
+        return (
+            self.obj._to_schema(self.metadata),
+            self.obj._to_host_array(stream=self.stream),
+        )
 
 
 @dataclass

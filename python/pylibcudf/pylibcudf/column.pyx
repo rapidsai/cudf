@@ -348,7 +348,8 @@ cdef class Column:
 
     def to_arrow(
         self,
-        metadata: ColumnMetadata | str | None = None
+        metadata: ColumnMetadata | str | None = None,
+        stream: Stream = None,
     ) -> ArrowLike:
         """Create a pyarrow array from a pylibcudf column.
 
@@ -356,6 +357,8 @@ cdef class Column:
         ----------
         metadata : ColumnMetadata | str | None
             The metadata to attach to the column.
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
 
         Returns
         -------
@@ -370,7 +373,7 @@ cdef class Column:
         # TODO: Once the arrow C device interface registers more
         # types that it supports, we can call pa.array(self) if
         # no metadata is passed.
-        return pa.array(_ObjectWithArrowMetadata(self, metadata))
+        return pa.array(_ObjectWithArrowMetadata(self, metadata, stream))
 
     @staticmethod
     def from_arrow(
