@@ -97,7 +97,7 @@ using hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<T>;
 using storage_type     = cuco::bucket_storage<slot_type,
                                               BUCKET_SIZE,
                                               cuco::extent<std::size_t>,
-                                              cudf::detail::cuco_allocator<char>>;
+                                              rmm::mr::polymorphic_allocator<char>>;
 using storage_ref_type = typename storage_type::ref_type;
 
 /**
@@ -1105,9 +1105,8 @@ struct dictionary_caster {
     auto const total_num_literals     = static_cast<cudf::size_type>(literals.size());
 
     // Create a single bulk storage used by all cuco hash sets
-    auto set_storage = storage_type{
-      total_set_storage_size,
-      cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}};
+    auto set_storage =
+      storage_type{total_set_storage_size, rmm::mr::polymorphic_allocator<char>{}, stream.value()};
 
     // Initialize storage with the empty key sentinel
     set_storage.initialize_async(EMPTY_KEY_SENTINEL, {stream.value()});
