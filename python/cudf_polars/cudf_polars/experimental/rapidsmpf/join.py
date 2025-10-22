@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import asyncio
-from itertools import chain
 from typing import TYPE_CHECKING, Any, Literal
 
 from rapidsmpf.streaming.core.channel import Message
@@ -120,11 +119,7 @@ async def broadcast_join_node(
             large_child = ir.children[1]
 
         # Collect small-side chunks
-        small_dfs = list(
-            chain.from_iterable(
-                await asyncio.gather(get_small_table(ctx, small_child, small_ch))
-            )
-        )
+        small_dfs = await get_small_table(ctx, small_child, small_ch)
         if ir.options[0] != "Inner":
             # TODO: Use local repartitioning for non-inner joins
             small_dfs = [_concat(*small_dfs)]
