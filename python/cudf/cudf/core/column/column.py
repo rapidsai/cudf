@@ -181,11 +181,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self,
         data: None | Buffer,
         size: int,
-        dtype,
-        mask: None | Buffer = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple[ColumnBase, ...] = (),
+        dtype: DtypeObj,
+        mask: None | Buffer,
+        offset: int,
+        null_count: int,
+        children: tuple[ColumnBase, ...],
     ) -> None:
         if size < 0:
             raise ValueError("size must be >=0")
@@ -193,6 +193,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self._distinct_count: dict[bool, int] = {}
         self._dtype = dtype
         self._offset = offset
+        if null_count < 0:
+            raise ValueError("null_count must be >=0")
         self._null_count = null_count
         self._mask = None
         self._base_mask = None
@@ -371,7 +373,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             except AttributeError:
                 # attr was not called yet, so ignore.
                 pass
-        self._null_count = None
+        self._null_count = None  # type: ignore[assignment]
 
     def set_mask(self, value) -> Self:
         """
@@ -1096,6 +1098,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     else self.base_mask.copy(deep=False),
                     size=self.size,
                     offset=self.offset,
+                    null_count=self.null_count,
                     children=tuple(
                         col.copy(deep=False) for col in self.base_children
                     ),
@@ -2554,11 +2557,11 @@ def build_column(
     data: Buffer | None,
     dtype: DtypeObj,
     *,
-    size: int | None = None,
-    mask: Buffer | None = None,
-    offset: int = 0,
-    null_count: int | None = None,
-    children: tuple[ColumnBase, ...] = (),
+    size: int,
+    mask: Buffer | None,
+    offset: int,
+    null_count: int,
+    children: tuple[ColumnBase, ...],
 ) -> ColumnBase:
     """
     Build a Column of the appropriate type from the given parameters
@@ -2594,6 +2597,7 @@ def build_column(
             size=size,
             offset=offset,
             null_count=null_count,
+            children=children,
         )
     elif dtype.kind == "M":
         return cudf.core.column.DatetimeColumn(
@@ -2603,6 +2607,7 @@ def build_column(
             size=size,
             offset=offset,
             null_count=null_count,
+            children=children,
         )
     elif dtype.kind == "m":
         return cudf.core.column.TimeDeltaColumn(
@@ -2612,6 +2617,7 @@ def build_column(
             size=size,
             offset=offset,
             null_count=null_count,
+            children=children,
         )
     elif (
         dtype == CUDF_STRING_DTYPE
@@ -2696,6 +2702,7 @@ def build_column(
             size=size,
             offset=offset,
             null_count=null_count,
+            children=children,
         )
     else:
         raise TypeError(f"Unrecognized dtype: {dtype}")
