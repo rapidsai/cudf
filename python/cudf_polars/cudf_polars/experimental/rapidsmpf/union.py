@@ -78,7 +78,6 @@ def _(ir: Union, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManag
     # Pass-through all child chunks in channel order.
 
     # Process children
-    rec.state["balanced_consumer"] = False
     nodes, channels = process_children(ir, rec)
 
     # Create output ChannelManager

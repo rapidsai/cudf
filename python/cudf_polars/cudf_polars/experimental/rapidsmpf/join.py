@@ -197,12 +197,7 @@ def _(ir: Join, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
         and right_count == output_count
     )
 
-    # When we broadcast, we must make sure upstream
-    # multicast nodes make "all" data available.
-    if not (
-        pwise_join := output_count == 1 or (left_partitioned and right_partitioned)
-    ):
-        rec.state["balanced_consumer"] = False
+    pwise_join = output_count == 1 or (left_partitioned and right_partitioned)
 
     # Process children
     nodes, channels = process_children(ir, rec)

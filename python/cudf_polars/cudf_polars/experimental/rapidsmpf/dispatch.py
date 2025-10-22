@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any, TypeAlias, TypedDict
+from typing import TYPE_CHECKING, Any, NamedTuple, TypeAlias, TypedDict
 
 from cudf_polars.typing import GenericTransformer
 
@@ -45,6 +45,15 @@ LowerIRTransformer: TypeAlias = GenericTransformer[
 """Protocol for Lowering IR nodes."""
 
 
+class MulticastInfo(NamedTuple):
+    """A named tuple representing multicast information."""
+
+    num_consumers: int
+    """The number of consumers."""
+    unbounded: bool
+    """Whether the node needs unbounded multicast."""
+
+
 class GenState(TypedDict):
     """
     State used for generating a streaming sub-network.
@@ -57,18 +66,14 @@ class GenState(TypedDict):
         GPUEngine configuration options.
     partition_info
         Partition information.
-    output_ch_count
-        Output channel count.
-    balanced_consumer
-        Whether all down-stream nodes are pulling
-        data from multiple channels at the same rate.
+    multicast_nodes
+        Dictionary mapping IR nodes to multicast information.
     """
 
     ctx: Context
     config_options: ConfigOptions
     partition_info: MutableMapping[IR, PartitionInfo]
-    output_ch_count: MutableMapping[IR, int]
-    balanced_consumer: bool
+    multicast_nodes: dict[IR, MulticastInfo]
 
 
 SubNetGenerator: TypeAlias = GenericTransformer[

@@ -16,7 +16,9 @@ from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Empty
-from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
+from cudf_polars.experimental.rapidsmpf.dispatch import (
+    generate_ir_sub_network,
+)
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     process_children,
@@ -255,26 +257,6 @@ async def multicast_node_bounded(
         await asyncio.gather(*(ch.data.drain(ctx) for ch in chs_out))
 
 
-async def _send_table_chunks(
-    ctx: Context,
-    table_chunks: list[TableChunk],
-    ch_out: Channel,
-) -> None:
-    """Send a list of table chunks to the output channel."""
-    async with shutdown_on_error(ctx, ch_out):
-        for table_chunk in table_chunks:
-            msg = Message(
-                TableChunk.from_pylibcudf_table(
-                    table_chunk.sequence_number,
-                    table_chunk.table_view(),
-                    table_chunk.stream,
-                    exclusive_view=False,
-                )
-            )
-            await ch_out.send(ctx, msg)
-        await ch_out.drain(ctx)
-
-
 @define_py_node()
 async def multicast_node_unbounded(
     ctx: Context,
@@ -284,8 +266,15 @@ async def multicast_node_unbounded(
     """
     Unbounded multicast node for rapidsmpf.
 
-    All incoming chunks are buffered in memory before
-    sending to all output channels.
+    Broadcasts chunks from input to all output channels. This is called
+    "unbounded" because it handles the case where one channel may consume
+    all data before another channel consumes any data.
+
+    The implementation uses adaptive sending:
+    - Maintains a FIFO buffer for each output channel
+    - Sends to all channels concurrently
+    - Receives next chunk as soon as any channel makes progress
+    - Efficient for both balanced and imbalanced consumption patterns
 
     Parameters
     ----------
@@ -297,12 +286,99 @@ async def multicast_node_unbounded(
         The output ChannelPairs.
     """
     async with shutdown_on_error(ctx, ch_in.data, *[ch.data for ch in chs_out]):
-        table_chunks: list[Message] = []
-        while (msg := await ch_in.data.recv(ctx)) is not None:
-            table_chunks.append(TableChunk.from_message(msg))
-        await asyncio.gather(
-            *(_send_table_chunks(ctx, table_chunks, ch.data) for ch in chs_out)
-        )
+        # FIFO buffer for each output channel
+        output_buffers: list[list[Message]] = [[] for _ in chs_out]
+
+        # Track active send/drain tasks for each output
+        active_tasks: dict[int, asyncio.Task] = {}
+
+        # Track which outputs need to be drained (set when no more input)
+        needs_drain: set[int] = set()
+
+        # Receive task
+        recv_task: asyncio.Task | None = asyncio.create_task(ch_in.data.recv(ctx))
+
+        # Flag to indicate we should start a new receive (for backpressure)
+        can_receive: bool = True
+
+        async def send_one_from_buffer(idx: int) -> None:
+            """Send one buffered message for output idx."""
+            if output_buffers[idx]:
+                msg = output_buffers[idx].pop(0)
+                await chs_out[idx].data.send(ctx, msg)
+
+        async def drain_output(idx: int) -> None:
+            """Drain output channel idx."""
+            await chs_out[idx].data.drain(ctx)
+
+        # Main loop: coordinate receiving, sending, and draining
+        while (
+            recv_task is not None or active_tasks or any(output_buffers) or needs_drain
+        ):
+            # Collect all currently active tasks
+            tasks_to_wait = list(active_tasks.values())
+            # Only include recv_task if we're allowed to receive
+            if recv_task is not None and can_receive:
+                tasks_to_wait.append(recv_task)
+
+            # Start new tasks for outputs with work to do
+            for idx in range(len(chs_out)):
+                if idx not in active_tasks:
+                    if output_buffers[idx]:
+                        # Send next buffered message
+                        task = asyncio.create_task(send_one_from_buffer(idx))
+                        active_tasks[idx] = task
+                        tasks_to_wait.append(task)
+                    elif idx in needs_drain:
+                        # Buffer empty and no more input - drain this output
+                        task = asyncio.create_task(drain_output(idx))
+                        active_tasks[idx] = task
+                        tasks_to_wait.append(task)
+                        needs_drain.discard(idx)
+
+            # If nothing to wait for, we're done
+            if not tasks_to_wait:
+                break
+
+            # Wait for ANY task to complete
+            done, _ = await asyncio.wait(
+                tasks_to_wait, return_when=asyncio.FIRST_COMPLETED
+            )
+
+            # Process completed tasks
+            for task in done:
+                if task is recv_task:
+                    # Receive completed
+                    msg = task.result()
+                    if msg is None:
+                        # End of input - mark all outputs as needing drain
+                        recv_task = None
+                        needs_drain.update(range(len(chs_out)))
+                    else:
+                        # Add message to all output buffers
+                        chunk = TableChunk.from_message(msg)
+                        for buffer in output_buffers:
+                            message = Message(
+                                TableChunk.from_pylibcudf_table(
+                                    chunk.sequence_number,
+                                    chunk.table_view(),
+                                    chunk.stream,
+                                    exclusive_view=False,
+                                )
+                            )
+                            buffer.append(message)
+
+                        # Don't receive next chunk until at least one send completes
+                        can_receive = False
+                        recv_task = asyncio.create_task(ch_in.data.recv(ctx))
+                else:
+                    # Must be a send or drain task - find which output and remove it
+                    for idx, at in list(active_tasks.items()):
+                        if at is task:
+                            del active_tasks[idx]
+                            # A send completed - allow receiving again
+                            can_receive = True
+                            break
 
 
 @generate_ir_sub_network.register(IR)
@@ -314,14 +390,11 @@ def _(ir: IR, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]
     bcast_indices: list[int] = []
     if len(ir.children) > 1:
         counts = [rec.state["partition_info"][c].count for c in ir.children]
-        if bcast_indices := (
+        bcast_indices = (
             []
             if all(c == 1 for c in counts)
             else [i for i, c in enumerate(counts) if c == 1]
-        ):
-            # When we broadcast, we must make sure upstream
-            # multicast nodes make "all" data available.
-            rec.state["balanced_consumer"] = False
+        )
 
     # Process children
     nodes, channels = process_children(ir, rec)
@@ -416,20 +489,22 @@ def generate_ir_sub_network_wrapper(
         corresponding streaming-network output ChannelManager.
     """
     nodes, channels = generate_ir_sub_network(ir, rec)
-    if (count := rec.state["output_ch_count"][ir]) > 1:
+
+    # Check if this node needs multicast
+    if (multicast_info := rec.state["multicast_nodes"].get(ir)) is not None:
+        count = multicast_info.num_consumers
         manager = ChannelManager(count=count)
-        if rec.state["balanced_consumer"]:
-            # TODO: Do we _know_ if this is safe?
+        if multicast_info.unbounded:
             nodes.append(
-                multicast_node_bounded(
+                multicast_node_unbounded(
                     rec.state["ctx"],
                     channels[ir].reserve_output_slot(),
                     *[manager.reserve_input_slot() for _ in range(count)],
                 )
             )
-        else:
+        else:  # "bounded"
             nodes.append(
-                multicast_node_unbounded(
+                multicast_node_bounded(
                     rec.state["ctx"],
                     channels[ir].reserve_output_slot(),
                     *[manager.reserve_input_slot() for _ in range(count)],

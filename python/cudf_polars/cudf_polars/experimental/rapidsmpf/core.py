@@ -28,8 +28,9 @@ import cudf_polars.experimental.rapidsmpf.repartition
 import cudf_polars.experimental.rapidsmpf.shuffle
 import cudf_polars.experimental.rapidsmpf.union  # noqa: F401
 from cudf_polars.containers import DataFrame
+from cudf_polars.dsl.ir import Join, Union
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
-from cudf_polars.experimental.rapidsmpf.dispatch import lower_ir_node
+from cudf_polars.experimental.rapidsmpf.dispatch import MulticastInfo, lower_ir_node
 from cudf_polars.experimental.rapidsmpf.nodes import generate_ir_sub_network_wrapper
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
@@ -179,6 +180,75 @@ def lower_ir_graph(
     return mapper(ir)
 
 
+def determine_multicast_nodes(
+    ir: IR,
+    partition_info: MutableMapping[IR, PartitionInfo],
+) -> dict[IR, MulticastInfo]:
+    """
+    Determine which IR nodes need multicast and what type.
+
+    Parameters
+    ----------
+    ir
+        The root IR node.
+    partition_info
+        Partition information for each IR node.
+
+    Returns
+    -------
+    Dictionary mapping IR nodes to MulticastInfo tuples where:
+    - num_consumers: number of consumers
+    - unbounded: whether the node needs unbounded multicast
+    Only includes nodes that need multicast (i.e., have multiple consumers).
+    """
+    # Calculate output channel counts (number of consumers per node)
+    output_ch_count: defaultdict[IR, int] = defaultdict(int)
+    for node in traversal([ir]):
+        for child in node.children:
+            output_ch_count[child] += 1
+
+    # Determine which nodes need unbounded multicast
+    unbounded: set[IR] = set()
+
+    def _mark_children_unbounded(node: IR) -> None:
+        for child in node.children:
+            unbounded.add(child)
+
+    # Traverse the graph and identify nodes that need unbounded multicast
+    for node in traversal([ir]):
+        if node in unbounded:
+            _mark_children_unbounded(node)
+        elif isinstance(node, Union):
+            # Union processes children sequentially, so all children
+            # with multiple consumers need unbounded multicast
+            _mark_children_unbounded(node)
+        elif isinstance(node, Join):
+            # This may be a broadcast join
+            _mark_children_unbounded(node)
+        elif len(node.children) > 1:
+            # Check if this node is doing any broadcasting.
+            # When we move to dynamic partitioning, we will need a
+            # new way to indicate that a node is broadcasting 1+ children.
+            counts = [partition_info[c].count for c in node.children]
+            has_broadcast = any(c == 1 for c in counts) and not all(
+                c == 1 for c in counts
+            )
+            if has_broadcast:
+                # Broadcasting operation - children need unbounded multicast
+                _mark_children_unbounded(node)
+
+    # Build result dictionary: only include nodes with multiple consumers
+    multicast_nodes: dict[IR, MulticastInfo] = {}
+    for node, count in output_ch_count.items():
+        if count > 1:
+            multicast_nodes[node] = MulticastInfo(
+                num_consumers=count,
+                unbounded=node in unbounded,
+            )
+
+    return multicast_nodes
+
+
 def generate_network(
     ctx: Context,
     ir: IR,
@@ -203,24 +273,15 @@ def generate_network(
     -------
     The network nodes and output hook.
     """
-    # Find IR nodes with multiple references.
-    # We will need to multiply the output channel
-    # for these nodes.
-    output_ch_count: defaultdict[IR, int] = defaultdict(int)
-    for node in traversal([ir]):
-        for child in node.children:
-            output_ch_count[child] += 1
+    # Determine which nodes need multicasting
+    multicast_nodes = determine_multicast_nodes(ir, partition_info)
 
     # Generate the network
     state: GenState = {
         "ctx": ctx,
         "config_options": config_options,
         "partition_info": partition_info,
-        "output_ch_count": output_ch_count,
-        # TODO: The "balanced_consumer" flag is a temporary
-        # hack to avoid hanging in multicast nodes. We definitely
-        # need to revisit this.
-        "balanced_consumer": True,
+        "multicast_nodes": multicast_nodes,
     }
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state
