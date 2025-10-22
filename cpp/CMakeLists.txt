@@ -811,6 +811,7 @@ add_library(
   src/text/stemmer.cu
   src/text/bpe/byte_pair_encoding.cu
   src/text/bpe/load_merge_pairs.cu
+  src/text/subword/subword_tokenize.cu
   src/text/tokenize.cu
   src/text/vocabulary_tokenize.cu
   src/text/wordpiece_tokenize.cu
