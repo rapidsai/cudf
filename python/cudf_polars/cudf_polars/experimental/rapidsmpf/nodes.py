@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.streaming.core.channel import Message
@@ -22,38 +21,14 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     process_children,
+    shutdown_on_error,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
-
-    from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
-
-
-@asynccontextmanager
-async def shutdown_on_error(
-    ctx: Context, *channels: Channel[Any]
-) -> AsyncIterator[None]:
-    """
-    Shutdown on error for rapidsmpf.
-
-    Parameters
-    ----------
-    ctx
-        The context.
-    channels
-        The channels to shutdown.
-    """
-    # TODO: This probably belongs in rapidsmpf.
-    try:
-        yield
-    except Exception:
-        await asyncio.gather(*(ch.shutdown(ctx) for ch in channels))
-        raise
 
 
 @define_py_node()

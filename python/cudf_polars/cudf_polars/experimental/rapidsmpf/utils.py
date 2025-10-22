@@ -4,7 +4,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import operator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from functools import reduce
 from typing import TYPE_CHECKING, Any, TypeAlias
@@ -12,6 +14,9 @@ from typing import TYPE_CHECKING, Any, TypeAlias
 from rapidsmpf.streaming.core.channel import Channel
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
+    from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
     from cudf_polars.dsl.ir import IR
@@ -20,6 +25,28 @@ if TYPE_CHECKING:
 
 # Type alias for metadata payloads (placeholder - not used yet)
 MetadataPayload: TypeAlias = Any
+
+
+@asynccontextmanager
+async def shutdown_on_error(
+    ctx: Context, *channels: Channel[Any]
+) -> AsyncIterator[None]:
+    """
+    Shutdown on error for rapidsmpf.
+
+    Parameters
+    ----------
+    ctx
+        The context.
+    channels
+        The channels to shutdown.
+    """
+    # TODO: This probably belongs in rapidsmpf.
+    try:
+        yield
+    except Exception:
+        await asyncio.gather(*(ch.shutdown(ctx) for ch in channels))
+        raise
 
 
 @dataclass
