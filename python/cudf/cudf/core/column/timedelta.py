@@ -90,11 +90,11 @@ class TimeDeltaColumn(TemporalBaseColumn):
     def __init__(
         self,
         data: Buffer,
-        size: int | None,
+        size: int,
         dtype: np.dtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
+        mask: Buffer | None,
+        offset: int,
+        null_count: int,
         children: tuple = (),
     ):
         if cudf.get_option("mode.pandas_compatible"):

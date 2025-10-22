@@ -1890,7 +1890,7 @@ class IndexedFrame(Frame):
         )
 
     @_performance_tracking
-    def nans_to_nulls(self):
+    def nans_to_nulls(self) -> Self:
         """
         Convert nans (if any) to nulls
 
@@ -1935,15 +1935,7 @@ class IndexedFrame(Frame):
         1  <NA>  3.14
         2  <NA>  <NA>
         """
-        result = []
-        for col in self._columns:
-            converted = col.nans_to_nulls()
-            if converted is col:
-                converted = converted.copy()
-            result.append(converted)
-        return self._from_data_like_self(
-            self._data._from_columns_like_self(result)
-        )
+        return super().nans_to_nulls()
 
     @_performance_tracking
     def interpolate(
@@ -6649,7 +6641,9 @@ def _check_duplicate_level_names(specified, level_names):
 @_performance_tracking
 def _get_replacement_values_for_columns(
     to_replace: Any, value: Any, columns_dtype_map: dict[Any, DtypeObj]
-) -> tuple[dict[Any, bool], dict[Any, Any], dict[Any, Any]]:
+) -> tuple[
+    dict[Any, bool], dict[Any, ColumnBase | list], dict[Any, ColumnBase | list]
+]:
     """
     Returns a per column mapping for the values to be replaced, new
     values to be replaced with and if all the values are empty.
@@ -6674,9 +6668,9 @@ def _get_replacement_values_for_columns(
         A dict mapping of all columns and the corresponding values
         to be replaced with.
     """
-    to_replace_columns: dict[Any, Any] = {}
-    values_columns: dict[Any, Any] = {}
-    all_na_columns: dict[Any, Any] = {}
+    to_replace_columns: dict[Any, ColumnBase | list] = {}
+    values_columns: dict[Any, ColumnBase | list] = {}
+    all_na_columns: dict[Any, bool] = {}
 
     if is_scalar(to_replace) and is_scalar(value):
         to_replace_columns = {col: [to_replace] for col in columns_dtype_map}
@@ -6781,20 +6775,23 @@ def _get_replacement_values_for_columns(
         )
 
     to_replace_columns = {
-        key: [value] if is_scalar(value) else value
+        key: [value]
+        if is_scalar(value)
+        else (value if isinstance(value, list) else as_column(value))
         for key, value in to_replace_columns.items()
     }
     values_columns = {
-        key: [value] if is_scalar(value) else value
+        key: [value]
+        if is_scalar(value)
+        else (value if isinstance(value, list) else as_column(value))
         for key, value in values_columns.items()
     }
 
     for i in to_replace_columns:
         if i in values_columns:
             if isinstance(values_columns[i], list):
-                all_na = values_columns[i].count(None) == len(
-                    values_columns[i]
-                )
+                val_col = cast(list, values_columns[i])
+                all_na = any(val is None for val in val_col)
             else:
                 all_na = False
             all_na_columns[i] = all_na

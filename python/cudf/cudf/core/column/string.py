@@ -118,12 +118,12 @@ class StringColumn(ColumnBase):
     def __init__(
         self,
         data: Buffer,
-        size: int | None,
+        size: int,
         dtype: np.dtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple[ColumnBase] = (),  # type: ignore[assignment]
+        mask: Buffer | None,
+        offset: int,
+        null_count: int,
+        children: tuple[ColumnBase],
     ):
         if not isinstance(data, Buffer):
             raise ValueError("data must be a Buffer")
@@ -144,20 +144,6 @@ class StringColumn(ColumnBase):
             dtype = CUDF_STRING_DTYPE
         if len(children) > 1:
             raise ValueError("StringColumn must have at most 1 offset column.")
-
-        if size is None:
-            for child in children:
-                assert child.offset == 0
-
-            if len(children) == 0:
-                size = 0
-            elif children[0].size == 0:
-                size = 0
-            else:
-                # one less because the last element of offsets is the number of
-                # bytes in the data buffer
-                size = children[0].size - 1
-            size = size - offset
 
         if len(children) == 0 and size != 0:
             # all nulls-column:
@@ -449,7 +435,7 @@ class StringColumn(ColumnBase):
             dtype_to_pylibcudf_type(dtype),
         )
         result = ColumnBase.from_pylibcudf(plc_column)
-        result.dtype.precision = dtype.precision
+        result.dtype.precision = dtype.precision  # type: ignore[union-attr]
         return result  # type: ignore[return-value]
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
@@ -507,10 +493,10 @@ class StringColumn(ColumnBase):
 
     def find_and_replace(
         self,
-        to_replace: ColumnLike,
-        replacement: ColumnLike,
+        to_replace: ColumnBase | list,
+        replacement: ColumnBase | list,
         all_nan: bool = False,
-    ) -> StringColumn:
+    ) -> Self:
         """
         Return col with *to_replace* replaced with *value*
         """

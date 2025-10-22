@@ -2439,7 +2439,7 @@ def _process_metadata(
         # update the decimal precision of each column
         for col in names:
             if isinstance(df._data[col].dtype, DecimalDtype):
-                df._data[col].dtype.precision = meta_data_per_column[col][
+                df._data[col].dtype.precision = meta_data_per_column[col][  # type: ignore[union-attr]
                     "metadata"
                 ]["precision"]
 
