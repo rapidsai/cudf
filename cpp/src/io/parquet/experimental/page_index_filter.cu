@@ -294,7 +294,6 @@ struct page_stats_caster : public stats_caster_base {
     if (input_column.null_count()) {
       // Set all bits in output nullmask to valid
       output_nullmask = cudf::create_null_mask(total_rows, mask_state::ALL_VALID, stream, mr);
-
       // For each input page, invalidate the null mask for corresponding rows if needed.
       std::for_each(thrust::counting_iterator(0),
                     thrust::counting_iterator(total_pages),
@@ -412,9 +411,8 @@ struct page_stats_caster : public stats_caster_base {
     // Buffer for row-level strings nullmask (output)
     auto output_nullmask = rmm::device_buffer{};
     if (input_null_count) {
-      // Initialize output nullmask to all bits set.
+      // Set all bits in output nullmask to valid
       output_nullmask = cudf::create_null_mask(total_rows, mask_state::ALL_VALID, stream, mr);
-
       // For each input page, invalidate the null mask for corresponding rows if needed.
       std::for_each(thrust::counting_iterator(0),
                     thrust::counting_iterator(total_pages),
