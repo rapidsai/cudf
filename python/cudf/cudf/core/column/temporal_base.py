@@ -51,20 +51,15 @@ class TemporalBaseColumn(ColumnBase):
     def __init__(
         self,
         data: Buffer,
-        size: int | None,
+        size: int,
         dtype: np.dtype | pd.DatetimeTZDtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple = (),
+        mask: Buffer | None,
+        offset: int,
+        null_count: int,
+        children: tuple,
     ):
         if not isinstance(data, Buffer):
             raise ValueError("data must be a Buffer.")
-        if data.size % dtype.itemsize:
-            raise ValueError("Buffer size must be divisible by element size")
-        if size is None:
-            size = data.size // dtype.itemsize
-            size = size - offset
         if len(children) != 0:
             raise ValueError(f"{type(self).__name__} must have no children.")
         super().__init__(
@@ -288,8 +283,8 @@ class TemporalBaseColumn(ColumnBase):
 
     def find_and_replace(
         self,
-        to_replace: ColumnBase,
-        replacement: ColumnBase,
+        to_replace: ColumnBase | list,
+        replacement: ColumnBase | list,
         all_nan: bool = False,
     ) -> Self:
         if not isinstance(to_replace, type(self)):

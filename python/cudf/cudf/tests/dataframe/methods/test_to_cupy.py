@@ -7,7 +7,6 @@ import pytest
 
 import cudf
 from cudf.testing import assert_eq
-from cudf.testing._utils import expand_bits_to_bytes, random_bitmask
 
 
 def test_empty_dataframe_to_cupy():
@@ -102,13 +101,11 @@ def test_dataframe_to_cupy_null_values():
     refvalues = {}
     rng = np.random.default_rng(seed=0)
     for k in "abcd":
-        df[k] = data = rng.random(nelem)
-        bitmask = random_bitmask(nelem)
-        df[k] = df[k]._column.set_mask(bitmask)
-        boolmask = np.asarray(
-            expand_bits_to_bytes(bitmask)[:nelem], dtype=np.bool_
-        )
+        data = rng.random(nelem)
+        boolmask = rng.choice([True, False], size=nelem)
         data[~boolmask] = na
+        df[k] = data
+        df.loc[~boolmask, k] = None
         refvalues[k] = data
 
     result = df.to_cupy()
