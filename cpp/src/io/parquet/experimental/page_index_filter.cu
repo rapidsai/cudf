@@ -242,8 +242,8 @@ namespace {
 };
 
 /**
- * @brief Converts page-level statistics of a column to 2 device columns - min, max values. Each
- * column has number of rows equal to the total rows in all row groups.
+ * @brief Converts page-level statistics of a column to 3 device columns - min, max and is_null
+ * values. Each column has number of rows equal to the total rows in all row groups.
  */
 struct page_stats_caster : public stats_caster_base {
   cudf::size_type total_rows;
