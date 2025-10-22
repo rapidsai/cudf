@@ -98,7 +98,7 @@ using global_set_t = cuco::static_set<cudf::size_type,
                                       cuda::thread_scope_device,
                                       row_comparator_t,
                                       probing_scheme_t,
-                                      cudf::detail::cuco_allocator<char>,
+                                      rmm::mr::polymorphic_allocator<char>,
                                       cuco::storage<GROUPBY_BUCKET_SIZE>>;
 
 using nullable_global_set_t = cuco::static_set<cudf::size_type,
@@ -106,7 +106,7 @@ using nullable_global_set_t = cuco::static_set<cudf::size_type,
                                                cuda::thread_scope_device,
                                                nullable_row_comparator_t,
                                                probing_scheme_t,
-                                               cudf::detail::cuco_allocator<char>,
+                                               rmm::mr::polymorphic_allocator<char>,
                                                cuco::storage<GROUPBY_BUCKET_SIZE>>;
 
 template <typename Op>
