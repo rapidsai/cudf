@@ -373,7 +373,8 @@ struct page_stats_caster : public stats_caster_base {
 
     // Construct device vectors containing page-level (input) string data, and offsets and sizes
     auto [page_str_chars, page_str_offsets, page_str_sizes] =
-      host_column<cudf::string_view>::make_strings_children(host_strings, host_chars, stream, mr);
+      host_column<cudf::string_view>::make_strings_children(
+        host_strings, host_chars, stream, cudf::get_current_device_resource_ref());
 
     // Buffer for row-level string sizes (output).
     auto row_str_sizes = rmm::device_uvector<size_t>(total_rows, stream, mr);
@@ -568,8 +569,8 @@ struct page_stats_caster : public stats_caster_base {
       // row-level.
       if constexpr (not cuda::std::is_same_v<T, cudf::string_view>) {
         // Move host min/max columns to device
-        auto mincol = min.to_device(dtype, stream, mr);
-        auto maxcol = max.to_device(dtype, stream, mr);
+        auto mincol = min.to_device(dtype, stream, cudf::get_current_device_resource_ref());
+        auto maxcol = max.to_device(dtype, stream, cudf::get_current_device_resource_ref());
 
         // Convert page-level min and max columns to row-level min and max columns by gathering
         // values based on page-level row offsets
@@ -695,14 +696,14 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
   }
 
   // Convert page statistics to a table
-  // where min(col[i]) = columns[i*2], max(col[i])=columns[i*2+1]
+  // where min(col[i]) = columns[i*3], max(col[i])=columns[i*3+1], is_null(col[i])=columns[i*3+2]
   // For each column, it contains total number of rows from all row groups.
   page_stats_caster const stats_col{.total_rows           = static_cast<size_type>(total_rows),
                                     .per_file_metadata    = per_file_metadata,
                                     .row_group_indices    = row_group_indices,
                                     .has_is_null_operator = has_is_null_operator};
 
-  std::vector<std::unique_ptr<column>> columns;
+  std::vector<std::unique_ptr<column>> page_stats_columns;
   std::for_each(
     thrust::counting_iterator<size_t>(0),
     thrust::counting_iterator(num_columns),
@@ -713,34 +714,50 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
       if (not stats_columns_mask[col_idx] or
           (cudf::is_compound(dtype) && dtype.id() != cudf::type_id::STRING)) {
         // Placeholder for unsupported types and non-participating columns
-        columns.push_back(cudf::make_numeric_column(
-          data_type{cudf::type_id::BOOL8}, total_rows, rmm::device_buffer{}, 0, stream, mr));
-        columns.push_back(cudf::make_numeric_column(
-          data_type{cudf::type_id::BOOL8}, total_rows, rmm::device_buffer{}, 0, stream, mr));
+        page_stats_columns.push_back(
+          cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
+                                    total_rows,
+                                    rmm::device_buffer{},
+                                    0,
+                                    stream,
+                                    cudf::get_current_device_resource_ref()));
+        page_stats_columns.push_back(
+          cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
+                                    total_rows,
+                                    rmm::device_buffer{},
+                                    0,
+                                    stream,
+                                    cudf::get_current_device_resource_ref()));
         if (has_is_null_operator) {
-          columns.push_back(cudf::make_numeric_column(
-            data_type{cudf::type_id::BOOL8}, total_rows, rmm::device_buffer{}, 0, stream, mr));
+          page_stats_columns.push_back(
+            cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
+                                      total_rows,
+                                      rmm::device_buffer{},
+                                      0,
+                                      stream,
+                                      cudf::get_current_device_resource_ref()));
         }
         return;
       }
       auto [min_col, max_col, is_null_col] = cudf::type_dispatcher<dispatch_storage_type>(
-        dtype, stats_col, schema_idx, dtype, stream, mr);
-      columns.push_back(std::move(min_col));
-      columns.push_back(std::move(max_col));
+        dtype, stats_col, schema_idx, dtype, stream, cudf::get_current_device_resource_ref());
+      page_stats_columns.push_back(std::move(min_col));
+      page_stats_columns.push_back(std::move(max_col));
       if (has_is_null_operator) {
         CUDF_EXPECTS(is_null_col.has_value(), "is_null host column must be present");
-        columns.push_back(std::move(is_null_col.value()));
+        page_stats_columns.push_back(std::move(is_null_col.value()));
       }
     });
 
-  auto stats_table = cudf::table(std::move(columns));
+  auto page_stats_table = cudf::table(std::move(page_stats_columns));
 
   // Converts AST to StatsAST with reference to min, max columns in above `stats_table`.
   parquet::detail::stats_expression_converter const stats_expr{
     filter.get(), static_cast<size_type>(output_dtypes.size()), has_is_null_operator, stream};
 
   // Filter the input table using AST expression and return the (BOOL8) predicate column.
-  return cudf::detail::compute_column(stats_table, stats_expr.get_stats_expr().get(), stream, mr);
+  return cudf::detail::compute_column(
+    page_stats_table, stats_expr.get_stats_expr().get(), stream, mr);
 }
 
 std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask(
