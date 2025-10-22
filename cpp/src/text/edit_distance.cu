@@ -132,9 +132,9 @@ struct calculate_compute_buffer_fn {
  * https://ashvardanian.com/posts/stringwars-on-gpus/#dynamic-programming-and-levenshtein-evaluation-order
  */
 template <int32_t tile_size = cudf::detail::warp_size, typename Iterator>
-__device__ void compute_distance(Iterator ss1,
+__device__ void compute_distance(Iterator input1,
                                  cudf::size_type length1,
-                                 Iterator ss2,
+                                 Iterator input2,
                                  cudf::size_type length2,
                                  cudf::size_type* d_buffer,
                                  cudf::size_type* d_result)
@@ -161,7 +161,7 @@ __device__ void compute_distance(Iterator ss1,
     v1[1] = 1;
   }
 
-  // for navigating the diagonal of the matrix of characters for the 2 strings
+  // utility for navigating the diagonal of the matrix of characters for the 2 strings
   auto next_itr = [](Iterator sitr, cudf::size_type length, Iterator itr, cudf::size_type offset) {
     if constexpr (cuda::std::is_pointer_v<Iterator>) {
       itr = sitr - offset;  // ASCII iterator
@@ -173,20 +173,21 @@ __device__ void compute_distance(Iterator ss1,
   };
 
   // top-left of the matrix
-  for (auto idx = 0; idx < length1; ++idx, ++ss1) {
-    auto const n = idx + 2;
-    auto const a = n > length1;
+  // includes the diagonal one passed the max(length1,length2) diagonal
+  for (auto idx = 0; idx < length1; ++idx, ++input1) {
+    auto const n = idx + 2;      // diagonal length
+    auto const a = n > length1;  // extra diagonal adjust
 
     auto jdx = static_cast<cudf::size_type>(lane_idx);
-    auto it1 = ss1;
-    auto it2 = ss2;
+    auto it1 = input1;
+    auto it2 = input2;
 
-    auto tile_count = cudf::util::div_rounding_up_safe(n, tile_size);
+    auto tile_count = cudf::util::div_rounding_up_safe(n + 1, tile_size);
     while (tile_count--) {
       auto const offset = (jdx - 1);
-      // locate the 2 characters to compare
-      it1 = next_itr(ss1, length1, it1, offset);
-      it2 = next_itr(ss2, length2, it2, -offset);
+      // locate the 2 characters to compare along the diagonal
+      it1 = next_itr(input1, length1, it1, offset);
+      it2 = next_itr(input2, length2, it2, -offset);
       if (jdx == 0) {
         if (!a) { v2[0] = n; }
       } else if (jdx < n) {
@@ -204,24 +205,24 @@ __device__ void compute_distance(Iterator ss1,
     cuda::std::swap(v1, v2);
   }
 
-  --ss1;  // reset
-  ++ss2;  // iterators
+  --input1;  // reset
+  ++input2;  // iterators
 
   // bottom-right of the matrix
-  for (auto idx = 1; idx < length2; ++idx, ++ss2) {
-    bool const fl = (length2 - idx) > length1;
+  for (auto idx = 1; idx < length2; ++idx, ++input2) {
+    bool const fl = (length2 - idx) > length1;  // fill-last flag
     auto const n  = (fl ? length1 : (length2 - idx)) + 1;
 
     auto jdx = static_cast<cudf::size_type>(lane_idx);
-    auto it1 = ss1;
-    auto it2 = ss2;
+    auto it1 = input1;
+    auto it2 = input2;
 
     auto tile_count = cudf::util::div_rounding_up_safe(n, tile_size);
     while (tile_count--) {
       auto const offset = (jdx - 1);
-      // locate the 2 characters to compare
-      it1 = next_itr(ss1, length1, it1, offset);
-      it2 = next_itr(ss2, length2, it2, -offset);
+      // locate the 2 characters to compare along the diagonal
+      it1 = next_itr(input1, length1, it1, offset);
+      it2 = next_itr(input2, length2, it2, -offset);
       if (jdx > 0 && jdx < n) {
         auto const sc = v0[jdx] + (*it1 != *it2);
         auto const dc = v1[jdx - 1] + 1;
@@ -258,6 +259,7 @@ CUDF_KERNEL void levenshtein_kernel(cudf::column_device_view d_strings,
                                  : d_targets.element<cudf::string_view>(str_idx);
   }();
 
+  // compute_distance algorithm is designed such that it expects length1 <= length2
   if (d_str1.length() > d_str2.length()) { cuda::std::swap(d_str1, d_str2); }
   auto const length1 = d_str1.length();
   auto const length2 = d_str2.length();
