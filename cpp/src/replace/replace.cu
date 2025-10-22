@@ -1,8 +1,9 @@
+// clang-format off
 /*
- * Copyright 2018 BlazingDB, Inc.
+ * SPDX-FileCopyrightText: Copyright 2018 BlazingDB, Inc.
 
- *     Copyright 2018 Cristhian Alberto Gonzales Castillo <cristhian@blazingdb.com>
- *     Copyright 2018 Alexander Ocsa <alexander@blazingdb.com>
+ * SPDX-FileCopyrightText: Copyright 2018 Cristhian Alberto Gonzales Castillo <cristhian@blazingdb.com>
+ * SPDX-FileCopyrightText: Copyright 2018 Alexander Ocsa <alexander@blazingdb.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +17,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// clang-format on
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0

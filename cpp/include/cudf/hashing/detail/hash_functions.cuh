@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2017-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2017-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -77,9 +77,11 @@ __device__ inline uint64_t swap_endian(uint64_t x)
 };
 
 /**
+ * SPDX-SnippetBegin
  * Modified GPU implementation of
  * https://johnnylee-sde.github.io/Fast-unsigned-integer-to-hex-string/
- * Copyright (c) 2015 Barry Clark
+ * SPDX-FileCopyrightText: Copyright (c) 2015 Barry Clark
+ * SPDX-License-Identifier: MIT
  * Licensed under the MIT license.
  * See file LICENSE for detail or copy at https://opensource.org/licenses/MIT
  */
@@ -98,5 +100,6 @@ __device__ inline void uint32ToLowercaseHexString(uint32_t num, char* destinatio
   x += offsets;
   std::memcpy(destination, reinterpret_cast<uint8_t*>(&x), 8);
 }
+// SPDX-SnippetEnd
 
 }  // namespace cudf::hashing::detail

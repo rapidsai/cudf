@@ -182,7 +182,9 @@ repos:
             cpp/src/io/comp/debrotli[.]cu$|
             cpp/src/io/comp/cpu_unbz2[.]cpp$|
             cpp/src/io/comp/unbz2[.]hpp$|
-            cpp/src/io/comp/gpuinflate[.]cu$
+            cpp/src/io/comp/gpuinflate[.]cu$|
+            cpp/src/io/utilities/base64_utilities[.]cpp$|
+            cpp/src/io/utilities/base64_utilities[.]hpp$
           )
       - id: verify-copyright
         name: verify-copyright-brotli
@@ -207,7 +209,16 @@ repos:
         args: [--fix, --spdx, "--spdx-license-identifier=Apache-2.0 AND Zlib"]
         files: |
           (?x)^(
-            cpp/src/io/comp/gpuinflate[.]cu$
+            cpp/src/io/comp/gpuinflate[.]cu$|
+            cpp/src/io/utilities/base64_utilities[.]cpp$|
+            cpp/src/io/utilities/base64_utilities[.]hpp$
+          )
+      - id: verify-copyright
+        name: verify-copyright-cxxopts
+        args: [--fix, --spdx, "--spdx-license-identifier=MIT"]
+        files: |
+          (?x)^(
+            cpp/include/cudf_test/cxxopts[.]hpp$
           )
       - id: verify-alpha-spec
       - id: verify-codeowners

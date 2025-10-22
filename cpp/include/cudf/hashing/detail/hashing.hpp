@@ -60,7 +60,9 @@ std::unique_ptr<column> xxhash_64(table_view const& input,
                                   rmm::cuda_stream_view,
                                   rmm::device_async_resource_ref mr);
 
-/* Copyright 2005-2014 Daniel James.
+/* SPDX-SnippetBegin
+ * SPDX-FileCopyrightText: Copyright 2005-2014 Daniel James.
+ * SPDX-License-Identifier: BSL-1.0
  *
  * Use, modification and distribution is subject to the Boost Software
  * License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
@@ -80,8 +82,11 @@ CUDF_HOST_DEVICE constexpr uint32_t hash_combine(uint32_t lhs, uint32_t rhs)
 {
   return lhs ^ (rhs + 0x9e37'79b9 + (lhs << 6) + (lhs >> 2));
 }
+// SPDX-SnippetEnd
 
-/* Copyright 2005-2014 Daniel James.
+/* SPDX-SnippetBegin
+ * SPDX-FileCopyrightText: Copyright 2005-2014 Daniel James.
+ * SPDX-License-Identifier: BSL-1.0
  *
  * Use, modification and distribution is subject to the Boost Software
  * License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
@@ -101,6 +106,7 @@ constexpr std::size_t hash_combine(std::size_t lhs, std::size_t rhs)
 {
   return lhs ^ (rhs + 0x9e37'79b9'7f4a'7c15 + (lhs << 6) + (lhs >> 2));
 }
+// SPDX-SnippetEnd
 
 }  // namespace hashing::detail
 }  // namespace CUDF_EXPORT cudf
