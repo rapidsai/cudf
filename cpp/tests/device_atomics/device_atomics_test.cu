@@ -275,10 +275,11 @@ class Atomic128Test : public cudf::test::BaseFixture {
                            __int128_t add_value,
                            __int128_t expected_result)
   {
-    rmm::device_scalar<__int128_t> d_target(initial_value, cudf::test::get_default_stream());
-    test_single_atomic_add_kernel<<<32, 256>>>(d_target.data(), add_value);
-    CUDF_CHECK_CUDA(cudf::test::get_default_stream().value());
-    __int128_t result = d_target.value(cudf::test::get_default_stream());
+    rmm::device_scalar<__int128_t> d_target(initial_value, cudf::get_default_stream());
+    test_single_atomic_add_kernel<<<32, 256, 0, cudf::get_default_stream().value()>>>(
+      d_target.data(), add_value);
+    CUDF_CHECK_CUDA(cudf::get_default_stream().value());
+    __int128_t result = d_target.value(cudf::get_default_stream());
     EXPECT_EQ(result, expected_result);
   }
 };
