@@ -780,23 +780,6 @@ table_with_metadata hybrid_scan_reader_impl::read_chunk_internal(
     }
   }
 
-  out_columns =
-    cudf::structs::detail::enforce_null_consistency(std::move(out_columns), _stream, _mr);
-
-  // Check if number of rows per source should be included in output metadata.
-  if (include_output_num_rows_per_source()) {
-    // For chunked reading, compute the output number of rows per source
-    if (mode == read_mode::CHUNKED_READ) {
-      out_metadata.num_rows_per_source =
-        calculate_output_num_rows_per_source(read_info.skip_rows, read_info.num_rows);
-    }
-    // Simply move the number of rows per file if reading all at once
-    else {
-      // Move is okay here as we are reading in one go.
-      out_metadata.num_rows_per_source = std::move(_file_itm_data.num_rows_per_source);
-    }
-  }
-
   // Add empty columns if needed. Filter output columns based on filter.
   return finalize_output(read_columns_mode, out_metadata, out_columns, row_mask);
 }
