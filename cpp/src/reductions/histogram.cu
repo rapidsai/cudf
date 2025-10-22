@@ -148,16 +148,16 @@ compute_row_frequencies(table_view const& input,
                              histogram_count_type{0});
 
   // Construct a hash set
-  auto row_set = cuco::static_set{
-    cuco::extent{num_rows},
-    cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
-    cuco::empty_key<size_type>{-1},
-    key_equal,
-    cuco::linear_probing<DEFAULT_HISTOGRAM_CG_SIZE, row_hash>{key_hasher},
-    {},  // thread scope
-    {},  // storage
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-    stream.value()};
+  auto row_set =
+    cuco::static_set{cuco::extent{num_rows},
+                     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
+                     cuco::empty_key<size_type>{-1},
+                     key_equal,
+                     cuco::linear_probing<DEFAULT_HISTOGRAM_CG_SIZE, row_hash>{key_hasher},
+                     {},  // thread scope
+                     {},  // storage
+                     rmm::mr::polymorphic_allocator<char>{},
+                     stream.value()};
 
   // Device-accessible reference to the hash set with `insert_and_find` operator
   auto row_set_ref = row_set.ref(cuco::op::insert_and_find);

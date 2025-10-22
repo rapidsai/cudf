@@ -64,6 +64,7 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     _get_nan_for_dtype,
     find_common_type,
+    get_dtype_of_same_kind,
     is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
@@ -1989,6 +1990,11 @@ class Series(SingleColumnFrame, IndexedFrame):
         array([1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0,
                0, 0, 4, 0, 0, 0, 0, 0, 0, 0], dtype=uint8)
         """
+        warnings.warn(
+            "Series.data is deprecated and will be removed in a future version. "
+            "Use Series.to_pylibcudf()[0].data() instead.",
+            FutureWarning,
+        )
         return self._column.data
 
     @_performance_tracking
@@ -4221,7 +4227,17 @@ class DatetimeProperties(BaseDatelikeProperties):
         8    6
         dtype: int16
         """
-        return self._return_result_like_self(self.series._column.weekday)
+        res = self.series._column.weekday
+        if cudf.get_option("mode.pandas_compatible"):
+            # Pandas returns int64 for weekday
+            res = res.astype(
+                get_dtype_of_same_kind(
+                    self.series._column.dtype, np.dtype("int64")
+                )
+            )
+        return self._return_result_like_self(res)
+
+    day_of_week = dayofweek
 
     @property  # type: ignore
     @_performance_tracking
@@ -4552,7 +4568,41 @@ class DatetimeProperties(BaseDatelikeProperties):
         11    31
         dtype: int16
         """
-        return self._return_result_like_self(self.series._column.days_in_month)
+        res = self.series._column.days_in_month
+        if cudf.get_option("mode.pandas_compatible"):
+            # Pandas returns int64 for dayofweek
+            res = res.astype(
+                get_dtype_of_same_kind(
+                    self.series._column.dtype, np.dtype("int64")
+                )
+            )
+        return self._return_result_like_self(res)
+
+    daysinmonth = days_in_month
+
+    @property
+    def tz(self) -> str | None:
+        return self.series._column.tz
+
+    @property
+    def freq(self) -> str | None:
+        return self.series._column.freq
+
+    @property
+    def date(self):
+        return self.series._column.date
+
+    @property
+    def time(self):
+        return self.series._column.time
+
+    @property
+    def timetz(self):
+        return self.series._column.timetz
+
+    @property
+    def unit(self) -> str:
+        return self.series._column.time_unit
 
     @property  # type: ignore
     @_performance_tracking
