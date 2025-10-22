@@ -2370,9 +2370,19 @@ def _set_col_metadata(
 
 
 def _get_comp_type(
-    compression: Literal["snappy", "ZSTD", "ZLIB", "LZ4", None],
+    compression: Literal[
+        "snappy",
+        "SNAPPY",
+        "GZIP",
+        "BROTLI",
+        "LZ4",
+        "ZSTD",
+        "ZLIB",
+        "NONE",
+        None,
+    ],
 ) -> plc.io.types.CompressionType:
-    if compression is None:
+    if compression is None or compression == "NONE":
         return plc.io.types.CompressionType.NONE
     result = getattr(plc.io.types.CompressionType, compression.upper(), None)
     if result is None:
@@ -2527,3 +2537,55 @@ def _process_metadata(
         df._data.label_dtype = column_index_type
 
     return df
+
+
+def is_supported_read_parquet(
+    compression: Literal["SNAPPY", "GZIP", "BROTLI", "LZ4", "ZSTD", "NONE"],
+) -> bool:
+    """Check if the compression type is supported for reading Parquet files.
+
+    Parameters
+    ----------
+    compression : str
+        The compression type to check (e.g., "SNAPPY", "GZIP", "LZ4")
+
+    Returns
+    -------
+    bool
+        True if the compression type is supported for reading Parquet files
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.io.parquet.is_supported_read_parquet("LZ4")  # doctest: +SKIP
+    True
+    """
+    return plc.io.parquet.is_supported_read_parquet(
+        _get_comp_type(compression)
+    )
+
+
+def is_supported_write_parquet(
+    compression: Literal["SNAPPY", "GZIP", "BROTLI", "LZ4", "ZSTD", "NONE"],
+) -> bool:
+    """Check if the compression type is supported for writing Parquet files.
+
+    Parameters
+    ----------
+    compression : str
+        The compression type to check (e.g., "SNAPPY", "GZIP", "LZ4")
+
+    Returns
+    -------
+    bool
+        True if the compression type is supported for writing Parquet files
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.io.parquet.is_supported_write_parquet("SNAPPY")  # doctest: +SKIP
+    True
+    """
+    return plc.io.parquet.is_supported_write_parquet(
+        _get_comp_type(compression)
+    )
