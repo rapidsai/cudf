@@ -22,6 +22,7 @@
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -190,12 +191,6 @@ struct BlockPrefixCallbackOp
     }
 };
 
-/** Number of chunk which need to be scheduled for the grid */
-template<typename T, typename U>
-__device__ uint64_t calculate_waves(T grid_size, U chunk_size) {
-  return ((grid_size - 1)/ chunk_size) + 1;
-}
-
 /**
  * @brief Gather characters from the input iterator, with char parallel strategy.
  *
@@ -253,13 +248,13 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
   __shared__ uint64_t last_ibyte_threadblock; // The last loaded character in our scratch that can be written out to GMEM
 
   // Generate chunked load offsets for the strings processed in current thread block
-  for (size_type idx = threadIdx.x, waves = 0; waves < calculate_waves(strings_current_threadblock, blockDim.x); idx += blockDim.x, waves++) {
+  for (size_type idx = threadIdx.x, waves = 0; waves < cudf::util::div_rounding_up_safe(strings_current_threadblock, static_cast<size_type>(blockDim.x)); idx += blockDim.x, waves++) {
     auto curr_string_num_chunks {0}; // default for the block scan
 
     if (idx < strings_current_threadblock) {
       auto const& curr_string_idx = idx + begin_out_string_idx;
       auto const& curr_string = strings_begin[string_indices[curr_string_idx]];
-      curr_string_num_chunks = calculate_waves(curr_string.size_bytes(), sizeof(uint32_t));
+      curr_string_num_chunks = cudf::util::div_rounding_up_safe(curr_string.size_bytes(), static_cast<size_type>(sizeof(uint32_t)));
       if (reinterpret_cast<std::uintptr_t>(curr_string.data()) % sizeof(uint32_t) != 0) curr_string_num_chunks++; // need extra chunk to account for non-alignment
     }
 
@@ -272,7 +267,7 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
   __syncthreads();
 
   // On each iteration we fill in the string_scratch which is of size block_size where each element is a chunk
-  auto const load_waves = calculate_waves(in_offsets_threadblock[strings_current_threadblock], block_size);
+  auto const load_waves = cudf::util::div_rounding_up_safe(in_offsets_threadblock[strings_current_threadblock], static_cast<int64_t>(block_size));
 
 
   // Outer loop: Load data from GMEM into SHMEM in 4B chunks
