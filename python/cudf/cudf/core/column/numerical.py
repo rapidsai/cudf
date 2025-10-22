@@ -16,7 +16,7 @@ import pylibcudf as plc
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
-from cudf.core.buffer import acquire_spill_lock
+from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.core.column.categorical import CategoricalColumn
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.column.numerical_base import NumericalBaseColumn
@@ -89,7 +89,7 @@ class NumericalColumn(NumericalBaseColumn):
         offset: int,
         null_count: int,
         exposed: bool,
-    ):
+    ) -> None:
         if (
             cudf.get_option("mode.pandas_compatible")
             and dtype.kind not in "iufb"
@@ -400,7 +400,7 @@ class NumericalColumn(NumericalBaseColumn):
             mask, _ = plc.transform.nans_to_nulls(
                 self.to_pylibcudf(mode="read")
             )
-            return self.set_mask(mask)
+            return self.set_mask(as_buffer(mask))
 
     def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if isinstance(other, ColumnBase):
@@ -673,13 +673,15 @@ class NumericalColumn(NumericalBaseColumn):
 
     def find_and_replace(
         self,
-        to_replace: ColumnLike,
-        replacement: ColumnLike,
+        to_replace: ColumnBase | list,
+        replacement: ColumnBase | list,
         all_nan: bool = False,
     ) -> Self:
         """
         Return col with *to_replace* replaced with *value*.
         """
+        # TODO: all_nan and list arguments only used for this
+        # this subclass, try to factor these cases out of this method
 
         # If all of `to_replace`/`replacement` are `None`,
         # dtype of `to_replace_col`/`replacement_col`
@@ -736,9 +738,7 @@ class NumericalColumn(NumericalBaseColumn):
             (to_replace_col.dtype, replacement_col.dtype, self.dtype)
         )
         if len(replacement_col) == 1 and len(to_replace_col) > 1:
-            replacement_col = as_column(
-                replacement[0], length=len(to_replace_col), dtype=common_type
-            )
+            replacement_col = replacement_col.repeat(len(to_replace_col))
         elif len(replacement_col) == 1 and len(to_replace_col) == 0:
             return self.copy()
         replaced = cast(Self, self.astype(common_type))

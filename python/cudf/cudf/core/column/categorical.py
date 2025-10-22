@@ -103,7 +103,7 @@ class CategoricalColumn(column.ColumnBase):
         offset: int,
         null_count: int,
         exposed: bool,
-    ):
+    ) -> None:
         if not isinstance(dtype, CategoricalDtype):
             raise ValueError(
                 f"{dtype=} must be cudf.CategoricalDtype instance."
@@ -405,10 +405,10 @@ class CategoricalColumn(column.ColumnBase):
 
     def find_and_replace(
         self,
-        to_replace: ColumnLike,
-        replacement: ColumnLike,
+        to_replace: ColumnBase | list,
+        replacement: ColumnBase | list,
         all_nan: bool = False,
-    ) -> CategoricalColumn:
+    ) -> Self:
         """
         Return col with *to_replace* replaced with *replacement*.
         """

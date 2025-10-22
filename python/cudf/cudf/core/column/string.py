@@ -123,7 +123,7 @@ class StringColumn(ColumnBase):
         offset: int,
         null_count: int,
         exposed: bool,
-    ):
+    ) -> None:
         if (
             not cudf.get_option("mode.pandas_compatible")
             and dtype != CUDF_STRING_DTYPE
@@ -476,10 +476,10 @@ class StringColumn(ColumnBase):
 
     def find_and_replace(
         self,
-        to_replace: ColumnLike,
-        replacement: ColumnLike,
+        to_replace: ColumnBase | list,
+        replacement: ColumnBase | list,
         all_nan: bool = False,
-    ) -> StringColumn:
+    ) -> Self:
         """
         Return col with *to_replace* replaced with *value*
         """

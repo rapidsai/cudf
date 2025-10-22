@@ -20,7 +20,6 @@ from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 from typing_extensions import Self
 
 import pylibcudf as plc
-import rmm
 
 import cudf
 from cudf.api.types import (
@@ -330,7 +329,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return int(self.base_data.size / self.dtype.itemsize)  # type: ignore[union-attr]
 
     @property
-    def dtype(self):
+    def dtype(self) -> DtypeObj:
         return self._dtype
 
     @property
@@ -476,77 +475,25 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 pass
         self._null_count = None  # type: ignore[assignment]
 
-    def set_mask(self, value) -> Self:
+    def set_mask(self, mask: Buffer | None) -> Self:
         """
-        Replaces the mask buffer of the column and returns a new column. This
-        will zero the column offset, compute a new mask buffer if necessary,
-        and compute new data Buffers zero-copy that use pointer arithmetic to
-        properly adjust the pointer.
+        Replaces the mask buffer of the column and returns a new column.
+        The input mask is assumed to be of appropriate size for self.
         """
-        mask_size = plc.null_mask.bitmask_allocation_size_bytes(self.size)
-        required_num_bytes = -(-self.size // 8)  # ceiling divide
-        error_msg = (
-            "The value for mask is smaller than expected, got {} bytes, "
-            f"expected {required_num_bytes} bytes."
-        )
-        if value is None:
-            mask = None
-        elif (
-            cai := getattr(value, "__cuda_array_interface__", None)
-        ) is not None:
-            if cai["typestr"][1] == "t":
-                mask_size = plc.null_mask.bitmask_allocation_size_bytes(
-                    cai["shape"][0]
-                )
-                mask = as_buffer(
-                    data=cai["data"][0], size=mask_size, owner=value
-                )
-            elif cai["typestr"][1] == "b":
-                mask = as_column(value).as_mask()
-            else:
-                if cai["typestr"] not in ("|i1", "|u1"):
-                    if isinstance(value, ColumnBase):
-                        value = value.values
-                    value = cp.asarray(value).view("|u1")
-                mask = as_buffer(value)
-            if mask.size < required_num_bytes:
-                raise ValueError(error_msg.format(str(value.size)))
-            if mask.size < mask_size:
-                dbuf = rmm.DeviceBuffer(size=mask_size)
-                dbuf.copy_from_device(value)
-                mask = as_buffer(dbuf)
-        elif hasattr(value, "__array_interface__"):
-            value = np.asarray(value).view("u1")[:mask_size]
-            if value.size < required_num_bytes:
-                raise ValueError(error_msg.format(str(value.size)))
-            dbuf = rmm.DeviceBuffer(size=mask_size)
-            dbuf.copy_from_host(value)
-            mask = as_buffer(dbuf)
-        else:
-            try:
-                value = memoryview(value)
-            except TypeError as err:
-                raise TypeError(
-                    f"Expected a Buffer object or None for mask, got {type(value).__name__}"
-                ) from err
-            else:
-                value = np.asarray(value).view("u1")[:mask_size]
-                if value.size < required_num_bytes:
-                    raise ValueError(error_msg.format(str(value.size)))
-                dbuf = rmm.DeviceBuffer(size=mask_size)
-                dbuf.copy_from_host(value)
-                mask = as_buffer(dbuf)
-
-        if mask is not None:
+        if isinstance(mask, Buffer):
             new_mask = plc.gpumemoryview(mask)
             new_null_count = plc.null_mask.null_count(
                 new_mask,
                 0,
                 self.size,
             )
-        else:
+        elif mask is None:
             new_mask = None
             new_null_count = 0
+        else:
+            raise ValueError(
+                f"Expected a Buffer object or None for mask, got {type(mask).__name__}"
+            )
         new_plc_column = self.to_pylibcudf(
             mode="read", use_base=False
         ).with_mask(new_mask, new_null_count)
@@ -787,7 +734,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # )
 
     @classmethod
-    def from_cuda_array_interface(cls, arbitrary: Any) -> Self:
+    def from_cuda_array_interface(cls, arbitrary: Any) -> ColumnBase:
         """
         Create a Column from an object implementing the CUDA array interface.
 
@@ -827,13 +774,33 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             data_ptr_exposed=cudf.get_option("copy_on_write"),
         )
         if mask is not None:
-            column = column.set_mask(mask)
+            cai_mask = mask.__cuda_array_interface__
+            if cai_mask["typestr"][1] == "t":
+                mask_size = plc.null_mask.bitmask_allocation_size_bytes(
+                    cai_mask["shape"][0]
+                )
+                mask_buff = as_buffer(
+                    data=cai_mask["data"][0], size=mask_size, owner=mask
+                )
+            elif cai_mask["typestr"][1] == "b":
+                mask_buff = ColumnBase.from_cuda_array_interface(
+                    mask,
+                ).as_mask()
+            else:
+                mask_buff = as_buffer(mask)
+            required_num_bytes = -(-column.size // 8)  # ceiling divide
+            if mask_buff.size < required_num_bytes:
+                raise ValueError(
+                    f"The value for mask is smaller than expected, got {mask.size} bytes, "
+                    f"expected {required_num_bytes} bytes."
+                )
+            column = column.set_mask(mask_buff)
         return column  # type: ignore[return-value]
 
     def __len__(self) -> int:
         return self.size
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
             f"{object.__repr__(self)}\n"
             f"{self.to_arrow().to_string()}\n"
@@ -909,8 +876,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def find_and_replace(
         self,
-        to_replace: ColumnLike,
-        replacement: ColumnLike,
+        to_replace: ColumnBase | list,
+        replacement: ColumnBase | list,
         all_nan: bool = False,
     ) -> Self:
         raise NotImplementedError
@@ -1157,18 +1124,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             plc_fill_value,
         )
         return type(self).from_pylibcudf(plc_col)  # type: ignore[return-value]
-
-    @property
-    def nullmask(self) -> cp.ndarray:
-        """The gpu buffer for the null-mask"""
-        if not self.nullable:
-            raise ValueError("Column has no null mask")
-        obj = cuda_array_interface_wrapper(
-            ptr=self.mask.get_ptr(mode="read"),  # type: ignore[union-attr]
-            size=self.mask.size,  # type: ignore[union-attr]
-            owner=self.mask,  # type: ignore[union-attr]
-        )
-        return cp.asarray(obj).view(SIZE_TYPE_DTYPE)
 
     def copy(self, deep: bool = True) -> Self:
         """
@@ -1483,6 +1438,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
         )
 
+    @acquire_spill_lock()
+    def repeat(self, repeats: int) -> Self:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.filling.repeat(
+                plc.Table([self.to_pylibcudf(mode="read")]), repeats
+            ).columns()[0]
+        )
+
     def fillna(
         self,
         fill_value: ScalarLike | ColumnLike,
@@ -1699,7 +1662,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         raise TypeError(f"cannot perform quantile with type {self.dtype}")
 
     def take(
-        self, indices: ColumnBase, nullify: bool = False, check_bounds=True
+        self,
+        indices: ColumnBase,
+        nullify: bool = False,
+        check_bounds: bool = True,
     ) -> Self:
         """Return Column by taking values from the corresponding *indices*.
 
@@ -1865,7 +1831,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         raise NotImplementedError()
 
     @acquire_spill_lock()
-    def cast(self, dtype: Dtype) -> ColumnBase:
+    def cast(self, dtype: DtypeObj) -> ColumnBase:
         result = type(self).from_pylibcudf(
             plc.unary.cast(
                 self.to_pylibcudf(mode="read"), dtype_to_pylibcudf_type(dtype)
@@ -1945,14 +1911,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
         raise NotImplementedError
 
-    def as_string_column(self, dtype) -> StringColumn:
+    def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         raise NotImplementedError
 
     def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
         raise NotImplementedError
 
-    def apply_boolean_mask(self, mask) -> ColumnBase:
-        mask = as_column(mask)
+    def apply_boolean_mask(self, mask: ColumnBase) -> ColumnBase:
         if mask.dtype.kind != "b":
             raise ValueError("boolean_mask is not boolean type.")
 
@@ -1985,7 +1950,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 )
             )
 
-    def __arrow_array__(self, type=None):
+    def __arrow_array__(self, type: pa.DataType | None = None) -> None:
         raise TypeError(
             "Implicit conversion to a host PyArrow Array via __arrow_array__ "
             "is not allowed, To explicitly construct a PyArrow Array, "
@@ -2017,7 +1982,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         return _array_ufunc(self, ufunc, method, inputs, kwargs)
 
-    def __invert__(self):
+    def __invert__(self) -> ColumnBase:
         raise TypeError(
             f"Operation `~` not supported on {self.dtype.type.__name__}"
         )
@@ -2079,7 +2044,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         header: dict[Any, Any] = {}
         frames = []
         try:
-            dtype, dtype_frames = self.dtype.device_serialize()
+            dtype, dtype_frames = self.dtype.device_serialize()  # type: ignore[union-attr]
             header["dtype"] = dtype
             frames.extend(dtype_frames)
             header["dtype-is-cudf-serialized"] = True
@@ -2184,7 +2149,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
         return cls.from_pylibcudf(plc_column)._with_type_metadata(dtype)
 
-    def unary_operator(self, unaryop: str):
+    def unary_operator(self, unaryop: str) -> ColumnBase:
         raise TypeError(
             f"Operation {unaryop} not supported for dtype {self.dtype}."
         )
@@ -2267,7 +2232,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def _label_encoding(
         self,
         cats: ColumnBase,
-        dtype: Dtype | None = None,
+        dtype: DtypeObj | None = None,
     ) -> NumericalColumn:
         """
         Convert each value in `self` into an integer code, with `cats`

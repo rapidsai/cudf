@@ -66,7 +66,7 @@ class IntervalColumn(StructColumn):
         )  # type: ignore[return-value]
 
     def to_arrow(self) -> pa.Array:
-        typ = self.dtype.to_arrow()
+        typ = self.dtype.to_arrow()  # type: ignore[union-attr]
         struct_arrow = super().to_arrow()
         if len(struct_arrow) == 0:
             # struct arrow is pa.struct array with null children types
@@ -81,7 +81,8 @@ class IntervalColumn(StructColumn):
     def is_empty(self) -> ColumnBase:
         left_equals_right = (self.right == self.left).fillna(False)
         not_closed_both = as_column(
-            self.dtype.closed != "both", length=len(self)
+            self.dtype.closed != "both",  # type: ignore[union-attr]
+            length=len(self),
         )
         return left_equals_right & not_closed_both
 
@@ -124,7 +125,7 @@ class IntervalColumn(StructColumn):
         self, closed: Literal["left", "right", "both", "neither"]
     ) -> Self:
         return self._with_type_metadata(  # type: ignore[return-value]
-            IntervalDtype(self.dtype.subtype, closed)
+            IntervalDtype(self.dtype.subtype, closed)  # type: ignore[union-attr]
         )
 
     def as_interval_column(self, dtype: IntervalDtype) -> Self:  # type: ignore[override]
@@ -152,7 +153,7 @@ class IntervalColumn(StructColumn):
         elif arrow_type:
             raise NotImplementedError(f"{arrow_type=} is not implemented.")
 
-        pd_type = self.dtype.to_pandas()
+        pd_type = self.dtype.to_pandas()  # type: ignore[union-attr]
         return pd.Index(pd_type.__from_arrow__(self.to_arrow()), dtype=pd_type)
 
     def element_indexing(
@@ -162,5 +163,5 @@ class IntervalColumn(StructColumn):
         if isinstance(result, dict) and cudf.get_option(
             "mode.pandas_compatible"
         ):
-            return pd.Interval(**result, closed=self.dtype.closed)
+            return pd.Interval(**result, closed=self.dtype.closed)  # type: ignore[union-attr]
         return result
