@@ -1991,6 +1991,11 @@ class Series(SingleColumnFrame, IndexedFrame):
         array([1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0,
                0, 0, 4, 0, 0, 0, 0, 0, 0, 0], dtype=uint8)
         """
+        warnings.warn(
+            "Series.data is deprecated and will be removed in a future version. "
+            "Use Series.to_pylibcudf()[0].data() instead.",
+            FutureWarning,
+        )
         return self._column.data
 
     @_performance_tracking
