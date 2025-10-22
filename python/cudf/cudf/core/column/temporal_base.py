@@ -283,8 +283,8 @@ class TemporalBaseColumn(ColumnBase):
 
     def find_and_replace(
         self,
-        to_replace: ColumnBase,
-        replacement: ColumnBase,
+        to_replace: ColumnBase | list,
+        replacement: ColumnBase | list,
         all_nan: bool = False,
     ) -> Self:
         if not isinstance(to_replace, type(self)):

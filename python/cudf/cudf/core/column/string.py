@@ -493,10 +493,10 @@ class StringColumn(ColumnBase):
 
     def find_and_replace(
         self,
-        to_replace: ColumnLike,
-        replacement: ColumnLike,
+        to_replace: ColumnBase | list,
+        replacement: ColumnBase | list,
         all_nan: bool = False,
-    ) -> StringColumn:
+    ) -> Self:
         """
         Return col with *to_replace* replaced with *value*
         """
