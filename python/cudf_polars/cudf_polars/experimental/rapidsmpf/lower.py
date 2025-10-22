@@ -34,7 +34,6 @@ def _lower_ir_node_task_engine(
     return base_lower_ir_node(ir, rec)
 
 
-@lower_ir_node.register(Sort)
 @lower_ir_node.register(ShuffleSorted)
 @lower_ir_node.register(StreamingSink)
 def _unsupported(

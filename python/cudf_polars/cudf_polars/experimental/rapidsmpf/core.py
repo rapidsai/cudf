@@ -78,11 +78,6 @@ def evaluate_logical_plan(ir: IR, config_options: ConfigOptions) -> DataFrame:
         )
 
     # Lower the IR graph on the client process (for now).
-    # NOTE: The `PartitionInfo.count` attribute is only used
-    # for "guidance", because the number of chunks produced
-    # by a streaming node may be dynamic. For now, we populate
-    # and use the `count` attribute to trigger fallback
-    # warnings in the lower_ir_graph call below.
     ir, partition_info = lower_ir_graph(ir, config_options)
 
     # Configure the context.
@@ -91,8 +86,7 @@ def evaluate_logical_plan(ir: IR, config_options: ConfigOptions) -> DataFrame:
     # TODO: Need a way to configure options specific to the rapidmspf engine.
     options = Options(get_environment_variables())
     comm = new_communicator(options)
-    # NOTE: Maybe use rmm.mr.CudaAsyncMemoryResource() by default
-    # in callback.py instead of UVM (by default)?
+    # TODO: Use CudaAsyncMemoryResource when spilling is supported
     mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
     br = BufferResource(mr)
     rmm.mr.set_current_device_resource(mr)

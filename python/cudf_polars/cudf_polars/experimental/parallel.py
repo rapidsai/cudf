@@ -219,7 +219,7 @@ def evaluate_rapidsmpf(
     config_options: ConfigOptions,
 ) -> DataFrame:  # pragma: no cover; rapidsmpf runtime not tested in CI yet
     """
-    Evaluate with the RapidsMPF streaming engine.
+    Evaluate with the RapidsMPF streaming runtime.
 
     Parameters
     ----------
