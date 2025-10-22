@@ -3413,6 +3413,10 @@ class RangeIndex(Index):
 
         return self._column.isin(values).values
 
+    @_performance_tracking
+    def nans_to_nulls(self) -> Self:
+        return self.copy()
+
     def __pos__(self) -> Self:
         return self.copy()
 
@@ -3730,9 +3734,7 @@ class DatetimeIndex(Index):
         datetime.tzinfo or None
             Returns None when the array is tz-naive.
         """
-        if isinstance(self.dtype, pd.DatetimeTZDtype):
-            return self.dtype.tz
-        return None
+        return self._column.tz
 
     @property
     def tzinfo(self) -> tzinfo | None:
