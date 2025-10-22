@@ -98,6 +98,7 @@ def test_column_offset_and_size(pandas_input, offset, size):
         mask=col.base_mask,
         size=size,
         offset=offset,
+        null_count=col.null_count,
         children=col.base_children,
     )
 
@@ -519,6 +520,9 @@ def test_string_no_children_properties():
         as_buffer(rmm.DeviceBuffer(size=0)),
         size=0,
         dtype=np.dtype("object"),
+        mask=None,
+        offset=0,
+        null_count=0,
         children=(),
     )
     assert empty_col.base_children == ()

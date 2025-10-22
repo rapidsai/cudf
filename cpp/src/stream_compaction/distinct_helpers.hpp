@@ -60,7 +60,7 @@ using distinct_set_t =
                      1,
                      cudf::detail::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
                                                                 cudf::nullate::DYNAMIC>>,
-                   cudf::detail::cuco_allocator<char>,
+                   rmm::mr::polymorphic_allocator<char>,
                    cuco::storage<1>>;
 
 /**
