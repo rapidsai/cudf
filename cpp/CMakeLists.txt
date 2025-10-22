@@ -277,6 +277,9 @@ include(${rapids-cmake-dir}/cpm/rapids_logger.cmake)
 rapids_cpm_rapids_logger(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
 create_logger_macros(CUDF "cudf::default_logger()" include/cudf)
 
+# find rmm
+include(cmake/thirdparty/get_rmm.cmake)
+
 # find jitify
 include(cmake/thirdparty/get_jitify.cmake)
 
@@ -286,11 +289,8 @@ include(cmake/thirdparty/get_nvtx.cmake)
 # find nvCOMP
 include(cmake/thirdparty/get_nvcomp.cmake)
 
-# find CCCL before rmm so that we get cudf's patched version of CCCL
+# find CCCL
 include(cmake/thirdparty/get_cccl.cmake)
-
-# find rmm
-include(cmake/thirdparty/get_rmm.cmake)
 
 # find croaring
 include(cmake/thirdparty/get_croaring.cmake)
