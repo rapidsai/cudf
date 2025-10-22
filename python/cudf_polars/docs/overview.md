@@ -741,6 +741,7 @@ and convert back to polars:
 
 ```python
 from cudf_polars.dsl.translate import Translator
+from cudf_polars.dsl.ir import IRExecutionContext
 import polars as pl
 
 q = ...
@@ -749,7 +750,7 @@ q = ...
 ir = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
 
 # DataFrame living on the device
-result = ir.evaluate(cache={}, timer=None)
+result = ir.evaluate(cache={}, timer=None, context=IRExecutionContext())
 
 # Polars dataframe
 host_result = result.to_polars()
