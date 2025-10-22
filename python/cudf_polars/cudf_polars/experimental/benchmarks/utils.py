@@ -410,21 +410,24 @@ def get_executor_options(
     """Generate executor_options for GPUEngine."""
     executor_options: dict[str, Any] = {}
 
-    if run_config.blocksize:
-        executor_options["target_partition_size"] = run_config.blocksize
-    if run_config.max_rows_per_partition:
-        executor_options["max_rows_per_partition"] = run_config.max_rows_per_partition
-    if run_config.shuffle:
-        executor_options["shuffle_method"] = run_config.shuffle
-    if run_config.broadcast_join_limit:
-        executor_options["broadcast_join_limit"] = run_config.broadcast_join_limit
-    if run_config.rapidsmpf_spill:
-        executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
-    if run_config.cluster == "distributed":
-        executor_options["cluster"] = "distributed"
-    if run_config.stats_planning:
-        executor_options["stats_planning"] = {"use_reduction_planning": True}
-    executor_options["runtime"] = run_config.runtime
+    if run_config.executor == "streaming":
+        if run_config.blocksize:
+            executor_options["target_partition_size"] = run_config.blocksize
+        if run_config.max_rows_per_partition:
+            executor_options["max_rows_per_partition"] = (
+                run_config.max_rows_per_partition
+            )
+        if run_config.shuffle:
+            executor_options["shuffle_method"] = run_config.shuffle
+        if run_config.broadcast_join_limit:
+            executor_options["broadcast_join_limit"] = run_config.broadcast_join_limit
+        if run_config.rapidsmpf_spill:
+            executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
+        if run_config.cluster == "distributed":
+            executor_options["cluster"] = "distributed"
+        if run_config.stats_planning:
+            executor_options["stats_planning"] = {"use_reduction_planning": True}
+        executor_options["runtime"] = run_config.runtime
 
     if (
         benchmark
@@ -463,7 +466,7 @@ def print_query_plan(
         if args.explain_logical:
             print(f"\nQuery {q_id} - Logical plan\n")
             print(explain_query(q, engine, physical=False))
-        if args.explain:
+        if args.explain and run_config.executor == "streaming":
             print(f"\nQuery {q_id} - Physical plan\n")
             print(explain_query(q, engine))
     else:

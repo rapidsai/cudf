@@ -119,13 +119,17 @@ async def broadcast_join_node(
             small_child = ir.children[0]
             large_child = ir.children[1]
 
-        # TODO: Build output partition incrementally?
-        small_dfs: list[DataFrame] = []
-        get_small_table_fut = asyncio.create_task(
-            get_small_table(ctx, small_child, small_ch)
+        # Collect small-side chunks
+        small_dfs = list(
+            chain.from_iterable(
+                await asyncio.gather(get_small_table(ctx, small_child, small_ch))
+            )
         )
+        if ir.options[0] != "Inner":
+            # TODO: Use local repartitioning for non-inner joins
+            small_dfs = [_concat(*small_dfs)]
 
-        # Stream through large side, joining with broadcast data
+        # Stream through large side, joining with the small-side
         while (msg := await large_ch.data.recv(ctx)) is not None:
             large_chunk = TableChunk.from_message(msg)
             large_df = DataFrame.from_table(
@@ -134,14 +138,6 @@ async def broadcast_join_node(
                 list(large_child.schema.values()),
                 large_chunk.stream,
             )
-
-            if not small_dfs:
-                small_dfs = list(
-                    chain.from_iterable(await asyncio.gather(get_small_table_fut))
-                )
-                if ir.options[0] != "Inner":
-                    # TODO: Use local repartitioning for non-inner joins
-                    small_dfs = [_concat(*small_dfs)]
 
             # Perform the join
             results = [
