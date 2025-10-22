@@ -210,9 +210,9 @@ void write_to_parquet_device_buffer(std::unique_ptr<cudf::table> const& table,
                                     cuio_source_sink_pair& source);
 
 /**
- * @brief Generate NDS-H tables and write to parquet device buffers
+ * @brief Generate "tpch" tables and write to parquet device buffers
  *
- * @param scale_factor The scale factor of NDS-H tables to generate
+ * @param scale_factor The scale factor of "tpch" tables to generate
  * @param table_names The names of the tables to generate
  * @param sources The parquet data sources to populate
  */
