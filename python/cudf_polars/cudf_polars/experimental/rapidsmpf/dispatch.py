@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-"""Dispatching for the RapidsMPF streaming engine."""
+"""Dispatching for the RapidsMPF streaming runtime."""
 
 from __future__ import annotations
 
@@ -106,7 +106,7 @@ def lower_ir_node(
     -----
     This function is distinct from the `lower_ir_node` function
     in the `parallel` module, because the lowering logic for the
-    streaming engine is different for some IR sub-classes.
+    streaming runtime is different for some IR sub-classes.
 
     See Also
     --------
@@ -120,7 +120,7 @@ def generate_ir_sub_network(
     ir: IR, rec: SubNetGenerator
 ) -> tuple[list[Any], dict[IR, ChannelManager]]:
     """
-    Generate a sub-network for the RapidsMPF streaming engine.
+    Generate a sub-network for the RapidsMPF streaming runtime.
 
     Parameters
     ----------

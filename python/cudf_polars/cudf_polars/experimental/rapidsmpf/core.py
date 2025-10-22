@@ -53,7 +53,7 @@ if TYPE_CHECKING:
 
 def evaluate_logical_plan(ir: IR, config_options: ConfigOptions) -> DataFrame:
     """
-    Evaluate a logical plan with the RapidsMPF streaming engine.
+    Evaluate a logical plan with the RapidsMPF streaming runtime.
 
     Parameters
     ----------

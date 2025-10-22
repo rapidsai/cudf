@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-"""Core node definitions for the RapidsMPF streaming engine."""
+"""Core node definitions for the RapidsMPF streaming runtime."""
 
 from __future__ import annotations
 
@@ -446,7 +446,7 @@ def generate_ir_sub_network_wrapper(
     ir: IR, rec: SubNetGenerator
 ) -> tuple[list[Any], dict[IR, ChannelManager]]:
     """
-    Generate a sub-network for the RapidsMPF streaming engine.
+    Generate a sub-network for the RapidsMPF streaming runtime.
 
     Parameters
     ----------

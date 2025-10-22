@@ -77,7 +77,7 @@ def _lower_ir_fallback(
     ):  # pragma: no cover; Requires distributed
         raise NotImplementedError(
             "Fallback is not yet supported distributed execution "
-            "with the RAPIDS-MPF streaming engine."
+            "with the RAPIDS-MPF streaming runtime."
         )
 
     # Lower children
