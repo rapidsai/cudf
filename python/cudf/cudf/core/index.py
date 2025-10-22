@@ -220,6 +220,10 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
         return None
 
     @property
+    def _constructor(self):
+        return Index
+
+    @property
     def _constructor_expanddim(self):
         return cudf.MultiIndex
 
@@ -1891,6 +1895,35 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
         result.name = name
         return result
 
+    @cached_property
+    def inferred_type(self) -> str:
+        """
+        Return a string of the type inferred from the values.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index([1, 2, 3])
+        >>> idx
+        Index([1, 2, 3], dtype='int64')
+        >>> idx.inferred_type
+        'integer'
+        """
+        if self._is_object():
+            if len(self) == 0:
+                return "empty"
+            else:
+                return "string"
+        elif self._is_integer():
+            return "integer"
+        elif self._is_floating():
+            return "floating"
+        elif self._is_boolean():
+            return "boolean"
+        raise NotImplementedError(
+            f"inferred_type not implemented for dtype {self.dtype}"
+        )
+
     @_performance_tracking
     def memory_usage(self, deep: bool = False) -> int:
         return self._column.memory_usage
@@ -2184,14 +2217,6 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
         if isinstance(res, ColumnBase):
             res = Index._from_column(res, name=self.name)
         return res
-
-    @property  # type: ignore
-    @_performance_tracking
-    def dtype(self):
-        """
-        `dtype` of the underlying values in Index.
-        """
-        return self._column.dtype
 
     @_performance_tracking
     def isna(self) -> cupy.ndarray:
@@ -2616,6 +2641,14 @@ class RangeIndex(Index):
         self._name = value
 
     @property
+    def _constructor(self):
+        return RangeIndex
+
+    @cached_property
+    def inferred_type(self) -> str:
+        return "integer"
+
+    @property
     @_performance_tracking
     def _num_rows(self) -> int:
         return len(self)
@@ -2879,7 +2912,7 @@ class RangeIndex(Index):
         By default the dtype is 64 bit signed integer. This is configurable
         via `default_integer_bitwidth` as 32 bit in `cudf.options`
         """
-        dtype = np.dtype(np.int64)
+        dtype: np.dtype = np.dtype(np.int64)
         return _maybe_convert_to_default_type(dtype)
 
     @property
@@ -3365,7 +3398,7 @@ class RangeIndex(Index):
             i = [self._range.index(value)]
         except ValueError:
             i = []
-        return as_column(i, dtype=SIZE_TYPE_DTYPE)
+        return as_column(i, dtype=SIZE_TYPE_DTYPE)  # type: ignore[return-value]
 
     def isin(self, values, level=None) -> cupy.ndarray:
         if level is not None and level > 0:
@@ -3379,6 +3412,10 @@ class RangeIndex(Index):
             )
 
         return self._column.isin(values).values
+
+    @_performance_tracking
+    def nans_to_nulls(self) -> Self:
+        return self.copy()
 
     def __pos__(self) -> Self:
         return self.copy()
@@ -3649,6 +3686,14 @@ class DatetimeIndex(Index):
         )
 
     @cached_property
+    def _constructor(self):
+        return DatetimeIndex
+
+    @cached_property
+    def inferred_type(self) -> str:
+        return "datetime64"
+
+    @cached_property
     def asi8(self) -> cupy.ndarray:
         return self._column.astype(np.dtype(np.int64)).values
 
@@ -3689,9 +3734,7 @@ class DatetimeIndex(Index):
         datetime.tzinfo or None
             Returns None when the array is tz-naive.
         """
-        if isinstance(self.dtype, pd.DatetimeTZDtype):
-            return self.dtype.tz
-        return None
+        return self._column.tz
 
     @property
     def tzinfo(self) -> tzinfo | None:
@@ -4560,6 +4603,14 @@ class TimedeltaIndex(Index):
         """
         raise NotImplementedError("as_unit is currently not implemented")
 
+    @cached_property
+    def _constructor(self):
+        return TimedeltaIndex
+
+    @cached_property
+    def inferred_type(self) -> str:
+        return "timedelta64"
+
     @property
     def freq(self) -> DateOffset | None:
         raise NotImplementedError("freq is currently not implemented")
@@ -4857,6 +4908,14 @@ class CategoricalIndex(Index):
     @property
     def ordered(self) -> bool:
         return self._column.ordered
+
+    @cached_property
+    def _constructor(self):
+        return CategoricalIndex
+
+    @cached_property
+    def inferred_type(self) -> str:
+        return "categorical"
 
     @property
     @_performance_tracking
@@ -5172,7 +5231,7 @@ class IntervalIndex(Index):
 
         if len(data) == 0:
             if not hasattr(data, "dtype"):
-                child_type = np.dtype(np.int64)
+                child_type: Dtype = np.dtype(np.int64)
             elif isinstance(data.dtype, (pd.IntervalDtype, IntervalDtype)):
                 child_type = data.dtype.subtype
             else:
@@ -5212,6 +5271,14 @@ class IntervalIndex(Index):
     @property
     def closed(self) -> Literal["left", "right", "neither", "both"]:
         return self.dtype.closed
+
+    @property
+    def closed_left(self) -> bool:
+        return self.closed in ("left", "both")
+
+    @property
+    def closed_right(self) -> bool:
+        return self.closed in ("right", "both")
 
     @classmethod
     @_performance_tracking
@@ -5297,6 +5364,14 @@ class IntervalIndex(Index):
             plc_column
         )._with_type_metadata(dtype)
         return IntervalIndex._from_column(interval_col, name=name)
+
+    @cached_property
+    def _constructor(self):
+        return IntervalIndex
+
+    @cached_property
+    def inferred_type(self) -> str:
+        return "interval"
 
     @classmethod
     def from_arrays(

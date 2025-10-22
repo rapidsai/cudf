@@ -111,14 +111,20 @@ cdef class ParquetReaderOptions:
 
         self.c_obj.set_row_groups(outer)
 
-    cpdef void set_num_rows(self, size_type nrows):
+    cpdef void set_num_rows(self, int64_t nrows):
         """
         Sets number of rows to read.
 
         Parameters
         ----------
-        nrows : size_type
+        nrows : int64_t
             Number of rows to read after skip
+
+        Notes
+        -----
+        Although this allows one to request more than `size_type::max()`
+        rows, if any single read would produce a table larger than this row
+        limit, an error is thrown.
 
         Returns
         -------
@@ -173,6 +179,21 @@ cdef class ParquetReaderOptions:
         None
         """
         self.c_obj.set_filter(<expression &>dereference(filter.c_obj))
+
+    cpdef void set_source(self, SourceInfo src):
+        """
+        Set a new source info location.
+
+        Parameters
+        ----------
+        src : SourceInfo
+            New source information, replacing existing information.
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_source(src.c_obj)
 
 
 cdef class ParquetReaderOptionsBuilder:
@@ -513,7 +534,7 @@ cdef class ChunkedParquetWriterOptionsBuilder:
         self.c_obj.metadata(metadata.c_obj)
         return self
 
-    cpdef ChunkedParquetWriterOptionsBuilder key_value_metadata(self, list metadata):
+    cpdef ChunkedParquetWriterOptionsBuilder key_value_metadata(self, metadata):
         """
         Sets Key-Value footer metadata.
 
@@ -724,7 +745,7 @@ cdef class ParquetWriterOptions:
 
         self.c_obj.set_partitions(c_partions)
 
-    cpdef void set_column_chunks_file_paths(self, list file_paths):
+    cpdef void set_column_chunks_file_paths(self, file_paths):
         """
         Sets column chunks file path to be set in the raw output metadata.
 
@@ -833,7 +854,7 @@ cdef class ParquetWriterOptionsBuilder:
         self.c_obj.metadata(metadata.c_obj)
         return self
 
-    cpdef ParquetWriterOptionsBuilder key_value_metadata(self, list metadata):
+    cpdef ParquetWriterOptionsBuilder key_value_metadata(self, metadata):
         """
         Sets Key-Value footer metadata.
 

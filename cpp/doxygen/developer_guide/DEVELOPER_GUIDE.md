@@ -6,6 +6,7 @@ to these additional files for further documentation of libcudf best practices.
 * [Documentation Guide](DOCUMENTATION.md) for guidelines on documenting libcudf code.
 * [Testing Guide](TESTING.md) for guidelines on writing unit tests.
 * [Benchmarking Guide](BENCHMARKING.md) for guidelines on writing unit benchmarks.
+* [Profiling Guide](PROFILING.md) for guidelines on profiling libcudf code.
 
 # Overview
 

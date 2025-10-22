@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include "../utilities/timer.hpp"
 #include "common_utils.hpp"
 #include "io_source.hpp"
+#include "timer.hpp"
 
 #include <cudf/concatenate.hpp>
 #include <cudf/io/parquet.hpp>
@@ -363,10 +363,10 @@ int32_t main(int argc, char const** argv)
   }
 
   // Initialize mr, default stream and stream pool
-  auto const is_pool_used = true;
-  auto resource           = create_memory_resource(is_pool_used);
-  auto default_stream     = cudf::get_default_stream();
-  auto stream_pool        = rmm::cuda_stream_pool(thread_count);
+  bool constexpr is_pool_used = true;
+  auto resource               = create_memory_resource(is_pool_used);
+  auto default_stream         = cudf::get_default_stream();
+  auto stream_pool            = rmm::cuda_stream_pool(thread_count);
   auto stats_mr =
     rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(resource.get());
   rmm::mr::set_current_device_resource(&stats_mr);
@@ -394,7 +394,7 @@ int32_t main(int argc, char const** argv)
                    "growth.\n\n";
     }
 
-    cudf::examples::timer timer;
+    timer timer;
     std::for_each(thrust::make_counting_iterator(0),
                   thrust::make_counting_iterator(num_reads),
                   [&](auto i) {  // Read parquet files and discard the tables
@@ -430,7 +430,7 @@ int32_t main(int argc, char const** argv)
     std::string output_path =
       std::filesystem::temp_directory_path().string() + "/output_" + current_date_and_time();
     std::filesystem::create_directory({output_path});
-    cudf::examples::timer timer;
+    timer timer;
     write_parquet_multithreaded(output_path, table_views, thread_count, stream_pool);
     default_stream.synchronize();
     timer.print_elapsed_millis();
@@ -452,7 +452,7 @@ int32_t main(int argc, char const** argv)
     default_stream.synchronize();
 
     // Check if the tables are identical
-    check_tables_equal(input_table->view(), transcoded_table->view());
+    check_tables_equal(input_table->view(), transcoded_table->view(), default_stream);
 
     // Remove the created temp directory and parquet data
     std::filesystem::remove_all(output_path);
