@@ -45,13 +45,13 @@ LowerIRTransformer: TypeAlias = GenericTransformer[
 """Protocol for Lowering IR nodes."""
 
 
-class MulticastInfo(NamedTuple):
-    """A named tuple representing multicast information."""
+class FanoutInfo(NamedTuple):
+    """A named tuple representing fanout information."""
 
     num_consumers: int
     """The number of consumers."""
     unbounded: bool
-    """Whether the node needs unbounded multicast."""
+    """Whether the node needs unbounded fanout."""
 
 
 class GenState(TypedDict):
@@ -66,14 +66,14 @@ class GenState(TypedDict):
         GPUEngine configuration options.
     partition_info
         Partition information.
-    multicast_nodes
-        Dictionary mapping IR nodes to multicast information.
+    fanout_nodes
+        Dictionary mapping IR nodes to fanout information.
     """
 
     ctx: Context
     config_options: ConfigOptions
     partition_info: MutableMapping[IR, PartitionInfo]
-    multicast_nodes: dict[IR, MulticastInfo]
+    fanout_nodes: dict[IR, FanoutInfo]
 
 
 SubNetGenerator: TypeAlias = GenericTransformer[

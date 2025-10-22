@@ -30,7 +30,7 @@ import cudf_polars.experimental.rapidsmpf.union  # noqa: F401
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import Join, Union
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
-from cudf_polars.experimental.rapidsmpf.dispatch import MulticastInfo, lower_ir_node
+from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo, lower_ir_node
 from cudf_polars.experimental.rapidsmpf.nodes import generate_ir_sub_network_wrapper
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
@@ -180,12 +180,12 @@ def lower_ir_graph(
     return mapper(ir)
 
 
-def determine_multicast_nodes(
+def determine_fanout_nodes(
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
-) -> dict[IR, MulticastInfo]:
+) -> dict[IR, FanoutInfo]:
     """
-    Determine which IR nodes need multicast and what type.
+    Determine which IR nodes need fanout and what type.
 
     Parameters
     ----------
@@ -196,10 +196,10 @@ def determine_multicast_nodes(
 
     Returns
     -------
-    Dictionary mapping IR nodes to MulticastInfo tuples where:
+    Dictionary mapping IR nodes to FanoutInfo tuples where:
     - num_consumers: number of consumers
-    - unbounded: whether the node needs unbounded multicast
-    Only includes nodes that need multicast (i.e., have multiple consumers).
+    - unbounded: whether the node needs unbounded fanout
+    Only includes nodes that need fanout (i.e., have multiple consumers).
     """
     # Calculate output channel counts (number of consumers per node)
     output_ch_count: defaultdict[IR, int] = defaultdict(int)
@@ -207,20 +207,20 @@ def determine_multicast_nodes(
         for child in node.children:
             output_ch_count[child] += 1
 
-    # Determine which nodes need unbounded multicast
+    # Determine which nodes need unbounded fanout
     unbounded: set[IR] = set()
 
     def _mark_children_unbounded(node: IR) -> None:
         for child in node.children:
             unbounded.add(child)
 
-    # Traverse the graph and identify nodes that need unbounded multicast
+    # Traverse the graph and identify nodes that need unbounded fanout
     for node in traversal([ir]):
         if node in unbounded:
             _mark_children_unbounded(node)
         elif isinstance(node, Union):
             # Union processes children sequentially, so all children
-            # with multiple consumers need unbounded multicast
+            # with multiple consumers need unbounded fanout
             _mark_children_unbounded(node)
         elif isinstance(node, Join):
             # This may be a broadcast join
@@ -234,19 +234,19 @@ def determine_multicast_nodes(
                 c == 1 for c in counts
             )
             if has_broadcast:
-                # Broadcasting operation - children need unbounded multicast
+                # Broadcasting operation - children need unbounded fanout
                 _mark_children_unbounded(node)
 
     # Build result dictionary: only include nodes with multiple consumers
-    multicast_nodes: dict[IR, MulticastInfo] = {}
+    fanout_nodes: dict[IR, FanoutInfo] = {}
     for node, count in output_ch_count.items():
         if count > 1:
-            multicast_nodes[node] = MulticastInfo(
+            fanout_nodes[node] = FanoutInfo(
                 num_consumers=count,
                 unbounded=node in unbounded,
             )
 
-    return multicast_nodes
+    return fanout_nodes
 
 
 def generate_network(
@@ -273,15 +273,15 @@ def generate_network(
     -------
     The network nodes and output hook.
     """
-    # Determine which nodes need multicasting
-    multicast_nodes = determine_multicast_nodes(ir, partition_info)
+    # Determine which nodes need fanout
+    fanout_nodes = determine_fanout_nodes(ir, partition_info)
 
     # Generate the network
     state: GenState = {
         "ctx": ctx,
         "config_options": config_options,
         "partition_info": partition_info,
-        "multicast_nodes": multicast_nodes,
+        "fanout_nodes": fanout_nodes,
     }
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state

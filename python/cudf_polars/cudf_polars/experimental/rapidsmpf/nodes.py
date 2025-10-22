@@ -217,13 +217,13 @@ async def default_node_multi(
 
 
 @define_py_node()
-async def multicast_node_bounded(
+async def fanout_node_bounded(
     ctx: Context,
     ch_in: ChannelPair,
     *chs_out: ChannelPair,
 ) -> None:
     """
-    Bounded multicast node for rapidsmpf.
+    Bounded fanout node for rapidsmpf.
 
     Each chunk is broadcasted to all output channels
     as it arrives.
@@ -258,13 +258,13 @@ async def multicast_node_bounded(
 
 
 @define_py_node()
-async def multicast_node_unbounded(
+async def fanout_node_unbounded(
     ctx: Context,
     ch_in: ChannelPair,
     *chs_out: ChannelPair,
 ) -> None:
     """
-    Unbounded multicast node for rapidsmpf.
+    Unbounded fanout node for rapidsmpf.
 
     Broadcasts chunks from input to all output channels. This is called
     "unbounded" because it handles the case where one channel may consume
@@ -490,13 +490,13 @@ def generate_ir_sub_network_wrapper(
     """
     nodes, channels = generate_ir_sub_network(ir, rec)
 
-    # Check if this node needs multicast
-    if (multicast_info := rec.state["multicast_nodes"].get(ir)) is not None:
-        count = multicast_info.num_consumers
+    # Check if this node needs fanout
+    if (fanout_info := rec.state["fanout_nodes"].get(ir)) is not None:
+        count = fanout_info.num_consumers
         manager = ChannelManager(count=count)
-        if multicast_info.unbounded:
+        if fanout_info.unbounded:
             nodes.append(
-                multicast_node_unbounded(
+                fanout_node_unbounded(
                     rec.state["ctx"],
                     channels[ir].reserve_output_slot(),
                     *[manager.reserve_input_slot() for _ in range(count)],
@@ -504,7 +504,7 @@ def generate_ir_sub_network_wrapper(
             )
         else:  # "bounded"
             nodes.append(
-                multicast_node_bounded(
+                fanout_node_bounded(
                     rec.state["ctx"],
                     channels[ir].reserve_output_slot(),
                     *[manager.reserve_input_slot() for _ in range(count)],
