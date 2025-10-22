@@ -166,13 +166,10 @@ struct update_target_element<Source, aggregation::SUM_WITH_OVERFLOW> {
       *(overflow_column.data<bool>() + target_index)};
     if (bool_ref.load(cuda::memory_order_relaxed)) { return; }
 
-    // Check for overflow before performing the addition to avoid UB
-    // For positive overflow: old_sum > 0, source_value > 0, and old_sum > max - source_value
-    // For negative overflow: old_sum < 0, source_value < 0, and old_sum < min - source_value
     // TODO: to be replaced by CCCL equivalents once https://github.com/NVIDIA/cccl/pull/3755 is
     // ready
-    auto const overflow = ((old_sum > 0 && source_value > 0 && old_sum > type_max - source_value) ||
-                           (old_sum < 0 && source_value < 0 && old_sum < type_min - source_value));
+    auto const overflow =
+      source_value > 0 ? old_sum > type_max - source_value : old_sum < type_min - source_value;
 
     if (overflow) { cudf::detail::atomic_max(&overflow_column.element<bool>(target_index), true); }
   }
