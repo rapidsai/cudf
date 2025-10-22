@@ -174,6 +174,13 @@ class GenericTransformer(Protocol[U_contra, V_co, StateT_co]):
         ...
 
 
+class DecimalDataTypeOptions(TypedDict):
+    "Decimal options."
+
+    precision: int
+    scale: int
+
+
 class ColumnOptions(TypedDict):
     """
     Column constructor options.
@@ -187,7 +194,7 @@ class ColumnOptions(TypedDict):
     order: plc.types.Order
     null_order: plc.types.NullOrder
     name: str | None
-    dtype: str
+    dtype: str | DecimalDataTypeOptions
 
 
 class DeserializedColumnOptions(TypedDict):
