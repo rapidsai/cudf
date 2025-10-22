@@ -64,25 +64,26 @@ __forceinline__ __device__ uint4 load_uint4(char const* ptr)
 
 // Load of 4B, assuming ptr may not be 4B aligned, so we need to mask the result
 // use for start of string char column
-__device__ uint32_t load_uint32_masked(char const* const ptr, char const* const head, char const* const tail) {
+__device__ inline uint32_t load_uint32_masked(char const* const ptr, char const* const head, char const* const tail) {
   uint32_t result = 0;
   auto offset = reinterpret_cast<std::uintptr_t>(ptr) % sizeof(uint32_t);
 
   // chunk start is the aligned address of the chunk
-  auto const* chunk_start = reinterpret_cast<unsigned int const*>(ptr - offset);
+  auto const* chunk_start = reinterpret_cast<char const*>(ptr - offset);
+  auto const* chunk_end = chunk_start + sizeof(uint32_t);
 
   // Is the 4B load valid
-  if (chunk_start >= head && chunk_start + sizeof(uint32_t) <= tail) {
+  if (chunk_start >= head && chunk_end <= tail) {
     return *reinterpret_cast<uint32_t const*>(chunk_start);
   }
 
   // If the 4B load is not valid, we need to load the chunk byte by byte
   // ptr to the first byte of the chunk that is readable
-  auto start_ptr = chunk_start < head ? head : chunk_start;
-  auto end_ptr = chunk_start + sizeof(uint32_t) > tail ? tail : chunk_start + sizeof(uint32_t);
-  auto byte_read_offset = start_ptr % sizeof(uint32_t);
+  auto const* start_ptr = chunk_start < head ? head : chunk_start;
+  auto const* end_ptr = chunk_end > tail ? tail : chunk_end;
+  auto byte_read_offset = reinterpret_cast<std::uintptr_t>(start_ptr) % sizeof(uint32_t);
   for (auto i = start_ptr; i < end_ptr; i++) {
-    result |= (*i << (byte_read_offset + (i - start_ptr) * 8));
+    result |= (static_cast<uint32_t>(*i) << ((byte_read_offset + i - start_ptr) * 8));
   }
   return result;
 }
@@ -191,7 +192,7 @@ struct BlockPrefixCallbackOp
 
 /** Number of chunk which need to be scheduled for the grid */
 template<typename T, typename U>
-uint64_t calculate_waves(T grid_size, U chunk_size) {
+__device__ uint64_t calculate_waves(T grid_size, U chunk_size) {
   return ((grid_size - 1)/ chunk_size) + 1;
 }
 
@@ -249,17 +250,17 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
   }
 
   uint64_t first_ibyte_threadblock = out_offsets_threadblock[0]; 
-  __shared__ uint64_t last_ibyte_threadblock = 0; // The last loaded character in our scratch that can be written out to GMEM
+  __shared__ uint64_t last_ibyte_threadblock; // The last loaded character in our scratch that can be written out to GMEM
 
   // Generate chunked load offsets for the strings processed in current thread block
-  for (size_type idx = threadIdx.x; idx <= calculate_waves(strings_current_threadblock, blockDim.x); idx += blockDim.x) {
+  for (size_type idx = threadIdx.x, waves = 0; waves < calculate_waves(strings_current_threadblock, blockDim.x); idx += blockDim.x, waves++) {
     auto curr_string_num_chunks {0}; // default for the block scan
 
     if (idx < strings_current_threadblock) {
       auto const& curr_string_idx = idx + begin_out_string_idx;
       auto const& curr_string = strings_begin[string_indices[curr_string_idx]];
       curr_string_num_chunks = calculate_waves(curr_string.size_bytes(), sizeof(uint32_t));
-      if (curr_string.data() % sizeof(uint32_t) != 0) curr_string_num_chunks++; // need extra chunk to account for non-alignment
+      if (reinterpret_cast<std::uintptr_t>(curr_string.data()) % sizeof(uint32_t) != 0) curr_string_num_chunks++; // need extra chunk to account for non-alignment
     }
 
     BlockScan(temp_storage).InclusiveSum(curr_string_num_chunks, curr_string_num_chunks, prefix_op);
@@ -277,8 +278,8 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
   // Outer loop: Load data from GMEM into SHMEM in 4B chunks
   // Data reuse: Chars from SHMEM are used by more then 1 thread.
   // Keep more 4B chunks in flight at the same time, i.e. keep more bytes in flight
-  for (int in_ichunk = threadIdx.x; in_ichunk < load_waves; in_ichunk += blockDim.x) {
-    if (in_ichunk < in_offsets_threadblock[strings_per_threadblock]) {
+  for (int in_ichunk = threadIdx.x, wave = 0; wave < load_waves; in_ichunk += blockDim.x, wave++) {
+    if (in_ichunk < in_offsets_threadblock[strings_current_threadblock]) {
       auto const string_idx_iter =
         cuda::std::prev(thrust::upper_bound(thrust::seq,
                                             in_offsets_threadblock,
@@ -290,8 +291,8 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
       // string_idx is local to threadblock, so add begin_out_string_idx to it
       // when we then use that as index to string_indices, we get the string index to read
       size_type in_string_idx = string_indices[begin_out_string_idx + string_idx];
-      auto const& curr_string = strings_begin[in_string_idx].data();
-      auto const curr_string_alignment_offset = curr_string % sizeof(uint32_t);
+      auto const curr_string = strings_begin[in_string_idx];
+      auto const curr_string_alignment_offset = reinterpret_cast<std::uintptr_t>(curr_string.data()) % sizeof(uint32_t);
 
       // offset to in the first chunk for string_idx in the shared scratch space
       auto const curr_string_first_chunk = string_idx == 0 ? 0 : (in_offsets_threadblock[string_idx - 1]);
@@ -301,16 +302,18 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
         - curr_string_first_chunk * sizeof(uint32_t)     // first chararacter in first chunk
         - curr_string_alignment_offset;
       
-      assert(load_offset < curr_string.size_bytes() && load_offset > -(sizeof(uint32_t)));
+
+      assert(load_offset < curr_string.size_bytes() && load_offset > -(static_cast<int64_t>(sizeof(uint32_t))));
 
       // calculate which character to load within the string
-      auto const i_character = max(0, aligned_offset) // character in the string to load
+      auto const i_character = max(int64_t{0}, load_offset);
       
       // we dont need to align the curr_string pointer with load_offset here. Using just for easier understanding. 
-      *(reinterpret_cast<uint32_t*>(string_scratch) + threadIdx.x) = load_uint32_masked(curr_string + load_offset, d_chars_begin, d_chars_end);
+      *(reinterpret_cast<uint32_t*>(string_scratch) + threadIdx.x) = load_uint32_masked(curr_string.data() + load_offset, d_chars_begin, d_chars_end);
 
+      // TODO: would it be better to just calculate this last_byte on each thread
         // if this is the last chunk loaded in each wave
-      if (in_ichunk % block_size == 0 || in_ichunk == in_offsets_threadblock[strings_per_threadblock]) {
+      if ((in_ichunk + 1) % block_size == 0 || in_ichunk == in_offsets_threadblock[strings_current_threadblock] - 1) {
         // number of output characters that are part of the last chunk
         // we can have atmost 4, if we are loading i_chaacter we can have atmost the number of char in the string.
         auto const loaded_characters = min(sizeof(uint32_t), curr_string.size_bytes() - i_character);
@@ -319,6 +322,7 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
     }
 
     // make sure tile is loaded to SHMEM
+    // make sure last_ibyte_threadblock is written out to SHMEM
     __syncthreads();
 
 
@@ -347,20 +351,20 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
 
       // offset to first charater in the first chunk for string_idx in the shared scratch space
       
-      auto const& curr_string = strings_begin[in_string_idx].data();
+      auto const curr_string = strings_begin[in_string_idx];
       auto const curr_string_first_chunk = string_idx == 0 ? 0 : (in_offsets_threadblock[string_idx - 1]);
-      auto const curr_string_alignment_offset = curr_string % sizeof(uint32_t);
-      auto load_offset = (curr_string_first_chunk * sizeof(uint32_t)) + icharacter; 
+      auto const curr_string_alignment_offset = reinterpret_cast<std::uintptr_t>(curr_string.data()) % sizeof(uint32_t);
+      auto load_offset = (curr_string_first_chunk * sizeof(uint32_t)) + icharacter + curr_string_alignment_offset; 
 
       // read the character from the input string and write it to the output buffer
-      out_chars[out_ibyte]    = string_scratch[load_offset % block_size*sizeof(uint32_t)];
+      out_chars[out_ibyte]    = string_scratch[load_offset % (block_size*sizeof(uint32_t))];
     }
 
     first_ibyte_threadblock = last_ibyte_threadblock + 1;
+    
+    // Ensure scratch buffer is flushed before we overwrite with new data
+    __syncthreads();
   }
-
-  // Ensure scratch buffer is flushed before we overwrite with new data
-  __syncthreads();
 }
 
 /**
@@ -422,7 +426,7 @@ rmm::device_uvector<char> gather_chars(StringIterator strings_begin,
       <<<(output_count + strings_per_threadblock - 1) / strings_per_threadblock,
          block_size,
          0,
-         stream.value()>>>(strings_begin, d_chars_begin, d_chars_end, offsets, map_begin, output_count);
+         stream.value()>>>(strings_begin, d_chars_begin, d_chars_end, d_chars, offsets, map_begin, output_count);
   }
 
   return chars_data;
@@ -463,7 +467,7 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
 
   // build offsets column
   auto const d_strings    = column_device_view::create(strings.parent(), stream);
-  auto const d_chars_being = strings.chars_begin(stream);
+  auto const d_chars_begin = strings.chars_begin(stream);
   auto const d_chars_end = strings.chars_end(stream);
   auto const d_in_offsets = cudf::detail::offsetalator_factory::make_input_iterator(
     strings.is_empty() ? make_empty_column(type_id::INT32)->view() : strings.offsets(),
@@ -485,7 +489,7 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
     cudf::detail::offsetalator_factory::make_input_iterator(out_offsets_column->view());
   cudf::prefetch::detail::prefetch(d_chars_begin, strings.chars_size(stream), stream);
   auto out_chars_data = gather_chars(
-    d_strings->begin<string_view>(), d_chars_being, d_chars_end, begin, end, offsets_view, total_bytes, stream, mr);
+    d_strings->begin<string_view>(), d_chars_begin, d_chars_end, begin, end, offsets_view, total_bytes, stream, mr);
 
   return make_strings_column(output_count,
                              std::move(out_offsets_column),
