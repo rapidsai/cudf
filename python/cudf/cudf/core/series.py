@@ -85,11 +85,11 @@ if TYPE_CHECKING:
     from cudf.core.dataframe import DataFrame
 
 
-def _format_percentile_names(percentiles: Iterable) -> list[str]:
+def _format_percentile_names(percentiles: np.ndarray) -> list[str]:
     return [f"{int(x * 100)}%" for x in percentiles]
 
 
-def _describe_numeric(obj: Series, percentiles: Iterable) -> dict[str, Any]:
+def _describe_numeric(obj: Series, percentiles: np.ndarray) -> dict[str, Any]:
     # Helper for Series.describe with numerical data.
     return {
         "count": obj.count(),
@@ -109,7 +109,7 @@ def _describe_numeric(obj: Series, percentiles: Iterable) -> dict[str, Any]:
 
 def _describe_timetype(
     obj: Series,
-    percentiles: Iterable,
+    percentiles: np.ndarray,
     typ: type[pd.Timestamp] | type[pd.Timedelta],
 ) -> dict[str, Any]:
     # Common helper for Series.describe with timedelta/timestamp data.
@@ -138,19 +138,21 @@ def _describe_timetype(
     return data
 
 
-def _describe_timedelta(obj: Series, percentiles: Iterable) -> dict[str, Any]:
+def _describe_timedelta(
+    obj: Series, percentiles: np.ndarray
+) -> dict[str, Any]:
     # Helper for Series.describe with timedelta data.
     return _describe_timetype(obj, percentiles, pd.Timedelta)
 
 
-def _describe_timestamp(obj: Series, percentiles: Iterable) -> dict[str, Any]:
+def _describe_timestamp(
+    obj: Series, percentiles: np.ndarray
+) -> dict[str, Any]:
     # Helper for Series.describe with timestamp data.
     return _describe_timetype(obj, percentiles, pd.Timestamp)
 
 
-def _describe_categorical(
-    obj: Series, percentiles: Iterable
-) -> dict[str, Any]:
+def _describe_categorical(obj: Series) -> dict[str, Any]:
     # Helper for Series.describe with categorical data.
     data = {
         "count": obj.count(),
@@ -3325,7 +3327,7 @@ class Series(SingleColumnFrame, IndexedFrame):
 
         dtype: Dtype | None = "str"
         if self.dtype.kind == "b":
-            data = _describe_categorical(self, percentiles)
+            data = _describe_categorical(self)
         elif is_dtype_obj_numeric(self.dtype):
             data = _describe_numeric(self, percentiles)
             if isinstance(self.dtype, pd.ArrowDtype):
@@ -3339,7 +3341,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         elif self.dtype.kind == "M":
             data = _describe_timestamp(self, percentiles)
         else:
-            data = _describe_categorical(self, percentiles)
+            data = _describe_categorical(self)
 
         res = Series(
             data=data.values(),
