@@ -117,7 +117,6 @@ class DataFrame:
         table_with_metadata = _ObjectWithArrowMetadata(
             self.table, metadata, self.stream
         )
-        self.stream.synchronize()
         df = pl.DataFrame(table_with_metadata)
         return df.rename(name_map).with_columns(
             pl.col(c.name).set_sorted(descending=c.order == plc.types.Order.DESCENDING)
