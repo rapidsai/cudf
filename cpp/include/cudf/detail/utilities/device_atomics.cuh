@@ -361,7 +361,7 @@ __device__ __forceinline__ uint64_t calculate_carry_64(uint64_t old_val,
 {
   // Use __uint128_t to detect overflow beyond 64-bit range
   __uint128_t sum = static_cast<__uint128_t>(old_val) + add_val + carry_in;
-  return (sum > cuda::std::numeric_limits<uint64_t>::max()) ? 1 : 0;
+  return sum > cuda::std::numeric_limits<uint64_t>::max();
 }
 
 /**
