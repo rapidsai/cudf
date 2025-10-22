@@ -153,6 +153,6 @@ def process_children(
         return [], {}
 
     _nodes_list, _channels_list = zip(*(rec(c) for c in ir.children), strict=True)
-    nodes: list[Any] = list(reduce(lambda a, b: a + b, _nodes_list, []))
+    nodes: list[Any] = list(reduce(operator.add, _nodes_list, []))
     channels: dict[IR, ChannelManager] = reduce(operator.or_, _channels_list)
     return nodes, channels
