@@ -1770,7 +1770,7 @@ class Series(SingleColumnFrame, IndexedFrame):
     def fillna(
         self,
         value: None | ScalarLike | Series = None,
-        method: Literal["ffill", "bfill", "pad", "backfill", None] = None,
+        method: Literal["ffill", "bfill", "pad", "backfill"] | None = None,
         axis: Axis | None = None,
         inplace: bool = False,
         limit: int | None = None,
