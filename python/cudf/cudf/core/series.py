@@ -9,7 +9,7 @@ import warnings
 from collections.abc import Mapping
 from copy import deepcopy
 from shutil import get_terminal_size
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 import cupy as cp
 import numpy as np
@@ -2061,6 +2061,34 @@ class Series(SingleColumnFrame, IndexedFrame):
             dtype = {self.name: cudf.dtype(dtype)}
         return super().astype(dtype, copy, errors)
 
+    @overload
+    def sort_index(
+        self,
+        axis: Axis = ...,
+        level=...,
+        ascending: bool | Iterable[bool] = ...,
+        inplace: Literal[False] = ...,
+        kind: str = ...,  # type: ignore[valid-type]
+        na_position: Literal["first", "last"] = ...,
+        sort_remaining: bool = ...,
+        ignore_index: bool = ...,
+        key=...,
+    ) -> Self: ...
+
+    @overload
+    def sort_index(
+        self,
+        axis: Axis = ...,
+        level=...,
+        ascending: bool | Iterable[bool] = ...,
+        inplace: Literal[True] = ...,
+        kind: str = ...,  # type: ignore[valid-type]
+        na_position: Literal["first", "last"] = ...,
+        sort_remaining: bool = ...,
+        ignore_index: bool = ...,
+        key=...,
+    ) -> None: ...
+
     @_performance_tracking
     def sort_index(
         self,
@@ -2076,7 +2104,7 @@ class Series(SingleColumnFrame, IndexedFrame):
     ) -> Self | None:
         if axis not in (0, "index"):
             raise ValueError("Only axis=0 is valid for Series.")
-        return super().sort_index(
+        return super().sort_index(  # type: ignore[call-overload]
             axis=axis,
             level=level,
             ascending=ascending,

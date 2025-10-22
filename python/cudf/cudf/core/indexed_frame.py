@@ -16,6 +16,7 @@ from typing import (
     Literal,
     TypeVar,
     cast,
+    overload,
 )
 from uuid import uuid4
 
@@ -2607,6 +2608,34 @@ class IndexedFrame(Frame):
         scaled = (self - vmin) / (vmax - vmin)
         scaled.index = self.index.copy(deep=False)
         return scaled
+
+    @overload
+    def sort_index(
+        self,
+        axis: Axis = ...,
+        level=...,
+        ascending: bool | Iterable[bool] = ...,
+        inplace: Literal[False] = ...,
+        kind: str = ...,
+        na_position: Literal["first", "last"] = ...,
+        sort_remaining: bool = ...,
+        ignore_index: bool = ...,
+        key=...,
+    ) -> Self: ...
+
+    @overload
+    def sort_index(
+        self,
+        axis: Axis = ...,
+        level=...,
+        ascending: bool | Iterable[bool] = ...,
+        inplace: Literal[True] = ...,
+        kind: str = ...,
+        na_position: Literal["first", "last"] = ...,
+        sort_remaining: bool = ...,
+        ignore_index: bool = ...,
+        key=...,
+    ) -> None: ...
 
     @_performance_tracking
     def sort_index(
