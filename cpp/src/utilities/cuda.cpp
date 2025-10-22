@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,18 @@ cudf::size_type num_multiprocessors()
   int num_sms = 0;
   CUDF_CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, device));
   return num_sms;
+}
+
+[[nodiscard]] bool has_integrated_memory()
+{
+  static auto const cached_result = []() {
+    int device = 0;
+    CUDF_CUDA_TRY(cudaGetDevice(&device));
+    int is_integrated = 0;
+    CUDF_CUDA_TRY(cudaDeviceGetAttribute(&is_integrated, cudaDevAttrIntegrated, device));
+    return is_integrated == 1;
+  }();
+  return cached_result;
 }
 
 }  // namespace cudf::detail
