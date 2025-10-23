@@ -240,6 +240,12 @@ enum class null_aware : bool {
   YES = 1   ///< The function is null-aware
 };
 
+/// @brief Indicates the null output policy of a function.
+enum class null_output : uint8_t {
+  PRESERVE     = 0,  ///< The resulting column's nullmask is preserved
+  NON_NULLABLE = 1   ///< A null-mask is not produced and all values are considered valid
+};
+
 /**
  * @brief Indicator for the logical data type of an element in a column.
  *
