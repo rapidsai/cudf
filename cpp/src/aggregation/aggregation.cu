@@ -103,7 +103,7 @@ struct identity_initializer {
       // Initialize sum column using standard SUM aggregation dispatch
       dispatch_type_and_aggregation(
         sum_col.type(), aggregation::SUM, identity_initializer{}, sum_col, stream);
-      thrust::fill_n(
+      thrust::uninitialized_fill_n(
         rmm::exec_policy_nosync(stream), overflow_col.begin<bool>(), col.size(), false);
     } else if constexpr (std::is_same_v<T, cudf::struct_view>) {
       // This should only happen for SUM_WITH_OVERFLOW, but handle it just in case
