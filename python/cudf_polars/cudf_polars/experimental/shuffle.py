@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import operator
+from functools import partial
 from typing import TYPE_CHECKING, Any, Concatenate, Literal, TypeVar, TypedDict
 
 import pylibcudf as plc
@@ -24,6 +25,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataType
     from cudf_polars.dsl.expr import NamedExpr
+    from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.experimental.parallel import PartitionInfo
     from cudf_polars.typing import Schema
@@ -163,6 +165,8 @@ class Shuffle(IR):
         keys: tuple[NamedExpr, ...],
         shuffle_method: ShuffleMethod,
         df: DataFrame,
+        *,
+        context: IRExecutionContext,
     ) -> DataFrame:  # pragma: no cover
         """Evaluate and return a dataframe."""
         # Single-partition Shuffle evaluation is a no-op
@@ -255,6 +259,7 @@ def _simple_shuffle_graph(
     ],
     options: OPT_T,
     *other: Any,
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     """Make a simple all-to-all shuffle graph."""
     split_name = f"split-{name_out}"
@@ -278,7 +283,7 @@ def _simple_shuffle_graph(
                 (split_name, part_in),
                 part_out,
             )
-        graph[(name_out, part_out)] = (_concat, *_concat_list)
+        graph[(name_out, part_out)] = (partial(_concat, context=context), *_concat_list)
     return graph
 
 
@@ -309,7 +314,9 @@ def _(
 
 @generate_ir_tasks.register(Shuffle)
 def _(
-    ir: Shuffle, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: Shuffle,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     # Extract "shuffle_method" configuration
     shuffle_method = ir.shuffle_method
@@ -356,7 +363,7 @@ def _(
                 ) from err
 
     # Simple task-based fall-back
-    return _simple_shuffle_graph(
+    return partial(_simple_shuffle_graph, context=context)(
         get_key_name(ir.children[0]),
         get_key_name(ir),
         partition_info[ir.children[0]].count,

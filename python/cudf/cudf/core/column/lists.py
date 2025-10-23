@@ -46,10 +46,10 @@ class ListColumn(ColumnBase):
         data: None,
         size: int,
         dtype: ListDtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple[NumericalColumn, ColumnBase] = (),  # type: ignore[assignment]
+        mask: Buffer | None,
+        offset: int,
+        null_count: int,
+        children: tuple[NumericalColumn, ColumnBase],
     ):
         if data is not None:
             raise ValueError("data must be None")
@@ -127,17 +127,17 @@ class ListColumn(ColumnBase):
         result = super().element_indexing(index)
         if isinstance(result, pa.Scalar):
             py_element = maybe_nested_pa_scalar_to_py(result)
-            return self.dtype._recursively_replace_fields(py_element)
+            return self.dtype._recursively_replace_fields(py_element)  # type: ignore[union-attr]
         return result
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar:
         if isinstance(value, list) or value is None:
             return pa_scalar_to_plc_scalar(
-                pa.scalar(value, type=self.dtype.to_arrow())
+                pa.scalar(value, type=self.dtype.to_arrow())  # type: ignore[union-attr]
             )
         elif value is NA or value is None:
             return pa_scalar_to_plc_scalar(
-                pa.scalar(None, type=self.dtype.to_arrow())
+                pa.scalar(None, type=self.dtype.to_arrow())  # type: ignore[union-attr]
             )
         else:
             raise ValueError(f"Can not set {value} into ListColumn")
@@ -156,7 +156,7 @@ class ListColumn(ColumnBase):
             return NotImplemented
         if isinstance(other.dtype, ListDtype):
             if op == "__add__":
-                return self.concatenate_rows([other])  # type: ignore[list-item]
+                return self.concatenate_rows([other])
             else:
                 raise NotImplementedError(
                     "Lists concatenation for this operation is not yet"
@@ -287,7 +287,7 @@ class ListColumn(ColumnBase):
             0,
             [offset_col, data_plc_col],
         )
-        return cls.from_pylibcudf(plc_column)  # type: ignore[return-value]
+        return cls.from_pylibcudf(plc_column)
 
     @cached_property
     def _string_separators(self) -> plc.Column:
@@ -357,7 +357,7 @@ class ListColumn(ColumnBase):
         else:
             return get_dtype_of_same_kind(
                 self.dtype,
-                self.dtype.pyarrow_dtype.value_type.to_pandas_dtype(),
+                self.dtype.pyarrow_dtype.value_type.to_pandas_dtype(),  # type: ignore[union-attr]
             )
 
     def to_pandas(
@@ -537,7 +537,7 @@ class ListColumn(ColumnBase):
                     f"seed must be in range [0, {np.iinfo(np.uint32).max}]"
                 )
             seed = np.uint32(seed)
-        return type(self).from_pylibcudf(  # type: ignore[return-value]
+        return type(self).from_pylibcudf(
             plc.nvtext.minhash.minhash_ngrams(
                 self.to_pylibcudf(mode="read"),
                 width,
@@ -562,7 +562,7 @@ class ListColumn(ColumnBase):
                     f"seed must be in range [0, {np.iinfo(np.uint64).max}]"
                 )
             seed = np.uint64(seed)
-        return type(self).from_pylibcudf(  # type: ignore[return-value]
+        return type(self).from_pylibcudf(
             plc.nvtext.minhash.minhash64_ngrams(
                 self.to_pylibcudf(mode="read"),
                 width,

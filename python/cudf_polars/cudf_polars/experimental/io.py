@@ -10,6 +10,7 @@ import itertools
 import math
 import statistics
 from collections import defaultdict
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -17,7 +18,14 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars.dsl.ir import IR, DataFrameScan, Empty, Scan, Sink, Union
+from cudf_polars.dsl.ir import (
+    IR,
+    DataFrameScan,
+    Empty,
+    Scan,
+    Sink,
+    Union,
+)
 from cudf_polars.experimental.base import (
     ColumnSourceInfo,
     ColumnStat,
@@ -38,6 +46,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import NamedExpr
+    from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.base import StatsCollector
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
@@ -190,6 +199,8 @@ class SplitScan(IR):
         include_file_paths: str | None,
         predicate: NamedExpr | None,
         parquet_options: ParquetOptions,
+        *,
+        context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         if typ not in ("parquet",):  # pragma: no cover
@@ -250,6 +261,7 @@ class SplitScan(IR):
             include_file_paths,
             predicate,
             parquet_options,
+            context=context,
         )
 
 
@@ -403,9 +415,12 @@ def _sink_to_directory(
     options: dict[str, Any],
     df: DataFrame,
     ready: None,
+    context: IRExecutionContext,
 ) -> DataFrame:
     """Sink a partition to a new file."""
-    return Sink.do_evaluate(schema, kind, path, parquet_options, options, df)
+    return Sink.do_evaluate(
+        schema, kind, path, parquet_options, options, df, context=context
+    )
 
 
 def _sink_to_parquet_file(
@@ -488,7 +503,9 @@ def _sink_to_file(
 
 
 def _file_sink_graph(
-    ir: StreamingSink, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: StreamingSink,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     """Sink to a single file."""
     name = get_key_name(ir)
@@ -498,7 +515,7 @@ def _file_sink_graph(
     if count == 1:
         return {
             (name, 0): (
-                sink.do_evaluate,
+                partial(sink.do_evaluate, context=context),
                 *sink._non_child_args,
                 (child_name, 0),
             )
@@ -524,7 +541,9 @@ def _file_sink_graph(
 
 
 def _directory_sink_graph(
-    ir: StreamingSink, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: StreamingSink,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     """Sink to a directory of files."""
     name = get_key_name(ir)
@@ -545,6 +564,7 @@ def _directory_sink_graph(
             sink.options,
             (child_name, i),
             setup_name,
+            context,
         )
         for i in range(count)
     }
@@ -554,12 +574,14 @@ def _directory_sink_graph(
 
 @generate_ir_tasks.register(StreamingSink)
 def _(
-    ir: StreamingSink, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: StreamingSink,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     if ir.executor_options.sink_to_directory:
-        return _directory_sink_graph(ir, partition_info)
+        return _directory_sink_graph(ir, partition_info, context=context)
     else:
-        return _file_sink_graph(ir, partition_info)
+        return _file_sink_graph(ir, partition_info, context=context)
 
 
 class ParquetMetadata:

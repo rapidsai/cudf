@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 import polars as pl
@@ -30,6 +31,7 @@ if TYPE_CHECKING:
     from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.dsl.expr import NamedExpr
+    from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
 
@@ -248,6 +250,7 @@ def _sort_boundaries_graph(
     column_order: Sequence[plc.types.Order],
     null_order: Sequence[plc.types.NullOrder],
     count: int,
+    context: IRExecutionContext,
 ) -> tuple[str, MutableMapping[Any, Any]]:
     """Graph to get the boundaries from all partitions."""
     local_boundaries_name = f"sort-boundaries_local-{name_in}"
@@ -266,7 +269,7 @@ def _sort_boundaries_graph(
         )
         _concat_list.append((local_boundaries_name, part_id))
 
-    graph[concat_boundaries_name] = (_concat, *_concat_list)
+    graph[concat_boundaries_name] = (partial(_concat, context=context), *_concat_list)
     graph[global_boundaries_name] = (
         _get_final_sort_boundaries,
         concat_boundaries_name,
@@ -477,6 +480,8 @@ class ShuffleSorted(IR):
         null_order: tuple[plc.types.NullOrder, ...],
         shuffle_method: ShuffleMethod,
         df: DataFrame,
+        *,
+        context: IRExecutionContext,
     ) -> DataFrame:  # pragma: no cover
         """Evaluate and return a dataframe."""
         # Single-partition ShuffleSorted evaluation is a no-op
@@ -581,7 +586,9 @@ def _(
 
 @generate_ir_tasks.register(ShuffleSorted)
 def _(
-    ir: ShuffleSorted, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: ShuffleSorted,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     by = [ne.value.name for ne in ir.by if isinstance(ne.value, Col)]
     if len(by) != len(ir.by):  # pragma: no cover
@@ -596,6 +603,7 @@ def _(
         ir.order,
         ir.null_order,
         partition_info[child].count,
+        context,
     )
 
     options = {
@@ -645,7 +653,7 @@ def _(
 
     # Simple task-based fall-back
     graph.update(
-        _simple_shuffle_graph(
+        partial(_simple_shuffle_graph, context=context)(
             get_key_name(child),
             get_key_name(ir),
             partition_info[child].count,

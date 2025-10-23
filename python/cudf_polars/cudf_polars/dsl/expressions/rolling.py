@@ -6,13 +6,10 @@
 
 from __future__ import annotations
 
-import itertools
 from collections import defaultdict
 from dataclasses import dataclass
 from functools import singledispatchmethod
 from typing import TYPE_CHECKING, Any
-
-import polars as pl
 
 import pylibcudf as plc
 
@@ -26,7 +23,7 @@ from cudf_polars.dsl.utils.windows import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Sequence
+    from collections.abc import Sequence
 
     from rmm.pylibrmm.stream import Stream
 
@@ -92,17 +89,6 @@ def to_request(
         )  # pragma: no cover; raise before we get here because we
         # don't do correct handling of empty groups
     return plc.rolling.RollingRequest(col.obj, min_periods, value.agg_request)
-
-
-def _by_exprs(b: Expr | tuple) -> Generator[Expr]:
-    if isinstance(b, Expr):
-        yield b
-    elif isinstance(b, tuple):  # pragma: no cover; tests cover this path when
-        # run with the distributed cluster only
-        for item in b:
-            yield from _by_exprs(item)
-    else:
-        yield expr.Literal(DataType(pl.Int64()), b)  # pragma: no cover
 
 
 class RollingWindow(Expr):
@@ -230,7 +216,6 @@ class GroupedRollingWindow(Expr):
         "named_aggs",
         "post",
         "by_count",
-        "_order_by_expr",
     )
 
     def __init__(
@@ -239,15 +224,18 @@ class GroupedRollingWindow(Expr):
         options: Any,
         named_aggs: Sequence[expr.NamedExpr],
         post: expr.NamedExpr,
-        *by: Expr,
-        _order_by_expr: Expr | None = None,
+        by_count: int,
+        *children: Expr,
     ) -> None:
         self.dtype = dtype
         self.options = options
         self.named_aggs = tuple(named_aggs)
         self.post = post
+        self.by_count = by_count
+        has_order_by = self.options[1]
         self.is_pointwise = False
-        self._order_by_expr = _order_by_expr
+        self.children = tuple(children)
+        self._order_by_expr = children[by_count] if has_order_by else None
 
         unsupported = [
             type(named_expr.value).__name__
@@ -266,32 +254,6 @@ class GroupedRollingWindow(Expr):
             raise NotImplementedError(
                 f"Unsupported over(...) only expression: {kinds}="
             )
-
-        # Ensures every partition-by is an Expr
-        # Fixes over(1) cases with the streaming
-        # executor and a small blocksize
-        by_expr = [e for b in by for e in _by_exprs(b)]
-
-        # Expose agg dependencies as children so the streaming
-        # executor retains required source columns
-        child_deps = [
-            v.children[0]
-            for ne in self.named_aggs
-            for v in (ne.value,)
-            if isinstance(v, expr.Agg)
-            or (
-                isinstance(v, expr.UnaryFunction)
-                and v.name in {"rank", "fill_null_with_strategy", "cum_sum"}
-            )
-        ]
-        self.by_count = len(by_expr)
-        self.children = tuple(
-            itertools.chain(
-                by_expr,
-                (() if self._order_by_expr is None else (self._order_by_expr,)),
-                child_deps,
-            )
-        )
 
     @staticmethod
     def _sorted_grouper(by_cols_for_scan: list[Column]) -> plc.groupby.GroupBy:

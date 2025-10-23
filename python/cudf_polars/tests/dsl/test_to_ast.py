@@ -15,6 +15,7 @@ import cudf_polars.dsl.ir as ir_nodes
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.containers.dataframe import DataFrame, NamedColumn
+from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.dsl.to_ast import insert_colrefs, to_ast, to_parquet_filter
 from cudf_polars.utils.cuda_stream import get_cuda_stream
 
@@ -66,7 +67,7 @@ def test_compute_column(expr, df):
     ir = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
 
     assert isinstance(ir, ir_nodes.Select)
-    table = ir.children[0].evaluate(cache={}, timer=None)
+    table = ir.children[0].evaluate(cache={}, timer=None, context=IRExecutionContext())
     name_to_index = {c.name: i for i, c in enumerate(table.columns)}
 
     def compute_column(e):

@@ -636,8 +636,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                     col.has_nulls() for col in self._columns
                 ):
                     if to_dtype.kind == "b" or any(
-                        dtype.kind == "b"  # type: ignore[union-attr]
-                        for _, dtype in self._dtypes
+                        dtype.kind == "b" for _, dtype in self._dtypes
                     ):
                         if module == cupy:
                             raise ValueError(
@@ -1667,10 +1666,10 @@ class Frame(BinaryOperand, Scannable, Serializable):
                     # that nulls that are present in both left_column and
                     # right_column are not filled.
                     if left_column.nullable and right_column.nullable:
-                        with acquire_spill_lock():
-                            lmask = as_column(left_column.nullmask)
-                            rmask = as_column(right_column.nullmask)
-                            output_mask = (lmask | rmask).data
+                        output_mask = (
+                            left_column._get_mask_as_column()
+                            | right_column._get_mask_as_column()
+                        ).as_mask()
                         left_column = left_column.fillna(fill_value)
                         right_column = right_column.fillna(fill_value)
                     elif left_column.nullable:
@@ -1733,13 +1732,8 @@ class Frame(BinaryOperand, Scannable, Serializable):
             cupy_inputs = []
             for inp in (left, right) if ufunc.nin == 2 else (left,):
                 if isinstance(inp, ColumnBase) and inp.has_nulls():
-                    new_mask = as_column(inp.nullmask)
-
-                    # TODO: This is a hackish way to perform a bitwise and
-                    # of bitmasks. Once we expose
-                    # cudf::detail::bitwise_and, then we can use that
-                    # instead.
-                    mask = new_mask if mask is None else (mask & new_mask)
+                    new_mask = inp._get_mask_as_column()
+                    mask = new_mask if mask is None else mask & new_mask
 
                     # Arbitrarily fill with zeros. For ufuncs, we assume
                     # that the end result propagates nulls via a bitwise
@@ -1751,7 +1745,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
             if ufunc.nout == 1:
                 cp_output = (cp_output,)
             for i, out in enumerate(cp_output):
-                data[i][name] = as_column(out).set_mask(mask)
+                data[i][name] = as_column(out).set_mask(
+                    mask if mask is None else mask.as_mask()
+                )
         return data
 
     # Unary logical operators
