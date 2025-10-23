@@ -64,6 +64,8 @@ class _ObjectWithArrowMetadata:
     def __arrow_c_array__(
         self, requested_schema: None = None
     ) -> tuple[CapsuleType, CapsuleType]:
+        # TODO: pass CUDA stream here
+        # https://github.com/rapidsai/cudf/pull/20323
         return self.obj._to_schema(self.metadata), self.obj._to_host_array()
 
 
