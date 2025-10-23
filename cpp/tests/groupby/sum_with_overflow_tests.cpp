@@ -28,8 +28,6 @@
 using namespace cudf::test::iterators;
 using namespace numeric;
 
-using K = int32_t;
-
 // SUM_WITH_OVERFLOW tests - supports signed integer and decimal types
 template <typename V>
 struct groupby_sum_with_overflow_test : public cudf::test::BaseFixture {};
@@ -42,6 +40,7 @@ TYPED_TEST_SUITE(groupby_sum_with_overflow_test, sum_with_overflow_supported_typ
 
 TYPED_TEST(groupby_sum_with_overflow_test, basic)
 {
+  using K = int32_t;
   using V = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<K> keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
@@ -100,6 +99,7 @@ TYPED_TEST(groupby_sum_with_overflow_test, basic)
 
 TYPED_TEST(groupby_sum_with_overflow_test, empty_cols)
 {
+  using K = int32_t;
   using V = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<K> keys{};
@@ -124,6 +124,7 @@ TYPED_TEST(groupby_sum_with_overflow_test, empty_cols)
 
 TYPED_TEST(groupby_sum_with_overflow_test, zero_valid_keys)
 {
+  using K = int32_t;
   using V = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<K> keys({1, 2, 3}, cudf::test::iterators::all_nulls());
@@ -148,6 +149,7 @@ TYPED_TEST(groupby_sum_with_overflow_test, zero_valid_keys)
 
 TYPED_TEST(groupby_sum_with_overflow_test, zero_valid_values)
 {
+  using K = int32_t;
   using V = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<K> keys{1, 1, 1};
@@ -176,6 +178,7 @@ TYPED_TEST(groupby_sum_with_overflow_test, zero_valid_values)
 
 TYPED_TEST(groupby_sum_with_overflow_test, null_keys_and_values)
 {
+  using K = int32_t;
   using V = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<K> keys(
@@ -210,6 +213,7 @@ TYPED_TEST(groupby_sum_with_overflow_test, null_keys_and_values)
 
 TYPED_TEST(groupby_sum_with_overflow_test, overflow_detection)
 {
+  using K = int32_t;
   using V = TypeParam;
 
   if constexpr (cudf::is_fixed_point<V>()) {
@@ -389,38 +393,6 @@ TYPED_TEST(groupby_sum_with_overflow_test, overflow_detection)
 
     // Note: SUM_WITH_OVERFLOW only works with hash groupby, not sort groupby
   }  // end else block for non-decimal types
-}
-
-// Test that SUM_WITH_OVERFLOW works with int32_t (which used to be unsupported)
-TEST(groupby_sum_with_overflow_compatibility_test, int32_support)
-{
-  using K = int32_t;
-  using V = int32_t;  // int32_t is now supported by SUM_WITH_OVERFLOW
-
-  cudf::test::fixed_width_column_wrapper<K> keys{1, 1, 1, 2, 2, 2, 3, 3, 3};
-  cudf::test::fixed_width_column_wrapper<V> vals{1, 2, 3, 4, 5, 6, 7, 8, 9};
-
-  cudf::test::fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
-
-  // Create expected struct column with sum and overflow children
-  auto sum_col      = cudf::test::fixed_width_column_wrapper<V>{6, 15, 24};
-  auto overflow_col = cudf::test::fixed_width_column_wrapper<bool>{false, false, false};
-  std::vector<std::unique_ptr<cudf::column>> children;
-  children.push_back(sum_col.release());
-  children.push_back(overflow_col.release());
-  auto expect_vals = cudf::create_structs_hierarchy(3, std::move(children), 0, {});
-
-  auto agg = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
-
-  // SUM_WITH_OVERFLOW should now work with int32_t value types
-  test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg), force_use_sort_impl::NO);
-
-  // SUM_WITH_OVERFLOW should throw with sort-based groupby
-  auto agg_sort = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
-  EXPECT_THROW(
-    test_single_agg(
-      keys, vals, expect_keys, *expect_vals, std::move(agg_sort), force_use_sort_impl::YES),
-    cudf::logic_error);
 }
 
 // Test that SUM_WITH_OVERFLOW throws an error for bool type (which is not supported)
