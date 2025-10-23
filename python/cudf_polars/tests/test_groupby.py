@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import itertools
+import platform
 import random
+import sys
 from datetime import date
 
 import pytest
@@ -266,7 +268,20 @@ def test_groupby_agg_broadcast_raises(df):
 
 @pytest.mark.parametrize("nrows", [30, 300, 300_000])
 @pytest.mark.parametrize("nkeys", [1, 2, 4])
-def test_groupby_maintain_order_random(nrows, nkeys, with_nulls):
+def test_groupby_maintain_order_random(nrows, nkeys, with_nulls, request):
+    if (
+        sys.version_info >= (3, 13)
+        and platform.machine().lower() == "x86_64"
+        and nkeys == 1
+        and nrows == 300_000
+    ):
+        request.applymarker(
+            pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/20345 "
+                "[BUG] Hash groupby sum on unsorted integer keys is incorrect.",
+                strict=False,
+            )
+        )
     key_names = [f"key{key}" for key in range(nkeys)]
     rng = random.Random(2)
     key_values = [rng.choices(range(100), k=nrows) for _ in key_names]
