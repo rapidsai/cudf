@@ -1198,10 +1198,9 @@ def test_series_from_cupy_scalars():
 def test_to_dense_array():
     rng = np.random.default_rng(seed=0)
     data = rng.random(8)
-    mask = np.asarray([0b11010110]).astype(np.byte)
-    sr = cudf.Series._from_column(
-        as_column(data, dtype=np.float64).set_mask(mask)
-    )
+    mask = rng.choice([True, False], size=len(data))
+    sr = cudf.Series(data)
+    sr.loc[mask] = None
     assert sr.has_nulls
     assert sr.null_count != len(sr)
     filled = sr.to_numpy(na_value=np.nan)

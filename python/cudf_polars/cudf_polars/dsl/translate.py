@@ -868,13 +868,31 @@ def _(
             if has_order_by
             else None
         )
+
+        named_aggs = [agg for agg, _ in aggs]
+
+        by_exprs = [
+            translator.translate_expr(n=n, schema=schema) for n in node.partition_by
+        ]
+
+        child_deps = [
+            v.children[0]
+            for ne in named_aggs
+            for v in (ne.value,)
+            if isinstance(v, expr.Agg)
+            or (
+                isinstance(v, expr.UnaryFunction)
+                and v.name in {"rank", "fill_null_with_strategy", "cum_sum"}
+            )
+        ]
+        children = (*by_exprs, *((order_by_expr,) if has_order_by else ()), *child_deps)
         return expr.GroupedRollingWindow(
             dtype,
             (mapping, has_order_by, descending, nulls_last),
-            [agg for agg, _ in aggs],
+            named_aggs,
             post,
-            *(translator.translate_expr(n=n, schema=schema) for n in node.partition_by),
-            _order_by_expr=order_by_expr,
+            len(by_exprs),
+            *children,
         )
     assert_never(node.options)
 
