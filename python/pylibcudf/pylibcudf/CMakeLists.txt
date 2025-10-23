@@ -53,6 +53,7 @@ set(cython_sources
     types.pyx
     unary.pyx
     utils.pyx
+    utilities.pyx
 )
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
@@ -73,4 +74,3 @@ add_subdirectory(libcudf)
 add_subdirectory(strings)
 add_subdirectory(io)
 add_subdirectory(nvtext)
-add_subdirectory(utilities)

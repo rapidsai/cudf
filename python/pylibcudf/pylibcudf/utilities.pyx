@@ -8,6 +8,6 @@ __all__ = ["is_ptds_enabled"]
 cpdef bool is_ptds_enabled():
     """Checks if per-thread default stream is enabled.
 
-    For details, see :cpp:func:`cudf::is_ptds_enabled`.
+    For details, see :cpp:func:`is_ptds_enabled`.
     """
     return default_stream.is_ptds_enabled()
