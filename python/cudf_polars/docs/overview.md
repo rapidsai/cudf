@@ -214,7 +214,9 @@ Plan node definitions live in `cudf_polars/dsl/ir.py`, these all
 inherit from the base `IR` node. The evaluation of a plan node is done
 by implementing the `do_evaluate` method. This method takes in
 the non-child arguments specified in `_non_child_args`, followed by
-pre-evaluated child nodes (`DataFrame` objects). To perform the
+pre-evaluated child nodes (`DataFrame` objects), and finally a
+keyword-only `context` argument (an `IRExecutionContext` object
+containing runtime execution context). To perform the
 evaluation, one should use the base class (generic) `evaluate` method
 which handles the recursive evaluation of child nodes.
 
@@ -739,6 +741,7 @@ and convert back to polars:
 
 ```python
 from cudf_polars.dsl.translate import Translator
+from cudf_polars.dsl.ir import IRExecutionContext
 import polars as pl
 
 q = ...
@@ -747,7 +750,7 @@ q = ...
 ir = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
 
 # DataFrame living on the device
-result = ir.evaluate(cache={}, timer=None)
+result = ir.evaluate(cache={}, timer=None, context=IRExecutionContext())
 
 # Polars dataframe
 host_result = result.to_polars()

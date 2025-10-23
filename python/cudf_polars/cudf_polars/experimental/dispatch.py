@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from cudf_polars.dsl import ir
-    from cudf_polars.dsl.ir import IR
+    from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.base import (
         ColumnStats,
         PartitionInfo,
@@ -77,7 +77,9 @@ def lower_ir_node(
 
 @singledispatch
 def generate_ir_tasks(
-    ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: IR,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     """
     Generate a task graph for evaluation of an IR node.
@@ -88,6 +90,8 @@ def generate_ir_tasks(
         IR node to generate tasks for.
     partition_info
         Partitioning information, obtained from :func:`lower_ir_graph`.
+    context
+        Runtime context for IR node execution.
 
     Returns
     -------
