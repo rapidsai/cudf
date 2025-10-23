@@ -261,6 +261,19 @@ class reader_impl {
   void preprocess_subpass_pages(read_mode mode, size_t chunk_read_limit);
 
   /**
+   * @brief Set page string offset indices for non-dictionary string columns.
+   *
+   * This function calculates the string offset index for each page of non-dictionary
+   * string columns and populates the _page_string_offset_indices member variable.
+   * The indices are used by decode kernels to access pre-computed string offsets.
+   *
+   * @param skip_rows The number of rows to skip in this subpass
+   * @param num_rows The number of rows to read in this subpass
+   * @param page_mask The page mask for this subpass
+   */
+   void set_page_string_offset_indices(size_t skip_rows, size_t num_rows, cudf::device_span<bool const> page_mask);
+
+  /**
    * @brief Allocate nesting information storage for all pages and set pointers to it.
    *
    * One large contiguous buffer of PageNestingInfo structs is allocated and
@@ -451,6 +464,14 @@ class reader_impl {
 
   // Page mask for filtering out subpass data pages
   cudf::detail::hostdevice_vector<bool> _subpass_page_mask;
+
+  // For each page, the index into the column's string offset buffer
+  // Used for non-dictionary string columns
+  rmm::device_uvector<size_t> _page_string_offset_indices;
+
+  // String offset buffer for non-dictionary string columns
+  // Contains pre-computed offsets into the string data
+  rmm::device_uvector<uint32_t> _string_offset_buffer;
 
   // _output_buffers associated metadata
   std::unique_ptr<table_metadata> _output_metadata;

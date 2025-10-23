@@ -24,6 +24,9 @@
 #include <cooperative_groups.h>
 #include <cuda/std/bit>
 #include <cuda/std/iterator>
+#include <cuda/barrier>
+#include <cuda/pipeline>
+#include <new>
 
 namespace cudf::io::parquet::detail {
 
@@ -928,6 +931,311 @@ constexpr bool is_split_decode()
 }
 
 /**
+ * @brief Pre-processing kernel to fill string offsets for non-dictionary string columns
+ *
+ * This kernel runs before the main decode kernel to pre-compute string offsets
+ * for columns that use plain encoding without dictionaries.
+ *
+ * @param pages List of pages
+ * @param chunks List of column chunks
+ * @param page_mask Boolean vector indicating which pages need to be processed
+ */
+CUDF_KERNEL void preprocess_string_offsets(PageInfo* pages,
+                                           device_span<ColumnChunkDesc const> chunks,
+                                           device_span<size_t const> page_string_offset_indices,
+                                           cudf::device_span<bool const> page_mask,
+                                           size_t min_row,
+                                           size_t num_rows)
+{
+  __shared__ __align__(16) page_state_s state_g;
+  
+  auto const block      = cg::this_thread_block();
+  int const page_idx    = cg::this_grid().block_rank();
+  int const t           = block.thread_rank();
+  page_state_s* const s = &state_g;
+  PageInfo* pp          = &pages[page_idx];
+  //if (t == 0) {
+    //printf("PREPROCESS: page_string_offset_indices.size() %d\n", (int)page_string_offset_indices.size());
+  //}
+
+  // Don't process pages that don't need to be decoded
+  if (!page_mask[page_idx]) { return; }
+
+  // Check if this is a string column without dictionary using kernel mask
+  constexpr uint32_t STRINGS_MASK_NON_DELTA_NON_DICT = BitOr(decode_kernel_mask::STRING,
+    decode_kernel_mask::STRING_NESTED,
+    decode_kernel_mask::STRING_LIST,
+    decode_kernel_mask::STRING_STREAM_SPLIT,
+    decode_kernel_mask::STRING_STREAM_SPLIT_NESTED,
+    decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
+
+  // Setup local page info
+  if (!setup_local_page_info(s,
+                             pp,
+                             chunks,
+                             min_row,
+                             num_rows,
+                             mask_filter{STRINGS_MASK_NON_DELTA_NON_DICT},
+                             page_processing_stage::DECODE)) {
+    return;
+  }
+
+  //if (t == 0) {
+    //printf("PREPROCESS: page %d, kernel_mask %d\n", page_idx, (int)pp->kernel_mask);
+  //}
+
+  // Get the string offset buffer for this column
+  auto const& chunk = chunks[pp->chunk_idx];
+  uint32_t* str_offsets = chunk.column_string_offset_base;
+  if (str_offsets == nullptr) { return; }
+  
+  // Get the offset for this page within the column's buffer
+  size_t page_offset = page_string_offset_indices[page_idx];
+  //size_t const page_start_row = s->col.start_row + s->page.chunk_row;
+  
+  auto const dict_size = s->dict_size;
+
+  // Determine if this is a list column and how many values to process
+  size_t num_values_to_process;
+  size_t num_values_to_skip;
+  if (chunk.max_level[level_type::REPETITION] == 0) {
+    num_values_to_skip = 0;
+    num_values_to_process = s->num_rows + s->first_row;
+//TODO: WRONG! DON'T KNOW HOW MANY NULLS WE ARE SKIPPING! MUST DECODE THE WHOLE PAGE! Or at least up to first_row +num_rows. CANNOT SKIP FOR NON-LIST!
+//THEN remove -first_row in string_decode()
+//TODO: try to read num_valids
+  } else {
+    // For list columns, use skipped_leaf_values and batch_size from leaf nesting level
+    int const leaf_level = s->col.max_nesting_depth - 1;
+    num_values_to_skip = s->page.skipped_leaf_values;
+    num_values_to_process = s->page.nesting[leaf_level].batch_size;
+  }
+
+  __shared__ size_t num_values_written;
+  __shared__ uint32_t last_offset; //offset into data_start
+
+  if (t == 0) {
+    uint8_t const* cur = s->data_start;
+    uint32_t k = 0;
+
+    // Skip to the first value we need to process
+    size_t skip_pos = 0;
+    for (; skip_pos < num_values_to_skip; skip_pos++) {
+      uint32_t string_offset = k + 4; // string length is first 4 bytes
+      if (string_offset > dict_size) { break; }  // Can't read any more valid data
+      int len = (cur[k]) | (cur[k + 1] << 8) | (cur[k + 2] << 16) | (cur[k + 3] << 24);
+      if (string_offset + len > dict_size) { break; }  // Data is corrupted or incomplete
+      k = string_offset + len;
+    }
+    //printf("SKIP: min_row %d, num_rows %d, page_start_row %d, s->page.num_rows %d,s->first_row %d, s->num_rows %d, num_input_values %d, num_values_to_skip %d, num_values_to_process %d, dict_size: %d, page_offset: %d, str_offsets %p, skipped to %d\n", 
+      //(int)min_row, (int)num_rows, (int)page_start_row, (int)s->page.num_rows, (int)s->first_row, (int)s->num_rows, (int)s->page.num_input_values, (int)num_values_to_skip, (int)num_values_to_process, (int)dict_size, (int)page_offset, (void*)str_offsets, int(k));
+
+    // Process the values we need - only if we successfully skipped past all the values we needed to
+    size_t pos = 0;
+    if (skip_pos == num_values_to_skip) {
+      for (; pos < num_values_to_process; pos++) {
+        uint32_t string_offset = k + 4;
+        if (string_offset > dict_size) {/* printf("BREAK1: string_offset %d, dict_size %d\n", (int)string_offset, (int)dict_size); */break; }  // Can't read any more valid data
+        //int len = (cur[k]) | (cur[k + 1] << 8) | (cur[k + 2] << 16) | (cur[k + 3] << 24);
+        int len;
+        cuda::std::memcpy(reinterpret_cast<void*>(&len), reinterpret_cast<const void*>(&cur[k]), 4);
+        if (string_offset + len > dict_size) {/* printf("BREAK2: string_offset %d, len %d, dict_size %d\n", (int)string_offset, (int)len, (int)dict_size); */break; }  // Data is corrupted or incomplete
+        str_offsets[page_offset + pos] = string_offset;
+        //printf("num_input_values: %d, pos: %d, offset %d, index %d, len %d\n", 
+          //(int)s->page.num_input_values, (int)pos, (int)string_offset, (int)page_offset + (int)pos, (int)len);
+        k = string_offset + len;
+      }
+    }
+    
+    num_values_written = pos;
+    last_offset = k + 4; //+4 for "stored" length of "next" string that we'll subtract off later
+  }
+
+  block.sync();  // Ensure all threads see num_values_written
+
+  // Use all threads in the block to fill remaining entries with the last offset
+  // This fills in the rest if we break early above because the dictionary wasn't large enough
+  // But it also fills in the last offset for the page, hence the +1 in the loop limit. 
+  constexpr auto block_size = 32;
+  for (size_t i = num_values_written + t; i < num_values_to_process + 1; i += block_size) {
+    str_offsets[page_offset + i] = last_offset;
+  }
+}
+
+
+/**
+ * @brief Pre-processing kernel to fill string offsets for non-dictionary string columns
+ *
+ * This kernel runs before the main decode kernel to pre-compute string offsets
+ * for columns that use plain encoding without dictionaries.
+ *
+ * @param pages List of pages
+ * @param chunks List of column chunks
+ * @param page_mask Boolean vector indicating which pages need to be processed
+ */
+ /*
+CUDF_KERNEL void preprocess_string_offsets_pipelined(PageInfo* pages,
+                                           device_span<ColumnChunkDesc const> chunks,
+                                           device_span<size_t const> page_string_offset_indices,
+                                           cudf::device_span<bool const> page_mask,
+                                           size_t min_row,
+                                           size_t num_rows)
+{
+  __shared__ __align__(16) page_state_s state_g;
+  __shared__ __align__(16) uint8_t prefetch_buffer[4096];
+  
+  auto const block      = cg::this_thread_block();
+  int const page_idx    = cg::this_grid().block_rank();
+  int const t           = block.thread_rank();
+  page_state_s* const s = &state_g;
+  PageInfo* pp          = &pages[page_idx];
+  //if (t == 0) { 
+    //printf("PREPROCESS: page_string_offset_indices.size() %d\n", (int)page_string_offset_indices.size());
+  //}
+
+  // Don't process pages that don't need to be decoded
+  if (!page_mask[page_idx]) { return; }
+
+  // Check if this is a string column without dictionary using kernel mask
+  constexpr uint32_t STRINGS_MASK_NON_DELTA_NON_DICT = BitOr(decode_kernel_mask::STRING,
+    decode_kernel_mask::STRING_NESTED,
+    decode_kernel_mask::STRING_LIST,
+    decode_kernel_mask::STRING_STREAM_SPLIT,
+    decode_kernel_mask::STRING_STREAM_SPLIT_NESTED,
+    decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
+
+  // Setup local page info
+  if (!setup_local_page_info(s,
+                             pp,
+                             chunks,
+                             min_row,
+                             num_rows,
+                             mask_filter{STRINGS_MASK_NON_DELTA_NON_DICT},
+                             page_processing_stage::DECODE)) {
+    return;
+  }
+
+  //if (t == 0) {
+    //printf("PREPROCESS: page %d, kernel_mask %d\n", page_idx, (int)pp->kernel_mask);
+  //}
+
+  // Get the string offset buffer for this column
+  auto const& chunk = chunks[pp->chunk_idx];
+  uint32_t* str_offsets = chunk.column_string_offset_base;
+  if (str_offsets == nullptr) { return; }
+  
+  // Get the offset for this page within the column's buffer
+  size_t page_offset = page_string_offset_indices[page_idx];
+  //size_t const page_start_row = s->col.start_row + s->page.chunk_row;
+  
+  auto const dict_size = s->dict_size;
+
+  // Determine if this is a list column and how many values to process
+  size_t num_values_to_process;
+  size_t num_values_to_skip;
+  if (chunk.max_level[level_type::REPETITION] == 0) {
+    num_values_to_skip = 0;
+    num_values_to_process = s->num_rows + s->first_row;
+//TODO: WRONG! DON'T KNOW HOW MANY NULLS WE ARE SKIPPING! MUST DECODE THE WHOLE PAGE! Or at least up to first_row +num_rows. CANNOT SKIP FOR NON-LIST!
+//THEN remove -first_row in string_decode()
+//TODO: try to read num_valids
+  } else {
+    // For list columns, use skipped_leaf_values and batch_size from leaf nesting level
+    int const leaf_level = s->col.max_nesting_depth - 1;
+    num_values_to_skip = s->page.skipped_leaf_values;
+    num_values_to_process = s->page.nesting[leaf_level].batch_size;
+  }
+
+  __shared__ size_t num_values_written;
+  __shared__ uint32_t last_offset; //offset into data_start
+
+  if (t == 0) {
+    uint8_t const* cur = s->data_start;
+    uint32_t k = 0;
+    
+    // Prefetch buffer tracking
+    constexpr size_t prefetch_size = 4096;
+    uint32_t buffer_base = 0;  // Starting position in cur for current buffer
+    uint32_t buffer_end = 0;   // End position in cur for current buffer
+    bool buffer_valid = false; // Whether buffer contains valid data
+    
+    // Helper lambda to prefetch next chunk
+    auto prefetch_next_chunk = [&]() {
+      buffer_base = k;
+      size_t bytes_to_copy = min(prefetch_size, static_cast<size_t>(dict_size - buffer_base));
+      if (bytes_to_copy > 0) {
+        cuda::std::memcpy(prefetch_buffer, cur + buffer_base, bytes_to_copy);
+        buffer_end = buffer_base + bytes_to_copy;
+        buffer_valid = true;
+      } else {
+        buffer_valid = false;
+      }
+    };
+    
+    // Initial prefetch
+    prefetch_next_chunk();
+
+    // Skip to the first value we need to process
+    size_t skip_pos = 0;
+    for (; skip_pos < num_values_to_skip; skip_pos++) {
+      uint32_t string_offset = k + 4; // string length is first 4 bytes
+      if (string_offset > dict_size) { break; }  // Can't read any more valid data
+      
+      // Check if we need to prefetch more data
+      if (!buffer_valid || k + 4 >= buffer_end) {
+        prefetch_next_chunk();
+        if (!buffer_valid) break;
+      }
+      
+      uint32_t local_k = k - buffer_base;
+      int len = (prefetch_buffer[local_k]) | (prefetch_buffer[local_k + 1] << 8) | 
+                (prefetch_buffer[local_k + 2] << 16) | (prefetch_buffer[local_k + 3] << 24);
+      if (string_offset + len > dict_size) { break; }  // Data is corrupted or incomplete
+      k = string_offset + len;
+    }
+    //printf("SKIP: min_row %d, num_rows %d, page_start_row %d, s->page.num_rows %d,s->first_row %d, s->num_rows %d, num_input_values %d, num_values_to_skip %d, num_values_to_process %d, dict_size: %d, page_offset: %d, str_offsets %p, skipped to %d\n", 
+      //(int)min_row, (int)num_rows, (int)page_start_row, (int)s->page.num_rows, (int)s->first_row, (int)s->num_rows, (int)s->page.num_input_values, (int)num_values_to_skip, (int)num_values_to_process, (int)dict_size, (int)page_offset, (void*)str_offsets, int(k));
+
+    // Process the values we need - only if we successfully skipped past all the values we needed to
+    size_t pos = 0;
+    if (skip_pos == num_values_to_skip) {
+      for (; pos < num_values_to_process; pos++) {
+        uint32_t string_offset = k + 4;
+        if (string_offset > dict_size) {break; }  // Can't read any more valid data
+        
+        // Check if we need to prefetch more data
+        if (!buffer_valid || k + 4 >= buffer_end) {
+          prefetch_next_chunk();
+          if (!buffer_valid) break;
+        }
+        
+        uint32_t local_k = k - buffer_base;
+        int len;
+        cuda::std::memcpy(reinterpret_cast<void*>(&len), reinterpret_cast<const void*>(&prefetch_buffer[local_k]), 4);
+        if (string_offset + len > dict_size) {break; }  // Data is corrupted or incomplete
+        str_offsets[page_offset + pos] = string_offset;
+        //printf("num_input_values: %d, pos: %d, offset %d, index %d, len %d\n", 
+          //(int)s->page.num_input_values, (int)pos, (int)string_offset, (int)page_offset + (int)pos, (int)len);
+        k = string_offset + len;
+      }
+    }
+    
+    num_values_written = pos;
+    last_offset = k + 4; //+4 for "stored" length of "next" string that we'll subtract off later
+  }
+
+  block.sync();  // Ensure all threads see num_values_written
+
+  // Use all threads in the block to fill remaining entries with the last offset
+  // This fills in the rest if we break early above because the dictionary wasn't large enough
+  // But it also fills in the last offset for the page, hence the +1 in the loop limit. 
+  constexpr auto block_size = 32;
+  for (size_t i = num_values_written + t; i < num_values_to_process + 1; i += block_size) {
+    str_offsets[page_offset + i] = last_offset;
+  }
+}
+*/
+/**
  * @brief Kernel for computing fixed width non dictionary column data stored in the pages
  *
  * This function will write the page data and the page data's validity to the
@@ -947,6 +1255,7 @@ template <typename level_t, int decode_block_size_t, decode_kernel_mask kernel_m
 CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   decode_page_data_generic(PageInfo* pages,
                            device_span<ColumnChunkDesc const> chunks,
+                           device_span<size_t const> page_string_offset_indices,
                            size_t min_row,
                            size_t num_rows,
                            cudf::device_span<bool const> page_mask,
@@ -979,6 +1288,11 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   PageInfo* pp          = &pages[page_idx];
 
   if (!(BitAnd(pages[page_idx].kernel_mask, kernel_mask_t))) { return; }
+
+  if (t == 0) {
+    printf("PAGE %d: kernel_mask %d, has_lists_t %d, has_strings_t %d, has_nesting_t %d, has_dict_t %d, has_bools_t %d, min_row %d, num_rows %d, page start_row %d, page num_rows %d\n", 
+      page_idx, (int)pages[page_idx].kernel_mask, (int)has_lists_t, (int)has_strings_t, (int)has_nesting_t, (int)has_dict_t, (int)has_bools_t, (int)min_row, (int)num_rows, (int)s->col.start_row, (int)s->page.num_rows);
+  }
 
   // must come after the kernel mask check
   [[maybe_unused]] null_count_back_copier _{s, t};
@@ -1106,9 +1420,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
       if constexpr (has_dict_t) {
         skip_decode<rolling_buf_size>(dict_stream, skipped_leaf_values, t);
       } else if constexpr (has_strings_t) {
+        /*//TODO: REMOVE ME!
         initialize_string_descriptors<is_calc_sizes_only::YES>(s, sb, skipped_leaf_values, block);
         if (t == 0) { s->dict_pos = processed_count; }
-        block.sync();
+        block.sync();*/
       } else if constexpr (has_bools_t) {
         if (bools_are_rle_stream) {
           skip_decode<rolling_buf_size>(bool_stream, skipped_leaf_values, t);
@@ -1177,10 +1492,11 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
       dict_stream.decode_next(t, next_valid_count - valid_count);
       block.sync();
     } else if constexpr (has_strings_t) {
+      /*//TODO: REMOVE ME!
       auto const target_pos = next_valid_count + skipped_leaf_values;
       initialize_string_descriptors<is_calc_sizes_only::NO>(s, sb, target_pos, block);
       if (t == 0) { s->dict_pos = target_pos; }
-      block.sync();
+      block.sync();*/
     } else if constexpr (has_bools_t) {
       if (bools_are_rle_stream) {
         bool_stream.decode_next(t, next_valid_count - valid_count);
@@ -1194,9 +1510,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 
     auto decode_values = [&]<copy_mode copy_mode_t>() {
       if constexpr (has_strings_t) {
-        string_output_offset =
-          decode_strings<decode_block_size_t, has_lists_t, split_decode_t, copy_mode_t>(
-            s, sb, valid_count, next_valid_count, t, string_output_offset);
+        size_t page_offset = page_string_offset_indices[page_idx];
+        string_output_offset = 
+          decode_strings<decode_block_size_t, has_dict_t, has_lists_t, split_decode_t, copy_mode_t>(
+          s, sb, valid_count, next_valid_count, t, page_offset, string_output_offset);
       } else if constexpr (split_decode_t) {
         decode_fixed_width_split_values<decode_block_size_t, has_lists_t, copy_mode_t>(
           s, sb, valid_count, next_valid_count, t);
@@ -1274,6 +1591,7 @@ using int_tag_t = std::integral_constant<int, value>;
  */
 void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
                       cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                      cudf::device_span<size_t const> page_string_offset_indices,
                       size_t num_rows,
                       size_t min_row,
                       int level_type_size,
@@ -1295,6 +1613,7 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
       decode_page_data_generic<uint8_t, decode_block_size, mask>
         <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(),
                                                      chunks,
+                                                     page_string_offset_indices,
                                                      min_row,
                                                      num_rows,
                                                      page_mask,
@@ -1304,6 +1623,7 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
       decode_page_data_generic<uint16_t, decode_block_size, mask>
         <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(),
                                                      chunks,
+                                                     page_string_offset_indices,
                                                      min_row,
                                                      num_rows,
                                                      page_mask,
@@ -1383,6 +1703,31 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
       break;
     default: CUDF_EXPECTS(false, "Kernel type not handled by this function"); break;
   }
+}
+
+/**
+ * @brief Launches the pre-processing kernel to fill string offsets for non-dictionary columns
+ *
+ * @param pages List of pages
+ * @param chunks List of column chunks
+ * @param page_mask Boolean vector indicating which pages need to be processed
+ * @param stream CUDA stream to use
+ */
+void preprocess_string_offsets(cudf::detail::hostdevice_span<PageInfo> pages,
+                               cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                               cudf::device_span<size_t const> page_string_offset_indices,
+                               cudf::device_span<bool const> page_mask,
+                               size_t min_row,
+                               size_t num_rows,
+                               rmm::cuda_stream_view stream)
+{
+  if (pages.size() == 0) { return; }
+
+  dim3 dim_block(32, 1);  // 1 warp since only thread 0 is used
+  dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
+
+  preprocess_string_offsets<<<dim_grid, dim_block, 0, stream.value()>>>(
+    pages.device_ptr(), chunks, page_string_offset_indices, page_mask, min_row, num_rows);
 }
 
 }  // namespace cudf::io::parquet::detail
