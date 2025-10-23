@@ -21,8 +21,11 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/groupby.hpp>
+#include <cudf/table/table_view.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 using namespace cudf::test::iterators;
