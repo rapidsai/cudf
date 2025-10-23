@@ -1549,6 +1549,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def take(
         self,
         indices: ColumnBase,
+        *,
         nullify: bool = False,
         check_bounds: bool = True,
     ) -> Self:
