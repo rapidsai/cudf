@@ -84,8 +84,6 @@ class Column:
         self.name = name
         self.dtype = dtype
         self.set_sorted(is_sorted=is_sorted, order=order, null_order=null_order)
-        self._nan_count: int | None = None
-        self._obj_scalar: plc.Scalar | None = None
 
     @classmethod
     def deserialize(
@@ -183,6 +181,13 @@ class Column:
         """
         A copy of the column object as a pylibcudf Scalar.
 
+        Parameters
+        ----------
+        stream
+            CUDA stream used for device memory operations and kernel launches.
+            ``self.obj`` must be valid on this stream, and the result will be
+            valid on this stream.
+
         Returns
         -------
         pylibcudf Scalar object.
@@ -194,18 +199,7 @@ class Column:
         """
         if not self.is_scalar:
             raise ValueError(f"Cannot convert a column of length {self.size} to scalar")
-        if self._obj_scalar is None:
-            self._obj_scalar = plc.copying.get_element(self.obj, 0, stream=stream)
-            # We synchronize the stream here, to avoid a race condition if
-            # Column.obj_scalar() is ever called with different streams.
-            # We need to ensure that the result is valid on *all* streams
-            # prior to returning the result.
-            #
-            # To avoid this synchronization, we could cache the result *per stream*.
-            # But to do that properly requires the ability to get the CUDA Stream ID,
-            # which isn't currently available through RMM.
-            stream.synchronize()
-        return self._obj_scalar
+        return plc.copying.get_element(self.obj, 0, stream=stream)
 
     def rename(self, name: str | None, /) -> Self:
         """
@@ -268,7 +262,7 @@ class Column:
             Where nulls sort to.
         stream
             CUDA stream used for device memory operations and kernel launches
-            on this dataframe. The data in ``self.obj`` must be valid on this stream.
+            on this Column. The data in ``self.obj`` must be valid on this stream.
 
         Returns
         -------
@@ -304,7 +298,7 @@ class Column:
             Datatype to cast to.
         stream
             CUDA stream used for device memory operations and kernel launches
-            on this dataframe. The data in ``self.obj`` must be valid on this stream.
+            on this Column. The data in ``self.obj`` must be valid on this stream.
 
         Returns
         -------
@@ -495,28 +489,32 @@ class Column:
         return self.copy()
 
     def nan_count(self, stream: Stream) -> int:
-        """Return the number of NaN values in the column."""
-        if self._nan_count is None:
-            if self.size > 0 and plc.traits.is_floating_point(self.obj.type()):
-                # See https://github.com/rapidsai/cudf/issues/20202 for we type ignore
-                self._nan_count = plc.reduce.reduce(  # type: ignore[assignment]
-                    plc.unary.is_nan(self.obj, stream=stream),
-                    plc.aggregation.sum(),
-                    plc.types.SIZE_TYPE,
-                    stream=stream,
-                ).to_py()
-                # We synchronize the stream here, to avoid a race condition if
-                # Column.obj_scalar() is ever called with different streams.
-                # We need to ensure that the result is valid on *all* streams
-                # prior to returning the result.
-                #
-                # To avoid this synchronization, we could cache the result *per stream*.
-                # But to do that properly requires the ability to get the CUDA Stream ID,
-                # which isn't currently available through RMM.
-                stream.synchronize()
-            else:
-                self._nan_count = 0
-        return self._nan_count  # type: ignore[return-value]
+        """
+        Return the number of NaN values in the column.
+
+        Parameters
+        ----------
+        stream
+            CUDA stream used for device memory operations and kernel launches.
+            ``self.obj`` must be valid on this stream, and the result will be
+            valid on this stream.
+
+        Returns
+        -------
+        Number of NaN values in the column.
+        """
+        result: int
+        if self.size > 0 and plc.traits.is_floating_point(self.obj.type()):
+            # See https://github.com/rapidsai/cudf/issues/20202 for we type ignore
+            result = plc.reduce.reduce(  # type: ignore[assignment]
+                plc.unary.is_nan(self.obj, stream=stream),
+                plc.aggregation.sum(),
+                plc.types.SIZE_TYPE,
+                stream=stream,
+            ).to_py()
+        else:
+            result = 0
+        return result
 
     @property
     def size(self) -> int:
@@ -539,7 +537,7 @@ class Column:
             treated as for python indexing. If not provided, returns self.
         stream
             CUDA stream used for device memory operations and kernel launches
-            on this dataframe. The data in ``self.obj`` must be valid on this stream.
+            on this Column. The data in ``self.obj`` must be valid on this stream.
 
         Returns
         -------
