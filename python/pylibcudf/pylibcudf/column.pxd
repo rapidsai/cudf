@@ -25,7 +25,7 @@ cdef class OwnerWithCAI:
     cdef dict cai
 
     @staticmethod
-    cdef create(column_view cv, object owner)
+    cdef create(column_view cv, object owner, Stream stream)
 
 
 cdef class OwnerMaskWithCAI:
@@ -67,7 +67,11 @@ cdef class Column:
     cdef Column from_column_view(const column_view& cv, Column owner)
 
     @staticmethod
-    cdef Column from_column_view_of_arbitrary(const column_view& cv, object owner)
+    cdef Column from_column_view_of_arbitrary(
+        const column_view& cv,
+        object owner,
+        Stream stream,
+    )
 
     @staticmethod
     cdef Column _wrap_nested_list_column(

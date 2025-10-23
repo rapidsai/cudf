@@ -92,7 +92,7 @@ cdef class _ArrowColumnHolder:
 cdef class OwnerWithCAI:
     """An interface for column view's data with gpumemoryview via CAI."""
     @staticmethod
-    cdef create(column_view cv, object owner):
+    cdef create(column_view cv, object owner, Stream stream):
         obj = OwnerWithCAI()
         obj.owner = owner
         # The default size of 0 will be applied for any type that stores data in the
@@ -104,8 +104,7 @@ cdef class OwnerWithCAI:
             # Cast to Python integers before multiplying to avoid overflow.
             size = int(cv.size()) * int(cpp_size_of(cv.type()))
         elif cv.type().id() == type_id.STRING:
-            # TODO: stream-ordered
-            size = strings_column_view(cv).chars_size(_get_stream().view())
+            size = strings_column_view(cv).chars_size(stream.view())
 
         obj.cai = {
             "shape": (size,),
@@ -449,7 +448,11 @@ cdef class Column:
                 )
             result.col.swap(c_result)
 
-            return Column.from_column_view_of_arbitrary(result.col.get().view(), result)
+            return Column.from_column_view_of_arbitrary(
+                result.col.get().view(),
+                result,
+                stream,
+            )
         elif hasattr(obj, "__arrow_c_array__"):
             schema, h_array = obj.__arrow_c_array__()
             c_schema = <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
@@ -466,7 +469,11 @@ cdef class Column:
                 )
             result.col.swap(c_result)
 
-            return Column.from_column_view_of_arbitrary(result.col.get().view(), result)
+            return Column.from_column_view_of_arbitrary(
+                result.col.get().view(),
+                result,
+                stream,
+            )
         elif hasattr(obj, "__arrow_c_stream__"):
             arrow_stream = obj.__arrow_c_stream__()
             c_arrow_stream = (
@@ -486,7 +493,11 @@ cdef class Column:
                 )
             result.col.swap(c_result)
 
-            return Column.from_column_view_of_arbitrary(result.col.get().view(), result)
+            return Column.from_column_view_of_arbitrary(
+                result.col.get().view(),
+                result,
+                stream,
+            )
         elif hasattr(obj, "__arrow_c_device_stream__"):
             # TODO: When we add support for this case, it should be moved above
             # the __arrow_c_array__ case since we should prioritize device
@@ -712,7 +723,11 @@ cdef class Column:
     # from_column_view, but this does not work due to
     # https://github.com/cython/cython/issues/6740
     @staticmethod
-    cdef Column from_column_view_of_arbitrary(const column_view& cv, object owner):
+    cdef Column from_column_view_of_arbitrary(
+        const column_view& cv,
+        object owner,
+        Stream stream,
+    ):
         """Create a Column from a libcudf column_view into an arbitrary owner.
 
         This method accepts shared ownership of the underlying data from the owner.
@@ -726,16 +741,19 @@ cdef class Column:
         """
         # For efficiency, prohibit calling this overload with a Column owner.
         assert not isinstance(owner, Column)
+        stream = _get_stream(stream)
 
         children = []
         cdef size_type i
         if cv.num_children() != 0:
             for i in range(cv.num_children()):
                 children.append(
-                    Column.from_column_view_of_arbitrary(cv.child(i), owner)
+                    Column.from_column_view_of_arbitrary(cv.child(i), owner, stream)
                 )
 
-        cdef gpumemoryview owning_data = gpumemoryview(OwnerWithCAI.create(cv, owner))
+        cdef gpumemoryview owning_data = gpumemoryview(
+            OwnerWithCAI.create(cv, owner, stream)
+        )
         cdef gpumemoryview owning_mask = None
         if cv.null_count() > 0:
             owning_mask = gpumemoryview(OwnerMaskWithCAI.create(cv, owner))
