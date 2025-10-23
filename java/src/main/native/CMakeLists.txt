@@ -170,6 +170,7 @@ add_library(
   src/CompiledExpression.cpp
   src/ContiguousTableJni.cpp
   src/DataSourceHelperJni.cpp
+  src/GroupByHostUDFJni.cpp
   src/HashJoinJni.cpp
   src/HostMemoryBufferNativeUtilsJni.cpp
   src/HostUDFWrapperJni.cpp
