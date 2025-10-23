@@ -407,10 +407,10 @@ def _(
         if abs(py_val) > numeric_limits[float].max():
             raise OverflowError(f"{py_val} out of range for FLOAT32 scalar")
         c_obj = make_numeric_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
-        (<numeric_scalar[float]*>c_obj.get()).set_value(py_val)
+        (<numeric_scalar[float]*>c_obj.get()).set_value(py_val, stream.view())
     elif tid == type_id.FLOAT64:
         c_obj = make_numeric_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
-        (<numeric_scalar[double]*>c_obj.get()).set_value(py_val)
+        (<numeric_scalar[double]*>c_obj.get()).set_value(py_val, stream.view())
     else:
         typ = c_dtype.id()
         raise TypeError(f"Cannot convert float to Scalar with dtype {typ.name}")
@@ -443,7 +443,7 @@ def _(
         ):
             raise OverflowError(f"{py_val} out of range for INT8 scalar")
         c_obj = make_numeric_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
-        (<numeric_scalar[int8_t]*>c_obj.get()).set_value(py_val)
+        (<numeric_scalar[int8_t]*>c_obj.get()).set_value(py_val, stream.view())
 
     elif tid == type_id.INT16:
         if not (
@@ -451,7 +451,7 @@ def _(
         ):
             raise OverflowError(f"{py_val} out of range for INT16 scalar")
         c_obj = make_numeric_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
-        (<numeric_scalar[int16_t]*>c_obj.get()).set_value(py_val)
+        (<numeric_scalar[int16_t]*>c_obj.get()).set_value(py_val, stream.view())
 
     elif tid == type_id.INT32:
         if not (
@@ -459,7 +459,7 @@ def _(
         ):
             raise OverflowError(f"{py_val} out of range for INT32 scalar")
         c_obj = make_numeric_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
-        (<numeric_scalar[int32_t]*>c_obj.get()).set_value(py_val)
+        (<numeric_scalar[int32_t]*>c_obj.get()).set_value(py_val, stream.view())
 
     elif tid == type_id.INT64:
         if not (
@@ -467,7 +467,7 @@ def _(
         ):
             raise OverflowError(f"{py_val} out of range for INT64 scalar")
         c_obj = make_numeric_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
-        (<numeric_scalar[int64_t]*>c_obj.get()).set_value(py_val)
+        (<numeric_scalar[int64_t]*>c_obj.get()).set_value(py_val, stream.view())
 
     elif tid == type_id.UINT8:
         if py_val < 0:
@@ -475,7 +475,7 @@ def _(
         if py_val > numeric_limits[uint8_t].max():
             raise OverflowError(f"{py_val} out of range for UINT8 scalar")
         c_obj = make_numeric_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
-        (<numeric_scalar[uint8_t]*>c_obj.get()).set_value(py_val)
+        (<numeric_scalar[uint8_t]*>c_obj.get()).set_value(py_val, stream.view())
 
     elif tid == type_id.UINT16:
         if py_val < 0:
@@ -483,7 +483,7 @@ def _(
         if py_val > numeric_limits[uint16_t].max():
             raise OverflowError(f"{py_val} out of range for UINT16 scalar")
         c_obj = make_numeric_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
-        (<numeric_scalar[uint16_t]*>c_obj.get()).set_value(py_val)
+        (<numeric_scalar[uint16_t]*>c_obj.get()).set_value(py_val, stream.view())
 
     elif tid == type_id.UINT32:
         if py_val < 0:
@@ -491,7 +491,7 @@ def _(
         if py_val > numeric_limits[uint32_t].max():
             raise OverflowError(f"{py_val} out of range for UINT32 scalar")
         c_obj = make_numeric_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
-        (<numeric_scalar[uint32_t]*>c_obj.get()).set_value(py_val)
+        (<numeric_scalar[uint32_t]*>c_obj.get()).set_value(py_val, stream.view())
 
     elif tid == type_id.UINT64:
         if py_val < 0:
@@ -499,7 +499,7 @@ def _(
         if py_val > numeric_limits[uint64_t].max():
             raise OverflowError(f"{py_val} out of range for UINT64 scalar")
         c_obj = make_numeric_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
-        (<numeric_scalar[uint64_t]*>c_obj.get()).set_value(py_val)
+        (<numeric_scalar[uint64_t]*>c_obj.get()).set_value(py_val, stream.view())
 
     elif tid == type_id.DURATION_NANOSECONDS:
         if py_val > numeric_limits[int64_t].max():
@@ -508,7 +508,9 @@ def _(
             )
         c_obj = make_duration_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
         c_duration_ns = duration_ns(<int64_t>py_val)
-        (<duration_scalar[duration_ns]*>c_obj.get()).set_value(c_duration_ns)
+        (<duration_scalar[duration_ns]*>c_obj.get()).set_value(
+            c_duration_ns, stream.view()
+        )
 
     elif tid == type_id.DURATION_MICROSECONDS:
         if py_val > numeric_limits[int64_t].max():
@@ -517,7 +519,9 @@ def _(
             )
         c_obj = make_duration_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
         c_duration_us = duration_us(<int64_t>py_val)
-        (<duration_scalar[duration_us]*>c_obj.get()).set_value(c_duration_us)
+        (<duration_scalar[duration_us]*>c_obj.get()).set_value(
+            c_duration_us, stream.view()
+        )
 
     elif tid == type_id.DURATION_MILLISECONDS:
         if py_val > numeric_limits[int64_t].max():
@@ -526,7 +530,9 @@ def _(
             )
         c_obj = make_duration_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
         c_duration_ms = duration_ms(<int64_t>py_val)
-        (<duration_scalar[duration_ms]*>c_obj.get()).set_value(c_duration_ms)
+        (<duration_scalar[duration_ms]*>c_obj.get()).set_value(
+            c_duration_ms, stream.view()
+        )
 
     elif tid == type_id.DURATION_SECONDS:
         if py_val > numeric_limits[int64_t].max():
@@ -535,7 +541,9 @@ def _(
             )
         c_obj = make_duration_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
         c_duration_s = duration_s(<int64_t>py_val)
-        (<duration_scalar[duration_s]*>c_obj.get()).set_value(c_duration_s)
+        (<duration_scalar[duration_s]*>c_obj.get()).set_value(
+            c_duration_s, stream.view()
+        )
 
     elif tid == type_id.DURATION_DAYS:
         if py_val > numeric_limits[int32_t].max():
@@ -544,7 +552,9 @@ def _(
             )
         c_obj = make_duration_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
         c_duration_D = duration_D(<int32_t>py_val)
-        (<duration_scalar[duration_D]*>c_obj.get()).set_value(c_duration_D)
+        (<duration_scalar[duration_D]*>c_obj.get()).set_value(
+            c_duration_D, stream.view()
+        )
 
     else:
         typ = c_dtype.id()
@@ -570,7 +580,7 @@ def _(
         stream.view(),
         mr.get_mr()
     )
-    (<numeric_scalar[cbool]*>c_obj.get()).set_value(py_val)
+    (<numeric_scalar[cbool]*>c_obj.get()).set_value(py_val, stream.view())
     return _new_scalar(move(c_obj), dtype)
 
 
@@ -615,7 +625,9 @@ def _(
             )
         c_obj = make_duration_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
         c_duration_ns = duration_ns(<int64_t>total_nanoseconds)
-        (<duration_scalar[duration_ns]*>c_obj.get()).set_value(c_duration_ns)
+        (<duration_scalar[duration_ns]*>c_obj.get()).set_value(
+            c_duration_ns, stream.view()
+        )
     elif tid == type_id.DURATION_MICROSECONDS:
         total_microseconds = int(total_seconds * 1_000_000)
         if total_microseconds > numeric_limits[int64_t].max():
@@ -624,7 +636,9 @@ def _(
             )
         c_obj = make_duration_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
         c_duration_us = duration_us(<int64_t>total_microseconds)
-        (<duration_scalar[duration_us]*>c_obj.get()).set_value(c_duration_us)
+        (<duration_scalar[duration_us]*>c_obj.get()).set_value(
+            c_duration_us, stream.view()
+        )
     elif tid == type_id.DURATION_MILLISECONDS:
         total_milliseconds = int(total_seconds * 1_000)
         if total_milliseconds > numeric_limits[int64_t].max():
@@ -633,7 +647,9 @@ def _(
             )
         c_obj = make_duration_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
         c_duration_ms = duration_ms(<int64_t>total_milliseconds)
-        (<duration_scalar[duration_ms]*>c_obj.get()).set_value(c_duration_ms)
+        (<duration_scalar[duration_ms]*>c_obj.get()).set_value(
+            c_duration_ms, stream.view()
+        )
     elif tid == type_id.DURATION_SECONDS:
         total_seconds = int(total_seconds)
         if total_seconds > numeric_limits[int64_t].max():
@@ -642,7 +658,9 @@ def _(
             )
         c_obj = make_duration_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
         c_duration_s = duration_s(<int64_t>total_seconds)
-        (<duration_scalar[duration_s]*>c_obj.get()).set_value(c_duration_s)
+        (<duration_scalar[duration_s]*>c_obj.get()).set_value(
+            c_duration_s, stream.view()
+        )
     elif tid == type_id.DURATION_DAYS:
         total_days = int(total_seconds // 86400)
         if total_days > numeric_limits[int32_t].max():
@@ -651,7 +669,9 @@ def _(
             )
         c_obj = make_duration_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
         c_duration_D = duration_D(<int32_t>total_days)
-        (<duration_scalar[duration_D]*>c_obj.get()).set_value(c_duration_D)
+        (<duration_scalar[duration_D]*>c_obj.get()).set_value(
+            c_duration_D, stream.view()
+        )
     else:
         typ = c_dtype.id()
         raise TypeError(f"Cannot convert timedelta to Scalar with dtype {typ.name}")
@@ -691,7 +711,9 @@ def _(
         c_obj = make_timestamp_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
         c_duration_ns = duration_ns(<int64_t>epoch_nanoseconds)
         c_timestamp_ns = timestamp_ns(c_duration_ns)
-        (<timestamp_scalar[timestamp_ns]*>c_obj.get()).set_value(c_timestamp_ns)
+        (<timestamp_scalar[timestamp_ns]*>c_obj.get()).set_value(
+            c_timestamp_ns, stream.view()
+        )
     elif tid == type_id.TIMESTAMP_MICROSECONDS:
         epoch_microseconds = int(epoch_seconds * 1_000_000)
         if epoch_microseconds > numeric_limits[int64_t].max():
@@ -701,7 +723,9 @@ def _(
         c_obj = make_timestamp_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
         c_duration_us = duration_us(<int64_t>epoch_microseconds)
         c_timestamp_us = timestamp_us(c_duration_us)
-        (<timestamp_scalar[timestamp_us]*>c_obj.get()).set_value(c_timestamp_us)
+        (<timestamp_scalar[timestamp_us]*>c_obj.get()).set_value(
+            c_timestamp_us, stream.view()
+        )
     elif tid == type_id.TIMESTAMP_MILLISECONDS:
         epoch_milliseconds = int(epoch_seconds * 1_000)
         if epoch_milliseconds > numeric_limits[int64_t].max():
@@ -711,7 +735,9 @@ def _(
         c_obj = make_timestamp_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
         c_duration_ms = duration_ms(<int64_t>epoch_milliseconds)
         c_timestamp_ms = timestamp_ms(c_duration_ms)
-        (<timestamp_scalar[timestamp_ms]*>c_obj.get()).set_value(c_timestamp_ms)
+        (<timestamp_scalar[timestamp_ms]*>c_obj.get()).set_value(
+            c_timestamp_ms, stream.view()
+        )
     elif tid == type_id.TIMESTAMP_SECONDS:
         epoch_seconds = int(epoch_seconds)
         if epoch_seconds > numeric_limits[int64_t].max():
@@ -721,7 +747,9 @@ def _(
         c_obj = make_timestamp_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
         c_duration_s = duration_s(<int64_t>epoch_seconds)
         c_timestamp_s = timestamp_s(c_duration_s)
-        (<timestamp_scalar[timestamp_s]*>c_obj.get()).set_value(c_timestamp_s)
+        (<timestamp_scalar[timestamp_s]*>c_obj.get()).set_value(
+            c_timestamp_s, stream.view()
+        )
     elif tid == type_id.TIMESTAMP_DAYS:
         epoch_days = int(epoch_seconds // 86400)
         if epoch_days > numeric_limits[int32_t].max():
@@ -731,7 +759,9 @@ def _(
         c_obj = make_timestamp_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
         c_duration_D = duration_D(<int32_t>epoch_days)
         c_timestamp_D = timestamp_D(c_duration_D)
-        (<timestamp_scalar[timestamp_D]*>c_obj.get()).set_value(c_timestamp_D)
+        (<timestamp_scalar[timestamp_D]*>c_obj.get()).set_value(
+            c_timestamp_D, stream.view()
+        )
     else:
         typ = c_dtype.id()
         raise TypeError(f"Cannot convert datetime to Scalar with dtype {typ.name}")
@@ -785,7 +815,7 @@ if np is not None:
             dtype.c_obj, stream.view(), mr.get_mr()
         )
         cdef cbool c_val = np_val
-        (<numeric_scalar[cbool]*>c_obj.get()).set_value(c_val)
+        (<numeric_scalar[cbool]*>c_obj.get()).set_value(c_val, stream.view())
         cdef Scalar slr = _new_scalar(move(c_obj), dtype)
         return slr
 
@@ -806,7 +836,7 @@ if np is not None:
         cdef unique_ptr[scalar] c_obj = make_numeric_scalar(
             dtype.c_obj, stream.view(), mr.get_mr()
         )
-        (<numeric_scalar[int8_t]*>c_obj.get()).set_value(np_val)
+        (<numeric_scalar[int8_t]*>c_obj.get()).set_value(np_val, stream.view())
         cdef Scalar slr = _new_scalar(move(c_obj), dtype)
         return slr
 
@@ -816,7 +846,7 @@ if np is not None:
         cdef unique_ptr[scalar] c_obj = make_numeric_scalar(
             dtype.c_obj, stream.view(), mr.get_mr()
         )
-        (<numeric_scalar[int16_t]*>c_obj.get()).set_value(np_val)
+        (<numeric_scalar[int16_t]*>c_obj.get()).set_value(np_val, stream.view())
         cdef Scalar slr = _new_scalar(move(c_obj), dtype)
         return slr
 
@@ -826,7 +856,7 @@ if np is not None:
         cdef unique_ptr[scalar] c_obj = make_numeric_scalar(
             dtype.c_obj, stream.view(), mr.get_mr()
         )
-        (<numeric_scalar[int32_t]*>c_obj.get()).set_value(np_val)
+        (<numeric_scalar[int32_t]*>c_obj.get()).set_value(np_val, stream.view())
         cdef Scalar slr = _new_scalar(move(c_obj), dtype)
         return slr
 
@@ -836,7 +866,7 @@ if np is not None:
         cdef unique_ptr[scalar] c_obj = make_numeric_scalar(
             dtype.c_obj, stream.view(), mr.get_mr()
         )
-        (<numeric_scalar[int64_t]*>c_obj.get()).set_value(np_val)
+        (<numeric_scalar[int64_t]*>c_obj.get()).set_value(np_val, stream.view())
         cdef Scalar slr = _new_scalar(move(c_obj), dtype)
         return slr
 
@@ -846,7 +876,7 @@ if np is not None:
         cdef unique_ptr[scalar] c_obj = make_numeric_scalar(
             dtype.c_obj, stream.view(), mr.get_mr()
         )
-        (<numeric_scalar[uint8_t]*>c_obj.get()).set_value(np_val)
+        (<numeric_scalar[uint8_t]*>c_obj.get()).set_value(np_val, stream.view())
         cdef Scalar slr = _new_scalar(move(c_obj), dtype)
         return slr
 
@@ -856,7 +886,7 @@ if np is not None:
         cdef unique_ptr[scalar] c_obj = make_numeric_scalar(
             dtype.c_obj, stream.view(), mr.get_mr()
         )
-        (<numeric_scalar[uint16_t]*>c_obj.get()).set_value(np_val)
+        (<numeric_scalar[uint16_t]*>c_obj.get()).set_value(np_val, stream.view())
         cdef Scalar slr = _new_scalar(move(c_obj), dtype)
         return slr
 
@@ -866,7 +896,7 @@ if np is not None:
         cdef unique_ptr[scalar] c_obj = make_numeric_scalar(
             dtype.c_obj, stream.view(), mr.get_mr()
         )
-        (<numeric_scalar[uint32_t]*>c_obj.get()).set_value(np_val)
+        (<numeric_scalar[uint32_t]*>c_obj.get()).set_value(np_val, stream.view())
         cdef Scalar slr = _new_scalar(move(c_obj), dtype)
         return slr
 
@@ -876,7 +906,7 @@ if np is not None:
         cdef unique_ptr[scalar] c_obj = make_numeric_scalar(
             dtype.c_obj, stream.view(), mr.get_mr()
         )
-        (<numeric_scalar[uint64_t]*>c_obj.get()).set_value(np_val)
+        (<numeric_scalar[uint64_t]*>c_obj.get()).set_value(np_val, stream.view())
         cdef Scalar slr = _new_scalar(move(c_obj), dtype)
         return slr
 
@@ -886,7 +916,7 @@ if np is not None:
         cdef unique_ptr[scalar] c_obj = make_numeric_scalar(
             dtype.c_obj, stream.view(), mr.get_mr()
         )
-        (<numeric_scalar[float]*>c_obj.get()).set_value(np_val)
+        (<numeric_scalar[float]*>c_obj.get()).set_value(np_val, stream.view())
         cdef Scalar slr = _new_scalar(move(c_obj), dtype)
         return slr
 
@@ -896,7 +926,7 @@ if np is not None:
         cdef unique_ptr[scalar] c_obj = make_numeric_scalar(
             dtype.c_obj, stream.view(), mr.get_mr()
         )
-        (<numeric_scalar[double]*>c_obj.get()).set_value(np_val)
+        (<numeric_scalar[double]*>c_obj.get()).set_value(np_val, stream.view())
         cdef Scalar slr = _new_scalar(move(c_obj), dtype)
         return slr
 
