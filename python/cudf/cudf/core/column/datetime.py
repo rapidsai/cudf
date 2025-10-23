@@ -249,7 +249,7 @@ class DatetimeColumn(TemporalBaseColumn):
             last_day_col = type(self).from_pylibcudf(
                 plc.datetime.last_day_of_month(self.to_pylibcudf(mode="read"))
             )
-        return (self.day == last_day_col.day).fillna(False)  # type: ignore[attr-defined]
+        return (self.day == last_day_col.day).fillna(False)
 
     @functools.cached_property
     def is_quarter_end(self) -> ColumnBase:
@@ -568,7 +568,7 @@ class DatetimeColumn(TemporalBaseColumn):
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
         if isinstance(other, cudf.DateOffset):
-            return other._datetime_binop(self, op, reflect=reflect)  # type: ignore[attr-defined]
+            return other._datetime_binop(self, op, reflect=reflect)
         other = self._normalize_binop_operand(other)
         if other is NotImplemented:
             return NotImplemented
@@ -663,10 +663,10 @@ class DatetimeColumn(TemporalBaseColumn):
 
         lhs_binop: plc.Scalar | ColumnBase = (
             pa_scalar_to_plc_scalar(lhs) if isinstance(lhs, pa.Scalar) else lhs
-        )  # type: ignore[assignment]
+        )
         rhs_binop: plc.Scalar | ColumnBase = (
             pa_scalar_to_plc_scalar(rhs) if isinstance(rhs, pa.Scalar) else rhs
-        )  # type: ignore[assignment]
+        )
 
         result_col = binaryop.binaryop(lhs_binop, rhs_binop, op, out_dtype)
         if out_dtype.kind != "b" and op == "__add__":

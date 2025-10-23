@@ -249,7 +249,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                     other = other.astype(self.dtype)
             other_cudf_dtype = other.dtype
         elif isinstance(other, (int, Decimal)):
-            other_cudf_dtype = self.dtype._from_decimal(Decimal(other))  # type: ignore[arg-type, union-attr]
+            other_cudf_dtype = self.dtype._from_decimal(Decimal(other))  # type: ignore[union-attr]
         elif isinstance(other, float):
             return self._binaryop(as_column(other, length=len(self)), op)
         elif is_na_like(other):

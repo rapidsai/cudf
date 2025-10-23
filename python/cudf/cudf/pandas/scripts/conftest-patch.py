@@ -32,14 +32,14 @@ def null_assert_warnings(*args, **kwargs):
         pass
 
 
-@pytest.fixture(scope="session", autouse=True)  # type: ignore
+@pytest.fixture(scope="session", autouse=True)
 def patch_testing_functions():
     tm.assert_produces_warning = null_assert_warnings  # noqa: F821
     pytest.raises = replace_kwargs({"match": None})(pytest.raises)
 
 
 # Dictionary to store function call counts
-function_call_counts = defaultdict(lambda: defaultdict(int))  # type: ignore
+function_call_counts = defaultdict(lambda: defaultdict(int))  # type: ignore[var-annotated]
 
 # The specific functions to track
 FUNCTION_NAME = {"_slow_function_call", "_fast_function_call"}

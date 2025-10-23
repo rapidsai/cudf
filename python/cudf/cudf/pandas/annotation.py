@@ -7,7 +7,7 @@ try:
     import nvtx
 except ImportError:
 
-    class nvtx:  # type: ignore
+    class nvtx:  # type: ignore[no-redef]
         """Noop-stub with the same API as nvtx."""
 
         push_range = lambda *args, **kwargs: None  # noqa: E731
