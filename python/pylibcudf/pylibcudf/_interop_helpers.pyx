@@ -11,6 +11,7 @@ from pylibcudf.libcudf.interop cimport (
     release_arrow_device_array_raw,
     release_arrow_schema_raw,
 )
+from .utils cimport _get_stream
 
 from dataclasses import dataclass, field
 
