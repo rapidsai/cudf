@@ -621,6 +621,50 @@ class GroupedRollingWindow(Expr):
             for name, dtype, col in zip(names, dtypes, out_cols, strict=True)
         ]
 
+    def _build_groupby_requests(
+        self,
+        named_exprs: list[expr.NamedExpr],
+        df: DataFrame,
+        order_index: plc.Column | None = None,
+        by_cols: list[Column] | None = None,
+    ) -> tuple[list[plc.groupby.GroupByRequest], list[str], list[DataType]]:
+        assert by_cols is not None
+        gb_requests: list[plc.groupby.GroupByRequest] = []
+        out_names: list[str] = []
+        out_dtypes: list[DataType] = []
+
+        eval_cols: list[plc.Column] = []
+        val_nodes: list[tuple[expr.NamedExpr, expr.Agg]] = []
+
+        for ne in named_exprs:
+            val = ne.value
+            out_names.append(ne.name)
+            out_dtypes.append(val.dtype)
+            if isinstance(val, expr.Agg):
+                (child,) = (
+                    val.children
+                    if getattr(val, "name", None) != "quantile"
+                    else (val.children[0],)
+                )
+                eval_cols.append(child.evaluate(df, context=ExecutionContext.FRAME).obj)
+                val_nodes.append((ne, val))
+
+        if order_index is not None and eval_cols:
+            eval_cols = plc.copying.gather(
+                plc.Table(eval_cols), order_index, plc.copying.OutOfBoundsPolicy.NULLIFY
+            ).columns()
+
+        gathered_iter = iter(eval_cols)
+        for ne in named_exprs:
+            val = ne.value
+            if isinstance(val, expr.Len):
+                col = by_cols[0].obj
+            else:
+                col = next(gathered_iter)
+            gb_requests.append(plc.groupby.GroupByRequest(col, [val.agg_request]))
+
+        return gb_requests, out_names, out_dtypes
+
     def do_evaluate(  # noqa: D102
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
@@ -661,9 +705,6 @@ class GroupedRollingWindow(Expr):
         scalar_named, unary_window_ops = self._split_named_expr()
 
         # Build GroupByRequests for scalar aggregations
-        gb_requests: list[plc.groupby.GroupByRequest] = []
-        out_names: list[str] = []
-        out_dtypes: list[DataType] = []
         order_sensitive: list[expr.NamedExpr] = []
         other_scalars: list[expr.NamedExpr] = []
         for ne in scalar_named:
@@ -677,21 +718,9 @@ class GroupedRollingWindow(Expr):
             else:
                 other_scalars.append(ne)
 
-        for ne in other_scalars:
-            val = ne.value
-            out_names.append(ne.name)
-            out_dtypes.append(val.dtype)
-
-            if isinstance(val, expr.Len):
-                # A count aggregation, we need a column so use a key column
-                col = by_cols[0].obj
-                gb_requests.append(plc.groupby.GroupByRequest(col, [val.agg_request]))
-            elif isinstance(val, expr.Agg):
-                (child,) = (
-                    val.children if val.name != "quantile" else (val.children[0],)
-                )
-                col = child.evaluate(df, context=ExecutionContext.FRAME).obj
-                gb_requests.append(plc.groupby.GroupByRequest(col, [val.agg_request]))
+        gb_requests, out_names, out_dtypes = self._build_groupby_requests(
+            other_scalars, df, by_cols=by_cols
+        )
 
         group_keys_tbl, value_tables = grouper.aggregate(gb_requests)
         broadcasted_cols = self._broadcast_agg_results(
@@ -714,27 +743,10 @@ class GroupedRollingWindow(Expr):
                 grouper=grouper,
             )
             assert order_index is not None
-            gb_requests = []
-            out_names = []
-            out_dtypes = []
-            for ne in order_sensitive:
-                val = ne.value
-                (child,) = (
-                    val.children
-                    if hasattr(val, "name") and val.name != "quantile"
-                    else (val.children[0],)
-                )
-                col = child.evaluate(df, context=ExecutionContext.FRAME).obj
-                gathered_val = plc.copying.gather(
-                    plc.Table([col]),
-                    order_index,
-                    plc.copying.OutOfBoundsPolicy.NULLIFY,
-                ).columns()[0]
-                gb_requests.append(
-                    plc.groupby.GroupByRequest(gathered_val, [val.agg_request])
-                )
-                out_names.append(ne.name)
-                out_dtypes.append(val.dtype)
+
+            gb_requests, out_names, out_dtypes = self._build_groupby_requests(
+                order_sensitive, df, order_index=order_index, by_cols=by_cols
+            )
 
             group_keys_tbl_local, value_tables_local = local.aggregate(gb_requests)
             broadcasted_cols.extend(
