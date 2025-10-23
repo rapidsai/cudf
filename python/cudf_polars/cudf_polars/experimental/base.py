@@ -210,8 +210,6 @@ class ColumnSourceInfo:
         force
             If True, return unique-value statistics even if the column
             wasn't marked as needing unique-value information.
-        stream
-            CUDA stream used for device memory operations and kernel launches.
         """
         if (force or self.is_unique_stats_column) and len(self.table_source_pairs) == 1:
             # Single table source.

@@ -500,7 +500,7 @@ class Column:
             if self.size > 0 and plc.traits.is_floating_point(self.obj.type()):
                 # See https://github.com/rapidsai/cudf/issues/20202 for we type ignore
                 self._nan_count = plc.reduce.reduce(  # type: ignore[assignment]
-                    plc.unary.is_nan(self.obj, stream),
+                    plc.unary.is_nan(self.obj, stream=stream),
                     plc.aggregation.sum(),
                     plc.types.SIZE_TYPE,
                     stream=stream,
