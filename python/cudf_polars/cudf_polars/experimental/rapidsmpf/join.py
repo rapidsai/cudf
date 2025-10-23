@@ -11,7 +11,6 @@ from rapidsmpf.streaming.core.channel import Message
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import pylibcudf as plc
-from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Join
@@ -146,21 +145,24 @@ async def broadcast_join_node(
                             else [small_df, large_df]
                         ),
                     )
-                ).table
+                )
                 for small_df in small_dfs
             ]
 
             # Send output chunk
-            build_stream = DEFAULT_STREAM
+            build_stream = results[0].stream
             await ch_out.data.send(
                 ctx,
                 Message(
                     TableChunk.from_pylibcudf_table(
                         large_chunk.sequence_number,
                         (
-                            results[0]
+                            results[0].table
                             if len(results) == 1
-                            else plc.concatenate.concatenate(results, build_stream)
+                            else plc.concatenate.concatenate(
+                                [r.table for r in results],
+                                build_stream,
+                            )
                         ),
                         build_stream,
                         exclusive_view=True,

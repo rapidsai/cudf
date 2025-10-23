@@ -35,10 +35,16 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
 
     import pylibcudf as plc
+    from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
+
+
+# TODO: This implementation only supports a single GPU for now.
+#       Multi-GPU support will require a distinct GlobalShuffle
+#       context manager, and updated _shuffle_id_vacancy logic.
 
 
 # Set of available shuffle IDs
@@ -75,6 +81,8 @@ class LocalShuffle:
         The number of partitions to shuffle into.
     columns_to_hash: tuple[int, ...]
         The columns to hash.
+    stream: Stream
+        The stream to use for the shuffle.
     """
 
     def __init__(
@@ -82,13 +90,15 @@ class LocalShuffle:
         ctx: Context,
         num_partitions: int,
         columns_to_hash: tuple[int, ...],
+        *,
+        stream: Stream = DEFAULT_STREAM,
     ):
         self.ctx = ctx
         self.br = ctx.br()
         self.op_id = _get_new_shuffle_id()
         self.num_partitions = num_partitions
         self.columns_to_hash = columns_to_hash
-        self.stream = DEFAULT_STREAM
+        self.stream = stream
         statistics = ctx.statistics()
         comm = new_communicator(Options(get_environment_variables()))
         progress_thread = ProgressThread(comm, statistics)

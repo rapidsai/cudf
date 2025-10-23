@@ -12,7 +12,6 @@ from rapidsmpf.streaming.core.node import define_py_node
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import pylibcudf as plc
-from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
@@ -21,6 +20,8 @@ from cudf_polars.experimental.repartition import Repartition
 
 if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
+
+    from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
@@ -56,9 +57,8 @@ async def concatenate_node(
     # TODO: Use multiple streams
     max_chunks = max(2, max_chunks) if max_chunks else None
     async with shutdown_on_error(ctx, ch_in.data, ch_out.data):
-        build_stream = DEFAULT_STREAM
-
         seq_num = 0
+        build_stream: Stream | None = None
         # TODO: The sequence number currently has nothing to do with
         # the sequence number of the input chunks. We may need to add
         # an `ordered` option to this node to enforce the original
@@ -75,6 +75,8 @@ async def concatenate_node(
                     break
                 chunk = TableChunk.from_message(msg)
                 chunks.append(chunk)
+                if build_stream is None:
+                    build_stream = chunk.stream
 
             # Process collected chunks
             if chunks:

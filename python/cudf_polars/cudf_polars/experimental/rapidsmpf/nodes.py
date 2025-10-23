@@ -11,8 +11,6 @@ from rapidsmpf.streaming.core.channel import Message
 from rapidsmpf.streaming.core.node import define_py_node
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
-from rmm.pylibrmm.stream import DEFAULT_STREAM
-
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Empty
 from cudf_polars.experimental.rapidsmpf.dispatch import (
@@ -104,7 +102,7 @@ async def default_node_multi(
 
     Notes
     -----
-    Input chunks are aligned for evaluation.
+    Input chunks must be aligned for evaluation.
     """
     # TODO: Use multiple streams
     async with shutdown_on_error(ctx, *[ch.data for ch in chs_in], ch_out.data):
@@ -171,7 +169,7 @@ async def default_node_multi(
                         TableChunk.from_pylibcudf_table(
                             seq_num,
                             df.table,
-                            DEFAULT_STREAM,
+                            df.stream,
                             exclusive_view=True,
                         )
                     ),
@@ -426,7 +424,7 @@ async def empty_node(
 
         # Return the output chunk (empty but with correct schema)
         chunk = TableChunk.from_pylibcudf_table(
-            0, df.table, DEFAULT_STREAM, exclusive_view=True
+            0, df.table, df.stream, exclusive_view=True
         )
         await ch_out.data.send(ctx, Message(chunk))
 
