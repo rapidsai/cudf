@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
-    from cudf_polars.dsl.ir import IR
+    from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.dispatch import LowerIRTransformer
     from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
@@ -64,8 +64,9 @@ def _(
 
 @define_py_node()
 async def dataframescan_node(
-    ctx: Context,
+    context: Context,
     ir: DataFrameScan,
+    ir_context: IRExecutionContext,
     ch_out: ChannelPair,
     *,
     max_io_threads: int,
@@ -76,10 +77,12 @@ async def dataframescan_node(
 
     Parameters
     ----------
-    ctx
-        The context.
+    context
+        The rapidsmpf context.
     ir
         The DataFrameScan node.
+    ir_context
+        The execution context for the IR node.
     ch_out
         The output ChannelPair.
     max_io_threads
@@ -93,14 +96,14 @@ async def dataframescan_node(
     global_count = math.ceil(nrows / rows_per_partition)
 
     # For single rank, simplify the logic
-    if ctx.comm().nranks == 1:
+    if context.comm().nranks == 1:
         local_count = global_count
         local_offset = 0
     else:
-        local_count = math.ceil(global_count / ctx.comm().nranks)
-        local_offset = local_count * ctx.comm().rank
+        local_count = math.ceil(global_count / context.comm().nranks)
+        local_offset = local_count * context.comm().rank
 
-    async with shutdown_on_error(ctx, ch_out.data):
+    async with shutdown_on_error(context, ch_out.data):
         io_throttle = asyncio.Semaphore(max_io_threads)
         for seq_num in range(local_count):
             offset = local_offset * rows_per_partition + seq_num * rows_per_partition
@@ -112,10 +115,12 @@ async def dataframescan_node(
                 ir.df.slice(offset, rows_per_partition),
                 ir.projection,
             )
-            await read_chunk(ctx, io_throttle, ir_slice, seq_num, ch_out.data)
+            await read_chunk(
+                context, io_throttle, ir_slice, seq_num, ch_out.data, ir_context
+            )
 
         # Drain data channel
-        await ch_out.data.drain(ctx)
+        await ch_out.data.drain(context)
 
 
 @generate_ir_sub_network.register(DataFrameScan)
@@ -129,12 +134,14 @@ def _(
     rows_per_partition = config_options.executor.max_rows_per_partition
     max_io_threads = 1  # TODO: Make this configurable.
 
-    ctx = rec.state["ctx"]
+    context = rec.state["context"]
+    ir_context = rec.state["ir_context"]
     channels: dict[IR, ChannelManager] = {ir: ChannelManager()}
     nodes: list[Any] = [
         dataframescan_node(
-            ctx,
+            context,
             ir,
+            ir_context,
             channels[ir].reserve_input_slot(),
             max_io_threads=max_io_threads,
             rows_per_partition=rows_per_partition,
@@ -176,19 +183,20 @@ def _(
 
 
 async def read_chunk(
-    ctx: Context,
+    context: Context,
     io_throttle: asyncio.Semaphore,
     scan: IR,
     seq_num: int,
     ch_out: Channel[TableChunk],
+    ir_context: IRExecutionContext,
 ) -> None:
     """
     Read a chunk from disk and send it to the output channel.
 
     Parameters
     ----------
-    ctx
-        The context.
+    context
+        The rapidsmpf context.
     io_throttle
         The IO throttle.
     scan
@@ -197,15 +205,18 @@ async def read_chunk(
         The sequence number.
     ch_out
         The output channel.
+    ir_context
+        The execution context for the IR node.
     """
     async with io_throttle:
         # Evaluate and send the Scan-node result
         df = await asyncio.to_thread(
             scan.do_evaluate,
             *scan._non_child_args,
+            context=ir_context,
         )
         await ch_out.send(
-            ctx,
+            context,
             Message(
                 TableChunk.from_pylibcudf_table(
                     seq_num,
@@ -219,8 +230,9 @@ async def read_chunk(
 
 @define_py_node()
 async def scan_node(
-    ctx: Context,
+    context: Context,
     ir: Scan,
+    ir_context: IRExecutionContext,
     ch_out: ChannelPair,
     *,
     max_io_threads: int,
@@ -232,10 +244,12 @@ async def scan_node(
 
     Parameters
     ----------
-    ctx
-        The context.
+    context
+        The rapidsmpf context.
     ir
         The Scan node.
+    ir_context
+        The execution context for the IR node.
     ch_out
         The output ChannelPair.
     max_io_threads
@@ -247,13 +261,13 @@ async def scan_node(
         The Parquet options.
     """
     # TODO: Use multiple streams
-    async with shutdown_on_error(ctx, ch_out.data):
+    async with shutdown_on_error(context, ch_out.data):
         # Build a list of local Scan operations
         scans: list[Scan | SplitScan] = []
         if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
             count = plan.factor * len(ir.paths)
-            local_count = math.ceil(count / ctx.comm().nranks)
-            local_offset = local_count * ctx.comm().rank
+            local_count = math.ceil(count / context.comm().nranks)
+            local_offset = local_count * context.comm().rank
             path_offset = local_offset // plan.factor
             path_count = math.ceil(local_count / plan.factor)
             local_paths = ir.paths[path_offset : path_offset + path_count]
@@ -288,8 +302,8 @@ async def scan_node(
 
         else:
             count = math.ceil(len(ir.paths) / plan.factor)
-            local_count = math.ceil(count / ctx.comm().nranks)
-            local_offset = local_count * ctx.comm().rank
+            local_count = math.ceil(count / context.comm().nranks)
+            local_offset = local_count * context.comm().rank
             paths_offset_start = local_offset * plan.factor
             paths_offset_end = paths_offset_start + plan.factor * local_count
             for offset in range(paths_offset_start, paths_offset_end, plan.factor):
@@ -319,11 +333,13 @@ async def scan_node(
         io_throttle = asyncio.Semaphore(max_io_threads)
         tasks = []
         for seq_num, scan in enumerate(scans):
-            tasks.append(read_chunk(ctx, io_throttle, scan, seq_num, ch_out.data))
+            tasks.append(
+                read_chunk(context, io_throttle, scan, seq_num, ch_out.data, ir_context)
+            )
 
         # Drain the output data channel
         await asyncio.gather(*tasks)
-        await ch_out.data.drain(ctx)
+        await ch_out.data.drain(context)
 
 
 @generate_ir_sub_network.register(Scan)
@@ -344,8 +360,9 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
     channels: dict[IR, ChannelManager] = {ir: ChannelManager()}
     nodes: list[Any] = [
         scan_node(
-            rec.state["ctx"],
+            rec.state["context"],
             ir,
+            rec.state["ir_context"],
             channels[ir].reserve_input_slot(),
             max_io_threads=max_io_threads,
             plan=plan,

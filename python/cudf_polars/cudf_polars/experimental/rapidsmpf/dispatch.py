@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
     from rapidsmpf.streaming.core.context import Context
 
-    from cudf_polars.dsl.ir import IR
+    from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.base import (
         PartitionInfo,
         StatsCollector,
@@ -60,7 +60,7 @@ class GenState(TypedDict):
 
     Parameters
     ----------
-    ctx
+    context
         The rapidsmpf context.
     config_options
         GPUEngine configuration options.
@@ -68,12 +68,15 @@ class GenState(TypedDict):
         Partition information.
     fanout_nodes
         Dictionary mapping IR nodes to fanout information.
+    ir_context
+        The execution context for the IR node.
     """
 
-    ctx: Context
+    context: Context
     config_options: ConfigOptions
     partition_info: MutableMapping[IR, PartitionInfo]
     fanout_nodes: dict[IR, FanoutInfo]
+    ir_context: IRExecutionContext
 
 
 SubNetGenerator: TypeAlias = GenericTransformer[

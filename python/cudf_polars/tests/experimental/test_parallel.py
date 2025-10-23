@@ -13,8 +13,13 @@ from polars.testing import assert_frame_equal
 
 from cudf_polars import Translator
 from cudf_polars.dsl.expressions.base import Col, NamedExpr
+from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.dsl.traversal import traversal
-from cudf_polars.experimental.parallel import get_scheduler, lower_ir_graph, task_graph
+from cudf_polars.experimental.parallel import (
+    get_scheduler,
+    lower_ir_graph,
+    task_graph,
+)
 from cudf_polars.testing.asserts import (
     DEFAULT_CLUSTER,
     DEFAULT_RUNTIME,
@@ -180,7 +185,9 @@ def test_single_cluster():
     config_options = ConfigOptions.from_polars_engine(engine)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
     ir, partition_info = lower_ir_graph(ir, config_options)
-    graph, key = task_graph(ir, partition_info, config_options)
+    graph, key = task_graph(
+        ir, partition_info, config_options, context=IRExecutionContext()
+    )
     scheduler = get_scheduler(config_options)
     cache = {}
     result = scheduler(graph, key, cache=cache)
@@ -214,7 +221,9 @@ def test_task_graph_is_pickle_serializable(engine):
     config_options = ConfigOptions.from_polars_engine(engine)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
     ir, partition_info = lower_ir_graph(ir, config_options)
-    graph, _ = task_graph(ir, partition_info, config_options)
+    graph, _ = task_graph(
+        ir, partition_info, config_options, context=IRExecutionContext()
+    )
 
     pickle.loads(pickle.dumps(graph))  # no exception
 

@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
     from rapidsmpf.streaming.core.leaf_node import DeferredMessages
 
-    from cudf_polars.dsl.ir import IR
+    from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.dispatch import (
@@ -51,7 +51,12 @@ if TYPE_CHECKING:
     )
 
 
-def evaluate_logical_plan(ir: IR, config_options: ConfigOptions) -> DataFrame:
+def evaluate_logical_plan(
+    ir: IR,
+    config_options: ConfigOptions,
+    *,
+    context: IRExecutionContext,
+) -> DataFrame:
     """
     Evaluate a logical plan with the RapidsMPF streaming runtime.
 
@@ -61,6 +66,8 @@ def evaluate_logical_plan(ir: IR, config_options: ConfigOptions) -> DataFrame:
         The IR node.
     config_options
         The configuration options.
+    context
+        The execution context for the IR node.
 
     Returns
     -------
@@ -90,11 +97,17 @@ def evaluate_logical_plan(ir: IR, config_options: ConfigOptions) -> DataFrame:
     mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
     br = BufferResource(mr)
     rmm.mr.set_current_device_resource(mr)
-    ctx = Context(comm, br, options)
+    rmpf_context = Context(comm, br, options)
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cpse")
 
     # Generate network nodes
-    nodes, output = generate_network(ctx, ir, partition_info, config_options)
+    nodes, output = generate_network(
+        rmpf_context,
+        ir,
+        partition_info,
+        config_options,
+        ir_context=context,
+    )
 
     # Run the network
     run_streaming_pipeline(nodes=nodes, py_executor=executor)
@@ -103,10 +116,13 @@ def evaluate_logical_plan(ir: IR, config_options: ConfigOptions) -> DataFrame:
     return combine_output_chunks(
         ir,
         *(TableChunk.from_message(msg) for msg in output.release()),
+        ir_context=context,
     )
 
 
-def combine_output_chunks(ir: IR, *chunks: TableChunk) -> DataFrame:
+def combine_output_chunks(
+    ir: IR, *chunks: TableChunk, ir_context: IRExecutionContext
+) -> DataFrame:
     """
     Combine the output chunks into a single DataFrame.
 
@@ -116,6 +132,8 @@ def combine_output_chunks(ir: IR, *chunks: TableChunk) -> DataFrame:
         The IR node.
     chunks
         The output chunks.
+    ir_context
+        The execution context for the IR node.
 
     Returns
     -------
@@ -130,7 +148,8 @@ def combine_output_chunks(ir: IR, *chunks: TableChunk) -> DataFrame:
                 chunk.stream,
             )
             for chunk in sorted(chunks, key=lambda c: c.sequence_number)
-        )
+        ),
+        context=ir_context,
     )
 
 
@@ -243,24 +262,28 @@ def determine_fanout_nodes(
 
 
 def generate_network(
-    ctx: Context,
+    context: Context,
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
+    *,
+    ir_context: IRExecutionContext,
 ) -> tuple[list[Any], DeferredMessages]:
     """
     Translate the IR graph to a RapidsMPF streaming network.
 
     Parameters
     ----------
-    ctx
-        The context.
+    context
+        The rapidsmpf context.
     ir
         The IR node.
     partition_info
         The partition information.
     config_options
         The configuration options.
+    ir_context
+        The execution context for the IR node.
 
     Returns
     -------
@@ -271,10 +294,11 @@ def generate_network(
 
     # Generate the network
     state: GenState = {
-        "ctx": ctx,
+        "context": context,
         "config_options": config_options,
         "partition_info": partition_info,
         "fanout_nodes": fanout_nodes,
+        "ir_context": ir_context,
     }
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state
@@ -289,7 +313,7 @@ def generate_network(
 
     # Add final node to pull from the output data channel
     # (metadata channel is unused)
-    output_node, output = pull_from_channel(ctx, ch_in=ch_out.data)
+    output_node, output = pull_from_channel(context, ch_in=ch_out.data)
     nodes.append(output_node)
 
     # Return network and output hook

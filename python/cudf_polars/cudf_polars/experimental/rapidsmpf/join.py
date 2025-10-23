@@ -31,13 +31,13 @@ from cudf_polars.experimental.utils import _concat
 if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
 
-    from cudf_polars.dsl.ir import IR
+    from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
 
 
 async def get_small_table(
-    ctx: Context,
+    context: Context,
     small_child: IR,
     ch_small: ChannelPair,
 ) -> list[DataFrame]:
@@ -46,8 +46,8 @@ async def get_small_table(
 
     Parameters
     ----------
-    ctx
-        The context.
+    context
+        The rapidsmpf context.
     small_child
         The small-table child IR node.
     ch_small
@@ -59,7 +59,7 @@ async def get_small_table(
         The small-table DataFrame partitions.
     """
     small_chunks = []
-    while (msg := await ch_small.data.recv(ctx)) is not None:
+    while (msg := await ch_small.data.recv(context)) is not None:
         small_chunks.append(TableChunk.from_message(msg))
 
     if len(small_chunks) == 0:
@@ -78,8 +78,9 @@ async def get_small_table(
 
 @define_py_node()
 async def broadcast_join_node(
-    ctx: Context,
+    context: Context,
     ir: Join,
+    ir_context: IRExecutionContext,
     ch_out: ChannelPair,
     ch_left: ChannelPair,
     ch_right: ChannelPair,
@@ -90,10 +91,12 @@ async def broadcast_join_node(
 
     Parameters
     ----------
-    ctx
-        The context.
+    context
+        The rapidsmpf context.
     ir
         The Join IR node.
+    ir_context
+        The execution context for the IR node.
     ch_out
         The output ChannelPair.
     ch_left
@@ -103,7 +106,7 @@ async def broadcast_join_node(
     broadcast_side
         The side to broadcast.
     """
-    async with shutdown_on_error(ctx, ch_left.data, ch_right.data, ch_out.data):
+    async with shutdown_on_error(context, ch_left.data, ch_right.data, ch_out.data):
         if broadcast_side == "right":
             # Broadcast right, stream left
             small_ch = ch_right
@@ -118,13 +121,13 @@ async def broadcast_join_node(
             large_child = ir.children[1]
 
         # Collect small-side chunks
-        small_dfs = await get_small_table(ctx, small_child, small_ch)
+        small_dfs = await get_small_table(context, small_child, small_ch)
         if ir.options[0] != "Inner":
             # TODO: Use local repartitioning for non-inner joins
-            small_dfs = [_concat(*small_dfs)]
+            small_dfs = [_concat(*small_dfs, context=ir_context)]
 
         # Stream through large side, joining with the small-side
-        while (msg := await large_ch.data.recv(ctx)) is not None:
+        while (msg := await large_ch.data.recv(context)) is not None:
             large_chunk = TableChunk.from_message(msg)
             large_df = DataFrame.from_table(
                 large_chunk.table_view(),
@@ -144,6 +147,7 @@ async def broadcast_join_node(
                             if broadcast_side == "right"
                             else [small_df, large_df]
                         ),
+                        context=ir_context,
                     )
                 )
                 for small_df in small_dfs
@@ -152,7 +156,7 @@ async def broadcast_join_node(
             # Send output chunk
             build_stream = results[0].stream
             await ch_out.data.send(
-                ctx,
+                context,
                 Message(
                     TableChunk.from_pylibcudf_table(
                         large_chunk.sequence_number,
@@ -170,7 +174,7 @@ async def broadcast_join_node(
                 ),
             )
 
-        await ch_out.data.drain(ctx)
+        await ch_out.data.drain(context)
 
 
 @generate_ir_sub_network.register(Join)
@@ -202,8 +206,9 @@ def _(ir: Join, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
         # Partition-wise join (use default_node_multi)
         nodes.append(
             default_node_multi(
-                rec.state["ctx"],
+                rec.state["context"],
                 ir,
+                rec.state["ir_context"],
                 channels[ir].reserve_input_slot(),
                 (
                     channels[left].reserve_output_slot(),
@@ -225,8 +230,9 @@ def _(ir: Join, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
 
         nodes.append(
             broadcast_join_node(
-                rec.state["ctx"],
+                rec.state["context"],
                 ir,
+                rec.state["ir_context"],
                 channels[ir].reserve_input_slot(),
                 channels[left].reserve_output_slot(),
                 channels[right].reserve_output_slot(),

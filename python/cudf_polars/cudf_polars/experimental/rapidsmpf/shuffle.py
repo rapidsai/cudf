@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     import pylibcudf as plc
     from rmm.pylibrmm.stream import Stream
 
-    from cudf_polars.dsl.ir import IR
+    from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
 
@@ -75,7 +75,7 @@ class LocalShuffle:
 
     Parameters
     ----------
-    ctx: Context
+    context: Context
         The streaming context.
     num_partitions: int
         The number of partitions to shuffle into.
@@ -87,19 +87,19 @@ class LocalShuffle:
 
     def __init__(
         self,
-        ctx: Context,
+        context: Context,
         num_partitions: int,
         columns_to_hash: tuple[int, ...],
         *,
         stream: Stream = DEFAULT_STREAM,
     ):
-        self.ctx = ctx
-        self.br = ctx.br()
+        self.context = context
+        self.br = context.br()
         self.op_id = _get_new_shuffle_id()
         self.num_partitions = num_partitions
         self.columns_to_hash = columns_to_hash
         self.stream = stream
-        statistics = ctx.statistics()
+        statistics = context.statistics()
         comm = new_communicator(Options(get_environment_variables()))
         progress_thread = ProgressThread(comm, statistics)
         self.shuffler = Shuffler(
@@ -177,8 +177,9 @@ class LocalShuffle:
 
 @define_py_node()
 async def local_shuffle_node(
-    ctx: Context,
+    context: Context,
     ir: Shuffle,
+    ir_context: IRExecutionContext,
     ch_in: ChannelPair,
     ch_out: ChannelPair,
     columns_to_hash: tuple[int, ...],
@@ -193,10 +194,12 @@ async def local_shuffle_node(
 
     Parameters
     ----------
-    ctx
-        The streaming context.
+    context
+        The rapidsmpf context.
     ir
         The Shuffle IR node.
+    ir_context
+        The execution context for the IR node.
     ch_in
         Input ChannelPair with metadata and data channels.
     ch_out
@@ -207,13 +210,13 @@ async def local_shuffle_node(
         Number of partitions to shuffle into.
     """
     async with shutdown_on_error(
-        ctx, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
+        context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
     ):
         # Create LocalShuffle context manager to handle shuffler lifecycle
-        with LocalShuffle(ctx, num_partitions, columns_to_hash) as local_shuffle:
+        with LocalShuffle(context, num_partitions, columns_to_hash) as local_shuffle:
             # Process input chunks
             while True:
-                msg = await ch_in.data.recv(ctx)
+                msg = await ch_in.data.recv(context)
                 if msg is None:
                     break
 
@@ -238,9 +241,9 @@ async def local_shuffle_node(
                 )
 
                 # Send the output chunk
-                await ch_out.data.send(ctx, Message(output_chunk))
+                await ch_out.data.send(context, Message(output_chunk))
 
-        await ch_out.data.drain(ctx)
+        await ch_out.data.drain(context)
 
 
 @generate_ir_sub_network.register(Shuffle)
@@ -256,7 +259,7 @@ def _(ir: Shuffle, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelMan
         raise NotImplementedError("Shuffle requires simple keys.")
     column_names = list(ir.schema.keys())
 
-    context = rec.state["ctx"]
+    context = rec.state["context"]
     columns_to_hash = tuple(column_names.index(k.name) for k in keys)
     num_partitions = rec.state["partition_info"][ir].count
 
@@ -269,6 +272,7 @@ def _(ir: Shuffle, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelMan
         local_shuffle_node(
             context,
             ir,
+            rec.state["ir_context"],
             ch_in=channels[child].reserve_output_slot(),
             ch_out=channels[ir].reserve_input_slot(),
             columns_to_hash=columns_to_hash,

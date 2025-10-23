@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import operator
-from functools import reduce
+from functools import partial, reduce
 from typing import TYPE_CHECKING, Any
 
 from cudf_polars.dsl.ir import ConditionalJoin, Join, Slice
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from cudf_polars.dsl.expr import NamedExpr
-    from cudf_polars.dsl.ir import IR
+    from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.parallel import LowerIRTransformer
     from cudf_polars.utils.config import ShuffleMethod
 
@@ -306,7 +306,9 @@ def _(
 
 @generate_ir_tasks.register(Join)
 def _(
-    ir: Join, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: Join,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     left, right = ir.children
     output_count = partition_info[ir].count
@@ -326,7 +328,7 @@ def _(
         right_name = get_key_name(right)
         return {
             key: (
-                ir.do_evaluate,
+                partial(ir.do_evaluate, context=context),
                 *ir._non_child_args,
                 (left_name, i),
                 (right_name, i),
@@ -388,7 +390,7 @@ def _(
 
                 inter_key = (inter_name, part_out, j)
                 graph[(inter_name, part_out, j)] = (
-                    ir.do_evaluate,
+                    partial(ir.do_evaluate, context=context),
                     ir.left_on,
                     ir.right_on,
                     ir.options,
@@ -398,6 +400,9 @@ def _(
             if len(_concat_list) == 1:
                 graph[(out_name, part_out)] = graph.pop(_concat_list[0])
             else:
-                graph[(out_name, part_out)] = (_concat, *_concat_list)
+                graph[(out_name, part_out)] = (
+                    partial(_concat, context=context),
+                    *_concat_list,
+                )
 
         return graph

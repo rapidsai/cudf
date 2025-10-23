@@ -23,15 +23,16 @@ if TYPE_CHECKING:
 
     from rmm.pylibrmm.stream import Stream
 
-    from cudf_polars.dsl.ir import IR
+    from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
 
 
 @define_py_node()
 async def concatenate_node(
-    ctx: Context,
+    context: Context,
     ir: Repartition,
+    ir_context: IRExecutionContext,
     ch_out: ChannelPair,
     ch_in: ChannelPair,
     *,
@@ -42,10 +43,12 @@ async def concatenate_node(
 
     Parameters
     ----------
-    ctx
-        The context.
+    context
+        The rapidsmpf context.
     ir
         The Repartition IR node.
+    ir_context
+        The execution context for the IR node.
     ch_out
         The output ChannelPair.
     ch_in
@@ -56,7 +59,7 @@ async def concatenate_node(
     """
     # TODO: Use multiple streams
     max_chunks = max(2, max_chunks) if max_chunks else None
-    async with shutdown_on_error(ctx, ch_in.data, ch_out.data):
+    async with shutdown_on_error(context, ch_in.data, ch_out.data):
         seq_num = 0
         build_stream: Stream | None = None
         # TODO: The sequence number currently has nothing to do with
@@ -70,7 +73,7 @@ async def concatenate_node(
 
             # Collect chunks up to max_chunks or until end of stream
             while len(chunks) < (max_chunks or float("inf")):
-                msg = await ch_in.data.recv(ctx)
+                msg = await ch_in.data.recv(context)
                 if msg is None:
                     break
                 chunk = TableChunk.from_message(msg)
@@ -88,7 +91,7 @@ async def concatenate_node(
                     )
                 )
                 await ch_out.data.send(
-                    ctx,
+                    context,
                     Message(
                         TableChunk.from_pylibcudf_table(
                             seq_num, table, build_stream, exclusive_view=True
@@ -101,7 +104,7 @@ async def concatenate_node(
             if msg is None:
                 break
 
-        await ch_out.data.drain(ctx)
+        await ch_out.data.drain(context)
 
 
 @generate_ir_sub_network.register(Repartition)
@@ -129,8 +132,9 @@ def _(
     # Add python node
     nodes.append(
         concatenate_node(
-            rec.state["ctx"],
+            rec.state["context"],
             ir,
+            rec.state["ir_context"],
             channels[ir].reserve_input_slot(),
             channels[ir.children[0]].reserve_output_slot(),
             max_chunks=max_chunks,

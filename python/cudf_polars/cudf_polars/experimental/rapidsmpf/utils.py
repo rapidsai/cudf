@@ -29,15 +29,15 @@ MetadataPayload: TypeAlias = Any
 
 @asynccontextmanager
 async def shutdown_on_error(
-    ctx: Context, *channels: Channel[Any]
+    context: Context, *channels: Channel[Any]
 ) -> AsyncIterator[None]:
     """
     Shutdown on error for rapidsmpf.
 
     Parameters
     ----------
-    ctx
-        The context.
+    context
+        The rapidsmpf context.
     channels
         The channels to shutdown.
     """
@@ -45,7 +45,7 @@ async def shutdown_on_error(
     try:
         yield
     except Exception:
-        await asyncio.gather(*(ch.shutdown(ctx) for ch in channels))
+        await asyncio.gather(*(ch.shutdown(context) for ch in channels))
         raise
 
 

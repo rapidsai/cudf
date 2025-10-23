@@ -25,14 +25,16 @@ from cudf_polars.experimental.rapidsmpf.utils import (
 if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
 
+    from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
 
 
 @define_py_node()
 async def default_node_single(
-    ctx: Context,
+    context: Context,
     ir: IR,
+    ir_context: IRExecutionContext,
     ch_out: ChannelPair,
     ch_in: ChannelPair,
 ) -> None:
@@ -41,10 +43,12 @@ async def default_node_single(
 
     Parameters
     ----------
-    ctx
-        The context.
+    context
+        The rapidsmpf context.
     ir
         The IR node.
+    ir_context
+        The execution context for the IR node.
     ch_out
         The output ChannelPair.
     ch_in
@@ -54,8 +58,8 @@ async def default_node_single(
     -----
     Chunks are processed in the order they are received.
     """
-    async with shutdown_on_error(ctx, ch_in.data, ch_out.data):
-        while (msg := await ch_in.data.recv(ctx)) is not None:
+    async with shutdown_on_error(context, ch_in.data, ch_out.data):
+        while (msg := await ch_in.data.recv(context)) is not None:
             chunk = TableChunk.from_message(msg)
             seq_num = chunk.sequence_number
             df = await asyncio.to_thread(
@@ -67,19 +71,21 @@ async def default_node_single(
                     list(ir.children[0].schema.values()),
                     chunk.stream,
                 ),
+                context=ir_context,
             )
             chunk = TableChunk.from_pylibcudf_table(
                 seq_num, df.table, chunk.stream, exclusive_view=True
             )
-            await ch_out.data.send(ctx, Message(chunk))
+            await ch_out.data.send(context, Message(chunk))
 
-        await ch_out.data.drain(ctx)
+        await ch_out.data.drain(context)
 
 
 @define_py_node()
 async def default_node_multi(
-    ctx: Context,
+    context: Context,
     ir: IR,
+    ir_context: IRExecutionContext,
     ch_out: ChannelPair,
     chs_in: tuple[ChannelPair, ...],
     bcast_indices: list[int],
@@ -89,10 +95,12 @@ async def default_node_multi(
 
     Parameters
     ----------
-    ctx
-        The context.
+    context
+        The rapidsmpf context.
     ir
         The IR node.
+    ir_context
+        The execution context for the IR node.
     ch_out
         The output ChannelPair (metadata already sent).
     chs_in
@@ -105,7 +113,7 @@ async def default_node_multi(
     Input chunks must be aligned for evaluation.
     """
     # TODO: Use multiple streams
-    async with shutdown_on_error(ctx, *[ch.data for ch in chs_in], ch_out.data):
+    async with shutdown_on_error(context, *[ch.data for ch in chs_in], ch_out.data):
         seq_num = 0
         n_children = len(chs_in)
         accepting_data = True
@@ -120,7 +128,7 @@ async def default_node_multi(
                     zip(chs_in, ir.children, strict=True)
                 ):
                     if (ch_not_finished := ch_idx not in finished_channels) and (
-                        msg := await ch_in.data.recv(ctx)
+                        msg := await ch_in.data.recv(context)
                     ) is not None:
                         table_chunk = TableChunk.from_message(msg)
                         if ch_idx in bcast_indices and staged_chunks[ch_idx]:
@@ -162,9 +170,10 @@ async def default_node_multi(
                         )
                         for ch_idx in range(n_children)
                     ],
+                    context=ir_context,
                 )
                 await ch_out.data.send(
-                    ctx,
+                    context,
                     Message(
                         TableChunk.from_pylibcudf_table(
                             seq_num,
@@ -186,12 +195,12 @@ async def default_node_multi(
                     )
                 break  # All channels have finished
 
-        await ch_out.data.drain(ctx)
+        await ch_out.data.drain(context)
 
 
 @define_py_node()
 async def fanout_node_bounded(
-    ctx: Context,
+    context: Context,
     ch_in: ChannelPair,
     *chs_out: ChannelPair,
 ) -> None:
@@ -203,20 +212,20 @@ async def fanout_node_bounded(
 
     Parameters
     ----------
-    ctx
-        The context.
+    context
+        The rapidsmpf context.
     ch_in
         The input ChannelPair.
     chs_out
         The output ChannelPairs.
     """
     # TODO: Use multiple streams
-    async with shutdown_on_error(ctx, ch_in.data, *[ch.data for ch in chs_out]):
-        while (msg := await ch_in.data.recv(ctx)) is not None:
+    async with shutdown_on_error(context, ch_in.data, *[ch.data for ch in chs_out]):
+        while (msg := await ch_in.data.recv(context)) is not None:
             table_chunk = TableChunk.from_message(msg)
             for ch_out in chs_out:
                 await ch_out.data.send(
-                    ctx,
+                    context,
                     Message(
                         TableChunk.from_pylibcudf_table(
                             table_chunk.sequence_number,
@@ -227,12 +236,12 @@ async def fanout_node_bounded(
                     ),
                 )
 
-        await asyncio.gather(*(ch.data.drain(ctx) for ch in chs_out))
+        await asyncio.gather(*(ch.data.drain(context) for ch in chs_out))
 
 
 @define_py_node()
 async def fanout_node_unbounded(
-    ctx: Context,
+    context: Context,
     ch_in: ChannelPair,
     *chs_out: ChannelPair,
 ) -> None:
@@ -251,14 +260,14 @@ async def fanout_node_unbounded(
 
     Parameters
     ----------
-    ctx
-        The context.
+    context
+        The rapidsmpf context.
     ch_in
         The input ChannelPair.
     chs_out
         The output ChannelPairs.
     """
-    async with shutdown_on_error(ctx, ch_in.data, *[ch.data for ch in chs_out]):
+    async with shutdown_on_error(context, ch_in.data, *[ch.data for ch in chs_out]):
         # FIFO buffer for each output channel
         output_buffers: list[list[Message]] = [[] for _ in chs_out]
 
@@ -269,7 +278,7 @@ async def fanout_node_unbounded(
         needs_drain: set[int] = set()
 
         # Receive task
-        recv_task: asyncio.Task | None = asyncio.create_task(ch_in.data.recv(ctx))
+        recv_task: asyncio.Task | None = asyncio.create_task(ch_in.data.recv(context))
 
         # Flag to indicate we should start a new receive (for backpressure)
         can_receive: bool = True
@@ -278,11 +287,11 @@ async def fanout_node_unbounded(
             """Send one buffered message for output idx."""
             if output_buffers[idx]:
                 msg = output_buffers[idx].pop(0)
-                await chs_out[idx].data.send(ctx, msg)
+                await chs_out[idx].data.send(context, msg)
 
         async def drain_output(idx: int) -> None:
             """Drain output channel idx."""
-            await chs_out[idx].data.drain(ctx)
+            await chs_out[idx].data.drain(context)
 
         # Main loop: coordinate receiving, sending, and draining
         while (
@@ -343,7 +352,7 @@ async def fanout_node_unbounded(
 
                         # Don't receive next chunk until at least one send completes
                         can_receive = False
-                        recv_task = asyncio.create_task(ch_in.data.recv(ctx))
+                        recv_task = asyncio.create_task(ch_in.data.recv(context))
                 else:
                     # Must be a send or drain task - find which output and remove it
                     for idx, at in list(active_tasks.items()):
@@ -379,8 +388,9 @@ def _(ir: IR, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]
         # Single-channel default node
         nodes.append(
             default_node_single(
-                rec.state["ctx"],
+                rec.state["context"],
                 ir,
+                rec.state["ir_context"],
                 channels[ir].reserve_input_slot(),
                 channels[ir.children[0]].reserve_output_slot(),
             )
@@ -389,8 +399,9 @@ def _(ir: IR, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]
         # Multi-channel default node
         nodes.append(
             default_node_multi(
-                rec.state["ctx"],
+                rec.state["context"],
                 ir,
+                rec.state["ir_context"],
                 channels[ir].reserve_input_slot(),
                 tuple(channels[c].reserve_output_slot() for c in ir.children),
                 bcast_indices=bcast_indices,
@@ -402,8 +413,9 @@ def _(ir: IR, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]
 
 @define_py_node()
 async def empty_node(
-    ctx: Context,
+    context: Context,
     ir: Empty,
+    ir_context: IRExecutionContext,
     ch_out: ChannelPair,
 ) -> None:
     """
@@ -411,32 +423,37 @@ async def empty_node(
 
     Parameters
     ----------
-    ctx
-        The context.
+    context
+        The rapidsmpf context.
     ir
         The Empty node.
+    ir_context
+        The execution context for the IR node.
     ch_out
         The output ChannelPair.
     """
-    async with shutdown_on_error(ctx, ch_out.data):
+    async with shutdown_on_error(context, ch_out.data):
         # Evaluate the IR node to create an empty DataFrame
-        df: DataFrame = ir.do_evaluate(*ir._non_child_args)
+        df: DataFrame = ir.do_evaluate(*ir._non_child_args, context=ir_context)
 
         # Return the output chunk (empty but with correct schema)
         chunk = TableChunk.from_pylibcudf_table(
             0, df.table, df.stream, exclusive_view=True
         )
-        await ch_out.data.send(ctx, Message(chunk))
+        await ch_out.data.send(context, Message(chunk))
 
-        await ch_out.data.drain(ctx)
+        await ch_out.data.drain(context)
 
 
 @generate_ir_sub_network.register(Empty)
 def _(ir: Empty, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]]:
     """Generate network for Empty node - produces one empty chunk."""
-    ctx = rec.state["ctx"]
+    context = rec.state["context"]
+    ir_context = rec.state["ir_context"]
     channels: dict[IR, ChannelManager] = {ir: ChannelManager()}
-    nodes: list[Any] = [empty_node(ctx, ir, channels[ir].reserve_input_slot())]
+    nodes: list[Any] = [
+        empty_node(context, ir, ir_context, channels[ir].reserve_input_slot())
+    ]
     return nodes, channels
 
 
@@ -470,7 +487,7 @@ def generate_ir_sub_network_wrapper(
         if fanout_info.unbounded:
             nodes.append(
                 fanout_node_unbounded(
-                    rec.state["ctx"],
+                    rec.state["context"],
                     channels[ir].reserve_output_slot(),
                     *[manager.reserve_input_slot() for _ in range(count)],
                 )
@@ -478,7 +495,7 @@ def generate_ir_sub_network_wrapper(
         else:  # "bounded"
             nodes.append(
                 fanout_node_bounded(
-                    rec.state["ctx"],
+                    rec.state["context"],
                     channels[ir].reserve_output_slot(),
                     *[manager.reserve_input_slot() for _ in range(count)],
                 )
