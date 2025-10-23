@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -49,7 +50,7 @@ class ListColumn(ColumnBase):
         mask: Buffer | None,
         offset: int,
         null_count: int,
-        children: tuple[NumericalColumn, ColumnBase],  # type: ignore[assignment]
+        children: tuple[NumericalColumn, ColumnBase],
     ):
         if data is not None:
             raise ValueError("data must be None")
@@ -156,7 +157,7 @@ class ListColumn(ColumnBase):
             return NotImplemented
         if isinstance(other.dtype, ListDtype):
             if op == "__add__":
-                return self.concatenate_rows([other])  # type: ignore[list-item]
+                return self.concatenate_rows([other])
             else:
                 raise NotImplementedError(
                     "Lists concatenation for this operation is not yet"
@@ -287,7 +288,7 @@ class ListColumn(ColumnBase):
             0,
             [offset_col, data_plc_col],
         )
-        return cls.from_pylibcudf(plc_column)  # type: ignore[return-value]
+        return cls.from_pylibcudf(plc_column)
 
     @cached_property
     def _string_separators(self) -> plc.Column:
@@ -537,7 +538,7 @@ class ListColumn(ColumnBase):
                     f"seed must be in range [0, {np.iinfo(np.uint32).max}]"
                 )
             seed = np.uint32(seed)
-        return type(self).from_pylibcudf(  # type: ignore[return-value]
+        return type(self).from_pylibcudf(
             plc.nvtext.minhash.minhash_ngrams(
                 self.to_pylibcudf(mode="read"),
                 width,
@@ -562,7 +563,7 @@ class ListColumn(ColumnBase):
                     f"seed must be in range [0, {np.iinfo(np.uint64).max}]"
                 )
             seed = np.uint64(seed)
-        return type(self).from_pylibcudf(  # type: ignore[return-value]
+        return type(self).from_pylibcudf(
             plc.nvtext.minhash.minhash64_ngrams(
                 self.to_pylibcudf(mode="read"),
                 width,

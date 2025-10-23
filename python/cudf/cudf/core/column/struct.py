@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 from functools import cached_property
@@ -210,7 +211,7 @@ class StructColumn(ColumnBase):
                 null_count=self.null_count,
                 children=tuple(  # type: ignore[arg-type]
                     child.astype(dtype.subtype) for child in self.base_children
-                ),  # type: ignore[arg-type]
+                ),
             )
         elif isinstance(dtype, StructDtype):
             return StructColumn(
