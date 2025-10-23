@@ -1,4 +1,5 @@
 /*
+ * SPDX-FileCopyrightText: Copyright (C) 2002-2013 Mark Adler, all rights reserved
  * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0 AND Zlib
  */
@@ -10,7 +11,7 @@
 */
 
 /*
-SPDX-FileCopyrightText: Copyright (C) 2002-2013 Mark Adler, all rights reserved
+Copyright (C) 2002-2013 Mark Adler, all rights reserved
 version 2.3, 21 Jan 2013
 
 This software is provided 'as-is', without any express or implied

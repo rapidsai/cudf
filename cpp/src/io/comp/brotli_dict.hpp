@@ -1,4 +1,6 @@
 /*
+ * SPDX-FileCopyrightText: Copyright 2013 Google Inc. All Rights Reserved.
+ * SPDX-FileCopyrightText: Copyright(c) 2009, 2010, 2013 - 2016 by the Brotli Authors.
  * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0 AND MIT
  */
@@ -8,14 +10,14 @@
  * https://github.com/google/brotli, original license text below.
  */
 
-/* SPDX-FileCopyrightText: Copyright 2013 Google Inc. All Rights Reserved.
+/* Copyright 2013 Google Inc. All Rights Reserved.
 
 Distributed under MIT license.
 See file LICENSE for detail or copy at https://opensource.org/licenses/MIT
 */
 
 /*
-SPDX-FileCopyrightText: Copyright(c) 2009, 2010, 2013 - 2016 by the Brotli Authors.
+Copyright(c) 2009, 2010, 2013 - 2016 by the Brotli Authors.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files(the "Software"), to deal

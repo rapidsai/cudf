@@ -1,4 +1,5 @@
 /*
+ * SPDX-FileCopyrightText: Copyright (C) 2004-2017, 2020-2022 René Nyffenegger
  * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0 AND Zlib
  */
@@ -17,7 +18,7 @@
  *
  *  Version: 2.rc.09 (release candidate)
  *
- *  SPDX-FileCopyrightText: Copyright (C) 2004-2017, 2020-2022 René Nyffenegger
+ *  Copyright (C) 2004-2017, 2020-2022 René Nyffenegger
  *
  *  This source code is provided 'as-is', without any express or implied
  *  warranty. In no event will the author be held liable for any damages

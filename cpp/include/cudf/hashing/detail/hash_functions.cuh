@@ -78,10 +78,12 @@ __device__ inline uint64_t swap_endian(uint64_t x)
 
 /**
  * SPDX-SnippetBegin
- * Modified GPU implementation of
- * https://johnnylee-sde.github.io/Fast-unsigned-integer-to-hex-string/
  * SPDX-FileCopyrightText: Copyright (c) 2015 Barry Clark
  * SPDX-License-Identifier: MIT
+ *
+ * Modified GPU implementation of
+ * https://johnnylee-sde.github.io/Fast-unsigned-integer-to-hex-string/
+ * Copyright (c) 2015 Barry Clark
  * Licensed under the MIT license.
  * See file LICENSE for detail or copy at https://opensource.org/licenses/MIT
  */
