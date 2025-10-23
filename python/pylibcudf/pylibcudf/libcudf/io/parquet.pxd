@@ -38,9 +38,10 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         bool is_enabled_allow_mismatched_pq_schemas() except +libcudf_exception_handler
         # setter
 
+        void set_source(source_info src) except +libcudf_exception_handler
         void set_filter(expression &filter) except +libcudf_exception_handler
         void set_columns(vector[string] col_names) except +libcudf_exception_handler
-        void set_num_rows(size_type val) except +libcudf_exception_handler
+        void set_num_rows(int64_t val) except +libcudf_exception_handler
         void set_row_groups(
             vector[vector[size_type]] row_grp
         ) except +libcudf_exception_handler
@@ -219,6 +220,10 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
     cdef unique_ptr[vector[uint8_t]] write_parquet(
         parquet_writer_options options,
         cuda_stream_view stream,
+    ) except +libcudf_exception_handler
+
+    cdef bool is_supported_read_parquet(
+        compression_type compression
     ) except +libcudf_exception_handler
 
     cdef bool is_supported_write_parquet(

@@ -55,10 +55,10 @@ class StructColumn(ColumnBase):
         data: None,
         size: int,
         dtype: StructDtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple[ColumnBase, ...] = (),
+        mask: Buffer | None,
+        offset: int,
+        null_count: int,
+        children: tuple[ColumnBase, ...],
     ):
         if data is not None:
             raise ValueError("data must be None.")
@@ -107,8 +107,8 @@ class StructColumn(ColumnBase):
 
     def to_arrow(self) -> pa.Array:
         children = [child.to_arrow() for child in self.children]
-        dtype = (
-            pyarrow_dtype_to_cudf_dtype(self.dtype)
+        dtype: StructDtype = (
+            pyarrow_dtype_to_cudf_dtype(self.dtype)  # type: ignore[assignment]
             if isinstance(self.dtype, pd.ArrowDtype)
             else self.dtype
         )
@@ -161,21 +161,21 @@ class StructColumn(ColumnBase):
         result = super().element_indexing(index)
         if isinstance(result, pa.Scalar):
             py_element = maybe_nested_pa_scalar_to_py(result)
-            return self.dtype._recursively_replace_fields(py_element)
+            return self.dtype._recursively_replace_fields(py_element)  # type: ignore[union-attr]
         return result
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar:
         if isinstance(value, dict):
             new_value = {
                 field: _maybe_na_to_none(value.get(field, None))
-                for field in self.dtype.fields
+                for field in self.dtype.fields  # type: ignore[union-attr]
             }
             return pa_scalar_to_plc_scalar(
-                pa.scalar(new_value, type=self.dtype.to_arrow())
+                pa.scalar(new_value, type=self.dtype.to_arrow())  # type: ignore[union-attr]
             )
         elif value is None or value is cudf.NA:
             return pa_scalar_to_plc_scalar(
-                pa.scalar(None, type=self.dtype.to_arrow())
+                pa.scalar(None, type=self.dtype.to_arrow())  # type: ignore[union-attr]
             )
         else:
             raise ValueError(
@@ -210,7 +210,7 @@ class StructColumn(ColumnBase):
                 null_count=self.null_count,
                 children=tuple(  # type: ignore[arg-type]
                     child.astype(dtype.subtype) for child in self.base_children
-                ),  # type: ignore[arg-type]
+                ),
             )
         elif isinstance(dtype, StructDtype):
             return StructColumn(

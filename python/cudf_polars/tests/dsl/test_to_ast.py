@@ -15,7 +15,9 @@ import cudf_polars.dsl.ir as ir_nodes
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.containers.dataframe import DataFrame, NamedColumn
+from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.dsl.to_ast import insert_colrefs, to_ast, to_parquet_filter
+from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 
 @pytest.fixture(scope="module")
@@ -59,11 +61,13 @@ def df():
     ],
 )
 def test_compute_column(expr, df):
+    stream = get_cuda_stream()
+
     q = df.select(expr)
     ir = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
 
     assert isinstance(ir, ir_nodes.Select)
-    table = ir.children[0].evaluate(cache={}, timer=None)
+    table = ir.children[0].evaluate(cache={}, timer=None, context=IRExecutionContext())
     name_to_index = {c.name: i for i, c in enumerate(table.columns)}
 
     def compute_column(e):
@@ -77,13 +81,13 @@ def test_compute_column(expr, df):
         ast = to_ast(e_with_colrefs)
         if ast is not None:
             return NamedColumn(
-                plc.transform.compute_column(table.table, ast),
+                plc.transform.compute_column(table.table, ast, stream=stream),
                 name=e.name,
                 dtype=e.value.dtype,
             )
         return e.evaluate(table)
 
-    got = DataFrame(map(compute_column, ir.exprs)).to_polars()
+    got = DataFrame(map(compute_column, ir.exprs), stream=stream).to_polars()
 
     expect = q.collect()
 

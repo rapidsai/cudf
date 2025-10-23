@@ -86,7 +86,7 @@ class parquet_reader_options {
   // Number of rows to skip from the start; Parquet stores the number of rows as int64_t
   int64_t _skip_rows = 0;
   // Number of rows to read; `nullopt` is all
-  std::optional<size_type> _num_rows;
+  std::optional<int64_t> _num_rows;
 
   // Read row groups that start at or after this byte offset into the source
   size_t _skip_bytes = 0;
@@ -204,7 +204,7 @@ class parquet_reader_options {
    * @return Number of rows to read; `nullopt` if the option hasn't been set (in which case the file
    * is read until the end)
    */
-  [[nodiscard]] std::optional<size_type> const& get_num_rows() const { return _num_rows; }
+  [[nodiscard]] std::optional<int64_t> const& get_num_rows() const { return _num_rows; }
 
   /**
    * @brief Returns bytes to skip before starting reading row groups
@@ -256,6 +256,13 @@ class parquet_reader_options {
    * @return `true` if JIT compilation should be used for filtering
    */
   [[nodiscard]] bool is_enabled_use_jit_filter() const { return _use_jit_filter; }
+
+  /**
+   * @brief Set a new source location
+   *
+   * @param src New `source_info`.
+   */
+  void set_source(source_info src) { _source = std::move(src); }
 
   /**
    * @brief Sets the names of columns to be read from all input sources.
@@ -380,9 +387,12 @@ class parquet_reader_options {
   /**
    * @brief Sets number of rows to read.
    *
+   * @note Although this allows one to request more than `size_type::max()` rows, if any
+   * single read would produce a table larger than this row limit, an error is thrown.
+   *
    * @param val Number of rows to read after skip
    */
-  void set_num_rows(size_type val);
+  void set_num_rows(int64_t val);
 
   /**
    * @brief Sets bytes to skip before starting reading row groups.
@@ -540,10 +550,13 @@ class parquet_reader_options_builder {
   /**
    * @brief Sets number of rows to read.
    *
+   * @note Although this allows one to request more than `size_type::max()` rows, if any
+   * single read would produce a table larger than this row limit, an error is thrown.
+   *
    * @param val Number of rows to read after skip
    * @return this for chaining
    */
-  parquet_reader_options_builder& num_rows(size_type val)
+  parquet_reader_options_builder& num_rows(int64_t val)
   {
     options.set_num_rows(val);
     return *this;

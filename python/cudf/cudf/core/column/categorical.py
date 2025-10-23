@@ -81,7 +81,7 @@ class CategoricalColumn(column.ColumnBase):
     """
 
     dtype: CategoricalDtype
-    _children: tuple[NumericalColumn]  # type: ignore[assignment]
+    _children: tuple[NumericalColumn]
     _VALID_REDUCTIONS = {
         "max",
         "min",
@@ -98,22 +98,16 @@ class CategoricalColumn(column.ColumnBase):
     def __init__(
         self,
         data: None,
-        size: int | None,
+        size: int,
         dtype: CategoricalDtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple[NumericalColumn] = (),  # type: ignore[assignment]
+        mask: Buffer | None,
+        offset: int,
+        null_count: int,
+        children: tuple[NumericalColumn],
     ):
         if data is not None:
             raise ValueError(f"{data=} must be None")
         validate_categorical_children(children)
-        if size is None:
-            child = children[0]
-            assert child.offset == 0
-            assert child.base_mask is None
-            size = child.size
-            size = size - offset
         if not isinstance(dtype, CategoricalDtype):
             raise ValueError(
                 f"{dtype=} must be cudf.CategoricalDtype instance."
@@ -408,10 +402,10 @@ class CategoricalColumn(column.ColumnBase):
 
     def find_and_replace(
         self,
-        to_replace: ColumnLike,
-        replacement: ColumnLike,
+        to_replace: ColumnBase | list,
+        replacement: ColumnBase | list,
         all_nan: bool = False,
-    ) -> CategoricalColumn:
+    ) -> Self:
         """
         Return col with *to_replace* replaced with *replacement*.
         """
@@ -444,7 +438,7 @@ class CategoricalColumn(column.ColumnBase):
             # However, it seems that this functionality has been broken for a
             # long time so for now we're just having mypy ignore and we'll come
             # back to this.
-            if fill_value in self.categories:  # type: ignore
+            if fill_value in self.categories:  # type: ignore[operator]
                 replaced = self.fillna(fill_value)
             else:
                 new_categories = self.categories.append(
@@ -709,7 +703,7 @@ class CategoricalColumn(column.ColumnBase):
         elif newsize == 0:
             codes_col = column.column_empty(0, head.codes.dtype)
         else:
-            codes_col = column.concat_columns(codes)  # type: ignore[arg-type]
+            codes_col = column.concat_columns(codes)
 
         return codes_col._with_type_metadata(CategoricalDtype(categories=cats))  # type: ignore[return-value]
 

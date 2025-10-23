@@ -1,5 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -548,7 +547,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
             # disabled when the child was launched. That is a fairly rare pattern though
             # and we can document the limitations.
             # The main thread is always started, so the ident is always an int
-            or loader._disable_count[threading.main_thread().ident] > 0  # type: ignore
+            or loader._disable_count[threading.main_thread().ident] > 0  # type: ignore[index]
         )
         if not use_real:
             # Only need to check the denylist if we're not turned off.

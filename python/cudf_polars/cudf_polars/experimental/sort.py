@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 import polars as pl
@@ -27,6 +28,7 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping, Sequence
 
     from cudf_polars.dsl.expr import NamedExpr
+    from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
 
@@ -139,7 +141,8 @@ def _select_local_split_candidates(
                     dtype=part_id_dtype,
                     name=next(name_gen),
                 ),
-            ]
+            ],
+            stream=df.stream,
         )
 
     candidates = [i * df.num_rows // num_partitions for i in range(num_partitions)]
@@ -155,6 +158,7 @@ def _select_local_split_candidates(
         plc.Table([*res.columns(), part_id, row_id]),
         [*df.column_names, next(name_gen), next(name_gen)],
         [*df.dtypes, part_id_dtype, part_id_dtype],
+        stream=df.stream,
     )
 
 
@@ -206,6 +210,7 @@ def _get_final_sort_boundaries(
         sort_boundaries,
         sort_boundaries_candidates.column_names,
         sort_boundaries_candidates.dtypes,
+        stream=sort_boundaries_candidates.stream,
     )
 
 
@@ -215,6 +220,7 @@ def _sort_boundaries_graph(
     column_order: Sequence[plc.types.Order],
     null_order: Sequence[plc.types.NullOrder],
     count: int,
+    context: IRExecutionContext,
 ) -> tuple[str, MutableMapping[Any, Any]]:
     """Graph to get the boundaries from all partitions."""
     local_boundaries_name = f"sort-boundaries_local-{name_in}"
@@ -233,7 +239,7 @@ def _sort_boundaries_graph(
         )
         _concat_list.append((local_boundaries_name, part_id))
 
-    graph[concat_boundaries_name] = (_concat, *_concat_list)
+    graph[concat_boundaries_name] = (partial(_concat, context=context), *_concat_list)
     graph[global_boundaries_name] = (
         _get_final_sort_boundaries,
         concat_boundaries_name,
@@ -320,6 +326,8 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
         column_names = options["column_names"]
         column_dtypes = options["column_dtypes"]
 
+        stream = DEFAULT_STREAM
+
         # TODO: When sorting, this step should finalize with a merge (unless we
         # require stability, as cudf merge is not stable).
         return DataFrame.from_table(
@@ -331,10 +339,11 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
                     statistics=context.statistics,
                 ),
                 br=context.br,
-                stream=DEFAULT_STREAM,
+                stream=stream,
             ),
             column_names,
             column_dtypes,
+            stream=stream,
         )
 
 
@@ -379,6 +388,7 @@ def _sort_partition_dataframe(
             split,
             df.column_names,
             df.dtypes,
+            stream=df.stream,
         )
         for i, split in enumerate(plc.copying.split(df.table, splits))
     }
@@ -432,6 +442,8 @@ class ShuffleSorted(IR):
         null_order: tuple[plc.types.NullOrder, ...],
         shuffle_method: ShuffleMethod,
         df: DataFrame,
+        *,
+        context: IRExecutionContext,
     ) -> DataFrame:  # pragma: no cover
         """Evaluate and return a dataframe."""
         # Single-partition ShuffleSorted evaluation is a no-op
@@ -536,7 +548,9 @@ def _(
 
 @generate_ir_tasks.register(ShuffleSorted)
 def _(
-    ir: ShuffleSorted, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: ShuffleSorted,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     by = [ne.value.name for ne in ir.by if isinstance(ne.value, Col)]
     if len(by) != len(ir.by):  # pragma: no cover
@@ -551,6 +565,7 @@ def _(
         ir.order,
         ir.null_order,
         partition_info[child].count,
+        context,
     )
 
     options = {
@@ -600,7 +615,7 @@ def _(
 
     # Simple task-based fall-back
     graph.update(
-        _simple_shuffle_graph(
+        partial(_simple_shuffle_graph, context=context)(
             get_key_name(child),
             get_key_name(ir),
             partition_info[child].count,

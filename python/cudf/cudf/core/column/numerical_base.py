@@ -60,10 +60,10 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         data: Buffer,
         size: int,
         dtype: DecimalDtype | np.dtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple = (),
+        mask: Buffer | None,
+        offset: int,
+        null_count: int,
+        children: tuple,
     ):
         if not isinstance(data, Buffer):
             raise ValueError("data must be a Buffer instance.")
@@ -86,12 +86,12 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         skipna = True if skipna is None else skipna
 
         if len(self) == 0 or self._can_return_nan(skipna=skipna):
-            return _get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
 
         self = self.nans_to_nulls().dropna()
 
         if len(self) < 4:
-            return _get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
 
         n = len(self)
         miu = self.mean()
@@ -164,7 +164,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                     indices.to_pylibcudf(mode="read"),
                     exact,
                 )
-                result = type(self).from_pylibcudf(plc_column)  # type: ignore[assignment]
+                result = type(self).from_pylibcudf(plc_column)
         if return_scalar:
             scalar_result = result.element_indexing(0)
             if interpolation in {"lower", "higher", "nearest"}:
@@ -178,7 +178,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                 except (TypeError, ValueError):
                     pass
             return (
-                _get_nan_for_dtype(self.dtype)
+                _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
                 if scalar_result is NA
                 else scalar_result
             )
@@ -221,7 +221,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         skipna = True if skipna is None else skipna
 
         if self._can_return_nan(skipna=skipna):
-            return _get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
 
         # enforce linear in case the default ever changes
         result = self.quantile(
@@ -240,7 +240,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             or len(other) == 0
             or (len(self) == 1 and len(other) == 1)
         ):
-            return _get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
 
         result = (self - self.mean()) * (other - other.mean())
         cov_sample = result.sum() / (len(self) - 1)
@@ -248,13 +248,13 @@ class NumericalBaseColumn(ColumnBase, Scannable):
 
     def corr(self, other: NumericalBaseColumn) -> float:
         if len(self) == 0 or len(other) == 0:
-            return _get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
 
         cov = self.cov(other)
         lhs_std, rhs_std = self.std(), other.std()
 
         if not cov or lhs_std == 0 or rhs_std == 0:
-            return _get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
         return cov / lhs_std / rhs_std
 
     def round(
@@ -268,7 +268,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             raise ValueError(f"{how=} must be either 'half_even' or 'half_up'")
         plc_how = plc.round.RoundingMethod[how.upper()]
         with acquire_spill_lock():
-            return type(self).from_pylibcudf(  # type: ignore[return-value]
+            return type(self).from_pylibcudf(
                 plc.round.round(
                     self.to_pylibcudf(mode="read"), decimals, plc_how
                 )

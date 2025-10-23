@@ -124,7 +124,13 @@ from cudf.utils.utils import (
 )
 
 if TYPE_CHECKING:
-    from cudf._typing import ColumnLike, Dtype, NotImplementedType
+    from cudf._typing import (
+        Axis,
+        ColumnLike,
+        Dtype,
+        NotImplementedType,
+        ScalarLike,
+    )
 
 _cupy_nan_methods_map = {
     "min": "nanmin",
@@ -1627,7 +1633,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         self._drop_column(name)
 
     @_performance_tracking
-    def memory_usage(self, index: bool = True, deep: bool = False) -> Series:  # type: ignore[override]
+    def memory_usage(self, index: bool = True, deep: bool = False) -> Series:
         """
         Return the memory usage of the DataFrame.
 
@@ -2594,7 +2600,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             # Special case needed to avoid converting
             # Series objects into pd.Series
             if not inspect.isclass(into):
-                cons = type(into)  # type: ignore[assignment]
+                cons = type(into)
                 if isinstance(into, defaultdict):
                     cons = functools.partial(cons, into.default_factory)
             elif issubclass(into, Mapping):
@@ -2840,7 +2846,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         """
         return _DataFrameAtIndexer(self)
 
-    @property  # type: ignore
+    @property
     @_external_only_api(
         "Use _column_names instead, or _data.to_pandas_index if a pandas "
         "index is absolutely necessary. For checking if the columns are a "
@@ -2851,7 +2857,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         """Returns a tuple of columns"""
         return self._data.to_pandas_index
 
-    @columns.setter  # type: ignore
+    @columns.setter
     @_performance_tracking
     def columns(self, columns):
         multiindex = False
@@ -3544,7 +3550,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         value = as_column(value, nan_as_null=nan_as_null)
         self._data.insert(name, value, loc=loc)
 
-    @property  # type:ignore
+    @property
     @_performance_tracking
     def axes(self):
         """
@@ -3869,7 +3875,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             else:
                 to_replace = list(index.keys())
                 vals = list(index.values())
-                is_all_na = vals.count(None) == len(vals)
+                is_all_na = all(val is None for val in vals)
 
                 try:
                     out_index = _index_from_data(
@@ -6517,11 +6523,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     @_performance_tracking
     def _reduce(
         self,
-        op,
+        op: str,
         axis=None,
-        numeric_only=False,
+        numeric_only: bool = False,
         **kwargs,
-    ):
+    ) -> ScalarLike:
         source = self
 
         if axis is None:
@@ -6597,13 +6603,15 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )(**kwargs)
             else:
                 source_dtypes = [dtype for _, dtype in source._dtypes]
+                # TODO: What happens if common_dtype is None?
                 common_dtype = find_common_type(source_dtypes)
                 if (
                     common_dtype == CUDF_STRING_DTYPE
                     and any(
                         dtype != CUDF_STRING_DTYPE for dtype in source_dtypes
                     )
-                    or common_dtype.kind != "b"
+                    or common_dtype is not None
+                    and common_dtype.kind != "b"
                     and any(dtype.kind == "b" for dtype in source_dtypes)
                 ):
                     raise TypeError(
@@ -6622,7 +6630,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     if res.isnull().all():
                         if cudf.api.types.is_numeric_dtype(common_dtype):
                             if op in {"sum", "product"}:
-                                if common_dtype.kind == "f":
+                                if (
+                                    common_dtype is not None
+                                    and common_dtype.kind == "f"
+                                ):
                                     res_dtype = (
                                         np.dtype("float64")
                                         if isinstance(
@@ -6630,7 +6641,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                                         )
                                         else common_dtype
                                     )
-                                elif common_dtype.kind == "u":
+                                elif (
+                                    common_dtype is not None
+                                    and common_dtype.kind == "u"
+                                ):
                                     res_dtype = np.dtype("uint64")
                                 else:
                                     res_dtype = np.dtype("int64")
@@ -6645,7 +6659,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                                 "skew",
                                 "median",
                             }:
-                                if common_dtype.kind == "f":
+                                if (
+                                    common_dtype is not None
+                                    and common_dtype.kind == "f"
+                                ):
                                     res_dtype = (
                                         np.dtype("float64")
                                         if isinstance(
@@ -6668,19 +6685,22 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     @_performance_tracking
     def _scan(
         self,
-        op,
-        axis=None,
+        op: str,
+        axis: Axis | None = None,
+        skipna: bool = True,
         *args,
         **kwargs,
-    ):
+    ) -> Self:
         if axis is None:
             axis = 0
         axis = self._get_axis_from_axis_arg(axis)
 
         if axis == 0:
-            return super()._scan(op, axis=axis, *args, **kwargs)
+            return super()._scan(op, axis=axis, skipna=skipna, *args, **kwargs)
         elif axis == 1:
-            return self._apply_cupy_method_axis_1(op, **kwargs)
+            return self._apply_cupy_method_axis_1(op, skipna=skipna, **kwargs)
+        else:
+            raise ValueError(f"{axis=} should be None, 0 or 1")
 
     @_performance_tracking
     def mode(self, axis=0, numeric_only=False, dropna=True):
@@ -6808,7 +6828,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         return super(DataFrame, obj).any(axis, skipna, **kwargs)
 
     @_performance_tracking
-    def _apply_cupy_method_axis_1(self, method, *args, **kwargs):
+    def _apply_cupy_method_axis_1(self, method: str, *args, **kwargs):
         # This method uses cupy to perform scans and reductions along rows of a
         # DataFrame. Since cuDF is designed around columnar storage and
         # operations, we convert DataFrames to 2D cupy arrays for these ops.

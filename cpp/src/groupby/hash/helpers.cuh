@@ -37,6 +37,11 @@ CUDF_HOST_DEVICE auto constexpr GROUPBY_BLOCK_SIZE = 128;
 /// aggregations
 CUDF_HOST_DEVICE auto constexpr GROUPBY_CARDINALITY_THRESHOLD = 128;
 
+/// Threshold to switch between two strategies: one is to output the aggregation results directly to
+/// the final dense output columns, the other is to output the results to sparse intermediate
+/// buffers then gather to the final dense output columns.
+auto constexpr GROUPBY_DENSE_OUTPUT_THRESHOLD = 2;
+
 // We add additional `block_size`, because after the number of elements in the local hash set
 // exceeds the threshold, all threads in the thread block can still insert one more element.
 /// The maximum number of elements handled per block
@@ -93,7 +98,7 @@ using global_set_t = cuco::static_set<cudf::size_type,
                                       cuda::thread_scope_device,
                                       row_comparator_t,
                                       probing_scheme_t,
-                                      cudf::detail::cuco_allocator<char>,
+                                      rmm::mr::polymorphic_allocator<char>,
                                       cuco::storage<GROUPBY_BUCKET_SIZE>>;
 
 using nullable_global_set_t = cuco::static_set<cudf::size_type,
@@ -101,7 +106,7 @@ using nullable_global_set_t = cuco::static_set<cudf::size_type,
                                                cuda::thread_scope_device,
                                                nullable_row_comparator_t,
                                                probing_scheme_t,
-                                               cudf::detail::cuco_allocator<char>,
+                                               rmm::mr::polymorphic_allocator<char>,
                                                cuco::storage<GROUPBY_BUCKET_SIZE>>;
 
 template <typename Op>

@@ -16,6 +16,7 @@ import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_scalar
 from cudf.core.accessors.base_accessor import BaseAccessor
+from cudf.core.accessors.lists import ListMethods
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.dtypes import ListDtype
 from cudf.options import get_option
@@ -502,7 +503,7 @@ class StringMethods(BaseAccessor):
         else:
             # If self._column is not a ListColumn, we will have to
             # split each row by character and create a ListColumn out of it.
-            list_column = self._column.fillna("").character_tokenize()  # type: ignore[assignment]
+            list_column = self._column.fillna("").character_tokenize()
             if len(list_column) == 0:
                 list_column = column_empty(  # type: ignore[assignment]
                     len(self._column), dtype=list_column.dtype
@@ -523,9 +524,9 @@ class StringMethods(BaseAccessor):
                     f"of type: {type(sep_na_rep)}"
                 )
             data = list_column.join_list_elements(  # type: ignore[attr-defined]
-                sep_column,  # type: ignore[arg-type]
+                sep_column,
                 sep_na_rep,
-                string_na_rep,  # type: ignore[arg-type]
+                string_na_rep,
             )
         else:
             raise TypeError(
@@ -752,7 +753,7 @@ class StringMethods(BaseAccessor):
                 result_col = self._column.contains_re(pat, flags)  # type: ignore[arg-type]
             else:
                 if case is False:
-                    input_column = self._column.to_lower()  # type: ignore[union-attr]
+                    input_column = self._column.to_lower()
                     pat_normed = pat.lower()  # type: ignore[union-attr]
                 else:
                     input_column = self._column
@@ -762,7 +763,7 @@ class StringMethods(BaseAccessor):
             # TODO: we silently ignore the `regex=` flag here
             col_pat = as_column(pat, dtype=CUDF_STRING_DTYPE)
             if case is False:
-                input_column = self._column.to_lower()  # type: ignore[union-attr]
+                input_column = self._column.to_lower()
                 col_pat = col_pat.to_lower()  # type: ignore[attr-defined]
             else:
                 input_column = self._column
@@ -989,7 +990,7 @@ class StringMethods(BaseAccessor):
 
         # Pandas forces non-regex replace when pat is a single-character
         if regex is True and len(pat) > 1:
-            result = self._column.replace_re(  # type: ignore[arg-type]
+            result = self._column.replace_re(
                 pat,  # type: ignore[arg-type]
                 pa_repl,
                 n,
@@ -1105,7 +1106,7 @@ class StringMethods(BaseAccessor):
         dtype: object
         """
         return self._return_or_inplace(
-            self._column.slice_strings(start, stop, step)  # type: ignore[arg-type]
+            self._column.slice_strings(start, stop, step)
         )
 
     def isinteger(self) -> Series | Index:
@@ -2132,7 +2133,7 @@ class StringMethods(BaseAccessor):
         dtype: object
         """
         return self._return_or_inplace(
-            self._column.slice_strings(starts._column, stops._column)  # type: ignore[arg-type]
+            self._column.slice_strings(starts._column, stops._column)
         )
 
     def slice_replace(
@@ -2313,17 +2314,19 @@ class StringMethods(BaseAccessor):
         2    f
         dtype: object
         """
+        if isinstance(self._column.dtype, ListDtype):
+            return ListMethods(self._parent).get(i)
         str_lens = self.len()
         if i < 0:
             next_index = i - 1
             step = -1
-            to_mask = str_lens < abs(i)  # type: ignore[operator]
+            to_mask = str_lens < abs(i)
         else:
             next_index = i + 1
             step = 1
-            to_mask = str_lens <= i  # type: ignore[operator]
+            to_mask = str_lens <= i
         result = self.slice(i, next_index, step)
-        if to_mask.any():  # type: ignore[union-attr]
+        if to_mask.any():
             result[to_mask] = pd.NA  # type: ignore[index]
         return result
 
@@ -3793,7 +3796,7 @@ class StringMethods(BaseAccessor):
         pat: str | tuple[str, ...],
     ) -> Series | Index:
         return self._return_or_inplace(
-            self._column.starts_ends_with(method, pat)  # type: ignore[arg-type]
+            self._column.starts_ends_with(method, pat)
         )
 
     def endswith(self, pat: str | tuple[str, ...]) -> Series | Index:
@@ -3914,10 +3917,10 @@ class StringMethods(BaseAccessor):
         """
         if suffix is None or len(suffix) == 0:
             return self._return_or_inplace(self._column)
-        ends_column = self.endswith(suffix)._column  # type: ignore[union-attr]
-        removed_column = self.slice(0, -len(suffix), None)._column  # type: ignore[union-attr]
+        ends_column = self.endswith(suffix)._column
+        removed_column = self.slice(0, -len(suffix), None)._column
 
-        result = removed_column.copy_if_else(self._column, ends_column)  # type: ignore[arg-type]
+        result = removed_column.copy_if_else(self._column, ends_column)
         return self._return_or_inplace(result)
 
     def removeprefix(self, prefix: str) -> Series | Index:
@@ -3953,9 +3956,9 @@ class StringMethods(BaseAccessor):
         """
         if prefix is None or len(prefix) == 0:
             return self._return_or_inplace(self._column)
-        starts_column = self.startswith(prefix)._column  # type: ignore[union-attr]
-        removed_column = self.slice(len(prefix), None, None)._column  # type: ignore[union-attr]
-        result = removed_column.copy_if_else(self._column, starts_column)  # type: ignore[arg-type]
+        starts_column = self.startswith(prefix)._column
+        removed_column = self.slice(len(prefix), None, None)._column
+        result = removed_column.copy_if_else(self._column, starts_column)
         return self._return_or_inplace(result)
 
     def _find(
@@ -4122,7 +4125,7 @@ class StringMethods(BaseAccessor):
         if end is None:
             end = -1
 
-        result_col = self.find(sub, start, end)._column  # type: ignore[union-attr]
+        result_col = self.find(sub, start, end)._column
 
         result = self._return_or_inplace(result_col)
 
@@ -4184,7 +4187,7 @@ class StringMethods(BaseAccessor):
         if end is None:
             end = -1
 
-        result_col = self.rfind(sub, start, end)._column  # type: ignore[union-attr]
+        result_col = self.rfind(sub, start, end)._column
 
         result = self._return_or_inplace(result_col)
 
@@ -4491,7 +4494,7 @@ class StringMethods(BaseAccessor):
 
         if isinstance(delim, ColumnBase):
             result = self._return_or_inplace(
-                self._column.tokenize_column(delim),  # type: ignore[arg-type]
+                self._column.tokenize_column(delim),
                 retain_index=False,
             )
         elif isinstance(delim, plc.Scalar):
@@ -4505,7 +4508,7 @@ class StringMethods(BaseAccessor):
                 for delimiters, but got {type(delimiter)}"
             )
         if isinstance(self._parent, cudf.Series):
-            result.index = self._parent.index.repeat(  # type: ignore
+            result.index = self._parent.index.repeat(  # type: ignore[union-attr]
                 self.token_count(delimiter=delimiter)
             )
         return result
@@ -4632,12 +4635,12 @@ class StringMethods(BaseAccessor):
         delim = _massage_string_arg(delimiter, "delimiter", allow_col=True)
         if isinstance(delim, ColumnBase):
             return self._return_or_inplace(
-                self._column.count_tokens_column(delim)  # type: ignore[arg-type]
+                self._column.count_tokens_column(delim)
             )
 
         elif isinstance(delim, plc.Scalar):
             return self._return_or_inplace(
-                self._column.count_tokens_scalar(delim)  # type: ignore[arg-type]
+                self._column.count_tokens_scalar(delim)
             )
         else:
             raise TypeError(
@@ -4731,11 +4734,11 @@ class StringMethods(BaseAccessor):
         if isinstance(result, cudf.Series) and not as_list:
             # before exploding, removes those lists which have 0 length
             result = result[result.list.len() > 0]
-            return result.explode()  # type: ignore
+            return result.explode()  # type: ignore[union-attr]
         return result
 
     def hash_character_ngrams(
-        self, n: int = 5, as_list: bool = False, seed: np.uint32 = 0
+        self, n: int = 5, as_list: bool = False, seed: int | np.uint32 = 0
     ) -> Series | Index:
         """
         Generate hashes of n-grams from characters in a column of strings.
@@ -5029,9 +5032,7 @@ class StringMethods(BaseAccessor):
         """
         if can_convert_to_column(position):
             position = as_column(position)
-        return self._return_or_inplace(
-            self._column.is_letter(False, position)  # type: ignore[arg-type]
-        )
+        return self._return_or_inplace(self._column.is_letter(False, position))
 
     def is_vowel(self, position) -> Series | Index:
         """
@@ -5066,9 +5067,7 @@ class StringMethods(BaseAccessor):
         """
         if can_convert_to_column(position):
             position = as_column(position)
-        return self._return_or_inplace(
-            self._column.is_letter(True, position)  # type: ignore[arg-type]
-        )
+        return self._return_or_inplace(self._column.is_letter(True, position))
 
     def build_suffix_array(self, min_width: int) -> Series | Index:
         """
@@ -5092,7 +5091,7 @@ class StringMethods(BaseAccessor):
             New column of suffix array
         """
         return self._return_or_inplace(
-            self._column.build_suffix_array(min_width),  # type: ignore[arg-type]
+            self._column.build_suffix_array(min_width),
             inplace=False,
             expand=False,
             retain_index=False,
@@ -5121,7 +5120,7 @@ class StringMethods(BaseAccessor):
         """
         sa_column = sa._column
         return self._return_or_inplace(
-            self._column.resolve_duplicates(sa_column, min_width),  # type: ignore[arg-type]
+            self._column.resolve_duplicates(sa_column, min_width),
             inplace=False,
             expand=False,
             retain_index=False,
@@ -5160,7 +5159,7 @@ class StringMethods(BaseAccessor):
         return self._return_or_inplace(
             self._column.resolve_duplicates_pair(
                 sa1_col, input2_col, sa2_col, min_width
-            ),  # type: ignore[arg-type]
+            ),
             inplace=False,
             expand=False,
             retain_index=False,
@@ -5326,7 +5325,7 @@ class StringMethods(BaseAccessor):
                 return self.minhash64(seed, a_column, b_column, width)
 
     def minhash64(
-        self, seed: np.uint64, a: ColumnLike, b: ColumnLike, width: int
+        self, seed: int | np.uint64, a: ColumnLike, b: ColumnLike, width: int
     ) -> Series | Index:
         """
         Compute the minhash of a strings column.
@@ -5377,7 +5376,7 @@ class StringMethods(BaseAccessor):
         )
 
     def minhash_ngrams(
-        self, ngrams: int, seed: np.uint32, a: ColumnLike, b: ColumnLike
+        self, ngrams: int, seed: int | np.uint32, a: ColumnLike, b: ColumnLike
     ) -> Series | Index:
         """
         Compute the minhash of a list column of strings.
@@ -5428,7 +5427,7 @@ class StringMethods(BaseAccessor):
         )
 
     def minhash64_ngrams(
-        self, ngrams: int, seed: np.uint64, a: ColumnLike, b: ColumnLike
+        self, ngrams: int, seed: int | np.uint64, a: ColumnLike, b: ColumnLike
     ) -> Series | Index:
         """
         Compute the minhash of a list column of strings.
@@ -5502,5 +5501,5 @@ class StringMethods(BaseAccessor):
         dtype: float32
         """
         return self._return_or_inplace(
-            self._column.jaccard_index(input._column, width)  # type: ignore[arg-type]
+            self._column.jaccard_index(input._column, width)
         )

@@ -10,6 +10,7 @@ import polars as pl
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.experimental.dask_registers import register
+from cudf_polars.utils.cuda_stream import get_dask_cuda_stream
 
 # Must register sizeof dispatch before running tests
 register()
@@ -26,6 +27,6 @@ register()
     ],
 )
 def test_dask_sizeof(polars_tbl, size):
-    df = DataFrame.from_polars(polars_tbl)
+    df = DataFrame.from_polars(polars_tbl, stream=get_dask_cuda_stream())
     assert sizeof(df) == size
     assert sum(sizeof(c) for c in df.columns) == size
