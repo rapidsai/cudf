@@ -824,11 +824,11 @@ void decompress(compression_type compression,
 {
   auto const nvcomp_type = detail::to_nvcomp_compression(compression);
   switch (compression) {
+    case compression_type::LZ4:
     case compression_type::ZSTD:
       return not detail::nvcomp::is_decompression_disabled(nvcomp_type.value());
     case compression_type::BROTLI:
     case compression_type::GZIP:
-    case compression_type::LZ4:
     case compression_type::SNAPPY:
     case compression_type::ZLIB:
     case compression_type::NONE: return true;

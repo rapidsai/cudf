@@ -653,9 +653,9 @@ class ORCWriter:
 
 
 def _get_comp_type(
-    compression: Literal[False, None, "SNAPPY", "ZLIB", "ZSTD", "LZ4"],
+    compression: Literal[False, None, "SNAPPY", "ZLIB", "ZSTD", "LZ4", "NONE"],
 ) -> plc.io.types.CompressionType:
-    if compression is None or compression is False:
+    if compression is None or compression is False or compression == "NONE":
         return plc.io.types.CompressionType.NONE
 
     normed_compression = compression.upper()
@@ -711,3 +711,51 @@ def _set_col_children_metadata(
         )
     else:
         return
+
+
+def is_supported_read_orc(
+    compression: Literal["SNAPPY", "ZLIB", "ZSTD", "LZ4", "NONE"],
+) -> bool:
+    """Check if the compression type is supported for reading ORC files.
+
+    Parameters
+    ----------
+    compression : str
+        The compression type to check (e.g., "SNAPPY", "ZLIB", "LZ4")
+
+    Returns
+    -------
+    bool
+        True if the compression type is supported for reading ORC files
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.io.orc.is_supported_read_orc("LZ4")  # doctest: +SKIP
+    True
+    """
+    return plc.io.orc.is_supported_read_orc(_get_comp_type(compression))
+
+
+def is_supported_write_orc(
+    compression: Literal["SNAPPY", "ZLIB", "ZSTD", "LZ4", "NONE"],
+) -> bool:
+    """Check if the compression type is supported for writing ORC files.
+
+    Parameters
+    ----------
+    compression : str
+        The compression type to check (e.g., "SNAPPY", "ZLIB", "LZ4")
+
+    Returns
+    -------
+    bool
+        True if the compression type is supported for writing ORC files
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.io.orc.is_supported_write_orc("SNAPPY")  # doctest: +SKIP
+    True
+    """
+    return plc.io.orc.is_supported_write_orc(_get_comp_type(compression))

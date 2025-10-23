@@ -7,7 +7,7 @@
 
 #include "io/comp/compression.hpp"
 
-#include <cudf/io/nvcomp_adapter.hpp>
+#include <cudf/io/detail/nvcomp_adapter.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/span.hpp>
 

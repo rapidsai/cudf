@@ -153,6 +153,14 @@ cdef extern from "cudf/io/orc.hpp" namespace "cudf::io" nogil:
         cuda_stream_view stream,
     ) except +libcudf_exception_handler
 
+    cdef bool is_supported_read_orc(
+        cudf_io_types.compression_type compression
+    ) except +libcudf_exception_handler
+
+    cdef bool is_supported_write_orc(
+        cudf_io_types.compression_type compression
+    ) except +libcudf_exception_handler
+
     cdef cppclass chunked_orc_writer_options:
         chunked_orc_writer_options() except +libcudf_exception_handler
         cudf_io_types.sink_info get_sink() except +libcudf_exception_handler

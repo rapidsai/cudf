@@ -131,7 +131,7 @@ def to_numeric(
     if dtype.kind in "mM":
         col = col.astype(np.dtype(np.int64))
     elif isinstance(dtype, CategoricalDtype):
-        cat_dtype = col.dtype.categories.dtype
+        cat_dtype = col.dtype.categories.dtype  # type: ignore[union-attr]
         if cat_dtype.kind in "iufb":
             col = col.astype(cat_dtype)
         else:

@@ -61,10 +61,10 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         data: Buffer,
         size: int,
         dtype: DecimalDtype | np.dtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple = (),
+        mask: Buffer | None,
+        offset: int,
+        null_count: int,
+        children: tuple,
     ):
         if not isinstance(data, Buffer):
             raise ValueError("data must be a Buffer instance.")
