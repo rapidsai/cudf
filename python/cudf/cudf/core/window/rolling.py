@@ -254,7 +254,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
 
         if get_option("mode.pandas_compatible"):
             obj = obj.nans_to_nulls()
-        self.obj = obj  # type: ignore[assignment]
+        self.obj = obj
 
         self.window, self.min_periods = self._normalize_window_and_min_periods(
             window, min_periods

@@ -90,11 +90,11 @@ class TimeDeltaColumn(TemporalBaseColumn):
     def __init__(
         self,
         data: Buffer,
-        size: int | None,
+        size: int,
         dtype: np.dtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
+        mask: Buffer | None,
+        offset: int,
+        null_count: int,
         children: tuple = (),
     ):
         if cudf.get_option("mode.pandas_compatible"):
@@ -275,7 +275,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
             # Since sum isn't overridden in Numerical[Base]Column, mypy only
             # sees the signature from Reducible (which doesn't have the extra
             # parameters from ColumnBase._reduce) so we have to ignore this.
-            self.astype(self._UNDERLYING_DTYPE).sum(  # type: ignore
+            self.astype(self._UNDERLYING_DTYPE).sum(  # type: ignore[call-arg]
                 skipna=skipna, min_count=min_count
             ),
             unit=self.time_unit,
