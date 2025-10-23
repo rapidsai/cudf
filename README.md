@@ -1,8 +1,10 @@
 # <div align="left"><img src="img/rapids_logo.png" width="90px"/>&nbsp;cuDF - A GPU-accelerated DataFrame library for tabular data processing</div>
 
-cuDF (pronounced "KOO-dee-eff") is an Apache 2.0 licensed, GPU-accelerated DataFrame library
+cuDF (pronounced "KOO-dee-eff") is an [Apache 2.0 licensed](LICENCE), GPU-accelerated DataFrame library
 for tabular data processing. The cuDF library is one part of the [RAPIDS](https://rapids.ai/) GPU
 Accelerated Data Science suite of libraries.
+
+## About
 
 cuDF is composed of multiple libraries including:
 
@@ -29,6 +31,64 @@ of cuDF on your local workstation or the cloud using Docker, pip, conda, and mor
 
 To install cuDF from source, please follow [the contribution guide](CONTRIBUTING.md#setting-up-your-build-environment) detailing
 how to setup the build environment.
+
+## Examples
+
+The following examples showcase reading a parquet file, dropping missing rows with a null value,
+and performing a groupby aggregation on the data.
+
+### cudf
+
+`import cudf` and the APIs are largely similar to pandas.
+
+```python
+import cudf
+
+df = cudf.read_parquet("data.parquet")
+df.dropna().groupby(["A", "B"]).mean()
+```
+
+### cudf.pandas
+
+With a Python file containing pandas code:
+
+```python
+import pandas as pd
+
+df = cudf.read_parquet("data.parquet")
+df.dropna().groupby(["A", "B"]).mean()
+```
+
+Use cudf.pandas by invoking `python` with `-m cudf.pandas`
+
+```bash
+$ python -m cudf.pandas script.py
+```
+
+If running the pandas code in an interactive Jupyter environment, call `%load_ext cudf.pandas` before
+importing pandas.
+
+```python
+In [1]: %load_ext cudf.pandas
+
+In [2]: import pandas as pd
+
+In [3]: df = cudf.read_parquet("data.parquet")
+
+In [4]: df.dropna().groupby(["A", "B"]).mean()
+```
+
+### cudf-polars
+
+Using Polars' [lazy API](https://docs.pola.rs/user-guide/lazy/), call `collect` with `engine="gpu"` to run
+the operation on the GPU
+
+```python
+import polars as pl
+
+lf = pl.scan_parquet("data.parquet")
+lf.drop_nulls().group_by(["A", "B"]).mean().collect(engine="gpu)
+```
 
 ## Questions and Discussion
 
