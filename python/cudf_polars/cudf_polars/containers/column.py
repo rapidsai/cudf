@@ -196,6 +196,15 @@ class Column:
             raise ValueError(f"Cannot convert a column of length {self.size} to scalar")
         if self._obj_scalar is None:
             self._obj_scalar = plc.copying.get_element(self.obj, 0, stream=stream)
+            # We synchronize the stream here, to avoid a race condition if
+            # Column.obj_scalar() is ever called with different streams.
+            # We need to ensure that the result is valid on *all* streams
+            # prior to returning the result.
+            #
+            # To avoid this synchronization, we could cache the result *per stream*.
+            # But to do that properly requires the ability to get the CUDA Stream ID,
+            # which isn't currently available through RMM.
+            stream.synchronize()
         return self._obj_scalar
 
     def rename(self, name: str | None, /) -> Self:
@@ -496,6 +505,15 @@ class Column:
                     plc.types.SIZE_TYPE,
                     stream=stream,
                 ).to_py()
+                # We synchronize the stream here, to avoid a race condition if
+                # Column.obj_scalar() is ever called with different streams.
+                # We need to ensure that the result is valid on *all* streams
+                # prior to returning the result.
+                #
+                # To avoid this synchronization, we could cache the result *per stream*.
+                # But to do that properly requires the ability to get the CUDA Stream ID,
+                # which isn't currently available through RMM.
+                stream.synchronize()
             else:
                 self._nan_count = 0
         return self._nan_count  # type: ignore[return-value]
