@@ -35,7 +35,7 @@ class _ObjectWithArrowMetadata:
     def __init__(self, obj, metadata=None, stream=None):
         self.obj = obj
         self.metadata = metadata
-        self.stream = stream
+        self.stream = _get_stream(stream)
 
     def __arrow_c_array__(self, requested_schema=None):
         return (
