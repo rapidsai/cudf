@@ -14,6 +14,7 @@ import pylibcudf as plc
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr, ir
+from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.dsl.to_ast import ExprTransformer
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
@@ -171,7 +172,9 @@ def test_rewrite_ir_node():
 
     new = mapper(orig)
 
-    result = new.evaluate(cache={}, timer=None).to_polars()
+    result = new.evaluate(
+        cache={}, timer=None, context=IRExecutionContext()
+    ).to_polars()
 
     expect = pl.DataFrame({"a": [2, 1], "b": [-4, -3]})
 
@@ -202,7 +205,9 @@ def test_rewrite_scan_node(tmp_path):
     orig = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
     new = mapper(orig)
 
-    result = new.evaluate(cache={}, timer=None).to_polars()
+    result = new.evaluate(
+        cache={}, timer=None, context=IRExecutionContext()
+    ).to_polars()
 
     expect = q.collect()
 
@@ -274,6 +279,8 @@ def test_rewrite_names_and_ops():
 
     new_ir = rewriter(qir)
 
-    got = new_ir.evaluate(cache={}, timer=None).to_polars()
+    got = new_ir.evaluate(
+        cache={}, timer=None, context=IRExecutionContext()
+    ).to_polars()
 
     assert_frame_equal(expect, got)
