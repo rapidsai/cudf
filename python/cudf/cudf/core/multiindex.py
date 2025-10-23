@@ -239,12 +239,12 @@ class MultiIndex(Index):
         self._name = None
         self.names = names
 
-    @property  # type: ignore
+    @property  # type: ignore[explicit-override]
     @_performance_tracking
     def names(self):
         return self._names
 
-    @names.setter  # type: ignore
+    @names.setter
     @_performance_tracking
     def names(self, value):
         if value is None:
@@ -370,7 +370,7 @@ class MultiIndex(Index):
             existing_names[lev] = names[i]
         names = existing_names
 
-        return self._set_names(names=names, inplace=inplace)  # type: ignore[return-value]
+        return self._set_names(names=names, inplace=inplace)
 
     def _maybe_materialize_codes_and_levels(self: Self) -> Self:
         """
@@ -443,12 +443,12 @@ class MultiIndex(Index):
         mi._name = name
         return mi
 
-    @property  # type: ignore
+    @property  # type: ignore[explicit-override]
     @_performance_tracking
     def name(self):
         return self._name
 
-    @name.setter  # type: ignore
+    @name.setter
     @_performance_tracking
     def name(self, value):
         self._name = value
@@ -577,7 +577,7 @@ class MultiIndex(Index):
         data_output = "\n".join(lines)
         return output_prefix + data_output
 
-    @property  # type: ignore
+    @property
     @_external_only_api("Use ._codes instead")
     @_performance_tracking
     def codes(self) -> pd.core.indexes.frozen.FrozenList:
@@ -608,7 +608,7 @@ class MultiIndex(Index):
             "get_slice_bound is not currently implemented."
         )
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def levels(self) -> list[cudf.Index]:
         """
@@ -642,7 +642,7 @@ class MultiIndex(Index):
             for idx, name in zip(self._levels, self.names, strict=True)  # type: ignore[arg-type]
         ]
 
-    @property  # type: ignore
+    @property  # type: ignore[explicit-override]
     @_performance_tracking
     def ndim(self) -> int:
         """Dimension of the data. For MultiIndex ndim is always 2."""
@@ -974,7 +974,7 @@ class MultiIndex(Index):
             )
         return NotImplemented
 
-    @property  # type: ignore
+    @property  # type: ignore[explicit-override]
     @_performance_tracking
     def size(self) -> int:
         # The size of a MultiIndex is only dependent on the number of rows.
@@ -1760,7 +1760,7 @@ class MultiIndex(Index):
             nan_as_null=nan_as_null,
         )
 
-    @cached_property  # type: ignore
+    @cached_property  # type: ignore[explicit-override]
     @_performance_tracking
     def is_unique(self) -> bool:
         return len(self) == self.nunique(dropna=False)
