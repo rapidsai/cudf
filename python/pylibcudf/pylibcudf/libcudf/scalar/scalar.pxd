@@ -16,18 +16,29 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
         scalar() except +libcudf_exception_handler
         scalar(scalar other) except +libcudf_exception_handler
         data_type type() except +libcudf_exception_handler
-        void set_valid_async(bool is_valid) except +libcudf_exception_handler
+        void set_valid_async(
+            bool is_valid, cuda_stream_view stream
+        ) except +libcudf_exception_handler
         bool is_valid() except +libcudf_exception_handler
 
     cdef cppclass numeric_scalar[T](scalar):
-        void set_value(T value) except +libcudf_exception_handler
+        void set_value(
+            T value,
+            cuda_stream_view stream
+        ) except +libcudf_exception_handler
         T value() except +libcudf_exception_handler
 
     cdef cppclass timestamp_scalar[T](scalar):
-        void set_value(T value) except +libcudf_exception_handler
+        void set_value(
+            T value,
+            cuda_stream_view stream
+        ) except +libcudf_exception_handler
 
     cdef cppclass duration_scalar[T](scalar):
-        void set_value(T value) except +libcudf_exception_handler
+        void set_value(
+            T value,
+            cuda_stream_view stream
+        ) except +libcudf_exception_handler
 
     cdef cppclass string_scalar(scalar):
         string to_string() except +libcudf_exception_handler
