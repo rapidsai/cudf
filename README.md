@@ -87,7 +87,7 @@ the operation on the GPU
 import polars as pl
 
 lf = pl.scan_parquet("data.parquet")
-lf.drop_nulls().group_by(["A", "B"]).mean().collect(engine="gpu)
+lf.drop_nulls().group_by(["A", "B"]).mean().collect(engine="gpu")
 ```
 
 ## Questions and Discussion
