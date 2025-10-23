@@ -35,6 +35,7 @@ except ImportError:
     pynvml = None
 
 try:
+    from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.dsl.translate import Translator
     from cudf_polars.experimental.explain import explain_query
     from cudf_polars.experimental.parallel import evaluate_streaming
@@ -540,10 +541,15 @@ def execute_query(
             if args.debug:
                 translator = Translator(q._ldf.visit(), engine)
                 ir = translator.translate_ir()
+                context = IRExecutionContext()
                 if run_config.executor == "in-memory":
-                    return ir.evaluate(cache={}, timer=None).to_polars()
+                    return ir.evaluate(
+                        cache={}, timer=None, context=context
+                    ).to_polars()
                 elif run_config.executor == "streaming":
-                    return evaluate_streaming(ir, translator.config_options).to_polars()
+                    return evaluate_streaming(
+                        ir, translator.config_options, context=context
+                    ).to_polars()
                 assert_never(run_config.executor)
             else:
                 return q.collect(engine=engine)
