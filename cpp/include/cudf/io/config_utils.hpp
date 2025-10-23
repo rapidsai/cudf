@@ -19,11 +19,11 @@
 
 namespace CUDF_EXPORT cudf {
 namespace io {
-//! kvikio
+//! `KvikIO`
 namespace kvikio_integration {
 
 /**
- * @addtogroup io_utilities
+ * @addtogroup io_configuration
  * @{
  * @file
  */
@@ -41,6 +41,7 @@ void set_up_kvikio();
 
 }  // namespace kvikio_integration
 
+//! `nvCOMP`
 namespace nvcomp_integration {
 
 /**
