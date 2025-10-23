@@ -164,7 +164,7 @@ class distinct_hash_join {
                                            cuda::thread_scope_device,
                                            always_not_equal,
                                            probing_scheme_type,
-                                           cudf::detail::cuco_allocator<char>,
+                                           rmm::mr::polymorphic_allocator<char>,
                                            cuco_storage_type>;
 
   bool _has_nested_columns;  ///< True if nested columns are present in build and probe tables
