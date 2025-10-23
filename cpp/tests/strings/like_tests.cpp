@@ -25,15 +25,15 @@ struct StringsLikeTests : public cudf::test::BaseFixture {};
 
 TEST_F(StringsLikeTests, Basic)
 {
-  auto input =
-    cudf::test::strings_column_wrapper({"abc", "a bc", "ABC", "abcd", " abc", "", "", "áéêú"},
-                                       {true, true, true, true, true, true, false, true});
+  auto input = cudf::test::strings_column_wrapper(
+    {"abc", "a bc", "ABC", "abcd", " abc", "", "", "áéêú", "abc "},
+    {true, true, true, true, true, true, false, true, true});
   auto sv       = cudf::strings_column_view(input);
   auto pattern  = std::string_view("abc");
   auto results  = cudf::strings::like(sv, pattern);
   auto expected = cudf::test::fixed_width_column_wrapper<bool>(
-    {true, false, false, false, false, false, false, false},
-    {true, true, true, true, true, true, false, true});
+    {true, false, false, false, false, false, false, false, false},
+    {true, true, true, true, true, true, false, true, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 
   input = cudf::test::strings_column_wrapper(
@@ -168,6 +168,12 @@ TEST_F(StringsLikeTests, Middle)
   results  = cudf::strings::like(sv_big, std::string_view("%aaa%bbb%fff"));
   expected = cudf::test::fixed_width_column_wrapper<bool>({false, false, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+
+  results = cudf::strings::like(
+    sv_big,
+    std::string_view("%aaabbb67890aaa45678901234567890123456789012345678901234567890123456789%"));
+  expected = cudf::test::fixed_width_column_wrapper<bool>({false, false, true});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
 TEST_F(StringsLikeTests, Place)
@@ -288,6 +294,18 @@ TEST_F(StringsLikeTests, Escape)
     std::string_view("abcd%fghijklmnopqrstuvwxyz_%1_%3_%5_%7_%9ABCDEFGHIJKLMNOPQRSTUVWXYZáéêú"),
     escape);
   expected = cudf::test::fixed_width_column_wrapper<bool>({false, true, false});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+
+  escape   = std::string_view("^");
+  results  = cudf::strings::like(sv_big, std::string_view("%0^_2^_4_6_8%"), escape);
+  expected = cudf::test::fixed_width_column_wrapper<bool>({true, false, false});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+
+  results  = cudf::strings::like(sv, std::string_view("a^_b%"), escape);
+  expected = cudf::test::fixed_width_column_wrapper<bool>(
+    {false, false, false, true, false, false, false, false});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+  results = cudf::strings::like(sv, std::string_view("%a^_b"), escape);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
