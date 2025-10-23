@@ -54,8 +54,6 @@ if TYPE_CHECKING:
 
     from polars import polars
 
-    pl_expr = polars._expr_nodes
-
     from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.containers.dataframe import NamedColumn

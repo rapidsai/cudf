@@ -19,8 +19,6 @@ if TYPE_CHECKING:
 
     from polars import polars
 
-    pl_expr = polars._expr_nodes
-
     from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["TemporalFunction"]

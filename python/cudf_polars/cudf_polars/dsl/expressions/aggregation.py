@@ -51,10 +51,6 @@ class Agg(Expr):
             raise NotImplementedError(
                 f"Unsupported aggregation {name=}"
             )  # pragma: no cover; all valid aggs are supported
-        if name == "sum":
-            child = children[0]
-            if plc.traits.is_fixed_point(child.dtype.plc_type):
-                self.dtype = child.dtype
         # TODO: nan handling in groupby case
         if name == "min":
             req = plc.aggregation.min()

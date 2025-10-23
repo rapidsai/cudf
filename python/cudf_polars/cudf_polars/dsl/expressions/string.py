@@ -23,12 +23,8 @@ from cudf_polars.dsl.expressions.literal import Literal, LiteralColumn
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
-dtype_str_repr = polars.dtype_str_repr
-
 if TYPE_CHECKING:
     from typing_extensions import Self
-
-    pl_expr = polars._expr_nodes
 
     from cudf_polars.containers import DataFrame, DataType
 
@@ -285,7 +281,7 @@ class StringFunction(Expr):
                     and width.value is not None
                     and width.value < 0
                 ):  # pragma: no cover
-                    dtypestr = dtype_str_repr(width.dtype.polars_type)
+                    dtypestr = polars.dtype_str_repr(width.dtype.polars_type)
                     raise InvalidOperationError(
                         f"conversion from `{dtypestr}` to `u64` "
                         f"failed in column 'literal' for 1 out of "

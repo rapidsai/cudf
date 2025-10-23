@@ -24,8 +24,6 @@ if TYPE_CHECKING:
     import polars.type_aliases as pl_types
     from polars import polars
 
-    pl_expr = polars._expr_nodes
-
     from cudf_polars.containers import DataFrame
 
 __all__ = ["BooleanFunction"]
