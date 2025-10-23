@@ -280,6 +280,11 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
   // on each wave, we write out bytes loaded to the string scratch
   // we have to write bytes from in_offsets_threadblock[strings_current_threadblock-1] chunks
   int nwaves = cudf::util::div_rounding_up_safe(in_offsets_threadblock[strings_current_threadblock-1], static_cast<int64_t>(block_size));
+
+  //FIXME: remove debug print
+  if (threadIdx.x == 0) {
+    printf("nwaves: %d", nwaves);
+  }
   
   // Outer loop: Load data from GMEM into SHMEM in 4B chunks
   // Data reuse: Chars from SHMEM are used by more then 1 thread.
@@ -287,12 +292,14 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
   for (int in_ichunk = threadIdx.x, wave = 0;
     wave < nwaves;
     in_ichunk += blockDim.x, wave++) {
+
+    // if chunk is within bounds, load data for this chunk
     if (in_ichunk < in_offsets_threadblock[strings_current_threadblock -1]) {
       auto const string_idx_iter =
-        cuda::std::prev(thrust::upper_bound(thrust::seq,
-                                            in_offsets_threadblock,
-                                            in_offsets_threadblock + strings_current_threadblock,
-                                            in_ichunk));
+        thrust::upper_bound(thrust::seq,
+                            in_offsets_threadblock,
+                            in_offsets_threadblock + strings_current_threadblock,
+                            in_ichunk);
         // each entry in out_offsets_threadblock is a different string start, so the distance gives the string index
       size_type string_idx = cuda::std::distance(in_offsets_threadblock, string_idx_iter);
 
@@ -303,7 +310,7 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
       auto const curr_string_alignment_offset = reinterpret_cast<std::uintptr_t>(curr_string.data()) % sizeof(uint32_t);
 
       // offset to in the first chunk for string_idx in the shared scratch space
-      auto const curr_string_first_chunk = string_idx == 0 ? 0 : (in_offsets_threadblock[string_idx - 1]);
+      auto const curr_string_first_chunk = string_idx == 0 ? 0 : (in_offsets_threadblock[string_idx - 1]);;
 
       auto const load_offset = 
         in_ichunk * sizeof(uint32_t)  // first character in current chunk
