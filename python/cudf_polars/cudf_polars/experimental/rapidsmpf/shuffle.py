@@ -90,8 +90,7 @@ class LocalShuffle:
         context: Context,
         num_partitions: int,
         columns_to_hash: tuple[int, ...],
-        *,
-        stream: Stream = DEFAULT_STREAM,
+        stream: Stream,
     ):
         self.context = context
         self.br = context.br()
@@ -213,7 +212,11 @@ async def local_shuffle_node(
         context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
     ):
         # Create LocalShuffle context manager to handle shuffler lifecycle
-        with LocalShuffle(context, num_partitions, columns_to_hash) as local_shuffle:
+        # TODO: Use ir_context to get the stream (not available yet)
+        stream = DEFAULT_STREAM
+        with LocalShuffle(
+            context, num_partitions, columns_to_hash, stream
+        ) as local_shuffle:
             # Process input chunks
             while True:
                 msg = await ch_in.data.recv(context)

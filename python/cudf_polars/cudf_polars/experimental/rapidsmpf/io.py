@@ -12,8 +12,6 @@ from typing import TYPE_CHECKING, Any
 from rapidsmpf.streaming.core.channel import Message
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
-from rmm.pylibrmm.stream import DEFAULT_STREAM
-
 from cudf_polars.dsl.ir import IR, DataFrameScan, Scan
 from cudf_polars.experimental.base import (
     IOPartitionFlavor,
@@ -221,7 +219,7 @@ async def read_chunk(
                 TableChunk.from_pylibcudf_table(
                     seq_num,
                     df.table,
-                    DEFAULT_STREAM,
+                    df.stream,
                     exclusive_view=True,
                 )
             ),
