@@ -14,6 +14,19 @@ import cudf_polars.containers.datatype
 from cudf_polars.containers import Column, DataType
 
 
+def _as_instance(dtype: pl.DataType) -> pl.DataType:
+    if isinstance(dtype, type):
+        return dtype()
+    if isinstance(dtype, pl.List):
+        inner = _as_instance(dtype.inner)
+        return pl.List(inner)
+    if isinstance(dtype, pl.Struct):
+        return pl.Struct(
+            [pl.Field(f.name, _as_instance(f.dtype)) for f in dtype.fields]
+        )
+    return dtype
+
+
 def test_non_scalar_access_raises():
     dtype = DataType(pl.Int8())
     column = Column(
@@ -131,9 +144,9 @@ def test_deserialize_ctor_kwargs_invalid_dtype():
         "order": plc.types.Order.ASCENDING,
         "null_order": plc.types.NullOrder.AFTER,
         "name": "test",
-        "dtype": "in64",
+        "dtype": {"kind": "scalar", "name": "foo"},
     }
-    with pytest.raises(ValueError):
+    with pytest.raises(NotImplementedError, match="Unknown scalar dtype name"):
         Column.deserialize_ctor_kwargs(column_kwargs)
 
 
@@ -144,7 +157,7 @@ def test_deserialize_ctor_kwargs_list_dtype():
         "order": plc.types.Order.ASCENDING,
         "null_order": plc.types.NullOrder.AFTER,
         "name": "test",
-        "dtype": pl.polars.dtype_str_repr(pl_type),
+        "dtype": cudf_polars.containers.datatype._dtype_to_header(pl_type),
     }
     result = Column.deserialize_ctor_kwargs(column_kwargs)
     expected = {
@@ -189,21 +202,21 @@ def test_serialize_cache_miss():
 @pytest.mark.parametrize(
     "dtype",
     [
-        pl.Binary,
-        pl.Binary(),
         pl.Boolean,
         pl.Boolean(),
-        pl.Categorical(),
         pl.Date,
         pl.Date(),
         pl.Datetime,
         pl.Datetime(),
+        pl.Duration,
+        pl.Duration(),
         pl.Float32,
         pl.Float32(),
         pl.Int8,
         pl.Int8(),
         pl.List(pl.Int8()),
         pl.List(pl.Int8),
+        pl.List(pl.Decimal(10)),
         pl.Object,
         pl.Object(),
         pl.String,
@@ -212,38 +225,29 @@ def test_serialize_cache_miss():
         pl.Time(),
         pl.UInt8,
         pl.UInt8(),
+        pl.Struct([pl.Field("a", pl.Int8), pl.Field("b", pl.Int8)]),
         # These fail.
+        pytest.param(
+            pl.Binary,
+            marks=pytest.mark.xfail(reason="Binary is not supported", strict=True),
+        ),
+        pytest.param(
+            pl.Binary(),
+            marks=pytest.mark.xfail(reason="Binary is not supported", strict=True),
+        ),
+        # These Error
         pytest.param(
             pl.Enum(["a", "b"]),
             marks=pytest.mark.xfail(reason="Enum is not supported", strict=True),
         ),
         pytest.param(
-            pl.List(pl.Decimal(10)),
-            marks=pytest.mark.xfail(
-                reason="List[Decimal] is not supported", strict=True
-            ),
-        ),
-        # These Error
-        pytest.param(
             pl.Array(pl.Int8, shape=(1,)),
             marks=pytest.mark.xfail(reason="Array[Int8] is not supported", strict=True),
         ),
-        pytest.param(
-            pl.Array(pl.Int8(), shape=(1,)),
-            marks=pytest.mark.xfail(reason="Array[Int8] is not supported", strict=True),
-        ),
-        pytest.param(
-            pl.Struct([pl.Field("a", pl.Int8), pl.Field("b", pl.Int8)]),
-            marks=pytest.mark.xfail(reason="Struct is not supported", strict=True),
-        ),
-        pytest.param(
-            pl.Struct([pl.Field("a", pl.Int8()), pl.Field("b", pl.Int8())]),
-            marks=pytest.mark.xfail(reason="Struct is not supported", strict=True),
-        ),
     ],
 )
-def test_dtype_short_repr_to_dtype_roundtrip(dtype: pl.DataType):
-    result = cudf_polars.containers.column._dtype_short_repr_to_dtype(
-        pl.polars.dtype_str_repr(dtype)
-    )
-    assert result == dtype
+def test_dtype_header_roundtrip(dtype: pl.DataType):
+    dt = _as_instance(dtype)
+    header = cudf_polars.containers.datatype._dtype_to_header(dt)
+    result = cudf_polars.containers.datatype._dtype_from_header(header)
+    assert result == dt

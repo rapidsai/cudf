@@ -174,11 +174,49 @@ class GenericTransformer(Protocol[U_contra, V_co, StateT_co]):
         ...
 
 
-class DecimalDataTypeOptions(TypedDict):
-    "Decimal options."
+class _BaseDataTypeHeader(TypedDict):
+    kind: str
 
+
+class _ScalarDataTypeHeader(_BaseDataTypeHeader):
+    name: str
+
+
+class _DecimalDataTypeHeader(_BaseDataTypeHeader):
     precision: int
     scale: int
+
+
+class _DatetimeDataTypeHeader(_BaseDataTypeHeader):
+    time_unit: str
+    time_zone: str | None
+
+
+class _DurationDataTypeHeader(_BaseDataTypeHeader):
+    time_unit: str
+
+
+class _ListDataTypeHeader(_BaseDataTypeHeader):
+    inner: DataTypeHeader
+
+
+class _StructFieldHeader(TypedDict):
+    name: str
+    dtype: DataTypeHeader
+
+
+class _StructDataTypeHeader(_BaseDataTypeHeader):
+    fields: list[_StructFieldHeader]
+
+
+DataTypeHeader = (
+    _ScalarDataTypeHeader
+    | _DecimalDataTypeHeader
+    | _DatetimeDataTypeHeader
+    | _DurationDataTypeHeader
+    | _ListDataTypeHeader
+    | _StructDataTypeHeader
+)
 
 
 class ColumnOptions(TypedDict):
@@ -194,7 +232,7 @@ class ColumnOptions(TypedDict):
     order: plc.types.Order
     null_order: plc.types.NullOrder
     name: str | None
-    dtype: str | DecimalDataTypeOptions
+    dtype: DataTypeHeader
 
 
 class DeserializedColumnOptions(TypedDict):

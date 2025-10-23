@@ -8,8 +8,6 @@ from __future__ import annotations
 import functools
 from typing import TYPE_CHECKING
 
-import polars as pl
-import polars.datatypes.convert
 from polars.exceptions import InvalidOperationError
 
 import pylibcudf as plc
@@ -22,37 +20,23 @@ from pylibcudf.strings.convert.convert_integers import (
 from pylibcudf.traits import is_floating_point
 
 from cudf_polars.containers import DataType
+from cudf_polars.containers.datatype import _dtype_from_header, _dtype_to_header
 from cudf_polars.utils import conversion
 from cudf_polars.utils.dtypes import is_order_preserving_cast
 
 if TYPE_CHECKING:
     from typing_extensions import Self
 
+    from polars import Series as pl_Series
+
     from cudf_polars.typing import (
         ColumnHeader,
         ColumnOptions,
-        DecimalDataTypeOptions,
         DeserializedColumnOptions,
         Slice,
     )
 
 __all__: list[str] = ["Column"]
-
-
-def _dtype_short_repr_to_dtype(dtype_str: str) -> pl.DataType:
-    """Convert a Polars dtype short repr to a Polars dtype."""
-    # limitations of dtype_short_repr_to_dtype described in
-    # py-polars/polars/datatypes/convert.py#L299
-    if dtype_str.startswith("list["):
-        stripped = dtype_str.removeprefix("list[").removesuffix("]")
-        return pl.List(_dtype_short_repr_to_dtype(stripped))
-    pl_type = polars.datatypes.convert.dtype_short_repr_to_dtype(dtype_str)
-    if pl_type is None:
-        raise ValueError(f"{dtype_str} was not able to be parsed by Polars.")
-    if isinstance(pl_type, polars.datatypes.DataTypeClass):
-        return pl_type()
-    else:
-        return pl_type
 
 
 class Column:
@@ -114,18 +98,12 @@ class Column:
         column_kwargs: ColumnOptions,
     ) -> DeserializedColumnOptions:
         """Deserialize the constructor kwargs for a Column."""
-        dtype_kwarg = column_kwargs["dtype"]
-        if isinstance(dtype_kwarg, dict):  # pragma: no cover
-            dtype = DataType(pl.Decimal(dtype_kwarg["precision"], dtype_kwarg["scale"]))
-        else:
-            dtype = DataType(_dtype_short_repr_to_dtype(dtype_kwarg))
-
         return {
             "is_sorted": column_kwargs["is_sorted"],
             "order": column_kwargs["order"],
             "null_order": column_kwargs["null_order"],
             "name": column_kwargs["name"],
-            "dtype": dtype,
+            "dtype": DataType(_dtype_from_header(column_kwargs["dtype"])),
         }
 
     def serialize(
@@ -158,21 +136,12 @@ class Column:
 
     def serialize_ctor_kwargs(self) -> ColumnOptions:
         """Serialize the constructor kwargs for self."""
-        polars_type = self.dtype.polars_type
-        if isinstance(polars_type, pl.Decimal):  # pragma: no cover
-            dtype: DecimalDataTypeOptions = {
-                "precision": polars_type.precision,
-                "scale": polars_type.scale,
-            }
-        else:
-            dtype = pl.polars.dtype_str_repr(polars_type)
-
         return {
             "is_sorted": self.is_sorted,
             "order": self.order,
             "null_order": self.null_order,
             "name": self.name,
-            "dtype": dtype,
+            "dtype": _dtype_to_header(self.dtype.polars_type),
         }
 
     @functools.cached_property
@@ -367,7 +336,7 @@ class Column:
                     raise InvalidOperationError("Conversion from `str` failed.")
                 return to_integers(self.obj, dtype)
 
-    def copy_metadata(self, from_: pl.Series, /) -> Self:
+    def copy_metadata(self, from_: pl_Series, /) -> Self:
         """
         Copy metadata from a host series onto self.
 

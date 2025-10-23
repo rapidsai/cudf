@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from functools import cache
+from typing import TYPE_CHECKING, cast
 
 from typing_extensions import assert_never
 
@@ -13,7 +14,127 @@ import polars as pl
 
 import pylibcudf as plc
 
+from cudf_polars.typing import (
+    _DatetimeDataTypeHeader,
+    _DecimalDataTypeHeader,
+    _DurationDataTypeHeader,
+    _ListDataTypeHeader,
+    _ScalarDataTypeHeader,
+    _StructDataTypeHeader,
+)
+
+if TYPE_CHECKING:
+    from cudf_polars.typing import (
+        DataTypeHeader,
+    )
+
 __all__ = ["DataType"]
+
+
+def _dtype_to_header(dtype: pl.DataType) -> DataTypeHeader:
+    if isinstance(dtype, pl.Boolean):
+        return {"kind": "scalar", "name": "Boolean"}
+    if isinstance(dtype, pl.Int8):
+        return {"kind": "scalar", "name": "Int8"}
+    if isinstance(dtype, pl.Int16):
+        return {"kind": "scalar", "name": "Int16"}
+    if isinstance(dtype, pl.Int32):
+        return {"kind": "scalar", "name": "Int32"}
+    if isinstance(dtype, pl.Int64):
+        return {"kind": "scalar", "name": "Int64"}
+    if isinstance(dtype, pl.UInt8):
+        return {"kind": "scalar", "name": "UInt8"}
+    if isinstance(dtype, pl.UInt16):
+        return {"kind": "scalar", "name": "UInt16"}
+    if isinstance(dtype, pl.UInt32):
+        return {"kind": "scalar", "name": "UInt32"}
+    if isinstance(dtype, pl.UInt64):
+        return {"kind": "scalar", "name": "UInt64"}
+    if isinstance(dtype, pl.Float32):
+        return {"kind": "scalar", "name": "Float32"}
+    if isinstance(dtype, pl.Float64):
+        return {"kind": "scalar", "name": "Float64"}
+    if isinstance(dtype, pl.String):
+        return {"kind": "scalar", "name": "String"}
+    if isinstance(dtype, pl.Null):
+        return {"kind": "scalar", "name": "Null"}
+    if isinstance(dtype, pl.Date):
+        return {"kind": "scalar", "name": "Date"}
+    if isinstance(dtype, pl.Time):
+        return {"kind": "scalar", "name": "Time"}
+    if isinstance(dtype, pl.Object):
+        return {"kind": "scalar", "name": "Object"}
+    if isinstance(dtype, pl.Decimal):
+        return {"kind": "decimal", "precision": dtype.precision, "scale": dtype.scale}
+    if isinstance(dtype, pl.Datetime):
+        return {
+            "kind": "datetime",
+            "time_unit": dtype.time_unit,
+            "time_zone": dtype.time_zone,
+        }
+    if isinstance(dtype, pl.Duration):
+        return {"kind": "duration", "time_unit": dtype.time_unit}
+    if isinstance(dtype, pl.List):
+        return {"kind": "list", "inner": _dtype_to_header(dtype.inner)}
+    if isinstance(dtype, pl.Struct):
+        return {
+            "kind": "struct",
+            "fields": [
+                {"name": f.name, "dtype": _dtype_to_header(f.dtype)}
+                for f in dtype.fields
+            ],
+        }
+    raise NotImplementedError(f"Unsupported dtype {dtype!r}")
+
+
+def _dtype_from_header(header: DataTypeHeader) -> pl.DataType:
+    kind = header["kind"]
+    if kind == "scalar":
+        name = cast(_ScalarDataTypeHeader, header)["name"]
+        mapping = {
+            "Boolean": pl.Boolean(),
+            "Int8": pl.Int8(),
+            "Int16": pl.Int16(),
+            "Int32": pl.Int32(),
+            "Int64": pl.Int64(),
+            "Object": pl.Object(),
+            "UInt8": pl.UInt8(),
+            "UInt16": pl.UInt16(),
+            "UInt32": pl.UInt32(),
+            "UInt64": pl.UInt64(),
+            "Float32": pl.Float32(),
+            "Float64": pl.Float64(),
+            "String": pl.String(),
+            "Null": pl.Null(),
+            "Date": pl.Date(),
+            "Time": pl.Time(),
+        }
+        try:
+            return mapping[name]
+        except KeyError as err:
+            raise NotImplementedError(f"Unknown scalar dtype name: {name}") from err
+    if kind == "decimal":
+        return pl.Decimal(
+            cast(_DecimalDataTypeHeader, header)["precision"],
+            cast(_DecimalDataTypeHeader, header)["scale"],
+        )
+    if kind == "datetime":
+        return pl.Datetime(
+            time_unit=cast(_DatetimeDataTypeHeader, header)["time_unit"],
+            time_zone=cast(_DatetimeDataTypeHeader, header).get("time_zone"),
+        )
+    if kind == "duration":
+        return pl.Duration(time_unit=cast(_DurationDataTypeHeader, header)["time_unit"])
+    if kind == "list":
+        return pl.List(_dtype_from_header(cast(_ListDataTypeHeader, header)["inner"]))
+    if kind == "struct":
+        return pl.Struct(
+            [
+                pl.Field(f["name"], _dtype_from_header(f["dtype"]))
+                for f in cast(_StructDataTypeHeader, header)["fields"]
+            ]
+        )
+    raise NotImplementedError(f"Unsupported kind {kind!r}")
 
 
 @cache
