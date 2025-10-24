@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -175,7 +176,7 @@ def validate_range_arg(arg, arg_name: Literal["start", "stop", "step"]) -> int:
     return int(arg)
 
 
-class Index(SingleColumnFrame):  # type: ignore[misc]
+class Index(SingleColumnFrame):
     """
     Immutable sequence used for indexing and alignment.
 
@@ -1781,25 +1782,6 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
 
         return self._gather(indices)
 
-    def _apply_boolean_mask(self, boolean_mask) -> Self:
-        """Apply boolean mask to each row of `self`.
-
-        Rows corresponding to `False` is dropped.
-        """
-        boolean_mask = as_column(boolean_mask)
-        if boolean_mask.dtype.kind != "b":
-            raise ValueError("boolean_mask is not boolean type.")
-
-        return self._from_columns_like_self(
-            [
-                ColumnBase.from_pylibcudf(col)
-                for col in stream_compaction.apply_boolean_mask(
-                    list(self._columns), boolean_mask
-                )
-            ],
-            column_names=self._column_names,
-        )
-
     def _new_index_for_reset_index(
         self, levels: tuple | None, name
     ) -> None | Index:
@@ -1928,7 +1910,7 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
     def memory_usage(self, deep: bool = False) -> int:
         return self._column.memory_usage
 
-    @cached_property  # type: ignore
+    @cached_property  # type: ignore[explicit-override]
     @_performance_tracking
     def is_unique(self) -> bool:
         return self._column.is_unique
@@ -3202,7 +3184,7 @@ class RangeIndex(Index):
             return index
         # Evenly spaced values can return a
         # RangeIndex instead of a materialized Index.
-        if not index._column.has_nulls():  # type: ignore[attr-defined]
+        if not index._column.has_nulls():
             uniques = cupy.unique(cupy.diff(index.values))
             if len(uniques) == 1 and (diff := uniques[0].get()) != 0:
                 new_range = range(index[0], index[-1] + diff, diff)
@@ -3245,12 +3227,6 @@ class RangeIndex(Index):
         return Index._from_column(
             self._column.take(gather_map, nullify, check_bounds),
             name=self.name,
-        )
-
-    @_performance_tracking
-    def _apply_boolean_mask(self, boolean_mask) -> Index:
-        return Index._from_column(
-            self._column.apply_boolean_mask(boolean_mask), name=self.name
         )
 
     def repeat(self, repeats, axis=None):
@@ -3412,6 +3388,10 @@ class RangeIndex(Index):
             )
 
         return self._column.isin(values).values
+
+    @_performance_tracking
+    def nans_to_nulls(self) -> Self:
+        return self.copy()
 
     def __pos__(self) -> Self:
         return self.copy()
@@ -3730,9 +3710,7 @@ class DatetimeIndex(Index):
         datetime.tzinfo or None
             Returns None when the array is tz-naive.
         """
-        if isinstance(self.dtype, pd.DatetimeTZDtype):
-            return self.dtype.tz
-        return None
+        return self._column.tz
 
     @property
     def tzinfo(self) -> tzinfo | None:
@@ -5256,11 +5234,11 @@ class IntervalIndex(Index):
             if copy:
                 col = col.copy()
             interval_col = col._with_type_metadata(
-                IntervalDtype(col.dtype.subtype, closed)
+                IntervalDtype(col.dtype.subtype, closed)  # type: ignore[union-attr]
             )
 
         if dtype:
-            interval_col = interval_col.astype(dtype)  # type: ignore[assignment]
+            interval_col = interval_col.astype(dtype)
 
         SingleColumnFrame.__init__(
             self, ColumnAccessor({name: interval_col}, verify=False)
@@ -5394,7 +5372,7 @@ class IntervalIndex(Index):
         pidx = pd.IntervalIndex.from_tuples(
             data, closed=closed, name=name, copy=copy, dtype=dtype
         )
-        return cls(pidx, name=name)  # type: ignore[return-value]
+        return cls(pidx, name=name)
 
     def __getitem__(self, index):
         raise NotImplementedError(
