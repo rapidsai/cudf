@@ -266,6 +266,9 @@ def test_groupby_agg_broadcast_raises(df):
 
 @pytest.mark.parametrize("nrows", [30, 300, 300_000])
 @pytest.mark.parametrize("nkeys", [1, 2, 4])
+@pytest.mark.skip(
+    reason=" Hash groupby bug: See https://github.com/rapidsai/cudf/issues/20345"
+)
 def test_groupby_maintain_order_random(nrows, nkeys, with_nulls):
     key_names = [f"key{key}" for key in range(nkeys)]
     rng = random.Random(2)

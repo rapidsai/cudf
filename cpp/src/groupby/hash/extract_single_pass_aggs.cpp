@@ -1,20 +1,9 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "flatten_single_pass_aggs.hpp"
+#include "extract_single_pass_aggs.hpp"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
@@ -116,17 +105,18 @@ class groupby_simple_aggregations_collector final
   }
 };
 
-// flatten aggs to filter in single pass aggs
 std::tuple<table_view,
            cudf::detail::host_vector<aggregation::Kind>,
-           std::vector<std::unique_ptr<aggregation>>>
-flatten_single_pass_aggs(host_span<aggregation_request const> requests,
+           std::vector<std::unique_ptr<aggregation>>,
+           bool>
+extract_single_pass_aggs(host_span<aggregation_request const> requests,
                          rmm::cuda_stream_view stream)
 {
   std::vector<column_view> columns;
   std::vector<std::unique_ptr<aggregation>> aggs;
   auto agg_kinds = cudf::detail::make_empty_host_vector<aggregation::Kind>(requests.size(), stream);
 
+  bool has_compound_aggs = false;
   for (auto const& request : requests) {
     auto const& agg_v = request.aggregations;
 
@@ -142,16 +132,20 @@ flatten_single_pass_aggs(host_span<aggregation_request const> requests,
     auto values_type = cudf::is_dictionary(request.values.type())
                          ? cudf::dictionary_column_view(request.values).keys().type()
                          : request.values.type();
-    for (auto&& agg : agg_v) {
+    for (auto const& agg : agg_v) {
       groupby_simple_aggregations_collector collector;
+      auto spass_aggs = agg->get_simple_aggregations(values_type, collector);
+      if (spass_aggs.size() > 1 || !spass_aggs.front()->is_equal(*agg)) {
+        has_compound_aggs = true;
+      }
 
-      for (auto& agg_s : agg->get_simple_aggregations(values_type, collector)) {
+      for (auto& agg_s : spass_aggs) {
         insert_agg(request.values, std::move(agg_s));
       }
     }
   }
 
-  return std::make_tuple(table_view(columns), std::move(agg_kinds), std::move(aggs));
+  return {table_view(columns), std::move(agg_kinds), std::move(aggs), has_compound_aggs};
 }
 
 std::vector<aggregation::Kind> get_simple_aggregations(groupby_aggregation const& agg,

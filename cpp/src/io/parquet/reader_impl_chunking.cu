@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "reader_impl.hpp"
@@ -314,7 +303,7 @@ void reader_impl::setup_next_subpass(read_mode mode)
   // copy the appropriate subset of pages from each column and store the mapping back to the source
   // (pass) pages
   else {
-    subpass.page_buf = cudf::detail::hostdevice_vector<PageInfo>(total_pages, total_pages, _stream);
+    subpass.page_buf       = cudf::detail::hostdevice_vector<PageInfo>(total_pages, _stream);
     subpass.page_src_index = rmm::device_uvector<size_t>(total_pages, _stream);
     auto iter              = thrust::make_counting_iterator(0);
     rmm::device_uvector<size_t> dst_offsets(num_columns + 1, _stream);
@@ -360,11 +349,11 @@ void reader_impl::setup_next_subpass(read_mode mode)
 
     if (is_first_subpass) {
       pass.decomp_dict_data = std::move(pass_data);
-      pass.pages.host_to_device(_stream);
+      pass.pages.host_to_device_async(_stream);
     }
 
     subpass.decomp_page_data = std::move(subpass_data);
-    subpass.pages.host_to_device(_stream);
+    subpass.pages.host_to_device_async(_stream);
   }
 
   // since there is only ever 1 dictionary per chunk (the first page), do it at the
