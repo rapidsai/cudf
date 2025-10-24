@@ -21,20 +21,20 @@ def test_groupby_cumcount(index):
     gdf = cudf.from_pandas(pdf)
 
     assert_groupby_results_equal(
-        pdf.groupby("a").cumcount() + 1,
+        pdf.groupby("a").cumcount(),
         gdf.groupby("a").cumcount(),
         check_dtype=False,
     )
 
     assert_groupby_results_equal(
-        pdf.groupby(["a", "b", "c"]).cumcount() + 1,
+        pdf.groupby(["a", "b", "c"]).cumcount(),
         gdf.groupby(["a", "b", "c"]).cumcount(),
         check_dtype=False,
     )
 
     sr = pd.Series(range(len(pdf)), index=index)
     assert_groupby_results_equal(
-        pdf.groupby(sr).cumcount() + 1,
+        pdf.groupby(sr).cumcount(),
         gdf.groupby(sr).cumcount(),
         check_dtype=False,
     )
@@ -51,25 +51,19 @@ def test_groupby_2keys_scan(func):
     got_df = gdf.groupby(["x", "y"], sort=True).agg(func)
     # pd.groupby.cumcount returns a series.
     if isinstance(expect_df, pd.Series):
-        expect_df = expect_df.to_frame("val") + 1
+        expect_df = expect_df.to_frame("val")
 
     assert_groupby_results_equal(got_df, expect_df)
 
     expect_df = getattr(pdf.groupby(["x", "y"], sort=True), func)()
-    if func == "cumcount":
-        expect_df = expect_df + 1
     got_df = getattr(gdf.groupby(["x", "y"], sort=True), func)()
     assert_groupby_results_equal(got_df, expect_df)
 
     expect_df = getattr(pdf.groupby(["x", "y"], sort=True)[["x"]], func)()
-    if func == "cumcount":
-        expect_df = expect_df + 1
     got_df = getattr(gdf.groupby(["x", "y"], sort=True)[["x"]], func)()
     assert_groupby_results_equal(got_df, expect_df)
 
     expect_df = getattr(pdf.groupby(["x", "y"], sort=True)["y"], func)()
-    if func == "cumcount":
-        expect_df = expect_df + 1
     got_df = getattr(gdf.groupby(["x", "y"], sort=True)["y"], func)()
     assert_groupby_results_equal(got_df, expect_df)
 
