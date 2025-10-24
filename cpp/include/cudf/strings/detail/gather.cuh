@@ -223,7 +223,7 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
   // stores the size in chunks(4B) required to store a string in the scratch. accounts for alignment
   // 0th position stores the offset of the 1st string
   __shared__ int64_t in_offsets_threadblock[strings_per_threadblock]; // FIXME: can be int32 since string size cannot exceed this
-  __shared__ char string_scratch[block_size*sizeof(uint32_t)]; // scratch for loading string chunks
+  __shared__ uint32_t string_scratch[block_size]; // scratch for loading string chunks
 
 
   using BlockScan = cub::BlockScan<int, block_size>;
@@ -247,6 +247,8 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
     out_offsets_threadblock[idx] = out_offsets[curr_string_idx];
   }
 
+  __syncthreads();
+
   uint64_t first_ibyte_threadblock = out_offsets_threadblock[0]; 
   __shared__ uint64_t last_ibyte_threadblock; // The last loaded character in our scratch that can be written out to GMEM
 
@@ -257,12 +259,15 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
     auto curr_string_num_chunks {0}; // default for the block scan
 
     if (idx < strings_current_threadblock) {
-      auto const& curr_string_idx = idx + begin_out_string_idx;
-      auto const& curr_string = strings_begin[string_indices[curr_string_idx]];
-      auto const& curr_string_alignment = reinterpret_cast<std::uintptr_t>(curr_string.data()) % sizeof(uint32_t);
-
-      if (curr_string.size_bytes() != 0)
-      {
+      // If the output string is empty do not dereference input.
+      auto const out_len =
+      out_offsets_threadblock[idx + 1] - out_offsets_threadblock[idx];
+      if (out_len == 0) {
+        curr_string_num_chunks = 0;
+      } else {
+        auto const& curr_string_idx = idx + begin_out_string_idx;
+        auto const& curr_string = strings_begin[string_indices[curr_string_idx]];
+        auto const& curr_string_alignment = reinterpret_cast<std::uintptr_t>(curr_string.data()) % sizeof(uint32_t);
         curr_string_num_chunks = cudf::util::div_rounding_up_safe(
           static_cast<int64_t>(curr_string.size_bytes() + curr_string_alignment),
           static_cast<int64_t>(sizeof(uint32_t)));
@@ -310,6 +315,12 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
       // string_idx is local to threadblock, so add begin_out_string_idx to it
       // when we then use that as index to string_indices, we get the string index to read
       size_type in_string_idx = string_indices[begin_out_string_idx + string_idx];
+      
+      // FIXME: remove debug print
+      if (blockIdx.x == 0) {
+        printf("reading string idx %d\n", static_cast<int>(in_string_idx));
+      }
+
       auto const curr_string = strings_begin[in_string_idx];
       auto const curr_string_alignment_offset = reinterpret_cast<std::uintptr_t>(curr_string.data()) % sizeof(uint32_t);
 
@@ -328,7 +339,7 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
       auto const i_character = max(int64_t{0}, load_offset);
       
       // we dont need to align the curr_string pointer with load_offset here. Using just for easier understanding. 
-      *(reinterpret_cast<uint32_t*>(string_scratch) + threadIdx.x) = load_uint32_masked(curr_string.data() + load_offset, d_chars_begin, d_chars_end);
+      *(string_scratch + threadIdx.x) = load_uint32_masked(curr_string.data() + load_offset, d_chars_begin, d_chars_end);
 
       // TODO: would it be better to just calculate this last_byte on each thread
         // if this is the last chunk loaded in each wave
@@ -365,6 +376,11 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
       // when we then use that as index to string_indices, we get the string index to read
       size_type in_string_idx = string_indices[begin_out_string_idx + string_idx];
 
+      // FIXME: remove debug print
+      if (blockIdx.x == 0) {
+        printf("writing string idx %d\n", static_cast<int>(in_string_idx));
+      }
+
       // calculate which character to load within the string
       auto const icharacter = out_ibyte - out_offsets_threadblock[string_idx];
 
@@ -377,8 +393,8 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
 
       // read the character from the input string and write it to the output buffer
       // FIXME: remove debug print
-      printf("character written out: %c\n", string_scratch[load_offset % (block_size*sizeof(uint32_t))]);
-      out_chars[out_ibyte]    = string_scratch[load_offset % (block_size*sizeof(uint32_t))];
+      printf("character written out: %c\n", reinterpret_cast<char*>(string_scratch)[load_offset % (block_size*sizeof(uint32_t))]);
+      out_chars[out_ibyte]    = reinterpret_cast<char*>(string_scratch)[load_offset % (block_size*sizeof(uint32_t))];
     }
 
     first_ibyte_threadblock = last_ibyte_threadblock + 1;
