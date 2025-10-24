@@ -75,6 +75,8 @@ __device__ inline uint32_t load_uint32_masked(char const* const ptr, char const*
 
   // Is the 4B load valid
   if (chunk_start >= head && chunk_end < tail) {
+    //FIXME: remove printf
+    printf("loading chunk from addr: %p\n", (void*)chunk_start);
     return *reinterpret_cast<uint32_t const*>(chunk_start);
   }
 
@@ -220,7 +222,7 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
 
   // stores the size in chunks(4B) required to store a string in the scratch. accounts for alignment
   // 0th position stores the offset of the 1st string
-  __shared__ int64_t in_offsets_threadblock[strings_per_threadblock];
+  __shared__ int64_t in_offsets_threadblock[strings_per_threadblock]; // FIXME: can be int32 since string size cannot exceed this
   __shared__ char string_scratch[block_size*sizeof(uint32_t)]; // scratch for loading string chunks
 
 
@@ -259,9 +261,12 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
       auto const& curr_string = strings_begin[string_indices[curr_string_idx]];
       auto const& curr_string_alignment = reinterpret_cast<std::uintptr_t>(curr_string.data()) % sizeof(uint32_t);
 
-      curr_string_num_chunks = cudf::util::div_rounding_up_safe(
-        static_cast<int64_t>(curr_string.size_bytes() + curr_string_alignment),
-        static_cast<int64_t>(sizeof(uint32_t)));
+      if (curr_string.size_bytes() != 0)
+      {
+        curr_string_num_chunks = cudf::util::div_rounding_up_safe(
+          static_cast<int64_t>(curr_string.size_bytes() + curr_string_alignment),
+          static_cast<int64_t>(sizeof(uint32_t)));
+      }
     }
 
     BlockScan(temp_storage).InclusiveSum(curr_string_num_chunks, curr_string_num_chunks, prefix_op);
@@ -289,12 +294,11 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
   // Outer loop: Load data from GMEM into SHMEM in 4B chunks
   // Data reuse: Chars from SHMEM are used by more then 1 thread.
   // Keep more 4B chunks in flight at the same time, i.e. keep more bytes in flight
-  for (int in_ichunk = threadIdx.x, wave = 0;
-    wave < nwaves;
-    in_ichunk += blockDim.x, wave++) {
+  for (int in_ichunk = threadIdx.x, wave = 0; wave < nwaves; in_ichunk += blockDim.x, wave++) {
 
     // if chunk is within bounds, load data for this chunk
     if (in_ichunk < in_offsets_threadblock[strings_current_threadblock -1]) {
+
       auto const string_idx_iter =
         thrust::upper_bound(thrust::seq,
                             in_offsets_threadblock,
@@ -310,7 +314,7 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
       auto const curr_string_alignment_offset = reinterpret_cast<std::uintptr_t>(curr_string.data()) % sizeof(uint32_t);
 
       // offset to in the first chunk for string_idx in the shared scratch space
-      auto const curr_string_first_chunk = string_idx == 0 ? 0 : (in_offsets_threadblock[string_idx - 1]);;
+      auto const curr_string_first_chunk = string_idx == 0 ? 0 : (in_offsets_threadblock[string_idx - 1]);
 
       auto const load_offset = 
         in_ichunk * sizeof(uint32_t)  // first character in current chunk
