@@ -12833,6 +12833,9 @@ def format_structured_log(log_string: str) -> str:
 def pytest_runtest_makereport(item, call):
     outcome = yield
     if (
+        # Ideally we also care about fallbacks in a test setup too,
+        # but not sure how to meaningfully enforce fallback regression
+        # during test setup
         call.when == "call"
         and outcome.passed
         and "LOG_FAST_FALLBACK" in outcome.caplog
