@@ -6,6 +6,7 @@
 #include <benchmarks/common/generate_input.hpp>
 
 #include <cudf/aggregation.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
@@ -56,14 +57,27 @@ static void bench_edit_distance_ascii(nvbench::state& state)
   data_profile ascii_profile = data_profile_builder().no_validity().cardinality(0).distribution(
     cudf::type_id::INT8, distribution_id::UNIFORM, 32, 126);  // nice ASCII range
 
-  auto offsets = create_random_column(offsets_type, row_count{num_rows + 1}, profile);
-  offsets      = cudf::scan(offsets->view(),
+  auto offsets    = create_random_column(offsets_type, row_count{num_rows + 1}, profile);
+  offsets         = cudf::scan(offsets->view(),
                        *cudf::make_sum_aggregation<cudf::scan_aggregation>(),
                        cudf::scan_type::EXCLUSIVE);
-  auto ascii_data1 =
-    create_random_column(cudf::type_id::INT8, row_count{num_rows * max_width}, ascii_profile);
-  auto ascii_data2 =
-    create_random_column(cudf::type_id::INT8, row_count{num_rows * max_width}, ascii_profile);
+  auto chars_size = offsets_type == cudf::type_id::INT64
+                      ? dynamic_cast<cudf::numeric_scalar<int64_t>*>(
+                          cudf::get_element(offsets->view(), num_rows).get())
+                          ->value()
+                      : static_cast<int64_t>(dynamic_cast<cudf::numeric_scalar<int32_t>*>(
+                                               cudf::get_element(offsets->view(), num_rows).get())
+                                               ->value());
+  if (chars_size > std::numeric_limits<int32_t>::max()) {
+    // to be fixed with create_ascii_string_column utility in PR 20354
+    state.skip("chars size too large for this benchmark");
+    return;
+  }
+
+  auto ascii_data1 = create_random_column(
+    cudf::type_id::INT8, row_count{static_cast<cudf::size_type>(chars_size)}, ascii_profile);
+  auto ascii_data2 = create_random_column(
+    cudf::type_id::INT8, row_count{static_cast<cudf::size_type>(chars_size)}, ascii_profile);
 
   auto input1 = cudf::column_view(cudf::data_type{cudf::type_id::STRING},
                                   num_rows,
@@ -82,10 +96,8 @@ static void bench_edit_distance_ascii(nvbench::state& state)
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
 
-  auto sv1 = cudf::strings_column_view(input1);
-  auto sv2 = cudf::strings_column_view(input2);
-  auto chars_size =
-    sv1.chars_size(cudf::get_default_stream()) + sv2.chars_size(cudf::get_default_stream());
+  auto sv1          = cudf::strings_column_view(input1);
+  auto sv2          = cudf::strings_column_view(input2);
   auto offsets_size = offsets->alloc_size();
   state.add_global_memory_reads<nvbench::int8_t>(chars_size + 2 * offsets_size);
   // output are integers (one per row)
