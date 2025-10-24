@@ -136,7 +136,7 @@ def test_orderby_nulls_raises_computeerror():
             q.collect(engine=pl.GPUEngine(raise_on_fail=True))
 
 
-def test_invalid_duration_spec_raises_in_translation() -> None:
+def test_invalid_duration_spec_raises_in_translation():
     df = pl.LazyFrame({"orderby": [1, 2, 4, 5], "values": [1, 2, 3, 4]})
     q = df.select(pl.col("values").sum().rolling("orderby", period="3d"))
     assert_ir_translation_raises(q, pl.exceptions.InvalidOperationError)
