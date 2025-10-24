@@ -1073,18 +1073,33 @@ def setup_logging(query_id: int, iteration: int) -> None:  # noqa: D103
         )
 
 
-def execute_duckdb_query(query: str, dataset_path: Path) -> pl.DataFrame:
+def execute_duckdb_query(
+    query: str,
+    dataset_path: Path,
+    *,
+    suffix: str = ".parquet",
+) -> pl.DataFrame:
     """Execute a query with DuckDB."""
     if duckdb is None:
         raise ImportError(duckdb_err)
-    statements = [
-        f"CREATE VIEW {table.stem} as SELECT * FROM read_parquet('{table.absolute()}');"
-        for table in Path(dataset_path).glob("*.parquet")
+    tbl_names = [
+        "customer",
+        "lineitem",
+        "nation",
+        "orders",
+        "part",
+        "partsupp",
+        "region",
+        "supplier",
     ]
-    statements.append(query)
-
     with duckdb.connect() as conn:
-        return conn.execute("\n".join(statements)).pl()
+        for name in tbl_names:
+            pattern = (Path(dataset_path) / name).as_posix() + suffix
+            conn.execute(
+                f"CREATE OR REPLACE VIEW {name} AS "
+                f"SELECT * FROM parquet_scan('{pattern}');"
+            )
+        return conn.execute(query).pl()
 
 
 def run_duckdb(
@@ -1108,7 +1123,11 @@ def run_duckdb(
 
         for i in range(args.iterations):
             t0 = time.time()
-            result = execute_duckdb_query(sql, run_config.dataset_path)
+            result = execute_duckdb_query(
+                sql,
+                run_config.dataset_path,
+                suffix=run_config.suffix,
+            )
             t1 = time.time()
             record = Record(query=q_id, iteration=i, duration=t1 - t0)
             if args.print_results:
