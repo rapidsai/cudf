@@ -125,6 +125,7 @@ CUDF_KERNEL void mapping_indices_kernel(size_type num_input_rows,
     block.sync();
     if (cardinality >= GROUPBY_CARDINALITY_THRESHOLD) { break; }
   }
+  block.sync();  // some threads may not participate in the loop, so we need to sync here
 
   // Insert unique keys from shared to global hash set if block-cardinality
   // doesn't exceed the threshold upper-limit
