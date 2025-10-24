@@ -715,25 +715,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             exposed=data_ptr_exposed,
         )
 
-        # data_view = col.data()
-        # mask_view = col.null_mask()
-        # return build_column(  # type: ignore[return-value]
-        #     data=as_buffer(data_view.obj, exposed=data_ptr_exposed)
-        #     if data_view is not None
-        #     else None,
-        #     dtype=dtype,
-        #     size=col.size(),
-        #     mask=as_buffer(mask_view.obj, exposed=data_ptr_exposed)
-        #     if mask_view is not None
-        #     else None,
-        #     offset=col.offset(),
-        #     null_count=col.null_count(),
-        #     children=tuple(
-        #         cls.from_pylibcudf(child, data_ptr_exposed=data_ptr_exposed)
-        #         for child in col.children()
-        #     ),
-        # )
-
     @classmethod
     def from_cuda_array_interface(cls, arbitrary: Any) -> ColumnBase:
         """
