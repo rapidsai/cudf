@@ -345,7 +345,7 @@ cdef class Table:
         if requested_schema is not None:
             raise ValueError("pylibcudf.Table does not support alternative schema")
 
-        return self._to_schema(), self._to_host_array()
+        return self._to_schema(), self._to_host_array(_get_stream(None))
 
     def __arrow_c_device_array__(self, requested_schema=None, **kwargs):
         if requested_schema is not None:
