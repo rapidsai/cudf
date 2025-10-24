@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from decimal import Decimal
 
 import cupy as cp
@@ -6,7 +7,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-from numba import cuda
 
 import cudf
 from cudf.core._compat import (
@@ -251,7 +251,7 @@ def test_column_zero_length_slice():
     the_column = x[1:]["a"]._column
 
     expect = np.array([], dtype="int8")
-    got = cuda.as_cuda_array(the_column.data).copy_to_host()
+    got = cp.asarray(the_column.data).get()
 
     np.testing.assert_array_equal(expect, got)
 
