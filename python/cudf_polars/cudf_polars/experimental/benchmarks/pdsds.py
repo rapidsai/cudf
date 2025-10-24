@@ -49,7 +49,7 @@ def valid_query(name: str) -> bool:
 class PDSDSQueriesMeta(type):
     """Metaclass used for query lookup."""
 
-    def __getattr__(cls, name: str):  # type: ignore
+    def __getattr__(cls, name: str):  # type: ignore[no-untyped-def]
         """Query lookup."""
         if valid_query(name):
             q_num = int(name[1:])

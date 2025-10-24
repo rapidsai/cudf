@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import collections
 from contextlib import nullcontext as does_not_raise
@@ -1045,8 +1046,16 @@ def test_change_column_dtype_in_empty():
             ["a", "b", "c", "d"],
             [1, 0],
         ),
-        (cp.random.randn(2, 4), ["a", "b", "c", "d"], ["a", "b"]),
-        (cp.random.randn(2, 4), ["a", "b", "c", "d"], [1, 0]),
+        (
+            cp.random.default_rng(0).standard_normal(size=(2, 4)),
+            ["a", "b", "c", "d"],
+            ["a", "b"],
+        ),
+        (
+            cp.random.default_rng(0).standard_normal(size=(2, 4)),
+            ["a", "b", "c", "d"],
+            [1, 0],
+        ),
     ],
 )
 def test_dataframe_init_from_arrays_cols(data, cols, index):

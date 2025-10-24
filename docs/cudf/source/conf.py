@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 #
 # cudf documentation build configuration file, created by
 # sphinx-quickstart on Wed May  3 10:59:22 2017.
@@ -605,6 +606,7 @@ nitpick_ignore = [
     ("py:class", "StringColumn"),
     ("py:class", "ColumnLike"),
     ("py:class", "DtypeObj"),
+    ("py:class", "Axis"),
     ("py:class", "ArrowLike"),
 ]
 

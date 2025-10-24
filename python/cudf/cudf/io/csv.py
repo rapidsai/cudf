@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import itertools
@@ -35,7 +36,7 @@ if TYPE_CHECKING:
     from cudf._typing import DtypeObj
 
 
-_CSV_HEX_TYPE_MAP = {
+_CSV_HEX_TYPE_MAP: dict[str, np.dtype] = {
     "hex": np.dtype("int64"),
     "hex64": np.dtype("int64"),
     "hex32": np.dtype("int32"),

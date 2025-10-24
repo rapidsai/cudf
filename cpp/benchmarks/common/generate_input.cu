@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "generate_input.hpp"
@@ -871,6 +860,11 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
       std::move(current_child_column),
       profile.get_null_probability().has_value() ? null_count : 0,
       profile.get_null_probability().has_value() ? std::move(null_mask) : rmm::device_buffer{});
+    if (auto const cv = list_column->view();
+        cudf::has_nonempty_nulls(cv, cudf::get_default_stream())) {
+      list_column = cudf::purge_nonempty_nulls(
+        cv, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+    }
   }
   return list_column;  // return the top-level column
 }
@@ -887,6 +881,11 @@ std::unique_ptr<cudf::column> create_distinct_rows_column<cudf::list_view>(
     auto offsets_column = cudf::sequence(num_rows + 1, *zero);
     auto list_column    = cudf::make_lists_column(
       num_rows, std::move(offsets_column), std::move(child_column), 0, rmm::device_buffer{});
+    if (auto const cv = list_column->view();
+        cudf::has_nonempty_nulls(cv, cudf::get_default_stream())) {
+      list_column = cudf::purge_nonempty_nulls(
+        cv, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+    }
     std::swap(child_column, list_column);
   }
   auto lists_col =

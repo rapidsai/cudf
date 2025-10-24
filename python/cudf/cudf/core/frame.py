@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -51,7 +52,7 @@ if TYPE_CHECKING:
     )
     from types import ModuleType
 
-    from cudf._typing import Dtype, DtypeObj, ScalarLike
+    from cudf._typing import Axis, Dtype, DtypeObj, ScalarLike
     from cudf.core.series import Series
 
 
@@ -92,7 +93,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         return zip(self._column_names, self._columns, strict=True)
 
     @property
-    def _dtypes(self) -> Generator[tuple[Hashable, Dtype], None, None]:
+    def _dtypes(self) -> Generator[tuple[Hashable, DtypeObj], None, None]:
         for label, col in self._column_labels_and_values:
             yield label, col.dtype
 
@@ -180,6 +181,18 @@ class Frame(BinaryOperand, Scannable, Serializable):
             data=dict(zip(column_names, columns, strict=True)), **kwargs
         )
         return cls._from_data(col_accessor)
+
+    @_performance_tracking
+    def nans_to_nulls(self) -> Self:
+        result = []
+        for col in self._columns:
+            converted = col.nans_to_nulls()
+            if converted is col:
+                converted = converted.copy()
+            result.append(converted)
+        return self._from_data_like_self(
+            self._data._from_columns_like_self(result)
+        )
 
     @classmethod
     @_performance_tracking
@@ -556,7 +569,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         # identical except for the attribute they access to generate values.
 
         def to_array(
-            col: ColumnBase, to_dtype: np.dtype
+            col: ColumnBase, to_dtype: Dtype | None
         ) -> cupy.ndarray | np.ndarray:
             if (
                 col.has_nulls()
@@ -624,8 +637,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                     col.has_nulls() for col in self._columns
                 ):
                     if to_dtype.kind == "b" or any(
-                        dtype.kind == "b"  # type: ignore[union-attr]
-                        for _, dtype in self._dtypes
+                        dtype.kind == "b" for _, dtype in self._dtypes
                     ):
                         if module == cupy:
                             raise ValueError(
@@ -1655,10 +1667,10 @@ class Frame(BinaryOperand, Scannable, Serializable):
                     # that nulls that are present in both left_column and
                     # right_column are not filled.
                     if left_column.nullable and right_column.nullable:
-                        with acquire_spill_lock():
-                            lmask = as_column(left_column.nullmask)
-                            rmask = as_column(right_column.nullmask)
-                            output_mask = (lmask | rmask).data
+                        output_mask = (
+                            left_column._get_mask_as_column()
+                            | right_column._get_mask_as_column()
+                        ).as_mask()
                         left_column = left_column.fillna(fill_value)
                         right_column = right_column.fillna(fill_value)
                     elif left_column.nullable:
@@ -1721,13 +1733,8 @@ class Frame(BinaryOperand, Scannable, Serializable):
             cupy_inputs = []
             for inp in (left, right) if ufunc.nin == 2 else (left,):
                 if isinstance(inp, ColumnBase) and inp.has_nulls():
-                    new_mask = as_column(inp.nullmask)
-
-                    # TODO: This is a hackish way to perform a bitwise and
-                    # of bitmasks. Once we expose
-                    # cudf::detail::bitwise_and, then we can use that
-                    # instead.
-                    mask = new_mask if mask is None else (mask & new_mask)
+                    new_mask = inp._get_mask_as_column()
+                    mask = new_mask if mask is None else mask & new_mask
 
                     # Arbitrarily fill with zeros. For ufuncs, we assume
                     # that the end result propagates nulls via a bitwise
@@ -1739,7 +1746,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
             if ufunc.nout == 1:
                 cp_output = (cp_output,)
             for i, out in enumerate(cp_output):
-                data[i][name] = as_column(out).set_mask(mask)
+                data[i][name] = as_column(out).set_mask(
+                    mask if mask is None else mask.as_mask()
+                )
         return data
 
     # Unary logical operators
@@ -1772,9 +1781,28 @@ class Frame(BinaryOperand, Scannable, Serializable):
         )
 
     @_performance_tracking
-    def _reduce(self, *args, **kwargs):
+    def _reduce(
+        self,
+        op: str,
+        axis=no_default,
+        numeric_only: bool = False,
+        **kwargs,
+    ) -> ScalarLike:
         raise NotImplementedError(
-            f"Reductions are not supported for objects of type {type(self)}."
+            f"Reductions are not supported for objects of type {type(self).__name__}."
+        )
+
+    @_performance_tracking
+    def _scan(
+        self,
+        op: str,
+        axis: Axis | None = None,
+        skipna: bool = True,
+        *args,
+        **kwargs,
+    ) -> Self:
+        raise NotImplementedError(
+            f"Scans are not supported for objects of type {type(self).__name__}."
         )
 
     @_performance_tracking

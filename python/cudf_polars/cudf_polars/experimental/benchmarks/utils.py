@@ -44,6 +44,7 @@ except ImportError:
     pynvml = None
 
 try:
+    from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.dsl.translate import Translator
     from cudf_polars.experimental.explain import explain_query
     from cudf_polars.experimental.parallel import evaluate_streaming
@@ -475,7 +476,7 @@ def print_query_plan(
         )
 
 
-def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  # type: ignore
+def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  # type: ignore[no-untyped-def]
     """Initialize a Dask distributed cluster."""
     if run_config.cluster != "distributed":
         return None
@@ -548,10 +549,15 @@ def execute_query(
             if args.debug:
                 translator = Translator(q._ldf.visit(), engine)
                 ir = translator.translate_ir()
+                context = IRExecutionContext()
                 if run_config.executor == "in-memory":
-                    return ir.evaluate(cache={}, timer=None).to_polars()
+                    return ir.evaluate(
+                        cache={}, timer=None, context=context
+                    ).to_polars()
                 elif run_config.executor == "streaming":
-                    return evaluate_streaming(ir, translator.config_options).to_polars()
+                    return evaluate_streaming(
+                        ir, translator.config_options, context=context
+                    ).to_polars()
                 assert_never(run_config.executor)
             else:
                 return q.collect(engine=engine)
@@ -851,7 +857,7 @@ def run_polars(
     validation_failures: list[int] = []
     query_failures: list[tuple[int, int]] = []
 
-    client = initialize_dask_cluster(run_config, args)  # type: ignore
+    client = initialize_dask_cluster(run_config, args)
 
     records: defaultdict[int, list[Record]] = defaultdict(list)
     engine: pl.GPUEngine | None = None
@@ -894,8 +900,8 @@ def run_polars(
                     gather_shuffle_statistics,
                 )
 
-                shuffle_stats = gather_shuffle_statistics(client)  # type: ignore[arg-type]
-                clear_shuffle_statistics(client)  # type: ignore[arg-type]
+                shuffle_stats = gather_shuffle_statistics(client)
+                clear_shuffle_statistics(client)
             else:
                 shuffle_stats = None
 

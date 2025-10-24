@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import decimal
@@ -691,7 +692,7 @@ class StructDtype(_BaseDtype):
 
         frames: list[Buffer] = []
 
-        fields: dict[str, bytes | tuple[Any, tuple[int, int]]] = {}
+        fields: dict[str, str | tuple[Any, tuple[int, int]]] = {}
 
         for k, dtype in self.fields.items():
             if isinstance(dtype, _BaseDtype):
@@ -1048,7 +1049,7 @@ class IntervalDtype(StructDtype):
     def to_pandas(self) -> pd.IntervalDtype:
         if cudf.get_option("mode.pandas_compatible"):
             return pd.IntervalDtype(
-                subtype=self.subtype.numpy_dtype  # type: ignore
+                subtype=self.subtype.numpy_dtype
                 if is_pandas_nullable_extension_dtype(self.subtype)
                 else self.subtype,
                 closed=self.closed,
