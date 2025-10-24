@@ -1,4 +1,5 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 """Base class for Frame types that have an index."""
 
 from __future__ import annotations
@@ -266,8 +267,8 @@ class IndexedFrame(Frame):
     """
 
     # mypy can't handle bound type variables as class members
-    _loc_indexer_type: type[_LocIndexerClass]  # type: ignore
-    _iloc_indexer_type: type[_IlocIndexerClass]  # type: ignore
+    _loc_indexer_type: type[_LocIndexerClass]  # type: ignore[valid-type]
+    _iloc_indexer_type: type[_IlocIndexerClass]  # type: ignore[valid-type]
     _groupby = GroupBy
     _resampler = _Resampler
 
@@ -353,7 +354,7 @@ class IndexedFrame(Frame):
         self._attrs = dict(value)
 
     @classmethod
-    def _from_data(  # type: ignore[override]
+    def _from_data(
         cls,
         data: MutableMapping,
         index: Index | None = None,
@@ -2440,7 +2441,7 @@ class IndexedFrame(Frame):
         """
         return self._iloc_indexer_type(self)
 
-    @property  # type:ignore
+    @property
     @_performance_tracking
     def axes(self):
         """
@@ -6459,7 +6460,7 @@ class IndexedFrame(Frame):
         if numeric_only:
             if isinstance(source, cudf.Series) and not is_dtype_obj_numeric(
                 source.dtype, include_decimal=False
-            ):  # type: ignore[attr-defined]
+            ):
                 raise TypeError(
                     "Series.rank does not allow numeric_only=True with "
                     "non-numeric dtype."
@@ -6833,7 +6834,7 @@ def _drop_rows_by_labels(
             level = 0
 
         levels_index = obj.index.get_level_values(level)
-        if errors == "raise" and not labels.isin(levels_index).all():  # type: ignore[union-attr]
+        if errors == "raise" and not labels.isin(levels_index).all():
             raise KeyError("One or more values not found in axis")
 
         if isinstance(level, int):
@@ -6888,7 +6889,7 @@ def _drop_rows_by_labels(
 
     else:
         orig_index_type = obj.index.dtype
-        if errors == "raise" and not labels.isin(obj.index).all():  # type: ignore[union-attr]
+        if errors == "raise" and not labels.isin(obj.index).all():
             raise KeyError("One or more values not found in axis")
 
         if isinstance(labels, ColumnBase):

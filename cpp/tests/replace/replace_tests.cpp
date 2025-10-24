@@ -1,6 +1,12 @@
+// clang-format off
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
+ * SPDX-FileCopyrightText: Copyright 2018 BlazingDB, Inc.
+ * SPDX-FileCopyrightText: Copyright 2018 Cristhian Alberto Gonzales Castillo <cristhian@blazingdb.com>
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+// clang-format on
+/*
  * Copyright 2018 BlazingDB, Inc.
  *     Copyright 2018 Cristhian Alberto Gonzales Castillo <cristhian@blazingdb.com>
  *
