@@ -2571,6 +2571,7 @@ class StringMethods(BaseAccessor):
 
         if pat is None:
             pat = ""
+            regex = False
 
         if regex and isinstance(pat, re.Pattern):
             pat = pat.pattern
