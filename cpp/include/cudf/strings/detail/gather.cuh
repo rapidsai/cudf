@@ -65,7 +65,8 @@ __forceinline__ __device__ uint4 load_uint4(char const* ptr)
 
 // Load of 4B, assuming ptr may not be 4B aligned, so we need to mask the result
 // use for start of string char column
-__device__ inline uint32_t load_uint32_masked(char const* const ptr, char const* const head, char const* const tail) {
+// returns a pair containing the loaded uint32_t chunk and the number of characters loaded in it
+__device__ inline cuda::std::pair<uint32_t, uint32_t> load_uint32_masked(char const* const ptr, char const* const head, char const* const tail) {
   uint32_t result = 0;
   auto offset = reinterpret_cast<std::uintptr_t>(ptr) % sizeof(uint32_t);
 
@@ -74,10 +75,10 @@ __device__ inline uint32_t load_uint32_masked(char const* const ptr, char const*
   auto const* chunk_end = chunk_start + sizeof(uint32_t);
 
   // Is the 4B load valid
-  if (chunk_start >= head && chunk_end < tail) {
+  if (chunk_start >= head && chunk_end <= tail) {
     //FIXME: remove printf
     printf("loading chunk from addr: %p\n", (void*)chunk_start);
-    return *reinterpret_cast<uint32_t const*>(chunk_start);
+    return cuda::std::make_pair(*reinterpret_cast<uint32_t const*>(chunk_start), 4);
   }
 
   // If the 4B load is not valid, we need to load the chunk byte by byte
@@ -88,7 +89,7 @@ __device__ inline uint32_t load_uint32_masked(char const* const ptr, char const*
   for (auto i = start_ptr; i < end_ptr; i++) {
     result |= (static_cast<uint32_t>(*i) << ((byte_read_offset + i - start_ptr) * 8));
   }
-  return result;
+  return cuda::std::make_pair(result, end_ptr - start_ptr);
 }
 
 /**
@@ -262,9 +263,7 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
       // If the output string is empty do not dereference input.
       auto const out_len =
       out_offsets_threadblock[idx + 1] - out_offsets_threadblock[idx];
-      if (out_len == 0) {
-        curr_string_num_chunks = 0;
-      } else {
+      if (out_len != 0) {
         auto const& curr_string_idx = idx + begin_out_string_idx;
         auto const& curr_string = strings_begin[string_indices[curr_string_idx]];
         auto const& curr_string_alignment = reinterpret_cast<std::uintptr_t>(curr_string.data()) % sizeof(uint32_t);
@@ -339,15 +338,19 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
       auto const i_character = max(int64_t{0}, load_offset);
       
       // we dont need to align the curr_string pointer with load_offset here. Using just for easier understanding. 
-      *(string_scratch + threadIdx.x) = load_uint32_masked(curr_string.data() + load_offset, d_chars_begin, d_chars_end);
+      auto [chunk, num_char] = load_uint32_masked(curr_string.data() + load_offset, d_chars_begin, d_chars_end);
+      *(string_scratch + threadIdx.x) = chunk;
 
-      // TODO: would it be better to just calculate this last_byte on each thread
+      // TODO: would it be better to just calculate this last_byte on each thread 
         // if this is the last chunk loaded in each wave
-      if ((in_ichunk + 1) % block_size == 0 || in_ichunk == in_offsets_threadblock[strings_current_threadblock - 1] - 1) {
+      int const last_chunk = in_offsets_threadblock[strings_current_threadblock - 1] - 1;
+      int const last_chunk_tb = (block_size * (wave + 1)) - 1;
+
+      // if this is the last chunk in the wave, or the last chunk in all chunks to be read
+      if (in_ichunk == min(last_chunk, last_chunk_tb)) {
         // number of output characters that are part of the last chunk
         // we can have atmost 4, if we are loading i_chaacter we can have atmost the number of char in the string.
-        auto const loaded_characters = min(sizeof(uint32_t), curr_string.size_bytes() - i_character);
-        last_ibyte_threadblock = out_offsets_threadblock[string_idx] + i_character + loaded_characters;
+        last_ibyte_threadblock = out_offsets_threadblock[string_idx] + i_character + num_char;
       }
     }
 
