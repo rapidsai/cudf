@@ -38,9 +38,7 @@ from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
 from cudf_polars.dsl.tracing import log_do_evaluate, nvtx_annotate_cudf_polars
 from cudf_polars.dsl.utils.reshape import broadcast
-from cudf_polars.dsl.utils.windows import (
-    range_window_bounds,
-)
+from cudf_polars.dsl.utils.windows import offsets_to_windows, range_window_bounds
 from cudf_polars.utils import dtypes
 from cudf_polars.utils.cuda_stream import (
     get_cuda_stream,
@@ -59,7 +57,13 @@ if TYPE_CHECKING:
     from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.containers.dataframe import NamedColumn
-    from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
+    from cudf_polars.typing import (
+        CSECache,
+        ClosedInterval,
+        Duration,
+        Schema,
+        Slice as Zlice,
+    )
     from cudf_polars.utils.config import ParquetOptions
     from cudf_polars.utils.timer import Timer
 
@@ -1459,17 +1463,19 @@ class Rolling(IR):
     __slots__ = (
         "agg_requests",
         "closed_window",
-        "following",
         "index",
+        "index_dtype",
         "keys",
-        "preceding",
+        "offset",
+        "period",
         "zlice",
     )
     _non_child = (
         "schema",
         "index",
-        "preceding",
-        "following",
+        "index_dtype",
+        "offset",
+        "period",
         "closed_window",
         "keys",
         "agg_requests",
@@ -1477,10 +1483,12 @@ class Rolling(IR):
     )
     index: expr.NamedExpr
     """Column being rolled over."""
-    preceding: plc.Scalar
-    """Preceding window extent defining start of window."""
-    following: plc.Scalar
-    """Following window extent defining end of window."""
+    index_dtype: plc.DataType
+    """Datatype of the index column."""
+    offset: Duration
+    """Offset duration."""
+    period: Duration
+    """Period duration."""
     closed_window: ClosedInterval
     """Treatment of window endpoints."""
     keys: tuple[expr.NamedExpr, ...]
@@ -1494,8 +1502,9 @@ class Rolling(IR):
         self,
         schema: Schema,
         index: expr.NamedExpr,
-        preceding: plc.Scalar,
-        following: plc.Scalar,
+        index_dtype: plc.DataType,
+        offset: Duration,
+        period: Duration,
         closed_window: ClosedInterval,
         keys: Sequence[expr.NamedExpr],
         agg_requests: Sequence[expr.NamedExpr],
@@ -1504,8 +1513,9 @@ class Rolling(IR):
     ):
         self.schema = schema
         self.index = index
-        self.preceding = preceding
-        self.following = following
+        self.index_dtype = index_dtype
+        self.offset = offset
+        self.period = period
         self.closed_window = closed_window
         self.keys = tuple(keys)
         self.agg_requests = tuple(agg_requests)
@@ -1528,8 +1538,9 @@ class Rolling(IR):
         self.children = (df,)
         self._non_child_args = (
             index,
-            preceding,
-            following,
+            index_dtype,
+            offset,
+            period,
             closed_window,
             keys,
             agg_requests,
@@ -1542,8 +1553,9 @@ class Rolling(IR):
     def do_evaluate(
         cls,
         index: expr.NamedExpr,
-        preceding: plc.Scalar,
-        following: plc.Scalar,
+        index_dtype: plc.DataType,
+        offset: Duration,
+        period: Duration,
         closed_window: ClosedInterval,
         keys_in: Sequence[expr.NamedExpr],
         aggs: Sequence[expr.NamedExpr],
@@ -1553,6 +1565,13 @@ class Rolling(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
+        preceding, following = offsets_to_windows(
+            index_dtype,
+            offset,
+            period,
+            stream=df.stream,
+        )
+
         keys = broadcast(
             *(k.evaluate(df) for k in keys_in),
             target_length=df.num_rows,

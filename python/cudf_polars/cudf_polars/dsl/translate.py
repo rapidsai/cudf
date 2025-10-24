@@ -348,7 +348,12 @@ def _(node: pl_ir.GroupBy, translator: Translator, schema: Schema) -> ir.IR:
         raise NotImplementedError("group_by_dynamic")
     elif is_rolling:
         return rewrite_rolling(
-            node.options, schema, keys, original_aggs, translator.config_options, inp
+            node.options,
+            schema,
+            keys,
+            original_aggs,
+            translator.config_options,
+            inp,
         )
     else:
         return rewrite_groupby(node, schema, keys, original_aggs, inp)

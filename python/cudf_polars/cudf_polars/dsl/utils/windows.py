@@ -11,8 +11,6 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars.utils.cuda_stream import get_cuda_stream
-
 if TYPE_CHECKING:
     from rmm.pylibrmm.stream import Stream
 
@@ -139,6 +137,7 @@ def offsets_to_windows(
     dtype: plc.DataType,
     offset: Duration,
     period: Duration,
+    stream: Stream,
 ) -> tuple[plc.Scalar, plc.Scalar]:
     """
     Convert polars offset/period pair to preceding/following windows.
@@ -151,27 +150,22 @@ def offsets_to_windows(
         Offset duration
     period
         Period of window
+    stream
+        CUDA stream used for device memory operations and kernel launches
+        on this dataframe. The returned scalars will be valid on this stream.
 
     Returns
     -------
     tuple of preceding and following windows as pylibcudf scalars.
-
-    Notes
-    -----
-    The returned scalars are constructed on a new stream, which is
-    synchronized before being returned.
     """
     offset_i = duration_to_int(dtype, *offset)
     period_i = duration_to_int(dtype, *period)
     # Polars uses current_row + offset, ..., current_row + offset + period
     # Libcudf uses current_row - preceding, ..., current_row + following
-    stream = get_cuda_stream()
-    result = (
+    return (
         duration_to_scalar(dtype, -offset_i, stream=stream),
         duration_to_scalar(dtype, offset_i + period_i, stream=stream),
     )
-    stream.synchronize()
-    return result
 
 
 def range_window_bounds(

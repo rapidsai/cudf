@@ -13,7 +13,6 @@ from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.utils.aggregations import apply_pre_evaluation
 from cudf_polars.dsl.utils.naming import unique_names
-from cudf_polars.dsl.utils.windows import offsets_to_windows
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -50,6 +49,8 @@ def rewrite_rolling(
         Configuration options (currently unused).
     inp
         Input plan node to the rolling aggregation.
+    stream
+        CUDA stream used for device memory operations and kernel launches
 
     Returns
     -------
@@ -95,9 +96,6 @@ def rewrite_rolling(
     else:
         rolling_schema = schema
         apply_post_evaluation = lambda inp: inp  # noqa: E731
-    preceding, following = offsets_to_windows(
-        plc_index_dtype, options.rolling.offset, options.rolling.period
-    )
     if (n := len(keys)) > 0:
         # Grouped rolling in polars sorts the output by the groups.
         inp = ir.Sort(
@@ -113,8 +111,9 @@ def rewrite_rolling(
         ir.Rolling(
             rolling_schema,
             index,
-            preceding,
-            following,
+            plc_index_dtype,
+            options.rolling.offset,
+            options.rolling.period,
             options.rolling.closed_window,
             keys,
             aggs,

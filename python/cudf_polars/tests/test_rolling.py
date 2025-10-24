@@ -104,6 +104,7 @@ def test_rolling_empty_aggs(with_slice):
 
 
 def test_calendrical_period_unsupported(df):
+    breakpoint()
     q = df.rolling("dt", period="1mo", closed="right").agg(sum=pl.sum("values"))
 
     assert_ir_translation_raises(q, NotImplementedError)

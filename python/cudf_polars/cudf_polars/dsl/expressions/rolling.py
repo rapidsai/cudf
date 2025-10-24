@@ -94,12 +94,10 @@ def to_request(
 class RollingWindow(Expr):
     __slots__ = (
         "closed_window",
-        "following",
         "offset",
         "orderby",
         "orderby_dtype",
         "period",
-        "preceding",
     )
     _non_child = (
         "dtype",
@@ -122,15 +120,9 @@ class RollingWindow(Expr):
     ) -> None:
         self.dtype = dtype
         self.orderby_dtype = orderby_dtype
-        # NOTE: Save original `offset` and `period` args,
-        # because the `preceding` and `following` attributes
-        # cannot be serialized (and must be reconstructed
-        # within `__init__`).
         self.offset = offset
         self.period = period
-        self.preceding, self.following = offsets_to_windows(
-            orderby_dtype, offset, period
-        )
+        self.orderby_dtype = orderby_dtype
         self.closed_window = closed_window
         self.orderby = orderby
         self.children = (agg,)
@@ -163,8 +155,16 @@ class RollingWindow(Expr):
             )
         else:
             orderby_obj = orderby.obj
+
+        preceding_scalar, following_scalar = offsets_to_windows(
+            self.orderby_dtype,
+            self.offset,
+            self.period,
+            stream=df.stream,
+        )
+
         preceding, following = range_window_bounds(
-            self.preceding, self.following, self.closed_window
+            preceding_scalar, following_scalar, self.closed_window
         )
         if orderby.obj.null_count() != 0:
             raise RuntimeError(
