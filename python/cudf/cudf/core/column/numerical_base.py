@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 """Define an interface for columns that can perform numerical operations."""
 
 from __future__ import annotations
@@ -60,10 +61,10 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         data: Buffer,
         size: int,
         dtype: DecimalDtype | np.dtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple = (),
+        mask: Buffer | None,
+        offset: int,
+        null_count: int,
+        children: tuple,
     ):
         if not isinstance(data, Buffer):
             raise ValueError("data must be a Buffer instance.")
@@ -164,7 +165,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                     indices.to_pylibcudf(mode="read"),
                     exact,
                 )
-                result = type(self).from_pylibcudf(plc_column)  # type: ignore[assignment]
+                result = type(self).from_pylibcudf(plc_column)
         if return_scalar:
             scalar_result = result.element_indexing(0)
             if interpolation in {"lower", "higher", "nearest"}:
@@ -268,7 +269,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             raise ValueError(f"{how=} must be either 'half_even' or 'half_up'")
         plc_how = plc.round.RoundingMethod[how.upper()]
         with acquire_spill_lock():
-            return type(self).from_pylibcudf(  # type: ignore[return-value]
+            return type(self).from_pylibcudf(
                 plc.round.round(
                     self.to_pylibcudf(mode="read"), decimals, plc_how
                 )

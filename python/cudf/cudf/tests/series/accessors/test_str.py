@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import json
 import re
@@ -2844,3 +2845,18 @@ def test_string_misc_name(ps_gs, name):
     assert_eq(ps + ps, gs + gs)
     assert_eq(ps + "RAPIDS", gs + "RAPIDS")
     assert_eq("RAPIDS" + ps, "RAPIDS" + gs)
+
+
+def test_string_list_get_access():
+    ps = pd.Series(["a,b,c", "d,e,f", None, "g,h,i"])
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.str.split(",")
+    got = gs.str.split(",")
+
+    assert_eq(expect, got)
+
+    expect = expect.str.get(1)
+    got = got.str.get(1)
+
+    assert_eq(expect, got)

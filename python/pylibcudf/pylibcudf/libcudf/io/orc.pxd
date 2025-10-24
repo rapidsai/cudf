@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 cimport pylibcudf.libcudf.io.types as cudf_io_types
 cimport pylibcudf.libcudf.table.table_view as cudf_table_view
 from libc.stdint cimport int64_t, uint8_t
@@ -150,6 +151,14 @@ cdef extern from "cudf/io/orc.hpp" namespace "cudf::io" nogil:
     cdef void write_orc(
         orc_writer_options options,
         cuda_stream_view stream,
+    ) except +libcudf_exception_handler
+
+    cdef bool is_supported_read_orc(
+        cudf_io_types.compression_type compression
+    ) except +libcudf_exception_handler
+
+    cdef bool is_supported_write_orc(
+        cudf_io_types.compression_type compression
     ) except +libcudf_exception_handler
 
     cdef cppclass chunked_orc_writer_options:
