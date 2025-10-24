@@ -89,11 +89,9 @@ variable `CUDF_POLARS__PARQUET_OPTIONS__CHUNKED=0` will set the default
 
 ## CUDA Stream Policy
 
-By default, all CUDA operations in cudf-polars are launched on the default
-stream.  cudf-polars can use
-
-`cudf-polars` can use multiple CUDA streams to run your query more efficiently
-by overlapping data transfers and kernel launches.
+By default, all CUDA operations in `cudf-polars` are launched on the default
+stream. You can configure `cudf-polars` to use multiple CUDA streams, which may
+improve performance by overlapping data transfers and kernel launches.
 
 This behavior is configured by the `cuda_stream_policy` keyword or
 `CUDF_POLARS__CUDA_STREAM_POLICY` environment variable.  The valid options are
