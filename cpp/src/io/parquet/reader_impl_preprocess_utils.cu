@@ -535,7 +535,7 @@ void decode_page_headers(pass_intermediate_data& pass,
     auto page_locations = cudf::detail::make_device_uvector_async(
       host_page_locations, stream, cudf::get_current_device_resource_ref());
 
-    // (Fast) decode page headers one thread per page
+    // Accelerated decode page headers, one thread per page
     decode_page_headers_with_pgidx(pass.chunks.d_begin(),
                                    unsorted_pages.begin(),
                                    page_locations.begin(),
@@ -545,7 +545,7 @@ void decode_page_headers(pass_intermediate_data& pass,
                                    error_code.data(),
                                    stream);
   } else {
-    // (Slow) decode page headers, one warp (lane)per pages of a chunk
+    // (Slow) decode page headers, one warp (lane) per pages of a chunk
     decode_page_headers(pass.chunks.d_begin(),
                         d_chunk_page_info.begin(),
                         pass.chunks.size(),
