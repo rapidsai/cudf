@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libc.stdint cimport int64_t, uint8_t
 
 from libcpp cimport bool
@@ -167,6 +168,8 @@ cdef class ParquetWriterOptionsBuilder:
     cpdef ParquetWriterOptions build(self)
 
 cpdef memoryview write_parquet(ParquetWriterOptions options, Stream stream = *)
+
+cpdef bool is_supported_read_parquet(compression_type compression)
 
 cpdef bool is_supported_write_parquet(compression_type compression)
 

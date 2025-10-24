@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import copy
@@ -1365,7 +1366,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         if dropna is not None:
             raise NotImplementedError("dropna is not currently supported.")
-        self.obj["__groupbynth_order__"] = range(0, len(self.obj))  # type: ignore[index]
+        self.obj["__groupbynth_order__"] = range(0, len(self.obj))
         # We perform another groupby here to have the grouping columns
         # be a part of dataframe columns.
         result = self.obj.groupby(self.grouping.keys).agg(lambda x: x.nth(n))
@@ -1734,7 +1735,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         # seems because unlike the builtin narrowings it only performs
         # narrowing in the positive case.
         normalized_aggs = [
-            list(agg) if is_list_like(agg) else [agg]  # type: ignore
+            list(agg) if is_list_like(agg) else [agg]  # type: ignore[arg-type]
             for agg in aggs_per_column
         ]
         return column_names, columns, normalized_aggs
