@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import datetime
@@ -222,7 +223,7 @@ def _plc_write_parquet(
         )
     if metadata_file_path is not None:
         if is_list_like(metadata_file_path):
-            options.set_column_chunks_file_paths(metadata_file_path)  # type: ignore[arg-type]
+            options.set_column_chunks_file_paths(metadata_file_path)
         else:
             options.set_column_chunks_file_paths([metadata_file_path])
     if row_group_size_bytes is not None:
