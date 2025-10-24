@@ -2,8 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import contextlib
+import io
 import json
 import os
+import pprint
 import sys
 import traceback
 from collections import defaultdict
@@ -12807,9 +12809,6 @@ def pytest_collection_modifyitems(session, config, items):
         NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS
     )
     for item in items:
-        item.add_marker(
-            pytest.mark.filterwarnings("error::cudf.pandas.FallbackWarning")
-        )
         if item.nodeid in NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS:
             item.add_marker(
                 pytest.mark.xfail(reason="Fails with cudf.pandas enabled.")
@@ -12822,24 +12821,32 @@ def pytest_collection_modifyitems(session, config, items):
             )
 
 
+def format_structured_log(log_string: str) -> str:
+    dict_start = log_string.find("{")
+    struct_log = json.loads(log_string[dict_start:])
+    with io.StringIO() as stream:
+        pprint.pprint(struct_log, stream=stream)  # noqa: T203
+        return stream.getvalue()
+
+
 @pytest.hookimpl(wrapper=True, tryfirst=True)
 def pytest_runtest_makereport(item, call):
     outcome = yield
     if (
         call.when == "call"
-        and call.excinfo is not None
-        # TODO: OK to import cudf.pandas to isinstance(call.excinfo.value, FallbackWarning)?
-        and type(call.excinfo.value).__name__ == "FallbackWarning"
-        and item.nodeid in NODEIDS_THAT_FALLBACK_TO_PANDAS
+        and outcome.passed
+        and "LOG_FAST_FALLBACK" in outcome.caplog
+        and item.nodeid not in NODEIDS_THAT_FALLBACK_TO_PANDAS
     ):
-        # If we expect a test to raise a cudf.pandas.FallbackWarning,
-        # we consider the test "passed" (assuming we are running with warning as errors)
+        # When running with CUDF_PANDAS_LOG_ON_FALLBACK=1, if a test passes but logs
+        # an unexpected fall back to pandas, fail the test
+        longrepr = f"Unexpected test fallback to pandas. The fall back logs are: \n{format_structured_log(outcome.caplog)}"
         outcome = pytest.TestReport(
             nodeid=outcome.nodeid,
             location=outcome.location,
             keywords=outcome.keywords,
-            outcome="passed",
-            longrepr=None,
+            outcome="failed",
+            longrepr=longrepr,
             when=outcome.when,
             sections=outcome.sections,
             duration=outcome.duration,

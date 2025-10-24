@@ -955,25 +955,6 @@ class TypeFallbackError(FallbackError):
     pass
 
 
-class FallbackWarning(UserWarning):
-    """Warning when a fallback occurs."""
-
-    pass
-
-
-def _warn_fallback_occurred(err: Exception, name: str) -> None:
-    """Raise a Warning when a fallback occurs."""
-    warning_message = (
-        f"The call to '{name}' is falling back to pandas. The exception was \n"
-        f"{err!r}"
-    )
-    warnings.warn(
-        warning_message,
-        FallbackWarning,
-        stacklevel=4,
-    )
-
-
 def _raise_fallback_error(err, name):
     """Raises a fallback error."""
     err_message = f"Falling back to the slow path. The exception was {err}. \
@@ -1072,11 +1053,9 @@ def _fast_slow_function_call(
             domain="cudf_pandas",
         ):
             slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
-            if _env_get_bool("CUDF_PANDAS_WARN_ON_FALLBACK", False):
-                _warn_fallback_occurred(err, slow_args[0].__qualname__)
-            elif _env_get_bool("CUDF_PANDAS_FAIL_ON_FALLBACK", False):
+            if _env_get_bool("CUDF_PANDAS_FAIL_ON_FALLBACK", False):
                 _raise_fallback_error(err, slow_args[0].__name__)
-            if _env_get_bool("LOG_FAST_FALLBACK", False):
+            if _env_get_bool("CUDF_PANDAS_LOG_ON_FALLBACK", False):
                 from ._logger import log_fallback
 
                 log_fallback(slow_args, slow_kwargs, err)
