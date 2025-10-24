@@ -263,6 +263,22 @@ class GroupedRollingWindow(Expr):
             raise NotImplementedError(
                 f"Unsupported over(...) only expression: {kinds}="
             )
+        if has_order_by:
+            ob = self._order_by_expr
+            is_multi_order_by = (
+                isinstance(ob, expr.UnaryFunction)
+                and ob.name == "as_struct"
+                and len(ob.children) > 1
+            )
+            has_order_sensitive_agg = any(
+                isinstance(ne.value, expr.Agg)
+                and ne.value.agg_request.kind() == plc.aggregation.Kind.NTH_ELEMENT
+                for ne in self.named_aggs
+            )
+            if is_multi_order_by and has_order_sensitive_agg:
+                raise NotImplementedError(
+                    "Multiple order_by keys with order-sensitive aggregations"
+                )
 
     @staticmethod
     def _sorted_grouper(by_cols_for_scan: list[Column]) -> plc.groupby.GroupBy:
@@ -531,7 +547,7 @@ class GroupedRollingWindow(Expr):
             )
             nulls.append(
                 plc.types.NullOrder.AFTER
-                if ob_nulls_last
+                if ob_desc ^ ob_nulls_last
                 else plc.types.NullOrder.BEFORE
             )
 
@@ -593,6 +609,97 @@ class GroupedRollingWindow(Expr):
         local = self._sorted_grouper(by_cols_for_scan)
         return order_index, by_cols_for_scan, local
 
+    def _broadcast_agg_results(
+        self,
+        by_tbl: plc.Table,
+        group_keys_tbl: plc.Table,
+        value_tbls: list[plc.Table],
+        names: list[str],
+        dtypes: list[DataType],
+        stream: Stream,
+    ) -> list[Column]:
+        # We do a left-join between the input keys to group-keys
+        # so every input row appears exactly once. left_order is
+        # returned un-ordered by libcudf.
+        left_order, right_order = plc.join.left_join(
+            by_tbl, group_keys_tbl, plc.types.NullEquality.EQUAL, stream
+        )
+
+        # Scatter the right order indices into an all-null table
+        # and at the position of the index in left order. Now we
+        # have the map between rows and groups with the correct ordering.
+        left_rows = left_order.size()
+        target = plc.Column.from_scalar(
+            plc.Scalar.from_py(None, plc.types.SIZE_TYPE, stream), left_rows, stream
+        )
+        aligned_map = plc.copying.scatter(
+            plc.Table([right_order]),
+            left_order,
+            plc.Table([target]),
+            stream,
+        ).columns()[0]
+
+        # Broadcast each scalar aggregated result back to row-shape using
+        # the aligned mapping between row indices and group indices.
+        out_cols = (t.columns()[0] for t in value_tbls)
+        return [
+            Column(
+                plc.copying.gather(
+                    plc.Table([col]),
+                    aligned_map,
+                    plc.copying.OutOfBoundsPolicy.NULLIFY,
+                    stream,
+                ).columns()[0],
+                name=name,
+                dtype=dtype,
+            )
+            for name, dtype, col in zip(names, dtypes, out_cols, strict=True)
+        ]
+
+    def _build_groupby_requests(
+        self,
+        named_exprs: list[expr.NamedExpr],
+        df: DataFrame,
+        order_index: plc.Column | None = None,
+        by_cols: list[Column] | None = None,
+    ) -> tuple[list[plc.groupby.GroupByRequest], list[str], list[DataType]]:
+        assert by_cols is not None
+        gb_requests: list[plc.groupby.GroupByRequest] = []
+        out_names: list[str] = []
+        out_dtypes: list[DataType] = []
+
+        eval_cols: list[plc.Column] = []
+        val_nodes: list[tuple[expr.NamedExpr, expr.Agg]] = []
+
+        for ne in named_exprs:
+            val = ne.value
+            out_names.append(ne.name)
+            out_dtypes.append(val.dtype)
+            if isinstance(val, expr.Agg):
+                (child,) = (
+                    val.children
+                    if getattr(val, "name", None) != "quantile"
+                    else (val.children[0],)
+                )
+                eval_cols.append(child.evaluate(df, context=ExecutionContext.FRAME).obj)
+                val_nodes.append((ne, val))
+
+        if order_index is not None and eval_cols:
+            eval_cols = plc.copying.gather(
+                plc.Table(eval_cols), order_index, plc.copying.OutOfBoundsPolicy.NULLIFY
+            ).columns()
+
+        gathered_iter = iter(eval_cols)
+        for ne in named_exprs:
+            val = ne.value
+            if isinstance(val, expr.Len):
+                col = by_cols[0].obj
+            else:
+                col = next(gathered_iter)
+            gb_requests.append(plc.groupby.GroupByRequest(col, [val.agg_request]))
+
+        return gb_requests, out_names, out_dtypes
+
     def do_evaluate(  # noqa: D102
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
@@ -636,68 +743,66 @@ class GroupedRollingWindow(Expr):
         scalar_named, unary_window_ops = self._split_named_expr()
 
         # Build GroupByRequests for scalar aggregations
-        gb_requests: list[plc.groupby.GroupByRequest] = []
-        out_names: list[str] = []
-        out_dtypes: list[DataType] = []
+        order_sensitive: list[expr.NamedExpr] = []
+        other_scalars: list[expr.NamedExpr] = []
         for ne in scalar_named:
             val = ne.value
-            out_names.append(ne.name)
-            out_dtypes.append(val.dtype)
+            if (
+                self._order_by_expr is not None
+                and isinstance(val, expr.Agg)
+                and val.agg_request.kind() == plc.aggregation.Kind.NTH_ELEMENT
+            ):
+                order_sensitive.append(ne)
+            else:
+                other_scalars.append(ne)
 
-            if isinstance(val, expr.Len):
-                # A count aggregation, we need a column so use a key column
-                col = by_cols[0].obj
-                gb_requests.append(plc.groupby.GroupByRequest(col, [val.agg_request]))
-            elif isinstance(val, expr.Agg):
-                (child,) = (
-                    val.children if val.name != "quantile" else (val.children[0],)
-                )
-                col = child.evaluate(df, context=ExecutionContext.FRAME).obj
-                gb_requests.append(plc.groupby.GroupByRequest(col, [val.agg_request]))
+        gb_requests, out_names, out_dtypes = self._build_groupby_requests(
+            other_scalars, df, by_cols=by_cols
+        )
 
         group_keys_tbl, value_tables = grouper.aggregate(gb_requests)
-        out_cols = (t.columns()[0] for t in value_tables)
-
-        # We do a left-join between the input keys to group-keys
-        # so every input row appears exactly once. left_order is
-        # returned un-ordered by libcudf.
-        left_order, right_order = plc.join.left_join(
-            by_tbl, group_keys_tbl, plc.types.NullEquality.EQUAL, stream=df.stream
+        broadcasted_cols = self._broadcast_agg_results(
+            by_tbl,
+            group_keys_tbl,
+            value_tables,
+            out_names,
+            out_dtypes,
+            df.stream,
         )
 
-        # Scatter the right order indices into an all-null table
-        # and at the position of the index in left order. Now we
-        # have the map between rows and groups with the correct ordering.
-        left_rows = left_order.size()
-        target = plc.Column.from_scalar(
-            plc.Scalar.from_py(None, plc.types.SIZE_TYPE, stream=df.stream),
-            left_rows,
-            stream=df.stream,
-        )
-        aligned_map = plc.copying.scatter(
-            plc.Table([right_order]),
-            left_order,
-            plc.Table([target]),
-            stream=df.stream,
-        ).columns()[0]
+        if order_sensitive:
+            row_id = plc.filling.sequence(
+                df.num_rows,
+                plc.Scalar.from_py(0, plc.types.SIZE_TYPE),
+                plc.Scalar.from_py(1, plc.types.SIZE_TYPE),
+            )
+            _, _, ob_desc, ob_nulls_last = self.options
+            order_index, _, local = self._grouped_window_scan_setup(
+                by_cols,
+                row_id=row_id,
+                order_by_col=order_by_col,
+                ob_desc=ob_desc,
+                ob_nulls_last=ob_nulls_last,
+                grouper=grouper,
+                stream=df.stream,
+            )
+            assert order_index is not None
 
-        # Broadcast each scalar aggregated result back to row-shape using
-        # the aligned mapping between row indices and group indices.
-        broadcasted_cols = [
-            Column(
-                plc.copying.gather(
-                    plc.Table([col]),
-                    aligned_map,
-                    plc.copying.OutOfBoundsPolicy.NULLIFY,
-                    stream=df.stream,
-                ).columns()[0],
-                name=named_expr.name,
-                dtype=dtype,
+            gb_requests, out_names, out_dtypes = self._build_groupby_requests(
+                order_sensitive, df, order_index=order_index, by_cols=by_cols
             )
-            for named_expr, dtype, col in zip(
-                scalar_named, out_dtypes, out_cols, strict=True
+
+            group_keys_tbl_local, value_tables_local = local.aggregate(gb_requests)
+            broadcasted_cols.extend(
+                self._broadcast_agg_results(
+                    by_tbl,
+                    group_keys_tbl_local,
+                    value_tables_local,
+                    out_names,
+                    out_dtypes,
+                    df.stream,
+                )
             )
-        ]
 
         row_id = plc.filling.sequence(
             df.num_rows,
@@ -706,7 +811,6 @@ class GroupedRollingWindow(Expr):
             stream=df.stream,
         )
 
-        order_index: plc.Column | None
         if rank_named := unary_window_ops["rank"]:
             if self._order_by_expr is not None:
                 _, _, ob_desc, ob_nulls_last = self.options
