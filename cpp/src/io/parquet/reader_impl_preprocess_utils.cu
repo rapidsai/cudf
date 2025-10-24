@@ -10,6 +10,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/functional.hpp>
+#include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 
@@ -443,11 +444,105 @@ void decode_page_headers(pass_intermediate_data& pass,
                    });
 
   kernel_error error_code(stream);
-  decode_page_headers(pass.chunks.d_begin(),
-                      d_chunk_page_info.begin(),
-                      pass.chunks.size(),
-                      error_code.data(),
-                      stream);
+
+  if (has_page_index) {
+    // Host vector to store data ptr locations for all pages in all chunks
+    auto host_page_locations =
+      cudf::detail::make_empty_host_vector<uint8_t*>(unsorted_pages.size(), stream);
+
+    // Lambda to collect data ptrs (locations) for all pages in a given range of chunks
+    auto const process_chunk = [&](size_type start, size_type end) -> std::vector<uint8_t*> {
+      if (start >= end) { return {}; }
+      std::vector<uint8_t*> page_locations;
+      std::for_each(pass.chunks.begin() + start, pass.chunks.begin() + end, [&](auto const& chunk) {
+        CUDF_EXPECTS(chunk.h_chunk_info and
+                       std::cmp_equal(chunk.h_chunk_info->pages.size(), chunk.num_data_pages),
+                     "Encountered invalid sized data page information in the page index");
+
+        auto data_ptr = const_cast<uint8_t*>(chunk.compressed_data);
+
+        if (chunk.num_dict_pages) {
+          CUDF_EXPECTS(chunk.h_chunk_info->dictionary_offset.has_value() and
+                         chunk.h_chunk_info->dictionary_size.has_value(),
+                       "Encountered missing dictionary page information in the page index");
+          CUDF_EXPECTS(
+            std::cmp_less(chunk.h_chunk_info->dictionary_offset.value(),
+                          chunk.h_chunk_info->pages.front().location.offset),
+            "Encountered dictionary page location to be than the first data page location");
+          page_locations.emplace_back(data_ptr);
+          data_ptr += chunk.h_chunk_info->dictionary_size.value();
+        }
+        auto const num_data_pages = chunk.h_chunk_info->pages.size();
+        std::for_each(thrust::counting_iterator<size_t>(0),
+                      thrust::counting_iterator(num_data_pages),
+                      [&](auto const page_idx) {
+                        page_locations.emplace_back(data_ptr);
+                        if (page_idx < num_data_pages - 1) {
+                          data_ptr += chunk.h_chunk_info->pages[page_idx + 1].location.offset -
+                                      chunk.h_chunk_info->pages[page_idx].location.offset;
+                        }
+                      });
+      });
+      return page_locations;
+    };
+
+    // Decide if we should collect page locations sequentially or in parallel
+    auto const total_chunks       = pass.chunks.size();
+    auto const parallel_threshold = 128;
+    if (total_chunks < parallel_threshold) {
+      auto page_locations = process_chunk(0, total_chunks);
+      host_page_locations.insert(host_page_locations.end(),
+                                 std::make_move_iterator(page_locations.begin()),
+                                 std::make_move_iterator(page_locations.end()));
+    } else {
+      auto constexpr num_threads   = 2;
+      auto const chunks_per_thread = cudf::util::div_rounding_up_unsafe(total_chunks, num_threads);
+      std::vector<std::future<std::vector<uint8_t*>>> page_location_tasks;
+      page_location_tasks.reserve(num_threads);
+      std::for_each(thrust::make_counting_iterator<size_t>(0),
+                    thrust::make_counting_iterator<size_t>(num_threads),
+                    [&](auto const tid) {
+                      page_location_tasks.emplace_back(
+                        cudf::detail::host_worker_pool().submit_task([&, tid = tid] {
+                          auto const chunk_start = std::min(tid * chunks_per_thread, total_chunks);
+                          auto const chunk_end =
+                            std::min(chunk_start + chunks_per_thread, total_chunks);
+                          return process_chunk(chunk_start, chunk_end);
+                        }));
+                    });
+
+      std::for_each(page_location_tasks.begin(), page_location_tasks.end(), [&](auto& task) {
+        auto page_locations = std::move(task).get();
+        host_page_locations.insert(host_page_locations.end(),
+                                   std::make_move_iterator(page_locations.begin()),
+                                   std::make_move_iterator(page_locations.end()));
+      });
+    }
+
+    CUDF_EXPECTS(host_page_locations.size() == unsorted_pages.size(),
+                 "Expected page offsets to match total pages");
+
+    // Copy page data ptrs to device
+    auto page_locations = cudf::detail::make_device_uvector_async(
+      host_page_locations, stream, cudf::get_current_device_resource_ref());
+
+    // (Fast) decode page headers one thread per page
+    decode_page_headers_with_pgidx(pass.chunks.d_begin(),
+                                   unsorted_pages.begin(),
+                                   page_locations.begin(),
+                                   chunk_page_counts.begin(),
+                                   pass.chunks.size(),
+                                   unsorted_pages.size(),
+                                   error_code.data(),
+                                   stream);
+  } else {
+    // (Slow) decode page headers, one warp (lane)per pages of a chunk
+    decode_page_headers(pass.chunks.d_begin(),
+                        d_chunk_page_info.begin(),
+                        pass.chunks.size(),
+                        error_code.data(),
+                        stream);
+  }
 
   if (auto const error = error_code.value_sync(stream); error != 0) {
     if (BitAnd(error, decode_error::UNSUPPORTED_ENCODING) != 0) {

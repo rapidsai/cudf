@@ -111,6 +111,7 @@ enum class decode_error : kernel_error::value_type {
   INVALID_DICT_WIDTH       = 0x40,
   DELTA_PARAM_MISMATCH     = 0x80,
   DELTA_PARAMS_UNSUPPORTED = 0x100,
+  INVALID_PAGE_TYPE        = 0x200,
 };
 
 /**
@@ -695,6 +696,27 @@ void decode_page_headers(ColumnChunkDesc* chunks,
                          int32_t num_chunks,
                          kernel_error::pointer error_code,
                          rmm::cuda_stream_view stream);
+
+/**
+ * @brief Decode page headers from specified page locations from the page index
+ *
+ * @param[in] chunks List of column chunks
+ * @param[in] pages List of pages
+ * @param[in] page_locations List of page locations
+ * @param[in] chunk_page_offsets List of running count of page locations per column chunk
+ * @param[in] num_chunks Number of column chunks
+ * @param[in] num_pages Number of pages
+ * @param[out] error_code Error code for kernel failures
+ * @param[in] stream CUDA stream to use
+ */
+void decode_page_headers_with_pgidx(ColumnChunkDesc* chunks,
+                                    PageInfo* pages,
+                                    uint8_t** page_offsets,
+                                    size_t* chunk_page_offsets,
+                                    int32_t num_chunks,
+                                    int32_t num_pages,
+                                    kernel_error::pointer error_code,
+                                    rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for building the dictionary index for the column
