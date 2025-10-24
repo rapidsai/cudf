@@ -42,9 +42,9 @@ def _dtypes_for_json_decode(dtype: DataType) -> JsonDecodeType:
         return [
             (field.name, child.plc_type, _dtypes_for_json_decode(child))
             for field, child in zip(
-                dtype.polars_type.fields,  # type: ignore[attr-defined]
+                dtype.polars_type.fields,
                 dtype.children,
-                strict=True,  # type: ignore[attr-defined]
+                strict=True,
             )
         ]
     else:
@@ -853,13 +853,13 @@ class StringFunction(Expr):
                 # TODO: Maybe accept a string scalar in
                 # cudf::strings::pad to avoid DtoH transfer
                 # See https://github.com/rapidsai/cudf/issues/20202 for we type ignore
-                width: int = width_col.obj.to_scalar().to_py()  # type: ignore[assignment, no-redef]
+                width: int = width_col.obj.to_scalar().to_py()  # type: ignore[no-redef]
             return Column(
                 plc.strings.padding.pad(
                     column.obj,
                     width,  # type: ignore[arg-type]
                     plc.strings.SideType.LEFT,
-                    char,  # type: ignore[arg-type]
+                    char,
                 ),
                 dtype=self.dtype,
             )
@@ -872,13 +872,13 @@ class StringFunction(Expr):
                 (char,) = self.options
                 # TODO: Maybe accept a string scalar in
                 # cudf::strings::pad to avoid DtoH transfer
-                width: int = width_col.obj.to_scalar().to_py()  # type: ignore[assignment, no-redef]
+                width: int = width_col.obj.to_scalar().to_py()  # type: ignore[no-redef]
             return Column(
                 plc.strings.padding.pad(
                     column.obj,
                     width,  # type: ignore[arg-type]
                     plc.strings.SideType.RIGHT,
-                    char,  # type: ignore[arg-type]
+                    char,
                 ),
                 dtype=self.dtype,
             )

@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import ast
@@ -17,7 +18,6 @@ from cudf.utils.dtypes import (
     BOOL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
-    SIZE_TYPE_DTYPE,
     TIMEDELTA_TYPES,
 )
 
@@ -271,12 +271,13 @@ def query_execute(df, expr, callenv):
     for col in cols:
         if not col.nullable:
             continue
-        nullmask = as_column(col.nullmask)
+        nullmask = col._get_mask_as_column()
 
         if out_mask is None:
-            out_mask = nullmask.astype(dtype=SIZE_TYPE_DTYPE)
+            out_mask = nullmask
         else:
             out_mask = binaryop.binaryop(
                 nullmask, out_mask, "__and__", out_mask.dtype
             )
-    return as_column(out).set_mask(out_mask).fillna(False)
+    mask_buff = out_mask if out_mask is None else out_mask.as_mask()
+    return as_column(out).set_mask(mask_buff).fillna(False)

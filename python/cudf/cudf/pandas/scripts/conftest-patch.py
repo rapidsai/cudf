@@ -32,14 +32,14 @@ def null_assert_warnings(*args, **kwargs):
         pass
 
 
-@pytest.fixture(scope="session", autouse=True)  # type: ignore
+@pytest.fixture(scope="session", autouse=True)
 def patch_testing_functions():
     tm.assert_produces_warning = null_assert_warnings  # noqa: F821
     pytest.raises = replace_kwargs({"match": None})(pytest.raises)
 
 
 # Dictionary to store function call counts
-function_call_counts = defaultdict(lambda: defaultdict(int))  # type: ignore
+function_call_counts = defaultdict(lambda: defaultdict(int))  # type: ignore[var-annotated]
 
 # The specific functions to track
 FUNCTION_NAME = {"_slow_function_call", "_fast_function_call"}
@@ -3046,14 +3046,12 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/extension/test_arrow.py::test_comparison_not_propagating_arrow_error",
     "tests/extension/test_arrow.py::test_dt_day_month_name[day_name-Sunday]",
     "tests/extension/test_arrow.py::test_dt_day_month_name[month_name-January]",
-    "tests/extension/test_arrow.py::test_dt_days_in_month[days_in_month]",
     "tests/extension/test_arrow.py::test_dt_is_month_start_end",
     "tests/extension/test_arrow.py::test_dt_is_quarter_start_end",
     "tests/extension/test_arrow.py::test_dt_is_year_start_end",
     "tests/extension/test_arrow.py::test_dt_isocalendar",
     "tests/extension/test_arrow.py::test_dt_properties[day-2]",
     "tests/extension/test_arrow.py::test_dt_properties[day_of_year-2]",
-    "tests/extension/test_arrow.py::test_dt_properties[dayofweek-0]",
     "tests/extension/test_arrow.py::test_dt_properties[dayofyear-2]",
     "tests/extension/test_arrow.py::test_dt_properties[hour-3]",
     "tests/extension/test_arrow.py::test_dt_properties[is_leap_year-False]",
@@ -4340,17 +4338,10 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/frame/methods/test_replace.py::TestDataFrameReplace::test_replace_NAT_with_None",
     "tests/frame/methods/test_replace.py::TestDataFrameReplace::test_replace_NA_with_None",
     "tests/frame/methods/test_replace.py::TestDataFrameReplace::test_replace_after_convert_dtypes",
-    "tests/frame/methods/test_replace.py::TestDataFrameReplace::test_replace_dict_tuple_list_ordering_remains_the_same",
     "tests/frame/methods/test_replace.py::TestDataFrameReplace::test_replace_list_with_mixed_type[DataFrame-array-data0-to_replace0-value0-expected0]",
     "tests/frame/methods/test_replace.py::TestDataFrameReplace::test_replace_list_with_mixed_type[DataFrame-tuple-data0-to_replace0-value0-expected0]",
-    "tests/frame/methods/test_replace.py::TestDataFrameReplace::test_replace_list_with_mixed_type[DataFrame-tuple-data1-to_replace1-value1-expected1]",
-    "tests/frame/methods/test_replace.py::TestDataFrameReplace::test_replace_list_with_mixed_type[DataFrame-tuple-data2-to_replace2-value2-expected2]",
-    "tests/frame/methods/test_replace.py::TestDataFrameReplace::test_replace_list_with_mixed_type[DataFrame-tuple-data3-to_replace3-value3-expected3]",
     "tests/frame/methods/test_replace.py::TestDataFrameReplace::test_replace_list_with_mixed_type[Series-array-data0-to_replace0-value0-expected0]",
     "tests/frame/methods/test_replace.py::TestDataFrameReplace::test_replace_list_with_mixed_type[Series-tuple-data0-to_replace0-value0-expected0]",
-    "tests/frame/methods/test_replace.py::TestDataFrameReplace::test_replace_list_with_mixed_type[Series-tuple-data1-to_replace1-value1-expected1]",
-    "tests/frame/methods/test_replace.py::TestDataFrameReplace::test_replace_list_with_mixed_type[Series-tuple-data2-to_replace2-value2-expected2]",
-    "tests/frame/methods/test_replace.py::TestDataFrameReplace::test_replace_list_with_mixed_type[Series-tuple-data3-to_replace3-value3-expected3]",
     "tests/frame/methods/test_replace.py::TestDataFrameReplace::test_replace_method[nan-bfill-expected1]",
     "tests/frame/methods/test_replace.py::TestDataFrameReplace::test_replace_mixed_int_block_splitting",
     "tests/frame/methods/test_replace.py::TestDataFrameReplace::test_replace_no_replacement_dtypes[nan-int64]",

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "stream_compaction_common.cuh"
@@ -144,15 +133,14 @@ cudf::size_type distinct_count(table_view const& keys,
 
   auto const comparator_helper = [&](auto const row_equal) {
     using hasher_type = decltype(hash_key);
-    auto key_set      = cuco::static_set{
-      cuco::extent{compute_hash_table_size(num_rows)},
-      cuco::empty_key<cudf::size_type>{-1},
-      row_equal,
-      cuco::linear_probing<1, hasher_type>{hash_key},
-           {},
-           {},
-      cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-      stream.value()};
+    auto key_set      = cuco::static_set{cuco::extent{compute_hash_table_size(num_rows)},
+                                    cuco::empty_key<cudf::size_type>{-1},
+                                    row_equal,
+                                    cuco::linear_probing<1, hasher_type>{hash_key},
+                                         {},
+                                         {},
+                                    rmm::mr::polymorphic_allocator<char>{},
+                                    stream.value()};
 
     auto const iter = thrust::counting_iterator<cudf::size_type>(0);
     // when nulls are equal, we skip hashing any row that has a null
