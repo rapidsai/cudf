@@ -497,7 +497,8 @@ void decode_page_headers(pass_intermediate_data& pass,
 
     // Decide if we should collect page locations sequentially or in parallel
     auto const total_chunks       = pass.chunks.size();
-    auto const parallel_threshold = 128;
+    // Empirically chosen to have enough chunks per thread
+    auto const parallel_threshold = 512;
     if (total_chunks < parallel_threshold) {
       auto page_locations = process_chunk(0, total_chunks);
       host_page_locations.insert(host_page_locations.end(),
