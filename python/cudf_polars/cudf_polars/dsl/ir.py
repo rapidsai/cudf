@@ -1898,22 +1898,35 @@ class ConditionalJoin(IR):
         """Serializable wrapper for a predicate expression."""
 
         predicate: expr.Expr
-        ast: plc.expressions.Expression
 
         def __init__(self, predicate: expr.Expr):
             self.predicate = predicate
-            stream = get_cuda_stream()
-            ast_result = to_ast(predicate, stream=stream)
-            stream.synchronize()
-            if ast_result is None:
-                raise NotImplementedError(
-                    f"Conditional join with predicate {predicate}"
-                )  # pragma: no cover; polars never delivers expressions we can't handle
-            self.ast = ast_result
 
         def __reduce__(self) -> tuple[Any, ...]:
             """Pickle a Predicate object."""
             return (type(self), (self.predicate,))
+
+        def ast(self, stream: Stream) -> plc.expressions.Expression:
+            """
+            Convert ``self.predicate`` to libcudf AST nodes suitable for conditional join.
+
+            Parameters
+            ----------
+            stream
+                CUDA stream used for device memory operations and kernel launches.
+
+            Returns
+            -------
+            plc.expressions.Expression
+                A pylibcudf AST expression representing the predicate.
+            """
+            stream = get_cuda_stream()
+            ast_result = to_ast(self.predicate, stream=stream)
+            if ast_result is None:
+                raise NotImplementedError(
+                    f"Conditional join with predicate {self.predicate}"
+                )  # pragma: no cover; polars never delivers expressions we can't handle
+            return ast_result
 
     __slots__ = ("ast_predicate", "options", "predicate")
     _non_child = ("schema", "predicate", "options")
@@ -1990,7 +2003,7 @@ class ConditionalJoin(IR):
         lg, rg = plc.join.conditional_inner_join(
             _apply_casts(left, left_casts).table,
             _apply_casts(right, right_casts).table,
-            predicate_wrapper.ast,
+            predicate_wrapper.ast(stream),
             stream=stream,
         )
         left = DataFrame.from_table(
