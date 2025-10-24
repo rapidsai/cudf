@@ -20,15 +20,15 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import Expr
-    from cudf_polars.dsl.ir import IR
+    from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.base import ColumnStats
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.utils.config import ConfigOptions
 
 
-def _concat(*dfs: DataFrame) -> DataFrame:
+def _concat(*dfs: DataFrame, context: IRExecutionContext) -> DataFrame:
     # Concatenate a sequence of DataFrames vertically
-    return Union.do_evaluate(None, *dfs)
+    return Union.do_evaluate(None, *dfs, context=context)
 
 
 def _fallback_inform(msg: str, config_options: ConfigOptions) -> None:

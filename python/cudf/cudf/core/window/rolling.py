@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import functools
@@ -254,7 +255,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
 
         if get_option("mode.pandas_compatible"):
             obj = obj.nans_to_nulls()
-        self.obj = obj  # type: ignore[assignment]
+        self.obj = obj
 
         self.window, self.min_periods = self._normalize_window_and_min_periods(
             window, min_periods

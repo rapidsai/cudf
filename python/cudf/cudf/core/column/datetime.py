@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -245,7 +246,7 @@ class DatetimeColumn(TemporalBaseColumn):
             last_day_col = type(self).from_pylibcudf(
                 plc.datetime.last_day_of_month(self.to_pylibcudf(mode="read"))
             )
-        return (self.day == last_day_col.day).fillna(False)  # type: ignore[attr-defined]
+        return (self.day == last_day_col.day).fillna(False)
 
     @functools.cached_property
     def is_quarter_end(self) -> ColumnBase:
@@ -564,7 +565,7 @@ class DatetimeColumn(TemporalBaseColumn):
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
         if isinstance(other, cudf.DateOffset):
-            return other._datetime_binop(self, op, reflect=reflect)  # type: ignore[attr-defined]
+            return other._datetime_binop(self, op, reflect=reflect)
         other = self._normalize_binop_operand(other)
         if other is NotImplemented:
             return NotImplemented
@@ -659,10 +660,10 @@ class DatetimeColumn(TemporalBaseColumn):
 
         lhs_binop: plc.Scalar | ColumnBase = (
             pa_scalar_to_plc_scalar(lhs) if isinstance(lhs, pa.Scalar) else lhs
-        )  # type: ignore[assignment]
+        )
         rhs_binop: plc.Scalar | ColumnBase = (
             pa_scalar_to_plc_scalar(rhs) if isinstance(rhs, pa.Scalar) else rhs
-        )  # type: ignore[assignment]
+        )
 
         result_col = binaryop.binaryop(lhs_binop, rhs_binop, op, out_dtype)
         if out_dtype.kind != "b" and op == "__add__":
@@ -679,11 +680,11 @@ class DatetimeColumn(TemporalBaseColumn):
             return DatetimeTZColumn(
                 data=self.base_data,  # type: ignore[arg-type]
                 dtype=dtype,
-                mask=self.base_mask,  # type: ignore[arg-type]
+                mask=self.base_mask,
                 size=self.size,
                 offset=self.offset,
                 null_count=self.null_count,
-                children=self.base_children,  # type: ignore[arg-type]
+                children=self.base_children,
             )
         if cudf.get_option("mode.pandas_compatible"):
             self._dtype = get_dtype_of_same_type(dtype, self.dtype)
@@ -847,11 +848,11 @@ class DatetimeTZColumn(DatetimeColumn):
         return DatetimeColumn(
             data=self.base_data,  # type: ignore[arg-type]
             dtype=_get_base_dtype(self.dtype),
-            mask=self.base_mask,  # type: ignore[arg-type]
+            mask=self.base_mask,
             size=self.size,
             offset=self.offset,
             null_count=self.null_count,
-            children=self.base_children,  # type: ignore[arg-type]
+            children=self.base_children,
         )
 
     @functools.cached_property
