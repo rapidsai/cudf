@@ -174,29 +174,30 @@ class GenericTransformer(Protocol[U_contra, V_co, StateT_co]):
         ...
 
 
-class _BaseDataTypeHeader(TypedDict):
-    kind: str
-
-
-class _ScalarDataTypeHeader(_BaseDataTypeHeader):
+class _ScalarDataTypeHeader(TypedDict):
+    kind: Literal["scalar"]
     name: str
 
 
-class _DecimalDataTypeHeader(_BaseDataTypeHeader):
+class _DecimalDataTypeHeader(TypedDict):
+    kind: Literal["decimal"]
     precision: int
     scale: int
 
 
-class _DatetimeDataTypeHeader(_BaseDataTypeHeader):
+class _DatetimeDataTypeHeader(TypedDict):
+    kind: Literal["datetime"]
     time_unit: str
     time_zone: str | None
 
 
-class _DurationDataTypeHeader(_BaseDataTypeHeader):
+class _DurationDataTypeHeader(TypedDict):
+    kind: Literal["duration"]
     time_unit: str
 
 
-class _ListDataTypeHeader(_BaseDataTypeHeader):
+class _ListDataTypeHeader(TypedDict):
+    kind: Literal["list"]
     inner: DataTypeHeader
 
 
@@ -205,7 +206,8 @@ class _StructFieldHeader(TypedDict):
     dtype: DataTypeHeader
 
 
-class _StructDataTypeHeader(_BaseDataTypeHeader):
+class _StructDataTypeHeader(TypedDict):
+    kind: Literal["struct"]
     fields: list[_StructFieldHeader]
 
 
