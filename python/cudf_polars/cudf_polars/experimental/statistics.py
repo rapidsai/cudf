@@ -61,8 +61,6 @@ def collect_statistics(
         Root IR node for collecting column statistics.
     config_options
         GPUEngine configuration options.
-    stream
-        CUDA stream used for device memory operations and kernel launches.
 
     Returns
     -------
@@ -580,11 +578,7 @@ def copy_child_unique_counts(column_stats_mapping: dict[str, ColumnStats]) -> No
 
 
 @update_column_stats.register(IR)
-def _(
-    ir: IR,
-    stats: StatsCollector,
-    config_options: ConfigOptions,
-) -> None:
+def _(ir: IR, stats: StatsCollector, config_options: ConfigOptions) -> None:
     # Default `update_column_stats` implementation.
     # Propagate largest child row-count estimate.
     stats.row_count[ir] = ColumnStat[int](
