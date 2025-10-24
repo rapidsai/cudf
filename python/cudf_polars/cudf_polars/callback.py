@@ -220,7 +220,7 @@ def _callback(
     if timer is not None:
         assert should_time
 
-    context = IRExecutionContext()
+    context = IRExecutionContext.from_config_options(config_options)
 
     with (
         nvtx.annotate(message="ExecuteIR", domain=CUDF_POLARS_NVTX_DOMAIN),

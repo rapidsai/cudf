@@ -87,6 +87,20 @@ environment variables with the prefix
 variable `CUDF_POLARS__PARQUET_OPTIONS__CHUNKED=0` will set the default
 `chunked` to `False`.
 
+## CUDA Stream Policy
+
+By default, all CUDA operations in cudf-polars are launched on the default
+stream.  cudf-polars can use
+
+`cudf-polars` can use multiple CUDA streams to run your query more efficiently
+by overlapping data transfers and kernel launches.
+
+This behavior is configured by the `cuda_stream_policy` keyword or
+`CUDF_POLARS__CUDA_STREAM_POLICY` environment variable.  The valid options are
+
+* `default`: use the default CUDA stream for all kernel launches and memory operations
+* `new`: create a new CUDA stream when necessary (when reading from a file or loading an in-memory `polars.LazyFrame` object)
+
 ## Disabling CUDA Managed Memory
 
 By default the `in-memory` executor will use [CUDA managed memory](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#unified-memory-introduction) with RMM's pool allocator. On systems that don't support managed memory, a non-managed asynchronous pool

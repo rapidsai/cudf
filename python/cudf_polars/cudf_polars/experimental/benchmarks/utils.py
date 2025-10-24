@@ -541,7 +541,9 @@ def execute_query(
             if args.debug:
                 translator = Translator(q._ldf.visit(), engine)
                 ir = translator.translate_ir()
-                context = IRExecutionContext()
+                context = IRExecutionContext.from_config_options(
+                    translator.config_options
+                )
                 if run_config.executor == "in-memory":
                     return ir.evaluate(
                         cache={}, timer=None, context=context

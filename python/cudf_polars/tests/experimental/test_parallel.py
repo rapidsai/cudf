@@ -179,7 +179,10 @@ def test_single_cluster():
     ir = Translator(q._ldf.visit(), engine).translate_ir()
     ir, partition_info = lower_ir_graph(ir, config_options)
     graph, key = task_graph(
-        ir, partition_info, config_options, context=IRExecutionContext()
+        ir,
+        partition_info,
+        config_options,
+        context=IRExecutionContext.from_config_options(config_options),
     )
     scheduler = get_scheduler(config_options)
     cache = {}
@@ -215,7 +218,10 @@ def test_task_graph_is_pickle_serializable(engine):
     ir = Translator(q._ldf.visit(), engine).translate_ir()
     ir, partition_info = lower_ir_graph(ir, config_options)
     graph, _ = task_graph(
-        ir, partition_info, config_options, context=IRExecutionContext()
+        ir,
+        partition_info,
+        config_options,
+        context=IRExecutionContext.from_config_options(config_options),
     )
 
     pickle.loads(pickle.dumps(graph))  # no exception

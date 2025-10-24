@@ -69,7 +69,9 @@ def test_hash_shuffle(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
     assert len([node for node in partition_info if isinstance(node, Shuffle)]) == 2
 
     # Check that streaming evaluation works
-    result = evaluate_streaming(qir3, options, context=IRExecutionContext()).to_polars()
+    result = evaluate_streaming(
+        qir3, options, context=IRExecutionContext.from_config_options(options)
+    ).to_polars()
     # ignore is for polars' EngineType, which isn't publicly exported.
     # https://github.com/pola-rs/polars/issues/17420
     expect = df.collect(engine="cpu")

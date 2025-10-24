@@ -7,12 +7,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from rmm.pylibrmm.stream import DEFAULT_STREAM
+from rmm.pylibrmm.stream import DEFAULT_STREAM, Stream
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
-
-    from rmm.pylibrmm.stream import Stream
+    from collections.abc import Callable, Iterable
 
 
 def get_dask_cuda_stream() -> Stream:
@@ -23,6 +21,11 @@ def get_dask_cuda_stream() -> Stream:
 def get_cuda_stream() -> Stream:
     """Get the default CUDA stream for the current thread."""
     return DEFAULT_STREAM
+
+
+def get_new_cuda_stream() -> Stream:
+    """Get a new CUDA stream for the current thread."""
+    return Stream()
 
 
 def join_cuda_streams(
@@ -41,12 +44,16 @@ def join_cuda_streams(
     return
 
 
-def get_joined_cuda_stream(*, upstreams: Iterable[Stream]) -> Stream:
+def get_joined_cuda_stream(
+    get_cuda_stream: Callable[[], Stream], *, upstreams: Iterable[Stream]
+) -> Stream:
     """
     Return a CUDA stream that is joined to the given streams.
 
     Parameters
     ----------
+    get_cuda_stream
+        A zero-argument callable that returns a CUDA stream.
     upstreams
         CUDA streams that will be ordered before the returned stream.
 
