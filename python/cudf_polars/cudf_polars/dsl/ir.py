@@ -39,6 +39,7 @@ from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
 from cudf_polars.dsl.tracing import log_do_evaluate, nvtx_annotate_cudf_polars
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import (
+    offsets_to_windows,
     range_window_bounds,
 )
 from cudf_polars.utils import dtypes
@@ -1459,17 +1460,19 @@ class Rolling(IR):
     __slots__ = (
         "agg_requests",
         "closed_window",
-        "following",
+        "following_ordinal",
         "index",
+        "index_dtype",
         "keys",
-        "preceding",
+        "preceding_ordinal",
         "zlice",
     )
     _non_child = (
         "schema",
         "index",
-        "preceding",
-        "following",
+        "index_dtype",
+        "preceding_ordinal",
+        "following_ordinal",
         "closed_window",
         "keys",
         "agg_requests",
@@ -1477,10 +1480,12 @@ class Rolling(IR):
     )
     index: expr.NamedExpr
     """Column being rolled over."""
-    preceding: plc.Scalar
-    """Preceding window extent defining start of window."""
-    following: plc.Scalar
-    """Following window extent defining end of window."""
+    index_dtype: plc.DataType
+    """Datatype of the index column."""
+    preceding_ordinal: int
+    """Preceding window extent defining start of window as a host integer."""
+    following_ordinal: int
+    """Following window extent defining end of window as a host integer."""
     closed_window: ClosedInterval
     """Treatment of window endpoints."""
     keys: tuple[expr.NamedExpr, ...]
@@ -1494,8 +1499,9 @@ class Rolling(IR):
         self,
         schema: Schema,
         index: expr.NamedExpr,
-        preceding: plc.Scalar,
-        following: plc.Scalar,
+        index_dtype: plc.DataType,
+        preceding_ordinal: int,
+        following_ordinal: int,
         closed_window: ClosedInterval,
         keys: Sequence[expr.NamedExpr],
         agg_requests: Sequence[expr.NamedExpr],
@@ -1504,8 +1510,9 @@ class Rolling(IR):
     ):
         self.schema = schema
         self.index = index
-        self.preceding = preceding
-        self.following = following
+        self.index_dtype = index_dtype
+        self.preceding_ordinal = preceding_ordinal
+        self.following_ordinal = following_ordinal
         self.closed_window = closed_window
         self.keys = tuple(keys)
         self.agg_requests = tuple(agg_requests)
@@ -1528,8 +1535,9 @@ class Rolling(IR):
         self.children = (df,)
         self._non_child_args = (
             index,
-            preceding,
-            following,
+            index_dtype,
+            preceding_ordinal,
+            following_ordinal,
             closed_window,
             keys,
             agg_requests,
@@ -1542,8 +1550,9 @@ class Rolling(IR):
     def do_evaluate(
         cls,
         index: expr.NamedExpr,
-        preceding: plc.Scalar,
-        following: plc.Scalar,
+        index_dtype: plc.DataType,
+        preceding_ordinal: int,
+        following_ordinal: int,
         closed_window: ClosedInterval,
         keys_in: Sequence[expr.NamedExpr],
         aggs: Sequence[expr.NamedExpr],
@@ -1569,8 +1578,13 @@ class Rolling(IR):
             )
         else:
             orderby_obj = orderby.obj
+
+        preceding_scalar, following_scalar = offsets_to_windows(
+            index_dtype, preceding_ordinal, following_ordinal, stream=df.stream
+        )
+
         preceding_window, following_window = range_window_bounds(
-            preceding, following, closed_window
+            preceding_scalar, following_scalar, closed_window
         )
         if orderby.obj.null_count() != 0:
             raise RuntimeError(

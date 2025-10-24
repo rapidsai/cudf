@@ -18,6 +18,7 @@ from cudf_polars.dsl import expr
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import (
+    duration_to_int,
     offsets_to_windows,
     range_window_bounds,
 )
@@ -94,12 +95,12 @@ def to_request(
 class RollingWindow(Expr):
     __slots__ = (
         "closed_window",
-        "following",
+        "following_ordinal",
         "offset",
         "orderby",
         "orderby_dtype",
         "period",
-        "preceding",
+        "preceding_ordinal",
     )
     _non_child = (
         "dtype",
@@ -128,9 +129,11 @@ class RollingWindow(Expr):
         # within `__init__`).
         self.offset = offset
         self.period = period
-        self.preceding, self.following = offsets_to_windows(
-            orderby_dtype, offset, period
-        )
+        self.orderby_dtype = orderby_dtype
+        self.offset = offset
+        self.period = period
+        self.preceding_ordinal = duration_to_int(orderby_dtype, *offset)
+        self.following_ordinal = duration_to_int(orderby_dtype, *period)
         self.closed_window = closed_window
         self.orderby = orderby
         self.children = (agg,)
@@ -163,8 +166,14 @@ class RollingWindow(Expr):
             )
         else:
             orderby_obj = orderby.obj
+        preceding_scalar, following_scalar = offsets_to_windows(
+            self.orderby_dtype,
+            self.preceding_ordinal,
+            self.following_ordinal,
+            stream=df.stream,
+        )
         preceding, following = range_window_bounds(
-            self.preceding, self.following, self.closed_window
+            preceding_scalar, following_scalar, self.closed_window
         )
         if orderby.obj.null_count() != 0:
             raise RuntimeError(

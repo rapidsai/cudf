@@ -11,12 +11,10 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars.utils.cuda_stream import get_cuda_stream
-
 if TYPE_CHECKING:
     from rmm.pylibrmm.stream import Stream
 
-    from cudf_polars.typing import ClosedInterval, Duration
+    from cudf_polars.typing import ClosedInterval
 
 
 __all__ = [
@@ -137,8 +135,9 @@ def duration_to_scalar(dtype: plc.DataType, value: int, stream: Stream) -> plc.S
 
 def offsets_to_windows(
     dtype: plc.DataType,
-    offset: Duration,
-    period: Duration,
+    offset_i: int,
+    period_i: int,
+    stream: Stream,
 ) -> tuple[plc.Scalar, plc.Scalar]:
     """
     Convert polars offset/period pair to preceding/following windows.
@@ -147,31 +146,23 @@ def offsets_to_windows(
     ----------
     dtype
         Datatype of column defining windows
-    offset
-        Offset duration
-    period
-        Period of window
+    offset_i
+        Integer ordinal representing the offset of the window.
+        See :func:`duration_to_int` for more details.
+    period_i
+        Integer ordinal representing the period of the window.
+        See :func:`duration_to_int` for more details.
+    stream
+        CUDA stream used for device memory operations and kernel launches
 
     Returns
     -------
-    tuple of preceding and following windows as pylibcudf scalars.
-
-    Notes
-    -----
-    The returned scalars are constructed on a new stream, which is
-    synchronized before being returned.
+    tuple of preceding and following windows as host integers.
     """
-    offset_i = duration_to_int(dtype, *offset)
-    period_i = duration_to_int(dtype, *period)
-    # Polars uses current_row + offset, ..., current_row + offset + period
-    # Libcudf uses current_row - preceding, ..., current_row + following
-    stream = get_cuda_stream()
-    result = (
+    return (
         duration_to_scalar(dtype, -offset_i, stream=stream),
         duration_to_scalar(dtype, offset_i + period_i, stream=stream),
     )
-    stream.synchronize()
-    return result
 
 
 def range_window_bounds(
