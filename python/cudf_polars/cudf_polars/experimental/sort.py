@@ -334,6 +334,7 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
             stream=stream,
         )
         # TODO: figure out handoff with rapidsmpf
+        # https://github.com/rapidsai/cudf/issues/20337
         shuffler.insert_chunks(packed_inputs)
 
     @staticmethod
@@ -365,6 +366,7 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
         # TODO: When sorting, this step should finalize with a merge (unless we
         # require stability, as cudf merge is not stable).
         # TODO: figure out handoff with rapidsmpf
+        # https://github.com/rapidsai/cudf/issues/20337
         return DataFrame.from_table(
             unpack_and_concat(
                 unspill_partitions(
