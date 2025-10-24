@@ -686,7 +686,10 @@ class GroupedRollingWindow(Expr):
 
         if order_index is not None and eval_cols:
             eval_cols = plc.copying.gather(
-                plc.Table(eval_cols), order_index, plc.copying.OutOfBoundsPolicy.NULLIFY
+                plc.Table(eval_cols),
+                order_index,
+                plc.copying.OutOfBoundsPolicy.NULLIFY,
+                stream=df.stream,
             ).columns()
 
         gathered_iter = iter(eval_cols)
@@ -773,8 +776,9 @@ class GroupedRollingWindow(Expr):
         if order_sensitive:
             row_id = plc.filling.sequence(
                 df.num_rows,
-                plc.Scalar.from_py(0, plc.types.SIZE_TYPE),
-                plc.Scalar.from_py(1, plc.types.SIZE_TYPE),
+                plc.Scalar.from_py(0, plc.types.SIZE_TYPE, stream=df.stream),
+                plc.Scalar.from_py(1, plc.types.SIZE_TYPE, stream=df.stream),
+                stream=df.stream,
             )
             _, _, ob_desc, ob_nulls_last = self.options
             order_index, _, local = self._grouped_window_scan_setup(
