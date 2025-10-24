@@ -392,24 +392,29 @@ void BM_parquet_read_file_shape(nvbench::state& state)
   // Currently the parquet reader only reads the page index if there are string columns
   auto constexpr d_type = cudf::type_id::STRING;
 
-  auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
-  auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const source_type    = retrieve_io_type_enum(state.get_string("io_type"));
+  auto const num_rows       = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const num_row_groups = static_cast<cudf::size_type>(state.get_int64("num_row_groups"));
-  auto const num_pages_per_row_group = static_cast<cudf::size_type>(state.get_int64("pages_per_row_group"));
+  auto const num_pages_per_row_group =
+    static_cast<cudf::size_type>(state.get_int64("pages_per_row_group"));
   auto const has_page_idx = static_cast<bool>(state.get_int64("has_page_idx"));
 
   cuio_source_sink_pair source_sink(source_type);
 
-  auto const tbl = create_random_table({d_type}, row_count{num_rows}, data_profile_builder().cardinality(num_rows/10).avg_run_length(4));
+  auto const tbl =
+    create_random_table({d_type},
+                        row_count{num_rows},
+                        data_profile_builder().cardinality(num_rows / 10).avg_run_length(4));
   auto const view = tbl->view();
 
   cudf::io::parquet_writer_options write_opts =
     cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
       .compression(cudf::io::compression_type::NONE)
-      .row_group_size_rows(num_rows/num_row_groups)
-      .max_page_size_rows(num_rows/(num_row_groups * num_pages_per_row_group))
+      .row_group_size_rows(num_rows / num_row_groups)
+      .max_page_size_rows(num_rows / (num_row_groups * num_pages_per_row_group))
       // Write page index by setting stats_level to STATISTICS_COLUMN
-      .stats_level(has_page_idx ? cudf::io::statistics_freq::STATISTICS_COLUMN : cudf::io::statistics_freq::STATISTICS_ROWGROUP);
+      .stats_level(has_page_idx ? cudf::io::statistics_freq::STATISTICS_COLUMN
+                                : cudf::io::statistics_freq::STATISTICS_ROWGROUP);
   cudf::io::write_parquet(write_opts);
 
   cudf::io::parquet_reader_options read_opts =
@@ -417,17 +422,17 @@ void BM_parquet_read_file_shape(nvbench::state& state)
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.exec(
-    nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
-      try_drop_l3_cache();
+  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
+             [&](nvbench::launch& launch, auto& timer) {
+               try_drop_l3_cache();
 
-      timer.start();
-      auto const result = cudf::io::read_parquet(read_opts);
-      timer.stop();
+               timer.start();
+               auto const result = cudf::io::read_parquet(read_opts);
+               timer.stop();
 
-      CUDF_EXPECTS(result.tbl->num_columns() == 1, "Unexpected number of columns");
-      CUDF_EXPECTS(result.tbl->num_rows() == num_rows, "Unexpected number of rows");
-    });
+               CUDF_EXPECTS(result.tbl->num_columns() == 1, "Unexpected number of columns");
+               CUDF_EXPECTS(result.tbl->num_rows() == num_rows, "Unexpected number of rows");
+             });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(num_rows) / time, "rows_per_sec");

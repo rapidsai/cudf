@@ -701,7 +701,7 @@ void decode_page_headers(ColumnChunkDesc* chunks,
  * @brief Decode page headers from specified page locations from the page index
  *
  * @param[in] chunks List of column chunks
- * @param[in] pages List of pages
+ * @param[out] pages List of pages
  * @param[in] page_locations List of page locations
  * @param[in] chunk_page_offsets List of running count of page locations per column chunk
  * @param[in] num_chunks Number of column chunks
@@ -711,7 +711,7 @@ void decode_page_headers(ColumnChunkDesc* chunks,
  */
 void decode_page_headers_with_pgidx(ColumnChunkDesc* chunks,
                                     PageInfo* pages,
-                                    uint8_t** page_offsets,
+                                    uint8_t** page_locations,
                                     size_t* chunk_page_offsets,
                                     int32_t num_chunks,
                                     int32_t num_pages,

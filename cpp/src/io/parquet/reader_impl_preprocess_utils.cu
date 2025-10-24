@@ -445,15 +445,16 @@ void decode_page_headers(pass_intermediate_data& pass,
 
   kernel_error error_code(stream);
 
+  // If page index is present, collect data ptrs for all pages using single or multiple threads and
+  // launch the accelerated decode page headers kernel
   if (has_page_index) {
-    // Host vector to store data ptr locations for all pages in all chunks
     auto host_page_locations =
       cudf::detail::make_empty_host_vector<uint8_t*>(unsorted_pages.size(), stream);
 
-    // Lambda to collect data ptrs (locations) for all pages in a given range of chunks
-    auto const process_chunk = [&](size_type start, size_type end) -> std::vector<uint8_t*> {
-      // Return early if no chunks
-      if (start >= end) { return {}; }
+    // Function to collect data ptrs (locations) for all pages in a given range of chunks
+    auto const process_chunk = [&](size_type start, size_type end) {
+      // Return if no chunks in range
+      if (start >= end) { return std::vector<uint8_t*>{}; }
 
       std::vector<uint8_t*> page_locations;
       std::for_each(pass.chunks.begin() + start, pass.chunks.begin() + end, [&](auto const& chunk) {
@@ -495,22 +496,22 @@ void decode_page_headers(pass_intermediate_data& pass,
       return page_locations;
     };
 
-    // Decide if we should collect page locations sequentially or in parallel
+    // Decide if to launch the data ptr collection task sequentially or using thread pool
     auto const total_chunks       = pass.chunks.size();
-    // Empirically chosen to have enough chunks per thread
-    auto const parallel_threshold = 512;
+    auto const parallel_threshold = 512;  // Empirically chosen to have enough chunks per thread
+    auto constexpr num_tasks      = 2;
+
     if (total_chunks < parallel_threshold) {
       auto page_locations = process_chunk(0, total_chunks);
       host_page_locations.insert(host_page_locations.end(),
                                  std::make_move_iterator(page_locations.begin()),
                                  std::make_move_iterator(page_locations.end()));
     } else {
-      auto constexpr num_threads   = 2;
-      auto const chunks_per_thread = cudf::util::div_rounding_up_unsafe(total_chunks, num_threads);
+      auto const chunks_per_thread = cudf::util::div_rounding_up_unsafe(total_chunks, num_tasks);
       std::vector<std::future<std::vector<uint8_t*>>> page_location_tasks;
-      page_location_tasks.reserve(num_threads);
+      page_location_tasks.reserve(num_tasks);
       std::for_each(thrust::make_counting_iterator<size_t>(0),
-                    thrust::make_counting_iterator<size_t>(num_threads),
+                    thrust::make_counting_iterator<size_t>(num_tasks),
                     [&](auto const tid) {
                       page_location_tasks.emplace_back(
                         cudf::detail::host_worker_pool().submit_task([&, tid = tid] {
@@ -521,6 +522,7 @@ void decode_page_headers(pass_intermediate_data& pass,
                         }));
                     });
 
+      // Collect results from all tasks
       std::for_each(page_location_tasks.begin(), page_location_tasks.end(), [&](auto& task) {
         auto page_locations = std::move(task).get();
         host_page_locations.insert(host_page_locations.end(),
@@ -529,6 +531,7 @@ void decode_page_headers(pass_intermediate_data& pass,
       });
     }
 
+    // Check if we have data ptrs for all input pages
     CUDF_EXPECTS(host_page_locations.size() == unsorted_pages.size(),
                  "Expected page offsets to match total pages");
 
