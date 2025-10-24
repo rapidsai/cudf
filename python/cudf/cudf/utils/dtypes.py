@@ -543,6 +543,11 @@ def get_dtype_of_same_kind(source_dtype: DtypeObj, target_dtype: DtypeObj):
     if isinstance(source_dtype, pd.ArrowDtype):
         return dtype_to_pandas_arrowdtype(target_dtype)
     elif is_pandas_nullable_extension_dtype(source_dtype):
+        if (
+            isinstance(source_dtype, pd.StringDtype)
+            and source_dtype.na_value is np.nan
+        ):
+            return target_dtype
         return dtype_to_pandas_nullable_extension_type(target_dtype)
     else:
         return target_dtype

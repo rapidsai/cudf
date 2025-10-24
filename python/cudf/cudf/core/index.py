@@ -26,6 +26,7 @@ from cudf.api.types import (
     is_integer,
     is_list_like,
     is_scalar,
+    is_string_dtype,
 )
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import copying, sorting, stream_compaction
@@ -2530,7 +2531,10 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
     @copy_docstring(StringMethods)
     @_performance_tracking
     def str(self):
-        if self.dtype == CUDF_STRING_DTYPE:
+        if self.dtype == CUDF_STRING_DTYPE or (
+            cudf.get_option("mode.pandas_compatible")
+            and is_string_dtype(self.dtype)
+        ):
             return StringMethods(parent=self)
         else:
             raise AttributeError(
@@ -4912,6 +4916,17 @@ class CategoricalIndex(Index):
     @cached_property
     def inferred_type(self) -> str:
         return "categorical"
+
+    @property
+    @copy_docstring(StringMethods)
+    @_performance_tracking
+    def str(self):
+        if is_string_dtype(self.dtype.categories.dtype):
+            return StringMethods(parent=self)
+        else:
+            raise AttributeError(
+                "Can only use .str accessor with string values!"
+            )
 
     @property
     @_performance_tracking
