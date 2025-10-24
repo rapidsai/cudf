@@ -5,7 +5,6 @@
 
 import string
 
-import numba.cuda
 import numpy
 import pandas as pd
 import pyarrow as pa
@@ -175,12 +174,6 @@ def bench_from_arrow(benchmark, N):
 @pytest.mark.parametrize("N", NUM_ROWS)
 def bench_construction(benchmark, N):
     benchmark(cudf.DataFrame, {None: cupy.random.rand(N)})
-
-
-@pytest.mark.parametrize("N", NUM_ROWS)
-@pytest.mark.pandas_incompatible
-def bench_construction_numba_device_array(benchmark, N):
-    benchmark(cudf.DataFrame, numba.cuda.to_device(numpy.ones((100, N))))
 
 
 @benchmark_with_object(cls="dataframe", dtype="float", cols=6)
