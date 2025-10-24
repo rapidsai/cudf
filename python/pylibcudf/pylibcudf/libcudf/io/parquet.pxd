@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
 from libcpp.functional cimport reference_wrapper
@@ -220,6 +221,10 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
     cdef unique_ptr[vector[uint8_t]] write_parquet(
         parquet_writer_options options,
         cuda_stream_view stream,
+    ) except +libcudf_exception_handler
+
+    cdef bool is_supported_read_parquet(
+        compression_type compression
     ) except +libcudf_exception_handler
 
     cdef bool is_supported_write_parquet(

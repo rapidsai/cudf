@@ -119,9 +119,9 @@ class DataType:
         # these type ignores are needed because the type checker doesn't
         # see that these equality checks passing imply a specific type for each child field.
         if self.plc_type.id() == plc.TypeId.STRUCT:
-            return [DataType(field.dtype) for field in self.polars_type.fields]  # type: ignore[attr-defined]
+            return [DataType(field.dtype) for field in self.polars_type.fields]
         elif self.plc_type.id() == plc.TypeId.LIST:
-            return [DataType(self.polars_type.inner)]  # type: ignore[attr-defined]
+            return [DataType(self.polars_type.inner)]
         return []
 
     def scale(self) -> int:
