@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import warnings
@@ -130,7 +131,7 @@ def to_numeric(
     if dtype.kind in "mM":
         col = col.astype(np.dtype(np.int64))
     elif isinstance(dtype, CategoricalDtype):
-        cat_dtype = col.dtype.categories.dtype
+        cat_dtype = col.dtype.categories.dtype  # type: ignore[union-attr]
         if cat_dtype.kind in "iufb":
             col = col.astype(cat_dtype)
         else:

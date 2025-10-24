@@ -209,7 +209,7 @@ def make_final_proxy_type(
     def as_cpu_object(self):
         return self._fsproxy_fast_to_slow()
 
-    @property  # type: ignore
+    @property  # type: ignore[misc]
     def _fsproxy_state(self) -> _State:
         return (
             _State.FAST
@@ -253,7 +253,7 @@ def make_final_proxy_type(
 
     metaclass = _FastSlowProxyMeta
     if metaclasses:
-        metaclass = types.new_class(  # type: ignore
+        metaclass = types.new_class(  # type: ignore[assignment]
             f"{name}_Meta",
             (*metaclasses, _FastSlowProxyMeta),
             {},
@@ -312,7 +312,7 @@ def make_intermediate_proxy_type(
             f"Cannot directly instantiate object of type {type(self)}"
         )
 
-    @property  # type: ignore
+    @property  # type: ignore[misc]
     def _fsproxy_state(self):
         return (
             _State.FAST
@@ -715,7 +715,7 @@ class _CallableProxyMixin:
     """
 
     # For wrapped callables isinstance(self, FunctionType) should return True
-    __class__ = types.FunctionType  # type: ignore
+    __class__ = types.FunctionType  # type: ignore[assignment]
 
     def __call__(self, *args, **kwargs) -> Any:
         result, _ = _fast_slow_function_call(
@@ -840,7 +840,7 @@ class _FastSlowAttribute:
                 if instance is not None:
                     return _maybe_wrap_result(
                         getattr(instance._fsproxy_slow, self._name),
-                        None,  # type: ignore
+                        None,  # type: ignore[arg-type]
                     )
                 else:
                     raise e
@@ -874,7 +874,7 @@ class _FastSlowAttribute:
                 if self._private:
                     return _maybe_wrap_result(
                         getattr(instance._fsproxy_slow, self._name),
-                        None,  # type: ignore
+                        None,  # type: ignore[arg-type]
                     )
                 return _fast_slow_function_call(
                     getattr,
@@ -1408,7 +1408,7 @@ PROXY_BASE_CLASSES: set[type] = {
 }
 
 
-NUMPY_TYPES: set[type[np.generic]] = set(np.sctypeDict.values())  # type: ignore[arg-type]
+NUMPY_TYPES: set[type[np.generic]] = set(np.sctypeDict.values())
 
 
 _SPECIAL_METHODS: set[str] = {
