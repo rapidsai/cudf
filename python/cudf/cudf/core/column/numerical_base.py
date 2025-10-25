@@ -143,7 +143,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         interpolation: str,
         exact: bool,
         return_scalar: bool,
-    ) -> NumericalBaseColumn:
+    ) -> ColumnBase | ScalarLike:
         if np.logical_or(q < 0, q > 1).any():
             raise ValueError(
                 "percentiles should all be in the interval [0, 1]"

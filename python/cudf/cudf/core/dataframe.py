@@ -239,7 +239,8 @@ class _DataFrameIndexer(_FrameIndexer):
                 normalized_dtype = find_common_type(
                     [dtype for _, dtype in df._dtypes]
                 )
-                df = df.astype(normalized_dtype)
+                if normalized_dtype is not None:
+                    df = df.astype(normalized_dtype)
             sr = df.T
             return sr[sr._column_names[0]]
 
@@ -7597,7 +7598,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
             # homogenize the dtypes of the columns
             homogenized = (
-                col.astype(common_type) if col is not None else all_nulls()
+                col.astype(common_type)
+                if col is not None and common_type is not None
+                else (all_nulls() if col is None else col)
                 for col in columns
             )
             if (

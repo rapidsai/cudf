@@ -7,7 +7,7 @@ import operator
 import textwrap
 import warnings
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import numpy as np
 import pandas as pd
@@ -309,7 +309,7 @@ class CategoricalDtype(_BaseDtype):
         else:
             return column
 
-    def __eq__(self, other: Dtype) -> bool:
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, str):
             return other == self.name
         elif other is self:
@@ -395,7 +395,7 @@ class ListDtype(_BaseDtype):
     ListDtype(ListDtype(int32))
     """
 
-    name: str = "list"
+    name: ClassVar[str] = "list"
 
     def __init__(self, element_type: Dtype) -> None:
         self._element_type = cudf.dtype(element_type)
@@ -509,7 +509,7 @@ class ListDtype(_BaseDtype):
         return hash(self.to_arrow())
 
     def serialize(self) -> tuple[dict, list]:
-        header: dict[str, Dtype] = {}
+        header: dict[str, Any] = {}
 
         frames = []
 
@@ -598,7 +598,7 @@ class StructDtype(_BaseDtype):
 
     name = "struct"
 
-    def __init__(self, fields: dict[str, Dtype]) -> None:
+    def __init__(self, fields: Mapping[str, Dtype]) -> None:
         with cudf.option_context("mode.pandas_compatible", False):
             # We need to temporarily disable pandas compatibility mode
             # because `cudf.dtype("object")` raises an error.
@@ -725,7 +725,7 @@ class StructDtype(_BaseDtype):
 
     @cached_property
     def itemsize(self) -> int:
-        return sum(field.itemsize for field in self.fields.values())  # type: ignore[union-attr]
+        return sum(field.itemsize for field in self.fields.values())  # type: ignore[union-attr,misc]
 
     def _recursively_replace_fields(self, result: dict) -> dict:
         """
@@ -754,7 +754,11 @@ class StructDtype(_BaseDtype):
         elif isinstance(obj, pa.StructType):
             return cls.from_arrow(obj)
         elif isinstance(obj, pd.ArrowDtype):
-            return cls.from_arrow(obj.pyarrow_dtype)
+            if not isinstance(obj.pyarrow_dtype, pa.StructType):
+                raise TypeError(
+                    f"Expected StructType, got {type(obj.pyarrow_dtype).__name__}"
+                )
+            return cls.from_arrow(obj.pyarrow_dtype)  # type: ignore[arg-type]
         else:
             raise TypeError(f"Cannot convert {type(obj)} to StructDtype")
 
@@ -928,7 +932,7 @@ class DecimalDtype(_BaseDtype):
         _check_type(cls, header, frames, is_valid_class=issubclass)
         return cls(header["precision"], header["scale"])
 
-    def __eq__(self, other: Dtype) -> bool:
+    def __eq__(self, other: object) -> bool:
         if other is self:
             return True
         elif not isinstance(other, self.__class__):

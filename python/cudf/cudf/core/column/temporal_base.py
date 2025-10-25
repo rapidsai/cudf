@@ -402,7 +402,7 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         interpolation: str,
         exact: bool,
         return_scalar: bool,
-    ) -> ColumnBase | pd.Timestamp | pd.Timedelta:  # type: ignore[override]
+    ) -> ColumnBase | ScalarLike:
         result = self.astype(self._UNDERLYING_DTYPE).quantile(
             q=q,
             interpolation=interpolation,

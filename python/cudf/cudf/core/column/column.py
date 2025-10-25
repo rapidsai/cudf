@@ -1552,7 +1552,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         interpolation: str,
         exact: bool,
         return_scalar: bool,
-    ) -> ColumnBase:
+    ) -> ColumnBase | ScalarLike:
         raise TypeError(f"cannot perform quantile with type {self.dtype}")
 
     def take(
@@ -2120,7 +2120,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return np.dtype(np.bool_)
         return self.dtype
 
-    def _with_type_metadata(self: ColumnBase, dtype: DtypeObj) -> ColumnBase:
+    def _with_type_metadata(
+        self: ColumnBase, dtype: DtypeObj | None
+    ) -> ColumnBase:
         """
         Copies type metadata from self onto other, returning a new column.
 
@@ -2128,7 +2130,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         the children of ``self``.
         """
         # For Arrow dtypes, store them directly in the column's dtype property
-        if isinstance(dtype, pd.ArrowDtype):
+        if dtype is not None and isinstance(dtype, pd.ArrowDtype):
             self._dtype = cudf.dtype(dtype)
         return self
 
@@ -2473,7 +2475,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
 def column_empty(
     row_count: int,
-    dtype: DtypeObj = CUDF_STRING_DTYPE,
+    dtype: Dtype = CUDF_STRING_DTYPE,
 ) -> ColumnBase:
     """
     Allocate a new column with the given row_count and dtype.
@@ -2495,12 +2497,12 @@ def column_empty(
         if is_struct:
             children = tuple(
                 column_empty(row_count, field_dtype)
-                for field_dtype in dtype.fields.values()
+                for field_dtype in dtype.fields.values()  # type: ignore[union-attr]
             )
         else:
             children = (
                 as_column(0, length=row_count + 1, dtype=SIZE_TYPE_DTYPE),
-                column_empty(row_count, dtype=dtype.element_type),
+                column_empty(row_count, dtype=dtype.element_type),  # type: ignore[union-attr]
             )
         mask = (
             None

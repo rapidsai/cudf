@@ -642,7 +642,8 @@ class Frame(BinaryOperand, Scannable, Serializable):
                     col.has_nulls() for col in self._columns
                 ):
                     if to_dtype.kind == "b" or any(
-                        dtype.kind == "b" for _, dtype in self._dtypes
+                        dtype.kind == "b"
+                        for _, dtype in self._dtypes
                     ):
                         if module == cupy:
                             raise ValueError(
@@ -650,7 +651,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                             )
                         else:
                             to_dtype = np.dtype("object")
-                    elif to_dtype.kind in "ui":
+                    elif to_dtype.kind in "ui":  # type: ignore[union-attr]
                         to_dtype = np.dtype("float64")
 
             if cudf.get_option(
@@ -1435,16 +1436,19 @@ class Frame(BinaryOperand, Scannable, Serializable):
             for col, val in zip(self._columns, values, strict=True)
         ]
         sources = [
-            col
-            if is_dtype_equal(col.dtype, common_dtype)
-            else col.astype(common_dtype)
+            (
+                col
+                if is_dtype_equal(col.dtype, common_dtype)
+                or common_dtype is None
+                else col.astype(common_dtype)
+            )
             for col, common_dtype in zip(
                 self._columns, common_dtype_list, strict=True
             )
         ]
         values = [
             val
-            if is_dtype_equal(val.dtype, common_dtype)
+            if is_dtype_equal(val.dtype, common_dtype) or common_dtype is None
             else val.astype(common_dtype)
             for val, common_dtype in zip(
                 values, common_dtype_list, strict=True

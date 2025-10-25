@@ -2145,10 +2145,10 @@ class Index(SingleColumnFrame):
                 )
                 pd_preprocess = pd.CategoricalIndex(pd_cats)
                 data_repr = repr(pd_preprocess).split("\n")
-                pd_preprocess.dtype._categories = (
+                pd_preprocess.dtype._categories = (  # type: ignore[union-attr]
                     preprocess.categories.to_pandas()
                 )
-                pd_preprocess.dtype._ordered = preprocess.dtype.ordered
+                pd_preprocess.dtype._ordered = preprocess.dtype.ordered  # type: ignore[union-attr]
                 cats_repr = repr(pd_preprocess).split("\n")
                 output = "\n".join(data_repr[:-1] + cats_repr[-1:])
 
@@ -5147,7 +5147,11 @@ def interval_range(
             )
         )
     return IntervalIndex.from_breaks(
-        bin_edges.astype(common_dtype), closed=closed, name=name
+        bin_edges.astype(common_dtype)
+        if common_dtype is not None
+        else bin_edges,
+        closed=closed,
+        name=name,
     )
 
 
@@ -5211,7 +5215,7 @@ class IntervalIndex(Index):
             elif hasattr(data, "dtype") and isinstance(
                 data.dtype, (pd.IntervalDtype, IntervalDtype)
             ):
-                closed = data.dtype.closed
+                closed = data.dtype.closed  # type: ignore[union-attr]
 
         closed = closed or "right"
 

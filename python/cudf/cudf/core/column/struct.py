@@ -63,7 +63,17 @@ class StructColumn(ColumnBase):
     ):
         if data is not None:
             raise ValueError("data must be None.")
-        dtype = self._validate_dtype_instance(dtype)
+        # Inline validation - IntervalDtype is a subclass of StructDtype, so compare types exactly
+        if (
+            not cudf.get_option("mode.pandas_compatible")
+            and type(dtype) is not StructDtype
+        ) or (
+            cudf.get_option("mode.pandas_compatible")
+            and not is_dtype_obj_struct(dtype)
+        ):
+            raise ValueError(
+                f"{type(dtype).__name__} must be a StructDtype exactly."
+            )
         super().__init__(
             data=data,
             size=size,
@@ -83,21 +93,6 @@ class StructColumn(ColumnBase):
         """
         # TODO: handle if self.has_nulls(): case
         return self
-
-    @staticmethod
-    def _validate_dtype_instance(dtype: StructDtype) -> StructDtype:
-        # IntervalDtype is a subclass of StructDtype, so compare types exactly
-        if (
-            not cudf.get_option("mode.pandas_compatible")
-            and type(dtype) is not StructDtype
-        ) or (
-            cudf.get_option("mode.pandas_compatible")
-            and not is_dtype_obj_struct(dtype)
-        ):
-            raise ValueError(
-                f"{type(dtype).__name__} must be a StructDtype exactly."
-            )
-        return dtype
 
     @property
     def base_size(self) -> int:
@@ -209,9 +204,12 @@ class StructColumn(ColumnBase):
                 mask=self.base_mask,
                 offset=self.offset,
                 null_count=self.null_count,
-                children=tuple(  # type: ignore[arg-type]
-                    child.astype(dtype.subtype) for child in self.base_children
-                ),
+                children=tuple(
+                    child.astype(dtype.subtype)
+                    if dtype.subtype is not None
+                    else child
+                    for child in self.base_children
+                ),  # type: ignore[arg-type]
             )
         elif isinstance(dtype, StructDtype):
             return StructColumn(

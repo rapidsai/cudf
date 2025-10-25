@@ -177,7 +177,11 @@ class TimeDeltaColumn(TemporalBaseColumn):
                     if op == "__truediv__"
                     else self._UNDERLYING_DTYPE
                 )
-                this = self.astype(common_dtype).astype(out_dtype)
+                this = (
+                    self.astype(common_dtype).astype(out_dtype)
+                    if common_dtype is not None and out_dtype is not None
+                    else self
+                )
                 if isinstance(other, pa.Scalar):
                     if other.is_valid:
                         # pyarrow.cast doesn't support casting duration to float
@@ -194,7 +198,11 @@ class TimeDeltaColumn(TemporalBaseColumn):
                             None, type=cudf_dtype_to_pa_type(out_dtype)
                         )
                 else:
-                    other = other.astype(common_dtype).astype(out_dtype)
+                    other = (
+                        other.astype(common_dtype).astype(out_dtype)
+                        if common_dtype is not None and out_dtype is not None
+                        else other
+                    )
             elif op in {"__add__", "__sub__"}:
                 out_dtype = find_common_type((self.dtype, other_cudf_dtype))
         elif other_cudf_dtype.kind in {"f", "i", "u"}:

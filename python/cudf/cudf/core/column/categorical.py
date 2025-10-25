@@ -345,7 +345,9 @@ class CategoricalColumn(column.ColumnBase):
             # TODO: work on interval index dropna
             cats = cats.dropna()
         data = pd.Categorical.from_codes(
-            codes, categories=cats.to_pandas(), ordered=col.ordered
+            codes,  # type: ignore[arg-type]
+            categories=cats.to_pandas(),
+            ordered=col.ordered,  # type: ignore[arg-type]
         )
         return pd.Index(data)
 

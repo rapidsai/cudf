@@ -732,11 +732,17 @@ class NumericalColumn(NumericalBaseColumn):
             replacement_col = replacement_col.repeat(len(to_replace_col))
         elif len(replacement_col) == 1 and len(to_replace_col) == 0:
             return self.copy()
-        replaced = cast(Self, self.astype(common_type))
+        replaced = cast(
+            Self, self.astype(common_type) if common_type is not None else self
+        )
         df = cudf.DataFrame._from_data(
             {
-                "old": to_replace_col.astype(common_type),
-                "new": replacement_col.astype(common_type),
+                "old": to_replace_col.astype(common_type)
+                if common_type is not None
+                else to_replace_col,
+                "new": replacement_col.astype(common_type)
+                if common_type is not None
+                else replacement_col,
             }
         )
         df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
@@ -822,7 +828,7 @@ class NumericalColumn(NumericalBaseColumn):
                     lower_, upper_ = finfo.min, finfo.max  # type: ignore[assignment]
 
                     # Check specifically for np.pi values when casting to lower precision
-                    if self_dtype_numpy.itemsize > to_dtype_numpy.itemsize:
+                    if self_dtype_numpy.itemsize > to_dtype_numpy.itemsize:  # type: ignore[union-attr]
                         # Check if column contains pi value
                         if len(col) > 0:
                             # Create a simple column with pi to test if the precision matters
@@ -922,7 +928,7 @@ class NumericalColumn(NumericalBaseColumn):
 
         return self
 
-    def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
+    def _reduction_result_dtype(self, reduction_op: str) -> DtypeObj:
         if reduction_op in {"sum", "product"}:
             if self.dtype.kind == "f":
                 return self.dtype
@@ -930,7 +936,12 @@ class NumericalColumn(NumericalBaseColumn):
                 return np.dtype("uint64")
             return np.dtype("int64")
         elif reduction_op == "sum_of_squares":
-            return find_common_type((self.dtype, np.dtype(np.uint64)))
+            result = find_common_type((self.dtype, np.dtype(np.uint64)))
+            if result is None:
+                raise ValueError(
+                    f"Cannot determine common type for {self.dtype} and uint64"
+                )
+            return result
         elif reduction_op in {"var", "std", "mean"}:
             if self.dtype.kind == "f":
                 return self.dtype
@@ -1018,7 +1029,7 @@ def _normalize_find_and_replace_input(
     if (
         col_to_normalize_dtype.kind == "f"
         and input_column_dtype.kind in {"i", "u"}
-    ) or (col_to_normalize_dtype.num > input_column_dtype.num):
+    ) or (col_to_normalize_dtype.num > input_column_dtype.num):  # type: ignore[union-attr]
         raise TypeError(
             f"Potentially unsafe cast for non-equivalent "
             f"{col_to_normalize_dtype.name} "

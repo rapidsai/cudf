@@ -112,7 +112,14 @@ class DatetimeColumn(TemporalBaseColumn):
         null_count: int,
         children: tuple,
     ):
-        dtype = self._validate_dtype_instance(dtype)
+        # Inline validation
+        if (
+            cudf.get_option("mode.pandas_compatible") and not dtype.kind == "M"
+        ) or (
+            not cudf.get_option("mode.pandas_compatible")
+            and not (isinstance(dtype, np.dtype) and dtype.kind == "M")
+        ):
+            raise ValueError(f"dtype must be a datetime, got {dtype}")
         super().__init__(
             data=data,
             size=size,
@@ -163,17 +170,6 @@ class DatetimeColumn(TemporalBaseColumn):
         return self.scan(op.replace("cum", ""), True)._with_type_metadata(
             self.dtype
         )
-
-    @staticmethod
-    def _validate_dtype_instance(dtype: np.dtype) -> np.dtype:
-        if (
-            cudf.get_option("mode.pandas_compatible") and not dtype.kind == "M"
-        ) or (
-            not cudf.get_option("mode.pandas_compatible")
-            and not (isinstance(dtype, np.dtype) and dtype.kind == "M")
-        ):
-            raise ValueError(f"dtype must be a datetime, got {dtype}")
-        return dtype
 
     def __contains__(self, item: ScalarLike) -> bool:
         try:
@@ -811,14 +807,6 @@ class DatetimeTZColumn(DatetimeColumn):
             del self._local_time
         except AttributeError:
             pass
-
-    @staticmethod
-    def _validate_dtype_instance(
-        dtype: pd.DatetimeTZDtype,
-    ) -> pd.DatetimeTZDtype:
-        if not isinstance(dtype, pd.DatetimeTZDtype):
-            raise ValueError("dtype must be a pandas.DatetimeTZDtype")
-        return get_compatible_timezone(dtype)
 
     def to_pandas(
         self,
