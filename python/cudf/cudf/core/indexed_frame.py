@@ -17,6 +17,7 @@ from typing import (
     Literal,
     TypeVar,
     cast,
+    overload,
 )
 from uuid import uuid4
 
@@ -2609,19 +2610,47 @@ class IndexedFrame(Frame):
         scaled.index = self.index.copy(deep=False)
         return scaled
 
+    @overload
+    def sort_index(
+        self,
+        axis: Axis = ...,
+        level=...,
+        ascending: bool | Iterable[bool] = ...,
+        inplace: Literal[False] = ...,
+        kind: str = ...,
+        na_position: Literal["first", "last"] = ...,
+        sort_remaining: bool = ...,
+        ignore_index: bool = ...,
+        key=...,
+    ) -> Self: ...
+
+    @overload
+    def sort_index(
+        self,
+        axis: Axis = ...,
+        level=...,
+        ascending: bool | Iterable[bool] = ...,
+        inplace: Literal[True] = ...,
+        kind: str = ...,
+        na_position: Literal["first", "last"] = ...,
+        sort_remaining: bool = ...,
+        ignore_index: bool = ...,
+        key=...,
+    ) -> None: ...
+
     @_performance_tracking
     def sort_index(
         self,
-        axis=0,
+        axis: Axis = 0,
         level=None,
-        ascending=True,
-        inplace=False,
-        kind=None,
-        na_position="last",
-        sort_remaining=True,
-        ignore_index=False,
+        ascending: bool | Iterable[bool] = True,
+        inplace: bool = False,
+        kind: str = "quicksort",
+        na_position: Literal["first", "last"] = "last",
+        sort_remaining: bool = True,
+        ignore_index: bool = False,
         key=None,
-    ):
+    ) -> Self | None:
         """Sort object by labels (along an axis).
 
         Parameters
@@ -2706,7 +2735,7 @@ class IndexedFrame(Frame):
 
             * Not supporting: kind, sort_remaining=False
         """
-        if kind is not None:
+        if kind != "quicksort":
             raise NotImplementedError("kind is not yet supported")
 
         if key is not None:
@@ -2755,7 +2784,7 @@ class IndexedFrame(Frame):
                 )
                 out = self._gather(
                     GatherMap.from_column_unchecked(
-                        as_column(inds),
+                        as_column(inds),  # type: ignore[arg-type]
                         len(self),
                         nullify=False,
                     )
@@ -3555,8 +3584,8 @@ class IndexedFrame(Frame):
     def sort_values(
         self,
         by,
-        axis=0,
-        ascending: bool | list[bool] = True,
+        axis: Axis = 0,
+        ascending: bool | Iterable[bool] = True,
         inplace: bool = False,
         kind: str = "quicksort",
         na_position: Literal["first", "last"] = "last",
@@ -3672,7 +3701,7 @@ class IndexedFrame(Frame):
 
     def _n_largest_or_smallest(
         self, largest: bool, n: int, columns, keep: Literal["first", "last"]
-    ):
+    ) -> Self:
         # Get column to operate on
         if isinstance(columns, str):
             columns = [columns]
