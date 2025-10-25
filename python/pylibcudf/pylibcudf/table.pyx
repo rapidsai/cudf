@@ -74,7 +74,8 @@ cdef class Table:
 
     def to_arrow(
         self,
-        metadata: list[ColumnMetadata | str] | None = None
+        metadata: list[ColumnMetadata | str] | None = None,
+        stream: Stream = None,
     ) -> ArrowLike:
         """Create a pyarrow table from a pylibcudf table.
 
@@ -82,6 +83,8 @@ cdef class Table:
         ----------
         metadata : list[ColumnMetadata | str] | None
             The metadata to attach to the columns of the table.
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
 
         Returns
         -------
@@ -96,7 +99,7 @@ cdef class Table:
         # TODO: Once the arrow C device interface registers more
         # types that it supports, we can call pa.table(self) if
         # no metadata is passed.
-        return pa.table(_ObjectWithArrowMetadata(self, metadata))
+        return pa.table(_ObjectWithArrowMetadata(self, metadata, stream))
 
     @staticmethod
     def from_arrow(
@@ -320,10 +323,11 @@ cdef class Table:
 
         return PyCapsule_New(<void*>raw_schema_ptr, "arrow_schema", _release_schema)
 
-    def _to_host_array(self):
+    def _to_host_array(self, Stream stream):
         cdef ArrowArray* raw_host_array_ptr
+
         with nogil:
-            raw_host_array_ptr = to_arrow_host_raw(self.view())
+            raw_host_array_ptr = to_arrow_host_raw(self.view(), stream.view())
 
         return PyCapsule_New(<void*>raw_host_array_ptr, "arrow_array", _release_array)
 
@@ -342,7 +346,7 @@ cdef class Table:
         if requested_schema is not None:
             raise ValueError("pylibcudf.Table does not support alternative schema")
 
-        return self._to_schema(), self._to_host_array()
+        return self._to_schema(), self._to_host_array(_get_stream(None))
 
     def __arrow_c_device_array__(self, requested_schema=None, **kwargs):
         if requested_schema is not None:

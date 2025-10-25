@@ -349,7 +349,8 @@ cdef class Column:
 
     def to_arrow(
         self,
-        metadata: ColumnMetadata | str | None = None
+        metadata: ColumnMetadata | str | None = None,
+        stream: Stream = None,
     ) -> ArrowLike:
         """Create a pyarrow array from a pylibcudf column.
 
@@ -357,6 +358,8 @@ cdef class Column:
         ----------
         metadata : ColumnMetadata | str | None
             The metadata to attach to the column.
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
 
         Returns
         -------
@@ -371,7 +374,7 @@ cdef class Column:
         # TODO: Once the arrow C device interface registers more
         # types that it supports, we can call pa.array(self) if
         # no metadata is passed.
-        return pa.array(_ObjectWithArrowMetadata(self, metadata))
+        return pa.array(_ObjectWithArrowMetadata(self, metadata, stream))
 
     @staticmethod
     def from_arrow(
@@ -1324,10 +1327,10 @@ cdef class Column:
 
         return PyCapsule_New(<void*>raw_schema_ptr, 'arrow_schema', _release_schema)
 
-    def _to_host_array(self):
+    def _to_host_array(self, Stream stream):
         cdef ArrowArray* raw_host_array_ptr
         with nogil:
-            raw_host_array_ptr = to_arrow_host_raw(self.view())
+            raw_host_array_ptr = to_arrow_host_raw(self.view(), stream.view())
 
         return PyCapsule_New(<void*>raw_host_array_ptr, "arrow_array", _release_array)
 
@@ -1346,7 +1349,7 @@ cdef class Column:
         if requested_schema is not None:
             raise ValueError("pylibcudf.Column does not support alternative schema")
 
-        return self._to_schema(), self._to_host_array()
+        return self._to_schema(), self._to_host_array(_get_stream(None))
 
     def __arrow_c_device_array__(self, requested_schema=None, **kwargs):
         if requested_schema is not None:
