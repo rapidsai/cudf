@@ -5,7 +5,7 @@
 from . cimport (
     avro,
     datasource,
-    hybrid_scan,
+    experimental,
     json,
     orc,
     parquet,
