@@ -680,7 +680,7 @@ class DatetimeColumn(TemporalBaseColumn):
         else:
             return result_col
 
-    def _with_type_metadata(self, dtype: DtypeObj) -> DatetimeColumn:
+    def _with_type_metadata(self, dtype: DtypeObj | None) -> DatetimeColumn:
         if isinstance(dtype, pd.DatetimeTZDtype):
             return DatetimeTZColumn(
                 data=self.base_data,  # type: ignore[arg-type]
@@ -691,7 +691,7 @@ class DatetimeColumn(TemporalBaseColumn):
                 null_count=self.null_count,
                 children=self.base_children,
             )
-        if cudf.get_option("mode.pandas_compatible"):
+        if cudf.get_option("mode.pandas_compatible") and dtype is not None:
             self._dtype = get_dtype_of_same_type(dtype, self.dtype)
 
         return self

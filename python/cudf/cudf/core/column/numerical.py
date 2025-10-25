@@ -898,7 +898,7 @@ class NumericalColumn(NumericalBaseColumn):
 
     def _with_type_metadata(
         self: Self,
-        dtype: Dtype,
+        dtype: DtypeObj | None,
     ) -> ColumnBase:
         if isinstance(dtype, CategoricalDtype):
             codes_dtype = min_unsigned_type(len(dtype.categories))
@@ -912,7 +912,7 @@ class NumericalColumn(NumericalBaseColumn):
                 null_count=self.null_count,
                 children=(codes,),
             )
-        if cudf.get_option("mode.pandas_compatible"):
+        if cudf.get_option("mode.pandas_compatible") and dtype is not None:
             res_dtype = get_dtype_of_same_type(dtype, self.dtype)
             if (
                 is_pandas_nullable_extension_dtype(res_dtype)

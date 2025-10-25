@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from cudf._typing import (
         ColumnBinaryOperand,
         ColumnLike,
-        Dtype,
+        DtypeObj,
         ScalarLike,
     )
     from cudf.core.buffer import Buffer
@@ -710,7 +710,7 @@ class CategoricalColumn(column.ColumnBase):
 
         return codes_col._with_type_metadata(CategoricalDtype(categories=cats))  # type: ignore[return-value]
 
-    def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
+    def _with_type_metadata(self: Self, dtype: DtypeObj | None) -> Self:
         if isinstance(dtype, CategoricalDtype):
             return type(self)(
                 data=self.data,  # type: ignore[arg-type]

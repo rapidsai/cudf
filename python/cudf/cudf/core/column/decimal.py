@@ -443,10 +443,10 @@ class Decimal32Column(DecimalBaseColumn):
             buffers=[mask_buf, data_buf],  # type: ignore[list-item]
         )
 
-    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
+    def _with_type_metadata(self: Self, dtype: DtypeObj | None) -> Self:
         if isinstance(dtype, Decimal32Dtype):
             self.dtype.precision = dtype.precision  # type: ignore[union-attr]
-        if cudf.get_option("mode.pandas_compatible"):
+        if cudf.get_option("mode.pandas_compatible") and dtype is not None:
             self._dtype = get_dtype_of_same_type(dtype, self.dtype)
         return self
 
@@ -495,10 +495,10 @@ class Decimal128Column(DecimalBaseColumn):
 
         return super().to_arrow().cast(dtype.to_arrow())
 
-    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
+    def _with_type_metadata(self: Self, dtype: DtypeObj | None) -> Self:
         if isinstance(dtype, Decimal128Dtype):
             self.dtype.precision = dtype.precision  # type: ignore[union-attr]
-        if cudf.get_option("mode.pandas_compatible"):
+        if cudf.get_option("mode.pandas_compatible") and dtype is not None:
             self._dtype = get_dtype_of_same_type(dtype, self.dtype)
         return self
 
@@ -559,10 +559,10 @@ class Decimal64Column(DecimalBaseColumn):
             buffers=[mask_buf, data_buf],  # type: ignore[list-item]
         )
 
-    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
+    def _with_type_metadata(self: Self, dtype: DtypeObj | None) -> Self:
         if isinstance(dtype, Decimal64Dtype):
             self.dtype.precision = dtype.precision  # type: ignore[union-attr]
-        if cudf.get_option("mode.pandas_compatible"):
+        if cudf.get_option("mode.pandas_compatible") and dtype is not None:
             self._dtype = get_dtype_of_same_type(dtype, self.dtype)
         return self
 

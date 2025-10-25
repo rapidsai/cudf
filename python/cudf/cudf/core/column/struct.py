@@ -190,7 +190,7 @@ class StructColumn(ColumnBase):
         )
 
     def _with_type_metadata(
-        self: StructColumn, dtype: DtypeObj
+        self: StructColumn, dtype: DtypeObj | None
     ) -> StructColumn:
         from cudf.core.column import IntervalColumn
         from cudf.core.dtypes import IntervalDtype
