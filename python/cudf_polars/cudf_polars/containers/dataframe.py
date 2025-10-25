@@ -56,17 +56,21 @@ def _create_polars_column_metadata(
 # This is also defined in pylibcudf.interop
 class _ObjectWithArrowMetadata:
     def __init__(
-        self, obj: plc.Table | plc.Column, metadata: list[plc.interop.ColumnMetadata]
+        self,
+        obj: plc.Table | plc.Column,
+        metadata: list[plc.interop.ColumnMetadata],
+        stream: Stream,
     ) -> None:
         self.obj = obj
         self.metadata = metadata
+        self.stream = stream
 
     def __arrow_c_array__(
         self, requested_schema: None = None
     ) -> tuple[CapsuleType, CapsuleType]:
-        # TODO: pass CUDA stream here
-        # https://github.com/rapidsai/cudf/pull/20323
-        return self.obj._to_schema(self.metadata), self.obj._to_host_array()
+        return self.obj._to_schema(self.metadata), self.obj._to_host_array(
+            stream=self.stream
+        )
 
 
 # Pacify the type checker. DataFrame init asserts that all the columns
@@ -110,7 +114,9 @@ class DataFrame:
             _create_polars_column_metadata(name, dtype.polars_type)
             for name, dtype in zip(name_map, self.dtypes, strict=True)
         ]
-        table_with_metadata = _ObjectWithArrowMetadata(self.table, metadata)
+        table_with_metadata = _ObjectWithArrowMetadata(
+            self.table, metadata, self.stream
+        )
         df = pl.DataFrame(table_with_metadata)
         return df.rename(name_map).with_columns(
             pl.col(c.name).set_sorted(descending=c.order == plc.types.Order.DESCENDING)
