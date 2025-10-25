@@ -63,10 +63,41 @@ def simple_parquet_bytes(simple_parquet_table, row_group_size):
 
 
 def extract_footer(parquet_bytes):
-    """Extract footer bytes from a parquet file."""
-    footer_size = int.from_bytes(parquet_bytes[-8:-4], byteorder="little")
-    footer_start = len(parquet_bytes) - 8 - footer_size
-    return parquet_bytes[footer_start:-8]
+    """Extract footer bytes from a parquet file.
+
+    According to the Parquet file format specification, the last 8 bytes of a
+    Parquet file contain:
+    - 4 bytes: footer length (little-endian int32)
+    - 4 bytes: magic number "PAR1"
+
+    The footer metadata itself is located immediately before these last 8 bytes.
+
+    See: https://parquet.apache.org/docs/file-format/
+
+    Args:
+        parquet_bytes: Raw bytes of a Parquet file
+
+    Returns:
+        The footer metadata bytes (excluding the trailing 8-byte suffix)
+    """
+    # Parquet file format constants
+    PARQUET_FOOTER_SIZE_BYTES = 4  # Number of bytes encoding footer length
+    PARQUET_MAGIC_BYTES = 4  # Number of bytes for "PAR1" magic number
+    PARQUET_SUFFIX_BYTES = (
+        PARQUET_FOOTER_SIZE_BYTES + PARQUET_MAGIC_BYTES
+    )  # Total: 8 bytes
+
+    # Extract footer length from bytes [-8:-4]
+    footer_size = int.from_bytes(
+        parquet_bytes[-PARQUET_SUFFIX_BYTES:-PARQUET_MAGIC_BYTES],
+        byteorder="little",
+    )
+
+    # Footer is located before the 8-byte suffix
+    footer_start = len(parquet_bytes) - PARQUET_SUFFIX_BYTES - footer_size
+    footer_end = len(parquet_bytes) - PARQUET_SUFFIX_BYTES
+
+    return parquet_bytes[footer_start:footer_end]
 
 
 def test_hybrid_scan_reader_basic(simple_parquet_bytes, num_rows):
