@@ -62,6 +62,12 @@ def simple_parquet_bytes(simple_parquet_table, row_group_size):
     return buf.getvalue()
 
 
+@pytest.fixture(scope="module")
+def simple_parquet_footer(simple_parquet_bytes):
+    """Extract footer bytes from the simple parquet file."""
+    return extract_footer(simple_parquet_bytes)
+
+
 def extract_footer(parquet_bytes):
     """Extract footer bytes from a parquet file.
 
@@ -100,16 +106,16 @@ def extract_footer(parquet_bytes):
     return parquet_bytes[footer_start:footer_end]
 
 
-def test_hybrid_scan_reader_basic(simple_parquet_bytes, num_rows):
+def test_hybrid_scan_reader_basic(
+    simple_parquet_bytes, simple_parquet_footer, num_rows
+):
     """Test basic HybridScanReader construction and metadata access."""
-    footer_bytes = extract_footer(simple_parquet_bytes)
-
     # Create reader options
     source = plc.io.SourceInfo([io.BytesIO(simple_parquet_bytes)])
     options = plc.io.parquet.ParquetReaderOptions.builder(source).build()
 
     # Create reader
-    reader = HybridScanReader(footer_bytes, options)
+    reader = HybridScanReader(simple_parquet_footer, options)
 
     # Test metadata access
     metadata = reader.parquet_metadata()
@@ -118,15 +124,15 @@ def test_hybrid_scan_reader_basic(simple_parquet_bytes, num_rows):
     assert "parquet-cpp-arrow" in metadata.created_by
 
 
-def test_hybrid_scan_reader_from_metadata(simple_parquet_bytes):
+def test_hybrid_scan_reader_from_metadata(
+    simple_parquet_bytes, simple_parquet_footer
+):
     """Test creating HybridScanReader from pre-populated metadata."""
-    footer_bytes = extract_footer(simple_parquet_bytes)
-
     source = plc.io.SourceInfo([io.BytesIO(simple_parquet_bytes)])
     options = plc.io.parquet.ParquetReaderOptions.builder(source).build()
 
     # First create a reader to get metadata
-    reader1 = HybridScanReader(footer_bytes, options)
+    reader1 = HybridScanReader(simple_parquet_footer, options)
     metadata = reader1.parquet_metadata()
 
     # Create a second reader from the metadata
@@ -139,14 +145,14 @@ def test_hybrid_scan_reader_from_metadata(simple_parquet_bytes):
     )
 
 
-def test_hybrid_scan_all_row_groups(simple_parquet_bytes, num_row_groups):
+def test_hybrid_scan_all_row_groups(
+    simple_parquet_bytes, simple_parquet_footer, num_row_groups
+):
     """Test getting all row groups."""
-    footer_bytes = extract_footer(simple_parquet_bytes)
-
     source = plc.io.SourceInfo([io.BytesIO(simple_parquet_bytes)])
     options = plc.io.parquet.ParquetReaderOptions.builder(source).build()
 
-    reader = HybridScanReader(footer_bytes, options)
+    reader = HybridScanReader(simple_parquet_footer, options)
     row_groups = reader.all_row_groups(options)
 
     assert len(row_groups) == num_row_groups
@@ -154,15 +160,13 @@ def test_hybrid_scan_all_row_groups(simple_parquet_bytes, num_row_groups):
 
 
 def test_hybrid_scan_total_rows_in_row_groups(
-    simple_parquet_bytes, num_rows, row_group_size
+    simple_parquet_bytes, simple_parquet_footer, num_rows, row_group_size
 ):
     """Test getting total rows in specific row groups."""
-    footer_bytes = extract_footer(simple_parquet_bytes)
-
     source = plc.io.SourceInfo([io.BytesIO(simple_parquet_bytes)])
     options = plc.io.parquet.ParquetReaderOptions.builder(source).build()
 
-    reader = HybridScanReader(footer_bytes, options)
+    reader = HybridScanReader(simple_parquet_footer, options)
     all_row_groups = reader.all_row_groups(options)
 
     # Test all row groups
@@ -176,11 +180,13 @@ def test_hybrid_scan_total_rows_in_row_groups(
 
 @pytest.mark.parametrize("stream", [None, Stream()])
 def test_hybrid_scan_filter_row_groups_with_stats(
-    simple_parquet_bytes, num_row_groups, row_group_size, stream
+    simple_parquet_bytes,
+    simple_parquet_footer,
+    num_row_groups,
+    row_group_size,
+    stream,
 ):
     """Test filtering row groups using statistics."""
-    footer_bytes = extract_footer(simple_parquet_bytes)
-
     source = plc.io.SourceInfo([io.BytesIO(simple_parquet_bytes)])
     options = plc.io.parquet.ParquetReaderOptions.builder(source).build()
 
@@ -198,7 +204,7 @@ def test_hybrid_scan_filter_row_groups_with_stats(
     )
     options.set_filter(filter_expression)
 
-    reader = HybridScanReader(footer_bytes, options)
+    reader = HybridScanReader(simple_parquet_footer, options)
     all_row_groups = reader.all_row_groups(options)
     filtered = reader.filter_row_groups_with_stats(
         all_row_groups, options, stream
@@ -209,14 +215,14 @@ def test_hybrid_scan_filter_row_groups_with_stats(
     assert filtered == expected_row_groups
 
 
-def test_hybrid_scan_page_index_byte_range(simple_parquet_bytes):
+def test_hybrid_scan_page_index_byte_range(
+    simple_parquet_bytes, simple_parquet_footer
+):
     """Test getting page index byte range."""
-    footer_bytes = extract_footer(simple_parquet_bytes)
-
     source = plc.io.SourceInfo([io.BytesIO(simple_parquet_bytes)])
     options = plc.io.parquet.ParquetReaderOptions.builder(source).build()
 
-    reader = HybridScanReader(footer_bytes, options)
+    reader = HybridScanReader(simple_parquet_footer, options)
     page_index_range = reader.page_index_byte_range()
 
     # PyArrow doesn't write page index by default
@@ -225,11 +231,9 @@ def test_hybrid_scan_page_index_byte_range(simple_parquet_bytes):
 
 
 def test_hybrid_scan_secondary_filters_byte_ranges(
-    simple_parquet_bytes, num_rows
+    simple_parquet_bytes, simple_parquet_footer, num_rows
 ):
     """Test getting bloom filter and dictionary page byte ranges."""
-    footer_bytes = extract_footer(simple_parquet_bytes)
-
     source = plc.io.SourceInfo([io.BytesIO(simple_parquet_bytes)])
     options = plc.io.parquet.ParquetReaderOptions.builder(source).build()
 
@@ -247,7 +251,7 @@ def test_hybrid_scan_secondary_filters_byte_ranges(
     )
     options.set_filter(filter_expression)
 
-    reader = HybridScanReader(footer_bytes, options)
+    reader = HybridScanReader(simple_parquet_footer, options)
     all_row_groups = reader.all_row_groups(options)
 
     bloom_ranges, dict_ranges = reader.secondary_filters_byte_ranges(
@@ -260,11 +264,9 @@ def test_hybrid_scan_secondary_filters_byte_ranges(
 
 
 def test_hybrid_scan_column_chunk_byte_ranges(
-    simple_parquet_bytes, num_rows, num_row_groups
+    simple_parquet_bytes, simple_parquet_footer, num_rows, num_row_groups
 ):
     """Test getting filter and payload column chunk byte ranges."""
-    footer_bytes = extract_footer(simple_parquet_bytes)
-
     source = plc.io.SourceInfo([io.BytesIO(simple_parquet_bytes)])
     options = plc.io.parquet.ParquetReaderOptions.builder(source).build()
 
@@ -282,7 +284,7 @@ def test_hybrid_scan_column_chunk_byte_ranges(
     )
     options.set_filter(filter_expression)
 
-    reader = HybridScanReader(footer_bytes, options)
+    reader = HybridScanReader(simple_parquet_footer, options)
     all_row_groups = reader.all_row_groups(options)
 
     # Get filter column ranges (one filter column per row group)
@@ -310,14 +312,13 @@ def test_hybrid_scan_column_chunk_byte_ranges(
 )
 def test_hybrid_scan_materialize_columns(
     simple_parquet_bytes,
+    simple_parquet_footer,
     simple_parquet_table,
     num_rows,
     stream,
     use_data_page_mask,
 ):
     """Test full workflow of materializing filter and payload columns."""
-    footer_bytes = extract_footer(simple_parquet_bytes)
-
     # Create filter: col0 >= num_rows // 10 (filter out first 10%)
     filter_threshold = num_rows // 10
     filter_expression = Operation(
@@ -334,7 +335,7 @@ def test_hybrid_scan_materialize_columns(
     options = plc.io.parquet.ParquetReaderOptions.builder(source).build()
     options.set_filter(filter_expression)
 
-    reader = HybridScanReader(footer_bytes, options)
+    reader = HybridScanReader(simple_parquet_footer, options)
 
     # Get filtered row groups
     all_row_groups = reader.all_row_groups(options)
@@ -420,10 +421,10 @@ def test_hybrid_scan_materialize_columns(
     assert expected_arrow.equals(hybrid_arrow)
 
 
-def test_hybrid_scan_has_next_table_chunk(simple_parquet_bytes, num_rows):
+def test_hybrid_scan_has_next_table_chunk(
+    simple_parquet_bytes, simple_parquet_footer, num_rows
+):
     """Test has_next_table_chunk method - requires chunking to be set up first."""
-    footer_bytes = extract_footer(simple_parquet_bytes)
-
     # Filter: col0 >= num_rows // 10
     filter_threshold = num_rows // 10
     filter_expression = Operation(
@@ -440,7 +441,7 @@ def test_hybrid_scan_has_next_table_chunk(simple_parquet_bytes, num_rows):
     options = plc.io.parquet.ParquetReaderOptions.builder(source).build()
     options.set_filter(filter_expression)
 
-    reader = HybridScanReader(footer_bytes, options)
+    reader = HybridScanReader(simple_parquet_footer, options)
 
     all_row_groups = reader.all_row_groups(options)
     filtered_row_groups = reader.filter_row_groups_with_stats(
@@ -478,10 +479,10 @@ def test_hybrid_scan_has_next_table_chunk(simple_parquet_bytes, num_rows):
 
 
 @pytest.mark.parametrize("stream", [None, Stream()])
-def test_hybrid_scan_chunked_reading(simple_parquet_bytes, num_rows, stream):
+def test_hybrid_scan_chunked_reading(
+    simple_parquet_bytes, simple_parquet_footer, num_rows, stream
+):
     """Test chunked reading with setup and chunk methods."""
-    footer_bytes = extract_footer(simple_parquet_bytes)
-
     # Filter: col0 >= num_rows // 10
     filter_threshold = num_rows // 10
     filter_expression = Operation(
@@ -498,7 +499,7 @@ def test_hybrid_scan_chunked_reading(simple_parquet_bytes, num_rows, stream):
     options = plc.io.parquet.ParquetReaderOptions.builder(source).build()
     options.set_filter(filter_expression)
 
-    reader = HybridScanReader(footer_bytes, options)
+    reader = HybridScanReader(simple_parquet_footer, options)
 
     all_row_groups = reader.all_row_groups(options)
     filtered_row_groups = reader.filter_row_groups_with_stats(
