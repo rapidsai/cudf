@@ -561,9 +561,9 @@ void __launch_bounds__(decode_page_headers_block_size)
 }
 
 /**
- * @brief Functor for decoding page headers from specified page locations
+ * @brief Functor to decode page headers from specified page locations
  */
-struct decode_page_headers_with_pgidx_functor {
+struct decode_page_headers_with_pgidx_fn {
   ColumnChunkDesc* colchunks;
   PageInfo* pages;
   uint8_t** page_locations;
@@ -766,7 +766,7 @@ void decode_page_headers_with_pgidx(ColumnChunkDesc* chunks,
     rmm::exec_policy_nosync(stream),
     thrust::counting_iterator<size_type>(0),
     thrust::counting_iterator<size_type>(num_pages),
-    decode_page_headers_with_pgidx_functor{
+    decode_page_headers_with_pgidx_fn{
       chunks, pages, page_locations, chunk_page_counts, num_chunks, num_pages, error_code});
 }
 
