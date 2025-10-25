@@ -7,10 +7,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import pylibcudf as plc
 from rmm.pylibrmm.stream import DEFAULT_STREAM, Stream
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable, Sequence
 
 
 def get_dask_cuda_stream() -> Stream:
@@ -29,7 +30,7 @@ def get_new_cuda_stream() -> Stream:
 
 
 def join_cuda_streams(
-    *, downstreams: Iterable[Stream], upstreams: Iterable[Stream]
+    *, downstreams: Sequence[Stream], upstreams: Sequence[Stream]
 ) -> None:
     """
     Join multiple CUDA streams.
@@ -41,11 +42,14 @@ def join_cuda_streams(
     upstreams
         CUDA streams that will be ordered before ``downstreams``.
     """
-    return
+    upstreams = list(upstreams)
+    downstreams = list(downstreams)
+    for downstream in downstreams:
+        plc.experimental.join_streams(upstreams, downstream)
 
 
 def get_joined_cuda_stream(
-    get_cuda_stream: Callable[[], Stream], *, upstreams: Iterable[Stream]
+    get_cuda_stream: Callable[[], Stream], *, upstreams: Sequence[Stream]
 ) -> Stream:
     """
     Return a CUDA stream that is joined to the given streams.
@@ -61,6 +65,6 @@ def get_joined_cuda_stream(
     -------
     CUDA stream that is joined to the given streams.
     """
-    ret = get_cuda_stream()
-    join_cuda_streams(downstreams=(ret,), upstreams=upstreams)
-    return ret
+    downstream = get_cuda_stream()
+    join_cuda_streams(downstreams=(downstream,), upstreams=upstreams)
+    return downstream

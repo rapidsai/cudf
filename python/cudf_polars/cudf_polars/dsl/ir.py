@@ -2732,7 +2732,7 @@ class MergeSorted(IR):
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         stream = get_joined_cuda_stream(
-            context.get_cuda_stream, upstreams=(df.stream for df in dfs)
+            context.get_cuda_stream, upstreams=[df.stream for df in dfs]
         )
         left, right = dfs
         right = right.discard_columns(right.column_names_set - left.column_names_set)
@@ -2973,7 +2973,7 @@ class Union(IR):
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         stream = get_joined_cuda_stream(
-            context.get_cuda_stream, upstreams=(df.stream for df in dfs)
+            context.get_cuda_stream, upstreams=[df.stream for df in dfs]
         )
 
         # TODO: only evaluate what we need if we have a slice?
@@ -3046,7 +3046,7 @@ class HConcat(IR):
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         stream = get_joined_cuda_stream(
-            context.get_cuda_stream, upstreams=(df.stream for df in dfs)
+            context.get_cuda_stream, upstreams=[df.stream for df in dfs]
         )
 
         # Special should_broadcast case.
