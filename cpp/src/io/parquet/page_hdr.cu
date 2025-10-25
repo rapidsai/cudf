@@ -576,6 +576,7 @@ struct decode_page_headers_with_pgidx_fn {
   {
     if (page_idx >= num_pages) { return; }
 
+    // Binary search the the column chunk index for this page
     auto const chunk_idx = static_cast<int32_t>(
       cuda::std::distance(
         chunk_page_offsets,
@@ -583,8 +584,7 @@ struct decode_page_headers_with_pgidx_fn {
           thrust::seq, chunk_page_offsets, chunk_page_offsets + num_chunks + 1, page_idx)) -
       1);
 
-    auto error = kernel_error::value_type{0};
-
+    // Check if the chunk index is valid
     if (chunk_idx < 0 or chunk_idx >= num_chunks) {
       set_error(static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN),
                 error_code);
@@ -593,8 +593,14 @@ struct decode_page_headers_with_pgidx_fn {
 
     byte_stream_s bs{};
     bs.ck   = colchunks[chunk_idx];
-    bs.base = bs.cur       = page_locations[page_idx];
-    bs.end                 = bs.ck.compressed_data + bs.ck.compressed_size;
+    bs.base = bs.cur = page_locations[page_idx];
+    bs.end           = bs.ck.compressed_data + bs.ck.compressed_size;
+    // Check if byte stream pointers are valid.
+    if (bs.end < bs.cur) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN),
+                error_code);
+      return;
+    }
     bs.page.chunk_idx      = chunk_idx;
     bs.page.src_col_schema = bs.ck.src_col_schema;
     // this computation is only valid for flat schemas. for nested schemas,
@@ -629,15 +635,11 @@ struct decode_page_headers_with_pgidx_fn {
     bs.page.lvl_bytes[level_type::DEFINITION] = 0;
     bs.page.lvl_bytes[level_type::REPETITION] = 0;
 
-    if (bs.end < bs.cur) {
-      set_error(static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN),
-                error_code);
-      return;
-    }
-
     if (parse_page_header_fn{}(&bs) and bs.page.compressed_page_size >= 0) {
       if (not is_supported_encoding(bs.page.encoding)) {
-        error |= static_cast<int32_t>(decode_error::UNSUPPORTED_ENCODING);
+        set_error(static_cast<kernel_error::value_type>(decode_error::UNSUPPORTED_ENCODING),
+                  error_code);
+        return;
       }
       switch (bs.page_type) {
         case PageType::DATA_PAGE:
@@ -654,20 +656,20 @@ struct decode_page_headers_with_pgidx_fn {
           break;
         case PageType::DICTIONARY_PAGE: bs.page.flags |= PAGEINFO_FLAGS_DICTIONARY; break;
         default:
-          error |= static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_TYPE);
-          break;
+          set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_TYPE),
+                    error_code);
+          return;
       }
+
       bs.page.page_data   = const_cast<uint8_t*>(bs.cur);
       bs.page.kernel_mask = kernel_mask_for_page(bs.page, bs.ck);
     } else {
-      error |= static_cast<kernel_error::value_type>(decode_error::EMPTY_PAGE);
+      set_error(static_cast<kernel_error::value_type>(decode_error::EMPTY_PAGE), error_code);
+      return;
     }
 
-    if (error == 0) {
-      pages[page_idx] = bs.page;
-    } else {
-      set_error(error, error_code);
-    }
+    // Copy over the page info from byte stream
+    pages[page_idx] = bs.page;
   }
 };
 
