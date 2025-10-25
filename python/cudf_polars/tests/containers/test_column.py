@@ -138,7 +138,7 @@ def test_slice_none_returns_self():
     assert column.slice(None) is column
 
 
-def test_deserialize_ctor_kwargs_invalid_dtype():
+def test_deserialize_ctor_kwargs_invalid_dtype_and_kind():
     column_kwargs = {
         "is_sorted": plc.types.Sorted.NO,
         "order": plc.types.Order.ASCENDING,
@@ -147,6 +147,11 @@ def test_deserialize_ctor_kwargs_invalid_dtype():
         "dtype": {"kind": "scalar", "name": "foo"},
     }
     with pytest.raises(NotImplementedError, match="Unknown scalar dtype name"):
+        Column.deserialize_ctor_kwargs(column_kwargs)
+
+    column_kwargs["dtype"]["kind"] = "bar"
+
+    with pytest.raises(NotImplementedError, match="Unsupported kind"):
         Column.deserialize_ctor_kwargs(column_kwargs)
 
 
