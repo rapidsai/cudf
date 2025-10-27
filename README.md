@@ -63,6 +63,8 @@ conda install -c rapidsai cudf-polars
 conda install -c rapidsai dask-cudf
 ```
 
+A development version of each library is available as a nightly release by specifying the `-c rapidsai-nightly` channel instead.
+
 ### source
 
 To install cuDF from source, please follow [the contribution guide](CONTRIBUTING.md#setting-up-your-build-environment) detailing
