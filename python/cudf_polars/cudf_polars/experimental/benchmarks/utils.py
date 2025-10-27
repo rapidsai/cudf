@@ -558,7 +558,8 @@ def execute_query(
                     ).to_polars()
                 elif run_config.executor == "streaming":
                     return evaluate_streaming(
-                        ir, translator.config_options, context=context
+                        ir,
+                        translator.config_options,
                     ).to_polars()
                 assert_never(run_config.executor)
             else:

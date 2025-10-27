@@ -220,8 +220,6 @@ def _callback(
     if timer is not None:
         assert should_time
 
-    context = IRExecutionContext.from_config_options(config_options)
-
     with (
         nvtx.annotate(message="ExecuteIR", domain=CUDF_POLARS_NVTX_DOMAIN),
         # Device must be set before memory resource is obtained.
@@ -229,6 +227,7 @@ def _callback(
         set_memory_resource(memory_resource),
     ):
         if config_options.executor.name == "in-memory":
+            context = IRExecutionContext.from_config_options(config_options)
             df = ir.evaluate(cache={}, timer=timer, context=context).to_polars()
             if timer is None:
                 return df
@@ -247,7 +246,7 @@ def _callback(
                     """)
                 raise NotImplementedError(msg)
 
-            return evaluate_streaming(ir, config_options, context=context).to_polars()
+            return evaluate_streaming(ir, config_options).to_polars()
         assert_never(f"Unknown executor '{config_options.executor}'")
 
 
