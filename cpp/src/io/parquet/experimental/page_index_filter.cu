@@ -283,7 +283,6 @@ struct page_stats_caster : public stats_caster_base {
     if (input_column.null_count()) {
       // Set all bits in output nullmask to valid
       output_nullmask = cudf::create_null_mask(total_rows, mask_state::ALL_VALID, stream, mr);
-
       // For each input page, invalidate the null mask for corresponding rows if needed.
       std::for_each(thrust::counting_iterator(0),
                     thrust::counting_iterator(total_pages),
@@ -333,13 +332,13 @@ struct page_stats_caster : public stats_caster_base {
                                     dtype,
                                     stream,
                                     mr);
-    auto const null_nulls =
+    auto const is_null_nulls =
       is_nullcol->null_count()
         ? cudf::detail::null_count(
             reinterpret_cast<bitmask_type*>(is_null_nullmask.data()), 0, total_rows, stream)
         : 0;
     return std::make_unique<column>(
-      dtype, total_rows, std::move(is_null_data), std::move(is_null_nullmask), null_nulls);
+      dtype, total_rows, std::move(is_null_data), std::move(is_null_nullmask), is_null_nulls);
   }
 
   /**
@@ -348,7 +347,7 @@ struct page_stats_caster : public stats_caster_base {
    * @param host_strings Host span of cudf::string_view values in the input page-level host column
    * @param host_chars Host span of string data of the input page-level host column
    * @param host_nullmask Nullmask of the input page-level host column
-   * @param input_null_count Number of nulls in the input page-level host column
+   * @param host_null_count Number of nulls in the input page-level host column
    * @param page_indices Device vector containing the page index for each row index
    * @param page_row_offsets Host vector row offsets of each page
    * @param stream CUDA stream
@@ -361,7 +360,7 @@ struct page_stats_caster : public stats_caster_base {
     build_string_data_and_nullmask(cudf::host_span<cudf::string_view const> host_strings,
                                    cudf::host_span<char const> host_chars,
                                    bitmask_type const* host_page_nullmask,
-                                   size_type input_null_count,
+                                   size_type host_null_count,
                                    cudf::device_span<size_type const> page_indices,
                                    cudf::host_span<size_type const> page_row_offsets,
                                    rmm::cuda_stream_view stream,
@@ -400,10 +399,9 @@ struct page_stats_caster : public stats_caster_base {
 
     // Buffer for row-level strings nullmask (output)
     auto output_nullmask = rmm::device_buffer{};
-    if (input_null_count) {
-      // Initialize output nullmask to all bits set.
+    if (host_null_count) {
+      // Set all bits in output nullmask to valid
       output_nullmask = cudf::create_null_mask(total_rows, mask_state::ALL_VALID, stream, mr);
-
       // For each input page, invalidate the null mask for corresponding rows if needed.
       std::for_each(thrust::counting_iterator(0),
                     thrust::counting_iterator(total_pages),
