@@ -209,7 +209,7 @@ void BM_raw_read_wide_tables(nvbench::state& state,
   auto const data_size_bytes = static_cast<size_t>(state.get_int64("data_size"));
   auto const cardinality     = static_cast<cudf::size_type>(state.get_int64("cardinality"));
   auto const run_length      = static_cast<cudf::size_type>(state.get_int64("run_length"));
-  auto const source_type     = io_type::DEVICE_BUFFER;
+  auto const source_type     = io_type::FILEPATH;
   cuio_source_sink_pair source_sink(source_type);
 
   auto const num_rows_written = [&]() {
@@ -240,7 +240,7 @@ void BM_raw_read_wide_tables_mixed(nvbench::state& state)
   auto const data_size_bytes = static_cast<size_t>(state.get_int64("data_size"));
   auto const cardinality     = static_cast<cudf::size_type>(state.get_int64("cardinality"));
   auto const run_length      = static_cast<cudf::size_type>(state.get_int64("run_length"));
-  auto const source_type     = io_type::DEVICE_BUFFER;
+  auto const source_type     = io_type::FILEPATH;
   cuio_source_sink_pair source_sink(source_type);
 
   auto const num_rows_written = [&]() {
@@ -270,7 +270,7 @@ using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
 NVBENCH_BENCH_TYPES(BM_raw_read_data, NVBENCH_TYPE_AXES(d_type_list))
   .set_name("raw_read_decode")
   .set_type_axes_names({"data_type"})
-  .add_string_axis("io_type", {"DEVICE_BUFFER"})
+  .add_string_axis("io_type", {"FILEPATH"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32})
@@ -278,7 +278,7 @@ NVBENCH_BENCH_TYPES(BM_raw_read_data, NVBENCH_TYPE_AXES(d_type_list))
 
 NVBENCH_BENCH(BM_raw_read_io_compression)
   .set_name("raw_read_io_compression")
-  .add_string_axis("io_type", {"FILEPATH", "HOST_BUFFER", "DEVICE_BUFFER"})
+  .add_string_axis("io_type", {"FILEPATH"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32})
@@ -316,7 +316,7 @@ using d_type_list_struct_only = nvbench::enum_type_list<data_type::STRUCT>;
 NVBENCH_BENCH_TYPES(BM_raw_read_fixed_width_struct, NVBENCH_TYPE_AXES(d_type_list_struct_only))
   .set_name("raw_read_fixed_width_struct")
   .set_type_axes_names({"data_type"})
-  .add_string_axis("io_type", {"DEVICE_BUFFER"})
+  .add_string_axis("io_type", {"FILEPATH"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32})
@@ -324,7 +324,7 @@ NVBENCH_BENCH_TYPES(BM_raw_read_fixed_width_struct, NVBENCH_TYPE_AXES(d_type_lis
 
 NVBENCH_BENCH(BM_raw_read_long_strings)
   .set_name("raw_read_long_strings")
-  .add_string_axis("io_type", {"DEVICE_BUFFER"})
+  .add_string_axis("io_type", {"FILEPATH"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("data_size", {512 << 20})
