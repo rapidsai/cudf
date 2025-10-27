@@ -135,7 +135,7 @@ cdef extern from *:
     template <typename ViewType>
     ArrowArray* to_arrow_host_raw(
       ViewType const& obj,
-      rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+      rmm::cuda_stream_view stream,
       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) {
       ArrowArray *arr = new ArrowArray();
       auto device_arr = cudf::to_arrow_host(obj, stream, mr);
@@ -221,10 +221,12 @@ cdef extern from *:
         ArrowSchema *
     ) except +libcudf_exception_handler nogil
     cdef ArrowArray* to_arrow_host_raw(
-        const table_view& tbl
+        const table_view& tbl,
+        cuda_stream_view stream,
     ) except +libcudf_exception_handler nogil
     cdef ArrowArray* to_arrow_host_raw(
-        const column_view& tbl
+        const column_view& tbl,
+        cuda_stream_view stream,
     ) except +libcudf_exception_handler nogil
     cdef void release_arrow_array_raw(
         ArrowArray *
