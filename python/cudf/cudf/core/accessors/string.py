@@ -16,7 +16,6 @@ import pylibcudf as plc
 import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
-    _is_categorical_dtype,
     is_integer,
     is_scalar,
     is_string_dtype,
@@ -94,10 +93,10 @@ class StringMethods(BaseAccessor):
             else parent.dtype
         )
         # Convert categorical with string categories to string dtype
-        if isinstance(value_type, CategoricalDtype) and is_string_dtype(
-            value_type.categories.dtype  # type: ignore[union-attr]
+        if isinstance(value_type, cudf.CategoricalDtype) and is_string_dtype(
+            value_type.categories.dtype
         ):
-            parent = parent.astype(value_type.categories.dtype)  # type: ignore[union-attr]
+            parent = parent.astype(value_type.categories.dtype)
             value_type = parent.dtype
             is_valid_string = True
         else:
