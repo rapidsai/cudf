@@ -31,6 +31,7 @@ namespace {
 
 jitify2::Kernel get_kernel(std::string const& kernel_name, std::string const& cuda_source)
 {
+  CUDF_FUNC_RANGE();
   return cudf::jit::get_program_cache(*transform_jit_kernel_cu_jit)
     .get_kernel(kernel_name, {}, {{"cudf/detail/operation-udf.hpp", cuda_source}}, {"-arch=sm_."});
 }
@@ -78,6 +79,7 @@ jitify2::ConfiguredKernel build_span_kernel(std::string const& kernel_name,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   auto const cuda_source =
     is_ptx ? cudf::jit::parse_single_function_ptx(
                udf,

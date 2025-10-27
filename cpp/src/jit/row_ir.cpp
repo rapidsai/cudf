@@ -507,13 +507,13 @@ filter_args ast_converter::filter(target target_id,
                "Filter expression must return a boolean type.",
                std::invalid_argument);
 
-  std::vector<column_view> columns;
+  std::vector<column_view> predicate_columns;
   std::vector<std::unique_ptr<column>> scalar_columns;
 
   for (auto& input : converter.input_specs_) {
     auto column_view =
       dispatch_input_spec(input, [](auto&... args) { return get_column_view(args...); }, args);
-    columns.push_back(column_view);
+    predicate_columns.push_back(column_view);
 
     // move the scalar broadcast column so the user can make it live long enough
     // to be used in the filter result.
@@ -530,7 +530,7 @@ filter_args ast_converter::filter(target target_id,
                  [](auto const& col) { return col; });
 
   filter_args filter{std::move(scalar_columns),
-                     std::move(columns),
+                     std::move(predicate_columns),
                      std::move(converter.code_),
                      std::move(filter_columns),
                      false,

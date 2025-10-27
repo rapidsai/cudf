@@ -5,13 +5,18 @@
 
 #include "jit/row_ir.hpp"
 
+// [ ] use int32_t for transform null mask intermediate
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/valid_if.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/reshape.hpp>
 #include <cudf/stream_compaction.hpp>
+#include <cudf/strings/detail/gather.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -22,6 +27,7 @@
 
 #include <cuda/std/iterator>
 #include <thrust/copy.h>
+#include <thrust/gather.h>
 
 #include <jit/cache.hpp>
 #include <jit/helpers.hpp>
@@ -36,91 +42,126 @@ namespace cudf {
 
 namespace {
 
-struct filter_predicate {
-  static constexpr cudf::size_type NOT_APPLIED = -1;
-
-  constexpr __device__ bool operator()(cudf::size_type flag) const { return flag != NOT_APPLIED; }
-};
-
-/// @brief counts the number of items that are not marked as NOT_APPLIED
-struct filter_histogram {
-  constexpr __device__ cudf::size_type operator()(cudf::size_type flag) const
-  {
-    return (flag == filter_predicate::NOT_APPLIED) ? 0 : 1;
-  }
-};
-
-/// @brief A gather-filter operation that filters the elements of an input range base on a
-/// pre-computed stencil. The stencil serves as both a stencil and a gather map.
-template <typename InputIterator>
-auto filter_by(InputIterator input_begin,
-               InputIterator input_end,
-               cudf::size_type num_selected,
-               cudf::size_type const* stencil,
-               rmm::cuda_stream_view stream,
-               rmm::device_async_resource_ref mr)
+template <typename InputIterator, typename MapIterator>
+auto filter_fixed_width(InputIterator input_begin,
+                        InputIterator input_end,
+                        cudf::size_type num_selected,
+                        MapIterator map_iterator,
+                        rmm::cuda_stream_view stream,
+                        rmm::device_async_resource_ref mr)
 {
-  rmm::device_uvector<typename std::iterator_traits<InputIterator>::value_type> output(
+  CUDF_FUNC_RANGE();
+
+  auto output = rmm::device_uvector<typename std::iterator_traits<InputIterator>::value_type>(
     static_cast<size_t>(num_selected), stream, mr);
 
-  auto output_size = cuda::std::distance(output.begin(),
-                                         thrust::copy_if(rmm::exec_policy(stream),
-                                                         input_begin,
-                                                         input_end,
-                                                         stencil,
-                                                         output.begin(),
-                                                         filter_predicate{}));
-
-  CUDF_EXPECTS(output_size == num_selected,
-               "The number of selected items does not match the expected count.",  // < This should
-                                                                                   // never happen
-               std::runtime_error);
+  thrust::gather(rmm::exec_policy(stream),
+                 map_iterator,
+                 map_iterator + num_selected,
+                 input_begin,
+                 output.begin());
 
   return output;
 }
 
-template <bool result_has_nulls>
-struct filter_dispatcher;
+template <typename MapIterator>
+std::pair<rmm::device_buffer, cudf::size_type> null_mask_filter(cudf::column_device_view col,
+                                                                cudf::size_type null_count,
+                                                                cudf::size_type num_selected,
+                                                                MapIterator map_iterator,
+                                                                rmm::cuda_stream_view stream,
+                                                                rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
 
-template <>
-struct filter_dispatcher<false> {
-  template <typename T>
+  if (!col.nullable() || null_count == 0) { return std::pair(rmm::device_buffer{}, 0); }
+
+  auto null_mask = col.null_mask();
+  auto offset    = col.offset();
+
+  auto [compacted_null_mask, compacted_null_count] = cudf::detail::valid_if(
+    map_iterator,
+    map_iterator + num_selected,
+    [null_mask, offset] __device__(cudf::size_type i) -> bool {
+      return cudf::bit_is_set(null_mask, i + offset);
+    },
+    stream,
+    mr);
+
+  // drop null mask if there are no nulls
+  if (compacted_null_count == 0) { return std::pair(rmm::device_buffer{}, 0); }
+
+  return std::pair(std::move(compacted_null_mask), compacted_null_count);
+}
+
+struct filter_dispatcher {
+  template <typename T, typename MapIterator>
     requires(cudf::is_rep_layout_compatible<T>() && cudf::is_fixed_width<T>())
-  std::unique_ptr<cudf::column> operator()(cudf::column_device_view const& col,
+  std::unique_ptr<cudf::column> operator()(cudf::column_view col,
                                            cudf::size_type num_selected,
-                                           cudf::size_type const* stencil_iterator,
+                                           MapIterator map_iterator,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr) const
   {
-    auto filtered = filter_by(
-      col.data<T>(), col.data<T>() + col.size(), num_selected, stencil_iterator, stream, mr);
+    CUDF_FUNC_RANGE();
+
+    auto d_col    = cudf::column_device_view::create(col, stream);
+    auto filtered = filter_fixed_width(
+      d_col->data<T>(), d_col->data<T>() + d_col->size(), num_selected, map_iterator, stream, mr);
     auto filtered_size = filtered.size();
-    auto out =
-      cudf::column(col.type(), filtered_size, filtered.release(), rmm::device_buffer{}, 0, {});
+    auto [null_mask, null_count] =
+      null_mask_filter(*d_col, col.null_count(), num_selected, map_iterator, stream, mr);
+
+    auto out = cudf::column(
+      d_col->type(), filtered_size, filtered.release(), std::move(null_mask), null_count, {});
     return std::make_unique<cudf::column>(std::move(out));
   }
 
-  template <typename T>
-    requires(std::is_same_v<T, cudf::string_view>)
-  std::unique_ptr<cudf::column> operator()(cudf::column_device_view const& col,
+  template <typename T, typename MapIterator>
+    requires(cudf::is_fixed_point<T>())
+  std::unique_ptr<cudf::column> operator()(cudf::column_view col,
                                            cudf::size_type num_selected,
-                                           cudf::size_type const* stencil_iterator,
+                                           MapIterator map_iterator,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr) const
   {
-    auto filtered = filter_by(col.begin<cudf::string_view>(),
-                              col.begin<cudf::string_view>() + col.size(),
-                              num_selected,
-                              stencil_iterator,
-                              stream,
-                              mr);
-    return cudf::make_strings_column(filtered, cudf::string_view{nullptr, 0}, stream, mr);
+    CUDF_FUNC_RANGE();
+
+    using Rep          = typename T::rep;
+    auto d_col         = cudf::column_device_view::create(col, stream);
+    auto filtered      = filter_fixed_width(d_col->data<Rep>(),
+                                       d_col->data<Rep>() + d_col->size(),
+                                       num_selected,
+                                       map_iterator,
+                                       stream,
+                                       mr);
+    auto filtered_size = filtered.size();
+    auto [null_mask, null_count] =
+      null_mask_filter(*d_col, col.null_count(), num_selected, map_iterator, stream, mr);
+
+    auto out = cudf::column(
+      d_col->type(), filtered_size, filtered.release(), std::move(null_mask), null_count, {});
+    return std::make_unique<cudf::column>(std::move(out));
   }
 
-  template <typename T>
-  std::unique_ptr<cudf::column> operator()(cudf::column_device_view const& col,
+  template <typename T, typename MapIterator>
+    requires(std::is_same_v<T, cudf::string_view>)
+  std::unique_ptr<cudf::column> operator()(cudf::column_view col,
                                            cudf::size_type num_selected,
-                                           cudf::size_type const* stencil_iterator,
+                                           MapIterator map_iterator,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr) const
+  {
+    CUDF_FUNC_RANGE();
+
+    return cudf::strings::detail::gather(
+      col, map_iterator, map_iterator + num_selected, false, stream, mr);
+  }
+
+  template <typename T, typename MapIterator>
+  std::unique_ptr<cudf::column> operator()(cudf::column_view col,
+                                           cudf::size_type num_selected,
+                                           MapIterator map_iterator,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr) const
   {
@@ -130,38 +171,35 @@ struct filter_dispatcher<false> {
   }
 };
 
-std::unique_ptr<cudf::column> filter_column(
-  cudf::column_device_view const& column,
-  cudf::size_type num_selected,
-  cudf::jit::device_span<cudf::size_type const> filter_indices,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+template <typename MapIterator>
+std::unique_ptr<cudf::column> filter_column(cudf::column_view col,
+                                            cudf::size_type num_selected,
+                                            MapIterator map_iterator,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::device_async_resource_ref mr)
 {
-  return cudf::type_dispatcher<dispatch_storage_type>(column.type(),
-                                                      filter_dispatcher<false>{},
-                                                      column,
-                                                      num_selected,
-                                                      filter_indices.begin(),
-                                                      stream,
-                                                      mr);
+  CUDF_FUNC_RANGE();
+
+  return cudf::type_dispatcher(
+    col.type(), filter_dispatcher{}, col, num_selected, map_iterator, stream, mr);
 }
 
 void launch_filter_kernel(jitify2::ConfiguredKernel& kernel,
-                          cudf::jit::device_span<cudf::size_type> output,
+                          cudf::jit::device_span<bool> output,
                           std::vector<column_view> const& input_columns,
                           std::optional<void*> user_data,
                           rmm::cuda_stream_view stream,
                           rmm::device_async_resource_ref mr)
 {
   auto outputs = cudf::jit::to_device_vector(
-    std::vector{cudf::jit::device_optional_span<cudf::size_type>{output, nullptr}}, stream, mr);
+    std::vector{cudf::jit::device_optional_span<bool>{output, nullptr}}, stream, mr);
 
   auto [input_handles, inputs] =
     cudf::jit::column_views_to_device<column_device_view, column_view>(input_columns, stream, mr);
 
-  cudf::jit::device_optional_span<cudf::size_type> const* outputs_ptr = outputs.data();
-  column_device_view const* inputs_ptr                                = inputs.data();
-  void* p_user_data                                                   = user_data.value_or(nullptr);
+  cudf::jit::device_optional_span<bool> const* outputs_ptr = outputs.data();
+  column_device_view const* inputs_ptr                     = inputs.data();
+  void* p_user_data                                        = user_data.value_or(nullptr);
 
   std::array<void*, 3> args{&outputs_ptr, &inputs_ptr, &p_user_data};
 
@@ -198,6 +236,8 @@ void perform_checks(column_view base_column,
 
 jitify2::Kernel get_kernel(std::string const& kernel_name, std::string const& cuda_source)
 {
+  CUDF_FUNC_RANGE();
+
   return cudf::jit::get_program_cache(*stream_compaction_filter_jit_kernel_cu_jit)
     .get_kernel(kernel_name, {}, {{"cudf/detail/operation-udf.hpp", cuda_source}}, {"-arch=sm_."});
 }
@@ -213,6 +253,8 @@ jitify2::ConfiguredKernel build_kernel(std::string const& kernel_name,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
+
   CUDF_EXPECTS(!(is_null_aware == null_aware::YES && is_ptx),
                "Optional types are not supported in PTX UDFs",
                std::invalid_argument);
@@ -235,6 +277,28 @@ jitify2::ConfiguredKernel build_kernel(std::string const& kernel_name,
     ->configure_1d_max_occupancy(0, 0, nullptr, stream.value());
 }
 
+std::tuple<rmm::device_uvector<cudf::size_type>, cudf::size_type> create_gather_map(
+  column_view base_column,
+  cudf::jit::device_span<bool const> filters,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+
+  // this is a scratch buffer, it doesn't have to be exact-sized
+  auto compacted_indices =
+    rmm::device_uvector<cudf::size_type>{static_cast<size_t>(base_column.size()), stream, mr};
+  auto selection_end = thrust::copy_if(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator<cudf::size_type>(0),
+    thrust::make_counting_iterator(base_column.size()),
+    compacted_indices.begin(),
+    [p_filters = filters.data()] __device__(cudf::size_type i) -> bool { return p_filters[i]; });
+  auto num_selected =
+    static_cast<cudf::size_type>(cuda::std::distance(compacted_indices.begin(), selection_end));
+  return {std::move(compacted_indices), num_selected};
+}
+
 std::vector<std::unique_ptr<column>> filter_operation(
   column_view base_column,
   std::vector<column_view> const& predicate_columns,
@@ -246,12 +310,12 @@ std::vector<std::unique_ptr<column>> filter_operation(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  rmm::device_uvector<cudf::size_type> filter_indices{
-    static_cast<size_t>(base_column.size()), stream, mr};
+  auto filter_bools =
+    rmm::device_uvector<uint8_t>{static_cast<size_t>(base_column.size()), stream, mr};
 
   auto kernel = build_kernel("cudf::filtering::jit::kernel",
                              base_column.size(),
-                             {"cudf::size_type"},
+                             {"bool"},
                              predicate_columns,
                              user_data.has_value(),
                              is_null_aware,
@@ -260,17 +324,13 @@ std::vector<std::unique_ptr<column>> filter_operation(
                              stream,
                              mr);
 
-  cudf::jit::device_span<cudf::size_type> const filter_indices_span{filter_indices.data(),
-                                                                    filter_indices.size()};
+  auto filter_bools_span =
+    cudf::jit::device_span<bool>{reinterpret_cast<bool*>(filter_bools.data()), filter_bools.size()};
 
-  launch_filter_kernel(kernel, filter_indices_span, predicate_columns, user_data, stream, mr);
+  launch_filter_kernel(kernel, filter_bools_span, predicate_columns, user_data, stream, mr);
 
-  auto num_selected = thrust::transform_reduce(rmm::exec_policy(stream),
-                                               filter_indices.begin(),
-                                               filter_indices.end(),
-                                               filter_histogram{},
-                                               cudf::size_type{0},
-                                               std::plus<cudf::size_type>{});
+  auto [gather_map, num_selected] =
+    create_gather_map(base_column, filter_bools_span.as_const(), stream, mr);
 
   std::vector<std::unique_ptr<column>> filtered;
 
@@ -284,9 +344,7 @@ std::vector<std::unique_ptr<column>> filter_operation(
                      auto tiled_columns = tiled->release();
                      return std::move(tiled_columns.front());
                    } else {
-                     auto d_column = cudf::column_device_view::create(column, stream);
-                     return filter_column(
-                       *d_column, num_selected, filter_indices_span.as_const(), stream, mr);
+                     return filter_column(column, num_selected, gather_map.cbegin(), stream, mr);
                    }
                  });
 
