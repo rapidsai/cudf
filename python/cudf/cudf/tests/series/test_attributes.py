@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import re
 
 import cupy as cp
@@ -433,5 +434,5 @@ def test_series_values_property(data):
 
 def test_series_data_property_deprecated():
     s = cudf.Series([1, 2, 3])
-    with pytest.warns(FutureWarning):
+    with pytest.warns(FutureWarning, match="Series.data is deprecated"):
         s.data
