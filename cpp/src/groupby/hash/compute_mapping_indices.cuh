@@ -111,8 +111,11 @@ CUDF_KERNEL void mapping_indices_kernel(size_type num_input_rows,
   if (block.thread_rank() == 0) { cardinality = 0; }
   block.sync();
 
+  // All threads in the block will participate in the loop, and sync.
   auto const stride = cudf::detail::grid_1d::grid_stride();
-  for (auto idx = cudf::detail::grid_1d::global_thread_id(); idx < num_input_rows; idx += stride) {
+  for (auto idx = cudf::detail::grid_1d::global_thread_id();
+       idx - block.thread_rank() < num_input_rows;
+       idx += stride) {
     find_local_mapping(block,
                        idx,
                        num_input_rows,
