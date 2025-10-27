@@ -18,6 +18,7 @@ import rmm
 
 from cudf_polars.containers import Column, DataFrame, DataType
 from cudf_polars.dsl.expressions.base import NamedExpr
+from cudf_polars.utils.cuda_stream import get_dask_cuda_stream
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, Mapping
@@ -33,7 +34,7 @@ if TYPE_CHECKING:
 __all__ = ["DaskRegisterManager", "register"]
 
 
-class DaskRegisterManager:  # pragma: no cover; Only used with Distributed scheduler
+class DaskRegisterManager:  # pragma: no cover; Only used with Distributed cluster
     """Manager to ensure ensure serializer is only registered once."""
 
     _registered: bool = False
@@ -87,7 +88,11 @@ def register() -> None:
     ) -> DataFrame:
         with log_errors():
             metadata, gpudata = frames  # TODO: check if this is a length-2 list...
-            return DataFrame.deserialize(header, (metadata, plc.gpumemoryview(gpudata)))
+            return DataFrame.deserialize(
+                header,
+                (metadata, plc.gpumemoryview(gpudata)),
+                stream=get_dask_cuda_stream(),
+            )
 
     @cuda_deserialize.register(Column)
     def _(
@@ -100,17 +105,19 @@ def register() -> None:
     @overload
     def dask_serialize_column_or_frame(
         x: DataFrame,
-    ) -> tuple[DataFrameHeader, tuple[memoryview, memoryview]]: ...
+    ) -> tuple[DataFrameHeader, tuple[memoryview[bytes], memoryview[bytes]]]: ...
 
     @overload
     def dask_serialize_column_or_frame(
         x: Column,
-    ) -> tuple[ColumnHeader, tuple[memoryview, memoryview]]: ...
+    ) -> tuple[ColumnHeader, tuple[memoryview[bytes], memoryview[bytes]]]: ...
 
     @dask_serialize.register(Column)
     def dask_serialize_column_or_frame(
         x: DataFrame | Column,
-    ) -> tuple[DataFrameHeader | ColumnHeader, tuple[memoryview[bytes], memoryview]]:
+    ) -> tuple[
+        DataFrameHeader | ColumnHeader, tuple[memoryview[bytes], memoryview[bytes]]
+    ]:
         with log_errors():
             header, (metadata, gpudata) = x.serialize()
 
@@ -122,7 +129,7 @@ def register() -> None:
             nbytes = cai["shape"][0]
 
             # Copy the gpudata to host memory
-            gpudata_on_host = memoryview(
+            gpudata_on_host: memoryview[bytes] = memoryview(
                 rmm.DeviceBuffer(ptr=gpudata.ptr, size=nbytes).copy_to_host()
             )
             return header, (metadata, gpudata_on_host)
@@ -141,7 +148,7 @@ def register() -> None:
     @dask_serialize.register(DataFrame)
     def _(
         x: DataFrame, context: Mapping[str, Any] | None = None
-    ) -> tuple[DataFrameHeader, tuple[memoryview, memoryview]]:
+    ) -> tuple[DataFrameHeader, tuple[memoryview[bytes], memoryview[bytes]]]:
         # Do regular serialization if no staging buffer is provided.
         if context is None or "staging_device_buffer" not in context:
             return dask_serialize_column_or_frame(x)
@@ -184,7 +191,9 @@ def register() -> None:
                 frames[0],
                 plc.gpumemoryview(rmm.DeviceBuffer.to_device(frames[1])),
             )
-            return DataFrame.deserialize(header, new_frames)
+            return DataFrame.deserialize(
+                header, new_frames, stream=get_dask_cuda_stream()
+            )
 
     @sizeof_dispatch.register(Column)
     def _(x: Column) -> int:

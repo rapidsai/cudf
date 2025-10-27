@@ -128,6 +128,13 @@ struct orc_stream_info {
  * @brief Struct storing intermediate processing data loaded from data sources.
  */
 struct file_intermediate_data {
+  file_intermediate_data() = default;
+
+  file_intermediate_data(file_intermediate_data const&)            = delete;
+  file_intermediate_data& operator=(file_intermediate_data const&) = delete;
+  file_intermediate_data(file_intermediate_data&&)                 = default;
+  file_intermediate_data& operator=(file_intermediate_data&&)      = default;
+
   int64_t rows_to_skip;
   int64_t rows_to_read;
   std::vector<metadata::orc_stripe_info> selected_stripes;

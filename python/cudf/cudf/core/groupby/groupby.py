@@ -1226,12 +1226,14 @@ class GroupBy(Serializable, Reducible, Scannable):
             group_offsets = group_offsets[:-1]
         else:
             group_offsets = group_offsets[1:] - size_per_group
-        to_take = np.arange(size_per_group.sum(), dtype=SIZE_TYPE_DTYPE)
+        to_take_indices = np.arange(
+            size_per_group.sum(), dtype=SIZE_TYPE_DTYPE
+        )
         fixup = np.empty_like(size_per_group)
         fixup[0] = 0
         np.cumsum(size_per_group[:-1], out=fixup[1:])
-        to_take += np.repeat(group_offsets - fixup, size_per_group)
-        to_take = as_column(to_take)
+        to_take_indices += np.repeat(group_offsets - fixup, size_per_group)
+        to_take = as_column(to_take_indices)
         result = group_values.iloc[to_take]
         if preserve_order:
             # Can't use _mimic_pandas_order because we need to
@@ -1555,7 +1557,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             # interface doesn't take array-based low and high
             # arguments.
             low = 0
-            high = np.repeat(size_per_group, samples_per_group)
+            high: np.ndarray = np.repeat(size_per_group, samples_per_group)
             rng = np.random.default_rng(seed=random_state)
             indices = rng.integers(low, high, dtype=SIZE_TYPE_DTYPE)
             indices += np.repeat(group_offsets[:-1], samples_per_group)
