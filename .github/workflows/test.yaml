@@ -173,3 +173,41 @@ jobs:
       node_type: "gpu-l4-latest-1"
       container_image: "rapidsai/ci-conda:25.12-latest"
       script: ci/test_narwhals.sh
+  wheel-build-librapidsmpf:
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
+    with:
+      # Build for ONE specific combo (first amd64 entry) to match rapidsmpf/test
+      matrix_filter: map(select(.ARCH == "amd64")) | .[0:1]
+      build_type: ${{ inputs.build_type }}
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      script: "ci/build_wheel_librapidsmpf.sh"
+      package-name: librapidsmpf
+      package-type: cpp
+  wheel-build-rapidsmpf:
+    needs: wheel-build-librapidsmpf
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
+    with:
+      # Build for ONE specific combo (first amd64 entry) to guarantee matching with test
+      matrix_filter: map(select(.ARCH == "amd64")) | .[0:1]
+      build_type: ${{ inputs.build_type }}
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      script: "ci/build_wheel_rapidsmpf.sh"
+      package-name: rapidsmpf
+      package-type: python
+  wheel-tests-cudf-polars-with-rapidsmpf:
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
+    with:
+      # Use SAME simple filter as build (first amd64 entry) to guarantee matching
+      matrix_filter: map(select(.ARCH == "amd64")) | .[0:1]
+      build_type: ${{ inputs.build_type }}
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      script: "ci/test_cudf_polars_with_rapidsmpf.sh"

@@ -200,6 +200,34 @@ jobs:
       package-name: cudf_polars
       package-type: python
       pure-wheel: true
+  wheel-build-librapidsmpf:
+    needs: [telemetry-setup, wheel-build-pylibcudf]
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
+    with:
+      # Build for ONE specific combo (first amd64 entry) to match rapidsmpf/test
+      matrix_filter: map(select(.ARCH == "amd64")) | .[0:1]
+      build_type: ${{ inputs.build_type || 'branch' }}
+      branch: ${{ inputs.branch }}
+      sha: ${{ inputs.sha }}
+      date: ${{ inputs.date }}
+      script: ci/build_wheel_librapidsmpf.sh
+      package-name: librapidsmpf
+      package-type: cpp
+  wheel-build-rapidsmpf:
+    needs: [telemetry-setup, wheel-build-librapidsmpf]
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
+    with:
+      # Build for ONE specific combo (first amd64 entry) to guarantee matching with test
+      matrix_filter: map(select(.ARCH == "amd64")) | .[0:1]
+      build_type: ${{ inputs.build_type || 'branch' }}
+      branch: ${{ inputs.branch }}
+      sha: ${{ inputs.sha }}
+      date: ${{ inputs.date }}
+      script: ci/build_wheel_rapidsmpf.sh
+      package-name: rapidsmpf
+      package-type: python
   wheel-publish-cudf-polars:
     needs: wheel-build-cudf-polars
     secrets: inherit
