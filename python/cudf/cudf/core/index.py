@@ -4241,7 +4241,7 @@ class DatetimeIndex(Index):
     ) -> pd.DatetimeIndex:
         result = super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         if not arrow_type and self._freq is not None:
-            result.freq = self._freq._maybe_as_fast_pandas_offset()
+            result.freq = self._freq._maybe_as_fast_pandas_offset()  # type: ignore[attr-defined]
         return result
 
     def _is_boolean(self) -> bool:
@@ -4623,7 +4623,7 @@ class TimedeltaIndex(Index):
         numpy.ndarray
             An ndarray of ``datetime.timedelta`` objects.
         """
-        return self.to_pandas().to_pytimedelta()
+        return self.to_pandas().to_pytimedelta()  # type: ignore[attr-defined]
 
     @cached_property
     def asi8(self) -> cupy.ndarray:
@@ -5503,7 +5503,7 @@ class IntervalIndex(Index):
             If ``True``, return ``NA`` as a tuple ``(nan, nan)``. If ``False``,
             just return ``NA`` as ``nan``.
         """
-        return self.to_pandas().to_tuples(na_tuple=na_tuple)
+        return self.to_pandas().to_tuples(na_tuple=na_tuple)  # type: ignore[attr-defined]
 
 
 @_performance_tracking

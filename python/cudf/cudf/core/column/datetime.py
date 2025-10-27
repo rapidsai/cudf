@@ -824,7 +824,7 @@ class DatetimeTZColumn(DatetimeColumn):
         ):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         else:
-            return self._local_time.to_pandas().tz_localize(
+            return self._local_time.to_pandas().tz_localize(  # type: ignore[attr-defined]
                 self.dtype.tz,  # type: ignore[union-attr]
                 ambiguous="NaT",
                 nonexistent="NaT",

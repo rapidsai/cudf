@@ -32,7 +32,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from nvtx import annotate
-from pandas.io.formats import console
+from pandas.io.formats import console  # type: ignore[attr-defined]
 from pandas.io.formats.printing import pprint_thing
 from typing_extensions import Self, assert_never
 
