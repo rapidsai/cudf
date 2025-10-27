@@ -54,9 +54,10 @@ cdef class ChunkedPack:
 
 cpdef PackedColumns pack(Table input)
 
-cpdef Table unpack(PackedColumns input)
+cpdef Table unpack(PackedColumns input, Stream stream=*)
 
 cpdef Table unpack_from_memoryviews(
     memoryview metadata,
     gpumemoryview gpu_data,
+    Stream stream=*,
 )

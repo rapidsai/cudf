@@ -125,9 +125,11 @@ class StructFunction(Expr):
                 .utf8_escaped(val=False)
                 .build()
             )
-            plc.io.json.write_json(options)
+            plc.io.json.write_json(options, stream=df.stream)
             return Column(
-                plc.Column.from_iterable_of_py(buff.getvalue().split()),
+                plc.Column.from_iterable_of_py(
+                    buff.getvalue().split(), stream=df.stream
+                ),
                 dtype=self.dtype,
             )
         elif self.name in {

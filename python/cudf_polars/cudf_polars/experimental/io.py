@@ -39,6 +39,7 @@ from cudf_polars.experimental.base import (
     get_key_name,
 )
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
+from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, MutableMapping
@@ -438,7 +439,9 @@ def _sink_to_parquet_file(
             plc.io.parquet.ChunkedParquetWriterOptions.builder(sink), options
         )
         writer_options = builder.metadata(metadata).build()
-        writer = plc.io.parquet.ChunkedParquetWriter.from_options(writer_options)
+        writer = plc.io.parquet.ChunkedParquetWriter.from_options(
+            writer_options, stream=df.stream
+        )
 
     # Append to the open Parquet file.
     assert isinstance(writer, plc.io.parquet.ChunkedParquetWriter), (
@@ -762,7 +765,8 @@ class ParquetSourceInfo(DataSourceInfo):
         ).build()
         options.set_columns(key_columns)
         options.set_row_groups(list(samples.values()))
-        tbl_w_meta = plc.io.parquet.read_parquet(options)
+        stream = get_cuda_stream()
+        tbl_w_meta = plc.io.parquet.read_parquet(options, stream=stream)
         row_group_num_rows = tbl_w_meta.tbl.num_rows()
         for name, column in zip(
             tbl_w_meta.column_names(include_children=False),
@@ -773,6 +777,7 @@ class ParquetSourceInfo(DataSourceInfo):
                 column,
                 plc.types.NullPolicy.INCLUDE,
                 plc.types.NanPolicy.NAN_IS_NULL,
+                stream=stream,
             )
             fraction = row_group_unique_count / row_group_num_rows
             # Assume that if every row is unique then this is a
@@ -792,6 +797,7 @@ class ParquetSourceInfo(DataSourceInfo):
                 ColumnStat[int](value=count, exact=exact),
                 ColumnStat[float](value=fraction, exact=exact),
             )
+        stream.synchronize()
 
     def _update_unique_stats(self, column: str) -> None:
         if column not in self._unique_stats and column in self.metadata.column_names:
