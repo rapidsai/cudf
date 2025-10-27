@@ -129,5 +129,5 @@ bool cache_data_source_jni(JNIEnv* env);
 void release_data_source_jni(JNIEnv* env);
 
 // ColumnVector
-void release_cloumn_vector_jni(JNIEnv* env);
+void release_column_vector_jni(JNIEnv* env);
 }  // namespace cudf::jni

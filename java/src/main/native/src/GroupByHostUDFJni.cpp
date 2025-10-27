@@ -63,7 +63,7 @@ void cache_column_vector_jni(JNIEnv* env)
 }
 
 // This is called inside the "JNI_OnUnload", so no lock is needed.
-void release_cloumn_vector_jni(JNIEnv* env)
+void release_column_vector_jni(JNIEnv* env)
 {
   if (is_column_vector_class_cached) {
     ColumnVector_jclass           = del_global_ref(env, ColumnVector_jclass);
