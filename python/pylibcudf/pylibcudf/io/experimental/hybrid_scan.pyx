@@ -129,8 +129,6 @@ cdef class HybridScanReader:
     """
 
     def __init__(self, bytes footer_bytes, ParquetReaderOptions options):
-        # TODO: Check if libcudf requires footer_bytes to remain valid for the lifetime
-        # of the HybridScanReader
         cdef const uint8_t[::1] footer_view = footer_bytes
         self.c_obj = make_unique[cpp_hybrid_scan_reader](
             host_span[const_uint8_t](&footer_view[0], len(footer_bytes)),
