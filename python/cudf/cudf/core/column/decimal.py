@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from typing_extensions import Self
 
 import pylibcudf as plc
 import rmm
@@ -40,8 +41,6 @@ from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-
-    from typing_extensions import Self
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -482,8 +481,8 @@ class Decimal128Column(DecimalBaseColumn):
 
     @classmethod
     def from_arrow(cls, data: pa.Array | pa.ChunkedArray) -> Self:
-        result = cast(Decimal128Dtype, super().from_arrow(data))
-        result.dtype.precision = data.type.precision
+        result = cast(Self, super().from_arrow(data))
+        result.dtype.precision = data.type.precision  # type: ignore[union-attr]
         return result
 
     def to_arrow(self) -> pa.Array:
