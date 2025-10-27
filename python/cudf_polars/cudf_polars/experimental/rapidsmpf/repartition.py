@@ -7,7 +7,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any
 
-from rapidsmpf.streaming.core.channel import Message
+from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.node import define_py_node
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 

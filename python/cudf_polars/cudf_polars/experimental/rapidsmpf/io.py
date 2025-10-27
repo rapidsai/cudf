@@ -9,7 +9,7 @@ import dataclasses
 import math
 from typing import TYPE_CHECKING, Any
 
-from rapidsmpf.streaming.core.channel import Message
+from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 from cudf_polars.dsl.ir import IR, DataFrameScan, Scan

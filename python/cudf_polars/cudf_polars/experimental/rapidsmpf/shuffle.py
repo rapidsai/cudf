@@ -15,7 +15,7 @@ from rapidsmpf.integrations.cudf.partition import (
 )
 from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.shuffler import Shuffler
-from rapidsmpf.streaming.core.channel import Message
+from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.node import define_py_node
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 

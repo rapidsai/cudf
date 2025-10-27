@@ -7,7 +7,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any, Literal
 
-from rapidsmpf.streaming.core.channel import Message
+from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import pylibcudf as plc
