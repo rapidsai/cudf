@@ -813,6 +813,8 @@ decimal_dtype_template = textwrap.dedent(
 
 class DecimalDtype(_BaseDtype):
     _metadata = ("precision", "scale")
+    # Subclasses must override MAX_PRECISION. Sentinel value will fail at runtime.
+    MAX_PRECISION: ClassVar[int] = -1
 
     def __init__(self, precision: int, scale: int = 0) -> None:
         self._validate(precision, scale)
@@ -950,7 +952,7 @@ class DecimalDtype(_BaseDtype):
 )
 class Decimal32Dtype(DecimalDtype):
     name = "decimal32"
-    MAX_PRECISION = np.floor(np.log10(np.iinfo("int32").max))
+    MAX_PRECISION = int(np.floor(np.log10(np.iinfo("int32").max)))
     ITEMSIZE = 4
 
 
@@ -961,7 +963,7 @@ class Decimal32Dtype(DecimalDtype):
 )
 class Decimal64Dtype(DecimalDtype):
     name = "decimal64"
-    MAX_PRECISION = np.floor(np.log10(np.iinfo("int64").max))
+    MAX_PRECISION = int(np.floor(np.log10(np.iinfo("int64").max)))
     ITEMSIZE = 8
 
 
