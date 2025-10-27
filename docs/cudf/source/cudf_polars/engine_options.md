@@ -97,7 +97,8 @@ This behavior is configured by the `cuda_stream_policy` keyword or
 `CUDF_POLARS__CUDA_STREAM_POLICY` environment variable.  The valid options are
 
 * `default`: use the default CUDA stream for all kernel launches and memory operations
-* `new`: create a new CUDA stream when necessary (when reading from a file or loading an in-memory `polars.LazyFrame` object)
+* `new`: create a new CUDA stream when necessary (e.g. when reading from a file or loading an in-memory `polars.LazyFrame` object,
+  or when performing a join where the inputs might be on different streams)
 
 ## Disabling CUDA Managed Memory
 
