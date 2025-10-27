@@ -1937,7 +1937,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             if is_pandas_nullable_extension_dtype(self.dtype):
                 header["dtype"] = pickle.dumps(self.dtype)
             else:
-                header["dtype"] = self.dtype.str
+                header["dtype"] = self.dtype.str  # type: ignore[union-attr]
             header["dtype-is-cudf-serialized"] = False
 
         if self.data is not None:
