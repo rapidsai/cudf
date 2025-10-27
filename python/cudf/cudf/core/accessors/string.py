@@ -99,12 +99,10 @@ class StringMethods(BaseAccessor):
         ):
             parent = parent.astype(value_type.categories.dtype)  # type: ignore[union-attr]
             value_type = parent.dtype
-
-        # Validate dtype is suitable for string operations
-        is_valid_string = value_type == CUDF_STRING_DTYPE or (
-            cudf.get_option("mode.pandas_compatible")
-            and is_string_dtype(value_type)
-        )
+            is_valid_string = True
+        else:
+            # Validate dtype is suitable for string operations
+            is_valid_string = is_string_dtype(value_type)
         if not is_valid_string:
             raise AttributeError(
                 "Can only use .str accessor with string values"
