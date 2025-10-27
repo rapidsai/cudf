@@ -279,10 +279,10 @@ include(cmake/thirdparty/get_nvtx.cmake)
 # find nvCOMP
 include(cmake/thirdparty/get_nvcomp.cmake)
 
-# find CCCL before rmm so that we get cudf's patched version of CCCL
+# find CCCL
 include(cmake/thirdparty/get_cccl.cmake)
 
-# find rmm
+# find rmm, should come after including CCCL to allow overriding the CCCL version used for testing
 include(cmake/thirdparty/get_rmm.cmake)
 
 # find croaring
