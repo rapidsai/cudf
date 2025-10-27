@@ -162,7 +162,7 @@ __device__ void compute_distance(Iterator input1,
   };
 
   // top-left of the matrix
-  // includes the diagonal one passed the max(length1,length2) diagonal
+  // includes the diagonal one after the max(length1,length2) diagonal
   for (auto idx = 0; idx < length1; ++idx, ++input1) {
     auto const n = idx + 2;      // diagonal length
     auto const a = n > length1;  // extra diagonal adjust
