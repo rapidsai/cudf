@@ -120,7 +120,7 @@ struct calculate_compute_buffer_fn {
  * The diagonal approach inspired by:
  * https://ashvardanian.com/posts/stringwars-on-gpus/#dynamic-programming-and-levenshtein-evaluation-order
  */
-template <int32_t tile_size = cudf::detail::warp_size, typename Iterator>
+template <typename Iterator, int32_t tile_size = cudf::detail::warp_size>
 __device__ void compute_distance(Iterator input1,
                                  cudf::size_type length1,
                                  Iterator input2,

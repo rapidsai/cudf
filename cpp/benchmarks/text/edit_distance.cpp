@@ -38,7 +38,7 @@ static void bench_edit_distance_utf8(nvbench::state& state)
   state.add_global_memory_writes<nvbench::int32_t>(num_rows);
 
   state.exec(nvbench::exec_tag::sync,
-             [&](nvbench::launch& launch) { auto result = nvtext::edit_distance(sv1, sv2); });
+             [&](nvbench::launch&) { auto result = nvtext::edit_distance(sv1, sv2); });
 }
 
 static void bench_edit_distance_ascii(nvbench::state& state)
@@ -104,7 +104,7 @@ static void bench_edit_distance_ascii(nvbench::state& state)
   state.add_global_memory_writes<nvbench::int32_t>(num_rows);
 
   state.exec(nvbench::exec_tag::sync,
-             [&](nvbench::launch& launch) { auto result = nvtext::edit_distance(sv1, sv2); });
+             [&](nvbench::launch&) { auto result = nvtext::edit_distance(sv1, sv2); });
 }
 
 static void bench_edit_distance(nvbench::state& state)
