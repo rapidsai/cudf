@@ -29,8 +29,7 @@ reprog_device::reprog_device(reprog const& prog)
     _insts_count{prog.insts_count()},
     _starts_count{prog.starts_count()},
     _classes_count{prog.classes_count()},
-    _max_insts{prog.insts_count()},
-    _codepoint_flags{nullptr}
+    _max_insts{prog.insts_count()}
 {
 }
 
