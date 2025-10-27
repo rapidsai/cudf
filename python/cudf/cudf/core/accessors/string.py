@@ -94,7 +94,7 @@ class StringMethods(BaseAccessor):
             else parent.dtype
         )
         # Convert categorical with string categories to string dtype
-        if _is_categorical_dtype(value_type) and is_string_dtype(
+        if isinstance(value_type, CategoricalDtype) and is_string_dtype(
             value_type.categories.dtype  # type: ignore[union-attr]
         ):
             parent = parent.astype(value_type.categories.dtype)  # type: ignore[union-attr]
