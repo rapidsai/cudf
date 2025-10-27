@@ -127,7 +127,7 @@ class CategoricalColumn(column.ColumnBase):
     @property
     def base_size(self) -> int:
         return int(
-            (self.base_children[0].size) / self.base_children[0].dtype.itemsize
+            (self.base_children[0].size) / self.base_children[0].dtype.itemsize  # type: ignore[union-attr]
         )
 
     def __contains__(self, item: ScalarLike) -> bool:

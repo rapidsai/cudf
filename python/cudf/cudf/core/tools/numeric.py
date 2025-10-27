@@ -179,7 +179,7 @@ def to_numeric(
 
         for t in type_set:
             downcast_dtype: np.dtype = np.dtype(t)
-            if downcast_dtype.itemsize <= col.dtype.itemsize:
+            if downcast_dtype.itemsize <= col.dtype.itemsize:  # type: ignore[union-attr]
                 if col.can_cast_safely(downcast_dtype):
                     col = col.cast(downcast_dtype)
                     break

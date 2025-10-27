@@ -213,7 +213,7 @@ class StringColumn(ColumnBase, Scannable):
         if len(self.base_children) == 1:
             child0_size = (self.size + 1) * self.base_children[
                 0
-            ].dtype.itemsize
+            ].dtype.itemsize  # type: ignore[union-attr]
 
             n += child0_size
         return n
