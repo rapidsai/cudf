@@ -10,6 +10,7 @@ import polars as pl
 
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
+    assert_ir_translation_raises,
     get_default_engine,
 )
 from cudf_polars.utils.versions import POLARS_VERSION_LT_130, POLARS_VERSION_LT_132
@@ -312,3 +313,18 @@ def test_cross_join_filter_with_decimals(request, expr, left_dtype, right_dtype)
     q = left.join(right, how="cross").filter(expr)
 
     assert_gpu_result_equal(q, check_row_order=False)
+
+
+def test_ie_join_projection_pd_19005() -> None:
+    lf = pl.LazyFrame({"a": [1, 2], "b": [3, 4]}).with_row_index()
+    q = (
+        lf.join_where(
+            lf,
+            pl.col.index < pl.col.index_right,
+            pl.col.index.cast(pl.Int64) + pl.col.a > pl.col.a_right,
+        )
+        .group_by(pl.col.index)
+        .agg(pl.col.index_right)
+    )
+
+    assert_ir_translation_raises(q, NotImplementedError)

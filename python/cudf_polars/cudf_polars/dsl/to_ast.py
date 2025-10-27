@@ -108,6 +108,12 @@ class ASTState(TypedDict):
     stream: Stream
 
 
+class ValidateState(TypedDict):
+    """State for validation of AST transformations."""
+
+    for_parquet: bool
+
+
 class ExprTransformerState(TypedDict):
     """
     State used for AST transformation when inserting column references.
@@ -126,11 +132,93 @@ class ExprTransformerState(TypedDict):
     table_ref: plc.expressions.TableReference
 
 
+ValidateTransformer: TypeAlias = GenericTransformer[expr.Expr, None, ValidateState]
 Transformer: TypeAlias = GenericTransformer[expr.Expr, plc_expr.Expression, ASTState]
 ExprTransformer: TypeAlias = GenericTransformer[
     expr.Expr, expr.Expr, ExprTransformerState
 ]
 """Protocol for transformation of Expr nodes."""
+
+
+@singledispatch
+def _validate_to_ast(node: expr.Expr, self: ValidateTransformer) -> None:
+    print(f"Unhandled expression type {type(node)}")
+    raise NotImplementedError(f"Unhandled expression type {type(node)}")
+
+
+@_validate_to_ast.register
+def _(node: expr.Literal, self: ValidateTransformer) -> None:
+    return None
+
+
+@_validate_to_ast.register
+def _(node: expr.Col, self: ValidateTransformer) -> None:
+    if self.state["for_parquet"]:
+        return None
+    raise TypeError("Should always be wrapped in a ColRef node before translation")
+
+
+@_validate_to_ast.register
+def _(node: expr.ColRef, self: ValidateTransformer) -> None:
+    if self.state["for_parquet"]:
+        raise TypeError("Not expecting ColRef node in parquet filter")
+
+
+@_validate_to_ast.register
+def _(node: expr.BinOp, self: ValidateTransformer) -> None:
+    if node.op == plc.binaryop.BinaryOperator.NULL_NOT_EQUALS:
+        return None
+    if self.state["for_parquet"]:
+        op1_col, op2_col = (isinstance(op, expr.Col) for op in node.children)
+        if op1_col ^ op2_col:
+            op: plc.binaryop.BinaryOperator = node.op
+            if op not in SUPPORTED_STATISTICS_BINOPS:
+                raise NotImplementedError(
+                    f"Parquet filter binop with column doesn't support {node.op!r}"
+                )
+            op1, op2 = node.children
+            if op2_col:
+                (op1, op2) = (op2, op1)
+                op = REVERSED_COMPARISON[op]
+            if not isinstance(op2, expr.Literal):
+                raise NotImplementedError(
+                    "Parquet filter binops must have form 'col binop literal'"
+                )
+            return None
+        elif op1_col and op2_col:
+            raise NotImplementedError(
+                "Parquet filter binops must have one column reference not two"
+            )
+    for child in node.children:
+        self(child)
+
+
+@_validate_to_ast.register
+def _(node: expr.BooleanFunction, self: ValidateTransformer) -> None:
+    if node.name is expr.BooleanFunction.Name.IsIn:
+        needles, haystack = node.children
+        if isinstance(haystack, expr.LiteralColumn) and len(haystack.value) < 16:
+            return None
+    if self.state["for_parquet"] and isinstance(node.children[0], expr.Col):
+        raise NotImplementedError(
+            f"Parquet filters don't support {node.name} on columns"
+        )
+    if (
+        node.name is expr.BooleanFunction.Name.IsNull
+        or node.name is expr.BooleanFunction.Name.IsNotNull
+        or node.name is expr.BooleanFunction.Name.Not
+    ):
+        return None
+    raise NotImplementedError(f"AST conversion does not support {node.name}")
+
+
+@_validate_to_ast.register
+def _(node: expr.UnaryFunction, self: ValidateTransformer) -> None:
+    if isinstance(node.children[0], expr.Col) and self.state["for_parquet"]:
+        raise NotImplementedError(
+            "Parquet filters don't support {node.name} on columns"
+        )
+    return None
 
 
 @singledispatch
@@ -296,7 +384,15 @@ def to_parquet_filter(node: expr.Expr, stream: Stream) -> plc_expr.Expression | 
         return None
 
 
-def to_ast(node: expr.Expr, stream: Stream) -> plc_expr.Expression | None:
+def validate_to_ast(node: expr.Expr) -> None:
+    """Validate it."""
+    mapper: ValidateTransformer = CachingVisitor(
+        _validate_to_ast, state={"for_parquet": False}
+    )
+    return mapper(node)
+
+
+def to_ast(node: expr.Expr, stream: Stream) -> plc_expr.Expression:
     """
     Convert an expression to libcudf AST nodes suitable for compute_column.
 
@@ -320,10 +416,7 @@ def to_ast(node: expr.Expr, stream: Stream) -> plc_expr.Expression | None:
     mapper: Transformer = CachingVisitor(
         _to_ast, state={"for_parquet": False, "stream": stream}
     )
-    try:
-        return mapper(node)
-    except (KeyError, NotImplementedError):
-        return None
+    return mapper(node)
 
 
 def _insert_colrefs(node: expr.Expr, rec: ExprTransformer) -> expr.Expr:

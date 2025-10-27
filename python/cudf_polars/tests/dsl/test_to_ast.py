@@ -80,14 +80,16 @@ def test_compute_column(expr, df):
         )
         with pytest.raises(NotImplementedError):
             e_with_colrefs.evaluate(table)
-        ast = to_ast(e_with_colrefs, stream=stream)
-        if ast is not None:
+        try:
+            ast = to_ast(e_with_colrefs, stream=stream)
+        except (KeyError, NotImplementedError):
+            return e.evaluate(table)
+        else:
             return NamedColumn(
                 plc.transform.compute_column(table.table, ast, stream=stream),
                 name=e.name,
                 dtype=e.value.dtype,
             )
-        return e.evaluate(table)
 
     got = DataFrame(map(compute_column, ir.exprs), stream=stream).to_polars()
 

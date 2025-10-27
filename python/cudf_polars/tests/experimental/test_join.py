@@ -10,7 +10,10 @@ import polars as pl
 from cudf_polars import Translator
 from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.experimental.shuffle import Shuffle
-from cudf_polars.testing.asserts import DEFAULT_CLUSTER, assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    DEFAULT_CLUSTER,
+    assert_gpu_result_equal,
+)
 from cudf_polars.utils.config import ConfigOptions
 
 
