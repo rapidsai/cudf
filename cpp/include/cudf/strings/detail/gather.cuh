@@ -228,7 +228,7 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
   __shared__ uint64_t out_offsets_threadblock[strings_per_threadblock + 1]; // measured in characters
   // stores the size in chunks(4B) required to store a string in the scratch.
   __shared__ uint32_t in_offsets_threadblock[strings_per_threadblock];
-  __shared__ uint32_t string_scratch[block_size*pipeline_count]; // scratch for loading string chunks
+  __shared__ uint32_t chunk_scratch[tile_size_chunk*pipeline_count]; // scratch for loading string chunks
   __shared__ typename BlockScan::TempStorage temp_storage;
 
   // Initialize running total
@@ -333,14 +333,15 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
         
         // we dont need to align the curr_string pointer with load_offset here. Using just for easier understanding. 
         auto [chunk, num_char] = load_uint32_masked(curr_string.data() + load_offset, d_chars_begin, d_chars_end);
-        *(string_scratch + tile_size_chunk*pipeline + tb.thread_rank()) = chunk;
+        *(chunk_scratch + tile_size_chunk*pipeline + tb.thread_rank()) = chunk;
 
         // TODO: would it be better to just calculate this last_byte on each thread 
           // if this is the last chunk loaded in each tile
         int32_t const last_chunk = num_chunks - 1;
-        int32_t const last_chunk_tb = (tile_size_chunk * (tile + 1)) - 1;
+        int32_t const last_chunk_tb = (tile_size_chunk * (tile + pipeline + 1)) - 1;
 
         // if this is the last chunk in the tile, or the last chunk in all chunks to be read
+        // since each thread reads into a unique chunk, for each tile only one of the threads will be writing to the shared memory locations
         if (fetched_chunk == min(last_chunk, last_chunk_tb)) {
           // number of output characters that are part of the last chunk
           // we can have atmost 4, if we are loading i_chaacter we can have atmost the number of char in the string.
@@ -355,7 +356,7 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
 
 
     for (int pipeline = 0; pipeline < pipeline_count; pipeline++) {
-    // Read loaded tile/s from SHMEM and write to GMEM
+      // Read loaded tile/s from SHMEM and write to GMEM
       for (int64_t out_ibyte = tb.thread_rank() + first_ibyte_threadblock;
         out_ibyte < last_ibyte_threadblock[pipeline] && out_ibyte < out_offsets_threadblock[strings_current_threadblock];
         out_ibyte += block_size) {
@@ -387,10 +388,13 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
         auto load_offset = (curr_string_first_chunk * chunk_size) + icharacter + curr_string_alignment_offset; 
 
         // read the character from the input string and write it to the output buffer
-        out_chars[out_ibyte]    = reinterpret_cast<char*>(string_scratch + pipeline*tile_size_char)[load_offset % (block_size*chunk_size)];
+        auto const char_scratch = reinterpret_cast<char*>(chunk_scratch);
+        out_chars[out_ibyte]    = *(char_scratch + pipeline*tile_size_char + (load_offset % tile_size_char));
       }
 
-      first_ibyte_threadblock = last_ibyte_threadblock[pipeline] + 1;
+      // In case that last_ibyte_threadblock is uninitialized due to a pipleine not having read any data we want the subsequent loop
+      // condition to fail. The max() operator guarantees that if pipeline N, is the last pipleine then pipeline N+1 does not load any data from SHMEM
+      first_ibyte_threadblock = max(first_ibyte_threadblock, last_ibyte_threadblock[pipeline] + 1);
       
       // Ensure scratch buffer is flushed before we overwrite with new data
       tb.sync();
