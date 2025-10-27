@@ -37,7 +37,7 @@ void cache_column_vector_jni(JNIEnv* env)
   if (is_column_vector_class_cached) { return; }
 
   // Multiple threads may call into this, so try to ask for the lock first.
-  std::lock_guard lock(column_vector_cache_lock);
+  std::lock_guard<std::mutex> lock(column_vector_cache_lock);
   // need to check again to avoid duplicate cache
   if (is_column_vector_class_cached) { return; }
 
