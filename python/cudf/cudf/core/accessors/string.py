@@ -618,7 +618,7 @@ class StringMethods(BaseAccessor):
             The `flags` parameter currently only supports re.DOTALL and
             re.MULTILINE.
         """
-        if expand not in {True, False}:
+        if not isinstance(expand, bool):
             raise ValueError("expand parameter must be True or False")
         if not _is_supported_regex_flags(flags):
             raise NotImplementedError(
