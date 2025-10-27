@@ -1,20 +1,8 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/experimental/deletion_vectors.hpp>
 #include <cudf/stream_compaction.hpp>
@@ -25,6 +13,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device/polymorphic_allocator.hpp>
 
 #include <cuco/roaring_bitmap.cuh>
 #include <cuda/functional>
@@ -40,7 +29,7 @@ namespace cudf::io::parquet::experimental {
 
 // Type alias for the cuco 64-bit roaring bitmap
 using roaring_bitmap_type =
-  cuco::experimental::roaring_bitmap<cuda::std::uint64_t, cudf::detail::cuco_allocator<char>>;
+  cuco::experimental::roaring_bitmap<cuda::std::uint64_t, rmm::mr::polymorphic_allocator<char>>;
 
 namespace {
 
@@ -299,9 +288,7 @@ chunked_parquet_reader::chunked_parquet_reader(
 
   if (not serialized_roaring64.empty()) {
     _deletion_vector = std::make_unique<roaring_bitmap_impl>(
-      serialized_roaring64.data(),
-      cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, _stream.value()},
-      _stream);
+      serialized_roaring64.data(), rmm::mr::polymorphic_allocator<char>{}, _stream);
   }
 }
 
@@ -311,7 +298,7 @@ chunked_parquet_reader::chunked_parquet_reader(
 struct chunked_parquet_reader::roaring_bitmap_impl {
   roaring_bitmap_type roaring_bitmap;
   roaring_bitmap_impl(cuda::std::byte const* const serialized_roaring64_data,
-                      cudf::detail::cuco_allocator<char> const& allocator,
+                      rmm::mr::polymorphic_allocator<char> const& allocator,
                       rmm::cuda_stream_view stream)
     : roaring_bitmap(serialized_roaring64_data, allocator, stream)
   {
@@ -445,10 +432,8 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
   }
 
   // Filter the table using the deletion vector
-  auto deletion_vector = roaring_bitmap_type(
-    serialized_roaring64.data(),
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream.value()},
-    stream);
+  auto deletion_vector = roaring_bitmap_type{
+    serialized_roaring64.data(), rmm::mr::polymorphic_allocator<char>{}, stream};
   auto row_mask = build_row_mask_column(table_with_index->get_column(0).view(),
                                         deletion_vector,
                                         num_rows,

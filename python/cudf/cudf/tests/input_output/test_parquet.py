@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import datetime
 import decimal
@@ -25,6 +26,8 @@ from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.io.parquet import (
     ParquetDatasetWriter,
     ParquetWriter,
+    is_supported_read_parquet,
+    is_supported_write_parquet,
     merge_parquet_filemetadata,
 )
 from cudf.testing import (
@@ -3405,17 +3408,26 @@ def test_parquet_reader_engine_error():
         cudf.read_parquet(BytesIO(), engine="abc")
 
 
-def test_reader_lz4():
-    pdf = pd.DataFrame({"ints": [1, 2] * 5001})
+@pytest.mark.skipif(
+    not is_supported_read_parquet("LZ4")
+    or not is_supported_write_parquet("LZ4"),
+    reason="LZ4 compression not supported for Parquet",
+)
+def test_parquet_roundtrip_lz4():
+    gdf = cudf.DataFrame({"ints": [1, 2] * 5001})
 
     buffer = BytesIO()
-    pdf.to_parquet(buffer, compression="LZ4")
+    gdf.to_parquet(buffer, compression="LZ4")
 
     got = cudf.read_parquet(buffer)
-    assert_eq(pdf, got)
+    assert_eq(gdf, got)
 
 
-def test_writer_lz4():
+@pytest.mark.skipif(
+    not is_supported_write_parquet("LZ4"),
+    reason="LZ4 compression not supported for Parquet writing",
+)
+def test_parquet_write_lz4():
     gdf = cudf.DataFrame({"ints": [1, 2] * 5001})
 
     buffer = BytesIO()
@@ -4569,6 +4581,12 @@ def test_parquet_reader_empty_compressed_page(datadir):
 def test_parquet_decompression(
     set_decomp_env_vars, pdf_day_timestamps, compression
 ):
+    # Skip if the compression type is not supported for reading
+    if not is_supported_read_parquet(compression.upper()):
+        pytest.skip(
+            f"{compression} compression not supported for Parquet reading in this configuration"
+        )
+
     # PANDAS returns category objects whereas cuDF returns hashes
     expect = pdf_day_timestamps.drop(columns=["col_category"])
 

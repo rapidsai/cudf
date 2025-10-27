@@ -93,7 +93,7 @@ class StructFunction(Expr):
             field_index = next(
                 (
                     i
-                    for i, field in enumerate(self.children[0].dtype.polars_type.fields)  # type: ignore[attr-defined]
+                    for i, field in enumerate(self.children[0].dtype.polars_type.fields)
                     if field.name == self.options[0]
                 ),
                 None,
@@ -113,7 +113,7 @@ class StructFunction(Expr):
                 table,
                 [
                     (field.name, [])
-                    for field in self.children[0].dtype.polars_type.fields  # type: ignore[attr-defined]
+                    for field in self.children[0].dtype.polars_type.fields
                 ],
             )
             options = (
@@ -125,9 +125,11 @@ class StructFunction(Expr):
                 .utf8_escaped(val=False)
                 .build()
             )
-            plc.io.json.write_json(options)
+            plc.io.json.write_json(options, stream=df.stream)
             return Column(
-                plc.Column.from_iterable_of_py(buff.getvalue().split()),
+                plc.Column.from_iterable_of_py(
+                    buff.getvalue().split(), stream=df.stream
+                ),
                 dtype=self.dtype,
             )
         elif self.name in {
