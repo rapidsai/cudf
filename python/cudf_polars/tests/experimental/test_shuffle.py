@@ -75,5 +75,5 @@ def test_hash_shuffle(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
     result = evaluate_streaming(qir3, options, context=IRExecutionContext()).to_polars()
     # ignore is for polars' EngineType, which isn't publicly exported.
     # https://github.com/pola-rs/polars/issues/17420
-    expect = df.collect(engine="cpu")  # type: ignore[call-overload]
+    expect = df.collect(engine="cpu")
     assert_frame_equal(result, expect, check_row_order=False)

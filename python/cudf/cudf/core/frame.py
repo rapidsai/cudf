@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -636,8 +637,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                     col.has_nulls() for col in self._columns
                 ):
                     if to_dtype.kind == "b" or any(
-                        dtype.kind == "b"  # type: ignore[union-attr]
-                        for _, dtype in self._dtypes
+                        dtype.kind == "b" for _, dtype in self._dtypes
                     ):
                         if module == cupy:
                             raise ValueError(
@@ -918,9 +918,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
         self,
         value: None | ScalarLike | Series = None,
         method: Literal["ffill", "bfill", "pad", "backfill", None] = None,
-        axis=None,
+        axis: Axis | None = None,
         inplace: bool = False,
-        limit=None,
+        limit: int | None = None,
     ) -> Self | None:
         """Fill null values with ``value`` or specified ``method``.
 

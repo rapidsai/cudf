@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -309,7 +310,7 @@ class TemporalBaseColumn(ColumnBase):
             return self.copy(deep=True)
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
-        if to_dtype.kind == self.dtype.kind:  # type: ignore[union-attr]
+        if to_dtype.kind == self.dtype.kind:
             to_res, _ = np.datetime_data(to_dtype)
             # call-overload must be ignored because numpy stubs only accept literal strings
             # for time units (e.g., "ns", "us") to allow compile-time validation,

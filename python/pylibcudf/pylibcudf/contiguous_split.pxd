@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libc.stdint cimport uint8_t
 from libc.stddef cimport size_t
@@ -53,9 +54,10 @@ cdef class ChunkedPack:
 
 cpdef PackedColumns pack(Table input)
 
-cpdef Table unpack(PackedColumns input)
+cpdef Table unpack(PackedColumns input, Stream stream=*)
 
 cpdef Table unpack_from_memoryviews(
     memoryview metadata,
     gpumemoryview gpu_data,
+    Stream stream=*,
 )
