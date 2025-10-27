@@ -19,15 +19,51 @@ data structures and fundamental algorithms for tabular data.
 
 Notable projects that use cuDF include:
 
-* [spark-rapids](https://github.com/NVIDIA/spark-rapids): A GPU accelerator plugin for [Apache Spark](https://spark.apache.org/)
+* [Spark RAPIDS](https://github.com/NVIDIA/spark-rapids): A GPU accelerator plugin for [Apache Spark](https://spark.apache.org/)
 * [Velox-cuDF](https://github.com/facebookincubator/velox/blob/main/velox/experimental/cudf/README.md): A [Velox](https://velox-lib.io/)
 extension module to execute Velox plans on the GPU
 * [Sirius](https://www.sirius-db.com/): A GPU-native SQL engine providing extensions for libraries like [DuckDB](https://duckdb.org/)
 
 ## Installation
 
-Please visit the [RAPIDS Installation Guide](https://docs.rapids.ai/install/) for details regarding how to install a stable or nightly release
-of cuDF on your local workstation or the cloud using Docker, pip, conda, and more.
+### System Requirements
+
+Operating System, GPU driver, and supported CUDA version information can be found of the [RAPIDS Installation Guide](https://docs.rapids.ai/install/#system-req)
+
+### pip
+
+Each cudf library is available on PyPI. You will need to match the major version number of your installed CUDA version with a `-cu##` suffix
+when installing from PyPI.
+
+```bash
+# CUDA 13
+pip install libcudf-cu13
+pip install pylibcudf-cu13
+pip install cudf-cu13
+pip install cudf-polars-cu13
+pip install dask-cudf-cu13
+
+# CUDA 12
+pip install libcudf-cu12
+pip install pylibcudf-cu12
+pip install cudf-cu12
+pip install cudf-polars-cu12
+pip install dask-cudf-cu12
+```
+
+### conda
+
+Each cudf library is available to be installed with the conda package manager by specifying the `-c rapidsai` channel.
+
+```bash
+conda install -c rapidsai libcudf
+conda install -c rapidsai pylibcudf
+conda install -c rapidsai cudf
+conda install -c rapidsai cudf-polars
+conda install -c rapidsai dask-cudf
+```
+
+### source
 
 To install cuDF from source, please follow [the contribution guide](CONTRIBUTING.md#setting-up-your-build-environment) detailing
 how to setup the build environment.
