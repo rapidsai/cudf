@@ -28,7 +28,7 @@ extension module to execute Velox plans on the GPU
 
 ### System Requirements
 
-Operating System, GPU driver, and supported CUDA version information can be found of the [RAPIDS Installation Guide](https://docs.rapids.ai/install/#system-req)
+Operating System, GPU driver, and supported CUDA version information can be found at the [RAPIDS Installation Guide](https://docs.rapids.ai/install/#system-req)
 
 ### pip
 
