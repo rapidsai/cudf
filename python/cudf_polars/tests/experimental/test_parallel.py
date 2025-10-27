@@ -13,7 +13,6 @@ from polars.testing import assert_frame_equal
 
 from cudf_polars import Translator
 from cudf_polars.dsl.expressions.base import Col, NamedExpr
-from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.parallel import (
     get_scheduler,
@@ -182,7 +181,6 @@ def test_single_cluster():
         ir,
         partition_info,
         config_options,
-        context=IRExecutionContext.from_config_options(config_options),
     )
     scheduler = get_scheduler(config_options)
     cache = {}
@@ -221,7 +219,6 @@ def test_task_graph_is_pickle_serializable(engine):
         ir,
         partition_info,
         config_options,
-        context=IRExecutionContext.from_config_options(config_options),
     )
 
     pickle.loads(pickle.dumps(graph))  # no exception
