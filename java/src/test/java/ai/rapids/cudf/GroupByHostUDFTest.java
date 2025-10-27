@@ -73,12 +73,15 @@ class IntMaxAggUDFWarpper extends HostUDFWrapper {
 
     @Override
     protected ColumnVector aggregate() {
-      ColumnVector ret = aggregateGrouped(innerUDF.getGroupOffsets(), innerUDF.getGroupedValues());
-      if (checkRowsNumberInJava() && getNumGroups() != ret.getRowCount()) {
-        throw new RuntimeException("Got wrong rows number: " + ret.getRowCount() +
-          ", (expected: " + getNumGroups() + ")");
+      try (ColumnView offsets = innerUDF.getGroupOffsets();
+           ColumnView grouped = innerUDF.getGroupedValues()) {
+        ColumnVector ret = aggregateGrouped(offsets, grouped);
+        if (checkRowsNumberInJava() && getNumGroups() != ret.getRowCount()) {
+          throw new RuntimeException("Got wrong rows number: " + ret.getRowCount() +
+            ", (expected: " + getNumGroups() + ")");
+        }
+        return ret;
       }
-      return ret;
     }
   };
 
