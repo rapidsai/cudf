@@ -523,6 +523,7 @@ def test_ir_execution_context_from_config_options(
     )
     context = IRExecutionContext.from_config_options(config)
     assert context.get_cuda_stream is expected
+    context.get_cuda_stream()  # no exception
 
 
 def test_validate_cuda_stream_policy() -> None:
