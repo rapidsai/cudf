@@ -249,7 +249,7 @@ class NumericalColumn(NumericalBaseColumn):
         if op in {"__truediv__", "__rtruediv__"}:
             # Division with integer types results in a suitable float.
             if truediv_type := int_float_dtype_mapping.get(
-                self.dtype.numpy_dtype.type
+                self.dtype.numpy_dtype.type  # type: ignore[attr-defined]
                 if is_pandas_nullable_extension_dtype(self.dtype)
                 else self.dtype.type
             ):
@@ -439,7 +439,7 @@ class NumericalColumn(NumericalBaseColumn):
                 else:
                     common_dtype = get_dtype_of_same_kind(
                         self.dtype,
-                        np.result_type(self.dtype.numpy_dtype, other),  # noqa: TID251
+                        np.result_type(self.dtype.numpy_dtype, other),  # type: ignore[attr-defined]  # noqa: TID251
                     )
             else:
                 common_dtype = np.result_type(self.dtype, other)  # noqa: TID251

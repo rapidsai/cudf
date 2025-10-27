@@ -138,7 +138,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
             # np.timedelta64 raises ValueError, hence `item`
             # cannot exist in `self`.
             return False
-        return super().__contains__(item.to_numpy())
+        return super().__contains__(item.to_numpy())  # type: ignore[attr-defined]
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)

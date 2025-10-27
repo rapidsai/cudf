@@ -483,15 +483,16 @@ class StringColumn(ColumnBase, Scannable):
         if (
             cudf.get_option("mode.pandas_compatible")
             and isinstance(self.dtype, pd.StringDtype)
-            and self.dtype.storage in ["pyarrow", "python"]
+            and self.dtype.storage in ["pyarrow", "python"]  # type: ignore[attr-defined]
         ):
-            if self.dtype.storage == "pyarrow":
-                pandas_array = self.dtype.__from_arrow__(
+            if self.dtype.storage == "pyarrow":  # type: ignore[attr-defined]
+                pandas_array = self.dtype.__from_arrow__(  # type: ignore[attr-defined]
                     self.to_arrow().cast(pa.large_string())
                 )
             elif self.dtype.na_value is np.nan:
                 pandas_array = pd.array(
-                    self.to_arrow().to_pandas(), dtype=self.dtype
+                    self.to_arrow().to_pandas(),  # type: ignore[arg-type]
+                    dtype=self.dtype,
                 )
             else:
                 return super().to_pandas(
