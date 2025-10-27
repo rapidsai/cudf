@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -122,8 +111,11 @@ CUDF_KERNEL void mapping_indices_kernel(size_type num_input_rows,
   if (block.thread_rank() == 0) { cardinality = 0; }
   block.sync();
 
+  // All threads in the block will participate in the loop, and sync.
   auto const stride = cudf::detail::grid_1d::grid_stride();
-  for (auto idx = cudf::detail::grid_1d::global_thread_id(); idx < num_input_rows; idx += stride) {
+  for (auto idx = cudf::detail::grid_1d::global_thread_id();
+       idx - block.thread_rank() < num_input_rows;
+       idx += stride) {
     find_local_mapping(block,
                        idx,
                        num_input_rows,
