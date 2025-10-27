@@ -12821,12 +12821,16 @@ def pytest_collection_modifyitems(session, config, items):
             )
 
 
-def format_structured_log(log_string: str) -> str:
+def try_format_structured_log(log_string: str) -> str:
     dict_start = log_string.find("{")
-    struct_log = json.loads(log_string[dict_start:])
-    with io.StringIO() as stream:
-        pprint.pprint(struct_log, stream=stream)  # noqa: T203
-        return stream.getvalue()
+    try:
+        struct_log = json.loads(log_string[dict_start:])
+    except json.JSONDecodeError:
+        return log_string
+    else:
+        with io.StringIO() as stream:
+            pprint.pprint(struct_log, stream=stream)  # noqa: T203
+            return stream.getvalue()
 
 
 @pytest.hookimpl(wrapper=True, tryfirst=True)
@@ -12843,7 +12847,7 @@ def pytest_runtest_makereport(item, call):
     ):
         # When running with CUDF_PANDAS_LOG_ON_FALLBACK=1, if a test passes but logs
         # an unexpected fall back to pandas, fail the test
-        longrepr = f"Unexpected test fallback to pandas. The fall back logs are: \n{format_structured_log(outcome.caplog)}"
+        longrepr = f"Unexpected test fallback to pandas. The fall back logs are: \n{try_format_structured_log(outcome.caplog)}"
         outcome = pytest.TestReport(
             nodeid=outcome.nodeid,
             location=outcome.location,
