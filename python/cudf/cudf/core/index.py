@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -3224,7 +3225,9 @@ class RangeIndex(Index):
     def _gather(self, gather_map, nullify=False, check_bounds=True):
         gather_map = as_column(gather_map)
         return Index._from_column(
-            self._column.take(gather_map, nullify, check_bounds),
+            self._column.take(
+                gather_map, nullify=nullify, check_bounds=check_bounds
+            ),
             name=self.name,
         )
 

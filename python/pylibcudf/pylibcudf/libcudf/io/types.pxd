@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 cimport pylibcudf.libcudf.io.data_sink as cudf_io_data_sink
 cimport pylibcudf.libcudf.io.datasource as cudf_io_datasource
 cimport pylibcudf.libcudf.table.table_view as cudf_table_view
