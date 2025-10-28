@@ -716,6 +716,10 @@ add_library(
   src/stream_compaction/drop_nulls.cu
   src/stream_compaction/filter/filter.cu
   src/stream_compaction/filter/filter_gather_map.cu
+  src/stream_compaction/filter/filter_gather_map_kernel_complex.cu
+  src/stream_compaction/filter/filter_gather_map_kernel_null_complex.cu
+  src/stream_compaction/filter/filter_gather_map_kernel_null_primitive.cu
+  src/stream_compaction/filter/filter_gather_map_kernel_primitive.cu
   src/stream_compaction/stable_distinct.cu
   src/stream_compaction/unique.cu
   src/stream_compaction/unique_count.cu

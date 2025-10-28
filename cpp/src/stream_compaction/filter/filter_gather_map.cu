@@ -3,11 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <cudf/ast/detail/expression_evaluator.cuh>
+#include "filter_gather_map_kernel.hpp"
+
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
-#include <cudf/detail/device_scalar.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
@@ -35,101 +34,6 @@
 namespace cudf {
 namespace detail {
 
-namespace {
-constexpr int MAX_BLOCK_SIZE = 256;
-
-/**
- * @brief Kernel to evaluate predicate on gather map pairs and mark valid indices
- *
- * @tparam max_block_size The size of the thread block, used to set launch bounds
- * @tparam has_nulls Indicates whether the expression may evaluate to null
- * @tparam has_complex_type Indicates whether the expression may contain complex types
- */
-template <cudf::size_type max_block_size, bool has_nulls, bool has_complex_type>
-__launch_bounds__(max_block_size) __global__
-  void filter_gather_map_kernel(cudf::table_device_view left_table,
-                                cudf::table_device_view right_table,
-                                cudf::device_span<cudf::size_type const> left_indices,
-                                cudf::device_span<cudf::size_type const> right_indices,
-                                cudf::ast::detail::expression_device_view device_expression_data,
-                                bool* output_flags)
-{
-  // Shared memory for intermediate storage
-  extern __shared__ char raw_intermediate_storage[];
-  cudf::ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
-    reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
-
-  auto thread_intermediate_storage =
-    &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
-
-  auto const tid    = cudf::detail::grid_1d::global_thread_id();
-  auto const stride = cudf::detail::grid_1d::grid_stride();
-
-  if (tid == 0) {
-    printf(
-      "Kernel started: left_indices.size()=%d, left_table.num_rows()=%d, "
-      "right_table.num_rows()=%d\n",
-      (int)left_indices.size(),
-      (int)left_table.num_rows(),
-      (int)right_table.num_rows());
-  }
-
-  auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls, has_complex_type>{
-    left_table, right_table, device_expression_data};
-
-  if (tid == 0) { printf("Evaluator created successfully\n"); }
-
-  for (cudf::size_type i = tid; i < left_indices.size(); i += stride) {
-    auto const left_row_index  = left_indices[i];
-    auto const right_row_index = right_indices[i];
-
-    if (tid == 0) {
-      printf("Processing i=%d, left_row_index=%d, right_row_index=%d\n",
-             (int)i,
-             (int)left_row_index,
-             (int)right_row_index);
-    }
-
-    auto result = cudf::ast::detail::value_expression_result<bool, has_nulls>{};
-
-    if (tid == 0) { printf("About to evaluate expression\n"); }
-
-    evaluator.evaluate(result, left_row_index, right_row_index, 0, thread_intermediate_storage);
-
-    if (tid == 0) {
-      printf("Expression evaluated: valid=%d, value=%d\n",
-             (int)result.is_valid(),
-             result.is_valid() ? (int)result.value() : -1);
-    }
-
-    output_flags[i] = result.is_valid() && result.value();
-  }
-
-  if (tid == 0) { printf("Kernel completed\n"); }
-}
-
-/**
- * @brief Template dispatch function to launch the appropriate kernel
- */
-template <bool has_nulls, bool has_complex_type>
-void launch_filter_gather_map_kernel(
-  cudf::table_device_view const& left_table,
-  cudf::table_device_view const& right_table,
-  cudf::device_span<cudf::size_type const> left_indices,
-  cudf::device_span<cudf::size_type const> right_indices,
-  cudf::ast::detail::expression_device_view device_expression_data,
-  bool* output_flags,
-  cudf::detail::grid_1d const& config,
-  std::size_t shmem_per_block,
-  rmm::cuda_stream_view stream)
-{
-  filter_gather_map_kernel<MAX_BLOCK_SIZE, has_nulls, has_complex_type>
-    <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
-      left_table, right_table, left_indices, right_indices, device_expression_data, output_flags);
-}
-
-}  // anonymous namespace
-
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 filter_gather_map(cudf::table_view const& left,
@@ -155,6 +59,7 @@ filter_gather_map(cudf::table_view const& left,
   // Create expression parser
   auto const parser = ast::detail::expression_parser{
     predicate, left, right, has_nulls, stream, cudf::get_current_device_resource_ref()};
+
   CUDF_EXPECTS(parser.output_type().id() == type_id::BOOL8,
                "The predicate expression must produce a Boolean output");
 
@@ -171,6 +76,7 @@ filter_gather_map(cudf::table_view const& left,
   // Configure kernel parameters with dynamic shared memory calculation
   int device_id;
   CUDF_CUDA_TRY(cudaGetDevice(&device_id));
+
   int shmem_limit_per_block;
   CUDF_CUDA_TRY(
     cudaDeviceGetAttribute(&shmem_limit_per_block, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
