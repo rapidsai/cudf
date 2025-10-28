@@ -230,7 +230,7 @@ def test_serialize_cache_miss():
     # the same hash, so they cache the same, but have some difference
     # in behavior (e.g. isinstance).
     cudf_polars.containers.datatype._from_polars.cache_clear()
-    result = Column.deserialize(header, frames)
+    result = Column.deserialize(header, frames, stream=stream)
     assert result.dtype == dtype
 
 
