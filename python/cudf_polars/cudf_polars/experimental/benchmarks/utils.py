@@ -228,6 +228,7 @@ class RunConfig:
     suffix: str
     executor: ExecutorType
     runtime: str
+    stream_policy: str
     cluster: str
     scheduler: str  # Deprecated, kept for backward compatibility
     n_workers: int
@@ -269,6 +270,14 @@ class RunConfig:
         cluster = args.cluster
         scheduler = args.scheduler
         runtime = args.runtime
+        stream_policy = args.stream_policy
+
+        # Handle "auto" stream policy
+        if stream_policy == "auto":
+            if runtime == "rapidsmpf":
+                stream_policy = "pool"
+            else:
+                stream_policy = "default"
 
         # Deal with deprecated scheduler argument
         # and non-streaming executors
@@ -338,6 +347,7 @@ class RunConfig:
             cluster=cluster,
             scheduler=scheduler,
             runtime=runtime,
+            stream_policy=stream_policy,
             n_workers=args.n_workers,
             shuffle=args.shuffle,
             gather_shuffle_stats=args.rapidsmpf_dask_statistics,
@@ -377,6 +387,7 @@ class RunConfig:
             print(f"path: {self.dataset_path}")
             print(f"scale_factor: {self.scale_factor}")
             print(f"executor: {self.executor}")
+            print(f"stream_policy: {self.stream_policy}")
             if self.executor == "streaming":
                 print(f"runtime: {self.runtime}")
                 print(f"cluster: {self.cluster}")
@@ -687,6 +698,15 @@ def parse_args(
         help="Runtime to use for the streaming executor (tasks or rapidsmpf).",
     )
     parser.add_argument(
+        "--stream-policy",
+        type=str,
+        choices=["auto", "default", "new", "pool"],
+        default="auto",
+        help=textwrap.dedent("""\
+            CUDA stream policy (auto, default, new, pool).
+            Default: auto (use the default policy for the runtime)"""),
+    )
+    parser.add_argument(
         "--n-workers",
         default=1,
         type=int,
@@ -884,6 +904,7 @@ def run_polars(
         executor_options = get_executor_options(run_config, benchmark=benchmark)
         engine = pl.GPUEngine(
             raise_on_fail=True,
+            cuda_stream_policy=run_config.stream_policy,
             executor=run_config.executor,
             executor_options=executor_options,
         )
