@@ -117,4 +117,6 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 pl.col("cs_net_profit").sum().alias("total net profit"),
             ]
         )
+        .sort(["order count"])
+        .limit(100)
     )
