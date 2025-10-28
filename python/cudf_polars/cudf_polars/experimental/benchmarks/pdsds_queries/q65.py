@@ -18,40 +18,40 @@ if TYPE_CHECKING:
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 65."""
     return """
-    SELECT s_store_name, 
-                   i_item_desc, 
-                   sc.revenue, 
-                   i_current_price, 
-                   i_wholesale_cost, 
-                   i_brand 
-    FROM   store, 
-           item, 
-           (SELECT ss_store_sk, 
-                   Avg(revenue) AS ave 
-            FROM   (SELECT ss_store_sk, 
-                           ss_item_sk, 
-                           Sum(ss_sales_price) AS revenue 
-                    FROM   store_sales, 
-                           date_dim 
-                    WHERE  ss_sold_date_sk = d_date_sk 
-                           AND d_month_seq BETWEEN 1199 AND 1199 + 11 
-                    GROUP  BY ss_store_sk, 
-                              ss_item_sk) sa 
-            GROUP  BY ss_store_sk) sb, 
-           (SELECT ss_store_sk, 
-                   ss_item_sk, 
-                   Sum(ss_sales_price) AS revenue 
-            FROM   store_sales, 
-                   date_dim 
-            WHERE  ss_sold_date_sk = d_date_sk 
-                   AND d_month_seq BETWEEN 1199 AND 1199 + 11 
-            GROUP  BY ss_store_sk, 
-                      ss_item_sk) sc 
-    WHERE  sb.ss_store_sk = sc.ss_store_sk 
-           AND sc.revenue <= 0.1 * sb.ave 
-           AND s_store_sk = sc.ss_store_sk 
-           AND i_item_sk = sc.ss_item_sk 
-    ORDER  BY s_store_name, 
+    SELECT s_store_name,
+                   i_item_desc,
+                   sc.revenue,
+                   i_current_price,
+                   i_wholesale_cost,
+                   i_brand
+    FROM   store,
+           item,
+           (SELECT ss_store_sk,
+                   Avg(revenue) AS ave
+            FROM   (SELECT ss_store_sk,
+                           ss_item_sk,
+                           Sum(ss_sales_price) AS revenue
+                    FROM   store_sales,
+                           date_dim
+                    WHERE  ss_sold_date_sk = d_date_sk
+                           AND d_month_seq BETWEEN 1199 AND 1199 + 11
+                    GROUP  BY ss_store_sk,
+                              ss_item_sk) sa
+            GROUP  BY ss_store_sk) sb,
+           (SELECT ss_store_sk,
+                   ss_item_sk,
+                   Sum(ss_sales_price) AS revenue
+            FROM   store_sales,
+                   date_dim
+            WHERE  ss_sold_date_sk = d_date_sk
+                   AND d_month_seq BETWEEN 1199 AND 1199 + 11
+            GROUP  BY ss_store_sk,
+                      ss_item_sk) sc
+    WHERE  sb.ss_store_sk = sc.ss_store_sk
+           AND sc.revenue <= 0.1 * sb.ave
+           AND s_store_sk = sc.ss_store_sk
+           AND i_item_sk = sc.ss_item_sk
+    ORDER  BY s_store_name,
               i_item_desc,
               revenue,  --added for deterministic ordering
               i_current_price,  --added for deterministic ordering
@@ -68,14 +68,15 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
     revenue_by_store_item = (
-        store_sales
-        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .filter(pl.col("d_month_seq").is_between(1199, 1199 + 11))
         .group_by(["ss_store_sk", "ss_item_sk"])
-        .agg([
-            pl.col("ss_sales_price").count().alias("revenue_count"),
-            pl.col("ss_sales_price").sum().alias("revenue_sum"),
-        ])
+        .agg(
+            [
+                pl.col("ss_sales_price").count().alias("revenue_count"),
+                pl.col("ss_sales_price").sum().alias("revenue_sum"),
+            ]
+        )
         .with_columns(
             pl.when(pl.col("revenue_count") == 0)
             .then(None)
@@ -85,26 +86,25 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .select(["ss_store_sk", "ss_item_sk", "revenue"])
     )
 
-    avg_revenue_by_store = (
-        revenue_by_store_item
-        .group_by("ss_store_sk")
-        .agg([pl.col("revenue").mean().alias("ave")])
+    avg_revenue_by_store = revenue_by_store_item.group_by("ss_store_sk").agg(
+        [pl.col("revenue").mean().alias("ave")]
     )
 
     return (
-        revenue_by_store_item
-        .join(avg_revenue_by_store, on="ss_store_sk", suffix="_sb")
+        revenue_by_store_item.join(avg_revenue_by_store, on="ss_store_sk", suffix="_sb")
         .filter(pl.col("revenue") <= 0.1 * pl.col("ave"))
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")
-        .select([
-            "s_store_name",
-            "i_item_desc",
-            "revenue",
-            "i_current_price",
-            "i_wholesale_cost",
-            "i_brand",
-        ])
+        .select(
+            [
+                "s_store_name",
+                "i_item_desc",
+                "revenue",
+                "i_current_price",
+                "i_wholesale_cost",
+                "i_brand",
+            ]
+        )
         .sort(
             ["s_store_name", "i_item_desc", "revenue", "i_current_price", "i_brand"],
             nulls_last=True,

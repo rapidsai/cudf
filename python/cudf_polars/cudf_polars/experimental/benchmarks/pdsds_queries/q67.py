@@ -71,20 +71,27 @@ def _build_rollup_levels(
 
     for grp_cols, null_cols in rollup_specs:
         lf = (
-            base_data.group_by(grp_cols).agg(pl.col("sales_amount").sum().alias("sumsales"))
+            base_data.group_by(grp_cols).agg(
+                pl.col("sales_amount").sum().alias("sumsales")
+            )
             if grp_cols
             else base_data.select(pl.col("sales_amount").sum().alias("sumsales"))
         )
 
         if null_cols:
-            lf = lf.with_columns([pl.lit(None, dtype=dt).alias(col) for col, dt in null_cols.items()])
+            lf = lf.with_columns(
+                [pl.lit(None, dtype=dt).alias(col) for col, dt in null_cols.items()]
+            )
 
-
-        lf = lf.select([*(c for c in full_cols if c in grp_cols or c in null_cols), "sumsales"])
+        lf = lf.select(
+            [*(c for c in full_cols if c in grp_cols or c in null_cols), "sumsales"]
+        )
 
         missing = [c for c in full_cols if c not in grp_cols and c not in null_cols]
         if missing:
-            lf = lf.with_columns([pl.lit(None).alias(c) for c in missing]).select(full_cols + ["sumsales"])
+            lf = lf.with_columns([pl.lit(None).alias(c) for c in missing]).select(
+                [*full_cols, "sumsales"]
+            )
 
         levels.append(lf)
 
@@ -92,15 +99,94 @@ def _build_rollup_levels(
 
 
 rollup_specs: list[tuple[list[str], dict[str, pl.DataType]]] = [
-    (["i_category", "i_class", "i_brand", "i_product_name", "d_year", "d_qoy", "d_moy", "s_store_id"], {}),
-    (["i_category", "i_class", "i_brand", "i_product_name", "d_year", "d_qoy", "d_moy"], {"s_store_id": pl.String}),
-    (["i_category", "i_class", "i_brand", "i_product_name", "d_year", "d_qoy"], {"d_moy": pl.Int32, "s_store_id": pl.String}),
-    (["i_category", "i_class", "i_brand", "i_product_name", "d_year"], {"d_qoy": pl.Int32, "d_moy": pl.Int32, "s_store_id": pl.String}),
-    (["i_category", "i_class", "i_brand", "i_product_name"], {"d_year": pl.Int32, "d_qoy": pl.Int32, "d_moy": pl.Int32, "s_store_id": pl.String}),
-    (["i_category", "i_class", "i_brand"], {"i_product_name": pl.String, "d_year": pl.Int32, "d_qoy": pl.Int32, "d_moy": pl.Int32, "s_store_id": pl.String}),
-    (["i_category", "i_class"], {"i_brand": pl.String, "i_product_name": pl.String, "d_year": pl.Int32, "d_qoy": pl.Int32, "d_moy": pl.Int32, "s_store_id": pl.String}),
-    (["i_category"], {"i_class": pl.String, "i_brand": pl.String, "i_product_name": pl.String, "d_year": pl.Int32, "d_qoy": pl.Int32, "d_moy": pl.Int32, "s_store_id": pl.String}),
-    ([], {"i_category": pl.String, "i_class": pl.String, "i_brand": pl.String, "i_product_name": pl.String, "d_year": pl.Int32, "d_qoy": pl.Int32, "d_moy": pl.Int32, "s_store_id": pl.String}),
+    (
+        [
+            "i_category",
+            "i_class",
+            "i_brand",
+            "i_product_name",
+            "d_year",
+            "d_qoy",
+            "d_moy",
+            "s_store_id",
+        ],
+        {},
+    ),
+    (
+        [
+            "i_category",
+            "i_class",
+            "i_brand",
+            "i_product_name",
+            "d_year",
+            "d_qoy",
+            "d_moy",
+        ],
+        {"s_store_id": pl.String},
+    ),
+    (
+        ["i_category", "i_class", "i_brand", "i_product_name", "d_year", "d_qoy"],
+        {"d_moy": pl.Int32, "s_store_id": pl.String},
+    ),
+    (
+        ["i_category", "i_class", "i_brand", "i_product_name", "d_year"],
+        {"d_qoy": pl.Int32, "d_moy": pl.Int32, "s_store_id": pl.String},
+    ),
+    (
+        ["i_category", "i_class", "i_brand", "i_product_name"],
+        {
+            "d_year": pl.Int32,
+            "d_qoy": pl.Int32,
+            "d_moy": pl.Int32,
+            "s_store_id": pl.String,
+        },
+    ),
+    (
+        ["i_category", "i_class", "i_brand"],
+        {
+            "i_product_name": pl.String,
+            "d_year": pl.Int32,
+            "d_qoy": pl.Int32,
+            "d_moy": pl.Int32,
+            "s_store_id": pl.String,
+        },
+    ),
+    (
+        ["i_category", "i_class"],
+        {
+            "i_brand": pl.String,
+            "i_product_name": pl.String,
+            "d_year": pl.Int32,
+            "d_qoy": pl.Int32,
+            "d_moy": pl.Int32,
+            "s_store_id": pl.String,
+        },
+    ),
+    (
+        ["i_category"],
+        {
+            "i_class": pl.String,
+            "i_brand": pl.String,
+            "i_product_name": pl.String,
+            "d_year": pl.Int32,
+            "d_qoy": pl.Int32,
+            "d_moy": pl.Int32,
+            "s_store_id": pl.String,
+        },
+    ),
+    (
+        [],
+        {
+            "i_category": pl.String,
+            "i_class": pl.String,
+            "i_brand": pl.String,
+            "i_product_name": pl.String,
+            "d_year": pl.Int32,
+            "d_qoy": pl.Int32,
+            "d_moy": pl.Int32,
+            "s_store_id": pl.String,
+        },
+    ),
 ]
 
 
@@ -112,27 +198,53 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
     base_data = (
-        store_sales
-        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")
         .filter(pl.col("d_month_seq").is_between(1181, 1181 + 11))
-        .with_columns((pl.col("ss_sales_price") * pl.col("ss_quantity")).fill_null(0).alias("sales_amount"))
+        .with_columns(
+            (pl.col("ss_sales_price") * pl.col("ss_quantity"))
+            .fill_null(0)
+            .alias("sales_amount")
+        )
     )
 
-    full_cols = ["i_category", "i_class", "i_brand", "i_product_name", "d_year", "d_qoy", "d_moy", "s_store_id"]
+    full_cols = [
+        "i_category",
+        "i_class",
+        "i_brand",
+        "i_product_name",
+        "d_year",
+        "d_qoy",
+        "d_moy",
+        "s_store_id",
+    ]
 
     rollup_data = _build_rollup_levels(base_data, full_cols, rollup_specs)
 
     ranked = rollup_data.with_columns(
-        pl.col("sumsales").rank(method="dense", descending=True).over("i_category").cast(pl.Int64).alias("rk")
+        pl.col("sumsales")
+        .rank(method="dense", descending=True)
+        .over("i_category")
+        .cast(pl.Int64)
+        .alias("rk")
     )
 
     return (
-        ranked
-        .filter(pl.col("rk") <= 100)
+        ranked.filter(pl.col("rk") <= 100)
         .sort(
-            ["i_category", "i_class", "i_brand", "i_product_name", "d_year", "d_qoy", "d_moy", "s_store_id", "sumsales", "rk"],
+            [
+                "i_category",
+                "i_class",
+                "i_brand",
+                "i_product_name",
+                "d_year",
+                "d_qoy",
+                "d_moy",
+                "s_store_id",
+                "sumsales",
+                "rk",
+            ],
             nulls_last=True,
             descending=[False] * 10,
         )

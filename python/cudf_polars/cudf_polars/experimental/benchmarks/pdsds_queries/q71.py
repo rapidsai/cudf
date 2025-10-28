@@ -70,65 +70,56 @@ def duckdb_impl(run_config: RunConfig) -> str:
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 71."""
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
-    catalog_sales = get_data(run_config.dataset_path, "catalog_sales", run_config.suffix)
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     time_dim = get_data(run_config.dataset_path, "time_dim", run_config.suffix)
 
-    target_dates = (
-        date_dim
-        .filter((pl.col("d_moy") == 11) & (pl.col("d_year") == 1999))
-        .select("d_date_sk")
+    target_dates = date_dim.filter(
+        (pl.col("d_moy") == 11) & (pl.col("d_year") == 1999)
+    ).select("d_date_sk")
+
+    web_component = web_sales.join(
+        target_dates, left_on="ws_sold_date_sk", right_on="d_date_sk"
+    ).select(
+        pl.col("ws_ext_sales_price").alias("ext_price"),
+        pl.col("ws_item_sk").alias("sold_item_sk"),
+        pl.col("ws_sold_time_sk").alias("time_sk"),
     )
 
-    web_component = (
-        web_sales
-        .join(target_dates, left_on="ws_sold_date_sk", right_on="d_date_sk")
-        .select(
-            pl.col("ws_ext_sales_price").alias("ext_price"),
-            pl.col("ws_item_sk").alias("sold_item_sk"),
-            pl.col("ws_sold_time_sk").alias("time_sk"),
-        )
+    catalog_component = catalog_sales.join(
+        target_dates, left_on="cs_sold_date_sk", right_on="d_date_sk"
+    ).select(
+        pl.col("cs_ext_sales_price").alias("ext_price"),
+        pl.col("cs_item_sk").alias("sold_item_sk"),
+        pl.col("cs_sold_time_sk").alias("time_sk"),
     )
 
-    catalog_component = (
-        catalog_sales
-        .join(target_dates, left_on="cs_sold_date_sk", right_on="d_date_sk")
-        .select(
-            pl.col("cs_ext_sales_price").alias("ext_price"),
-            pl.col("cs_item_sk").alias("sold_item_sk"),
-            pl.col("cs_sold_time_sk").alias("time_sk"),
-        )
-    )
-
-    store_component = (
-        store_sales
-        .join(target_dates, left_on="ss_sold_date_sk", right_on="d_date_sk")
-        .select(
-            pl.col("ss_ext_sales_price").alias("ext_price"),
-            pl.col("ss_item_sk").alias("sold_item_sk"),
-            pl.col("ss_sold_time_sk").alias("time_sk"),
-        )
+    store_component = store_sales.join(
+        target_dates, left_on="ss_sold_date_sk", right_on="d_date_sk"
+    ).select(
+        pl.col("ss_ext_sales_price").alias("ext_price"),
+        pl.col("ss_item_sk").alias("sold_item_sk"),
+        pl.col("ss_sold_time_sk").alias("time_sk"),
     )
 
     combined_sales = pl.concat([web_component, catalog_component, store_component])
 
-    filtered_items = (
-        item
-        .filter(pl.col("i_manager_id") == 1)
-        .select(["i_item_sk", "i_brand_id", "i_brand"])
+    filtered_items = item.filter(pl.col("i_manager_id") == 1).select(
+        ["i_item_sk", "i_brand_id", "i_brand"]
     )
 
-    filtered_time = (
-        time_dim
-        .filter(pl.col("t_meal_time").is_in(["breakfast", "dinner"]))
-        .select(["t_time_sk", "t_hour", "t_minute"])
-    )
+    filtered_time = time_dim.filter(
+        pl.col("t_meal_time").is_in(["breakfast", "dinner"])
+    ).select(["t_time_sk", "t_hour", "t_minute"])
 
     return (
-        combined_sales
-        .join(filtered_items, left_on="sold_item_sk", right_on="i_item_sk")
+        combined_sales.join(
+            filtered_items, left_on="sold_item_sk", right_on="i_item_sk"
+        )
         .join(filtered_time, left_on="time_sk", right_on="t_time_sk")
         .group_by(["i_brand", "i_brand_id", "t_hour", "t_minute"])
         .agg(pl.col("ext_price").sum().alias("ext_price"))
@@ -139,5 +130,9 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             "t_minute",
             "ext_price",
         )
-        .sort(["ext_price", "brand_id", "t_hour"], descending=[True, False, False], nulls_last=False)
+        .sort(
+            ["ext_price", "brand_id", "t_hour"],
+            descending=[True, False, False],
+            nulls_last=False,
+        )
     )
