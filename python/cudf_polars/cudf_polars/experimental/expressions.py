@@ -521,7 +521,11 @@ def _decompose(
     elif len(unique_input_irs) == 1:
         input_ir = unique_input_irs[0]
     else:
-        input_ir = rec.state["input_ir"]
+        # All child IRs were Empty. Reuse the
+        # parent input_ir so the node still has valid
+        # input to attach to within the expression tree.
+        # See https://github.com/rapidsai/cudf/pull/20409
+        input_ir = rec.state["input_ir"]  # pragma: no cover; no test yet
 
     # Call into class-specific logic to decompose ``expr``
     return _decompose_expr_node(
