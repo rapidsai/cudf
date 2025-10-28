@@ -9,9 +9,14 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 
 #include <memory>
 #include <optional>
+#include <utility>
 #include <vector>
 
 namespace CUDF_EXPORT cudf {
@@ -484,6 +489,52 @@ std::unique_ptr<table> filter(
   table_view const& filter_table,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Filters a gather map of row indices based on a predicate applied to the corresponding rows
+ *        in two tables.
+ *
+ * This function evaluates a user-specified predicate on rows of the left
+ * and right tables identified by the input gather map. Only the pairs of indices where the
+ * predicate evaluates to `true` are retained in the output gather map.
+ *
+ * The gather map is represented as two device spans of row indices:
+ * - `left_indices[i]` corresponds to the row index in the left table
+ * - `right_indices[i]` corresponds to the row index in the right table
+ *
+ * The predicate can involve arbitrary column operations from both tables, enabling support
+ * for "mixed join" workflows without materializing the full join table.
+ *
+ * @code{.pseudo}
+ * Left Table:  {{0, 1, 2}, {3, 4, 5}}
+ * Right Table: {{1, 2, 3}, {4, 6, 7}}
+ * Gather Map:  left_indices = {0,1}, right_indices = {0,2}
+ * Predicate:   left.col0 + right.col1 > 5
+ * Result:      filtered_left_indices = {1}, filtered_right_indices = {2}
+ * @endcode
+ *
+ * @param left The left table.
+ * @param right The right table.
+ * @param left_indices Device span of row indices in the left table.
+ * @param right_indices Device span of row indices in the right table.
+ * @param predicate An AST expression that returns a boolean for each pair of rows.
+ * @param stream CUDA stream used for kernel launches and memory operations.
+ * @param mr Device memory resource used to allocate output gather map.
+ *
+ * @return A pair of device vectors [`filtered_left_indices`, `filtered_right_indices`]
+ *         corresponding to rows that satisfy the predicate.
+ *
+ * @throw cudf::logic_error if `left_indices` and `right_indices` have different sizes.
+ */
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+filter_gather_map(cudf::table_view const& left,
+                  cudf::table_view const& right,
+                  cudf::device_span<size_type const> left_indices,
+                  cudf::device_span<size_type const> right_indices,
+                  ast::expression const& predicate,
+                  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */
 }  // namespace CUDF_EXPORT cudf

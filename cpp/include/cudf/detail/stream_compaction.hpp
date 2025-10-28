@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,11 +10,17 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
 namespace CUDF_EXPORT cudf {
+
+namespace ast {
+class expression;
+}
+
 namespace detail {
 /**
  * @copydoc cudf::drop_nulls(table_view const&, std::vector<size_type> const&,
@@ -117,6 +123,19 @@ cudf::size_type distinct_count(column_view const& input,
 cudf::size_type distinct_count(table_view const& input,
                                null_equality nulls_equal,
                                rmm::cuda_stream_view stream);
+
+/**
+ * @copydoc cudf::filter_gather_map
+ */
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+filter_gather_map(cudf::table_view const& left,
+                  cudf::table_view const& right,
+                  cudf::device_span<size_type const> left_indices,
+                  cudf::device_span<size_type const> right_indices,
+                  ast::expression const& predicate,
+                  rmm::cuda_stream_view stream,
+                  rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf
