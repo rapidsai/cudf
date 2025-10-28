@@ -17,7 +17,9 @@ class PackedColumns:
 def pack(input: Table, stream: Stream | None = None) -> PackedColumns: ...
 def unpack(input: PackedColumns) -> Table: ...
 def unpack_from_memoryviews(
-    metadata: memoryview[bytes], gpu_data: gpumemoryview
+    metadata: memoryview[bytes],
+    gpu_data: gpumemoryview,
+    stream: Stream | None = None,
 ) -> Table: ...
 
 class ChunkedPack:
