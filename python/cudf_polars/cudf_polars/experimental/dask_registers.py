@@ -100,7 +100,11 @@ def register() -> None:
     ) -> Column:
         with log_errors():
             metadata, gpudata = frames
-            return Column.deserialize(header, (metadata, plc.gpumemoryview(gpudata)))
+            return Column.deserialize(
+                header,
+                (metadata, plc.gpumemoryview(gpudata)),
+                stream=get_dask_cuda_stream(),
+            )
 
     @overload
     def dask_serialize_column_or_frame(
@@ -144,7 +148,7 @@ def register() -> None:
                 frames[0],
                 plc.gpumemoryview(rmm.DeviceBuffer.to_device(frames[1])),
             )
-            return Column.deserialize(header, new_frames)
+            return Column.deserialize(header, new_frames, stream=get_dask_cuda_stream())
 
     @dask_serialize.register(DataFrame)
     def _(
