@@ -4606,6 +4606,7 @@ Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv* env,
                                                 jclass,
                                                 jlong jinput_table,
                                                 jintArray jkey_indices,
+                                                jintArray jvalue_indices,
                                                 jboolean jignore_null_keys,
                                                 jboolean jkey_sorted,
                                                 jbooleanArray jkeys_sort_desc,
@@ -4643,42 +4644,71 @@ Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv* env,
 
     // 1) Gets the groups(keys, offsets, values) from groupby.
     //
-    // Uses only the non-key columns as the input values instead of the whole table,
-    // to avoid duplicated key columns in output of `get_groups`.
-    // The code looks like a little more complicated, but it can reduce the peak memory.
-    auto num_value_cols = input_table->num_columns() - key_indices.size();
+    // If the `jvalue_indices` is null, uses all_columns - key_columns as value columns;
+    // If the `jvalue_indices` is not null, use the `jvalue_indices` columns as value columns.
     std::vector<cudf::size_type> value_indices;
-    value_indices.reserve(num_value_cols);
-    // column indices start with 0.
-    cudf::size_type index = 0;
-    while (value_indices.size() < num_value_cols) {
-      if (std::find(key_indices.begin(), key_indices.end(), index) == key_indices.end()) {
-        // not key column, so adds it as value column.
-        value_indices.emplace_back(index);
+    auto num_value_cols = [&]() {
+      if (jvalue_indices == NULL) {
+        // if a column is not in key columns, then it's a value column
+        auto num_v_cols = static_cast<size_t>(input_table->num_columns()) - key_indices.size();
+        value_indices.reserve(num_v_cols);
+        cudf::size_type index = 0;
+        while (value_indices.size() < num_v_cols) {
+          if (std::find(key_indices.begin(), key_indices.end(), index) == key_indices.end()) {
+            // not key column, so adds it as value column.
+            value_indices.emplace_back(index);
+          }
+          index++;
+        }
+        return num_v_cols;
+      } else {
+        // use the specified columns as value columns
+        cudf::jni::native_jintArray n_value_indices(env, jvalue_indices);
+        value_indices.reserve(n_value_indices.size());
+        for (auto i = 0; i < n_value_indices.size(); i++) {
+          value_indices.emplace_back(n_value_indices[i]);
+        }
+        return static_cast<size_t>(n_value_indices.size());
       }
-      index++;
-    }
+    }();
+
     cudf::table_view values_view = input_table->select(value_indices);
     // execute grouping
     cudf::groupby::groupby::groups groups = grouper.get_groups(values_view);
 
-    // When builds the table view from keys and values of 'groups', restores the
-    // original order of columns (same order with that in input table).
-    std::vector<cudf::column_view> grouped_cols(key_indices.size() + num_value_cols);
-    // key columns
-    auto key_view    = groups.keys->view();
-    auto key_view_it = key_view.begin();
-    for (auto key_id : key_indices) {
-      grouped_cols.at(key_id) = std::move(*key_view_it);
-      key_view_it++;
-    }
-    // value columns
-    auto value_view    = groups.values->view();
-    auto value_view_it = value_view.begin();
-    for (auto value_id : value_indices) {
-      grouped_cols.at(value_id) = std::move(*value_view_it);
-      value_view_it++;
-    }
+    std::vector<cudf::column_view> grouped_cols;
+    [&]() -> void {
+      if (jvalue_indices == NULL) {
+        grouped_cols.reserve(key_indices.size() + num_value_cols);
+        // When builds the table view from keys and values of 'groups', restores the
+        // original order of columns (same order with that in input table).
+        std::vector<cudf::column_view> grouped_cols(key_indices.size() + num_value_cols);
+        // key columns
+        auto key_view    = groups.keys->view();
+        auto key_view_it = key_view.begin();
+        for (auto key_id : key_indices) {
+          grouped_cols.at(key_id) = std::move(*key_view_it);
+          key_view_it++;
+        }
+        // value columns
+        auto value_view    = groups.values->view();
+        auto value_view_it = value_view.begin();
+        for (auto value_id : value_indices) {
+          grouped_cols.at(value_id) = std::move(*value_view_it);
+          value_view_it++;
+        }
+      } else {
+        // specified value_indices, do not output keys columns by default
+        grouped_cols.reserve(num_value_cols);
+        auto value_view    = groups.values->view();
+        auto value_view_it = value_view.begin();
+        for (size_t i = 0; i < num_value_cols; ++i) {
+          grouped_cols.at(i) = std::move(*value_view_it);
+          value_view_it++;
+        }
+      }
+    }();
+
     cudf::table_view grouped_table(grouped_cols);
     // When no key columns, uses the input table instead, because the output
     // of 'get_groups' is empty.

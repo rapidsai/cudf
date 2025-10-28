@@ -806,6 +806,7 @@ public final class Table implements AutoCloseable {
 
   private static native ContigSplitGroupByResult contiguousSplitGroups(long inputTable,
                                                                 int[] keyIndices,
+                                                                int[] valueIndices,
                                                                 boolean ignoreNullKeys,
                                                                 boolean keySorted,
                                                                 boolean[] keysDescending,
@@ -4474,9 +4475,11 @@ public final class Table implements AutoCloseable {
      * for the memory to be released.
      */
     public ContiguousTable[] contiguousSplitGroups() {
+      int[] defaultValueIndices= null;
       try (ContigSplitGroupByResult ret = Table.contiguousSplitGroups(
           operation.table.nativeHandle,
           operation.indices,
+          defaultValueIndices,
           groupByOptions.getIgnoreNullKeys(),
           groupByOptions.getKeySorted(),
           groupByOptions.getKeysDescending(),
@@ -4504,9 +4507,44 @@ public final class Table implements AutoCloseable {
      * @return The split groups and uniq key table.
      */
     public ContigSplitGroupByResult contiguousSplitGroupsAndGenUniqKeys() {
+      int[] defaultValueIndices = null;
       return Table.contiguousSplitGroups(
               operation.table.nativeHandle,
               operation.indices,
+              defaultValueIndices,
+              groupByOptions.getIgnoreNullKeys(),
+              groupByOptions.getKeySorted(),
+              groupByOptions.getKeysDescending(),
+              groupByOptions.getKeysNullSmallest(),
+              true); // generate uniq key table
+    }
+
+    /**
+     * Similar to the above {@link #contiguousSplitGroupsAndGenUniqKeys}.
+     *
+     * The diff with the above method is:
+     * - Provide an extra input `valueIndices` which defines the columns to output.
+     * - The above method outputs keys columns in the splited tables,
+     *   but this method does not except `valueIndices` includes key columns.
+     *
+     * The splited tables only contain the columns defined in the `valueIndices`
+     *
+     * @param valueIndices Defines the output columns.
+     * @return The split groups and uniq key table.
+     */
+    public ContigSplitGroupByResult contiguousSplitGroupsAndGenUniqKeys(int[] valueIndices) {
+      if (operation.indices == null || operation.indices.length == 0) {
+        throw new IllegalArgumentException("key indices is empty!");
+      }
+
+      if (valueIndices == null || valueIndices.length == 0) {
+        throw new IllegalArgumentException("value indices is empty!");
+      }
+
+      return Table.contiguousSplitGroups(
+              operation.table.nativeHandle,
+              operation.indices,
+              valueIndices,
               groupByOptions.getIgnoreNullKeys(),
               groupByOptions.getKeySorted(),
               groupByOptions.getKeysDescending(),
