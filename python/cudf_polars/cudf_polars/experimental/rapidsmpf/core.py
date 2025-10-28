@@ -28,7 +28,7 @@ import cudf_polars.experimental.rapidsmpf.repartition
 import cudf_polars.experimental.rapidsmpf.shuffle
 import cudf_polars.experimental.rapidsmpf.union  # noqa: F401
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.ir import IRExecutionContext, Join, Union
+from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext, Join, Scan, Union
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo, lower_ir_node
 from cudf_polars.experimental.rapidsmpf.nodes import generate_ir_sub_network_wrapper
@@ -200,6 +200,7 @@ def lower_ir_graph(
 def determine_fanout_nodes(
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
+    ir_dep_count: defaultdict[IR, int],
 ) -> dict[IR, FanoutInfo]:
     """
     Determine which IR nodes need fanout and what type.
@@ -210,6 +211,8 @@ def determine_fanout_nodes(
         The root IR node.
     partition_info
         Partition information for each IR node.
+    ir_dep_count
+        The number of IR dependencies for each IR node.
 
     Returns
     -------
@@ -218,12 +221,6 @@ def determine_fanout_nodes(
     - unbounded: whether the node needs unbounded fanout
     Only includes nodes that need fanout (i.e., have multiple consumers).
     """
-    # Calculate output channel counts (number of consumers per node)
-    output_ch_count: defaultdict[IR, int] = defaultdict(int)
-    for node in traversal([ir]):
-        for child in node.children:
-            output_ch_count[child] += 1
-
     # Determine which nodes need unbounded fanout
     unbounded: set[IR] = set()
 
@@ -256,7 +253,7 @@ def determine_fanout_nodes(
 
     # Build result dictionary: only include nodes with multiple consumers
     fanout_nodes: dict[IR, FanoutInfo] = {}
-    for node, count in output_ch_count.items():
+    for node, count in ir_dep_count.items():
         if count > 1:
             fanout_nodes[node] = FanoutInfo(
                 num_consumers=count,
@@ -294,8 +291,21 @@ def generate_network(
     -------
     The network nodes and output hook.
     """
+    # Count the number of IO nodes and the number of IR dependencies
+    num_io_nodes: int = 0
+    ir_dep_count: defaultdict[IR, int] = defaultdict(int)
+    for node in traversal([ir]):
+        if isinstance(node, (DataFrameScan, Scan)):
+            num_io_nodes += 1
+        for child in node.children:
+            ir_dep_count[child] += 1
+
     # Determine which nodes need fanout
-    fanout_nodes = determine_fanout_nodes(ir, partition_info)
+    fanout_nodes = determine_fanout_nodes(ir, partition_info, ir_dep_count)
+
+    # TODO: Make this configurable
+    max_io_threads_global = 2
+    max_io_threads_local = max(1, max_io_threads_global // max(1, num_io_nodes))
 
     # Generate the network
     state: GenState = {
@@ -304,6 +314,7 @@ def generate_network(
         "partition_info": partition_info,
         "fanout_nodes": fanout_nodes,
         "ir_context": ir_context,
+        "max_io_threads": max_io_threads_local,
     }
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state

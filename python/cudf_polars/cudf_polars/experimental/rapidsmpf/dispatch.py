@@ -70,6 +70,9 @@ class GenState(TypedDict):
         Dictionary mapping IR nodes to fanout information.
     ir_context
         The execution context for the IR node.
+    max_io_threads
+        The maximum number of IO threads to use for
+        a single IO node.
     """
 
     context: Context
@@ -77,6 +80,7 @@ class GenState(TypedDict):
     partition_info: MutableMapping[IR, PartitionInfo]
     fanout_nodes: dict[IR, FanoutInfo]
     ir_context: IRExecutionContext
+    max_io_threads: int
 
 
 SubNetGenerator: TypeAlias = GenericTransformer[

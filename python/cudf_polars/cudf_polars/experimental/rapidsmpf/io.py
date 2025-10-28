@@ -130,7 +130,7 @@ def _(
         "'in-memory' executor not supported in 'generate_ir_sub_network'"
     )
     rows_per_partition = config_options.executor.max_rows_per_partition
-    max_io_threads = 1  # TODO: Make this configurable.
+    max_io_threads = rec.state["max_io_threads"]
 
     context = rec.state["context"]
     ir_context = rec.state["ir_context"]
@@ -348,7 +348,7 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
     )
     parquet_options = config_options.parquet_options
     partition_info = rec.state["partition_info"][ir]
-    max_io_threads = 1  # TODO: Make this configurable.
+    max_io_threads = rec.state["max_io_threads"]
 
     assert partition_info.io_plan is not None, "Scan node must have a partition plan"
     plan: IOPartitionPlan = partition_info.io_plan
