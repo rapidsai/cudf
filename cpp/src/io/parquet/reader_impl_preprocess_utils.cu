@@ -420,12 +420,12 @@ void decode_page_headers(pass_intermediate_data& pass,
   CUDF_FUNC_RANGE();
 
   auto iter = thrust::counting_iterator<size_t>(0);
-  rmm::device_uvector<size_t> chunk_page_counts(pass.chunks.size() + 1, stream);
+  rmm::device_uvector<size_t> chunk_page_offsets(pass.chunks.size() + 1, stream);
   thrust::transform_exclusive_scan(
     rmm::exec_policy_nosync(stream),
     iter,
     iter + pass.chunks.size() + 1,
-    chunk_page_counts.begin(),
+    chunk_page_offsets.begin(),
     cuda::proclaim_return_type<size_t>(
       [chunks = pass.chunks.d_begin(), num_chunks = pass.chunks.size()] __device__(size_t i) {
         return static_cast<size_t>(
@@ -437,10 +437,10 @@ void decode_page_headers(pass_intermediate_data& pass,
   thrust::for_each(rmm::exec_policy_nosync(stream),
                    iter,
                    iter + pass.chunks.size(),
-                   [cpi               = d_chunk_page_info.begin(),
-                    chunk_page_counts = chunk_page_counts.begin(),
-                    unsorted_pages    = unsorted_pages.begin()] __device__(size_t i) {
-                     cpi[i].pages = &unsorted_pages[chunk_page_counts[i]];
+                   [cpi                = d_chunk_page_info.begin(),
+                    chunk_page_offsets = chunk_page_offsets.begin(),
+                    unsorted_pages     = unsorted_pages.begin()] __device__(size_t i) {
+                     cpi[i].pages = &unsorted_pages[chunk_page_offsets[i]];
                    });
 
   kernel_error error_code(stream);
@@ -549,7 +549,7 @@ void decode_page_headers(pass_intermediate_data& pass,
     decode_page_headers_with_pgidx(pass.chunks.d_begin(),
                                    unsorted_pages.begin(),
                                    page_locations.begin(),
-                                   chunk_page_counts.begin(),
+                                   chunk_page_offsets.begin(),
                                    pass.chunks.size(),
                                    unsorted_pages.size(),
                                    error_code.data(),
