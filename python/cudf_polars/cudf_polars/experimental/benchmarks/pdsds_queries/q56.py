@@ -18,87 +18,91 @@ if TYPE_CHECKING:
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 56."""
     return """
-        WITH ss 
-            AS (SELECT i_item_id, 
-                        Sum(ss_ext_sales_price) total_sales 
-                FROM   store_sales, 
-                        date_dim, 
-                        customer_address, 
-                        item 
-                WHERE  i_item_id IN (SELECT i_item_id 
-                                    FROM   item 
-                                    WHERE  i_color IN ( 'firebrick', 'rosy', 'white' ) 
-                                    ) 
-                        AND ss_item_sk = i_item_sk 
-                        AND ss_sold_date_sk = d_date_sk 
-                        AND d_year = 1998 
-                        AND d_moy = 3 
-                        AND ss_addr_sk = ca_address_sk 
-                        AND ca_gmt_offset = -6 
-                GROUP  BY i_item_id), 
-            cs 
-            AS (SELECT i_item_id, 
-                        Sum(cs_ext_sales_price) total_sales 
-                FROM   catalog_sales, 
-                        date_dim, 
-                        customer_address, 
-                        item 
-                WHERE  i_item_id IN (SELECT i_item_id 
-                                    FROM   item 
-                                    WHERE  i_color IN ( 'firebrick', 'rosy', 'white' ) 
-                                    ) 
-                        AND cs_item_sk = i_item_sk 
-                        AND cs_sold_date_sk = d_date_sk 
-                        AND d_year = 1998 
-                        AND d_moy = 3 
-                        AND cs_bill_addr_sk = ca_address_sk 
-                        AND ca_gmt_offset = -6 
-                GROUP  BY i_item_id), 
-            ws 
-            AS (SELECT i_item_id, 
-                        Sum(ws_ext_sales_price) total_sales 
-                FROM   web_sales, 
-                        date_dim, 
-                        customer_address, 
-                        item 
-                WHERE  i_item_id IN (SELECT i_item_id 
-                                    FROM   item 
-                                    WHERE  i_color IN ( 'firebrick', 'rosy', 'white' ) 
-                                    ) 
-                        AND ws_item_sk = i_item_sk 
-                        AND ws_sold_date_sk = d_date_sk 
-                        AND d_year = 1998 
-                        AND d_moy = 3 
-                        AND ws_bill_addr_sk = ca_address_sk 
-                        AND ca_gmt_offset = -6 
-                GROUP  BY i_item_id) 
-        SELECT i_item_id, 
-                    Sum(total_sales) total_sales 
-        FROM   (SELECT * 
-                FROM   ss 
-                UNION ALL 
-                SELECT * 
-                FROM   cs 
-                UNION ALL 
-                SELECT * 
-                FROM   ws) tmp1 
-        GROUP  BY i_item_id 
+        WITH ss
+            AS (SELECT i_item_id,
+                        Sum(ss_ext_sales_price) total_sales
+                FROM   store_sales,
+                        date_dim,
+                        customer_address,
+                        item
+                WHERE  i_item_id IN (SELECT i_item_id
+                                    FROM   item
+                                    WHERE  i_color IN ( 'firebrick', 'rosy', 'white' )
+                                    )
+                        AND ss_item_sk = i_item_sk
+                        AND ss_sold_date_sk = d_date_sk
+                        AND d_year = 1998
+                        AND d_moy = 3
+                        AND ss_addr_sk = ca_address_sk
+                        AND ca_gmt_offset = -6
+                GROUP  BY i_item_id),
+            cs
+            AS (SELECT i_item_id,
+                        Sum(cs_ext_sales_price) total_sales
+                FROM   catalog_sales,
+                        date_dim,
+                        customer_address,
+                        item
+                WHERE  i_item_id IN (SELECT i_item_id
+                                    FROM   item
+                                    WHERE  i_color IN ( 'firebrick', 'rosy', 'white' )
+                                    )
+                        AND cs_item_sk = i_item_sk
+                        AND cs_sold_date_sk = d_date_sk
+                        AND d_year = 1998
+                        AND d_moy = 3
+                        AND cs_bill_addr_sk = ca_address_sk
+                        AND ca_gmt_offset = -6
+                GROUP  BY i_item_id),
+            ws
+            AS (SELECT i_item_id,
+                        Sum(ws_ext_sales_price) total_sales
+                FROM   web_sales,
+                        date_dim,
+                        customer_address,
+                        item
+                WHERE  i_item_id IN (SELECT i_item_id
+                                    FROM   item
+                                    WHERE  i_color IN ( 'firebrick', 'rosy', 'white' )
+                                    )
+                        AND ws_item_sk = i_item_sk
+                        AND ws_sold_date_sk = d_date_sk
+                        AND d_year = 1998
+                        AND d_moy = 3
+                        AND ws_bill_addr_sk = ca_address_sk
+                        AND ca_gmt_offset = -6
+                GROUP  BY i_item_id)
+        SELECT i_item_id,
+                    Sum(total_sales) total_sales
+        FROM   (SELECT *
+                FROM   ss
+                UNION ALL
+                SELECT *
+                FROM   cs
+                UNION ALL
+                SELECT *
+                FROM   ws) tmp1
+        GROUP  BY i_item_id
         ORDER  BY total_sales
         LIMIT 100;
     """
 
+
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 56."""
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
-    catalog_sales = get_data(run_config.dataset_path, "catalog_sales", run_config.suffix)
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
-    customer_address = get_data(run_config.dataset_path, "customer_address", run_config.suffix)
+    customer_address = get_data(
+        run_config.dataset_path, "customer_address", run_config.suffix
+    )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
     color_item_ids_lf = (
-        item
-        .filter(pl.col("i_color").is_in(["firebrick", "rosy", "white"]))
+        item.filter(pl.col("i_color").is_in(["firebrick", "rosy", "white"]))
         .select(["i_item_id"])
         .unique()
     )
@@ -140,10 +144,12 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 & (pl.col("ca_gmt_offset") == -6)
             )
             .group_by("i_item_id")
-            .agg([
-                pl.col(ch["ext_col"]).count().alias("count_sales"),
-                pl.col(ch["ext_col"]).sum().alias("sum_sales"),
-            ])
+            .agg(
+                [
+                    pl.col(ch["ext_col"]).count().alias("count_sales"),
+                    pl.col(ch["ext_col"]).sum().alias("sum_sales"),
+                ]
+            )
             .with_columns(
                 pl.when(pl.col("count_sales") == 0)
                 .then(None)
@@ -158,10 +164,12 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     return (
         pl.concat(per_channel)
         .group_by("i_item_id")
-        .agg([
-            pl.col("total_sales").count().alias("count_total"),
-            pl.col("total_sales").sum().alias("sum_total"),
-        ])
+        .agg(
+            [
+                pl.col("total_sales").count().alias("count_total"),
+                pl.col("total_sales").sum().alias("sum_total"),
+            ]
+        )
         .with_columns(
             pl.when(pl.col("count_total") == 0)
             .then(None)
