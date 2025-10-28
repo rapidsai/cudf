@@ -574,8 +574,6 @@ struct decode_page_headers_with_pgidx_fn {
 
   __device__ void operator()(size_type page_idx) const noexcept
   {
-    if (page_idx >= num_pages) { return; }
-
     // Binary search the the column chunk index for this page
     auto const chunk_idx = static_cast<int32_t>(
       cuda::std::distance(
