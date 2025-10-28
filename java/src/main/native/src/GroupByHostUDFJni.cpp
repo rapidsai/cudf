@@ -218,11 +218,12 @@ extern "C" {
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_GroupByHostUDF_createNativeInstance(JNIEnv* env,
                                                                                 jobject judf)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     return ptr_as_jlong(new cudf::jni::jni_groupby_host_udf(env, judf));
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_GroupByHostUDF_getGroupOffsetsView(JNIEnv* env,
@@ -230,13 +231,14 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_GroupByHostUDF_getGroupOffsetsView(J
                                                                                jobject udf_handle)
 {
   JNI_NULL_CHECK(env, udf_handle, "udf handle cannot be null.", 0);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto native_udf = reinterpret_cast<cudf::jni::jni_groupby_host_udf*>(udf_handle);
     auto ret_span   = native_udf->get_group_offsets();
     return ptr_as_jlong(new cudf::column_view(ret_span));
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_GroupByHostUDF_getGroupedValuesView(JNIEnv* env,
@@ -244,12 +246,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_GroupByHostUDF_getGroupedValuesView(
                                                                                 jobject udf_handle)
 {
   JNI_NULL_CHECK(env, udf_handle, "udf handle cannot be null.", 0);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto native_udf = reinterpret_cast<cudf::jni::jni_groupby_host_udf*>(udf_handle);
     return ptr_as_jlong(new cudf::column_view(native_udf->get_grouped_values()));
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_GroupByHostUDF_getNumGroups(JNIEnv* env,
@@ -257,12 +260,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_GroupByHostUDF_getNumGroups(JNIEnv* 
                                                                         jobject udf_handle)
 {
   JNI_NULL_CHECK(env, udf_handle, "udf handle cannot be null.", 0);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto native_udf = reinterpret_cast<cudf::jni::jni_groupby_host_udf*>(udf_handle);
     return static_cast<jlong>(native_udf->get_num_groups());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 }  // extern "C"
