@@ -249,6 +249,7 @@ class DataFrame:
         table = plc.contiguous_split.unpack_from_memoryviews(
             packed_metadata,
             packed_gpu_data,
+            stream,
         )
         return cls(
             (
