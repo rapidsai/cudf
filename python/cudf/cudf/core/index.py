@@ -2512,12 +2512,7 @@ class Index(SingleColumnFrame):
     @copy_docstring(StringMethods)
     @_performance_tracking
     def str(self):
-        if self.dtype == CUDF_STRING_DTYPE:
-            return StringMethods(parent=self)
-        else:
-            raise AttributeError(
-                "Can only use .str accessor with string values!"
-            )
+        return StringMethods(parent=self)
 
     @cache
     @_warn_no_dask_cudf
@@ -4825,9 +4820,11 @@ class CategoricalIndex(Index):
         ):
             data = data._column
         else:
-            data = as_column(
-                data, dtype=cudf.CategoricalDtype() if dtype is None else dtype
-            )
+            if dtype is None or (
+                isinstance(dtype, str) and dtype == "category"
+            ):
+                dtype = cudf.CategoricalDtype()
+            data = as_column(data, dtype=dtype)
             # dtype has already been taken care
             dtype = None
 
