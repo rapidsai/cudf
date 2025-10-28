@@ -2273,7 +2273,7 @@ def initial_setup():
 
     # Once we switch to pandas 3.0 CoW will be default
     if parse(pd.__version__) <= parse("3.0.0"):
-        cudf.set_option("mode.copy_on_write", True)
+        cudf.set_option("copy_on_write", True)
         pd.set_option("mode.copy_on_write", True)
 
 
