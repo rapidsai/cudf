@@ -497,11 +497,11 @@ void decode_page_headers(pass_intermediate_data& pass,
     };
 
     // Decide if to launch the data ptr collection task sequentially or using thread pool
-    auto const total_chunks              = pass.chunks.size();
-    auto constexpr max_num_tasks         = 8;
-    auto constexpr min_chunks_per_thread = 512;
+    auto const total_chunks            = pass.chunks.size();
+    auto constexpr max_num_tasks       = 8;
+    auto constexpr min_chunks_per_task = 512;
 
-    if (total_chunks < min_chunks_per_thread) {
+    if (total_chunks < min_chunks_per_task) {
       auto page_locations = process_chunk(0, total_chunks);
       host_page_locations.insert(host_page_locations.end(),
                                  std::make_move_iterator(page_locations.begin()),
@@ -509,7 +509,7 @@ void decode_page_headers(pass_intermediate_data& pass,
     } else {
       // Determine the number of tasks to launch
       auto const num_tasks = std::clamp<cudf::size_type>(
-        cudf::util::div_rounding_up_unsafe(total_chunks, min_chunks_per_thread),
+        cudf::util::div_rounding_up_unsafe(total_chunks, min_chunks_per_task),
         size_type{2},
         max_num_tasks);
       // Determine the number of column chunks processed per task
