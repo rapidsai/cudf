@@ -4524,10 +4524,10 @@ public final class Table implements AutoCloseable {
      *
      * The diff with the above method is:
      * - Provide an extra input `valueIndices` which defines the columns to output.
-     * - The above method outputs keys columns in the splited tables,
+     * - The above method outputs keys columns in the split tables,
      *   but this method does not except `valueIndices` includes key columns.
      *
-     * The splited tables only contain the columns defined in the `valueIndices`
+     * The split tables only contain the columns defined in the `valueIndices`
      *
      * @param valueIndices Defines the output columns.
      * @return The split groups and uniq key table.
