@@ -3443,11 +3443,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             inplace=inplace,
         )
 
-    @_performance_tracking
     @_external_only_api(
         "Use ._insert with ignore_index=True to avoid expensive index "
         "equality checking and reindexing when the data is already aligned."
     )
+    @_performance_tracking
     def insert(
         self,
         loc,
