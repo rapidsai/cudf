@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import ast
 import contextlib
 import io
 import json
@@ -12803,6 +12804,10 @@ NODEIDS_THAT_FALLBACK_TO_PANDAS = {
     "tests/strings/test_strings.py::test_iter_raises"
 }
 
+FALLBACK_QUALNAMES_TO_IGNORE = {
+    "assert_almost_equal",
+}
+
 
 def pytest_collection_modifyitems(session, config, items):
     TO_SKIP = NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS.union(
@@ -12821,18 +12826,6 @@ def pytest_collection_modifyitems(session, config, items):
             )
 
 
-def try_format_structured_log(log_string: str) -> str:
-    dict_start = log_string.find("{")
-    try:
-        struct_log = json.loads(log_string[dict_start:])
-    except json.JSONDecodeError:
-        return log_string
-    else:
-        with io.StringIO() as stream:
-            pprint.pprint(struct_log, stream=stream)  # noqa: T203
-            return stream.getvalue()
-
-
 @pytest.hookimpl(wrapper=True, tryfirst=True)
 def pytest_runtest_makereport(item, call):
     outcome = yield
@@ -12845,22 +12838,35 @@ def pytest_runtest_makereport(item, call):
         and "LOG_FAST_FALLBACK" in outcome.caplog
         and item.nodeid not in NODEIDS_THAT_FALLBACK_TO_PANDAS
     ):
-        # When running with CUDF_PANDAS_LOG_ON_FALLBACK=1, if a test passes but logs
-        # an unexpected fall back to pandas, fail the test
-        longrepr = f"Unexpected test fallback to pandas. The fall back logs are: \n{try_format_structured_log(outcome.caplog)}"
-        outcome = pytest.TestReport(
-            nodeid=outcome.nodeid,
-            location=outcome.location,
-            keywords=outcome.keywords,
-            outcome="failed",
-            longrepr=longrepr,
-            when=outcome.when,
-            sections=outcome.sections,
-            duration=outcome.duration,
-            start=outcome.start,
-            stop=outcome.stop,
-            user_properties=outcome.user_properties,
-        )
+        for log in outcome.caplog.split("\n"):
+            try:
+                structured_log = json.loads(log)
+            except json.JSONDecodeError:
+                # For some reason key are getting single quoted
+                structured_log = ast.literal_eval(log)
+            if (
+                structured_log["slow_object"]
+                not in FALLBACK_QUALNAMES_TO_IGNORE
+            ):
+                # When running with CUDF_PANDAS_LOG_ON_FALLBACK=1, if a test passes but logs
+                # an unexpected fall back to pandas, fail the test
+                with io.StringIO() as stream:
+                    pprint.pprint(structured_log, stream=stream)  # noqa: T203
+                    longrepr = f"Unexpected test fallback to pandas. The fall back logs are: \n{stream.getvalue()}"
+                outcome = pytest.TestReport(
+                    nodeid=outcome.nodeid,
+                    location=outcome.location,
+                    keywords=outcome.keywords,
+                    outcome="failed",
+                    longrepr=longrepr,
+                    when=outcome.when,
+                    sections=outcome.sections,
+                    duration=outcome.duration,
+                    start=outcome.start,
+                    stop=outcome.stop,
+                    user_properties=outcome.user_properties,
+                )
+                break
     return outcome
 
 

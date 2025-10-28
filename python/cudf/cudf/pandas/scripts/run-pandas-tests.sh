@@ -50,6 +50,7 @@ if [ ! -d "pandas-tests" ]; then
     cat > pandas-tests/pyproject.toml << \EOF
 [tool.pytest.ini_options]
 xfail_strict = true
+log_format = "%(message)s"
 markers = [
   "single_cpu: tests that should run on a single cpu only",
   "slow: mark a test as slow",
