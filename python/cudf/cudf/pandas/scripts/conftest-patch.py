@@ -6199,8 +6199,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/indexes/multi/test_constructors.py::test_create_index_existing_name",
     "tests/indexes/multi/test_constructors.py::test_from_arrays_respects_none_names",
     "tests/indexes/multi/test_constructors.py::test_from_frame_dtype_fidelity",
-    "tests/indexes/multi/test_constructors.py::test_from_frame_error[non_frame0]",
-    "tests/indexes/multi/test_constructors.py::test_from_frame_error[non_frame3]",
     "tests/indexes/multi/test_constructors.py::test_from_frame_missing_values_multiIndex",
     "tests/indexes/multi/test_constructors.py::test_multiindex_inference_consistency",
     "tests/indexes/multi/test_conversion.py::test_to_frame_dtype_fidelity",
