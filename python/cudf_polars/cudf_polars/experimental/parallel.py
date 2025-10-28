@@ -22,6 +22,7 @@ from cudf_polars.dsl.ir import (
     Filter,
     HConcat,
     HStack,
+    IRExecutionContext,
     MapFunction,
     Projection,
     Slice,
@@ -43,7 +44,6 @@ if TYPE_CHECKING:
     from typing import Any
 
     from cudf_polars.containers import DataFrame
-    from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.dispatch import LowerIRTransformer, State
     from cudf_polars.utils.config import ConfigOptions
 
@@ -98,7 +98,6 @@ def task_graph(
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
-    context: IRExecutionContext,
 ) -> tuple[MutableMapping[Any, Any], str | tuple[str, int]]:
     """
     Construct a task graph for evaluation of an IR graph.
@@ -134,6 +133,7 @@ def task_graph(
     --------
     generate_ir_tasks
     """
+    context = IRExecutionContext.from_config_options(config_options)
     graph = reduce(
         operator.or_,
         (
@@ -227,8 +227,6 @@ def post_process_task_graph(
 def evaluate_rapidsmpf(
     ir: IR,
     config_options: ConfigOptions,
-    *,
-    context: IRExecutionContext,
 ) -> DataFrame:  # pragma: no cover; rapidsmpf runtime not tested in CI yet
     """
     Evaluate with the RapidsMPF streaming runtime.
@@ -239,8 +237,6 @@ def evaluate_rapidsmpf(
         Logical plan to evaluate.
     config_options
         GPUEngine configuration options.
-    context
-        The execution context for the IR node.
 
     Returns
     -------
@@ -248,13 +244,12 @@ def evaluate_rapidsmpf(
     """
     from cudf_polars.experimental.rapidsmpf.core import evaluate_logical_plan
 
-    return evaluate_logical_plan(ir, config_options, context=context)
+    return evaluate_logical_plan(ir, config_options)
 
 
 def evaluate_streaming(
     ir: IR,
     config_options: ConfigOptions,
-    context: IRExecutionContext,
 ) -> DataFrame:
     """
     Evaluate an IR graph with partitioning.
@@ -265,8 +260,6 @@ def evaluate_streaming(
         Logical plan to evaluate.
     config_options
         GPUEngine configuration options.
-    context
-        The execution context for the IR node.
 
     Returns
     -------
@@ -280,12 +273,12 @@ def evaluate_streaming(
         config_options.executor.runtime == "rapidsmpf"
     ):  # pragma: no cover; rapidsmpf runtime not tested in CI yet
         # Using the RapidsMPF streaming runtime.
-        return evaluate_rapidsmpf(ir, config_options, context=context)
+        return evaluate_rapidsmpf(ir, config_options)
     else:
         # Using the default task engine.
         ir, partition_info = lower_ir_graph(ir, config_options)
 
-        graph, key = task_graph(ir, partition_info, config_options, context=context)
+        graph, key = task_graph(ir, partition_info, config_options)
 
         return get_scheduler(config_options)(graph, key)
 

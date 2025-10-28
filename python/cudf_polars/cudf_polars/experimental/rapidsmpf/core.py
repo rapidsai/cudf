@@ -28,7 +28,7 @@ import cudf_polars.experimental.rapidsmpf.repartition
 import cudf_polars.experimental.rapidsmpf.shuffle
 import cudf_polars.experimental.rapidsmpf.union  # noqa: F401
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.ir import Join, Union
+from cudf_polars.dsl.ir import IRExecutionContext, Join, Union
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo, lower_ir_node
 from cudf_polars.experimental.rapidsmpf.nodes import generate_ir_sub_network_wrapper
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
     from rapidsmpf.streaming.core.leaf_node import DeferredMessages
 
-    from cudf_polars.dsl.ir import IR, IRExecutionContext
+    from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.dispatch import (
@@ -54,8 +54,6 @@ if TYPE_CHECKING:
 def evaluate_logical_plan(
     ir: IR,
     config_options: ConfigOptions,
-    *,
-    context: IRExecutionContext,
 ) -> DataFrame:
     """
     Evaluate a logical plan with the RapidsMPF streaming runtime.
@@ -66,8 +64,6 @@ def evaluate_logical_plan(
         The IR node.
     config_options
         The configuration options.
-    context
-        The execution context for the IR node.
 
     Returns
     -------
@@ -100,13 +96,17 @@ def evaluate_logical_plan(
     rmpf_context = Context(comm, br, options)
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cpse")
 
+    # Create the IR execution context.
+    # TODO: Use stream pool.
+    ir_context = IRExecutionContext.from_config_options(config_options)
+
     # Generate network nodes
     nodes, output = generate_network(
         rmpf_context,
         ir,
         partition_info,
         config_options,
-        ir_context=context,
+        ir_context=ir_context,
     )
 
     # Run the network
@@ -116,7 +116,7 @@ def evaluate_logical_plan(
     return combine_output_chunks(
         ir,
         *(TableChunk.from_message(msg) for msg in output.release()),
-        ir_context=context,
+        ir_context=ir_context,
     )
 
 
