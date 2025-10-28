@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -96,7 +96,7 @@ class benchmark : public ::benchmark::Fixture {
 class memory_stats_logger {
  public:
   memory_stats_logger()
-    : existing_mr(cudf::get_current_device_resource()),
+    : existing_mr(cudf::get_current_device_resource_ref()),
       statistics_mr(rmm::mr::statistics_resource_adaptor(existing_mr))
   {
     cudf::set_current_device_resource(&statistics_mr);

@@ -401,7 +401,7 @@ void generate_parquet_data_sources(double scale_factor,
   CUDF_BENCHMARK_RANGE();
 
   // Set the memory resource to the managed pool
-  auto old_mr = cudf::get_current_device_resource();
+  auto old_mr = cudf::get_current_device_resource_ref();
   // if already managed pool or managed, don't create new one.
   using managed_pool_mr_t = decltype(make_managed_pool());
   managed_pool_mr_t managed_pool_mr;

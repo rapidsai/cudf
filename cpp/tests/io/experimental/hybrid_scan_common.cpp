@@ -172,7 +172,7 @@ auto apply_parquet_filters(cudf::host_span<uint8_t const> file_buffer_span,
   bloom_filtered_row_group_indices.reserve(current_row_group_indices.size());
   if (bloom_filter_byte_ranges.size()) {
     // Fetch 32 byte aligned bloom filter data buffers from the input file buffer
-    auto aligned_mr = rmm::mr::aligned_resource_adaptor(cudf::get_current_device_resource(),
+    auto aligned_mr = rmm::mr::aligned_resource_adaptor(cudf::get_current_device_resource_ref(),
                                                         bloom_filter_alignment);
 
     std::vector<rmm::device_buffer> bloom_filter_data =

@@ -209,7 +209,7 @@ aggregate_reader_metadata::filter_row_groups(
   }
 
   // Aligned resource adaptor to allocate bloom filter buffers with
-  auto aligned_mr = rmm::mr::aligned_resource_adaptor(cudf::get_current_device_resource(),
+  auto aligned_mr = rmm::mr::aligned_resource_adaptor(cudf::get_current_device_resource_ref(),
                                                       get_bloom_filter_alignment());
 
   // Read a vector of bloom filter bitset device buffers for all columns with equality
