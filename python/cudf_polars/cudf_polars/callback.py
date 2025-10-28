@@ -23,6 +23,7 @@ import rmm
 from rmm._cuda import gpu
 
 import cudf_polars.dsl.tracing
+from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.utils.config import _env_get_int, get_total_device_memory
@@ -218,6 +219,7 @@ def _callback(
     assert n_rows is None
     if timer is not None:
         assert should_time
+
     with (
         nvtx.annotate(message="ExecuteIR", domain=CUDF_POLARS_NVTX_DOMAIN),
         # Device must be set before memory resource is obtained.
@@ -225,7 +227,8 @@ def _callback(
         set_memory_resource(memory_resource),
     ):
         if config_options.executor.name == "in-memory":
-            df = ir.evaluate(cache={}, timer=timer).to_polars()
+            context = IRExecutionContext.from_config_options(config_options)
+            df = ir.evaluate(cache={}, timer=timer, context=context).to_polars()
             if timer is None:
                 return df
             else:

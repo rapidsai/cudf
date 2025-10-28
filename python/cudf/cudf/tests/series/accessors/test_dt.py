@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import datetime
 import zoneinfo
 
@@ -252,6 +253,7 @@ def test_days_in_months():
     gs = cudf.from_pandas(ps)
 
     assert_eq(ps.dt.days_in_month, gs.dt.days_in_month)
+    assert_eq(ps.dt.daysinmonth, gs.dt.daysinmonth)
 
 
 def test_is_month_start():
@@ -563,8 +565,11 @@ def test_datetime_strftime_not_implemented_formats(date_format):
         "nanosecond",
         "weekday",
         "dayofweek",
+        "day_of_week",
         "dayofyear",
         "day_of_year",
+        "unit",
+        "tz",
     ],
 )
 def test_dt_series_datetime_fields(data, field):

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "hybrid_scan_impl.hpp"
@@ -760,23 +749,6 @@ table_with_metadata hybrid_scan_reader_impl::read_chunk_internal(
       out_columns.emplace_back(make_column(_output_buffers[i], &col_name, metadata, _stream));
     } else {
       out_columns.emplace_back(make_column(_output_buffers[i], nullptr, metadata, _stream));
-    }
-  }
-
-  out_columns =
-    cudf::structs::detail::enforce_null_consistency(std::move(out_columns), _stream, _mr);
-
-  // Check if number of rows per source should be included in output metadata.
-  if (include_output_num_rows_per_source()) {
-    // For chunked reading, compute the output number of rows per source
-    if (mode == read_mode::CHUNKED_READ) {
-      out_metadata.num_rows_per_source =
-        calculate_output_num_rows_per_source(read_info.skip_rows, read_info.num_rows);
-    }
-    // Simply move the number of rows per file if reading all at once
-    else {
-      // Move is okay here as we are reading in one go.
-      out_metadata.num_rows_per_source = std::move(_file_itm_data.num_rows_per_source);
     }
   }
 

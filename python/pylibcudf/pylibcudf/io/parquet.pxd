@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libc.stdint cimport int64_t, uint8_t
 
 from libcpp cimport bool
@@ -42,7 +43,7 @@ cdef class ParquetReaderOptions:
     cdef parquet_reader_options c_obj
     cdef SourceInfo source
     cpdef void set_row_groups(self, list row_groups)
-    cpdef void set_num_rows(self, size_type nrows)
+    cpdef void set_num_rows(self, int64_t nrows)
     cpdef void set_skip_rows(self, int64_t skip_rows)
     cpdef void set_columns(self, list col_names)
     cpdef void set_filter(self, Expression filter)
@@ -167,6 +168,8 @@ cdef class ParquetWriterOptionsBuilder:
     cpdef ParquetWriterOptions build(self)
 
 cpdef memoryview write_parquet(ParquetWriterOptions options, Stream stream = *)
+
+cpdef bool is_supported_read_parquet(compression_type compression)
 
 cpdef bool is_supported_write_parquet(compression_type compression)
 

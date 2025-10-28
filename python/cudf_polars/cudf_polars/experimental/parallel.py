@@ -22,6 +22,7 @@ from cudf_polars.dsl.ir import (
     Filter,
     HConcat,
     HStack,
+    IRExecutionContext,
     MapFunction,
     Projection,
     Slice,
@@ -110,6 +111,8 @@ def task_graph(
         associated partitioning information.
     config_options
         GPUEngine configuration options.
+    context
+        Runtime context for IR node execution.
 
     Returns
     -------
@@ -130,9 +133,13 @@ def task_graph(
     --------
     generate_ir_tasks
     """
+    context = IRExecutionContext.from_config_options(config_options)
     graph = reduce(
         operator.or_,
-        (generate_ir_tasks(node, partition_info) for node in traversal([ir])),
+        (
+            generate_ir_tasks(node, partition_info, context=context)
+            for node in traversal([ir])
+        ),
     )
 
     key_name = get_key_name(ir)
@@ -140,7 +147,10 @@ def task_graph(
 
     key: str | tuple[str, int]
     if partition_count > 1:
-        graph[key_name] = (_concat, *partition_info[ir].keys(ir))
+        graph[key_name] = (
+            partial(_concat, context=context),
+            *partition_info[ir].keys(ir),
+        )
         key = key_name
     else:
         key = (key_name, 0)
@@ -244,7 +254,9 @@ def evaluate_streaming(
 
 @generate_ir_tasks.register(IR)
 def _(
-    ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: IR,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     # Generate pointwise (embarrassingly-parallel) tasks by default
     child_names = [get_key_name(c) for c in ir.children]
@@ -252,7 +264,7 @@ def _(
 
     return {
         key: (
-            ir.do_evaluate,
+            partial(ir.do_evaluate, context=context),
             *ir._non_child_args,
             *[
                 (child_name, 0 if bcast_child[j] else i)
@@ -292,7 +304,9 @@ def _(
 
 @generate_ir_tasks.register(Union)
 def _(
-    ir: Union, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: Union,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     key_name = get_key_name(ir)
     partition = itertools.count()

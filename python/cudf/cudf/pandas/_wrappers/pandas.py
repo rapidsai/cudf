@@ -1338,8 +1338,8 @@ def _df_query_method(self, *args, local_dict=None, global_dict=None, **kwargs):
     )
 
 
-DataFrame.eval = _df_eval_method  # type: ignore
-DataFrame.query = _df_query_method  # type: ignore
+DataFrame.eval = _df_eval_method
+DataFrame.query = _df_query_method
 
 _JsonReader = make_intermediate_proxy_type(
     "_JsonReader",
