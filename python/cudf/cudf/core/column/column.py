@@ -195,10 +195,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if null_count < 0:
             raise ValueError("null_count must be >=0")
         self._null_count = null_count
-        self._mask = None
-        self._base_mask = None
-        self._data = None
-        self._children = None
+        # Let the set_base_* methods handle initialization and cache management
         self.set_base_children(children)
         self.set_base_data(data)
         self.set_base_mask(mask)
