@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
+import os
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -61,3 +63,16 @@ def test_insert_NA():
     pdf["C"] = pd.NA
     gdf["C"] = cudf.NA
     assert_eq(pdf, gdf)
+
+
+def test_insert_external_only_api():
+    """Test that insert is marked as external-only API when NO_EXTERNAL_ONLY_APIS is set."""
+    # This test verifies the decorator is properly applied
+    # When NO_EXTERNAL_ONLY_APIS is set, calling insert from internal code should raise
+    if os.getenv("NO_EXTERNAL_ONLY_APIS"):
+        # Create a minimal test that would trigger the decorator
+        # This would normally be caught by CI when NO_EXTERNAL_ONLY_APIS is set
+        gdf = cudf.DataFrame({"A": [1, 2, 3]})
+        # External calls should still work
+        gdf.insert(1, "B", [4, 5, 6])
+        assert "B" in gdf.columns

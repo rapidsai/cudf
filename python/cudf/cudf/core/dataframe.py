@@ -1582,7 +1582,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                         loc=self._num_columns,
                         name=arg,
                         value=value,
-                        ignore_index=True,
+                        ignore_index=False,
                     )
 
         elif can_convert_to_column(arg):
