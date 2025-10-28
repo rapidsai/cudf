@@ -26,8 +26,8 @@ rapids-pip-retry install \
     -v \
     --extra-index-url=https://pypi.nvidia.com \
     --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple \
-    "rapidsmpf-${RAPIDS_PY_CUDA_SUFFIX}==25.12.*" \
-    "librapidsmpf-${RAPIDS_PY_CUDA_SUFFIX}==25.12.*"
+    "rapidsmpf-${RAPIDS_PY_CUDA_SUFFIX}>=25.12.0a0,<25.13" \
+    "librapidsmpf-${RAPIDS_PY_CUDA_SUFFIX}>=25.12.0a0,<25.13"
 
 # Install cudf_polars with test and experimental extras
 rapids-pip-retry install \
