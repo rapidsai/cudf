@@ -4825,9 +4825,11 @@ class CategoricalIndex(Index):
         ):
             data = data._column
         else:
-            data = as_column(
-                data, dtype=cudf.CategoricalDtype() if dtype is None else dtype
-            )
+            if dtype is None or (
+                isinstance(dtype, str) and dtype == "category"
+            ):
+                dtype = cudf.CategoricalDtype()
+            data = as_column(data, dtype=dtype)
             # dtype has already been taken care
             dtype = None
 
