@@ -6,46 +6,37 @@ set -euo pipefail
 
 source rapids-init-pip
 
-rapids-logger "Download wheels from build job"
+rapids-logger "Download wheels"
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
-
-# Download cudf-polars wheel (built in the combined build job)
 CUDF_POLARS_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}" RAPIDS_PY_WHEEL_PURE="1" rapids-download-wheels-from-github python)
 
-# Download libcudf and pylibcudf from earlier jobs
+# Download libcudf and pylibcudf built in the previous step
 LIBCUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github cpp)
 PYLIBCUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github python)
 
-# Download rapidsmpf wheels
-# librapidsmpf is a cpp package (like libcudf), rapidsmpf is python package
-LIBRAPIDSMPF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="librapidsmpf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github cpp)
-RAPIDSMPF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="rapidsmpf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github python)
+rapids-logger "Installing cudf_polars and its dependencies"
 
-rapids-logger "Installing wheels"
+# generate constraints (possibly pinning to oldest support versions of dependencies)
+rapids-generate-pip-constraints py_test_cudf_polars ./constraints.txt
 
-# Install libcudf and pylibcudf first
+# Install rapidsmpf from nightly index
+rapids-logger "Installing rapidsmpf from nightly"
 rapids-pip-retry install \
     -v \
-    "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
-    "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
-
-# Install librapidsmpf
-rapids-logger "Installing librapidsmpf"
-rapids-pip-retry install -v "$(echo "${LIBRAPIDSMPF_WHEELHOUSE}"/librapidsmpf*.whl)"
-
-# Install rapidsmpf
-rapids-logger "Installing rapidsmpf"
-rapids-pip-retry install -v "$(echo "${RAPIDSMPF_WHEELHOUSE}"/rapidsmpf*.whl)"
+    --extra-index-url=https://pypi.nvidia.com \
+    --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple \
+    "rapidsmpf-${RAPIDS_PY_CUDA_SUFFIX}==25.12.*" \
+    "librapidsmpf-${RAPIDS_PY_CUDA_SUFFIX}==25.12.*"
 
 # Install cudf_polars with test and experimental extras
-rapids-logger "Installing cudf_polars with test and experimental extras"
-rapids-generate-pip-constraints py_test_cudf_polars ./constraints.txt
 rapids-pip-retry install \
     -v \
     --constraint ./constraints.txt \
     --constraint "${PIP_CONSTRAINT}" \
-    "$(echo "${CUDF_POLARS_WHEELHOUSE}"/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,experimental]"
+    "$(echo "${CUDF_POLARS_WHEELHOUSE}"/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,experimental]" \
+    "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
+    "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
 
 rapids-logger "Run cudf_polars tests with rapidsmpf"
 
