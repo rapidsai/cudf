@@ -153,6 +153,15 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       script: "ci/test_wheel_cudf_polars.sh"
+  wheel-tests-cudf-polars-with-rapidsmpf:
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
+    with:
+      build_type: ${{ inputs.build_type }}
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      script: "ci/test_wheel_cudf_polars_with_rapidsmpf.sh"
   cudf-polars-polars-tests:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
