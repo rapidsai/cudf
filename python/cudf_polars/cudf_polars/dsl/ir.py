@@ -2359,7 +2359,7 @@ class Join(IR):
         join_fn, left_policy, right_policy = cls._joiners(how)
         if right_policy is None:
             # Semi join
-            lg = join_fn(left_on.table, right_on.table, null_equality)
+            lg = join_fn(left_on.table, right_on.table, null_equality, stream)
             table = plc.copying.gather(left.table, lg, left_policy, stream=stream)
             result = DataFrame.from_table(
                 table, left.column_names, left.dtypes, stream=stream
