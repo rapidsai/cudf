@@ -568,13 +568,13 @@ struct decode_page_headers_with_pgidx_fn {
   PageInfo* pages;
   uint8_t** page_locations;
   size_t* chunk_page_offsets;
-  int32_t num_chunks;
+  cudf::size_type num_chunks;
   kernel_error::pointer error_code;
 
   __device__ void operator()(size_type page_idx) const noexcept
   {
     // Binary search the the column chunk index for this page
-    auto const chunk_idx = static_cast<int32_t>(
+    auto const chunk_idx = static_cast<cudf::size_type>(
       cuda::std::distance(
         chunk_page_offsets,
         thrust::upper_bound(
@@ -756,8 +756,8 @@ void decode_page_headers_with_pgidx(ColumnChunkDesc* chunks,
                                     PageInfo* pages,
                                     uint8_t** page_locations,
                                     size_t* chunk_page_offsets,
-                                    int32_t num_chunks,
-                                    int32_t num_pages,
+                                    cudf::size_type num_chunks,
+                                    cudf::size_type num_pages,
                                     kernel_error::pointer error_code,
                                     rmm::cuda_stream_view stream)
 {
