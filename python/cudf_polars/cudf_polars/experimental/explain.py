@@ -34,7 +34,10 @@ if TYPE_CHECKING:
 
 
 def explain_query(
-    q: pl.LazyFrame, engine: pl.GPUEngine, *, physical: bool = True
+    q: pl.LazyFrame,
+    engine: pl.GPUEngine,
+    *,
+    physical: bool = True,
 ) -> str:
     """
     Return a formatted string representation of the IR plan.
