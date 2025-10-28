@@ -445,97 +445,46 @@ void decode_page_headers(pass_intermediate_data& pass,
 
   kernel_error error_code(stream);
 
-  // If page index is present, collect data ptrs for all pages using single or multiple threads and
-  // launch the accelerated decode page headers kernel
+  // If page index is present, collect data ptrs for all pages and launch the accelerated decode
+  // page headers kernel
   if (has_page_index) {
     auto host_page_locations =
       cudf::detail::make_empty_host_vector<uint8_t*>(unsorted_pages.size(), stream);
 
-    // Function to collect data ptrs (locations) for all pages in a given range of chunks
-    auto const process_chunk = [&](size_type start, size_type end) {
-      // Return if no chunks in range
-      if (start >= end) { return std::vector<uint8_t*>{}; }
+    std::for_each(pass.chunks.begin(), pass.chunks.end(), [&](auto const& chunk) {
+      // Column chunk buffer's data pointer
+      auto data_ptr = const_cast<uint8_t*>(chunk.compressed_data);
 
-      std::vector<uint8_t*> page_locations;
-      std::for_each(pass.chunks.begin() + start, pass.chunks.begin() + end, [&](auto const& chunk) {
-        CUDF_EXPECTS(chunk.h_chunk_info and
-                       std::cmp_equal(chunk.h_chunk_info->pages.size(), chunk.num_data_pages),
-                     "Encountered invalid sized data page information in the page index");
+      // Dictionary page, if any
+      if (chunk.num_dict_pages) {
+        CUDF_EXPECTS(chunk.h_chunk_info->dictionary_offset.has_value() and
+                       chunk.h_chunk_info->dictionary_size.has_value(),
+                     "Encountered missing dictionary page information in the page index");
+        // Parquet spec requires that the dictionary page be the first column chunk page
+        // if the column chunk has dictionary encoding
+        // Ref: https://github.com/apache/parquet-format?tab=readme-ov-file#column-chunks
+        CUDF_EXPECTS(std::cmp_less(chunk.h_chunk_info->dictionary_offset.value(),
+                                   chunk.h_chunk_info->pages.front().location.offset),
+                     "Encountered dictionary page located beyond the first data page");
+        host_page_locations.push_back(data_ptr);
+        data_ptr += chunk.h_chunk_info->dictionary_size.value();
+      }
 
-        // Column chunk buffer's data pointer
-        auto data_ptr = const_cast<uint8_t*>(chunk.compressed_data);
-
-        // Dictionary page, if any
-        if (chunk.num_dict_pages) {
-          CUDF_EXPECTS(chunk.h_chunk_info->dictionary_offset.has_value() and
-                         chunk.h_chunk_info->dictionary_size.has_value(),
-                       "Encountered missing dictionary page information in the page index");
-          // Parquet spec requires that the dictionary page be the first column chunk page
-          // if the column chunk has dictionary encoding
-          // Ref: https://github.com/apache/parquet-format?tab=readme-ov-file#column-chunks
-          CUDF_EXPECTS(std::cmp_less(chunk.h_chunk_info->dictionary_offset.value(),
-                                     chunk.h_chunk_info->pages.front().location.offset),
-                       "Encountered dictionary page located beyond the first data page");
-          page_locations.emplace_back(data_ptr);
-          data_ptr += chunk.h_chunk_info->dictionary_size.value();
-        }
-
-        // Data pages
-        auto const num_data_pages = chunk.h_chunk_info->pages.size();
-        std::for_each(thrust::counting_iterator<size_t>(0),
-                      thrust::counting_iterator(num_data_pages),
-                      [&](auto const page_idx) {
-                        page_locations.emplace_back(data_ptr);
-                        if (page_idx < num_data_pages - 1) {
-                          data_ptr += chunk.h_chunk_info->pages[page_idx + 1].location.offset -
-                                      chunk.h_chunk_info->pages[page_idx].location.offset;
-                        }
-                      });
-      });
-
-      return page_locations;
-    };
-
-    // Decide if to launch the data ptr collection task sequentially or using thread pool
-    auto const total_chunks            = pass.chunks.size();
-    auto constexpr max_num_tasks       = 8;
-    auto constexpr min_chunks_per_task = 512;
-
-    if (total_chunks < min_chunks_per_task) {
-      auto page_locations = process_chunk(0, total_chunks);
-      host_page_locations.insert(host_page_locations.end(),
-                                 std::make_move_iterator(page_locations.begin()),
-                                 std::make_move_iterator(page_locations.end()));
-    } else {
-      // Determine the number of tasks to launch
-      auto const num_tasks = std::clamp<cudf::size_type>(
-        cudf::util::div_rounding_up_unsafe(total_chunks, min_chunks_per_task),
-        size_type{2},
-        max_num_tasks);
-      // Determine the number of column chunks processed per task
-      auto const chunks_per_task = cudf::util::div_rounding_up_unsafe(total_chunks, num_tasks);
-      std::vector<std::future<std::vector<uint8_t*>>> page_location_tasks;
-      page_location_tasks.reserve(num_tasks);
-      std::for_each(thrust::make_counting_iterator<size_t>(0),
-                    thrust::make_counting_iterator<size_t>(num_tasks),
-                    [&](auto const tid) {
-                      page_location_tasks.emplace_back(
-                        cudf::detail::host_worker_pool().submit_task([&, tid = tid] {
-                          auto const chunk_start = std::min(tid * chunks_per_task, total_chunks);
-                          auto const chunk_end =
-                            std::min(chunk_start + chunks_per_task, total_chunks);
-                          return process_chunk(chunk_start, chunk_end);
-                        }));
+      // Data pages
+      CUDF_EXPECTS(chunk.h_chunk_info and
+                     std::cmp_equal(chunk.h_chunk_info->pages.size(), chunk.num_data_pages),
+                   "Encountered invalid sized data page information in the page index");
+      auto const num_data_pages = chunk.num_data_pages;
+      std::for_each(thrust::counting_iterator(0),
+                    thrust::counting_iterator(num_data_pages),
+                    [&](auto const page_idx) {
+                      host_page_locations.push_back(data_ptr);
+                      if (page_idx < num_data_pages - 1) {
+                        data_ptr += chunk.h_chunk_info->pages[page_idx + 1].location.offset -
+                                    chunk.h_chunk_info->pages[page_idx].location.offset;
+                      }
                     });
-
-      // Collect results from all tasks
-      std::for_each(page_location_tasks.begin(), page_location_tasks.end(), [&](auto& task) {
-        auto page_locations = std::move(task).get();
-        host_page_locations.insert(host_page_locations.end(),
-                                   std::make_move_iterator(page_locations.begin()),
-                                   std::make_move_iterator(page_locations.end()));
-      });
-    }
+    });
 
     // Check if we have data ptrs for all input pages
     CUDF_EXPECTS(host_page_locations.size() == unsorted_pages.size(),
