@@ -745,10 +745,13 @@ class CUDAStreamPolicy(str, enum.Enum):
 
     * ``CUDAStreamPolicy.DEFAULT`` : Use the default CUDA stream.
     * ``CUDAStreamPolicy.NEW`` : Create a new CUDA stream.
+    * ``CUDAStreamPolicy.POOL`` : Use the CUDA stream pool. This is currently
+      only supported by the RapidsMPF runtime.
     """
 
     DEFAULT = "default"
     NEW = "new"
+    POOL = "pool"
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -869,9 +872,28 @@ class ConfigOptions:
             "device": engine.device,
         }
 
-        if engine.config.get("cuda_stream_policy") is not None:
-            kwargs["cuda_stream_policy"] = CUDAStreamPolicy(
-                engine.config["cuda_stream_policy"]
+        # Handle "cuda-stream-policy".
+        # The default will depend on the runtime and executor.
+        user_cuda_stream_policy = engine.config.get(
+            "cuda_stream_policy", None
+        ) or os.environ.get("CUDF_POLARS__CUDA_STREAM_POLICY", None)
+        if user_cuda_stream_policy is None:
+            if executor.name == "streaming" and executor.runtime == Runtime.RAPIDSMPF:
+                cuda_stream_policy = CUDAStreamPolicy.POOL
+            else:
+                cuda_stream_policy = CUDAStreamPolicy.DEFAULT
+        else:
+            cuda_stream_policy = CUDAStreamPolicy(user_cuda_stream_policy)
+
+        # Pool policy is only supported by the rapidsmpf runtime.
+        if cuda_stream_policy == CUDAStreamPolicy.POOL and (
+            (executor.name != "streaming")
+            or (executor.name == "streaming" and executor.runtime != Runtime.RAPIDSMPF)
+        ):
+            raise ValueError(
+                "CUDAStreamPolicy.POOL is only supported by the rapidsmpf runtime."
             )
+
+        kwargs["cuda_stream_policy"] = cuda_stream_policy
 
         return cls(**kwargs)

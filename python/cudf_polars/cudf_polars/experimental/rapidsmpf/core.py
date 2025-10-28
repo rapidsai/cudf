@@ -34,6 +34,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo, lower_ir_nod
 from cudf_polars.experimental.rapidsmpf.nodes import generate_ir_sub_network_wrapper
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
+from cudf_polars.utils.config import CUDAStreamPolicy
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -97,8 +98,12 @@ def evaluate_logical_plan(
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cpse")
 
     # Create the IR execution context.
-    # TODO: Use stream pool.
-    ir_context = IRExecutionContext.from_config_options(config_options)
+    if config_options.cuda_stream_policy == CUDAStreamPolicy.POOL:
+        ir_context = IRExecutionContext(
+            get_cuda_stream=rmpf_context.get_stream_from_pool
+        )
+    else:
+        ir_context = IRExecutionContext.from_config_options(config_options)
 
     # Generate network nodes
     nodes, output = generate_network(

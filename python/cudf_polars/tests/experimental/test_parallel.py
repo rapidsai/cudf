@@ -153,6 +153,10 @@ def test_preserve_partitioning():
     assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.skipif(
+    DEFAULT_RUNTIME == "rapidsmpf",
+    reason="Uses explicit task graph.",
+)
 def test_single_cluster():
     # Test that the single cluster clears
     # the cache as tasks are executed.
@@ -198,6 +202,10 @@ def test_single_cluster():
     assert set(cache) == {key}
 
 
+@pytest.mark.skipif(
+    DEFAULT_RUNTIME == "rapidsmpf",
+    reason="Uses explicit task graph.",
+)
 def test_task_graph_is_pickle_serializable(engine):
     # Dask will fall back to using cloudpickle to serialize the task graph if
     # necessary. We'd like to avoid that, since cloudpickle serialization /
