@@ -85,6 +85,8 @@ __device__ inline cuda::std::pair<uint32_t, uint32_t> load_uint32_masked(char co
   auto const* start_ptr = chunk_start < head ? head : chunk_start;
   auto const* end_ptr = chunk_end >= tail ? tail : chunk_end;
   auto byte_read_offset = reinterpret_cast<std::uintptr_t>(start_ptr) % sizeof(uint32_t);
+
+  #pragma unroll 1
   for (auto i = start_ptr; i < end_ptr; i++) {
     result |= (static_cast<uint32_t>(*i) << ((byte_read_offset + i - start_ptr) * 8));
   }
