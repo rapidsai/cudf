@@ -569,7 +569,6 @@ struct decode_page_headers_with_pgidx_fn {
   uint8_t** page_locations;
   size_t* chunk_page_offsets;
   int32_t num_chunks;
-  int32_t num_pages;
   kernel_error::pointer error_code;
 
   __device__ void operator()(size_type page_idx) const noexcept
@@ -762,12 +761,11 @@ void decode_page_headers_with_pgidx(ColumnChunkDesc* chunks,
                                     kernel_error::pointer error_code,
                                     rmm::cuda_stream_view stream)
 {
-  thrust::for_each(
-    rmm::exec_policy_nosync(stream),
-    thrust::counting_iterator<size_type>(0),
-    thrust::counting_iterator<size_type>(num_pages),
-    decode_page_headers_with_pgidx_fn{
-      chunks, pages, page_locations, chunk_page_counts, num_chunks, num_pages, error_code});
+  thrust::for_each(rmm::exec_policy_nosync(stream),
+                   thrust::counting_iterator<size_type>(0),
+                   thrust::counting_iterator<size_type>(num_pages),
+                   decode_page_headers_with_pgidx_fn{
+                     chunks, pages, page_locations, chunk_page_counts, num_chunks, error_code});
 }
 
 void build_string_dictionary_index(ColumnChunkDesc* chunks,
