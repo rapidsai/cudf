@@ -85,6 +85,16 @@ def pytest_unconfigure(config):
         print(f"Function call counts have been written to {output_file}")  # noqa: T201
 
 
+@pytest.fixture(autouse=True)
+def set_copy_on_write_option():
+    import pandas as xpd
+
+    cudf = xpd._fsproxy_fast
+    pd = xpd._fsproxy_slow
+    cudf.set_option("copy_on_write", True)
+    pd.set_option("mode.copy_on_write", True)
+
+
 # TODO: Pass these tests with cudf.pandas enabled.
 NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/api/test_api.py::test_pandas_array_alias",
