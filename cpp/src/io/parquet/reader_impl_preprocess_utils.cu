@@ -513,7 +513,7 @@ void decode_page_headers(pass_intermediate_data& pass,
         size_type{2},
         max_num_tasks);
       // Determine the number of column chunks processed per task
-      auto const chunks_per_thread = cudf::util::div_rounding_up_unsafe(total_chunks, num_tasks);
+      auto const chunks_per_task = cudf::util::div_rounding_up_unsafe(total_chunks, num_tasks);
       std::vector<std::future<std::vector<uint8_t*>>> page_location_tasks;
       page_location_tasks.reserve(num_tasks);
       std::for_each(thrust::make_counting_iterator<size_t>(0),
@@ -521,9 +521,9 @@ void decode_page_headers(pass_intermediate_data& pass,
                     [&](auto const tid) {
                       page_location_tasks.emplace_back(
                         cudf::detail::host_worker_pool().submit_task([&, tid = tid] {
-                          auto const chunk_start = std::min(tid * chunks_per_thread, total_chunks);
+                          auto const chunk_start = std::min(tid * chunks_per_task, total_chunks);
                           auto const chunk_end =
-                            std::min(chunk_start + chunks_per_thread, total_chunks);
+                            std::min(chunk_start + chunks_per_task, total_chunks);
                           return process_chunk(chunk_start, chunk_end);
                         }));
                     });
