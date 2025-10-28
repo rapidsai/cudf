@@ -43,9 +43,11 @@ from cudf_polars.dsl.utils.windows import (
     range_window_bounds,
 )
 from cudf_polars.utils import dtypes
+from cudf_polars.utils.config import CUDAStreamPolicy
 from cudf_polars.utils.cuda_stream import (
     get_cuda_stream,
     get_joined_cuda_stream,
+    get_new_cuda_stream,
 )
 from cudf_polars.utils.versions import POLARS_VERSION_LT_131
 
@@ -61,7 +63,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers.dataframe import NamedColumn
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
-    from cudf_polars.utils.config import ParquetOptions
+    from cudf_polars.utils.config import ConfigOptions, ParquetOptions
     from cudf_polars.utils.timer import Timer
 
 __all__ = [
@@ -100,7 +102,27 @@ class IRExecutionContext:
 
     This dataclass holds runtime information and configuration needed
     during the evaluation of IR nodes.
+
+    Parameters
+    ----------
+    get_cuda_stream
+        A zero-argument callable that returns a CUDA stream.
     """
+
+    get_cuda_stream: Callable[[], Stream]
+
+    @classmethod
+    def from_config_options(cls, config_options: ConfigOptions) -> IRExecutionContext:
+        """Create an IRExecutionContext from ConfigOptions."""
+        match config_options.cuda_stream_policy:
+            case CUDAStreamPolicy.DEFAULT:
+                return cls(get_cuda_stream=get_cuda_stream)
+            case CUDAStreamPolicy.NEW:
+                return cls(get_cuda_stream=get_new_cuda_stream)
+            case _:  # pragma: no cover
+                raise ValueError(
+                    f"Invalid CUDA stream policy: {config_options.cuda_stream_policy}"
+                )
 
 
 _BINOPS = {
@@ -620,7 +642,7 @@ class Scan(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        stream = get_cuda_stream()
+        stream = context.get_cuda_stream()
         if typ == "csv":
 
             def read_csv_header(
@@ -1298,7 +1320,7 @@ class DataFrameScan(IR):
         """Evaluate and return a dataframe."""
         if projection is not None:
             df = df.select(projection)
-        df = DataFrame.from_polars(df, stream=get_cuda_stream())
+        df = DataFrame.from_polars(df, stream=context.get_cuda_stream())
         assert all(
             c.obj.type() == dtype.plc_type
             for c, dtype in zip(df.columns, schema.values(), strict=True)
@@ -1400,7 +1422,7 @@ class Select(IR):
             and self.children[0].typ == "parquet"
             and self.children[0].predicate is None
         ):  # pragma: no cover
-            stream = get_cuda_stream()
+            stream = context.get_cuda_stream()
             scan = self.children[0]
             effective_rows = scan.fast_count()
             dtype = DataType(pl.UInt32())
@@ -1991,10 +2013,11 @@ class ConditionalJoin(IR):
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         stream = get_joined_cuda_stream(
+            context.get_cuda_stream,
             upstreams=(
                 left.stream,
                 right.stream,
-            )
+            ),
         )
         left_casts, right_casts = _collect_decimal_binop_casts(
             predicate_wrapper.predicate
@@ -2280,7 +2303,9 @@ class Join(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        stream = get_joined_cuda_stream(upstreams=(left.stream, right.stream))
+        stream = get_joined_cuda_stream(
+            context.get_cuda_stream, upstreams=(left.stream, right.stream)
+        )
         how, nulls_equal, zlice, suffix, coalesce, maintain_order = options
         if how == "Cross":
             # Separate implementation, since cross_join returns the
@@ -2334,7 +2359,7 @@ class Join(IR):
         join_fn, left_policy, right_policy = cls._joiners(how)
         if right_policy is None:
             # Semi join
-            lg = join_fn(left_on.table, right_on.table, null_equality)
+            lg = join_fn(left_on.table, right_on.table, null_equality, stream)
             table = plc.copying.gather(left.table, lg, left_policy, stream=stream)
             result = DataFrame.from_table(
                 table, left.column_names, left.dtypes, stream=stream
@@ -2759,7 +2784,9 @@ class MergeSorted(IR):
         cls, key: str, *dfs: DataFrame, context: IRExecutionContext
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        stream = get_joined_cuda_stream(upstreams=(df.stream for df in dfs))
+        stream = get_joined_cuda_stream(
+            context.get_cuda_stream, upstreams=[df.stream for df in dfs]
+        )
         left, right = dfs
         right = right.discard_columns(right.column_names_set - left.column_names_set)
         on_col_left = left.select_columns({key})[0]
@@ -3001,7 +3028,9 @@ class Union(IR):
         cls, zlice: Zlice | None, *dfs: DataFrame, context: IRExecutionContext
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        stream = get_joined_cuda_stream(upstreams=(df.stream for df in dfs))
+        stream = get_joined_cuda_stream(
+            context.get_cuda_stream, upstreams=[df.stream for df in dfs]
+        )
 
         # TODO: only evaluate what we need if we have a slice?
         return DataFrame.from_table(
@@ -3072,7 +3101,9 @@ class HConcat(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        stream = get_joined_cuda_stream(upstreams=(df.stream for df in dfs))
+        stream = get_joined_cuda_stream(
+            context.get_cuda_stream, upstreams=[df.stream for df in dfs]
+        )
 
         # Special should_broadcast case.
         # Used to recombine decomposed expressions
@@ -3126,7 +3157,7 @@ class Empty(IR):
         cls, schema: Schema, *, context: IRExecutionContext
     ) -> DataFrame:  # pragma: no cover
         """Evaluate and return a dataframe."""
-        stream = get_cuda_stream()
+        stream = context.get_cuda_stream()
         return DataFrame(
             [
                 Column(
