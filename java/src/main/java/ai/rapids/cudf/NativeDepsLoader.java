@@ -171,7 +171,7 @@ public class NativeDepsLoader {
       loadNativeDeps(loadOrder, preserveDepsAfterLoad);
       return true;
     } catch (Throwable t) {
-      log.debug("Could not load optional native dependencies: " + t.getMessage());
+      log.warn("Could not load optional native dependencies: " + t.getMessage());
       return false;
     }
   }
