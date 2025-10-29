@@ -167,6 +167,11 @@ def _(node: expr.ColRef, self: ValidateTransformer) -> None:
 @_validate_to_ast.register
 def _(node: expr.BinOp, self: ValidateTransformer) -> None:
     if node.op == plc.binaryop.BinaryOperator.NULL_NOT_EQUALS:
+        self(
+            expr.BinOp(
+                node.dtype, plc.binaryop.BinaryOperator.NULL_EQUALS, *node.children
+            )
+        )  # check for validation errors
         return None
     if self.state["for_parquet"]:
         op1_col, op2_col = (isinstance(op, expr.Col) for op in node.children)
@@ -184,6 +189,8 @@ def _(node: expr.BinOp, self: ValidateTransformer) -> None:
                 raise NotImplementedError(
                     "Parquet filter binops must have form 'col binop literal'"
                 )
+            self(op1)  # check for validation errors
+            self(op2)  # check for validation errors
             return None
         elif op1_col and op2_col:
             raise NotImplementedError(
@@ -198,6 +205,7 @@ def _(node: expr.BooleanFunction, self: ValidateTransformer) -> None:
     if node.name is expr.BooleanFunction.Name.IsIn:
         needles, haystack = node.children
         if isinstance(haystack, expr.LiteralColumn) and len(haystack.value) < 16:
+            self(needles)
             return None
     if self.state["for_parquet"] and isinstance(node.children[0], expr.Col):
         raise NotImplementedError(
@@ -208,7 +216,8 @@ def _(node: expr.BooleanFunction, self: ValidateTransformer) -> None:
         or node.name is expr.BooleanFunction.Name.IsNotNull
         or node.name is expr.BooleanFunction.Name.Not
     ):
-        return None
+        self(node.children[0])
+        return None  # check for validation errors
     raise NotImplementedError(f"AST conversion does not support {node.name}")
 
 
@@ -218,6 +227,7 @@ def _(node: expr.UnaryFunction, self: ValidateTransformer) -> None:
         raise NotImplementedError(
             "Parquet filters don't support {node.name} on columns"
         )
+    self(node.children[0])  # check for validation errors
     return None
 
 
