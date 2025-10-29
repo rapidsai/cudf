@@ -12804,8 +12804,9 @@ NODEIDS_THAT_FALLBACK_TO_PANDAS = {
     "tests/strings/test_strings.py::test_iter_raises"
 }
 
-FALLBACK_QUALNAMES_TO_IGNORE = {
-    "assert_almost_equal",
+# TODO: Expand this list to include all of the public pandas API
+QUALNAMES_THAT_SHOULD_NOT_FALLBACK_TO_PANDAS = {
+    "cut",
 }
 
 
@@ -12838,18 +12839,23 @@ def pytest_runtest_makereport(item, call):
         and "LOG_FAST_FALLBACK" in outcome.caplog
         and item.nodeid not in NODEIDS_THAT_FALLBACK_TO_PANDAS
     ):
+        # When running with CUDF_PANDAS_LOG_ON_FALLBACK=1,
+        # if a test passes but an unexpected API
+        # logs an unexpected fall back to pandas, fail the test
         for log in outcome.caplog.split("\n"):
             try:
+                # Depends on the pytest config: log_format = "%(message)s"
                 structured_log = json.loads(log)
             except json.JSONDecodeError:
-                # For some reason key are getting single quoted
-                structured_log = ast.literal_eval(log)
+                # For some reason json keys can be single quoted?
+                try:
+                    structured_log = ast.literal_eval(log)
+                except ValueError:
+                    continue
             if (
                 structured_log["slow_object"]
-                not in FALLBACK_QUALNAMES_TO_IGNORE
+                in QUALNAMES_THAT_SHOULD_NOT_FALLBACK_TO_PANDAS
             ):
-                # When running with CUDF_PANDAS_LOG_ON_FALLBACK=1, if a test passes but logs
-                # an unexpected fall back to pandas, fail the test
                 with io.StringIO() as stream:
                     pprint.pprint(structured_log, stream=stream)  # noqa: T203
                     longrepr = f"Unexpected test fallback to pandas. The fall back logs are: \n{stream.getvalue()}"
