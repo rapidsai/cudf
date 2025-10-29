@@ -4703,7 +4703,7 @@ Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv* env,
         auto value_view    = groups.values->view();
         auto value_view_it = value_view.begin();
         for (size_t i = 0; i < num_value_cols; ++i) {
-          grouped_cols.at(i) = std::move(*value_view_it);
+          grouped_cols.emplace_back(std::move(*value_view_it));
           value_view_it++;
         }
       }
