@@ -172,8 +172,6 @@ class ModuleAcceleratorBase(
         A ModuleSpec with ourself as loader if we're interposing,
         otherwise None to pass off to the next loader.
         """
-        if fullname == "pandas._config.config":
-            return None
         if fullname == self.mod_name or fullname.startswith(
             f"{self.mod_name}."
         ):
