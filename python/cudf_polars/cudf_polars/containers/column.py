@@ -71,7 +71,10 @@ class Column:
 
     @classmethod
     def deserialize(
-        cls, header: ColumnHeader, frames: tuple[memoryview[bytes], plc.gpumemoryview]
+        cls,
+        header: ColumnHeader,
+        frames: tuple[memoryview[bytes], plc.gpumemoryview],
+        stream: Stream,
     ) -> Self:
         """
         Create a Column from a serialized representation returned by `.serialize()`.
@@ -82,6 +85,10 @@ class Column:
             The (unpickled) metadata required to reconstruct the object.
         frames
             Two-tuple of frames (a memoryview and a gpumemoryview).
+        stream
+            CUDA stream used for device memory operations and kernel launches
+            on this column. The caller is responsible for ensuring that
+            the data in ``frames`` is valid on ``stream``.
 
         Returns
         -------
@@ -90,7 +97,7 @@ class Column:
         """
         packed_metadata, packed_gpu_data = frames
         (plc_column,) = plc.contiguous_split.unpack_from_memoryviews(
-            packed_metadata, packed_gpu_data
+            packed_metadata, packed_gpu_data, stream
         ).columns()
         return cls(plc_column, **cls.deserialize_ctor_kwargs(header["column_kwargs"]))
 
