@@ -85,7 +85,7 @@ struct scoped_range_sync : scoped_range {
 
 /**
  * @brief Convenience macro for generating an NVTX scoped range in the `libcudf` domain with stream
- * synchronization at the end of the scope.
+ * synchronizations before constructing the range and at the end of the scope.
  *
  * This is an internal development utility, which should be compiled to nothing in production
  * builds. The NVTX range is generated and stream is synchronized only if the macro
@@ -101,6 +101,7 @@ struct scoped_range_sync : scoped_range {
  */
 #ifdef CUDF_ENABLE_NVTX_DEV_UTILS
 #define CUDF_SCOPED_RANGE_SYNC_DEV(str, stream) \
+  stream.synchronize();                         \
   [[maybe_unused]] cudf::scoped_range_sync __range_sync{str, stream};
 #else  // no-op
 #define CUDF_SCOPED_RANGE_SYNC_DEV(str, stream)
@@ -108,7 +109,8 @@ struct scoped_range_sync : scoped_range {
 
 /**
  * @brief Convenience macro for generating an NVTX range in the `libcudf` domain from the lifetime
- * of a function, synchronizing the given stream at the end of the function.
+ * of a function, synchronizing the given stream before constructing the range and at the end of
+ * the function.
  *
  * This is an internal development utility, which should be compiled to nothing in production
  * builds. The NVTX range is generated and stream is synchronized only if the macro
@@ -127,6 +129,7 @@ struct scoped_range_sync : scoped_range {
  */
 #ifdef CUDF_ENABLE_NVTX_DEV_UTILS
 #define CUDF_FUNC_RANGE_SYNC_DEV(stream) \
+  stream.synchronize();                  \
   [[maybe_unused]] cudf::scoped_range_sync __range_sync{__func__, stream};
 #else  // no-op
 #define CUDF_FUNC_RANGE_SYNC_DEV(stream)
