@@ -1617,3 +1617,13 @@ def test_merge_combinations(
         expected = expected.reset_index(drop=True)
 
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("param", ["c", 1, 3.4])
+def test_merge_invalid_input(param):
+    left = cudf.DataFrame({"a": [1, 2, 3]})
+
+    with pytest.raises(TypeError):
+        left.merge(param)
+    with pytest.raises(TypeError):
+        cudf.merge(left["a"], param)
