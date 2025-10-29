@@ -330,6 +330,13 @@ files:
       key: experimental
     includes:
       - run_cudf_polars_experimental
+  py_run_cudf_polars_rapidsmpf:
+    output: pyproject
+    pyproject_dir: python/cudf_polars
+    extras:
+      table: project.optional-dependencies
+      key: rapidsmpf
+    includes:
       - depends_on_rapidsmpf
   py_test_cudf_polars:
     output: pyproject
