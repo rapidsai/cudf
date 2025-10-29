@@ -9,6 +9,7 @@
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -402,7 +403,6 @@ class parquet_field_struct_list : public parquet_field {
 
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    CUDF_FUNC_RANGE();
     assert_field_type(field_type, FieldType::LIST);
     auto const [t, n] = cpr->get_listh();
     assert_field_type(t, FieldType::STRUCT);
@@ -410,14 +410,6 @@ class parquet_field_struct_list : public parquet_field {
 
     constexpr uint32_t parallel_threshold = 512;
     if (n >= parallel_threshold) {
-      // Pipeline range collection with task launching: collect a batch of ranges,
-      // launch a task to parse them, then collect the next batch while the first
-      // task is running. This overlaps range collection with parsing work.
-      struct struct_range {
-        uint8_t const* start;
-        size_t length;
-      };
-
       auto const num_tasks      = cudf::detail::host_worker_pool().get_thread_count() * 2;
       auto const items_per_task = n / num_tasks;
       auto const remainder      = n % num_tasks;
@@ -425,8 +417,7 @@ class parquet_field_struct_list : public parquet_field {
       std::vector<std::future<void>> tasks;
       tasks.reserve(num_tasks);
 
-      // Use a shared vector for all ranges to avoid allocations in each batch
-      std::vector<struct_range> all_ranges;
+      std::vector<cudf::host_span<uint8_t const>> all_ranges;
       all_ranges.reserve(n);
 
       std::size_t struct_idx = 0;
@@ -437,19 +428,20 @@ class parquet_field_struct_list : public parquet_field {
 
         if (start_idx >= n) break;
 
-        // Collect ranges for this batch
+        // Collect struct ranges for the next task
         for (std::size_t i = start_idx; i < end_idx && i < n; ++i) {
           uint8_t const* const start = cpr->m_cur;
           cpr->skip_struct_field(static_cast<int>(FieldType::STRUCT));
           all_ranges.emplace_back(start, static_cast<size_t>(cpr->m_cur - start));
         }
 
-        // Launch task immediately to parse this batch while we collect the next batch
+        // Launch task immediately to parse the structs  in parallel while the main thread collects
+        // the remaining ranges
         tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
           [&val = this->val, &all_ranges, start_idx, end_idx]() {
             CompactProtocolReader local_cpr;
             for (size_t i = start_idx; i < end_idx && i < all_ranges.size(); ++i) {
-              local_cpr.init(all_ranges[i].start, all_ranges[i].length);
+              local_cpr.init(all_ranges[i].data(), all_ranges[i].size());
               local_cpr.read(&val[i]);
             }
           }));
@@ -457,12 +449,11 @@ class parquet_field_struct_list : public parquet_field {
         struct_idx = end_idx;
       }
 
-      // Wait for all tasks to complete
       for (auto& task : tasks) {
         task.get();
       }
     } else {
-      // Sequential processing for small lists
+      // For small numbers of elements, use sequential processing to avoid overhead
       for (uint32_t i = 0; i < n; i++) {
         cpr->read(&val[i]);
       }
