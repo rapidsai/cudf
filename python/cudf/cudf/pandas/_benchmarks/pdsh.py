@@ -124,6 +124,46 @@ class PDSHQueries:
         )
         return sort.head(100)
 
+    @staticmethod
+    def q3(run_config: RunConfig) -> pd.DataFrame:
+        """Query 3."""
+        customer = get_data(
+            run_config.dataset_path, "customer", run_config.suffix
+        )
+        lineitem = get_data(
+            run_config.dataset_path, "lineitem", run_config.suffix
+        )
+        orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
+
+        var1 = "BUILDING"
+        var2 = date(1995, 3, 15)
+
+        fcustomer = customer[customer["c_mktsegment"] == var1]
+
+        jn1 = fcustomer.merge(
+            orders, left_on="c_custkey", right_on="o_custkey"
+        )
+        jn2 = jn1.merge(lineitem, left_on="o_orderkey", right_on="l_orderkey")
+
+        jn2 = jn2[jn2["o_orderdate"] < var2]
+        jn2 = jn2[jn2["l_shipdate"] > var2]
+        jn2["revenue"] = jn2.l_extendedprice * (1 - jn2.l_discount)
+
+        gb = jn2.groupby(
+            ["o_orderkey", "o_orderdate", "o_shippriority"], as_index=False
+        )
+        agg = gb["revenue"].sum()
+
+        sel = agg.loc[
+            :, ["o_orderkey", "revenue", "o_orderdate", "o_shippriority"]
+        ]
+        sel = sel.rename(columns={"o_orderkey": "l_orderkey"})
+
+        sorted_df = sel.sort_values(
+            by=["revenue", "o_orderdate"], ascending=[False, True]
+        )
+        return sorted_df.head(10)
+
 
 if __name__ == "__main__":
     run_pandas(PDSHQueries)
