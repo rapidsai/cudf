@@ -172,6 +172,8 @@ class ModuleAcceleratorBase(
         A ModuleSpec with ourself as loader if we're interposing,
         otherwise None to pass off to the next loader.
         """
+        if fullname == "pandas._config.config":
+            return None
         if fullname == self.mod_name or fullname.startswith(
             f"{self.mod_name}."
         ):
@@ -404,6 +406,8 @@ class ModuleAccelerator(ModuleAcceleratorBase):
         # sys.meta_path.
         for mod in sys.modules.copy():
             if mod.startswith(self.slow_lib):
+                if mod == "pandas._config.config":
+                    continue
                 sys.modules[self._module_cache_prefix + mod] = sys.modules[mod]
                 del sys.modules[mod]
         self._denylist = (*slow_module.__path__, *fast_module.__path__)
