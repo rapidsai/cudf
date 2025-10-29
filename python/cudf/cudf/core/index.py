@@ -2512,12 +2512,7 @@ class Index(SingleColumnFrame):
     @copy_docstring(StringMethods)
     @_performance_tracking
     def str(self):
-        if self.dtype == CUDF_STRING_DTYPE:
-            return StringMethods(parent=self)
-        else:
-            raise AttributeError(
-                "Can only use .str accessor with string values!"
-            )
+        return StringMethods(parent=self)
 
     @cache
     @_warn_no_dask_cudf
