@@ -5,12 +5,16 @@
 
 #include "compact_protocol_reader.hpp"
 
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <functional>
+#include <future>
 #include <tuple>
 
 namespace cudf::io::parquet::detail {
@@ -177,7 +181,6 @@ struct parquet_field_bool_list : public parquet_field_list<bool, FieldType::BOOL
     auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
       auto const current_byte = cpr->getb();
       assert_bool_field_type(current_byte);
-      CUDF_EXPECTS(i < val.size(), "Index out of bounds");
       val[i] = current_byte == static_cast<int>(FieldType::BOOLEAN_TRUE);
     };
     bind_read_func(read_value);
@@ -227,7 +230,6 @@ struct parquet_field_int_list : public parquet_field_list<T, EXPECTED_TYPE> {
   parquet_field_int_list(int f, std::vector<T>& v) : parquet_field_list<T, EXPECTED_TYPE>(f, v)
   {
     auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
-      CUDF_EXPECTS(i < val.size(), "Index out of bounds");
       val[i] = cpr->get_zigzag<T>();
     };
     this->bind_read_func(read_value);
@@ -273,7 +275,6 @@ class parquet_field_string_list : public parquet_field_list<std::string, FieldTy
       auto const l = cpr->get_u32();
       CUDF_EXPECTS(std::cmp_less(l, cpr->m_end - cpr->m_cur), "string length mismatch");
 
-      CUDF_EXPECTS(i < val.size(), "Index out of bounds");
       val[i].assign(reinterpret_cast<char const*>(cpr->m_cur), l);
       cpr->m_cur += l;
     };
@@ -311,7 +312,6 @@ struct parquet_field_enum_list : public parquet_field_list<Enum, FieldType::I32>
     : parquet_field_list<Enum, FieldType::I32>(f, v)
   {
     auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
-      CUDF_EXPECTS(i < val.size(), "Index out of bounds");
       val[i] = static_cast<Enum>(cpr->get_i32());
     };
     this->bind_read_func(read_value);
@@ -388,19 +388,85 @@ class parquet_field_union_enumerator : public parquet_field {
 /**
  * @brief Functor to read a vector of structures from CompactProtocolReader
  *
+ * Uses parallel processing when there are more than 512 elements
+ *
  * @return True if field types mismatch or if the process of reading a
  * struct fails
  */
 template <typename T>
-struct parquet_field_struct_list : public parquet_field_list<T, FieldType::STRUCT> {
-  parquet_field_struct_list(int f, std::vector<T>& v)
-    : parquet_field_list<T, FieldType::STRUCT>(f, v)
+class parquet_field_struct_list : public parquet_field {
+  std::vector<T>& val;
+
+ public:
+  parquet_field_struct_list(int f, std::vector<T>& v) : parquet_field(f), val(v) {}
+
+  inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
-      CUDF_EXPECTS(i < val.size(), "Index out of bounds");
-      cpr->read(&val[i]);
-    };
-    this->bind_read_func(read_value);
+    CUDF_FUNC_RANGE();
+    assert_field_type(field_type, FieldType::LIST);
+    auto const [t, n] = cpr->get_listh();
+    assert_field_type(t, FieldType::STRUCT);
+    val.resize(n);
+
+    constexpr uint32_t parallel_threshold = 512;
+    if (n >= parallel_threshold) {
+      // Pipeline range collection with task launching: collect a batch of ranges,
+      // launch a task to parse them, then collect the next batch while the first
+      // task is running. This overlaps range collection with parsing work.
+      struct struct_range {
+        uint8_t const* start;
+        size_t length;
+      };
+
+      auto const num_tasks      = cudf::detail::host_worker_pool().get_thread_count() * 2;
+      auto const items_per_task = n / num_tasks;
+      auto const remainder      = n % num_tasks;
+
+      std::vector<std::future<void>> tasks;
+      tasks.reserve(num_tasks);
+
+      // Use a shared vector for all ranges to avoid allocations in each batch
+      std::vector<struct_range> all_ranges;
+      all_ranges.reserve(n);
+
+      std::size_t struct_idx = 0;
+      for (std::size_t task_id = 0; task_id < num_tasks; ++task_id) {
+        auto const task_size = items_per_task + (task_id < remainder ? 1 : 0);
+        auto const start_idx = struct_idx;
+        auto const end_idx   = start_idx + task_size;
+
+        if (start_idx >= n) break;
+
+        // Collect ranges for this batch
+        for (std::size_t i = start_idx; i < end_idx && i < n; ++i) {
+          uint8_t const* const start = cpr->m_cur;
+          cpr->skip_struct_field(static_cast<int>(FieldType::STRUCT));
+          all_ranges.emplace_back(start, static_cast<size_t>(cpr->m_cur - start));
+        }
+
+        // Launch task immediately to parse this batch while we collect the next batch
+        tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
+          [&val = this->val, &all_ranges, start_idx, end_idx]() {
+            CompactProtocolReader local_cpr;
+            for (size_t i = start_idx; i < end_idx && i < all_ranges.size(); ++i) {
+              local_cpr.init(all_ranges[i].start, all_ranges[i].length);
+              local_cpr.read(&val[i]);
+            }
+          }));
+
+        struct_idx = end_idx;
+      }
+
+      // Wait for all tasks to complete
+      for (auto& task : tasks) {
+        task.get();
+      }
+    } else {
+      // Sequential processing for small lists
+      for (uint32_t i = 0; i < n; i++) {
+        cpr->read(&val[i]);
+      }
+    }
   }
 };
 
@@ -422,7 +488,6 @@ class parquet_field_binary : public parquet_field {
     auto const n = cpr->get_u32();
     CUDF_EXPECTS(std::cmp_less_equal(n, cpr->m_end - cpr->m_cur), "binary length mismatch");
 
-    val.resize(n);
     val.assign(cpr->m_cur, cpr->m_cur + n);
     cpr->m_cur += n;
   }
@@ -443,8 +508,6 @@ class parquet_field_binary_list
       auto const l = cpr->get_u32();
       CUDF_EXPECTS(std::cmp_less_equal(l, cpr->m_end - cpr->m_cur), "binary length mismatch");
 
-      CUDF_EXPECTS(i < val.size(), "Index out of bounds");
-      val[i].resize(l);
       val[i].assign(cpr->m_cur, cpr->m_cur + l);
       cpr->m_cur += l;
     };
