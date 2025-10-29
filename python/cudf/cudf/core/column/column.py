@@ -1550,6 +1550,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def take(
         self,
         indices: ColumnBase,
+        *,
         nullify: bool = False,
         check_bounds: bool = True,
     ) -> Self:
@@ -3219,7 +3220,16 @@ def as_column(
                     from_pandas=True,
                 )
             else:
-                if not isinstance(dtype, np.dtype):
+                if isinstance(
+                    dtype,
+                    (
+                        CategoricalDtype,
+                        DecimalDtype,
+                        IntervalDtype,
+                        ListDtype,
+                        StructDtype,
+                    ),
+                ):
                     dtype = dtype.to_pandas()
                 arbitrary = pd.Series(arbitrary, dtype=dtype)
         return as_column(arbitrary, nan_as_null=nan_as_null, dtype=dtype)
@@ -3359,17 +3369,26 @@ def concat_columns(objs: Sequence[ColumnBase]) -> ColumnBase:
     # Find the first non-null column:
     head = next((obj for obj in objs if obj.null_count != len(obj)), objs[0])
 
-    new_objs = list(objs)
-    for i, obj in enumerate(new_objs):
+    replacement_cols: dict[int, ColumnBase] = {}
+    for i, obj in enumerate(objs):
         # Check that all columns are the same type:
         if not is_dtype_equal(obj.dtype, head.dtype):
             # if all null, cast to appropriate dtype
             if obj.null_count == len(obj):
-                new_objs[i] = column_empty(
+                replacement_cols[i] = column_empty(
                     row_count=len(obj), dtype=head.dtype
                 )
             else:
                 raise ValueError("All columns must be the same type")
+    if replacement_cols:
+        if len(replacement_cols) == len(objs):
+            new_objs: Sequence[ColumnBase] = list(replacement_cols.values())
+        else:
+            new_objs = list(objs)
+            for idx, col in replacement_cols.items():
+                new_objs[idx] = col
+    else:
+        new_objs = objs
 
     # TODO: This logic should be generalized to a dispatch to
     # ColumnBase._concat so that all subclasses can override necessary

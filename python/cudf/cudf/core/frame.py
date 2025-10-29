@@ -918,9 +918,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
         self,
         value: None | ScalarLike | Series = None,
         method: Literal["ffill", "bfill", "pad", "backfill", None] = None,
-        axis=None,
+        axis: Axis | None = None,
         inplace: bool = False,
-        limit=None,
+        limit: int | None = None,
     ) -> Self | None:
         """Fill null values with ``value`` or specified ``method``.
 
