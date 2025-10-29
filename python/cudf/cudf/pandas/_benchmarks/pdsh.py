@@ -191,6 +191,66 @@ class PDSHQueries:
 
         return agg.sort_values(["o_orderpriority"])
 
+    @staticmethod
+    def q5(run_config: RunConfig) -> pd.DataFrame:
+        """Query 5."""
+        path = run_config.dataset_path
+        suffix = run_config.suffix
+        customer = get_data(path, "customer", suffix)
+        lineitem = get_data(path, "lineitem", suffix)
+        nation = get_data(path, "nation", suffix)
+        orders = get_data(path, "orders", suffix)
+        region = get_data(path, "region", suffix)
+        supplier = get_data(path, "supplier", suffix)
+
+        var1 = "ASIA"
+        var2 = date(1994, 1, 1)
+        var3 = date(1995, 1, 1)
+
+        jn1 = region.merge(
+            nation, left_on="r_regionkey", right_on="n_regionkey"
+        )
+        jn2 = jn1.merge(
+            customer, left_on="n_nationkey", right_on="c_nationkey"
+        )
+        jn3 = jn2.merge(orders, left_on="c_custkey", right_on="o_custkey")
+        jn4 = jn3.merge(lineitem, left_on="o_orderkey", right_on="l_orderkey")
+        jn5 = jn4.merge(
+            supplier,
+            left_on=["l_suppkey", "n_nationkey"],
+            right_on=["s_suppkey", "s_nationkey"],
+        )
+
+        jn5 = jn5[jn5["r_name"] == var1]
+        jn5 = jn5[(jn5["o_orderdate"] >= var2) & (jn5["o_orderdate"] < var3)]
+        jn5["revenue"] = jn5.l_extendedprice * (1.0 - jn5.l_discount)
+
+        gb = jn5.groupby("n_name", as_index=False)["revenue"].sum()
+        return gb.sort_values("revenue", ascending=False)
+
+    @staticmethod
+    def q6(run_config: RunConfig) -> pd.DataFrame:
+        """Query 6."""
+        path = run_config.dataset_path
+        suffix = run_config.suffix
+        lineitem = get_data(path, "lineitem", suffix)
+
+        var1 = date(1994, 1, 1)
+        var2 = date(1995, 1, 1)
+        var3 = 0.05
+        var4 = 0.07
+        var5 = 24
+
+        filt = lineitem[
+            (lineitem["l_shipdate"] >= var1) & (lineitem["l_shipdate"] < var2)
+        ]
+        filt = filt[
+            (filt["l_discount"] >= var3) & (filt["l_discount"] <= var4)
+        ]
+        filt = filt[filt["l_quantity"] < var5]
+        result_value = (filt["l_extendedprice"] * filt["l_discount"]).sum()
+        return pd.DataFrame({"revenue": [result_value]})
+
 
 if __name__ == "__main__":
     run_pandas(PDSHQueries)
