@@ -72,6 +72,58 @@ class PDSHQueries:
 
         return agg.sort_values(["l_returnflag", "l_linestatus"])
 
+    @staticmethod
+    def q2(run_config: RunConfig) -> pd.DataFrame:
+        """Query 2."""
+        nation = get_data(run_config.dataset_path, "nation", run_config.suffix)
+        part = get_data(run_config.dataset_path, "part", run_config.suffix)
+        partsupp = get_data(
+            run_config.dataset_path, "partsupp", run_config.suffix
+        )
+        region = get_data(run_config.dataset_path, "region", run_config.suffix)
+        supplier = get_data(
+            run_config.dataset_path, "supplier", run_config.suffix
+        )
+
+        var1 = 15
+        var2 = "BRASS"
+        var3 = "EUROPE"
+
+        jn = (
+            part.merge(partsupp, left_on="p_partkey", right_on="ps_partkey")
+            .merge(supplier, left_on="ps_suppkey", right_on="s_suppkey")
+            .merge(nation, left_on="s_nationkey", right_on="n_nationkey")
+            .merge(region, left_on="n_regionkey", right_on="r_regionkey")
+        )
+
+        jn = jn[jn["p_size"] == var1]
+        jn = jn[jn["p_type"].str.endswith(var2)]
+        jn = jn[jn["r_name"] == var3]
+
+        gb = jn.groupby("p_partkey", as_index=False)
+        agg = gb["ps_supplycost"].min()
+        jn2 = agg.merge(jn, on=["p_partkey", "ps_supplycost"])
+
+        sel = jn2.loc[
+            :,
+            [
+                "s_acctbal",
+                "s_name",
+                "n_name",
+                "p_partkey",
+                "p_mfgr",
+                "s_address",
+                "s_phone",
+                "s_comment",
+            ],
+        ]
+
+        sort = sel.sort_values(
+            by=["s_acctbal", "n_name", "s_name", "p_partkey"],
+            ascending=[False, True, True, True],
+        )
+        return sort.head(100)
+
 
 if __name__ == "__main__":
     run_pandas(PDSHQueries)
