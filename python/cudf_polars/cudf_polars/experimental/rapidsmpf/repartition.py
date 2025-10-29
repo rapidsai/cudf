@@ -93,9 +93,10 @@ async def concatenate_node(
                 await ch_out.data.send(
                     context,
                     Message(
+                        seq_num,
                         TableChunk.from_pylibcudf_table(
-                            seq_num, table, build_stream, exclusive_view=True
-                        )
+                            table, build_stream, exclusive_view=True
+                        ),
                     ),
                 )
                 seq_num += 1

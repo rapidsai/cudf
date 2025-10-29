@@ -120,13 +120,13 @@ def evaluate_logical_plan(
     # Extract/return the result
     return combine_output_chunks(
         ir,
-        *(TableChunk.from_message(msg) for msg in output.release()),
+        output.release(),
         ir_context=ir_context,
     )
 
 
 def combine_output_chunks(
-    ir: IR, *chunks: TableChunk, ir_context: IRExecutionContext
+    ir: IR, messages: list, ir_context: IRExecutionContext
 ) -> DataFrame:
     """
     Combine the output chunks into a single DataFrame.
@@ -135,8 +135,8 @@ def combine_output_chunks(
     ----------
     ir
         The IR node.
-    chunks
-        The output chunks.
+    messages
+        The output messages containing chunks.
     ir_context
         The execution context for the IR node.
 
@@ -152,7 +152,8 @@ def combine_output_chunks(
                 list(ir.schema.values()),
                 chunk.stream,
             )
-            for chunk in sorted(chunks, key=lambda c: c.sequence_number)
+            for msg in sorted(messages, key=lambda m: m.sequence_number)
+            for chunk in [TableChunk.from_message(msg)]
         ),
         context=ir_context,
     )

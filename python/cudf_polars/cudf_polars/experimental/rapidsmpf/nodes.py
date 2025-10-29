@@ -61,7 +61,7 @@ async def default_node_single(
     async with shutdown_on_error(context, ch_in.data, ch_out.data):
         while (msg := await ch_in.data.recv(context)) is not None:
             chunk = TableChunk.from_message(msg)
-            seq_num = chunk.sequence_number
+            seq_num = msg.sequence_number
             df = await asyncio.to_thread(
                 ir.do_evaluate,
                 *ir._non_child_args,
@@ -74,9 +74,9 @@ async def default_node_single(
                 context=ir_context,
             )
             chunk = TableChunk.from_pylibcudf_table(
-                seq_num, df.table, chunk.stream, exclusive_view=True
+                df.table, chunk.stream, exclusive_view=True
             )
-            await ch_out.data.send(context, Message(chunk))
+            await ch_out.data.send(context, Message(seq_num, chunk))
 
         await ch_out.data.drain(context)
 
@@ -135,7 +135,7 @@ async def default_node_multi(
                             raise RuntimeError(
                                 f"Broadcasted chunk already staged for channel {ch_idx}."
                             )
-                        staged_chunks[ch_idx][table_chunk.sequence_number] = (
+                        staged_chunks[ch_idx][msg.sequence_number] = (
                             DataFrame.from_table(
                                 table_chunk.table_view(),
                                 list(child.schema.keys()),
@@ -175,12 +175,12 @@ async def default_node_multi(
                 await ch_out.data.send(
                     context,
                     Message(
+                        seq_num,
                         TableChunk.from_pylibcudf_table(
-                            seq_num,
                             df.table,
                             df.stream,
                             exclusive_view=True,
-                        )
+                        ),
                     ),
                 )
                 seq_num += 1
@@ -223,16 +223,17 @@ async def fanout_node_bounded(
     async with shutdown_on_error(context, ch_in.data, *[ch.data for ch in chs_out]):
         while (msg := await ch_in.data.recv(context)) is not None:
             table_chunk = TableChunk.from_message(msg)
+            seq_num = msg.sequence_number
             for ch_out in chs_out:
                 await ch_out.data.send(
                     context,
                     Message(
+                        seq_num,
                         TableChunk.from_pylibcudf_table(
-                            table_chunk.sequence_number,
                             table_chunk.table_view(),
                             table_chunk.stream,
                             exclusive_view=False,
-                        )
+                        ),
                     ),
                 )
 
@@ -339,14 +340,15 @@ async def fanout_node_unbounded(
                     else:
                         # Add message to all output buffers
                         chunk = TableChunk.from_message(msg)
+                        seq_num = msg.sequence_number
                         for buffer in output_buffers:
                             message = Message(
+                                seq_num,
                                 TableChunk.from_pylibcudf_table(
-                                    chunk.sequence_number,
                                     chunk.table_view(),
                                     chunk.stream,
                                     exclusive_view=False,
-                                )
+                                ),
                             )
                             buffer.append(message)
 
@@ -438,9 +440,9 @@ async def empty_node(
 
         # Return the output chunk (empty but with correct schema)
         chunk = TableChunk.from_pylibcudf_table(
-            0, df.table, df.stream, exclusive_view=True
+            df.table, df.stream, exclusive_view=True
         )
-        await ch_out.data.send(context, Message(chunk))
+        await ch_out.data.send(context, Message(0, chunk))
 
         await ch_out.data.drain(context)
 

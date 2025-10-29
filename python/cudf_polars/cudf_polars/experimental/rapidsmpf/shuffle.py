@@ -237,14 +237,13 @@ async def local_shuffle_node(
 
                 # Create a new TableChunk with the result
                 output_chunk = TableChunk.from_pylibcudf_table(
-                    sequence_number=partition_id,
                     table=result_table,
                     stream=local_shuffle.stream,
                     exclusive_view=True,
                 )
 
                 # Send the output chunk
-                await ch_out.data.send(context, Message(output_chunk))
+                await ch_out.data.send(context, Message(partition_id, output_chunk))
 
         await ch_out.data.drain(context)
 

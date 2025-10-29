@@ -57,17 +57,12 @@ async def union_node(
         for ch_in in chs_in:
             num_ch_chunks = 0
             while (msg := await ch_in.data.recv(context)) is not None:
-                table_chunk = TableChunk.from_message(msg)
                 num_ch_chunks += 1
                 await ch_out.data.send(
                     context,
                     Message(
-                        TableChunk.from_pylibcudf_table(
-                            table_chunk.sequence_number + seq_num_offset,
-                            table_chunk.table_view(),
-                            table_chunk.stream,
-                            exclusive_view=True,
-                        )
+                        msg.sequence_number + seq_num_offset,
+                        TableChunk.from_message(msg),
                     ),
                 )
             seq_num_offset += num_ch_chunks

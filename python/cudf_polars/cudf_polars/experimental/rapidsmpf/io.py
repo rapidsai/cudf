@@ -216,12 +216,12 @@ async def read_chunk(
         await ch_out.send(
             context,
             Message(
+                seq_num,
                 TableChunk.from_pylibcudf_table(
-                    seq_num,
                     df.table,
                     df.stream,
                     exclusive_view=True,
-                )
+                ),
             ),
         )
 

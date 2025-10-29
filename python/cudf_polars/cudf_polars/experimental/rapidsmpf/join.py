@@ -129,6 +129,7 @@ async def broadcast_join_node(
         # Stream through large side, joining with the small-side
         while (msg := await large_ch.data.recv(context)) is not None:
             large_chunk = TableChunk.from_message(msg)
+            seq_num = msg.sequence_number
             large_df = DataFrame.from_table(
                 large_chunk.table_view(),
                 list(large_child.schema.keys()),
@@ -158,8 +159,8 @@ async def broadcast_join_node(
             await ch_out.data.send(
                 context,
                 Message(
+                    seq_num,
                     TableChunk.from_pylibcudf_table(
-                        large_chunk.sequence_number,
                         (
                             results[0].table
                             if len(results) == 1
@@ -170,7 +171,7 @@ async def broadcast_join_node(
                         ),
                         build_stream,
                         exclusive_view=True,
-                    )
+                    ),
                 ),
             )
 
