@@ -120,6 +120,11 @@ class SingleColumnFrame(Frame, NotIterable):
     @property
     @_performance_tracking
     def dtype(self) -> Dtype:
+        # TODO: Investigate whether this can ever actually return a string at runtime,
+        # or if the return type should be DtypeObj (ExtensionDtype | np.dtype) instead.
+        # Currently returns Dtype to match pandas API (which accepts string dtype specs),
+        # but internally self._column.dtype should only return actual dtype objects.
+        # This causes mypy errors in functions expecting DtypeObj (e.g., _can_values_be_equal).
         return self._column.dtype
 
     # TODO: We added fast paths in cudf #18555 to make `to_cupy` and `.values` faster
