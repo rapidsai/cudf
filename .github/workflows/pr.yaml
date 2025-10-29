@@ -279,6 +279,17 @@ jobs:
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: "ci/test_wheel_cudf_polars.sh"
+  wheel-tests-cudf-polars-with-rapidsmpf:
+    needs: [wheel-build-cudf-polars, changed-files]
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
+    with:
+      # This selects "ARCH=amd64 + the latest supported Python + CUDA" to minimize CI usage.
+      # (rapidsmpf compatibility already validated in rapidsmpf CI)
+      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+      build_type: pull-request
+      script: "ci/test_cudf_polars_with_rapidsmpf.sh"
   cudf-polars-polars-tests:
     needs: [wheel-build-cudf-polars, changed-files]
     secrets: inherit
@@ -382,17 +393,6 @@ jobs:
       node_type: "gpu-l4-latest-1"
       container_image: "rapidsai/ci-conda:25.12-latest"
       script: ci/test_narwhals.sh
-  wheel-tests-cudf-polars-with-rapidsmpf:
-    needs: [wheel-build-cudf-polars, changed-files]
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
-    with:
-      # Test one CUDA/Python combo to minimize CI usage
-      # (rapidsmpf compatibility already validated in rapidsmpf CI)
-      matrix_filter: map(select(.ARCH == "amd64")) | .[0:1]
-      build_type: pull-request
-      script: "ci/test_cudf_polars_with_rapidsmpf.sh"
   spark-rapids-jni:
     needs: changed-files
     uses: ./.github/workflows/spark-rapids-jni.yaml
