@@ -38,11 +38,16 @@ from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
 from cudf_polars.dsl.tracing import log_do_evaluate, nvtx_annotate_cudf_polars
 from cudf_polars.dsl.utils.reshape import broadcast
-from cudf_polars.dsl.utils.windows import range_window_bounds
+from cudf_polars.dsl.utils.windows import (
+    offsets_to_windows,
+    range_window_bounds,
+)
 from cudf_polars.utils import dtypes
+from cudf_polars.utils.config import CUDAStreamPolicy
 from cudf_polars.utils.cuda_stream import (
     get_cuda_stream,
     get_joined_cuda_stream,
+    get_new_cuda_stream,
 )
 from cudf_polars.utils.versions import POLARS_VERSION_LT_131
 
@@ -58,7 +63,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers.dataframe import NamedColumn
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
-    from cudf_polars.utils.config import ParquetOptions
+    from cudf_polars.utils.config import ConfigOptions, ParquetOptions
     from cudf_polars.utils.timer import Timer
 
 __all__ = [
@@ -97,7 +102,27 @@ class IRExecutionContext:
 
     This dataclass holds runtime information and configuration needed
     during the evaluation of IR nodes.
+
+    Parameters
+    ----------
+    get_cuda_stream
+        A zero-argument callable that returns a CUDA stream.
     """
+
+    get_cuda_stream: Callable[[], Stream]
+
+    @classmethod
+    def from_config_options(cls, config_options: ConfigOptions) -> IRExecutionContext:
+        """Create an IRExecutionContext from ConfigOptions."""
+        match config_options.cuda_stream_policy:
+            case CUDAStreamPolicy.DEFAULT:
+                return cls(get_cuda_stream=get_cuda_stream)
+            case CUDAStreamPolicy.NEW:
+                return cls(get_cuda_stream=get_new_cuda_stream)
+            case _:  # pragma: no cover
+                raise ValueError(
+                    f"Invalid CUDA stream policy: {config_options.cuda_stream_policy}"
+                )
 
 
 _BINOPS = {
@@ -569,9 +594,16 @@ class Scan(IR):
         Each path is repeated according to the number of rows read from it.
         """
         (filepaths,) = plc.filling.repeat(
-            plc.Table([plc.Column.from_arrow(pl.Series(values=map(str, paths)))]),
+            plc.Table(
+                [
+                    plc.Column.from_arrow(
+                        pl.Series(values=map(str, paths)), stream=df.stream
+                    )
+                ]
+            ),
             plc.Column.from_arrow(
-                pl.Series(values=rows_per_path, dtype=pl.datatypes.Int32())
+                pl.Series(values=rows_per_path, dtype=pl.datatypes.Int32()),
+                stream=df.stream,
             ),
             stream=df.stream,
         ).columns()
@@ -610,7 +642,7 @@ class Scan(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        stream = get_cuda_stream()
+        stream = context.get_cuda_stream()
         if typ == "csv":
 
             def read_csv_header(
@@ -729,7 +761,8 @@ class Scan(IR):
                         _parquet_physical_types(
                             schema, paths, with_columns or list(schema.keys()), stream
                         ),
-                    )
+                    ),
+                    stream=stream,
                 )
             parquet_reader_options = plc.io.parquet.ParquetReaderOptions.builder(
                 plc.io.SourceInfo(paths)
@@ -844,7 +877,9 @@ class Scan(IR):
         if predicate is None:
             return df
         else:
-            (mask,) = broadcast(predicate.evaluate(df), target_length=df.num_rows)
+            (mask,) = broadcast(
+                predicate.evaluate(df), target_length=df.num_rows, stream=df.stream
+            )
             return df.filter(mask)
 
 
@@ -1285,7 +1320,7 @@ class DataFrameScan(IR):
         """Evaluate and return a dataframe."""
         if projection is not None:
             df = df.select(projection)
-        df = DataFrame.from_polars(df, stream=get_cuda_stream())
+        df = DataFrame.from_polars(df, stream=context.get_cuda_stream())
         assert all(
             c.obj.type() == dtype.plc_type
             for c, dtype in zip(df.columns, schema.values(), strict=True)
@@ -1348,7 +1383,7 @@ class Select(IR):
         # Handle any broadcasting
         columns = [e.evaluate(df) for e in exprs]
         if should_broadcast:
-            columns = broadcast(*columns)
+            columns = broadcast(*columns, stream=df.stream)
         return DataFrame(columns, stream=df.stream)
 
     def evaluate(
@@ -1387,7 +1422,7 @@ class Select(IR):
             and self.children[0].typ == "parquet"
             and self.children[0].predicate is None
         ):  # pragma: no cover
-            stream = get_cuda_stream()
+            stream = context.get_cuda_stream()
             scan = self.children[0]
             effective_rows = scan.fast_count()
             dtype = DataType(pl.UInt32())
@@ -1436,7 +1471,7 @@ class Reduce(IR):
         context: IRExecutionContext,
     ) -> DataFrame:  # pragma: no cover; not exposed by polars yet
         """Evaluate and return a dataframe."""
-        columns = broadcast(*(e.evaluate(df) for e in exprs))
+        columns = broadcast(*(e.evaluate(df) for e in exprs), stream=df.stream)
         assert all(column.size == 1 for column in columns)
         return DataFrame(columns, stream=df.stream)
 
@@ -1447,17 +1482,19 @@ class Rolling(IR):
     __slots__ = (
         "agg_requests",
         "closed_window",
-        "following",
+        "following_ordinal",
         "index",
+        "index_dtype",
         "keys",
-        "preceding",
+        "preceding_ordinal",
         "zlice",
     )
     _non_child = (
         "schema",
         "index",
-        "preceding",
-        "following",
+        "index_dtype",
+        "preceding_ordinal",
+        "following_ordinal",
         "closed_window",
         "keys",
         "agg_requests",
@@ -1465,10 +1502,12 @@ class Rolling(IR):
     )
     index: expr.NamedExpr
     """Column being rolled over."""
-    preceding: plc.Scalar
-    """Preceding window extent defining start of window."""
-    following: plc.Scalar
-    """Following window extent defining end of window."""
+    index_dtype: plc.DataType
+    """Datatype of the index column."""
+    preceding_ordinal: int
+    """Preceding window extent defining start of window as a host integer."""
+    following_ordinal: int
+    """Following window extent defining end of window as a host integer."""
     closed_window: ClosedInterval
     """Treatment of window endpoints."""
     keys: tuple[expr.NamedExpr, ...]
@@ -1482,8 +1521,9 @@ class Rolling(IR):
         self,
         schema: Schema,
         index: expr.NamedExpr,
-        preceding: plc.Scalar,
-        following: plc.Scalar,
+        index_dtype: plc.DataType,
+        preceding_ordinal: int,
+        following_ordinal: int,
         closed_window: ClosedInterval,
         keys: Sequence[expr.NamedExpr],
         agg_requests: Sequence[expr.NamedExpr],
@@ -1492,8 +1532,9 @@ class Rolling(IR):
     ):
         self.schema = schema
         self.index = index
-        self.preceding = preceding
-        self.following = following
+        self.index_dtype = index_dtype
+        self.preceding_ordinal = preceding_ordinal
+        self.following_ordinal = following_ordinal
         self.closed_window = closed_window
         self.keys = tuple(keys)
         self.agg_requests = tuple(agg_requests)
@@ -1516,8 +1557,9 @@ class Rolling(IR):
         self.children = (df,)
         self._non_child_args = (
             index,
-            preceding,
-            following,
+            index_dtype,
+            preceding_ordinal,
+            following_ordinal,
             closed_window,
             keys,
             agg_requests,
@@ -1530,8 +1572,9 @@ class Rolling(IR):
     def do_evaluate(
         cls,
         index: expr.NamedExpr,
-        preceding: plc.Scalar,
-        following: plc.Scalar,
+        index_dtype: plc.DataType,
+        preceding_ordinal: int,
+        following_ordinal: int,
         closed_window: ClosedInterval,
         keys_in: Sequence[expr.NamedExpr],
         aggs: Sequence[expr.NamedExpr],
@@ -1541,7 +1584,11 @@ class Rolling(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        keys = broadcast(*(k.evaluate(df) for k in keys_in), target_length=df.num_rows)
+        keys = broadcast(
+            *(k.evaluate(df) for k in keys_in),
+            target_length=df.num_rows,
+            stream=df.stream,
+        )
         orderby = index.evaluate(df)
         # Polars casts integral orderby to int64, but only for calculating window bounds
         if (
@@ -1553,8 +1600,13 @@ class Rolling(IR):
             )
         else:
             orderby_obj = orderby.obj
+
+        preceding_scalar, following_scalar = offsets_to_windows(
+            index_dtype, preceding_ordinal, following_ordinal, stream=df.stream
+        )
+
         preceding_window, following_window = range_window_bounds(
-            preceding, following, closed_window
+            preceding_scalar, following_scalar, closed_window
         )
         if orderby.obj.null_count() != 0:
             raise RuntimeError(
@@ -1573,7 +1625,9 @@ class Rolling(IR):
                 raise RuntimeError("Input for grouped rolling is not sorted")
         else:
             if not orderby.check_sorted(
-                order=plc.types.Order.ASCENDING, null_order=plc.types.NullOrder.BEFORE
+                order=plc.types.Order.ASCENDING,
+                null_order=plc.types.NullOrder.BEFORE,
+                stream=df.stream,
             ):
                 raise RuntimeError(
                     f"Index column '{index.name}' in rolling is not sorted, please sort first"
@@ -1673,7 +1727,11 @@ class GroupBy(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        keys = broadcast(*(k.evaluate(df) for k in keys_in), target_length=df.num_rows)
+        keys = broadcast(
+            *(k.evaluate(df) for k in keys_in),
+            target_length=df.num_rows,
+            stream=df.stream,
+        )
         sorted = (
             plc.types.Sorted.YES
             if all(k.is_sorted for k in keys)
@@ -1719,7 +1777,7 @@ class GroupBy(IR):
             Column(grouped_key, name=key.name, dtype=key.dtype)
             for key, grouped_key in zip(keys, group_keys.columns(), strict=True)
         ]
-        broadcasted = broadcast(*result_keys, *results)
+        broadcasted = broadcast(*result_keys, *results, stream=df.stream)
         # Handle order preservation of groups
         if maintain_order and not sorted:
             # The order we want
@@ -1864,7 +1922,7 @@ def _apply_casts(df: DataFrame, casts: dict[str, DataType]) -> DataFrame:
         if target is None:
             columns.append(Column(col.obj, dtype=col.dtype, name=col.name))
         else:
-            casted = col.astype(target)
+            casted = col.astype(target, stream=df.stream)
             columns.append(Column(casted.obj, dtype=casted.dtype, name=col.name))
     return DataFrame(columns, stream=df.stream)
 
@@ -1880,7 +1938,9 @@ class ConditionalJoin(IR):
 
         def __init__(self, predicate: expr.Expr):
             self.predicate = predicate
-            ast_result = to_ast(predicate)
+            stream = get_cuda_stream()
+            ast_result = to_ast(predicate, stream=stream)
+            stream.synchronize()
             if ast_result is None:
                 raise NotImplementedError(
                     f"Conditional join with predicate {predicate}"
@@ -1952,7 +2012,13 @@ class ConditionalJoin(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        stream = get_joined_cuda_stream(upstreams=(left.stream, right.stream))
+        stream = get_joined_cuda_stream(
+            context.get_cuda_stream,
+            upstreams=(
+                left.stream,
+                right.stream,
+            ),
+        )
         left_casts, right_casts = _collect_decimal_binop_casts(
             predicate_wrapper.predicate
         )
@@ -2237,7 +2303,9 @@ class Join(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        stream = get_joined_cuda_stream(upstreams=(left.stream, right.stream))
+        stream = get_joined_cuda_stream(
+            context.get_cuda_stream, upstreams=(left.stream, right.stream)
+        )
         how, nulls_equal, zlice, suffix, coalesce, maintain_order = options
         if how == "Cross":
             # Separate implementation, since cross_join returns the
@@ -2276,10 +2344,12 @@ class Join(IR):
             return DataFrame([*left_cols, *right_cols], stream=stream).slice(zlice)
         # TODO: Waiting on clarity based on https://github.com/pola-rs/polars/issues/17184
         left_on = DataFrame(
-            broadcast(*(e.evaluate(left) for e in left_on_exprs)), stream=stream
+            broadcast(*(e.evaluate(left) for e in left_on_exprs), stream=stream),
+            stream=stream,
         )
         right_on = DataFrame(
-            broadcast(*(e.evaluate(right) for e in right_on_exprs)), stream=stream
+            broadcast(*(e.evaluate(right) for e in right_on_exprs), stream=stream),
+            stream=stream,
         )
         null_equality = (
             plc.types.NullEquality.EQUAL
@@ -2289,7 +2359,7 @@ class Join(IR):
         join_fn, left_policy, right_policy = cls._joiners(how)
         if right_policy is None:
             # Semi join
-            lg = join_fn(left_on.table, right_on.table, null_equality)
+            lg = join_fn(left_on.table, right_on.table, null_equality, stream)
             table = plc.copying.gather(left.table, lg, left_policy, stream=stream)
             result = DataFrame.from_table(
                 table, left.column_names, left.dtypes, stream=stream
@@ -2413,7 +2483,9 @@ class HStack(IR):
         columns = [c.evaluate(df) for c in exprs]
         if should_broadcast:
             columns = broadcast(
-                *columns, target_length=df.num_rows if df.num_columns != 0 else None
+                *columns,
+                target_length=df.num_rows if df.num_columns != 0 else None,
+                stream=df.stream,
             )
         else:
             # Polars ensures this is true, but let's make sure nothing
@@ -2492,6 +2564,7 @@ class Distinct(IR):
                 indices,
                 keep,
                 plc.types.NullEquality.EQUAL,
+                stream=df.stream,
             )
         else:
             distinct = (
@@ -2575,7 +2648,9 @@ class Sort(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        sort_keys = broadcast(*(k.evaluate(df) for k in by), target_length=df.num_rows)
+        sort_keys = broadcast(
+            *(k.evaluate(df) for k in by), target_length=df.num_rows, stream=df.stream
+        )
         do_sort = plc.sorting.stable_sort_by_key if stable else plc.sorting.sort_by_key
         table = do_sort(
             df.table,
@@ -2647,7 +2722,9 @@ class Filter(IR):
         cls, mask_expr: expr.NamedExpr, df: DataFrame, *, context: IRExecutionContext
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        (mask,) = broadcast(mask_expr.evaluate(df), target_length=df.num_rows)
+        (mask,) = broadcast(
+            mask_expr.evaluate(df), target_length=df.num_rows, stream=df.stream
+        )
         return df.filter(mask)
 
 
@@ -2671,7 +2748,9 @@ class Projection(IR):
         """Evaluate and return a dataframe."""
         # This can reorder things.
         columns = broadcast(
-            *(df.column_map[name] for name in schema), target_length=df.num_rows
+            *(df.column_map[name] for name in schema),
+            target_length=df.num_rows,
+            stream=df.stream,
         )
         return DataFrame(columns, stream=df.stream)
 
@@ -2705,7 +2784,9 @@ class MergeSorted(IR):
         cls, key: str, *dfs: DataFrame, context: IRExecutionContext
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        stream = get_joined_cuda_stream(upstreams=(df.stream for df in dfs))
+        stream = get_joined_cuda_stream(
+            context.get_cuda_stream, upstreams=[df.stream for df in dfs]
+        )
         left, right = dfs
         right = right.discard_columns(right.column_names_set - left.column_names_set)
         on_col_left = left.select_columns({key})[0]
@@ -2880,7 +2961,8 @@ class MapFunction(IR):
                         plc.Column.from_arrow(
                             pl.Series(
                                 values=pivotees, dtype=schema[variable_name].polars_type
-                            )
+                            ),
+                            stream=df.stream,
                         )
                     ]
                 ),
@@ -2889,7 +2971,9 @@ class MapFunction(IR):
             ).columns()
             value_column = plc.concatenate.concatenate(
                 [
-                    df.column_map[pivotee].astype(schema[value_name]).obj
+                    df.column_map[pivotee]
+                    .astype(schema[value_name], stream=df.stream)
+                    .obj
                     for pivotee in pivotees
                 ],
                 stream=df.stream,
@@ -2944,7 +3028,9 @@ class Union(IR):
         cls, zlice: Zlice | None, *dfs: DataFrame, context: IRExecutionContext
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        stream = get_joined_cuda_stream(upstreams=(df.stream for df in dfs))
+        stream = get_joined_cuda_stream(
+            context.get_cuda_stream, upstreams=[df.stream for df in dfs]
+        )
 
         # TODO: only evaluate what we need if we have a slice?
         return DataFrame.from_table(
@@ -3015,13 +3101,18 @@ class HConcat(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        stream = get_joined_cuda_stream(upstreams=(df.stream for df in dfs))
+        stream = get_joined_cuda_stream(
+            context.get_cuda_stream, upstreams=[df.stream for df in dfs]
+        )
 
         # Special should_broadcast case.
         # Used to recombine decomposed expressions
         if should_broadcast:
             return DataFrame(
-                broadcast(*itertools.chain.from_iterable(df.columns for df in dfs)),
+                broadcast(
+                    *itertools.chain.from_iterable(df.columns for df in dfs),
+                    stream=stream,
+                ),
                 stream=stream,
             )
 
@@ -3066,7 +3157,7 @@ class Empty(IR):
         cls, schema: Schema, *, context: IRExecutionContext
     ) -> DataFrame:  # pragma: no cover
         """Evaluate and return a dataframe."""
-        stream = get_cuda_stream()
+        stream = context.get_cuda_stream()
         return DataFrame(
             [
                 Column(

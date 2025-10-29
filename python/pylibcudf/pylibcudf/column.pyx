@@ -93,7 +93,7 @@ cdef class _ArrowColumnHolder:
 cdef class OwnerWithCAI:
     """An interface for column view's data with gpumemoryview via CAI."""
     @staticmethod
-    cdef create(column_view cv, object owner):
+    cdef create(column_view cv, object owner, Stream stream):
         obj = OwnerWithCAI()
         obj.owner = owner
         # The default size of 0 will be applied for any type that stores data in the
@@ -105,8 +105,7 @@ cdef class OwnerWithCAI:
             # Cast to Python integers before multiplying to avoid overflow.
             size = int(cv.size()) * int(cpp_size_of(cv.type()))
         elif cv.type().id() == type_id.STRING:
-            # TODO: stream-ordered
-            size = strings_column_view(cv).chars_size(_get_stream().view())
+            size = strings_column_view(cv).chars_size(stream.view())
 
         obj.cai = {
             "shape": (size,),
@@ -349,7 +348,8 @@ cdef class Column:
 
     def to_arrow(
         self,
-        metadata: ColumnMetadata | str | None = None
+        metadata: ColumnMetadata | str | None = None,
+        stream: Stream = None,
     ) -> ArrowLike:
         """Create a pyarrow array from a pylibcudf column.
 
@@ -357,6 +357,8 @@ cdef class Column:
         ----------
         metadata : ColumnMetadata | str | None
             The metadata to attach to the column.
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
 
         Returns
         -------
@@ -371,7 +373,7 @@ cdef class Column:
         # TODO: Once the arrow C device interface registers more
         # types that it supports, we can call pa.array(self) if
         # no metadata is passed.
-        return pa.array(_ObjectWithArrowMetadata(self, metadata))
+        return pa.array(_ObjectWithArrowMetadata(self, metadata, stream))
 
     @staticmethod
     def from_arrow(
@@ -450,7 +452,11 @@ cdef class Column:
                 )
             result.col.swap(c_result)
 
-            return Column.from_column_view_of_arbitrary(result.col.get().view(), result)
+            return Column.from_column_view_of_arbitrary(
+                result.col.get().view(),
+                result,
+                stream,
+            )
         elif hasattr(obj, "__arrow_c_array__"):
             schema, h_array = obj.__arrow_c_array__()
             c_schema = <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
@@ -467,7 +473,11 @@ cdef class Column:
                 )
             result.col.swap(c_result)
 
-            return Column.from_column_view_of_arbitrary(result.col.get().view(), result)
+            return Column.from_column_view_of_arbitrary(
+                result.col.get().view(),
+                result,
+                stream,
+            )
         elif hasattr(obj, "__arrow_c_stream__"):
             arrow_stream = obj.__arrow_c_stream__()
             c_arrow_stream = (
@@ -487,7 +497,11 @@ cdef class Column:
                 )
             result.col.swap(c_result)
 
-            return Column.from_column_view_of_arbitrary(result.col.get().view(), result)
+            return Column.from_column_view_of_arbitrary(
+                result.col.get().view(),
+                result,
+                stream,
+            )
         elif hasattr(obj, "__arrow_c_device_stream__"):
             # TODO: When we add support for this case, it should be moved above
             # the __arrow_c_array__ case since we should prioritize device
@@ -713,7 +727,11 @@ cdef class Column:
     # from_column_view, but this does not work due to
     # https://github.com/cython/cython/issues/6740
     @staticmethod
-    cdef Column from_column_view_of_arbitrary(const column_view& cv, object owner):
+    cdef Column from_column_view_of_arbitrary(
+        const column_view& cv,
+        object owner,
+        Stream stream,
+    ):
         """Create a Column from a libcudf column_view into an arbitrary owner.
 
         This method accepts shared ownership of the underlying data from the owner.
@@ -727,16 +745,19 @@ cdef class Column:
         """
         # For efficiency, prohibit calling this overload with a Column owner.
         assert not isinstance(owner, Column)
+        stream = _get_stream(stream)
 
         children = []
         cdef size_type i
         if cv.num_children() != 0:
             for i in range(cv.num_children()):
                 children.append(
-                    Column.from_column_view_of_arbitrary(cv.child(i), owner)
+                    Column.from_column_view_of_arbitrary(cv.child(i), owner, stream)
                 )
 
-        cdef gpumemoryview owning_data = gpumemoryview(OwnerWithCAI.create(cv, owner))
+        cdef gpumemoryview owning_data = gpumemoryview(
+            OwnerWithCAI.create(cv, owner, stream)
+        )
         cdef gpumemoryview owning_mask = None
         if cv.null_count() > 0:
             owning_mask = gpumemoryview(OwnerMaskWithCAI.create(cv, owner))
@@ -1324,10 +1345,10 @@ cdef class Column:
 
         return PyCapsule_New(<void*>raw_schema_ptr, 'arrow_schema', _release_schema)
 
-    def _to_host_array(self):
+    def _to_host_array(self, Stream stream):
         cdef ArrowArray* raw_host_array_ptr
         with nogil:
-            raw_host_array_ptr = to_arrow_host_raw(self.view())
+            raw_host_array_ptr = to_arrow_host_raw(self.view(), stream.view())
 
         return PyCapsule_New(<void*>raw_host_array_ptr, "arrow_array", _release_array)
 
@@ -1346,7 +1367,7 @@ cdef class Column:
         if requested_schema is not None:
             raise ValueError("pylibcudf.Column does not support alternative schema")
 
-        return self._to_schema(), self._to_host_array()
+        return self._to_schema(), self._to_host_array(_get_stream(None))
 
     def __arrow_c_device_array__(self, requested_schema=None, **kwargs):
         if requested_schema is not None:

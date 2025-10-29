@@ -28,6 +28,10 @@ cdef class Table:
     cdef Table from_table_view(const table_view& tv, Table owner)
 
     @staticmethod
-    cdef Table from_table_view_of_arbitrary(const table_view& tv, object owner)
+    cdef Table from_table_view_of_arbitrary(
+        const table_view& tv,
+        object owner,
+        Stream stream,
+    )
 
     cpdef list columns(self)

@@ -72,14 +72,20 @@ def test_base_stats_dataframescan(df, engine):
     # We need to use force=True to sample unique-value statistics,
     # because nothing in the query requires unique-value statistics.
     assert math.isclose(
-        source_info_x.unique_stats(force=True).count.value, row_count, rel_tol=5e-2
+        source_info_x.unique_stats(force=True).count.value,
+        row_count,
+        rel_tol=5e-2,
     )
     assert math.isclose(
-        source_info_x.unique_stats(force=True).fraction.value, 1.0, abs_tol=1e-2
+        source_info_x.unique_stats(force=True).fraction.value,
+        1.0,
+        abs_tol=1e-2,
     )
     assert not source_info_x.unique_stats(force=True).count.exact
     assert math.isclose(
-        source_info_y.unique_stats(force=True).count.value, 3, rel_tol=5e-2
+        source_info_y.unique_stats(force=True).count.value,
+        3,
+        rel_tol=5e-2,
     )
     assert math.isclose(
         source_info_y.unique_stats(force=True).fraction.value,
@@ -88,7 +94,9 @@ def test_base_stats_dataframescan(df, engine):
     )
     assert not source_info_y.unique_stats(force=True).count.exact
     assert math.isclose(
-        source_info_z.unique_stats(force=True).count.value, 5, rel_tol=5e-2
+        source_info_z.unique_stats(force=True).count.value,
+        5,
+        rel_tol=5e-2,
     )
     assert math.isclose(
         source_info_z.unique_stats(force=True).fraction.value,
