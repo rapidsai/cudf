@@ -4647,7 +4647,7 @@ Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv* env,
     // If the `jvalue_indices` is null, uses all_columns - key_columns as value columns;
     // If the `jvalue_indices` is not null, use the `jvalue_indices` columns as value columns.
     std::vector<cudf::size_type> value_indices;
-    auto num_value_cols = [&]() {
+    auto num_value_cols = [&]() -> size_t {
       if (jvalue_indices == NULL) {
         // if a column is not in key columns, then it's a value column
         auto num_v_cols = static_cast<size_t>(input_table->num_columns()) - key_indices.size();
@@ -4676,13 +4676,22 @@ Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv* env,
     // execute grouping
     cudf::groupby::groupby::groups groups = grouper.get_groups(values_view);
 
-    std::vector<cudf::column_view> grouped_cols;
+    auto num_grouped_cols = [&]() -> size_t {
+      if (jvalue_indices == NULL) {
+        // output both key columns and value columns
+        return key_indices.size() + num_value_cols;
+      } else {
+        // only output value columns
+        return num_value_cols;
+      }
+    }();
+
+    std::vector<cudf::column_view> grouped_cols(num_grouped_cols);
     [&]() -> void {
       if (jvalue_indices == NULL) {
         grouped_cols.reserve(key_indices.size() + num_value_cols);
         // When builds the table view from keys and values of 'groups', restores the
         // original order of columns (same order with that in input table).
-        std::vector<cudf::column_view> grouped_cols(key_indices.size() + num_value_cols);
         // key columns
         auto key_view    = groups.keys->view();
         auto key_view_it = key_view.begin();
@@ -4703,7 +4712,7 @@ Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv* env,
         auto value_view    = groups.values->view();
         auto value_view_it = value_view.begin();
         for (size_t i = 0; i < num_value_cols; ++i) {
-          grouped_cols.emplace_back(std::move(*value_view_it));
+          grouped_cols.at(i) = std::move(*value_view_it);
           value_view_it++;
         }
       }
