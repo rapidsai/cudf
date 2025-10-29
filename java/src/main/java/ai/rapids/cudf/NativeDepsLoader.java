@@ -159,6 +159,24 @@ public class NativeDepsLoader {
   }
 
   /**
+   * Optionally load native dependencies. This method attempts to load the specified libraries
+   * but does not throw exceptions on failure. Instead, it returns true if all libraries were
+   * loaded successfully, false otherwise.
+   * @param loadOrder the base name of the libraries. For example libfoo.so would be passed in as
+   *                  "foo". The libraries are loaded in the order provided.
+   * @return true if all libraries were loaded successfully, false otherwise
+   */
+  public static boolean loadOptionalNativeDeps(String[] loadOrder) {
+    try {
+      loadNativeDeps(loadOrder, preserveDepsAfterLoad);
+      return true;
+    } catch (Throwable t) {
+      log.debug("Could not load optional native dependencies: " + t.getMessage());
+      return false;
+    }
+  }
+
+  /**
    * Load native dependencies in stages, where the dependency libraries in each stage
    * are loaded only after all libraries in earlier stages have completed loading.
    * @param loadOrder array of stages with an array of dependency library names in each stage
