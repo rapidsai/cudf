@@ -868,15 +868,15 @@ def date_range(
     if isinstance(freq, DateOffset):
         offset = freq
     elif isinstance(freq, str):
-        offset = pd.tseries.frequencies.to_offset(freq)
+        pd_offset = pd.tseries.frequencies.to_offset(freq)
         if not isinstance(
-            offset, (pd.tseries.offsets.Tick, pd.tseries.offsets.Week)
+            pd_offset, (pd.tseries.offsets.Tick, pd.tseries.offsets.Week)
         ):
             raise ValueError(
                 f"Unrecognized frequency string {freq}. cuDF does "
                 "not yet support month, quarter, year-anchored frequency."
             )
-        offset = DateOffset._from_pandas_ticks_or_weeks(offset)
+        offset = DateOffset._from_pandas_ticks_or_weeks(pd_offset)
     else:
         raise TypeError("`freq` must be a `str` or cudf.DateOffset object.")
 
