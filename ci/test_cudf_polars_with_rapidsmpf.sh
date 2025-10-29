@@ -17,9 +17,6 @@ PYLIBCUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}"
 
 rapids-logger "Installing cudf_polars and its dependencies (including rapidsmpf)"
 
-# generate constraints (includes rapidsmpf from nightly)
-rapids-generate-pip-constraints test_python_cudf_polars_rapidsmpf ./constraints.txt
-
 rapids-pip-retry install \
     -v \
     --constraint ./constraints.txt \
