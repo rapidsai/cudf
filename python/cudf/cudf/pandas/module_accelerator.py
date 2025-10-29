@@ -405,6 +405,13 @@ class ModuleAccelerator(ModuleAcceleratorBase):
         for mod in sys.modules.copy():
             if mod.startswith(self.slow_lib):
                 if mod == "pandas._config.config":
+                    # Since it is possible for state to diverge between the proxy and real
+                    # module, we skip wrapping this one entirely.
+                    # For example, running tests in pandas/tests/config/test_config.py
+                    # mutates internal globals like _registered_options on the proxy,
+                    # while register_option() reads them from the real module.
+                    # Therefore the two get out of sync and raise duplicate registration errors.
+                    # Keeping the real module here avoids that split state.
                     continue
                 sys.modules[self._module_cache_prefix + mod] = sys.modules[mod]
                 del sys.modules[mod]
