@@ -16,9 +16,13 @@ from __future__ import annotations
 from datetime import date
 from typing import TYPE_CHECKING
 
-import pandas as pd
+import cudf.pandas
 
-from cudf.pandas._benchmarks.utils import (
+cudf.pandas.install()
+
+import pandas as pd  # noqa: E402
+
+from cudf.pandas._benchmarks.utils import (  # noqa: E402
     get_data,
     run_pandas,
 )
@@ -250,6 +254,65 @@ class PDSHQueries:
         filt = filt[filt["l_quantity"] < var5]
         result_value = (filt["l_extendedprice"] * filt["l_discount"]).sum()
         return pd.DataFrame({"revenue": [result_value]})
+
+    @staticmethod
+    def q7(run_config: RunConfig) -> pd.DataFrame:
+        """Query 7."""
+        customer = get_data(
+            run_config.dataset_path, "customer", run_config.suffix
+        )
+        lineitem = get_data(
+            run_config.dataset_path, "lineitem", run_config.suffix
+        )
+        nation = get_data(run_config.dataset_path, "nation", run_config.suffix)
+        orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
+        supplier = get_data(
+            run_config.dataset_path, "supplier", run_config.suffix
+        )
+
+        var1 = "FRANCE"
+        var2 = "GERMANY"
+        var3 = date(1995, 1, 1)
+        var4 = date(1996, 12, 31)
+
+        n1 = nation[(nation["n_name"] == var1)]
+        n2 = nation[(nation["n_name"] == var2)]
+
+        # Part 1
+        jn1 = customer.merge(n1, left_on="c_nationkey", right_on="n_nationkey")
+        jn2 = jn1.merge(orders, left_on="c_custkey", right_on="o_custkey")
+        jn2 = jn2.rename(columns={"n_name": "cust_nation"})
+        jn3 = jn2.merge(lineitem, left_on="o_orderkey", right_on="l_orderkey")
+        jn4 = jn3.merge(supplier, left_on="l_suppkey", right_on="s_suppkey")
+        jn5 = jn4.merge(n2, left_on="s_nationkey", right_on="n_nationkey")
+        df1 = jn5.rename(columns={"n_name": "supp_nation"})
+
+        # Part 2
+        jn1 = customer.merge(n2, left_on="c_nationkey", right_on="n_nationkey")
+        jn2 = jn1.merge(orders, left_on="c_custkey", right_on="o_custkey")
+        jn2 = jn2.rename(columns={"n_name": "cust_nation"})
+        jn3 = jn2.merge(lineitem, left_on="o_orderkey", right_on="l_orderkey")
+        jn4 = jn3.merge(supplier, left_on="l_suppkey", right_on="s_suppkey")
+        jn5 = jn4.merge(n1, left_on="s_nationkey", right_on="n_nationkey")
+        df2 = jn5.rename(columns={"n_name": "supp_nation"})
+
+        # Combine
+        total = pd.concat([df1, df2])
+
+        total = total[
+            (total["l_shipdate"] >= var3) & (total["l_shipdate"] <= var4)
+        ]
+        total["volume"] = total["l_extendedprice"] * (
+            1.0 - total["l_discount"]
+        )
+        total["l_year"] = total["l_shipdate"].dt.year
+
+        gb = total.groupby(
+            ["supp_nation", "cust_nation", "l_year"], as_index=False
+        )
+        agg = gb.agg(revenue=pd.NamedAgg(column="volume", aggfunc="sum"))
+
+        return agg.sort_values(by=["supp_nation", "cust_nation", "l_year"])
 
 
 if __name__ == "__main__":
