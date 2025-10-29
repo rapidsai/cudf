@@ -8,7 +8,8 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
-from rapidsmpf.buffer.resource import BufferResource
+from rapidsmpf.buffer.buffer import MemoryType
+from rapidsmpf.buffer.resource import BufferResource, LimitAvailableMemory
 from rapidsmpf.communicator.single import new_communicator
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
@@ -90,10 +91,23 @@ def evaluate_logical_plan(
     # TODO: Need a way to configure options specific to the rapidmspf engine.
     options = Options(get_environment_variables())
     comm = new_communicator(options)
-    # TODO: Use CudaAsyncMemoryResource when spilling is supported
     mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
-    br = BufferResource(mr)
     rmm.mr.set_current_device_resource(mr)
+    memory_available: MutableMapping[MemoryType, LimitAvailableMemory] | None = None
+    single_spill_device = options.get_or_default(
+        # For now, spilling can be enabled via the env
+        # variable RAPIDSMPF_POLARS_SINGLE_SPILL_DEVICE
+        "polars_single_spill_device",
+        default_value=1.0,
+    )
+    if single_spill_device > 0.0 and single_spill_device < 1.0:
+        total_memory = rmm.mr.available_device_memory()[1]
+        memory_available = {
+            MemoryType.DEVICE: LimitAvailableMemory(
+                mr, limit=int(total_memory * single_spill_device)
+            )
+        }
+    br = BufferResource(mr, memory_available=memory_available)
     rmpf_context = Context(comm, br, options)
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cpse")
 
