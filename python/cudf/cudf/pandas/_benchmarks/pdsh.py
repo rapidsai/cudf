@@ -164,6 +164,33 @@ class PDSHQueries:
         )
         return sorted_df.head(10)
 
+    @staticmethod
+    def q4(run_config: RunConfig) -> pd.DataFrame:
+        """Query 4."""
+        lineitem = get_data(
+            run_config.dataset_path, "lineitem", run_config.suffix
+        )
+        orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
+
+        var1 = date(1993, 7, 1)
+        var2 = date(1993, 10, 1)
+
+        jn = lineitem.merge(
+            orders, left_on="l_orderkey", right_on="o_orderkey"
+        )
+
+        jn = jn[(jn["o_orderdate"] >= var1) & (jn["o_orderdate"] < var2)]
+        jn = jn[jn["l_commitdate"] < jn["l_receiptdate"]]
+
+        jn = jn.drop_duplicates(subset=["o_orderpriority", "l_orderkey"])
+
+        gb = jn.groupby("o_orderpriority", as_index=False)
+        agg = gb.agg(
+            order_count=pd.NamedAgg(column="o_orderkey", aggfunc="count")
+        )
+
+        return agg.sort_values(["o_orderpriority"])
+
 
 if __name__ == "__main__":
     run_pandas(PDSHQueries)
