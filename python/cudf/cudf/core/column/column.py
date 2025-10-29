@@ -2635,8 +2635,13 @@ def build_column(
     dtype
         The dtype associated with the Column to construct
     size : int, optional
+        The size of the column.
     offset : int, optional
+        The offset of the column.
     null_count : int, optional
+        The number of nulls in the column.
+    exposed : bool, optional
+        Whether the data buffers of the plc_column are exposed.
     """
     if isinstance(dtype, CategoricalDtype):
         return cudf.core.column.CategoricalColumn(
