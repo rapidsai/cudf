@@ -121,7 +121,10 @@ class DataSourceInfo:
         """Data source row-count estimate."""
         raise NotImplementedError("Sub-class must implement row_count.")
 
-    def unique_stats(self, column: str) -> UniqueStats:  # pragma: no cover
+    def unique_stats(
+        self,
+        column: str,
+    ) -> UniqueStats:  # pragma: no cover
         """Return unique-value statistics for a column."""
         raise NotImplementedError("Sub-class must implement unique_stats.")
 
