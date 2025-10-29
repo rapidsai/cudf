@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Sequence
+from typing import Any
 
 import cupy
 import numpy as np
@@ -200,6 +201,8 @@ def cut(
         closed = "left"
         left_inclusive = True
 
+    # interval_labels can be many different types (IntervalIndex, CategoricalIndex, labels, None)
+    interval_labels: Any
     if isinstance(bins, pd.IntervalIndex):
         interval_labels = bins
     elif labels is None:
