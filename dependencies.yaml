@@ -345,7 +345,9 @@ files:
   test_python_cudf_polars_rapidsmpf:
     output: none
     includes:
-      - py_test_cudf_polars
+      - numpy_run
+      - test_python_common
+      - test_python_cudf_polars
       - depends_on_rapidsmpf
   py_trace_cudf_polars:
     output: pyproject
