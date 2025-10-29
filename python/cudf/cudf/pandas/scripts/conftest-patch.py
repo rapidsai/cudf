@@ -4150,18 +4150,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/frame/methods/test_describe.py::TestDataFrameDescribe::test_describe_datetime_columns",
     "tests/frame/methods/test_diff.py::TestDataFrameDiff::test_diff_all_int_dtype[int16]",
     "tests/frame/methods/test_diff.py::TestDataFrameDiff::test_diff_all_int_dtype[int8]",
-    "tests/frame/methods/test_dot.py::TestDataFrameDot::test_dot_1d_ndarray",
-    "tests/frame/methods/test_dot.py::TestDataFrameDot::test_dot_2d_ndarray",
-    "tests/frame/methods/test_dot.py::TestDataFrameDot::test_dot_aligns",
-    "tests/frame/methods/test_dot.py::TestDataFrameDot::test_dot_equiv_values_dot",
-    "tests/frame/methods/test_dot.py::TestDataFrameDot::test_dot_series",
-    "tests/frame/methods/test_dot.py::TestDataFrameDot::test_dot_series_alignment",
-    "tests/frame/methods/test_dot.py::TestSeriesDot::test_dot_1d_ndarray",
-    "tests/frame/methods/test_dot.py::TestSeriesDot::test_dot_2d_ndarray",
-    "tests/frame/methods/test_dot.py::TestSeriesDot::test_dot_aligns",
-    "tests/frame/methods/test_dot.py::TestSeriesDot::test_dot_equiv_values_dot",
-    "tests/frame/methods/test_dot.py::TestSeriesDot::test_dot_series",
-    "tests/frame/methods/test_dot.py::TestSeriesDot::test_dot_series_alignment",
     "tests/frame/methods/test_drop.py::TestDataFrameDrop::test_drop",
     "tests/frame/methods/test_drop.py::TestDataFrameDrop::test_drop_multiindex_not_lexsorted",
     "tests/frame/methods/test_drop.py::TestDataFrameDrop::test_drop_multiindex_other_level_nan",
@@ -12745,6 +12733,10 @@ NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS = {
     "tests/indexing/test_loc.py::TestLocSetitemWithExpansion::test_loc_setitem_with_expansion_nonunique_index[nullable_int]",
     "tests/reshape/merge/test_multi.py::TestMergeMulti::test_merge_na_keys",
     "tests/series/test_constructors.py::TestSeriesConstructors::test_constructor_maskedarray_hardened",
+    # We accelerate np.dot via cupy.dot when the proxy array inputs are backed by real
+    # cupy arrays. So it is possible for tests asserting equality like test_dot_2d_ndarray
+    # fail due to tiny FP differences.
+    "tests/frame/methods/test_dot.py::TestSeriesDot::test_dot_2d_ndarray",
 }
 
 

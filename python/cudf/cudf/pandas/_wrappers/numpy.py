@@ -9,8 +9,11 @@ import numpy
 from packaging import version
 
 from ..fast_slow_proxy import (
+    _fast_arg,
     _fast_slow_function_call,
     _FastSlowAttribute,
+    _maybe_wrap_result,
+    _slow_arg,
     is_proxy_object,
     make_final_proxy_type,
     make_intermediate_proxy_type,
@@ -146,6 +149,38 @@ def ndarray__reduce__(self):
     )
 
 
+def _is_cupy_or_cupy_backed_array(x) -> bool:
+    return isinstance(x, cupy.ndarray) or (
+        is_proxy_object(x) and isinstance(x._fsproxy_wrapped, cupy.ndarray)
+    )
+
+
+def ndarray__array_function__(self, func, types, args, kwargs):
+    name = func.__name__
+    try:
+        cupy_func = getattr(cupy, name)
+    except AttributeError:
+        if getattr(func, "__module__", "").startswith("numpy.linalg"):
+            cupy_func = getattr(cupy.linalg, name, None)
+        else:
+            cupy_func = None
+
+    if cupy_func is not None and all(
+        _is_cupy_or_cupy_backed_array(a) for a in args
+    ):
+        fast_args, fast_kwargs = _fast_arg(args), _fast_arg(kwargs)
+        if name == "fft":
+            cupy_func = cupy_func.fft
+        return _maybe_wrap_result(
+            cupy_func(*fast_args, **fast_kwargs), func, *args, **kwargs
+        )
+
+    slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
+    return _maybe_wrap_result(
+        func(*slow_args, **slow_kwargs), func, *args, **kwargs
+    )
+
+
 ndarray = make_final_proxy_type(
     "ndarray",
     cupy.ndarray,
@@ -155,6 +190,7 @@ ndarray = make_final_proxy_type(
     bases=(ProxyNDarrayBase,),
     additional_attributes={
         "__array__": array_method,
+        "__array_function__": ndarray__array_function__,
         # So that pa.array(wrapped-numpy-array) works
         "__arrow_array__": arrow_array_method,
         "__cuda_array_interface__": cuda_array_interface,
