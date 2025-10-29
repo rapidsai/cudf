@@ -369,6 +369,43 @@ class PDSHQueries:
         agg.columns = ["o_year", "mkt_share"]
         return agg.sort_values("o_year")
 
+    @staticmethod
+    def q9(run_config: RunConfig) -> pd.DataFrame:
+        """Query 9."""
+        path = run_config.dataset_path
+        suffix = run_config.suffix
+        lineitem = get_data(path, "lineitem", suffix)
+        nation = get_data(path, "nation", suffix)
+        orders = get_data(path, "orders", suffix)
+        part = get_data(path, "part", suffix)
+        partsupp = get_data(path, "partsupp", suffix)
+        supplier = get_data(path, "supplier", suffix)
+
+        jn1 = part.merge(partsupp, left_on="p_partkey", right_on="ps_partkey")
+        jn2 = jn1.merge(supplier, left_on="ps_suppkey", right_on="s_suppkey")
+        jn3 = jn2.merge(
+            lineitem,
+            left_on=["p_partkey", "ps_suppkey"],
+            right_on=["l_partkey", "l_suppkey"],
+        )
+        jn4 = jn3.merge(orders, left_on="l_orderkey", right_on="o_orderkey")
+        jn5 = jn4.merge(nation, left_on="s_nationkey", right_on="n_nationkey")
+
+        jn5 = jn5[jn5["p_name"].str.contains("green", regex=False)]
+
+        jn5["o_year"] = jn5["o_orderdate"].dt.year
+        jn5["amount"] = jn5["l_extendedprice"] * (1.0 - jn5["l_discount"]) - (
+            jn5["ps_supplycost"] * jn5["l_quantity"]
+        )
+        jn5 = jn5.rename(columns={"n_name": "nation"})
+
+        gb = jn5.groupby(["nation", "o_year"], as_index=False, sort=False)
+        agg = gb.agg(sum_profit=pd.NamedAgg(column="amount", aggfunc="sum"))
+        sorted_df = agg.sort_values(
+            by=["nation", "o_year"], ascending=[True, False]
+        )
+        return sorted_df.reset_index(drop=True)
+
 
 if __name__ == "__main__":
     run_pandas(PDSHQueries)
