@@ -343,11 +343,11 @@ metadata::metadata(datasource* source, bool read_page_indexes)
       int64_t const length = max_offset - min_offset;
       auto const idx_buf   = source->host_read(min_offset, length);
       // Flatten all columns into a single vector for easier task distribution
-      std::vector<std::reference_wrapper<ColumnChunk>> all_columns;
-      all_columns.reserve(row_groups.size() * row_groups.front().columns.size());
+      std::vector<std::reference_wrapper<ColumnChunk>> all_column_chunks;
+      all_column_chunks.reserve(row_groups.size() * row_groups.front().columns.size());
       for (auto& rg : row_groups) {
         for (auto& col : rg.columns) {
-          all_columns.emplace_back(std::ref(col));
+          all_column_chunks.emplace_back(std::ref(col));
         }
       }
 
@@ -369,36 +369,36 @@ metadata::metadata(datasource* source, bool read_page_indexes)
 
       // Use parallel processing only if we have enough columns to justify the overhead
       constexpr std::size_t parallel_threshold = 512;
-      auto const total_columns                 = all_columns.size();
-      if (total_columns >= parallel_threshold) {
+      auto const total_column_chunks           = all_column_chunks.size();
+      if (total_column_chunks >= parallel_threshold) {
         // Dynamically calculate number of tasks based the number or row groups and columns
         constexpr std::size_t min_tasks = 4;
         constexpr std::size_t max_tasks = 32;
-        auto const ratio                = static_cast<double>(total_columns) / parallel_threshold;
+        auto const ratio = static_cast<double>(total_column_chunks) / parallel_threshold;
         // Scale the number of tasks and task size evenly (e.g. quadrupling the number of elements
         // doubles both the number of tasks and the task size)
         auto const multiplier = std::size_t(1) << (static_cast<size_t>(std::log2(ratio)) / 2);
 
-        auto const num_tasks        = std::clamp(min_tasks * multiplier, min_tasks, max_tasks);
-        auto const columns_per_task = total_columns / num_tasks;
-        auto const remainder        = total_columns % num_tasks;
+        auto const num_tasks = std::clamp(min_tasks * multiplier, min_tasks, max_tasks);
+        auto const column_chunks_per_task = total_column_chunks / num_tasks;
+        auto const remainder              = total_column_chunks % num_tasks;
 
         std::vector<std::future<void>> tasks;
         tasks.reserve(num_tasks);
 
         std::size_t start_idx = 0;
         for (std::size_t task_id = 0; task_id < num_tasks; ++task_id) {
-          auto const task_size = columns_per_task + (task_id < remainder ? 1 : 0);
+          auto const task_size = column_chunks_per_task + (task_id < remainder ? 1 : 0);
           auto const end_idx   = start_idx + task_size;
 
-          if (start_idx >= total_columns) break;
+          if (start_idx >= total_column_chunks) break;
 
           tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
-            [&all_columns, &read_column_indexes, start_idx, end_idx]() {
+            [&all_column_chunks, &read_column_indexes, start_idx, end_idx]() {
               CompactProtocolReader local_cp;
 
-              for (size_t i = start_idx; i < end_idx && i < all_columns.size(); ++i) {
-                read_column_indexes(local_cp, all_columns[i].get());
+              for (size_t i = start_idx; i < end_idx && i < all_column_chunks.size(); ++i) {
+                read_column_indexes(local_cp, all_column_chunks[i].get());
               }
             }));
 
@@ -410,7 +410,7 @@ metadata::metadata(datasource* source, bool read_page_indexes)
         }
       } else {
         // For small numbers of columns, use sequential processing to avoid overhead
-        for (auto& col_ref : all_columns) {
+        for (auto& col_ref : all_column_chunks) {
           read_column_indexes(cp, col_ref.get());
         }
       }

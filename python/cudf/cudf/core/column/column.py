@@ -3300,7 +3300,16 @@ def as_column(
                     from_pandas=True,
                 )
             else:
-                if not isinstance(dtype, np.dtype):
+                if isinstance(
+                    dtype,
+                    (
+                        CategoricalDtype,
+                        DecimalDtype,
+                        IntervalDtype,
+                        ListDtype,
+                        StructDtype,
+                    ),
+                ):
                     dtype = dtype.to_pandas()
                 arbitrary = pd.Series(arbitrary, dtype=dtype)
         return as_column(arbitrary, nan_as_null=nan_as_null, dtype=dtype)

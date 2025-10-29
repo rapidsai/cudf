@@ -3554,7 +3554,7 @@ class IndexedFrame(Frame):
 
         # Mask and data column preallocated
         ans_col = _return_arr_from_dtype(retty, len(self))
-        ans_mask = as_column(True, length=len(self), dtype="bool")
+        ans_mask = as_column(True, length=len(self), dtype=np.dtype("bool"))
         output_args = [(ans_col, ans_mask), len(self)]
         input_args = _get_input_args_from_frame(self)
         launch_args = output_args + input_args + list(args)

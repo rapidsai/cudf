@@ -143,7 +143,9 @@ def initialize_column_stats(
 
 @singledispatch
 def update_column_stats(
-    ir: IR, stats: StatsCollector, config_options: ConfigOptions
+    ir: IR,
+    stats: StatsCollector,
+    config_options: ConfigOptions,
 ) -> None:
     """
     Finalize local column statistics for an IR node.
