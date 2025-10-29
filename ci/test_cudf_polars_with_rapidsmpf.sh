@@ -19,7 +19,6 @@ rapids-logger "Installing cudf_polars and its dependencies (including rapidsmpf)
 
 rapids-pip-retry install \
     -v \
-    --constraint ./constraints.txt \
     --constraint "${PIP_CONSTRAINT}" \
     "$(echo "${CUDF_POLARS_WHEELHOUSE}"/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,experimental,rapidsmpf]" \
     "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
