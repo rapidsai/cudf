@@ -294,8 +294,8 @@ class TimeDeltaColumn(TemporalBaseColumn):
             self.astype(self._UNDERLYING_DTYPE).sum(  # type: ignore[call-arg]
                 skipna=skipna, min_count=min_count
             ),
-            unit=self.time_unit,
-        ).as_unit(self.time_unit)
+            unit=self.time_unit,  # type: ignore[arg-type]
+        ).as_unit(self.time_unit)  # type: ignore[arg-type]
 
     @functools.cached_property
     def components(self) -> dict[str, NumericalColumn]:

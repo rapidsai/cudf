@@ -1,5 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -353,7 +352,7 @@ class NumericalColumn(NumericalBaseColumn):
         )
         rhs_binaryop: plc.Scalar | ColumnBase = (
             pa_scalar_to_plc_scalar(rhs) if isinstance(rhs, pa.Scalar) else rhs
-        )
+        )  # type: ignore[assignment]
 
         res = binaryop.binaryop(lhs_binaryop, rhs_binaryop, op, out_dtype)
         if (
@@ -557,9 +556,9 @@ class NumericalColumn(NumericalBaseColumn):
             if (
                 not is_pandas_nullable_extension_dtype(self.dtype)
                 and is_pandas_nullable_extension_dtype(dtype)
-                and dtype.kind == "f"
+                and dtype.kind == "f"  # type: ignore[union-attr]
             ):
-                res = self.nans_to_nulls().cast(dtype=dtype)
+                res = self.nans_to_nulls().cast(dtype=dtype)  # type: ignore[return-value]
                 res._dtype = dtype
                 return res  # type: ignore[return-value]
             if dtype_to_pylibcudf_type(dtype) == dtype_to_pylibcudf_type(
@@ -578,7 +577,7 @@ class NumericalColumn(NumericalBaseColumn):
                     res._dtype = dtype
                     return res
                 else:
-                    self._dtype = dtype
+                    self._dtype = dtype  # type: ignore[assignment]
                     return self
             if self.dtype.kind == "f" and dtype.kind in "iu":  # type: ignore[union-attr]
                 if (
@@ -589,8 +588,8 @@ class NumericalColumn(NumericalBaseColumn):
                         "Cannot convert non-finite values (NA or inf) to integer"
                     )
                 # If casting from float to int, we need to convert nans to nulls
-                res = self.nans_to_nulls().cast(dtype=dtype)
-                res._dtype = dtype
+                res = self.nans_to_nulls().cast(dtype=dtype)  # type: ignore[arg-type]
+                res._dtype = dtype  # type: ignore[assignment]
                 return res  # type: ignore[return-value]
 
         return self.cast(dtype=dtype)  # type: ignore[return-value]
@@ -774,7 +773,7 @@ class NumericalColumn(NumericalBaseColumn):
             return super()._validate_fillna_value(fill_value)
         else:
             cudf_obj = as_column(fill_value, nan_as_null=False)
-            if not cudf_obj.can_cast_safely(self.dtype):
+            if not cudf_obj.can_cast_safely(self.dtype):  # type: ignore[attr-defined]
                 raise TypeError(
                     f"Cannot safely cast non-equivalent "
                     f"{cudf_obj.dtype.type.__name__} to "
@@ -975,7 +974,7 @@ class NumericalColumn(NumericalBaseColumn):
         if bin_col.nullable:
             raise ValueError("`bins` cannot contain null entries.")
 
-        return type(self).from_pylibcudf(
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
             getattr(plc.search, "lower_bound" if right else "upper_bound")(
                 plc.Table([bin_col.to_pylibcudf(mode="read")]),
                 plc.Table([self.to_pylibcudf(mode="read")]),

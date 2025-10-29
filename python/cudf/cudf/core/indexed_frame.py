@@ -7021,7 +7021,7 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
                 # If the column is all nulls, we can use the column dtype
                 # to avoid unnecessary casting.
                 val_col = val_col.astype(col.dtype)
-        to_type = find_common_type([val_col.dtype, col.dtype])
+        to_type: DtypeObj | None = find_common_type([val_col.dtype, col.dtype])
         if (
             cudf.get_option("mode.pandas_compatible")
             and is_string_dtype(to_type)

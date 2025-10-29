@@ -5221,9 +5221,9 @@ class IntervalIndex(Index):
 
         if len(data) == 0:
             if not hasattr(data, "dtype"):
-                child_type: Dtype = np.dtype(np.int64)
+                child_type: Dtype | None = np.dtype(np.int64)
             elif isinstance(data.dtype, (pd.IntervalDtype, IntervalDtype)):
-                child_type = data.dtype.subtype
+                child_type = data.dtype.subtype  # type: ignore[assignment]
             else:
                 child_type = data.dtype
             child_plc_type = dtype_to_pylibcudf_type(child_type)

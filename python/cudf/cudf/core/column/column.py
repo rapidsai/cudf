@@ -2411,6 +2411,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 other_out = other_col.astype(self.dtype)
             return self, other_out
 
+        common_dtype: DtypeObj | None
         if is_dtype_obj_numeric(
             self.dtype, include_decimal=False
         ) and as_column(other).can_cast_safely(self.dtype):

@@ -291,7 +291,7 @@ class ColumnAccessor(MutableMapping):
                 pass
 
     @cached_property
-    def to_pandas_index(self) -> pd.Index:
+    def to_pandas_index(self) -> pd.Index | pd.MultiIndex:
         """Convert the keys of the ColumnAccessor to a Pandas Index object."""
         if self.multiindex and len(self.level_names) > 0:
             result = pd.MultiIndex.from_tuples(

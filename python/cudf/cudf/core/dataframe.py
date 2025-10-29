@@ -7540,11 +7540,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         )
 
         if has_unnamed_levels:
-            unnamed_level_values = pd.MultiIndex.from_arrays(
-                list(
-                    map(
-                        column_name_idx.get_level_values,
-                        unnamed_levels_indices,
+            unnamed_level_values: pd.Index | pd.MultiIndex = (
+                pd.MultiIndex.from_arrays(
+                    list(
+                        map(
+                            column_name_idx.get_level_values,
+                            unnamed_levels_indices,
+                        )
                     )
                 )
             )

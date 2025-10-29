@@ -173,7 +173,7 @@ class DatetimeColumn(TemporalBaseColumn):
 
     def __contains__(self, item: ScalarLike) -> bool:
         try:
-            ts = self._PD_SCALAR(item).as_unit(self.time_unit)
+            ts = self._PD_SCALAR(item).as_unit(self.time_unit)  # type: ignore[arg-type]
         except Exception:
             # pandas can raise a variety of errors
             # item cannot exist in self.

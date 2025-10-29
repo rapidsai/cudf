@@ -635,7 +635,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             if ncol == 1:
                 to_dtype = next(self._dtypes)[1]
             else:
-                to_dtype = find_common_type(
+                to_dtype: DtypeObj | None = find_common_type(
                     [dtype for _, dtype in self._dtypes]
                 )
                 if to_dtype is not None and any(
