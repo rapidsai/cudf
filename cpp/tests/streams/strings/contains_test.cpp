@@ -35,7 +35,8 @@ TEST_F(StringsContainsTest, Like)
   auto const escape  = std::string_view("%");
   cudf::strings::like(view, pattern, escape, cudf::test::get_default_stream());
 
+  auto const s_escape = cudf::string_scalar(escape, true, cudf::test::get_default_stream());
   auto const patterns = cudf::test::strings_column_wrapper({"H%", "t%s", "t", ""});
   cudf::strings::like(
-    view, cudf::strings_column_view(patterns), escape, cudf::test::get_default_stream());
+    view, cudf::strings_column_view(patterns), s_escape, cudf::test::get_default_stream());
 }
