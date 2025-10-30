@@ -11,6 +11,7 @@ from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
 from functools import singledispatch
+import warnings
 
 from pylibcudf.libcudf.interop cimport (
     DLManagedTensor,
@@ -46,6 +47,24 @@ __all__ = [
 ]
 
 
+def _deprecated_to_arrow_warning():
+    warnings.warn(
+        "pylibcudf.interop.to_arrow is deprecated; call the object's .to_arrow(...) "
+        "method instead (e.g., Table.to_arrow, Column.to_arrow, etc.).",
+        FutureWarning,
+        stacklevel=2,
+    )
+
+
+def _deprecated_from_arrow_warning():
+    warnings.warn(
+        "pylibcudf.interop.from_arrow is deprecated; use class methods instead "
+        "(e.g., Table.from_arrow, Column.from_arrow, etc.).",
+        FutureWarning,
+        stacklevel=2,
+    )
+
+
 @singledispatch
 def from_arrow(pyarrow_object, *, DataType data_type=None):
     """Create a cudf object from a pyarrow object.
@@ -66,6 +85,7 @@ def from_arrow(pyarrow_object, *, DataType data_type=None):
             "pip install pylibcudf with the [pyarrow] extra for a "
             "compatible pyarrow version."
         ) from pa_err
+    _deprecated_from_arrow_warning()
     raise TypeError(
         f"Unsupported type {type(pyarrow_object)} for conversion from arrow"
     )
@@ -93,16 +113,19 @@ def to_arrow(plc_object, **kwargs):
             "pip install pylibcudf with the [pyarrow] extra for a "
             "compatible pyarrow version."
         ) from pa_err
+    _deprecated_to_arrow_warning()
     raise TypeError(f"Unsupported type {type(plc_object)} for conversion to arrow")
 
 
 if pa is not None:
     @from_arrow.register(pa.DataType)
     def _from_arrow_datatype(pyarrow_object):
+        _deprecated_from_arrow_warning()
         return DataType.from_arrow(pyarrow_object)
 
     @from_arrow.register(pa.Table)
     def _from_arrow_table(pyarrow_object, *, DataType data_type=None):
+        _deprecated_from_arrow_warning()
         return Table.from_arrow(pyarrow_object, dtype=data_type)
 
     @from_arrow.register(pa.Scalar)
@@ -112,29 +135,35 @@ if pa is not None:
         DataType data_type=None,
         Stream stream = None
     ):
+        _deprecated_from_arrow_warning()
         return Scalar.from_arrow(pyarrow_object, dtype=data_type, stream=stream)
 
     @from_arrow.register(pa.Array)
     def _from_arrow_column(pyarrow_object, *, DataType data_type=None):
+        _deprecated_from_arrow_warning()
         return Column.from_arrow(pyarrow_object, dtype=data_type)
 
     @to_arrow.register(DataType)
     def _to_arrow_datatype(plc_object, **kwargs):
         """Convert a datatype to arrow."""
+        _deprecated_to_arrow_warning()
         return plc_object.to_arrow(**kwargs)
 
     @to_arrow.register(Table)
     def _to_arrow_table(plc_object, metadata=None):
         """Create a PyArrow table from a pylibcudf table."""
+        _deprecated_to_arrow_warning()
         return plc_object.to_arrow(metadata=metadata)
 
     @to_arrow.register(Column)
     def _to_arrow_array(plc_object, metadata=None):
         """Create a PyArrow array from a pylibcudf column."""
+        _deprecated_to_arrow_warning()
         return plc_object.to_arrow(metadata=metadata)
 
     @to_arrow.register(Scalar)
     def _to_arrow_scalar(plc_object, metadata=None):
+        _deprecated_to_arrow_warning()
         return plc_object.to_arrow(metadata=metadata)
 
 
