@@ -175,9 +175,12 @@ def ndarray__array_function__(self, func, types, args, kwargs):
         fast_args, fast_kwargs = _fast_arg(args), _fast_arg(kwargs)
         if name == "fft":
             cupy_func = cupy_func.fft
-        return _maybe_wrap_result(
-            cupy_func(*fast_args, **fast_kwargs), func, *args, **kwargs
-        )
+        try:
+            res = cupy_func(*fast_args, **fast_kwargs)
+        except NotImplementedError:
+            slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
+            res = func(*slow_args, **slow_kwargs)
+        return _maybe_wrap_result(res, func, *args, **kwargs)
 
     slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
     return _maybe_wrap_result(
