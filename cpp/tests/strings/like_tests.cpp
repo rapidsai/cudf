@@ -157,10 +157,36 @@ TEST_F(StringsLikeTests, Middle)
   results  = cudf::strings::like(sv_big, std::string_view("%aaa%bbb%fff"));
   expected = cudf::test::fixed_width_column_wrapper<bool>({false, false, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+}
 
-  results = cudf::strings::like(
-    sv_big,
-    std::string_view("%aaabbb67890aaa45678901234567890123456789012345678901234567890123456789%"));
+TEST_F(StringsLikeTests, MiddleOnly)
+{
+  auto input =
+    cudf::test::strings_column_wrapper({"a", "aa", "aaa", "b", "bb", "bba", "", "ábéêú"});
+  auto const sv = cudf::strings_column_view(input);
+
+  auto results  = cudf::strings::like(sv, std::string_view("%a%"));
+  auto expected = cudf::test::fixed_width_column_wrapper<bool>(
+    {true, true, true, false, false, true, false, false});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+
+  results  = cudf::strings::like(sv, std::string_view("%á%ê%ú%"));
+  expected = cudf::test::fixed_width_column_wrapper<bool>(
+    {false, false, false, false, false, false, false, true});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+
+  auto big = cudf::test::strings_column_wrapper(
+    {"bcdéfghijklmnopqrstuvwxyz0123456789aBCDEFGHIJKLMNOPQRSTUVWXYZáéêúa",
+     "ábcdêfghijklmnopqrstúvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZáéêú",
+     "0123456789aaabbb67890aaa45678901234567890123456789012345678901234567890123456789"
+     "01234567890123456789012345678901234567890123456789012345678901234567890123456fff"});
+  auto const sv_big = cudf::strings_column_view(big);
+
+  results  = cudf::strings::like(sv_big, std::string_view("%TUVWXYZá%"));
+  expected = cudf::test::fixed_width_column_wrapper<bool>({true, true, false});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+
+  results  = cudf::strings::like(sv_big, std::string_view("%aaa%bbb%fff%"));
   expected = cudf::test::fixed_width_column_wrapper<bool>({false, false, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
