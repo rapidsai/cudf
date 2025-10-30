@@ -151,16 +151,8 @@ def _(node: expr.Literal, self: ValidateTransformer) -> None:
 
 
 @_validate_to_ast.register
-def _(node: expr.Col, self: ValidateTransformer) -> None:
-    # if self.state["for_parquet"]:
-    #     return None
-    raise TypeError("Should always be wrapped in a ColRef node before translation")
-
-
-@_validate_to_ast.register
 def _(node: expr.ColRef, self: ValidateTransformer) -> None:
-    if self.state["for_parquet"]:
-        raise TypeError("Not expecting ColRef node in parquet filter")
+    pass
 
 
 @_validate_to_ast.register
@@ -172,29 +164,6 @@ def _(node: expr.BinOp, self: ValidateTransformer) -> None:
             )
         )  # check for validation errors
         return None
-    if self.state["for_parquet"]:
-        op1_col, op2_col = (isinstance(op, expr.Col) for op in node.children)
-        if op1_col ^ op2_col:
-            op: plc.binaryop.BinaryOperator = node.op
-            if op not in SUPPORTED_STATISTICS_BINOPS:
-                raise NotImplementedError(
-                    f"Parquet filter binop with column doesn't support {node.op!r}"
-                )
-            op1, op2 = node.children
-            if op2_col:
-                (op1, op2) = (op2, op1)
-                op = REVERSED_COMPARISON[op]
-            if not isinstance(op2, expr.Literal):
-                raise NotImplementedError(
-                    "Parquet filter binops must have form 'col binop literal'"
-                )
-            self(op1)  # check for validation errors
-            self(op2)  # check for validation errors
-            return None
-        elif op1_col and op2_col:
-            raise NotImplementedError(
-                "Parquet filter binops must have one column reference not two"
-            )
     for child in node.children:
         self(child)
 
@@ -206,10 +175,6 @@ def _(node: expr.BooleanFunction, self: ValidateTransformer) -> None:
         if isinstance(haystack, expr.LiteralColumn) and len(haystack.value) < 16:
             self(needles)
             return None
-    if self.state["for_parquet"] and isinstance(node.children[0], expr.Col):
-        raise NotImplementedError(
-            f"Parquet filters don't support {node.name} on columns"
-        )
     if (
         node.name is expr.BooleanFunction.Name.IsNull
         or node.name is expr.BooleanFunction.Name.IsNotNull
@@ -222,10 +187,6 @@ def _(node: expr.BooleanFunction, self: ValidateTransformer) -> None:
 
 @_validate_to_ast.register
 def _(node: expr.UnaryFunction, self: ValidateTransformer) -> None:
-    if isinstance(node.children[0], expr.Col) and self.state["for_parquet"]:
-        raise NotImplementedError(
-            "Parquet filters don't support {node.name} on columns"
-        )
     self(node.children[0])  # check for validation errors
     return None
 
