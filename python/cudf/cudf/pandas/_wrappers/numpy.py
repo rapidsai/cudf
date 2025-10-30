@@ -149,9 +149,13 @@ def ndarray__reduce__(self):
     )
 
 
-def _is_cupy_or_cupy_backed_array(x) -> bool:
-    return isinstance(x, cupy.ndarray) or (
-        is_proxy_object(x) and isinstance(x._fsproxy_wrapped, cupy.ndarray)
+def _is_cupy_backed_and_non_datetime_array(x) -> bool:
+    if is_proxy_object(x):
+        x = x._fsproxy_wrapped
+    return (
+        isinstance(x, cupy.ndarray)
+        and x.dtype is not None
+        and x.dtype.kind not in ("M", "m")
     )
 
 
@@ -166,7 +170,7 @@ def ndarray__array_function__(self, func, types, args, kwargs):
             cupy_func = None
 
     if cupy_func is not None and all(
-        _is_cupy_or_cupy_backed_array(a) for a in args
+        _is_cupy_backed_and_non_datetime_array(a) for a in args
     ):
         fast_args, fast_kwargs = _fast_arg(args), _fast_arg(kwargs)
         if name == "fft":
