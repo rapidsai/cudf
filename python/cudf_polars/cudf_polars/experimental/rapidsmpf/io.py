@@ -121,27 +121,36 @@ async def dataframescan_node(
                 )
             )
 
-        # Read data concurrently with Lineariser ensuring ordered delivery
-        lineariser = Lineariser(ch_out.data, len(ir_slices))
-
-        # Start the lineariser drain task
-        tasks = [lineariser.drain(context)]
-
-        # Start all read tasks
-        for seq_num, ir_slice in enumerate(ir_slices):
-            tasks.append(
-                read_chunk_linearised(
-                    context,
-                    io_throttle,
-                    ir_slice,
-                    seq_num,
-                    lineariser.get_input_queue(seq_num),
-                    ir_context,
+        # Read data
+        if max_io_threads == 1:
+            # Sequential execution - no need for Lineariser
+            for seq_num, ir_slice in enumerate(ir_slices):
+                await read_chunk(
+                    context, io_throttle, ir_slice, seq_num, ch_out.data, ir_context
                 )
-            )
+            await ch_out.data.drain(context)
+        else:
+            # Concurrent execution - use Lineariser to ensure ordered delivery
+            lineariser = Lineariser(ch_out.data, len(ir_slices))
 
-        # Wait for all tasks to complete
-        await asyncio.gather(*tasks)
+            # Start the lineariser drain task
+            tasks = [lineariser.drain(context)]
+
+            # Start all read tasks
+            for seq_num, ir_slice in enumerate(ir_slices):
+                tasks.append(
+                    read_chunk_linearised(
+                        context,
+                        io_throttle,
+                        ir_slice,
+                        seq_num,
+                        lineariser.get_input_queue(seq_num),
+                        ir_context,
+                    )
+                )
+
+            # Wait for all tasks to complete
+            await asyncio.gather(*tasks)
 
 
 @generate_ir_sub_network.register(DataFrameScan)
@@ -395,28 +404,37 @@ async def scan_node(
                     )
                 )
 
-        # Read data concurrently with Lineariser ensuring ordered delivery
+        # Read data
         io_throttle = asyncio.Semaphore(max_io_threads)
-        lineariser = Lineariser(ch_out.data, len(scans))
-
-        # Start the lineariser drain task
-        tasks = [lineariser.drain(context)]
-
-        # Start all read tasks
-        for seq_num, scan in enumerate(scans):
-            tasks.append(
-                read_chunk_linearised(
-                    context,
-                    io_throttle,
-                    scan,
-                    seq_num,
-                    lineariser.get_input_queue(seq_num),
-                    ir_context,
+        if max_io_threads == 1:
+            # Sequential execution - no need for Lineariser
+            for seq_num, scan in enumerate(scans):
+                await read_chunk(
+                    context, io_throttle, scan, seq_num, ch_out.data, ir_context
                 )
-            )
+            await ch_out.data.drain(context)
+        else:
+            # Concurrent execution - use Lineariser to ensure ordered delivery
+            lineariser = Lineariser(ch_out.data, len(scans))
 
-        # Wait for all tasks to complete
-        await asyncio.gather(*tasks)
+            # Start the lineariser drain task
+            tasks = [lineariser.drain(context)]
+
+            # Start all read tasks
+            for seq_num, scan in enumerate(scans):
+                tasks.append(
+                    read_chunk_linearised(
+                        context,
+                        io_throttle,
+                        scan,
+                        seq_num,
+                        lineariser.get_input_queue(seq_num),
+                        ir_context,
+                    )
+                )
+
+            # Wait for all tasks to complete
+            await asyncio.gather(*tasks)
 
 
 @generate_ir_sub_network.register(Scan)
