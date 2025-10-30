@@ -505,6 +505,8 @@ std::unique_ptr<table> filter(
  * The predicate can involve arbitrary column operations from both tables, enabling support
  * for "mixed join" workflows without materializing the full join table.
  *
+ * @throw std::invalid_argument if `left_indices` and `right_indices` have different sizes.
+ *
  * @code{.pseudo}
  * Left Table:  {{0, 1, 2}, {3, 4, 5}}
  * Right Table: {{1, 2, 3}, {4, 6, 7}}
@@ -523,8 +525,6 @@ std::unique_ptr<table> filter(
  *
  * @return A pair of device vectors [`filtered_left_indices`, `filtered_right_indices`]
  *         corresponding to rows that satisfy the predicate.
- *
- * @throw cudf::logic_error if `left_indices` and `right_indices` have different sizes.
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>

@@ -29,6 +29,7 @@
 #include <thrust/tuple.h>
 
 #include <memory>
+#include <stdexcept>
 #include <utility>
 
 namespace cudf {
@@ -46,7 +47,8 @@ filter_gather_map(cudf::table_view const& left,
 {
   // Validate inputs
   CUDF_EXPECTS(left_indices.size() == right_indices.size(),
-               "Left and right index arrays must have the same size");
+               "Left and right index arrays must have the same size",
+               std::invalid_argument);
 
   if (left_indices.empty()) {
     return std::make_pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),

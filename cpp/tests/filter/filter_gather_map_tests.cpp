@@ -425,12 +425,12 @@ TEST_F(FilterGatherMapTest, MismatchedSizes)
   auto const predicate =
     cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_left_0, col_ref_right_0);
 
-  // Should throw cudf::logic_error due to mismatched sizes
+  // Should throw std::invalid_argument due to mismatched sizes
   EXPECT_THROW(
     cudf::filter_gather_map(left_table,
                             right_table,
                             cudf::device_span<cudf::size_type const>(left_indices_input),
                             cudf::device_span<cudf::size_type const>(right_indices_input),
                             predicate),
-    cudf::logic_error);
+    std::invalid_argument);
 }
