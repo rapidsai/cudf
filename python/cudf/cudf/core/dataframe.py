@@ -6822,22 +6822,34 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         return df
 
     @_performance_tracking
-    def all(self, axis=0, bool_only=None, skipna=True, **kwargs):
+    def all(
+        self,
+        axis: Axis = 0,
+        bool_only: bool = False,
+        skipna: bool = True,
+        **kwargs,
+    ):
         obj = (
             self.select_dtypes(include=np.dtype(np.bool_))
             if bool_only
             else self
         )
-        return super(DataFrame, obj).all(axis, skipna, **kwargs)
+        return super(DataFrame, obj).all(axis, skipna, **kwargs)  # type: ignore[misc]
 
     @_performance_tracking
-    def any(self, axis=0, bool_only=None, skipna=True, **kwargs):
+    def any(
+        self,
+        axis: Axis = 0,
+        bool_only: bool = False,
+        skipna: bool = True,
+        **kwargs,
+    ):
         obj = (
             self.select_dtypes(include=np.dtype(np.bool_))
             if bool_only
             else self
         )
-        return super(DataFrame, obj).any(axis, skipna, **kwargs)
+        return super(DataFrame, obj).any(axis, skipna, **kwargs)  # type: ignore[misc]
 
     @_performance_tracking
     def _apply_cupy_method_axis_1(self, method: str, *args, **kwargs):
