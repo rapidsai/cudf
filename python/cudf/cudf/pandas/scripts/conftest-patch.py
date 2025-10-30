@@ -12729,6 +12729,12 @@ NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS = {
     # cupy arrays. So it is possible for tests asserting equality like test_dot_2d_ndarray
     # fail due to tiny FP differences.
     "tests/frame/methods/test_dot.py::TestSeriesDot::test_dot_2d_ndarray",
+    # TODO: These tests pass when run locally: with pandas 2.3.3, numpy 2.2.6, and cupy 13.6.0
+    # bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh
+    #      -q tests/indexes/test_common.py::test_sort_values_with_missing[nullable_int-first]
+    # Investigate why.
+    "tests/indexes/test_common.py::test_sort_values_with_missing[nullable_int-first]",
+    "tests/indexes/test_common.py::test_sort_values_with_missing[nullable_int-last]",
 }
 
 
