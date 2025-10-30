@@ -278,7 +278,10 @@ ConfigureTest(
 
 # ##################################################################################################
 # * filter tests -------------------------------------------------------------------------
-ConfigureTest(FILTER_TEST filter/filter_test.cpp filter/filter_gather_map_tests.cpp)
+ConfigureTest(
+  FILTER_TEST filter/filter_test.cpp filter/filter_gather_map_tests.cpp
+  filter/mixed_join_filter_gather_map_tests.cu
+)
 
 # ##################################################################################################
 # * interop tests -------------------------------------------------------------------------

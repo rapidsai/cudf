@@ -505,6 +505,10 @@ std::unique_ptr<table> filter(
  * The predicate can involve arbitrary column operations from both tables, enabling support
  * for "mixed join" workflows without materializing the full join table.
  *
+ * This function handles null indices (represented by `cudf::JoinNoneValue`) that may be produced by
+ * outer joins. Null indices are always included in the output as they represent meaningful data
+ * from unmatched rows in outer joins.
+ *
  * @throw std::invalid_argument if `left_indices` and `right_indices` have different sizes.
  *
  * @code{.pseudo}

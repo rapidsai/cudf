@@ -10,6 +10,7 @@
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -54,9 +55,16 @@ __launch_bounds__(max_block_size) __global__
 
     auto result = cudf::ast::detail::value_expression_result<bool, has_nulls>{};
 
-    // Bounds checking
-    if (left_row_index >= 0 && left_row_index < left_table.num_rows() && right_row_index >= 0 &&
-        right_row_index < right_table.num_rows()) {
+    // Check for null sentinels (used by outer joins for unmatched rows)
+    bool const has_null_index =
+      (left_row_index == cudf::JoinNoneValue || right_row_index == cudf::JoinNoneValue);
+
+    // Always include null indices as they represent meaningful data from outer joins
+    if (has_null_index) {
+      output_flags[i] = true;  // Keep null index pairs in output
+    } else if (left_row_index >= 0 && left_row_index < left_table.num_rows() &&
+               right_row_index >= 0 && right_row_index < right_table.num_rows()) {
+      // Valid indices - evaluate predicate
       evaluator.evaluate(result, left_row_index, right_row_index, 0, thread_intermediate_storage);
       output_flags[i] = result.is_valid() && result.value();
     } else {

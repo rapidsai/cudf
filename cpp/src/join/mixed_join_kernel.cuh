@@ -12,6 +12,7 @@
 #include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/span.hpp>
 
@@ -69,7 +70,7 @@ __device__ __forceinline__ void retrieve_matches(
   if constexpr (is_outer) {
     if (not found_match) {
       probe_output[0] = probe_row_index;
-      match_output[0] = cudf::detail::JoinNoneValue;
+      match_output[0] = cudf::JoinNoneValue;
     }
   }
 }

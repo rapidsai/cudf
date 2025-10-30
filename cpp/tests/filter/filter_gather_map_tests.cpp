@@ -10,6 +10,7 @@
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -433,4 +434,55 @@ TEST_F(FilterGatherMapTest, MismatchedSizes)
                             cudf::device_span<cudf::size_type const>(right_indices_input),
                             predicate),
     std::invalid_argument);
+}
+
+TEST_F(FilterGatherMapTest, NullIndices)
+{
+  using TypeParam = int32_t;
+
+  cudf::test::fixed_width_column_wrapper<TypeParam> left_col0({1, 2, 3});
+  cudf::table_view left_table({left_col0});
+
+  cudf::test::fixed_width_column_wrapper<TypeParam> right_col0({1, 4, 5});
+  cudf::table_view right_table({right_col0});
+
+  // Create index arrays with null sentinels (simulating outer join results)
+  constexpr cudf::size_type null_sentinel      = cudf::JoinNoneValue;
+  std::vector<cudf::size_type> left_host_data  = {0, 1, null_sentinel};
+  std::vector<cudf::size_type> right_host_data = {0, null_sentinel, 1};
+
+  auto left_indices_input = cudf::detail::make_device_uvector(
+    left_host_data, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+  auto right_indices_input = cudf::detail::make_device_uvector(
+    right_host_data, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+
+  auto const col_ref_left_0  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+
+  // Predicate: left.col0 == right.col0
+  auto const predicate =
+    cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
+
+  auto result =
+    cudf::filter_gather_map(left_table,
+                            right_table,
+                            cudf::device_span<cudf::size_type const>(left_indices_input),
+                            cudf::device_span<cudf::size_type const>(right_indices_input),
+                            predicate);
+
+  ASSERT_NE(result.first, nullptr) << "Left result is null";
+  ASSERT_NE(result.second, nullptr) << "Right result is null";
+
+  // Only the first pair (0,0) should pass: left[0]=1, right[0]=1, 1==1 is true
+  // The other pairs have null indices and should be filtered out
+  EXPECT_EQ(result.first->size(), 1);
+  EXPECT_EQ(result.second->size(), 1);
+
+  auto [left_result, right_result] = device_results_to_host(result);
+
+  std::vector<cudf::size_type> expected_left_indices  = {0};
+  std::vector<cudf::size_type> expected_right_indices = {0};
+
+  EXPECT_EQ(left_result, expected_left_indices);
+  EXPECT_EQ(right_result, expected_right_indices);
 }
