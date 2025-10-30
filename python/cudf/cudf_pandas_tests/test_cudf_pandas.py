@@ -1411,7 +1411,7 @@ def test_timestamp(data):
 def test_timedelta(data):
     xtimedelta = xpd.Timedelta(data)
     if not (data is pd.NaT or data == "nat"):
-        # NaT subclass datetime.datetime
+        # pandas.NaT subclasses datetime.datetime
         assert isinstance(xtimedelta, datetime.timedelta)
     timedelta = pd.Timedelta(data)
     tm.assert_equal(xtimedelta, timedelta)
