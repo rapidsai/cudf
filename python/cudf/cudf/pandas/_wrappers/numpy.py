@@ -8,11 +8,14 @@ import cupy._core.flags
 import numpy
 from packaging import version
 
+from cudf.options import _env_get_bool
+
 from ..fast_slow_proxy import (
     _fast_arg,
     _fast_slow_function_call,
     _FastSlowAttribute,
     _maybe_wrap_result,
+    _raise_fallback_error,
     _slow_arg,
     is_proxy_object,
     make_final_proxy_type,
@@ -177,8 +180,10 @@ def ndarray__array_function__(self, func, types, args, kwargs):
             cupy_func = cupy_func.fft
         try:
             res = cupy_func(*fast_args, **fast_kwargs)
-        except NotImplementedError:
+        except Exception as err:
             slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
+            if _env_get_bool("CUDF_PANDAS_FAIL_ON_FALLBACK", False):
+                _raise_fallback_error(err, slow_args[0].__name__)
             res = func(*slow_args, **slow_kwargs)
         return _maybe_wrap_result(res, func, *args, **kwargs)
 
