@@ -458,9 +458,7 @@ class parquet_field_struct_list : public parquet_field {
       }
     } else {
       // For small numbers of elements, use sequential processing to avoid overhead
-      for (uint32_t i = 0; i < n; i++) {
-        cpr->read(&val[i]);
-      }
+      std::for_each(val.begin(), val.end(), [&cpr](auto& elem) { cpr->read(&elem); });
     }
   }
 };
