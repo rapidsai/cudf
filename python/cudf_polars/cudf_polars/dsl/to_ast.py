@@ -152,8 +152,8 @@ def _(node: expr.Literal, self: ValidateTransformer) -> None:
 
 @_validate_to_ast.register
 def _(node: expr.Col, self: ValidateTransformer) -> None:
-    if self.state["for_parquet"]:
-        return None
+    # if self.state["for_parquet"]:
+    #     return None
     raise TypeError("Should always be wrapped in a ColRef node before translation")
 
 
