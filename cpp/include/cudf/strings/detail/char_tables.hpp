@@ -86,7 +86,7 @@ struct special_case_mapping {
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return Device memory pointer to the special case mapping table
  */
-const struct special_case_mapping* get_special_case_mapping_table(
+special_case_mapping const* get_special_case_mapping_table(
   rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
