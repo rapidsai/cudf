@@ -838,6 +838,12 @@ def parse_args(
         default=False,
         help="Enable statistics planning.",
     )
+    parser.add_argument(
+        "--reset-memory-resource-pool",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Reset the memory resource pool between each iteration.",
+    )
 
     parsed_args = parser.parse_args(args)
 
@@ -872,6 +878,11 @@ def run_polars(
             executor=run_config.executor,
             executor_options=executor_options,
         )
+
+        if args.reset_memory_resource_pool:
+            import cudf_polars.callback
+
+            cudf_polars.callback.default_memory_resource.cache_clear()
 
     for q_id in run_config.queries:
         try:
@@ -927,6 +938,11 @@ def run_polars(
             )
             if args.print_results:
                 print(result)
+
+            if run_config.executor != "cpu" and args.reset_memory_resource_pool:
+                import cudf_polars.callback
+
+                cudf_polars.callback.default_memory_resource.cache_clear()
 
             print(f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s")
             records[q_id].append(record)
