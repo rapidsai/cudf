@@ -6336,7 +6336,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/indexes/ranges/test_join.py::TestJoin::test_join_self[outer]",
     "tests/indexes/ranges/test_join.py::TestJoin::test_join_self[right]",
     "tests/indexes/ranges/test_range.py::TestRangeIndex::test_cache",
-    "tests/indexes/ranges/test_range.py::TestRangeIndex::test_copy",
     "tests/indexes/ranges/test_range.py::TestRangeIndex::test_engineless_lookup",
     "tests/indexes/ranges/test_setops.py::TestRangeIndexSetOps::test_union_sorted[RangeIndex(start=0, stop=-10, step=-1)-RangeIndex(start=-10, stop=-20, step=-1)-RangeIndex(start=-19, stop=1, step=1)-RangeIndex(start=0, stop=-20, step=-1)]",
     "tests/indexes/ranges/test_setops.py::TestRangeIndexSetOps::test_union_sorted[RangeIndex(start=0, stop=-100, step=-1)-RangeIndex(start=0, stop=-50, step=-3)-RangeIndex(start=-99, stop=1, step=1)-RangeIndex(start=0, stop=-100, step=-1)]",
