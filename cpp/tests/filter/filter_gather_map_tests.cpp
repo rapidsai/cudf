@@ -17,9 +17,52 @@
 
 #include <rmm/device_uvector.hpp>
 
-#include <thrust/copy.h>
+struct FilterGatherMapTest : public cudf::test::BaseFixture {
+  /**
+   * Helper function to convert device memory results to host vectors for comparison.
+   * Similar to the pattern used in mixed join tests.
+   */
+  std::pair<std::vector<cudf::size_type>, std::vector<cudf::size_type>> device_results_to_host(
+    const std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
+                    std::unique_ptr<rmm::device_uvector<cudf::size_type>>>& result)
+  {
+    std::vector<cudf::size_type> left_result;
+    std::vector<cudf::size_type> right_result;
 
-struct FilterGatherMapTest : public cudf::test::BaseFixture {};
+    for (size_t i = 0; i < result.first->size(); ++i) {
+      left_result.push_back(result.first->element(i, cudf::get_default_stream()));
+      right_result.push_back(result.second->element(i, cudf::get_default_stream()));
+    }
+
+    return std::make_pair(std::move(left_result), std::move(right_result));
+  }
+
+  /**
+   * Common test utility function to perform filter_gather_map and verify results.
+   * Similar to the pattern used in mixed join tests.
+   */
+  void test(cudf::table_view const& left_table,
+            cudf::table_view const& right_table,
+            cudf::device_span<cudf::size_type const> left_indices,
+            cudf::device_span<cudf::size_type const> right_indices,
+            cudf::ast::expression const& predicate,
+            std::vector<cudf::size_type> const& expected_left_indices,
+            std::vector<cudf::size_type> const& expected_right_indices)
+  {
+    auto result =
+      cudf::filter_gather_map(left_table, right_table, left_indices, right_indices, predicate);
+
+    ASSERT_NE(result.first, nullptr) << "Left result is null";
+    ASSERT_NE(result.second, nullptr) << "Right result is null";
+    EXPECT_EQ(result.first->size(), expected_left_indices.size());
+    EXPECT_EQ(result.second->size(), expected_right_indices.size());
+
+    auto [left_result, right_result] = device_results_to_host(result);
+
+    EXPECT_EQ(left_result, expected_left_indices);
+    EXPECT_EQ(right_result, expected_right_indices);
+  }
+};
 
 TEST_F(FilterGatherMapTest, BasicFilter)
 {
@@ -57,26 +100,16 @@ TEST_F(FilterGatherMapTest, BasicFilter)
   auto const predicate =
     cudf::ast::operation(cudf::ast::ast_operator::GREATER, add_operation, five);
 
-  auto result =
-    cudf::filter_gather_map(left_table,
-                            right_table,
-                            cudf::device_span<cudf::size_type const>(left_indices_input),
-                            cudf::device_span<cudf::size_type const>(right_indices_input),
-                            predicate);
-
   std::vector<cudf::size_type> expected_left_indices  = {1};
   std::vector<cudf::size_type> expected_right_indices = {2};
 
-  EXPECT_EQ(result.first->size(), expected_left_indices.size());
-  EXPECT_EQ(result.second->size(), expected_right_indices.size());
-  std::vector<cudf::size_type> left_result(result.first->size());
-  std::vector<cudf::size_type> right_result(result.second->size());
-
-  thrust::copy(result.first->begin(), result.first->end(), left_result.begin());
-  thrust::copy(result.second->begin(), result.second->end(), right_result.begin());
-
-  EXPECT_EQ(left_result, expected_left_indices);
-  EXPECT_EQ(right_result, expected_right_indices);
+  test(left_table,
+       right_table,
+       cudf::device_span<cudf::size_type const>(left_indices_input),
+       cudf::device_span<cudf::size_type const>(right_indices_input),
+       predicate,
+       expected_left_indices,
+       expected_right_indices);
 }
 
 TEST_F(FilterGatherMapTest, EmptyInput)
@@ -100,15 +133,16 @@ TEST_F(FilterGatherMapTest, EmptyInput)
   auto const predicate =
     cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_left_0, col_ref_right_0);
 
-  auto result =
-    cudf::filter_gather_map(left_table,
-                            right_table,
-                            cudf::device_span<cudf::size_type const>(left_indices_input),
-                            cudf::device_span<cudf::size_type const>(right_indices_input),
-                            predicate);
+  std::vector<cudf::size_type> expected_left_indices  = {};
+  std::vector<cudf::size_type> expected_right_indices = {};
 
-  EXPECT_EQ(result.first->size(), 0);
-  EXPECT_EQ(result.second->size(), 0);
+  test(left_table,
+       right_table,
+       cudf::device_span<cudf::size_type const>(left_indices_input),
+       cudf::device_span<cudf::size_type const>(right_indices_input),
+       predicate,
+       expected_left_indices,
+       expected_right_indices);
 }
 
 TEST_F(FilterGatherMapTest, AllFiltered)
@@ -136,15 +170,16 @@ TEST_F(FilterGatherMapTest, AllFiltered)
   auto const predicate =
     cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_left_0, col_ref_right_0);
 
-  auto result =
-    cudf::filter_gather_map(left_table,
-                            right_table,
-                            cudf::device_span<cudf::size_type const>(left_indices_input),
-                            cudf::device_span<cudf::size_type const>(right_indices_input),
-                            predicate);
+  std::vector<cudf::size_type> expected_left_indices  = {};
+  std::vector<cudf::size_type> expected_right_indices = {};
 
-  EXPECT_EQ(result.first->size(), 0);
-  EXPECT_EQ(result.second->size(), 0);
+  test(left_table,
+       right_table,
+       cudf::device_span<cudf::size_type const>(left_indices_input),
+       cudf::device_span<cudf::size_type const>(right_indices_input),
+       predicate,
+       expected_left_indices,
+       expected_right_indices);
 }
 
 TEST_F(FilterGatherMapTest, NoneFiltered)
@@ -172,26 +207,16 @@ TEST_F(FilterGatherMapTest, NoneFiltered)
   auto const predicate =
     cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_left_0, col_ref_right_0);
 
-  auto result =
-    cudf::filter_gather_map(left_table,
-                            right_table,
-                            cudf::device_span<cudf::size_type const>(left_indices_input),
-                            cudf::device_span<cudf::size_type const>(right_indices_input),
-                            predicate);
-
   std::vector<cudf::size_type> expected_left_indices  = {0, 1, 2};
   std::vector<cudf::size_type> expected_right_indices = {0, 1, 2};
 
-  EXPECT_EQ(result.first->size(), expected_left_indices.size());
-  EXPECT_EQ(result.second->size(), expected_right_indices.size());
-  std::vector<cudf::size_type> left_result(result.first->size());
-  std::vector<cudf::size_type> right_result(result.second->size());
-
-  thrust::copy(result.first->begin(), result.first->end(), left_result.begin());
-  thrust::copy(result.second->begin(), result.second->end(), right_result.begin());
-
-  EXPECT_EQ(left_result, expected_left_indices);
-  EXPECT_EQ(right_result, expected_right_indices);
+  test(left_table,
+       right_table,
+       cudf::device_span<cudf::size_type const>(left_indices_input),
+       cudf::device_span<cudf::size_type const>(right_indices_input),
+       predicate,
+       expected_left_indices,
+       expected_right_indices);
 }
 
 TEST_F(FilterGatherMapTest, WithNulls)
@@ -234,11 +259,13 @@ TEST_F(FilterGatherMapTest, WithNulls)
 
   EXPECT_EQ(result.first->size(), expected_left_indices.size());
   EXPECT_EQ(result.second->size(), expected_right_indices.size());
-  std::vector<cudf::size_type> left_result(result.first->size());
-  std::vector<cudf::size_type> right_result(result.second->size());
+  std::vector<cudf::size_type> left_result;
+  std::vector<cudf::size_type> right_result;
 
-  thrust::copy(result.first->begin(), result.first->end(), left_result.begin());
-  thrust::copy(result.second->begin(), result.second->end(), right_result.begin());
+  for (size_t i = 0; i < result.first->size(); ++i) {
+    left_result.push_back(result.first->element(i, cudf::get_default_stream()));
+    right_result.push_back(result.second->element(i, cudf::get_default_stream()));
+  }
 
   EXPECT_EQ(left_result, expected_left_indices);
   EXPECT_EQ(right_result, expected_right_indices);
@@ -340,11 +367,13 @@ TEST_F(FilterGatherMapTest, StringColumns)
 
   EXPECT_EQ(result.first->size(), expected_left_indices.size());
   EXPECT_EQ(result.second->size(), expected_right_indices.size());
-  std::vector<cudf::size_type> left_result(result.first->size());
-  std::vector<cudf::size_type> right_result(result.second->size());
+  std::vector<cudf::size_type> left_result;
+  std::vector<cudf::size_type> right_result;
 
-  thrust::copy(result.first->begin(), result.first->end(), left_result.begin());
-  thrust::copy(result.second->begin(), result.second->end(), right_result.begin());
+  for (size_t i = 0; i < result.first->size(); ++i) {
+    left_result.push_back(result.first->element(i, cudf::get_default_stream()));
+    right_result.push_back(result.second->element(i, cudf::get_default_stream()));
+  }
 
   EXPECT_EQ(left_result, expected_left_indices);
   EXPECT_EQ(right_result, expected_right_indices);
@@ -396,11 +425,13 @@ TYPED_TEST(FilterGatherMapNumericTest, NumericTypes)
 
   EXPECT_EQ(result.first->size(), expected_left_indices.size());
   EXPECT_EQ(result.second->size(), expected_right_indices.size());
-  std::vector<cudf::size_type> left_result(result.first->size());
-  std::vector<cudf::size_type> right_result(result.second->size());
+  std::vector<cudf::size_type> left_result;
+  std::vector<cudf::size_type> right_result;
 
-  thrust::copy(result.first->begin(), result.first->end(), left_result.begin());
-  thrust::copy(result.second->begin(), result.second->end(), right_result.begin());
+  for (size_t i = 0; i < result.first->size(); ++i) {
+    left_result.push_back(result.first->element(i, cudf::get_default_stream()));
+    right_result.push_back(result.second->element(i, cudf::get_default_stream()));
+  }
 
   EXPECT_EQ(left_result, expected_left_indices);
   EXPECT_EQ(right_result, expected_right_indices);
