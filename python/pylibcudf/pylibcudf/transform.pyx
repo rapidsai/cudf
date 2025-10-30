@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
 
@@ -39,6 +40,7 @@ __all__ = [
 cpdef tuple[gpumemoryview, int] nans_to_nulls(
     Column input,
     Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Create a null mask preserving existing nulls and converting nans to null.
 
@@ -50,6 +52,8 @@ cpdef tuple[gpumemoryview, int] nans_to_nulls(
         Column to produce new mask from.
     stream : Stream | None
         CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned mask's device memory.
 
     Returns
     -------
@@ -58,12 +62,13 @@ cpdef tuple[gpumemoryview, int] nans_to_nulls(
     cdef pair[unique_ptr[device_buffer], size_type] c_result
 
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_transform.nans_to_nulls(input.view(), stream.view())
+        c_result = cpp_transform.nans_to_nulls(input.view(), stream.view(), mr.get_mr())
 
     return (
-        gpumemoryview(DeviceBuffer.c_from_unique_ptr(move(c_result.first), stream)),
+        gpumemoryview(DeviceBuffer.c_from_unique_ptr(move(c_result.first), stream, mr)),
         c_result.second
     )
 
@@ -106,6 +111,7 @@ cpdef Column compute_column(
 cpdef tuple[gpumemoryview, int] bools_to_mask(
     Column input,
     Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Create a bitmask from a column of boolean elements
 
@@ -115,6 +121,8 @@ cpdef tuple[gpumemoryview, int] bools_to_mask(
         Column to produce new mask from.
     stream : Stream | None
         CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned mask's device memory.
 
     Returns
     -------
@@ -124,12 +132,13 @@ cpdef tuple[gpumemoryview, int] bools_to_mask(
     cdef pair[unique_ptr[device_buffer], size_type] c_result
 
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_transform.bools_to_mask(input.view(), stream.view())
+        c_result = cpp_transform.bools_to_mask(input.view(), stream.view(), mr.get_mr())
 
     return (
-        gpumemoryview(DeviceBuffer.c_from_unique_ptr(move(c_result.first), stream)),
+        gpumemoryview(DeviceBuffer.c_from_unique_ptr(move(c_result.first), stream, mr)),
         c_result.second
     )
 

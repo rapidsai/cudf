@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -20,8 +9,8 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/row_operator/lexicographic.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -45,20 +34,17 @@ void row_comparison(cudf::table_view input1,
 {
   rmm::cuda_stream_view stream{cudf::get_default_stream()};
 
-  auto device_table_1 = cudf::table_device_view::create(input1, stream);
-  auto device_table_2 = cudf::table_device_view::create(input2, stream);
-  auto d_column_order = cudf::detail::make_device_uvector(
-    column_order, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
-
-  auto comparator = cudf::row_lexicographic_comparator(
-    cudf::nullate::NO{}, *device_table_1, *device_table_2, d_column_order.data());
+  auto const comparator = cudf::detail::row::lexicographic::two_table_comparator{
+    input1, input2, column_order, {}, stream};
+  auto const lhs_it = cudf::detail::row::lhs_iterator(0);
+  auto const rhs_it = cudf::detail::row::rhs_iterator(0);
 
   thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator(0),
-                    thrust::make_counting_iterator(input1.num_rows()),
-                    thrust::make_counting_iterator(0),
+                    lhs_it,
+                    lhs_it + input1.num_rows(),
+                    rhs_it,
                     output.data<int8_t>(),
-                    comparator);
+                    comparator.less<false>(cudf::nullate::NO{}));
 }
 
 TEST_F(TableViewTest, EmptyColumnedTable)

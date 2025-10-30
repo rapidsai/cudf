@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -19,7 +8,8 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/row_operator/row_operators.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
+#include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/utilities/memory_resource.hpp>
@@ -156,13 +146,13 @@ void build_join_hash_table(
     auto const iter = cudf::detail::make_counting_transform_iterator(0, pair_fn{d_hasher});
 
     if (nulls_equal == cudf::null_equality::EQUAL or not nullable(build)) {
-      hash_table.insert(iter, iter + build.num_rows(), stream.value());
+      hash_table.insert_async(iter, iter + build.num_rows(), stream.value());
     } else {
       auto const stencil = thrust::counting_iterator<size_type>{0};
       auto const pred    = row_is_valid{bitmask};
 
       // insert valid rows
-      hash_table.insert_if(iter, iter + build.num_rows(), stencil, pred, stream.value());
+      hash_table.insert_if_async(iter, iter + build.num_rows(), stencil, pred, stream.value());
     }
   };
 

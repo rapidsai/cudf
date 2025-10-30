@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
 import pandas as pd
@@ -69,10 +70,7 @@ def timeseries(
             size=len(index),
             p=[1 - nulls_frequency, nulls_frequency],
         )
-        mask_buf = cudf.core.column.as_column(mask).as_mask()
-        masked_col = gdf[col]._column.set_mask(mask_buf)
-        gdf[col] = cudf.Series._from_column(masked_col, index=gdf.index)
-
+        gdf.loc[mask, col] = None
     return gdf
 
 

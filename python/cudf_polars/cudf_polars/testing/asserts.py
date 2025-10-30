@@ -28,9 +28,9 @@ __all__: list[str] = [
 ]
 
 # Will be overriden by `conftest.py` with the value from the `--executor`
-# and `--scheduler` command-line arguments
+# and `--cluster` command-line arguments
 DEFAULT_EXECUTOR = "in-memory"
-DEFAULT_SCHEDULER = "synchronous"
+DEFAULT_CLUSTER = "single"
 DEFAULT_BLOCKSIZE_MODE: Literal["small", "default"] = "default"
 
 
@@ -111,8 +111,8 @@ def assert_gpu_result_equal(
 
     # These keywords are correct, but mypy doesn't see that.
     # the 'misc' is for 'error: Keywords must be strings'
-    expect = lazydf.collect(**final_polars_collect_kwargs)  # type: ignore[call-overload,misc]
-    got = lazydf.collect(**final_cudf_collect_kwargs, engine=engine)  # type: ignore[call-overload,misc]
+    expect = lazydf.collect(**final_polars_collect_kwargs)
+    got = lazydf.collect(**final_cudf_collect_kwargs, engine=engine)
 
     assert_kwargs_bool: dict[str, bool] = {
         "check_row_order": check_row_order,
@@ -128,6 +128,9 @@ def assert_gpu_result_equal(
     else:
         tol_kwargs = {"rel_tol": rtol, "abs_tol": atol}
 
+    # the type checker errors with:
+    # Argument 4 to "assert_frame_equal" has incompatible type "**dict[str, float]"; expected "bool"  [arg-type]
+    # which seems to be a bug in the type checker / type annotations.
     assert_frame_equal(
         expect,
         got,
@@ -202,7 +205,7 @@ def get_default_engine(
     executor_options: dict[str, Any] = {}
     executor = executor or DEFAULT_EXECUTOR
     if executor == "streaming":
-        executor_options["scheduler"] = DEFAULT_SCHEDULER
+        executor_options["cluster"] = DEFAULT_CLUSTER
 
         blocksize_mode = blocksize_mode or DEFAULT_BLOCKSIZE_MODE
 
@@ -289,7 +292,7 @@ def assert_collect_raises(
     )
 
     try:
-        lazydf.collect(**final_polars_collect_kwargs)  # type: ignore[call-overload,misc]
+        lazydf.collect(**final_polars_collect_kwargs)
     except polars_except:
         pass
     except Exception as e:
@@ -302,7 +305,7 @@ def assert_collect_raises(
 
     engine = GPUEngine(raise_on_fail=True)
     try:
-        lazydf.collect(**final_cudf_collect_kwargs, engine=engine)  # type: ignore[call-overload,misc]
+        lazydf.collect(**final_cudf_collect_kwargs, engine=engine)
     except cudf_except:
         pass
     except Exception as e:

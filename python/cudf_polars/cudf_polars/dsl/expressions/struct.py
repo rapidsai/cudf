@@ -87,6 +87,8 @@ class StructFunction(Expr):
         """Evaluate this expression given a dataframe for context."""
         columns = [child.evaluate(df, context=context) for child in self.children]
         (column,) = columns
+        # these type ignores are needed because the type checker doesn't
+        # know that polars only calls StructFunction with struct types.
         if self.name == StructFunction.Name.FieldByName:
             field_index = next(
                 (
@@ -123,9 +125,11 @@ class StructFunction(Expr):
                 .utf8_escaped(val=False)
                 .build()
             )
-            plc.io.json.write_json(options)
+            plc.io.json.write_json(options, stream=df.stream)
             return Column(
-                plc.Column.from_iterable_of_py(buff.getvalue().split()),
+                plc.Column.from_iterable_of_py(
+                    buff.getvalue().split(), stream=df.stream
+                ),
                 dtype=self.dtype,
             )
         elif self.name in {

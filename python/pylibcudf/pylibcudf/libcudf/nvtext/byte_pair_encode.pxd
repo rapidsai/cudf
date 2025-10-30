@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from pylibcudf.exception_handler cimport libcudf_exception_handler
@@ -11,7 +12,7 @@ from rmm.librmm.memory_resource cimport device_memory_resource
 
 cdef extern from "nvtext/byte_pair_encoding.hpp" namespace "nvtext" nogil:
 
-    cdef struct bpe_merge_pairs "nvtext::bpe_merge_pairs":
+    cdef struct bpe_merge_pairs:
         pass
 
     cdef unique_ptr[bpe_merge_pairs] load_merge_pairs(

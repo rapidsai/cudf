@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -35,7 +36,7 @@ cpdef Column slice_strings(
     :py:class:`~pylibcudf.scalar.Scalar`. But ``step`` must be a
     :py:class:`~pylibcudf.scalar.Scalar`.
 
-    For details, see :cpp:func:`cudf::strings::slice_strings`.
+    For details, see :cpp:func:`slice_strings`.
 
     Parameters
     ----------
@@ -85,19 +86,16 @@ cpdef Column slice_strings(
 
     elif ColumnOrScalar is Scalar:
         if start is None:
-            stream = _get_stream(None)
             start = Scalar.from_libcudf(
-                cpp_make_fixed_width_scalar(0, stream.view())
+                cpp_make_fixed_width_scalar(0, stream.view(), mr.get_mr())
             )
         if stop is None:
-            stream = _get_stream(None)
             stop = Scalar.from_libcudf(
-                cpp_make_fixed_width_scalar(0, stream.view())
+                cpp_make_fixed_width_scalar(0, stream.view(), mr.get_mr())
             )
         if step is None:
-            stream = _get_stream(None)
             step = Scalar.from_libcudf(
-                cpp_make_fixed_width_scalar(1, stream.view())
+                cpp_make_fixed_width_scalar(1, stream.view(), mr.get_mr())
             )
 
         cpp_start = <numeric_scalar[size_type]*>start.c_obj.get()

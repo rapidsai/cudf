@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import decimal
@@ -33,7 +34,7 @@ else:
     PANDAS_NUMPY_DTYPE = pd.core.dtypes.dtypes.PandasDtype
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
 
     from typing_extension import Self
 
@@ -89,6 +90,10 @@ def dtype(arbitrary: Any) -> DtypeObj:
                 arrow_type == pa.date32()
                 or arrow_type == pa.binary()
                 or isinstance(arrow_type, pa.DictionaryType)
+            ) or (
+                cudf.get_option("mode.pandas_compatible")
+                and isinstance(arrow_type, pa.TimestampType)
+                and getattr(arrow_type, "tz", None) is not None
             ):
                 raise NotImplementedError(
                     f"cuDF does not yet support {pd_dtype}"
@@ -662,7 +667,8 @@ class StructDtype(_BaseDtype):
         StructType(struct<x: int32, y: string>)
         """
         return pa.struct(
-            {
+            # dict[str, DataType] should be compatible but pyarrow stubs are too strict
+            {  # type: ignore[arg-type]
                 k: cudf_dtype_to_pa_type(dtype)
                 for k, dtype in self.fields.items()
             }
@@ -686,7 +692,7 @@ class StructDtype(_BaseDtype):
 
         frames: list[Buffer] = []
 
-        fields: dict[str, bytes | tuple[Any, tuple[int, int]]] = {}
+        fields: dict[str, str | tuple[Any, tuple[int, int]]] = {}
 
         for k, dtype in self.fields.items():
             if isinstance(dtype, _BaseDtype):
@@ -851,7 +857,11 @@ class DecimalDtype(_BaseDtype):
         return pa.decimal128(self.precision, self.scale)
 
     @classmethod
-    def from_arrow(cls, typ: pa.Decimal128Type) -> Self:
+    def from_arrow(
+        cls, typ: pa.Decimal32Type | pa.Decimal64Type | pa.Decimal128Type
+    ) -> Self:
+        # TODO: Eventually narrow this to only accept the appropriate decimal type
+        # for each specific DecimalNDtype subclass
         """
         Construct a cudf decimal dtype from a ``pyarrow`` dtype
 
@@ -1039,7 +1049,7 @@ class IntervalDtype(StructDtype):
     def to_pandas(self) -> pd.IntervalDtype:
         if cudf.get_option("mode.pandas_compatible"):
             return pd.IntervalDtype(
-                subtype=self.subtype.numpy_dtype  # type: ignore
+                subtype=self.subtype.numpy_dtype
                 if is_pandas_nullable_extension_dtype(self.subtype)
                 else self.subtype,
                 closed=self.closed,
@@ -1306,3 +1316,34 @@ def is_decimal128_dtype(obj):
             and pa.types.is_decimal128(obj.pyarrow_dtype)
         )
     )
+
+
+def recursively_update_struct_names(
+    dtype: DtypeObj, child_names: Mapping[Any, Any]
+) -> DtypeObj:
+    """
+    Update dtype's field names (namely StructDtype) recursively with child_names.
+
+    Needed for nested types that come from libcudf which do not carry struct field names.
+    """
+    if isinstance(dtype, StructDtype):
+        return StructDtype(
+            {
+                new_name: recursively_update_struct_names(
+                    child_type, new_child_names
+                )
+                for (new_name, new_child_names), child_type in zip(
+                    child_names.items(), dtype.fields.values(), strict=True
+                )
+            }
+        )
+    elif isinstance(dtype, ListDtype):
+        # child_names here should be {"offsets": {}, "<values_key>": {...}}
+        values_key = next(reversed(child_names))
+        return ListDtype(
+            element_type=recursively_update_struct_names(
+                dtype.element_type, child_names[values_key]
+            )
+        )
+    else:
+        return dtype

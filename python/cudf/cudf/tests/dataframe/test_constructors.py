@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import collections
 from contextlib import nullcontext as does_not_raise
@@ -8,7 +9,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-from numba import cuda
 
 import cudf
 from cudf.core.column.column import as_column
@@ -1045,22 +1045,25 @@ def test_change_column_dtype_in_empty():
             ["a", "b", "c", "d"],
             [1, 0],
         ),
-        (cp.random.randn(2, 4), ["a", "b", "c", "d"], ["a", "b"]),
-        (cp.random.randn(2, 4), ["a", "b", "c", "d"], [1, 0]),
+        (
+            cp.random.default_rng(0).standard_normal(size=(2, 4)),
+            ["a", "b", "c", "d"],
+            ["a", "b"],
+        ),
+        (
+            cp.random.default_rng(0).standard_normal(size=(2, 4)),
+            ["a", "b", "c", "d"],
+            [1, 0],
+        ),
     ],
 )
 def test_dataframe_init_from_arrays_cols(data, cols, index):
     gd_data = data
     if isinstance(data, cp.ndarray):
-        # pandas can't handle cp arrays in general
+        # pandas can't handle cupy arrays
         pd_data = data.get()
-
-        # additional test for building DataFrame with gpu array whose
-        # cuda array interface has no `descr` attribute
-        numba_data = cuda.as_cuda_array(data)
     else:
         pd_data = data
-        numba_data = None
 
     # verify with columns & index
     pdf = pd.DataFrame(pd_data, columns=cols, index=index)
@@ -1078,10 +1081,6 @@ def test_dataframe_init_from_arrays_cols(data, cols, index):
     gdf = cudf.DataFrame(gd_data)
 
     assert_eq(pdf, gdf, check_dtype=False)
-
-    if numba_data is not None:
-        gdf = cudf.DataFrame(numba_data)
-        assert_eq(pdf, gdf, check_dtype=False)
 
 
 @pytest.mark.parametrize(

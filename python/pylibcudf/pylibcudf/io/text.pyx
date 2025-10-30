@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
 from libc.stdint cimport uint64_t
@@ -7,8 +8,9 @@ from libcpp.string cimport string
 from libcpp.utility cimport move
 
 from pylibcudf.column cimport Column
-from pylibcudf.utils cimport _get_stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from pylibcudf.io.types cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.io cimport text as cpp_text
 
@@ -162,12 +164,13 @@ cpdef Column multibyte_split(
     DataChunkSource source,
     str delimiter,
     ParseOptions options=None,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Splits the source text into a strings column using a multiple byte delimiter.
 
-    For details, see :cpp:func:`cudf::io::text::multibyte_split`
+    For details, see :cpp:func:`multibyte_split`
 
     Parameters
     ----------
@@ -193,6 +196,7 @@ cpdef Column multibyte_split(
     cdef unique_ptr[data_chunk_source] c_source = move(source.c_source)
     cdef string c_delimiter = delimiter.encode()
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     if options is None:
         options = ParseOptions()
@@ -204,7 +208,8 @@ cpdef Column multibyte_split(
             dereference(c_source),
             c_delimiter,
             c_options,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)

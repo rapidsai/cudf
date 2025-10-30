@@ -1,7 +1,7 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 
-import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
@@ -81,9 +81,8 @@ def test_multiindex_iloc_scalar():
     arrays = [["a", "a", "b", "b"], [1, 2, 3, 4]]
     tuples = list(zip(*arrays, strict=True))
     idx = cudf.MultiIndex.from_tuples(tuples)
-    gdf = cudf.DataFrame(
-        {"first": cp.random.rand(4), "second": cp.random.rand(4)}
-    )
+    rng = np.random.default_rng(0)
+    gdf = cudf.DataFrame({"first": rng.random(4), "second": rng.random(4)})
     gdf.index = idx
 
     pdf = gdf.to_pandas()

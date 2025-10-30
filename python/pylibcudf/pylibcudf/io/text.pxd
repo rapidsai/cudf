@@ -1,9 +1,11 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from pylibcudf.column cimport Column
 from pylibcudf.io.types cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from pylibcudf.libcudf.io.text cimport parse_options, data_chunk_source
 
 cdef class ParseOptions:
@@ -18,7 +20,8 @@ cpdef Column multibyte_split(
     DataChunkSource source,
     str delimiter,
     ParseOptions options=*,
-    Stream stream=*
+    Stream stream=*,
+    DeviceMemoryResource mr=*
 )
 
 cpdef DataChunkSource make_source(str data)

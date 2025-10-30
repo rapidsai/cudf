@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -19,7 +20,7 @@ cpdef Column findall(
     Returns a lists column of strings for each matching occurrence using
     the regex_program pattern within each string.
 
-    For details, see :cpp:func:`cudf::strings::findall`.
+    For details, see :cpp:func:`findall`.
 
     Parameters
     ----------
@@ -57,7 +58,7 @@ cpdef Column find_re(
     Returns character positions where the pattern first matches
     the elements in input strings.
 
-    For details, see :cpp:func:`cudf::strings::find_re`
+    For details, see :cpp:func:`find_re`
 
     Parameters
     ----------

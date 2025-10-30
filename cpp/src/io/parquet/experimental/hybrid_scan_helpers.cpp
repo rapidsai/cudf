@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "hybrid_scan_helpers.hpp"
@@ -87,7 +76,7 @@ aggregate_reader_metadata::aggregate_reader_metadata(FileMetaData const& parquet
   : aggregate_reader_metadata_base({}, false, false)
 {
   // Just copy over the FileMetaData struct to the internal metadata struct
-  per_file_metadata = std::vector<metadata_base>{metadata{parquet_metadata}.get_file_metadata()};
+  per_file_metadata.emplace_back(metadata{parquet_metadata}.get_file_metadata());
   initialize_internals(use_arrow_schema, has_cols_from_mismatched_srcs);
 }
 
@@ -97,7 +86,7 @@ aggregate_reader_metadata::aggregate_reader_metadata(cudf::host_span<uint8_t con
   : aggregate_reader_metadata_base({}, false, false)
 {
   // Re-initialize internal variables here as base class was initialized without a source
-  per_file_metadata = std::vector<metadata_base>{metadata{footer_bytes}.get_file_metadata()};
+  per_file_metadata.emplace_back(metadata{footer_bytes}.get_file_metadata());
   initialize_internals(use_arrow_schema, has_cols_from_mismatched_srcs);
 }
 
@@ -423,9 +412,17 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
             auto dictionary_offset = int64_t{0};
             auto dictionary_size   = int64_t{0};
 
-            // If any columns lack the page indexes then just return without modifying the
-            // row_group_info.
-            if (col_chunk.offset_index.has_value() and col_chunk.column_index.has_value()) {
+            // Make sure that we have page index and the column chunk doesn't have any
+            // non-dictionary encoded pages
+            auto const has_page_index_and_only_dict_encoded_pages =
+              col_chunk.offset_index.has_value() and col_chunk.column_index.has_value() and
+              std::all_of(
+                col_meta.encodings.cbegin(), col_meta.encodings.cend(), [](auto const& encoding) {
+                  return encoding == Encoding::PLAIN_DICTIONARY or
+                         encoding == Encoding::RLE_DICTIONARY;
+                });
+
+            if (has_page_index_and_only_dict_encoded_pages) {
               auto const& offset_index = col_chunk.offset_index.value();
               auto const num_pages     = offset_index.page_locations.size();
 

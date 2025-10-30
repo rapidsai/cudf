@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from rmm import DeviceBuffer
 from rmm.mr import DeviceMemoryResource
@@ -14,9 +15,11 @@ class PackedColumns:
     ) -> tuple[memoryview[bytes], gpumemoryview]: ...
 
 def pack(input: Table, stream: Stream | None = None) -> PackedColumns: ...
-def unpack(input: PackedColumns) -> Table: ...
+def unpack(input: PackedColumns, stream: Stream | None = None) -> Table: ...
 def unpack_from_memoryviews(
-    metadata: memoryview[bytes], gpu_data: gpumemoryview
+    metadata: memoryview[bytes],
+    gpu_data: gpumemoryview,
+    stream: Stream | None = None,
 ) -> Table: ...
 
 class ChunkedPack:
