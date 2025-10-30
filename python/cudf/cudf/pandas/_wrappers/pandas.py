@@ -448,6 +448,7 @@ RangeIndex = make_final_proxy_type(
         "name": _FastSlowAttribute("name"),
         "nbytes": _FastSlowAttribute("nbytes", private=True),
         "array": _FastSlowAttribute("array", private=True),
+        "_range": _FastSlowAttribute("_range", private=True),
     },
 )
 
