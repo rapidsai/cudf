@@ -189,6 +189,12 @@ TEST_F(StringsLikeTests, MiddleOnly)
   results  = cudf::strings::like(sv_big, std::string_view("%aaa%bbb%fff%"));
   expected = cudf::test::fixed_width_column_wrapper<bool>({false, false, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+
+  results = cudf::strings::like(
+    sv_big,
+    std::string_view("%0123456789012345678901234567890123456789012345678901234567890123456f%"));
+  expected = cudf::test::fixed_width_column_wrapper<bool>({false, false, true});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
 TEST_F(StringsLikeTests, Place)
