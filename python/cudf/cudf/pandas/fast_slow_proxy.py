@@ -1055,7 +1055,7 @@ def _fast_slow_function_call(
             slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
             if _env_get_bool("CUDF_PANDAS_FAIL_ON_FALLBACK", False):
                 _raise_fallback_error(err, slow_args[0].__name__)
-            if _env_get_bool("LOG_FAST_FALLBACK", False):
+            if _env_get_bool("CUDF_PANDAS_LOG_ON_FALLBACK", False):
                 from ._logger import log_fallback
 
                 log_fallback(slow_args, slow_kwargs, err)
