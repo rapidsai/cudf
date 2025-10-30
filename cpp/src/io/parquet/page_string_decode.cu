@@ -1116,18 +1116,14 @@ void compute_page_string_sizes_pass2(cudf::detail::hostdevice_span<PageInfo> pag
 /**
  * @brief Helper function to prefetch next chunk of data into shared memory using multiple threads
  *
- * If aligned_read is true, aligns reads to 16-byte boundaries for optimal memory access.
- * The first read may be smaller to achieve alignment.
- *
- * @param block The thread block
  * @param t Thread index within block
  * @param next_length_offset Current offset in the data stream
  * @param dict_size Total size of the dictionary/data
  * @param cur Pointer to the start of the data
  * @param prefetch_buffer Shared memory buffer for prefetching
- * @param buffer_base Output: base offset of the prefetched buffer (may be adjusted for alignment)
- * @param buffer_end Output: end offset of the prefetched buffer
- * @param buffer_valid Output: whether the buffer contains valid data
+ * @param[in,out] buffer_base Offset corresponding to the start of the prefetched buffer
+ * @param[in,out] buffer_end Offset corresponding to the end of the prefetched buffer
+ * @return Whether the buffer contains valid data
  */
 template <int32_t prefetch_size, int32_t block_size>
 inline __device__ bool prefetch_string_data(int t,
@@ -1138,20 +1134,24 @@ inline __device__ bool prefetch_string_data(int t,
                                             int32_t& buffer_base,
                                             int32_t& buffer_end)
 {
+  // The start of the prefetched buffer is the offset to the next length in the data stream
   buffer_base = next_length_offset;
 
   int32_t const total_bytes_to_copy = cuda::std::min(prefetch_size, dict_size - buffer_base);
-  if (total_bytes_to_copy <= 0) { return false; }
+  if (total_bytes_to_copy <= 0) { return false; }  // No data left to copy
+  buffer_end = buffer_base + total_bytes_to_copy;
 
-  buffer_end                           = buffer_base + total_bytes_to_copy;
+  // Nominally, each thread will copy an equal number of bytes; this rounds up.
   int32_t nominal_thread_bytes_to_copy = (total_bytes_to_copy + block_size - 1) / block_size;
   int32_t thread_offset                = nominal_thread_bytes_to_copy * t;
 
   if (thread_offset < total_bytes_to_copy) {
+    // Guard against the end of the data stream
     int32_t thread_bytes_to_copy =
       cuda::std::min(nominal_thread_bytes_to_copy, total_bytes_to_copy - thread_offset);
-    int32_t thread_copy_from_index = buffer_base + thread_offset;
+
     if (thread_bytes_to_copy > 0) {
+      int32_t thread_copy_from_index = buffer_base + thread_offset;
       cuda::std::memcpy(reinterpret_cast<void*>(&prefetch_buffer[thread_offset]),
                         reinterpret_cast<const void*>(&cur[thread_copy_from_index]),
                         thread_bytes_to_copy);
@@ -1161,11 +1161,11 @@ inline __device__ bool prefetch_string_data(int t,
 }
 
 /**
- * @brief Process string offsets with buffering and prefetching for typical string lengths
+ * @brief Read string offsets with buffering and prefetching
  *
  * This function uses a prefetch buffer to efficiently process string offsets by
- * reading data in chunks. Thread 0 processes strings while all threads cooperate
- * on prefetching data and filling remaining entries.
+ * reading data in chunks. Thread 0 reads string lengths, and all threads cooperate
+ * on prefetching data and filling the remaining entries.
  *
  * @param s Page state containing data_start, dict_size and other info
  * @param num_values_to_skip Number of values to skip before processing
@@ -1173,10 +1173,10 @@ inline __device__ bool prefetch_string_data(int t,
  * @param str_offsets Output buffer for string offsets
  */
 template <int32_t decode_block_size, size_t prefetch_size>
-inline __device__ void preprocess_string_offsets_buffered(page_state_s* s,
-                                                          size_t num_values_to_skip,
-                                                          size_t num_values_to_process,
-                                                          uint32_t* str_offsets)
+inline __device__ void read_string_offsets_buffered(page_state_s* s,
+                                                    size_t num_values_to_skip,
+                                                    size_t num_values_to_process,
+                                                    uint32_t* str_offsets)
 {
   auto const block     = cg::this_thread_block();
   int const t          = block.thread_rank();
@@ -1189,6 +1189,7 @@ inline __device__ void preprocess_string_offsets_buffered(page_state_s* s,
   __shared__ __align__(128) uint8_t prefetch_buffer[prefetch_size];
 
   auto process_data = [&]<bool save_offset>(size_t loop_end) {
+    // Parquet data is: 4-byte length, string, 4-byte length, string, ...
     for (size_t pos = 0; pos < loop_end; pos++) {
       int32_t const string_offset = next_length_offset + 4;
       if (string_offset > dict_size) { return pos; }  // Can't read any more valid data
@@ -1203,11 +1204,13 @@ inline __device__ void preprocess_string_offsets_buffered(page_state_s* s,
         block.sync();  // Sync all of the prefetched data for all of the threads
       }
 
-      int32_t const buffer_length_offset = next_length_offset - buffer_base;
+      // Read the length of the string from the prefetched buffer
+      int32_t const prefetch_read_index = next_length_offset - buffer_base;
       int len;
       cuda::std::memcpy(reinterpret_cast<void*>(&len),
-                        reinterpret_cast<const void*>(&prefetch_buffer[buffer_length_offset]),
+                        reinterpret_cast<const void*>(&prefetch_buffer[prefetch_read_index]),
                         4);
+
       if (string_offset + len > dict_size) { return pos; }  // Data is corrupted or incomplete
       next_length_offset = string_offset + len;
 
@@ -1234,7 +1237,7 @@ inline __device__ void preprocess_string_offsets_buffered(page_state_s* s,
       ? 0
       : process_data.template operator()<true>(num_values_to_process);
 
-  //+4 for "stored" length of "next" string that we'll subtract off during decode
+  // +4 for "stored" length of "next" string that we'll subtract off during decode
   // Easier/faster than branching in the decode loop
   int32_t const last_string_offset = next_length_offset + 4;
 
@@ -1248,23 +1251,22 @@ inline __device__ void preprocess_string_offsets_buffered(page_state_s* s,
 }
 
 /**
- * @brief Process string offsets without buffering for large average string lengths
+ * @brief Read string offsets without buffering for large average string lengths
  *
  * This function handles the case where the average string length is too large
- * to use the buffering approach. Thread 0 sequentially processes all strings
- * to compute their offsets, then all threads cooperatively fill remaining entries.
+ * to use the buffering approach. Thread 0 sequentially reads all string lengths,
+ * then all threads cooperatively fill the remaining entries.
  *
- * @param t Thread index within block
- * @param block Thread block
+ * @param s Page state containing data_start, dict_size and other info
  * @param num_values_to_skip Number of values to skip before processing
  * @param num_values_to_process Number of values to process
  * @param str_offsets Output buffer for string offsets
  */
 template <int32_t block_size>
-inline __device__ void preprocess_string_offsets_sequential(page_state_s* s,
-                                                            size_t num_values_to_skip,
-                                                            size_t num_values_to_process,
-                                                            uint32_t* str_offsets)
+inline __device__ void read_string_offsets_sequential(page_state_s* s,
+                                                      size_t num_values_to_skip,
+                                                      size_t num_values_to_process,
+                                                      uint32_t* str_offsets)
 {
   auto const block = cg::this_thread_block();
   int const t      = block.thread_rank();
@@ -1278,12 +1280,16 @@ inline __device__ void preprocess_string_offsets_sequential(page_state_s* s,
     auto const dict_size   = s->dict_size;
 
     auto process_loop = [&]<bool save_offsets>(size_t loop_end) {
+      // Parquet data is: 4-byte length, string, 4-byte length, string, ...
       for (size_t pos = 0; pos < loop_end; pos++) {
         uint32_t const string_offset = length_offset + 4;
         if (string_offset > dict_size) { return pos; }  // Can't read any more valid data
+
+        // Read the length of the string from the data stream
         int len;
         cuda::std::memcpy(
           reinterpret_cast<void*>(&len), reinterpret_cast<const void*>(&cur[length_offset]), 4);
+
         if (string_offset + len > dict_size) { return pos; }  // Data is corrupted or incomplete
         if constexpr (save_offsets) { str_offsets[pos] = string_offset; }
         length_offset = string_offset + len;
@@ -1291,14 +1297,16 @@ inline __device__ void preprocess_string_offsets_sequential(page_state_s* s,
       return loop_end;
     };
 
+    // Skip to the first value we need to process, then process the values we need
     size_t skip_pos = process_loop.template operator()<false>(num_values_to_skip);
     if (skip_pos == num_values_to_skip) {
       num_values_written = process_loop.template operator()<true>(num_values_to_process);
     } else {
-      num_values_written = 0;
+      num_values_written = 0;  // Skipped past all the values in the page
     }
-    last_offset =
-      length_offset + 4;  //+4 for "stored" length of "next" string that we'll subtract off later
+
+    // +4 for "stored" length of "next" string that we'll subtract off during decode
+    last_offset = length_offset + 4;
   }
 
   block.sync();  // Ensure all threads see num_values_written
@@ -1319,9 +1327,11 @@ inline __device__ void preprocess_string_offsets_sequential(page_state_s* s,
  *
  * @param pages List of pages
  * @param chunks List of column chunks
+ * @param page_string_offset_indices Device span of page string offset indices
  * @param page_mask Boolean vector indicating which pages need to be processed
+ * @param min_row Minimum row index to read
+ * @param num_rows Number of rows to read starting from min_row
  */
-
 template <int decode_block_size, size_t prefetch_size>
 CUDF_KERNEL void preprocess_string_offsets(PageInfo* pages,
                                            device_span<ColumnChunkDesc const> chunks,
@@ -1338,7 +1348,7 @@ CUDF_KERNEL void preprocess_string_offsets(PageInfo* pages,
 
   auto const& chunk = chunks[pp->chunk_idx];
   if (chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY) {
-    return;  // Offsets are fixed, no need to preprocess
+    return;  // String lengths, and thus offsets are fixed, no need to preprocess
   }
 
   // Check if this is a string column without dictionary using kernel mask
@@ -1363,35 +1373,46 @@ CUDF_KERNEL void preprocess_string_offsets(PageInfo* pages,
   }
 
   // Determine if this is a list column and how many values to process
-  bool const is_list = (chunk.max_level[level_type::REPETITION] != 0);
   // For non-lists, we don't know how many values we'll need to read, because we don't know
   // how many nulls we'll skip. So we have to read through the skipped rows.
+  bool const is_list              = (chunk.max_level[level_type::REPETITION] != 0);
+  size_t const num_values_to_skip = is_list ? pp->skipped_leaf_values : 0;
   size_t const num_values_to_process =
     is_list ? pp->nesting[chunk.max_nesting_depth - 1].batch_size : s->num_rows + s->first_row;
-  size_t const num_values_to_skip = is_list ? pp->skipped_leaf_values : 0;
+
   if (num_values_to_process == 0) { return; }
 
   uint32_t* const str_offsets =
     chunk.column_string_offset_base + page_string_offset_indices[page_idx];
 
+  // If the average string length is small, all of the threads in the warp can iteratively prefetch
+  // blocks of data containing many string lengths into shared memory.
+  // However, if the average string length is large, we'll spend too much time copying raw string
+  // data we don't need: have a single thread read the string lengths sequentially.
   constexpr int max_avg_string_length_for_buffer = prefetch_size / 16;  // for 1024 buffer, is 64
   auto const avg_string_length                   = s->dict_size / pp->num_input_values;
+
   if (avg_string_length > max_avg_string_length_for_buffer) {
-    preprocess_string_offsets_sequential<decode_block_size>(
+    // Use sequential processing for large average string lengths
+    read_string_offsets_sequential<decode_block_size>(
       s, num_values_to_skip, num_values_to_process, str_offsets);
   } else {
     // Use buffered processing for typical string lengths
-    preprocess_string_offsets_buffered<decode_block_size, prefetch_size>(
+    read_string_offsets_buffered<decode_block_size, prefetch_size>(
       s, num_values_to_skip, num_values_to_process, str_offsets);
   }
 }
 
 /**
- * @brief Launches the pre-processing kernel to fill string offsets for non-dictionary columns
+ * @brief Launches the pre-processing kernel to fill string offsets for non-dictionary, non-FLBA
+ * string columns
  *
  * @param pages List of pages
  * @param chunks List of column chunks
+ * @param page_string_offset_indices Device span of page string offset indices
  * @param page_mask Boolean vector indicating which pages need to be processed
+ * @param min_row Minimum row index to read
+ * @param num_rows Number of rows to read starting from min_row
  * @param stream CUDA stream to use
  */
 void preprocess_string_offsets(cudf::detail::hostdevice_span<PageInfo> pages,

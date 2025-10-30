@@ -952,7 +952,10 @@ void decode_delta_length_byte_array(cudf::detail::hostdevice_span<PageInfo> page
  *
  * @param[in,out] pages All pages to be processed
  * @param[in] chunks All chunks to be processed
+ * @param[in] page_string_offset_indices Device span of page string offset indices
  * @param[in] page_mask Boolean vector indicating which pages need to be processed
+ * @param[in] min_row Minimum row index to read
+ * @param[in] num_rows Number of rows to read starting from min_row
  * @param[in] stream CUDA stream to use
  */
 void preprocess_string_offsets(cudf::detail::hostdevice_span<PageInfo> pages,
@@ -977,18 +980,19 @@ void preprocess_string_offsets(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] kernel_mask Mask indicating the type of decoding kernel to launch.
  * @param[in] page_mask Boolean vector indicating which pages need to be decoded
  * @param[out] initial_str_offsets Vector to store the initial offsets for large nested string cols
+ * @param[in] page_string_offset_indices Device span of page string offset indices
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
 void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
                       cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                      cudf::device_span<size_t const> page_string_offset_indices,
                       size_t num_rows,
                       size_t min_row,
                       int level_type_size,
                       decode_kernel_mask kernel_mask,
                       cudf::device_span<bool const> page_mask,
                       cudf::device_span<size_t> initial_str_offsets,
+                      cudf::device_span<size_t const> page_string_offset_indices,
                       kernel_error::pointer error_code,
                       rmm::cuda_stream_view stream);
 

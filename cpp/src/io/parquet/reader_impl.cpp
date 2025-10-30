@@ -201,7 +201,8 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
       cudf::detail::make_device_uvector_async(host_offsets_vector, _stream, _mr);
     chunk_nested_str_data.host_to_device_async(_stream);
 
-    // Allocate string offset buffers and get string offsets for non-dictionary string columns
+    // Allocate string offset buffers and get string offsets for non-dictionary, non-FLBA string
+    // columns
     set_page_string_offset_indices(skip_rows, num_rows, _subpass_page_mask);
   }
 
@@ -217,13 +218,13 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   auto decode_data = [&](decode_kernel_mask decoder_mask) {
     detail::decode_page_data(subpass.pages,
                              pass.chunks,
-                             _page_string_offset_indices,
                              num_rows,
                              skip_rows,
                              level_type_size,
                              decoder_mask,
                              _subpass_page_mask,
                              initial_str_offsets,
+                             _page_string_offset_indices,
                              error_code.data(),
                              streams[s_idx++]);
   };
@@ -494,8 +495,8 @@ reader_impl::reader_impl()
   : _options{},
     _pass_page_mask{cudf::detail::make_host_vector<bool>(0, cudf::get_default_stream())},
     _subpass_page_mask{cudf::detail::hostdevice_vector<bool>(0, cudf::get_default_stream())},
-    _page_string_offset_indices{0, cudf::get_default_stream()},
-    _string_offset_buffer{0, cudf::get_default_stream()}
+    _string_offset_buffer{0, cudf::get_default_stream()},
+    _page_string_offset_indices{0, cudf::get_default_stream()}
 {
 }
 
@@ -530,8 +531,8 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
     _sources{std::move(sources)},
     _pass_page_mask{cudf::detail::make_host_vector<bool>(0, _stream)},
     _subpass_page_mask{cudf::detail::hostdevice_vector<bool>(0, _stream)},
-    _page_string_offset_indices{0, _stream},
     _string_offset_buffer{0, _stream},
+    _page_string_offset_indices{0, _stream},
     _output_chunk_read_limit{chunk_read_limit},
     _input_pass_read_limit{pass_read_limit}
 {

@@ -22,12 +22,8 @@
 #include <cudf/detail/utilities/cuda.cuh>
 
 #include <cooperative_groups.h>
-#include <cuda/barrier>
-#include <cuda/pipeline>
 #include <cuda/std/bit>
 #include <cuda/std/iterator>
-
-#include <new>
 
 namespace cudf::io::parquet::detail {
 
@@ -945,17 +941,18 @@ constexpr bool is_split_decode()
  * @param num_rows Maximum number of rows to read
  * @param page_mask Boolean vector indicating which pages need to be decoded
  * @param initial_str_offsets Vector to store the initial offsets for large nested string cols
+ * @param page_string_offset_indices Device span of page string offset indices
  * @param error_code Error code to set if an error is encountered
  */
 template <typename level_t, int decode_block_size_t, decode_kernel_mask kernel_mask_t>
 CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   decode_page_data_generic(PageInfo* pages,
                            device_span<ColumnChunkDesc const> chunks,
-                           device_span<size_t const> page_string_offset_indices,
                            size_t min_row,
                            size_t num_rows,
                            cudf::device_span<bool const> page_mask,
                            cudf::device_span<size_t> initial_str_offsets,
+                           cudf::device_span<size_t const> page_string_offset_indices,
                            kernel_error::pointer error_code)
 {
   constexpr bool has_dict_t     = has_dict<kernel_mask_t>();
@@ -1272,13 +1269,13 @@ using int_tag_t = std::integral_constant<int, value>;
  */
 void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
                       cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                      cudf::device_span<size_t const> page_string_offset_indices,
                       size_t num_rows,
                       size_t min_row,
                       int level_type_size,
                       decode_kernel_mask kernel_mask,
                       cudf::device_span<bool const> page_mask,
                       cudf::device_span<size_t> initial_str_offsets,
+                      cudf::device_span<size_t const> page_string_offset_indices,
                       kernel_error::pointer error_code,
                       rmm::cuda_stream_view stream)
 {
@@ -1294,21 +1291,21 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
       decode_page_data_generic<uint8_t, decode_block_size, mask>
         <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(),
                                                      chunks,
-                                                     page_string_offset_indices,
                                                      min_row,
                                                      num_rows,
                                                      page_mask,
                                                      initial_str_offsets,
+                                                     page_string_offset_indices,
                                                      error_code);
     } else {
       decode_page_data_generic<uint16_t, decode_block_size, mask>
         <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(),
                                                      chunks,
-                                                     page_string_offset_indices,
                                                      min_row,
                                                      num_rows,
                                                      page_mask,
                                                      initial_str_offsets,
+                                                     page_string_offset_indices,
                                                      error_code);
     }
   };

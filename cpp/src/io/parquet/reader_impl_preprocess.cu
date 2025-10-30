@@ -318,8 +318,8 @@ void reader_impl::set_page_string_offset_indices(size_t skip_rows,
   // Build a host vector to store the string offset indices for each page
   std::vector<size_t> h_page_string_offset_indices(subpass.pages.size(), 0);
 
+  // Calculate size of offset buffer to allocate by iterating over pages directly
   size_t total_num_offsets = 0;
-  // Calculate total number of values by iterating over pages directly
   for (size_t i = 0; i < subpass.pages.size(); ++i) {
     auto& page  = subpass.pages[i];
     auto& chunk = pass.chunks[page.chunk_idx];
@@ -339,7 +339,10 @@ void reader_impl::set_page_string_offset_indices(size_t skip_rows,
     auto const page_end_row      = page_start_row + page.num_rows;
     auto const subpass_start_row = skip_rows;
     auto const subpass_end_row   = subpass_start_row + num_rows;
-    auto const read_end_row      = std::min(page_end_row, subpass_end_row);
+
+    if ((page_end_row <= subpass_start_row) || (page_start_row >= subpass_end_row)) {
+      continue;  // will skip the page
+    }
 
     // For list columns, batch_size has been computed during preprocessing
     // We can't access it here because page.nesting is a device pointer
@@ -347,10 +350,9 @@ void reader_impl::set_page_string_offset_indices(size_t skip_rows,
 
     // For non-list columns, we don't know how many values we'll read, because we don't know
     // how many nulls we'll skip. So we have to read through the skipped rows on the page.
-    bool const will_skip_page =
-      (page_end_row <= subpass_start_row) || (page_start_row >= subpass_end_row);
+    auto const read_end_row = std::min(page_end_row, subpass_end_row);
     size_t const page_num_values =
-      will_skip_page ? 0 : (is_list_col ? page.num_input_values : (read_end_row - page_start_row));
+      is_list_col ? page.num_input_values : (read_end_row - page_start_row);
 
     // add to total, plus store last offset for each page
     total_num_offsets += page_num_values + (page_num_values > 0 ? 1 : 0);
@@ -359,7 +361,7 @@ void reader_impl::set_page_string_offset_indices(size_t skip_rows,
   // Allocate the string offset buffer
   _string_offset_buffer = rmm::device_uvector<uint32_t>(total_num_offsets, _stream, _mr);
 
-  // Set the string offset buffer for non-dictionary string columns
+  // Set the string offset buffer for non-dictionary, non-FLBA string columns
   for (size_t col_idx = 0; col_idx < pass.chunks.size(); ++col_idx) {
     auto& chunk = pass.chunks[col_idx];
     // Check if this is a string column without dictionary & not a fixed length byte array

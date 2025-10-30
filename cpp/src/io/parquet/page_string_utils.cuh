@@ -327,7 +327,6 @@ __device__ size_t decode_strings(page_state_s* s,
     }
 
     // compute output string offsets
-    // compute string offsets
     size_t thread_string_offset, block_total_string_length;
     {
       using scanner = cub::BlockScan<size_t, block_size>;
