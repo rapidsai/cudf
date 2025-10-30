@@ -142,7 +142,6 @@ ExprTransformer: TypeAlias = GenericTransformer[
 
 @singledispatch
 def _validate_to_ast(node: expr.Expr, self: ValidateTransformer) -> None:
-    print(f"Unhandled expression type {type(node)}")
     raise NotImplementedError(f"Unhandled expression type {type(node)}")
 
 
@@ -216,8 +215,8 @@ def _(node: expr.BooleanFunction, self: ValidateTransformer) -> None:
         or node.name is expr.BooleanFunction.Name.IsNotNull
         or node.name is expr.BooleanFunction.Name.Not
     ):
-        self(node.children[0])
-        return None  # check for validation errors
+        self(node.children[0])  # check for validation errors
+        return None
     raise NotImplementedError(f"AST conversion does not support {node.name}")
 
 
