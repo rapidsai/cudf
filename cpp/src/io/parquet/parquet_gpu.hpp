@@ -944,7 +944,6 @@ void decode_delta_length_byte_array(cudf::detail::hostdevice_span<PageInfo> page
                                     kernel_error::pointer error_code,
                                     rmm::cuda_stream_view stream);
 
-
 /**
  * @brief Launches pre-processing kernel to fill string offsets for non-dictionary columns
  *
@@ -956,13 +955,13 @@ void decode_delta_length_byte_array(cudf::detail::hostdevice_span<PageInfo> page
  * @param[in] page_mask Boolean vector indicating which pages need to be processed
  * @param[in] stream CUDA stream to use
  */
- void preprocess_string_offsets(cudf::detail::hostdevice_span<PageInfo> pages,
-  cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-  cudf::device_span<size_t const> page_string_offset_indices,
-  cudf::device_span<bool const> page_mask,
-  size_t min_row,
-  size_t num_rows,
-  rmm::cuda_stream_view stream);
+void preprocess_string_offsets(cudf::detail::hostdevice_span<PageInfo> pages,
+                               cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                               cudf::device_span<size_t const> page_string_offset_indices,
+                               cudf::device_span<bool const> page_mask,
+                               size_t min_row,
+                               size_t num_rows,
+                               rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for reading non-dictionary fixed width column data stored in the pages

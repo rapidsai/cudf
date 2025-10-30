@@ -250,13 +250,17 @@ template <int block_size,
           bool split_decode_t,
           copy_mode copy_mode_t,
           typename state_buf>
-__device__ size_t decode_strings(
-  page_state_s* s, state_buf* const sb, int start, int end, int t, size_t page_offset, size_t string_output_offset)
+__device__ size_t decode_strings(page_state_s* s,
+                                 state_buf* const sb,
+                                 int start,
+                                 int end,
+                                 int t,
+                                 uint32_t* str_offsets,
+                                 size_t string_output_offset)
 {
   // nesting level that is storing actual leaf values
   int const leaf_level_index    = s->col.max_nesting_depth - 1;
   int const skipped_leaf_values = s->page.skipped_leaf_values;
-  uint32_t* str_offsets = s->col.column_string_offset_base;
 
   auto const& ni = s->nesting_info[leaf_level_index];
 
@@ -289,51 +293,37 @@ __device__ size_t decode_strings(
     }();
 
     // lookup input string pointer & length. store length.
-    bool const in_range                       = (thread_pos < target_pos) && (dst_pos >= 0);
-    
-    char const* thread_input_string;
-    int string_length;
-    auto do_dict = [&](){
-      auto const string_pair = [&]() {
-        // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
-        // before first_row) in the flat hierarchy case.
-        if (!in_range) { return string_index_pair{nullptr, 0}; }
+    bool const in_range                             = (thread_pos < target_pos) && (dst_pos >= 0);
+    auto const [thread_input_string, string_length] = [&]() {
+      // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
+      // before first_row) in the flat hierarchy case.
+      if (!in_range) { return string_index_pair{nullptr, 0}; }
+      if constexpr (has_dict_t) {
         return gpuGetStringData(s, sb, src_pos);
-      }();
-      thread_input_string = string_pair.first;
-      string_length = string_pair.second;
-    };
-    //do_dict();
-
-    if constexpr (!has_dict_t) {
-      char const* new_thread_input_string;
-      int new_string_length;
-      int input_thread_string_offset = -1, next_offset = -1, read_index = -1;
-
-      // Copy pre-filled string offsets to the rolling buffer and compute lengths
-      if (!in_range) {
-        new_thread_input_string = nullptr;
-        new_string_length = 0;
       } else {
-        read_index = page_offset + thread_pos;
-        input_thread_string_offset = str_offsets[read_index];
-        next_offset = str_offsets[read_index + 1];
-        new_string_length = (next_offset == input_thread_string_offset) ? 0 : next_offset - input_thread_string_offset - 4;
-        if (input_thread_string_offset <= (uint32_t)s->dict_size) {
-          new_thread_input_string = reinterpret_cast<char const*>(s->data_start + input_thread_string_offset);
+        int input_thread_string_offset;
+        int string_length;
+        if (s->col.physical_type == Type::FIXED_LEN_BYTE_ARRAY) {
+          input_thread_string_offset = (thread_pos + skipped_leaf_values) * s->dtype_len_in;
+          string_length              = s->dtype_len_in;
         } else {
-          new_thread_input_string = nullptr;
-          new_string_length = 0;
+          input_thread_string_offset = str_offsets[thread_pos];
+          int const next_offset      = str_offsets[thread_pos + 1];
+          string_length              = (next_offset == input_thread_string_offset)
+                                         ? 0
+                                         : next_offset - input_thread_string_offset - 4;
         }
+        if (input_thread_string_offset >= (uint32_t)s->dict_size) {
+          return string_index_pair{nullptr, 0};
+        }
+        auto const thread_input_string =
+          reinterpret_cast<char const*>(s->data_start + input_thread_string_offset);
+        return string_index_pair{thread_input_string, string_length};
       }
-      string_length = new_string_length;
-      thread_input_string = new_thread_input_string;
-    } else {
-      do_dict();
-    }
+    }();
     if (in_range) {
-      int32_t* str_len_ptr          = reinterpret_cast<int32_t*>(ni.data_out) + dst_pos;
-      *str_len_ptr                  = string_length;
+      int32_t* str_len_ptr = reinterpret_cast<int32_t*>(ni.data_out) + dst_pos;
+      *str_len_ptr         = string_length;
     }
 
     // compute output string offsets
