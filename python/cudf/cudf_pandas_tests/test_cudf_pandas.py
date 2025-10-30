@@ -2126,3 +2126,10 @@ def test_pandas_objects_not_callable():
     assert isinstance(xpd.DataFrame, Callable)
     assert isinstance(xpd.Index, Callable)
     assert isinstance(xpd.RangeIndex, Callable)
+
+
+def test_module_proxy_write_through_config(monkeypatch):
+    cf = xpd._config.config
+    cf.register_option("foo", 1)
+    monkeypatch.setattr(cf, "_registered_options", {})
+    cf.register_option("foo", 1)
