@@ -90,6 +90,12 @@ target_link_libraries(
 )
 install(TARGETS localize_phone_precompiled DESTINATION bin/examples/libcudf/string_transformers)
 
+add_executable(like_jit like_jit.cpp)
+target_compile_features(like_jit PRIVATE cxx_std_20)
+# target_compile_options(like_jit PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
+target_link_libraries(like_jit PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>)
+install(TARGETS like_jit DESTINATION bin/examples/libcudf/string_transformers)
+
 install(FILES ${CMAKE_CURRENT_LIST_DIR}/info.csv
         DESTINATION bin/examples/libcudf/string_transformers
 )
