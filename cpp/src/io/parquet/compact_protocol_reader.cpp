@@ -182,6 +182,7 @@ struct parquet_field_bool_list : public parquet_field_list<bool, FieldType::BOOL
     auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
       auto const current_byte = cpr->getb();
       assert_bool_field_type(current_byte);
+      CUDF_EXPECTS(i < val.size(), "Index out of bounds");
       val[i] = current_byte == static_cast<int>(FieldType::BOOLEAN_TRUE);
     };
     bind_read_func(read_value);
@@ -231,6 +232,7 @@ struct parquet_field_int_list : public parquet_field_list<T, EXPECTED_TYPE> {
   parquet_field_int_list(int f, std::vector<T>& v) : parquet_field_list<T, EXPECTED_TYPE>(f, v)
   {
     auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
+      CUDF_EXPECTS(i < val.size(), "Index out of bounds");
       val[i] = cpr->get_zigzag<T>();
     };
     this->bind_read_func(read_value);
@@ -275,6 +277,7 @@ class parquet_field_string_list : public parquet_field_list<std::string, FieldTy
     auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
       auto const l = cpr->get_u32();
       CUDF_EXPECTS(std::cmp_less(l, cpr->m_end - cpr->m_cur), "string length mismatch");
+      CUDF_EXPECTS(i < val.size(), "Index out of bounds");
 
       val[i].assign(reinterpret_cast<char const*>(cpr->m_cur), l);
       cpr->m_cur += l;
@@ -313,6 +316,7 @@ struct parquet_field_enum_list : public parquet_field_list<Enum, FieldType::I32>
     : parquet_field_list<Enum, FieldType::I32>(f, v)
   {
     auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
+      CUDF_EXPECTS(i < val.size(), "Index out of bounds");
       val[i] = static_cast<Enum>(cpr->get_i32());
     };
     this->bind_read_func(read_value);
@@ -498,6 +502,7 @@ class parquet_field_binary_list
     auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
       auto const l = cpr->get_u32();
       CUDF_EXPECTS(std::cmp_less_equal(l, cpr->m_end - cpr->m_cur), "binary length mismatch");
+      CUDF_EXPECTS(i < val.size(), "Index out of bounds");
 
       val[i].assign(cpr->m_cur, cpr->m_cur + l);
       cpr->m_cur += l;
