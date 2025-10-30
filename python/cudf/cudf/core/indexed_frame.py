@@ -4054,7 +4054,7 @@ class IndexedFrame(Frame):
             col.round(decimals[name], how=how)
             if name in decimals
             and (
-                col.dtype.kind in "fiu"
+                col.dtype.kind in "iu"
                 or isinstance(
                     col.dtype, (cudf.Decimal32Dtype, cudf.Decimal64Dtype)
                 )
