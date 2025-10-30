@@ -482,7 +482,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
       out_buf.null_count() += pndi[l_idx].null_count;
     }
   }
-  
+
   // Clear string offset buffers to free device memory
   _page_string_offset_indices.resize(0, _stream);
   _string_offset_buffer.resize(0, _stream);
