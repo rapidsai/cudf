@@ -10,7 +10,6 @@
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/join/join.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -447,7 +446,7 @@ TEST_F(FilterGatherMapTest, NullIndices)
   cudf::table_view right_table({right_col0});
 
   // Create index arrays with null sentinels (simulating outer join results)
-  constexpr cudf::size_type null_sentinel      = cudf::JoinNoneValue;
+  constexpr cudf::size_type null_sentinel      = std::numeric_limits<cudf::size_type>::min();
   std::vector<cudf::size_type> left_host_data  = {0, 1, null_sentinel};
   std::vector<cudf::size_type> right_host_data = {0, null_sentinel, 1};
 
@@ -474,7 +473,8 @@ TEST_F(FilterGatherMapTest, NullIndices)
   ASSERT_NE(result.second, nullptr) << "Right result is null";
 
   // Only the first pair (0,0) should pass: left[0]=1, right[0]=1, 1==1 is true
-  // The other pairs have null indices and should be filtered out
+  // The other pairs have null indices and should be filtered out (can't evaluate predicates on
+  // them)
   EXPECT_EQ(result.first->size(), 1);
   EXPECT_EQ(result.second->size(), 1);
 

@@ -17,7 +17,6 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/join/hash_join.hpp>
-#include <cudf/join/join.hpp>
 #include <cudf/join/sort_merge_join.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>

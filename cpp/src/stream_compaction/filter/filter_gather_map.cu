@@ -42,6 +42,7 @@ filter_gather_map(cudf::table_view const& left,
                   cudf::device_span<size_type const> left_indices,
                   cudf::device_span<size_type const> right_indices,
                   ast::expression const& predicate,
+                  null_policy null_handling,
                   rmm::cuda_stream_view stream,
                   rmm::device_async_resource_ref mr)
 {
@@ -99,9 +100,10 @@ filter_gather_map(cudf::table_view const& left,
                                                   left_indices,
                                                   right_indices,
                                                   parser.device_expression_data,
-                                                  flags.data(),
+                                                  null_handling,
                                                   config,
                                                   shmem_per_block,
+                                                  flags.data(),
                                                   stream);
     } else {
       launch_filter_gather_map_kernel<true, false>(*left_table,
@@ -109,9 +111,10 @@ filter_gather_map(cudf::table_view const& left,
                                                    left_indices,
                                                    right_indices,
                                                    parser.device_expression_data,
-                                                   flags.data(),
+                                                   null_handling,
                                                    config,
                                                    shmem_per_block,
+                                                   flags.data(),
                                                    stream);
     }
   } else {
@@ -121,9 +124,10 @@ filter_gather_map(cudf::table_view const& left,
                                                    left_indices,
                                                    right_indices,
                                                    parser.device_expression_data,
-                                                   flags.data(),
+                                                   null_handling,
                                                    config,
                                                    shmem_per_block,
+                                                   flags.data(),
                                                    stream);
     } else {
       launch_filter_gather_map_kernel<false, false>(*left_table,
@@ -131,9 +135,10 @@ filter_gather_map(cudf::table_view const& left,
                                                     left_indices,
                                                     right_indices,
                                                     parser.device_expression_data,
-                                                    flags.data(),
+                                                    null_handling,
                                                     config,
                                                     shmem_per_block,
+                                                    flags.data(),
                                                     stream);
     }
   }
@@ -180,11 +185,13 @@ filter_gather_map(cudf::table_view const& left,
                   cudf::device_span<size_type const> left_indices,
                   cudf::device_span<size_type const> right_indices,
                   ast::expression const& predicate,
+                  null_policy null_handling,
                   rmm::cuda_stream_view stream,
                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::filter_gather_map(left, right, left_indices, right_indices, predicate, stream, mr);
+  return detail::filter_gather_map(
+    left, right, left_indices, right_indices, predicate, null_handling, stream, mr);
 }
 
 }  // namespace cudf

@@ -12,7 +12,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/join/conditional_join.hpp>
 #include <cudf/join/filtered_join.hpp>
-#include <cudf/join/join.hpp>
+#include <cudf/join/hash_join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -25,6 +25,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <limits>
 #include <numeric>
 #include <random>
 #include <stdexcept>
@@ -43,6 +44,9 @@ using ColumnVector = std::vector<std::vector<T>>;
 
 template <typename T>
 using NullableColumnVector = std::vector<std::pair<std::vector<T>, NullMaskVector>>;
+
+constexpr cudf::size_type JoinNoneValue =
+  std::numeric_limits<cudf::size_type>::min();  // TODO: how to test if this isn't public?
 
 // Common column references.
 auto const col_ref_left_0  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
@@ -386,7 +390,8 @@ struct ConditionalInnerJoinTest : public ConditionalJoinPairReturnTest<T> {
     cudf::table_view right,
     cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
   {
-    return cudf::inner_join(left, right, compare_nulls);
+    cudf::hash_join hash_joiner(right, compare_nulls);
+    return hash_joiner.inner_join(left);
   }
 };
 
@@ -577,7 +582,8 @@ struct ConditionalLeftJoinTest : public ConditionalJoinPairReturnTest<T> {
     cudf::table_view right,
     cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
   {
-    return cudf::left_join(left, right, compare_nulls);
+    cudf::hash_join hash_joiner(right, compare_nulls);
+    return hash_joiner.left_join(left);
   }
 };
 
@@ -588,7 +594,7 @@ TYPED_TEST(ConditionalLeftJoinTest, TestTwoColumnThreeRowSomeEqual)
   this->test({{0, 1, 2}, {10, 20, 30}},
              {{0, 1, 3}, {30, 40, 50}},
              left_zero_eq_right_zero,
-             {{0, 0}, {1, 1}, {2, cudf::JoinNoneValue}});
+             {{0, 0}, {1, 1}, {2, JoinNoneValue}});
 };
 
 TYPED_TEST(ConditionalLeftJoinTest, TestOneColumnLeftEmpty)
@@ -601,7 +607,7 @@ TYPED_TEST(ConditionalLeftJoinTest, TestOneColumnRightEmpty)
   this->test({{3, 4, 5}},
              {{}},
              left_zero_eq_right_zero,
-             {{0, cudf::JoinNoneValue}, {1, cudf::JoinNoneValue}, {2, cudf::JoinNoneValue}});
+             {{0, JoinNoneValue}, {1, JoinNoneValue}, {2, JoinNoneValue}});
 };
 
 TYPED_TEST(ConditionalLeftJoinTest, TestCompareRandomToHash)
@@ -643,7 +649,8 @@ struct ConditionalFullJoinTest : public ConditionalJoinPairReturnTest<T> {
     cudf::table_view right,
     cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
   {
-    return cudf::full_join(left, right, compare_nulls);
+    cudf::hash_join hash_joiner(right, compare_nulls);
+    return hash_joiner.full_join(left);
   }
 };
 
@@ -654,12 +661,12 @@ TYPED_TEST(ConditionalFullJoinTest, TestOneColumnNoneEqual)
   this->test({{0, 1, 2}},
              {{3, 4, 5}},
              left_zero_eq_right_zero,
-             {{0, cudf::JoinNoneValue},
-              {1, cudf::JoinNoneValue},
-              {2, cudf::JoinNoneValue},
-              {cudf::JoinNoneValue, 0},
-              {cudf::JoinNoneValue, 1},
-              {cudf::JoinNoneValue, 2}});
+             {{0, JoinNoneValue},
+              {1, JoinNoneValue},
+              {2, JoinNoneValue},
+              {JoinNoneValue, 0},
+              {JoinNoneValue, 1},
+              {JoinNoneValue, 2}});
 };
 
 TYPED_TEST(ConditionalFullJoinTest, TestOneColumnLeftEmpty)
@@ -667,7 +674,7 @@ TYPED_TEST(ConditionalFullJoinTest, TestOneColumnLeftEmpty)
   this->test({{}},
              {{3, 4, 5}},
              left_zero_eq_right_zero,
-             {{cudf::JoinNoneValue, 0}, {cudf::JoinNoneValue, 1}, {cudf::JoinNoneValue, 2}});
+             {{JoinNoneValue, 0}, {JoinNoneValue, 1}, {JoinNoneValue, 2}});
 };
 
 TYPED_TEST(ConditionalFullJoinTest, TestOneColumnRightEmpty)
@@ -675,7 +682,7 @@ TYPED_TEST(ConditionalFullJoinTest, TestOneColumnRightEmpty)
   this->test({{3, 4, 5}},
              {{}},
              left_zero_eq_right_zero,
-             {{0, cudf::JoinNoneValue}, {1, cudf::JoinNoneValue}, {2, cudf::JoinNoneValue}});
+             {{0, JoinNoneValue}, {1, JoinNoneValue}, {2, JoinNoneValue}});
 };
 
 TYPED_TEST(ConditionalFullJoinTest, TestTwoColumnThreeRowSomeEqual)
@@ -683,7 +690,7 @@ TYPED_TEST(ConditionalFullJoinTest, TestTwoColumnThreeRowSomeEqual)
   this->test({{0, 1, 2}, {10, 20, 30}},
              {{0, 1, 3}, {30, 40, 50}},
              left_zero_eq_right_zero,
-             {{0, 0}, {1, 1}, {2, cudf::JoinNoneValue}, {cudf::JoinNoneValue, 2}});
+             {{0, 0}, {1, 1}, {2, JoinNoneValue}, {JoinNoneValue, 2}});
 };
 
 TYPED_TEST(ConditionalFullJoinTest, TestCompareRandomToHash)

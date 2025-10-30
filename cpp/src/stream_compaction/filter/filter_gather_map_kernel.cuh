@@ -8,9 +8,9 @@
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/ast/detail/expression_parser.hpp>
+#include <cudf/detail/join/join.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
-#include <cudf/join/join.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -33,6 +33,7 @@ __launch_bounds__(max_block_size) __global__
                                 cudf::device_span<cudf::size_type const> left_indices,
                                 cudf::device_span<cudf::size_type const> right_indices,
                                 cudf::ast::detail::expression_device_view device_expression_data,
+                                cudf::null_policy null_handling,
                                 bool* output_flags)
 {
   // Shared memory for intermediate storage
@@ -56,12 +57,12 @@ __launch_bounds__(max_block_size) __global__
     auto result = cudf::ast::detail::value_expression_result<bool, has_nulls>{};
 
     // Check for null sentinels (used by outer joins for unmatched rows)
-    bool const has_null_index =
-      (left_row_index == cudf::JoinNoneValue || right_row_index == cudf::JoinNoneValue);
+    bool const has_null_index = (left_row_index == cudf::detail::JoinNoneValue ||
+                                 right_row_index == cudf::detail::JoinNoneValue);
 
-    // Always include null indices as they represent meaningful data from outer joins
+    // Handle null indices based on the specified policy
     if (has_null_index) {
-      output_flags[i] = true;  // Keep null index pairs in output
+      output_flags[i] = (null_handling == cudf::null_policy::INCLUDE);
     } else if (left_row_index >= 0 && left_row_index < left_table.num_rows() &&
                right_row_index >= 0 && right_row_index < right_table.num_rows()) {
       // Valid indices - evaluate predicate
@@ -83,14 +84,21 @@ void launch_filter_gather_map_kernel(
   cudf::device_span<cudf::size_type const> left_indices,
   cudf::device_span<cudf::size_type const> right_indices,
   cudf::ast::detail::expression_device_view device_expression_data,
-  bool* output_flags,
+  cudf::null_policy null_handling,
   cudf::detail::grid_1d const& config,
   std::size_t shmem_per_block,
+  bool* output_flags,
   rmm::cuda_stream_view stream)
 {
   filter_gather_map_kernel<MAX_BLOCK_SIZE, has_nulls, has_complex_type>
     <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
-      left_table, right_table, left_indices, right_indices, device_expression_data, output_flags);
+      left_table,
+      right_table,
+      left_indices,
+      right_indices,
+      device_expression_data,
+      null_handling,
+      output_flags);
 }
 
 }  // namespace cudf::detail
