@@ -93,7 +93,6 @@ async def dataframescan_node(
     rows_per_partition
         The number of rows per partition.
     """
-    # TODO: Use multiple streams
     nrows = max(ir.df.shape()[0], 1)
     global_count = math.ceil(nrows / rows_per_partition)
 
@@ -332,7 +331,6 @@ async def scan_node(
     parquet_options
         The Parquet options.
     """
-    # TODO: Use multiple streams
     async with shutdown_on_error(context, ch_out.data):
         # Build a list of local Scan operations
         scans: list[Scan | SplitScan] = []

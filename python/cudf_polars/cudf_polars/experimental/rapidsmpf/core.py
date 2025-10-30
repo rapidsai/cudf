@@ -131,33 +131,7 @@ def evaluate_logical_plan(
     # Run the network
     run_streaming_pipeline(nodes=nodes, py_executor=executor)
 
-    # Extract/return the result
-    return combine_output_chunks(
-        ir,
-        output.release(),
-        ir_context=ir_context,
-    )
-
-
-def combine_output_chunks(
-    ir: IR, messages: list, ir_context: IRExecutionContext
-) -> DataFrame:
-    """
-    Combine the output chunks into a single DataFrame.
-
-    Parameters
-    ----------
-    ir
-        The IR node.
-    messages
-        The output messages containing chunks.
-    ir_context
-        The execution context for the IR node.
-
-    Returns
-    -------
-    The combined DataFrame, ordered by sequence number.
-    """
+    # Extract/return the concatenated result
     return _concat(
         *(
             DataFrame.from_table(
@@ -166,7 +140,7 @@ def combine_output_chunks(
                 list(ir.schema.values()),
                 chunk.stream,
             )
-            for msg in sorted(messages, key=lambda m: m.sequence_number)
+            for msg in output.release()
             for chunk in [TableChunk.from_message(msg)]
         ),
         context=ir_context,
