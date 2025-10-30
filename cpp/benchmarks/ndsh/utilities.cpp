@@ -402,14 +402,12 @@ void generate_parquet_data_sources(double scale_factor,
 
   // Set the memory resource to the managed pool
   auto* old_mr = rmm::mr::get_current_device_resource();
-
+  // if already managed pool or managed, don't create new one.
   using managed_pool_mr_t = decltype(make_managed_pool());
   managed_pool_mr_t managed_pool_mr;
-
   bool const is_managed =
     dynamic_cast<rmm::mr::pool_memory_resource<rmm::mr::managed_memory_resource>*>(old_mr) or
     dynamic_cast<rmm::mr::managed_memory_resource*>(old_mr);
-
   if (!is_managed) {
     std::cout << "Creating managed pool just for data generation\n";
     managed_pool_mr = make_managed_pool();
@@ -479,5 +477,5 @@ void generate_parquet_data_sources(double scale_factor,
   }
 
   // Restore the original memory resource
-  if (!is_managed) { rmm::mr::set_current_device_resource(old_mr); }
+  if (!is_managed) { cudf::set_current_device_resource(old_mr); }
 }
