@@ -7,7 +7,7 @@ import pyarrow.parquet as pq
 import pytest
 
 from rmm import DeviceBuffer
-from rmm.pylibrmm.stream import Stream
+from rmm.pylibrmm.stream import DEFAULT_STREAM, Stream
 
 import pylibcudf as plc
 from pylibcudf.expressions import (
@@ -177,7 +177,7 @@ def test_hybrid_scan_filter_row_groups_with_stats(
         ColumnNameReference("col0"),
         Literal(
             plc.Scalar.from_arrow(
-                pa.scalar(filter_threshold, type=pa.uint32())
+                pa.scalar(filter_threshold, type=pa.uint32()), stream=stream
             )
         ),
     )
@@ -288,7 +288,6 @@ def test_hybrid_scan_materialize_columns(
     simple_parquet_bytes,
     simple_hybrid_scan_reader,
     simple_parquet_options,
-    simple_parquet_table,
     num_rows,
     stream,
     use_data_page_mask,
@@ -301,7 +300,7 @@ def test_hybrid_scan_materialize_columns(
         ColumnNameReference("col0"),
         Literal(
             plc.Scalar.from_arrow(
-                pa.scalar(filter_threshold, type=pa.uint32())
+                pa.scalar(filter_threshold, type=pa.uint32()), stream=stream
             )
         ),
     )
@@ -331,7 +330,8 @@ def test_hybrid_scan_materialize_columns(
     )
     filter_buffers = [
         DeviceBuffer.to_device(
-            simple_parquet_bytes[r.offset : r.offset + r.size]
+            simple_parquet_bytes[r.offset : r.offset + r.size],
+            stream or DEFAULT_STREAM,
         )
         for r in filter_ranges
     ]
@@ -344,7 +344,6 @@ def test_hybrid_scan_materialize_columns(
         use_data_page_mask,
         simple_parquet_options,
         stream,
-        None,  # mr parameter
     )
 
     # Filter column should have 1 column, with rows passing the filter
@@ -360,7 +359,8 @@ def test_hybrid_scan_materialize_columns(
     )
     payload_buffers = [
         DeviceBuffer.to_device(
-            simple_parquet_bytes[r.offset : r.offset + r.size]
+            simple_parquet_bytes[r.offset : r.offset + r.size],
+            stream or DEFAULT_STREAM,
         )
         for r in payload_ranges
     ]
@@ -373,7 +373,6 @@ def test_hybrid_scan_materialize_columns(
         use_data_page_mask,
         simple_parquet_options,
         stream,
-        None,  # mr parameter
     )
 
     assert payload_result.tbl.num_columns() == 2
@@ -506,7 +505,8 @@ def test_hybrid_scan_chunked_reading(
     )
     filter_buffers = [
         DeviceBuffer.to_device(
-            simple_parquet_bytes[r.offset : r.offset + r.size]
+            simple_parquet_bytes[r.offset : r.offset + r.size],
+            stream or DEFAULT_STREAM,
         )
         for r in filter_ranges
     ]
@@ -531,7 +531,7 @@ def test_hybrid_scan_chunked_reading(
     while simple_hybrid_scan_reader.has_next_table_chunk():
         chunk_result = (
             simple_hybrid_scan_reader.materialize_filter_columns_chunk(
-                row_mask, stream, None
+                row_mask, stream
             )
         )
         assert isinstance(chunk_result, plc.io.types.TableWithMetadata)
