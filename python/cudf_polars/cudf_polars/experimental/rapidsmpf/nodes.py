@@ -31,19 +31,21 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
 
 
-class Lineariser:
+class PyLineariser:
     """
     Linearise output-channel insertion from multiple producers by sequence number.
 
-    This is a Python implementation inspired by the C++ Lineariser in rapidsmpf.
+    This is a temporary Python implementation inspired by the C++ Lineariser in rapidsmpf.
     It ensures that messages from multiple concurrent producers are sent to the output
     channel in strictly increasing sequence number order.
 
     Each producer sends messages to its own queue, and the lineariser's drain()
     coroutine pulls from all queues and sends to the output channel in order.
 
+    Note: This will be replaced by Python bindings to the C++ Lineariser once available.
+
     Example usage:
-        lineariser = Lineariser(ch_out, num_tasks)
+        lineariser = PyLineariser(ch_out, num_tasks)
         tasks = [lineariser.drain(context)]
         for i in range(num_tasks):
             tasks.append(producer_task(context, lineariser.get_input_queue(i), i))
@@ -52,7 +54,7 @@ class Lineariser:
 
     def __init__(self, ch_out: Channel, num_producers: int):
         """
-        Create a new Lineariser.
+        Create a new PyLineariser.
 
         Parameters
         ----------

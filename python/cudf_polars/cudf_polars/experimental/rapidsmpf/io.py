@@ -24,7 +24,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
     lower_ir_node,
 )
 from cudf_polars.experimental.rapidsmpf.nodes import (
-    Lineariser,
+    PyLineariser,
     define_py_node,
     shutdown_on_error,
 )
@@ -130,8 +130,8 @@ async def dataframescan_node(
                 )
             await ch_out.data.drain(context)
         else:
-            # Concurrent execution - use Lineariser to ensure ordered delivery
-            lineariser = Lineariser(ch_out.data, len(ir_slices))
+            # Concurrent execution - use PyLineariser to ensure ordered delivery
+            lineariser = PyLineariser(ch_out.data, len(ir_slices))
 
             # Start the lineariser drain task
             tasks = [lineariser.drain(context)]
@@ -269,7 +269,7 @@ async def read_chunk_linearised(
     """
     Read a chunk from disk and send it to a lineariser queue.
 
-    This function is used with Lineariser to ensure ordered delivery
+    This function is used with PyLineariser to ensure ordered delivery
     of chunks even when I/O operations complete out of order.
 
     Parameters
@@ -414,8 +414,8 @@ async def scan_node(
                 )
             await ch_out.data.drain(context)
         else:
-            # Concurrent execution - use Lineariser to ensure ordered delivery
-            lineariser = Lineariser(ch_out.data, len(scans))
+            # Concurrent execution - use PyLineariser to ensure ordered delivery
+            lineariser = PyLineariser(ch_out.data, len(scans))
 
             # Start the lineariser drain task
             tasks = [lineariser.drain(context)]
