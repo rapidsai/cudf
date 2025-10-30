@@ -19,6 +19,8 @@ class CharacterNormalizer:
         while normalizing.
     special_tokens : cudf.Series
         Series of special tokens.
+        These are expected to be all upper case and
+        include the bracket ``[]`` characters.
     """
 
     def __init__(
