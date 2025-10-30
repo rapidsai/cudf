@@ -6621,6 +6621,17 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     )
                 pd_index = source._data.to_pandas_index
                 idx = from_pandas(pd_index)
+                if (
+                    op == "std"
+                    and common_dtype is not None
+                    and common_dtype.kind == "M"
+                ):
+                    # TODO: Columns should probably signal the result type of their scalar
+                    # Especially for this case where NaT could be datetime or timedelta
+                    unit = np.datetime_data(common_dtype)[0]
+                    axis_0_results = pd.Index(
+                        axis_0_results, dtype=f"m8[{unit}]"
+                    )
                 res = as_column(
                     axis_0_results,
                     nan_as_null=not cudf.get_option("mode.pandas_compatible"),
