@@ -194,7 +194,7 @@ NodeIndexT get_row_array_parent_col_id(device_span<NodeIndexT const> col_ids,
   if (col_ids.empty()) { return parent_node_sentinel; }
 
   auto const list_node_index = is_enabled_lines ? 0 : 1;
-  if (static_cast<size_t>(list_node_index) >= col_ids.size()) { return parent_node_sentinel; }
+  if (std::cmp_greater_equal(list_node_index, col_ids.size())) { return parent_node_sentinel; }
   auto const value = cudf::detail::make_host_vector(
     device_span<NodeIndexT const>{col_ids.data() + list_node_index, 1}, stream);
 
