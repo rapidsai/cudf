@@ -195,7 +195,7 @@ VectorPair concatenate_vector_pairs(VectorPair& a, VectorPair& b, rmm::cuda_stre
 /**
  * @brief  Creates a table containing the complement of left join indices.
  *
- * This table has two columns. The first one is filled with JoinNoMatch(-1)
+ * This table has two columns. The first one is filled with `JoinNoMatch`
  * and the second one contains values from 0 to right_table_row_count - 1
  * excluding those found in the right_indices column.
  *
