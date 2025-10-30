@@ -613,3 +613,13 @@ def test_scan_parquet_with_decimal_literal_in_predicate(df, tmp_path):
     )
 
     assert_gpu_result_equal(q)
+
+
+def test_scan_csv_blank_line(tmp_path):
+    data = """c0
+
+polars"""
+    fle = tmp_path / "test.csv"
+    fle.write_text(data)
+    q = pl.scan_csv(fle)
+    assert_gpu_result_equal(q)

@@ -14,7 +14,6 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/filling.hpp>
 #include <cudf/lists/combine.hpp>
@@ -24,6 +23,7 @@
 #include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/table/table.hpp>
+#include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -36,20 +36,16 @@
 #include <cuda/functional>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
-#include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
 #include <thrust/gather.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
-#include <thrust/random/linear_congruential_engine.h>
 #include <thrust/random/uniform_int_distribution.h>
 #include <thrust/random/uniform_real_distribution.h>
 #include <thrust/scan.h>
-#include <thrust/sequence.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
@@ -62,6 +58,7 @@
 #include <utility>
 #include <vector>
 
+namespace {
 /**
  * @brief Mersenne Twister pseudo-random engine.
  */
@@ -279,7 +276,8 @@ struct random_value_fn<T, std::enable_if_t<cudf::is_chrono<T>()>> {
       // Don't need a random seconds generator for sub-second intervals
       seconds_gen = [range_s](thrust::minstd_rand&, size_t size) {
         rmm::device_uvector<int64_t> result(size, cudf::get_default_stream());
-        thrust::fill(thrust::device, result.begin(), result.end(), range_s.second.count());
+        thrust::uninitialized_fill(
+          thrust::device, result.begin(), result.end(), range_s.second.count());
         return result;
       };
 
@@ -389,13 +387,6 @@ struct random_value_fn<T, typename std::enable_if_t<std::is_same_v<T, bool>>> {
   auto operator()(thrust::minstd_rand& engine, unsigned size) { return dist(engine, size); }
 };
 
-auto create_run_length_dist(cudf::size_type avg_run_len)
-{
-  // Distribution with low probability of generating 0-1 even with a low `avg_run_len` value
-  static constexpr float alpha = 4.f;
-  return std::gamma_distribution<float>{alpha, avg_run_len / alpha};
-}
-
 /**
  * @brief Generate indices within range [0 , cardinality) repeating with average run length
  * `avg_run_len`
@@ -471,9 +462,11 @@ struct string_generator {
     for (auto i = begin; i < end; ++i) {
       auto ch = char_dist(engine);
       if (i == end - 1 && ch >= '\x7F') ch = ' ';  // last element ASCII only.
-      if (ch >= '\x7F')                            // x7F is at the top edge of ASCII
+      if (ch >= '\x7F') {                          // x7F is at the top edge of ASCII
         chars[i++] = '\xC4';                       // these characters are assigned two bytes
-      chars[i] = static_cast<char>(ch + (ch >= '\x7F'));
+        ch         = ch | 0x80;
+      }
+      chars[i] = static_cast<char>(ch);
     }
   }
 };
@@ -520,30 +513,15 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
 
   auto [result_bitmask, null_count] =
     profile.get_null_probability().has_value()
-      ? cudf::detail::valid_if(
-          null_mask.begin(), null_mask.end() - 1, cuda::std::identity{}, stream, mr)
-      : std::pair{rmm::device_buffer{}, 0};
+      ? cudf::bools_to_mask(cudf::device_span<bool const>(null_mask), stream)
+      : std::pair{std::make_unique<rmm::device_buffer>(), 0};
 
-  return cudf::make_strings_column(
-    num_rows, std::move(offsets), chars.release(), null_count, std::move(result_bitmask));
+  return cudf::make_strings_column(num_rows,
+                                   std::move(offsets),
+                                   chars.release(),
+                                   null_count,
+                                   std::move(*result_bitmask.release()));
 }
-
-/**
- * @brief Functor to dispatch create_random_column calls.
- */
-struct create_rand_col_fn {
- public:
-  template <typename T>
-  std::unique_ptr<cudf::column> operator()(data_profile const& profile,
-                                           thrust::minstd_rand& engine,
-                                           cudf::size_type num_rows)
-  {
-    if (profile.get_cardinality() >= num_rows) {
-      return create_distinct_rows_column<T>(profile, engine, num_rows);
-    }
-    return create_random_column<T>(profile, engine, num_rows);
-  }
-};
 
 /**
  * @brief Creates a column with random content of type @ref T.
@@ -604,18 +582,12 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
   }
 
   auto [result_bitmask, null_count] =
-    cudf::detail::valid_if(null_mask.begin(),
-                           null_mask.end(),
-                           cuda::std::identity{},
-                           cudf::get_default_stream(),
-                           cudf::get_current_device_resource_ref());
+    profile.get_null_probability().has_value()
+      ? cudf::bools_to_mask(cudf::device_span<bool const>(null_mask))
+      : std::pair{std::make_unique<rmm::device_buffer>(), 0};
 
   return std::make_unique<cudf::column>(
-    dtype,
-    num_rows,
-    data.release(),
-    profile.get_null_probability().has_value() ? std::move(result_bitmask) : rmm::device_buffer{},
-    profile.get_null_probability().has_value() ? null_count : 0);
+    dtype, num_rows, data.release(), std::move(*result_bitmask.release()), null_count);
 }
 
 template <typename T>
@@ -631,19 +603,31 @@ std::unique_ptr<cudf::column> create_distinct_rows_column(data_profile const& pr
   if (profile.get_null_probability().has_value()) {
     auto valid_dist =
       random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_probability().value()});
-    rmm::device_uvector<bool> null_mask(0, cudf::get_default_stream());
-    null_mask = valid_dist(engine, num_rows);
+    auto null_mask = valid_dist(engine, num_rows);
     auto [result_bitmask, null_count] =
-      cudf::detail::valid_if(null_mask.begin(),
-                             null_mask.end(),
-                             cuda::std::identity{},
-                             cudf::get_default_stream(),
-                             cudf::get_current_device_resource_ref());
-    col->set_null_mask(std::move(result_bitmask), null_count);
+      cudf::bools_to_mask(cudf::device_span<bool const>(null_mask), cudf::get_default_stream());
+    col->set_null_mask(std::move(*result_bitmask.release()), null_count);
   }
 
   return std::move(cudf::sample(cudf::table_view({col->view()}), num_rows)->release()[0]);
 }
+
+/**
+ * @brief Functor to dispatch create_random_column calls.
+ */
+struct create_rand_col_fn {
+ public:
+  template <typename T>
+  std::unique_ptr<cudf::column> operator()(data_profile const& profile,
+                                           thrust::minstd_rand& engine,
+                                           cudf::size_type num_rows)
+  {
+    if (profile.get_cardinality() >= num_rows) {
+      return create_distinct_rows_column<T>(profile, engine, num_rows);
+    }
+    return create_random_column<T>(profile, engine, num_rows);
+  }
+};
 
 /**
  * @brief Creates a string column with random content.
@@ -733,13 +717,10 @@ std::unique_ptr<cudf::column> create_random_column<cudf::struct_view>(data_profi
       auto [null_mask, null_count] = [&]() {
         if (profile.get_null_probability().has_value()) {
           auto valids = valid_dist(engine, num_rows);
-          return cudf::detail::valid_if(valids.begin(),
-                                        valids.end(),
-                                        cuda::std::identity{},
-                                        cudf::get_default_stream(),
-                                        cudf::get_current_device_resource_ref());
+          return cudf::bools_to_mask(cudf::device_span<bool const>(valids),
+                                     cudf::get_default_stream());
         }
-        return std::pair<rmm::device_buffer, cudf::size_type>{};
+        return std::pair{std::make_unique<rmm::device_buffer>(), 0};
       }();
 
       // Adopt remaining children as evenly as possible
@@ -754,7 +735,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::struct_view>(data_profi
       current_child += children_to_adopt.size();
 
       *current_parent = cudf::make_structs_column(
-        num_rows, std::move(children_to_adopt), null_count, std::move(null_mask));
+        num_rows, std::move(children_to_adopt), null_count, std::move(*null_mask.release()));
     }
 
     if (lvl == 1) {
@@ -788,11 +769,14 @@ std::unique_ptr<cudf::column> create_distinct_rows_column<cudf::struct_view>(
   return std::move(cudf::sample(cudf::table_view({structs_col->view()}), num_rows)->release()[0]);
 }
 
-template <typename T>
 struct clamp_down {
-  T max;
-  clamp_down(T max) : max(max) {}
-  __host__ __device__ T operator()(T x) const { return min(x, max); }
+  cudf::size_type max;
+  bool const* validity;
+  uint32_t* sizes;
+  __device__ uint32_t operator()(cudf::size_type idx) const
+  {
+    return validity[idx] ? cuda::std::min(sizes[idx], static_cast<uint32_t>(max)) : 0;
+  }
 };
 /**
  * @brief Creates a list column with random content.
@@ -836,12 +820,15 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
     auto offsets = len_dist(engine, current_num_rows + 1);
     auto valids  = valid_dist(engine, current_num_rows);
     // to ensure these values <= current_child_column->size()
-    auto output_offsets = thrust::make_transform_output_iterator(
-      offsets.begin(), clamp_down{current_child_column->size()});
-
-    thrust::exclusive_scan(thrust::device, offsets.begin(), offsets.end(), output_offsets);
-    thrust::device_pointer_cast(offsets.end())[-1] =
-      current_child_column->size();  // Always include all elements
+    thrust::transform(thrust::device,
+                      thrust::counting_iterator<cudf::size_type>(0),
+                      thrust::counting_iterator<cudf::size_type>(current_num_rows),
+                      offsets.begin(),
+                      clamp_down{current_child_column->size(), valids.begin(), offsets.begin()});
+    thrust::exclusive_scan(thrust::device, offsets.begin(), offsets.end(), offsets.begin());
+    // Always include all elements
+    offsets.set_element(
+      offsets.size() - 1, current_child_column->size(), cudf::get_default_stream());
 
     auto offsets_column = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
                                                          current_num_rows + 1,
@@ -849,17 +836,16 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
                                                          rmm::device_buffer{},
                                                          0);
 
-    auto [null_mask, null_count] = cudf::detail::valid_if(valids.begin(),
-                                                          valids.end(),
-                                                          cuda::std::identity{},
-                                                          cudf::get_default_stream(),
-                                                          cudf::get_current_device_resource_ref());
-    list_column                  = cudf::make_lists_column(
-      current_num_rows,
-      std::move(offsets_column),
-      std::move(current_child_column),
-      profile.get_null_probability().has_value() ? null_count : 0,
-      profile.get_null_probability().has_value() ? std::move(null_mask) : rmm::device_buffer{});
+    auto [null_mask, null_count] = profile.get_null_probability().has_value()
+                                     ? cudf::bools_to_mask(cudf::device_span<bool const>(valids))
+                                     : std::pair{std::make_unique<rmm::device_buffer>(), 0};
+
+    list_column = cudf::make_lists_column(current_num_rows,
+                                          std::move(offsets_column),
+                                          std::move(current_child_column),
+                                          null_count,
+                                          std::move(*null_mask.release()));
+
     if (auto const cv = list_column->view();
         cudf::has_nonempty_nulls(cv, cudf::get_default_stream())) {
       list_column = cudf::purge_nonempty_nulls(
@@ -893,32 +879,7 @@ std::unique_ptr<cudf::column> create_distinct_rows_column<cudf::list_view>(
   return std::move(cudf::sample(cudf::table_view({lists_col->view()}), num_rows)->release()[0]);
 }
 
-using columns_vector = std::vector<std::unique_ptr<cudf::column>>;
-
-/**
- * @brief Creates a vector of columns with random content.
- *
- * @param profile Parameters for the random generator
- * @param dtype_ids vector of data type ids, one for each output column
- * @param engine Pseudo-random engine
- * @param num_rows Size of the output columns
- *
- * @return Column filled with random lists
- */
-columns_vector create_random_columns(data_profile const& profile,
-                                     std::vector<cudf::type_id> dtype_ids,
-                                     thrust::minstd_rand engine,
-                                     cudf::size_type num_rows)
-{
-  columns_vector output_columns;
-  std::transform(
-    dtype_ids.begin(), dtype_ids.end(), std::back_inserter(output_columns), [&](auto tid) {
-      engine.discard(num_rows);
-      return cudf::type_dispatcher(
-        cudf::data_type(tid), create_rand_col_fn{}, profile, engine, num_rows);
-    });
-  return output_columns;
-}
+}  // namespace
 
 /**
  * @brief Repeats the input data types cyclically order to fill a vector of @ref num_cols
@@ -980,7 +941,7 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
   auto seed_engine = deterministic_engine(seed);
   thrust::uniform_int_distribution<unsigned> seed_dist;
 
-  columns_vector output_columns;
+  std::vector<std::unique_ptr<cudf::column>> output_columns;
   std::transform(
     dtype_ids.begin(), dtype_ids.end(), std::back_inserter(output_columns), [&](auto tid) mutable {
       return create_random_column(tid, num_rows, profile, seed_dist(seed_engine));
