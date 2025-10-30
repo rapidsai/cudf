@@ -23,11 +23,103 @@ from cudf_polars.experimental.rapidsmpf.utils import (
 )
 
 if TYPE_CHECKING:
+    from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
+
+
+class Lineariser:
+    """
+    Linearise output-channel insertion from multiple producers by sequence number.
+
+    This is a Python implementation inspired by the C++ Lineariser in rapidsmpf.
+    It ensures that messages from multiple concurrent producers are sent to the output
+    channel in strictly increasing sequence number order.
+
+    Each producer sends messages to its own queue, and the lineariser's drain()
+    coroutine pulls from all queues and sends to the output channel in order.
+
+    Example usage:
+        lineariser = Lineariser(ch_out, num_tasks)
+        tasks = [lineariser.drain(context)]
+        for i in range(num_tasks):
+            tasks.append(producer_task(context, lineariser.get_input_queue(i), i))
+        await asyncio.gather(*tasks)
+    """
+
+    def __init__(self, ch_out: Channel, num_producers: int):
+        """
+        Create a new Lineariser.
+
+        Parameters
+        ----------
+        ch_out
+            The output channel to send ordered messages to.
+        num_producers
+            The number of producer tasks.
+        """
+        self.ch_out = ch_out
+        self.input_queues: list[asyncio.Queue[Message]] = [
+            asyncio.Queue() for _ in range(num_producers)
+        ]
+
+    def get_input_queue(self, producer_id: int) -> asyncio.Queue:
+        """
+        Get the input queue for a specific producer.
+
+        Parameters
+        ----------
+        producer_id
+            The producer index (0 to num_producers-1).
+
+        Returns
+        -------
+        asyncio.Queue
+            The queue that this producer should send messages to.
+        """
+        return self.input_queues[producer_id]
+
+    async def drain(self, context: Context) -> None:
+        """
+        Process inputs from all producers and send to output channel in order.
+
+        This coroutine should be awaited alongside all producer tasks.
+        Each producer must send their messages to their designated queue,
+        then send None to signal completion.
+
+        The drain maintains a min-heap containing at most one message from each
+        producer, ensuring bounded memory usage. Messages are sent in strictly
+        increasing sequence number order.
+
+        Parameters
+        ----------
+        context
+            The execution context.
+        """
+        import heapq
+
+        heap: list[tuple[int, int, Message]] = []
+
+        # Initial fill: get one message from each producer
+        for i, queue in enumerate(self.input_queues):
+            msg = await queue.get()
+            if msg is not None:
+                heapq.heappush(heap, (msg.sequence_number, i, msg))
+
+        # Process messages in sequence number order
+        while heap:
+            seq_num, producer_id, msg = heapq.heappop(heap)
+            await self.ch_out.send(context, msg)
+
+            # Refill from the same producer we just consumed from
+            next_msg = await self.input_queues[producer_id].get()
+            if next_msg is not None:
+                heapq.heappush(heap, (next_msg.sequence_number, producer_id, next_msg))
+
+        await self.ch_out.drain(context)
 
 
 @define_py_node()
