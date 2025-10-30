@@ -215,7 +215,6 @@ def _(ir: Join, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
                     channels[left].reserve_output_slot(),
                     channels[right].reserve_output_slot(),
                 ),
-                bcast_indices=[],
             )
         )
         return nodes, channels

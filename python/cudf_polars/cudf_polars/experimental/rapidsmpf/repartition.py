@@ -62,11 +62,6 @@ async def concatenate_node(
     async with shutdown_on_error(context, ch_in.data, ch_out.data):
         seq_num = 0
         build_stream: Stream | None = None
-        # TODO: The sequence number currently has nothing to do with
-        # the sequence number of the input chunks. We may need to add
-        # an `ordered` option to this node to enforce the original
-        # sequence-number ordering. However, we don't need this for
-        # simple aggregations yet.
         while True:
             chunks: list[TableChunk] = []
             msg: TableChunk | None = None

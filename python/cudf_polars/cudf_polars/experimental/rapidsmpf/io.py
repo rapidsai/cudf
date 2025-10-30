@@ -23,7 +23,11 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
     lower_ir_node,
 )
-from cudf_polars.experimental.rapidsmpf.nodes import define_py_node, shutdown_on_error
+from cudf_polars.experimental.rapidsmpf.nodes import (
+    PyLineariser,
+    define_py_node,
+    shutdown_on_error,
+)
 from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
 
 if TYPE_CHECKING:
@@ -89,7 +93,6 @@ async def dataframescan_node(
     rows_per_partition
         The number of rows per partition.
     """
-    # TODO: Use multiple streams
     nrows = max(ir.df.shape()[0], 1)
     global_count = math.ceil(nrows / rows_per_partition)
 
@@ -103,22 +106,51 @@ async def dataframescan_node(
 
     async with shutdown_on_error(context, ch_out.data):
         io_throttle = asyncio.Semaphore(max_io_threads)
+
+        # Build list of IR slices to read
+        ir_slices = []
         for seq_num in range(local_count):
             offset = local_offset * rows_per_partition + seq_num * rows_per_partition
             if offset >= nrows:
                 break
-
-            ir_slice = DataFrameScan(
-                ir.schema,
-                ir.df.slice(offset, rows_per_partition),
-                ir.projection,
-            )
-            await read_chunk(
-                context, io_throttle, ir_slice, seq_num, ch_out.data, ir_context
+            ir_slices.append(
+                DataFrameScan(
+                    ir.schema,
+                    ir.df.slice(offset, rows_per_partition),
+                    ir.projection,
+                )
             )
 
-        # Drain data channel
-        await ch_out.data.drain(context)
+        # Read data
+        if max_io_threads == 1:
+            # Sequential execution - no need for Lineariser
+            for seq_num, ir_slice in enumerate(ir_slices):
+                await read_chunk(
+                    context, io_throttle, ir_slice, seq_num, ch_out.data, ir_context
+                )
+            await ch_out.data.drain(context)
+        else:
+            # Concurrent execution - use PyLineariser to ensure ordered delivery
+            lineariser = PyLineariser(ch_out.data, len(ir_slices))
+
+            # Start the lineariser drain task
+            tasks = [lineariser.drain(context)]
+
+            # Start all read tasks
+            for seq_num, ir_slice in enumerate(ir_slices):
+                tasks.append(
+                    read_chunk_linearised(
+                        context,
+                        io_throttle,
+                        ir_slice,
+                        seq_num,
+                        lineariser.get_input_queue(seq_num),
+                        ir_context,
+                    )
+                )
+
+            # Wait for all tasks to complete
+            await asyncio.gather(*tasks)
 
 
 @generate_ir_sub_network.register(DataFrameScan)
@@ -226,6 +258,56 @@ async def read_chunk(
         )
 
 
+async def read_chunk_linearised(
+    context: Context,
+    io_throttle: asyncio.Semaphore,
+    scan: IR,
+    seq_num: int,
+    queue: asyncio.Queue,
+    ir_context: IRExecutionContext,
+) -> None:
+    """
+    Read a chunk from disk and send it to a lineariser queue.
+
+    This function is used with PyLineariser to ensure ordered delivery
+    of chunks even when I/O operations complete out of order.
+
+    Parameters
+    ----------
+    context
+        The rapidsmpf context.
+    io_throttle
+        The IO throttle.
+    scan
+        The Scan or DataFrameScan node.
+    seq_num
+        The sequence number.
+    queue
+        The lineariser input queue for this producer.
+    ir_context
+        The execution context for the IR node.
+    """
+    async with io_throttle:
+        # Evaluate the Scan-node
+        df = await asyncio.to_thread(
+            scan.do_evaluate,
+            *scan._non_child_args,
+            context=ir_context,
+        )
+        # Send to queue (lineariser will handle ordering)
+        msg = Message(
+            seq_num,
+            TableChunk.from_pylibcudf_table(
+                df.table,
+                df.stream,
+                exclusive_view=True,
+            ),
+        )
+        await queue.put(msg)
+    # Signal completion for this producer
+    await queue.put(None)
+
+
 @define_py_node()
 async def scan_node(
     context: Context,
@@ -258,7 +340,6 @@ async def scan_node(
     parquet_options
         The Parquet options.
     """
-    # TODO: Use multiple streams
     async with shutdown_on_error(context, ch_out.data):
         # Build a list of local Scan operations
         scans: list[Scan | SplitScan] = []
@@ -323,21 +404,37 @@ async def scan_node(
                     )
                 )
 
-        # Read data (using io_throttle).
-        # In some cases, we may may be able to read data
-        # concurrently. We are reading the chunks
-        # sequentially for now, because some tests assume
-        # chunks are read in order.
+        # Read data
         io_throttle = asyncio.Semaphore(max_io_threads)
-        tasks = []
-        for seq_num, scan in enumerate(scans):
-            tasks.append(
-                read_chunk(context, io_throttle, scan, seq_num, ch_out.data, ir_context)
-            )
+        if max_io_threads == 1:
+            # Sequential execution - no need for Lineariser
+            for seq_num, scan in enumerate(scans):
+                await read_chunk(
+                    context, io_throttle, scan, seq_num, ch_out.data, ir_context
+                )
+            await ch_out.data.drain(context)
+        else:
+            # Concurrent execution - use PyLineariser to ensure ordered delivery
+            lineariser = PyLineariser(ch_out.data, len(scans))
 
-        # Drain the output data channel
-        await asyncio.gather(*tasks)
-        await ch_out.data.drain(context)
+            # Start the lineariser drain task
+            tasks = [lineariser.drain(context)]
+
+            # Start all read tasks
+            for seq_num, scan in enumerate(scans):
+                tasks.append(
+                    read_chunk_linearised(
+                        context,
+                        io_throttle,
+                        scan,
+                        seq_num,
+                        lineariser.get_input_queue(seq_num),
+                        ir_context,
+                    )
+                )
+
+            # Wait for all tasks to complete
+            await asyncio.gather(*tasks)
 
 
 @generate_ir_sub_network.register(Scan)
