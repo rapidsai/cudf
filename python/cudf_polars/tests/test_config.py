@@ -154,6 +154,36 @@ def test_explicit_memory_resource():
     assert n_allocations > 0
 
 
+def test_nested_memory_resource_config():
+    spec = {
+        "qualname": "rmm.mr.PrefetchResourceAdaptor",
+        "options": {
+            "upstream_mr": {
+                "qualname": "rmm.mr.PoolMemoryResource",
+                "options": {
+                    "upstream_mr": {
+                        "qualname": "rmm.mr.ManagedMemoryResource",
+                    },
+                    "initial_pool_size": 256,
+                },
+            }
+        },
+    }
+
+    engine = pl.GPUEngine(
+        executor="streaming",
+        memory_resource_config=MemoryResourceConfig(
+            **spec,
+        ),
+    )
+    config = ConfigOptions.from_polars_engine(engine)
+    mr = config.memory_resource_config.create_memory_resource()
+    assert isinstance(mr, rmm.mr.PrefetchResourceAdaptor)
+    assert isinstance(mr.upstream_mr, rmm.mr.PoolMemoryResource)
+    assert mr.upstream_mr.pool_size() == 256
+    assert isinstance(mr.upstream_mr.upstream_mr, rmm.mr.ManagedMemoryResource)
+
+
 @pytest.mark.parametrize("executor", ["streaming", "in-memory"])
 def test_parquet_options(executor: str) -> None:
     config = ConfigOptions.from_polars_engine(

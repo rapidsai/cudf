@@ -414,13 +414,33 @@ class MemoryResourceConfig:
     qualname
         The fully qualified name of the memory resource class to use.
     options
-        The options to pass to the memory resource class.
+        This can be either a dictionary representing the options to pass
+        to the memory resource class, or, a dictionary representing a
+        nested memory resource configuration. The presence of "qualname"
+        field indicates a nested memory resource configuration.
 
     Examples
     --------
+    Create a memory resource config for a single memory resource:
     >>> MemoryResourceConfig(
     ...     qualname="rmm.mr.CudaAsyncMemoryResource",
     ...     options={"initial_pool_size": 100},
+    ... )
+
+    Create a memory resource config for a nested memory resource configuration:
+    >>> MemoryResourceConfig(
+    ...     qualname="rmm.mr.PrefetchResourceAdaptor",
+    ...     options={
+    ...         "upstream_mr": {
+    ...             "qualname": "rmm.mr.PoolMemoryResource",
+    ...             "options": {
+    ...                 "upstream_mr": {
+    ...                     "qualname": "rmm.mr.ManagedMemoryResource",
+    ...                 },
+    ...                 "initial_pool_size": 256,
+    ...             },
+    ...         }
+    ...     },
     ... )
     """
 
@@ -449,10 +469,32 @@ class MemoryResourceConfig:
 
     def create_memory_resource(self) -> rmm.mr.DeviceMemoryResource:
         """Create a memory resource from the configuration."""
-        module_name, class_name = self.qualname.rsplit(".", 1)
-        module = importlib.import_module(module_name)
-        cls = getattr(module, class_name)
-        return cls(**self.options or {})
+
+        def create_mr(
+            qualname: str, options: dict[str, Any] | None
+        ) -> rmm.mr.DeviceMemoryResource:
+            module_name, class_name = qualname.rsplit(".", 1)
+            module = importlib.import_module(module_name)
+            cls = getattr(module, class_name)
+            return cls(**options or {})
+
+        def process_options(opts: dict[str, Any] | None) -> dict[str, Any]:
+            if opts is None:
+                return {}
+
+            processed = {}
+            for key, value in opts.items():
+                if isinstance(value, dict) and "qualname" in value:
+                    # This is a nested memory resource config
+                    nested_qualname = value["qualname"]
+                    nested_options = process_options(value.get("options"))
+                    processed[key] = create_mr(nested_qualname, nested_options)
+                else:
+                    processed[key] = value
+            return processed
+
+        # Create the top-level memory resource
+        return create_mr(self.qualname, process_options(self.options))
 
     def __hash__(self) -> int:
         if self.options is None:
