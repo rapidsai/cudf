@@ -63,7 +63,7 @@ class Lineariser:
         """
         self.ch_out = ch_out
         self.input_queues: list[asyncio.Queue[Message]] = [
-            asyncio.Queue() for _ in range(num_producers)
+            asyncio.Queue(maxsize=1) for _ in range(num_producers)
         ]
 
     def get_input_queue(self, producer_id: int) -> asyncio.Queue:
@@ -87,37 +87,36 @@ class Lineariser:
         Process inputs from all producers and send to output channel in order.
 
         This coroutine should be awaited alongside all producer tasks.
-        Each producer must send their messages to their designated queue,
-        then send None to signal completion.
+        Each producer sends exactly one message with a specific sequence number
+        (matching its producer_id), then sends None to signal completion.
 
-        The drain maintains a min-heap containing at most one message from each
-        producer, ensuring bounded memory usage. Messages are sent in strictly
-        increasing sequence number order.
+        Messages are received in sequence order, sent immediately. This avoids
+        memory buildup by only requesting the next message we need.
 
         Parameters
         ----------
         context
             The execution context.
         """
-        import heapq
+        # Each producer i sends exactly one message with seq_num=i
+        for producer_id in range(len(self.input_queues)):
+            msg = await self.input_queues[producer_id].get()
 
-        heap: list[tuple[int, int, Message]] = []
+            assert msg is not None, (
+                f"Producer {producer_id} sent None instead of message"
+            )
+            assert msg.sequence_number == producer_id, (
+                f"Producer {producer_id} sent wrong seq_num: {msg.sequence_number}"
+            )
 
-        # Initial fill: get one message from each producer
-        for i, queue in enumerate(self.input_queues):
-            msg = await queue.get()
-            if msg is not None:
-                heapq.heappush(heap, (msg.sequence_number, i, msg))
-
-        # Process messages in sequence number order
-        while heap:
-            seq_num, producer_id, msg = heapq.heappop(heap)
+            # Send immediately - no buffering needed
             await self.ch_out.send(context, msg)
 
-            # Refill from the same producer we just consumed from
-            next_msg = await self.input_queues[producer_id].get()
-            if next_msg is not None:
-                heapq.heappush(heap, (next_msg.sequence_number, producer_id, next_msg))
+            # Verify producer signals completion
+            completion = await self.input_queues[producer_id].get()
+            assert completion is None, (
+                f"Producer {producer_id} sent unexpected second message"
+            )
 
         await self.ch_out.drain(context)
 
