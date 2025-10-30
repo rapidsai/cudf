@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -6322,7 +6323,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         # https://github.com/rapidsai/cudf/issues/7556
 
         def make_false_column_like_self():
-            return as_column(False, length=len(self), dtype="bool")
+            return as_column(False, length=len(self), dtype=np.dtype("bool"))
 
         # Preprocess different input types into a mapping from column names to
         # a list of values to check.

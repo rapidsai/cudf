@@ -702,6 +702,18 @@ class InMemoryExecutor:
     name: Literal["in-memory"] = dataclasses.field(default="in-memory", init=False)
 
 
+class CUDAStreamPolicy(str, enum.Enum):
+    """
+    The policy to use for acquiring new CUDA streams.
+
+    * ``CUDAStreamPolicy.DEFAULT`` : Use the default CUDA stream.
+    * ``CUDAStreamPolicy.NEW`` : Create a new CUDA stream.
+    """
+
+    DEFAULT = "default"
+    NEW = "new"
+
+
 @dataclasses.dataclass(frozen=True, eq=True)
 class ConfigOptions:
     """
@@ -721,6 +733,8 @@ class ConfigOptions:
     device
         The GPU used to run the query. If not provided, the
         query uses the current CUDA device.
+    cuda_stream_policy
+        The policy to use for acquiring new CUDA streams. See :class:`~cudf_polars.utils.config.CUDAStreamPolicy` for more.
     """
 
     raise_on_fail: bool = False
@@ -729,6 +743,13 @@ class ConfigOptions:
         default_factory=StreamingExecutor
     )
     device: int | None = None
+    cuda_stream_policy: CUDAStreamPolicy = dataclasses.field(
+        default_factory=_make_default_factory(
+            "CUDF_POLARS__CUDA_STREAM_POLICY",
+            CUDAStreamPolicy.__call__,
+            default=CUDAStreamPolicy.DEFAULT,
+        )
+    )
 
     @classmethod
     def from_polars_engine(
@@ -742,6 +763,7 @@ class ConfigOptions:
             "executor_options",
             "parquet_options",
             "raise_on_fail",
+            "cuda_stream_policy",
         }
 
         extra_options = set(engine.config.keys()) - valid_options
@@ -803,9 +825,16 @@ class ConfigOptions:
             case _:  # pragma: no cover; Unreachable
                 raise ValueError(f"Unsupported executor: {user_executor}")
 
-        return cls(
-            raise_on_fail=user_raise_on_fail,
-            parquet_options=ParquetOptions(**user_parquet_options),
-            executor=executor,
-            device=engine.device,
-        )
+        kwargs = {
+            "raise_on_fail": user_raise_on_fail,
+            "parquet_options": ParquetOptions(**user_parquet_options),
+            "executor": executor,
+            "device": engine.device,
+        }
+
+        if engine.config.get("cuda_stream_policy") is not None:
+            kwargs["cuda_stream_policy"] = CUDAStreamPolicy(
+                engine.config["cuda_stream_policy"]
+            )
+
+        return cls(**kwargs)

@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -1446,8 +1447,10 @@ class MultiIndex(Index):
         """
         if isinstance(df, pd.DataFrame):
             source_data = cudf.DataFrame(df)
-        else:
+        elif isinstance(df, cudf.DataFrame):
             source_data = df
+        else:
+            raise TypeError("Input must be a pandas or cudf DataFrame.")
         names = names if names is not None else source_data._column_names
         return cls.from_arrays(
             source_data._columns, sortorder=sortorder, names=names
