@@ -8,11 +8,14 @@
 #include "parquet_gpu.hpp"
 
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <cooperative_groups.h>
+#include <thrust/binary_search.h>
 #include <thrust/tuple.h>
 
 namespace cudf::io::parquet::detail {
@@ -371,7 +374,7 @@ inline __device__ bool parse_header(thrust::tuple<Operator...>& op, byte_stream_
   return true;
 }
 
-struct gpuParseDataPageHeader {
+struct parse_data_page_header_fn {
   __device__ bool operator()(byte_stream_s* bs)
   {
     auto op = thrust::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
@@ -382,7 +385,7 @@ struct gpuParseDataPageHeader {
   }
 };
 
-struct gpuParseDictionaryPageHeader {
+struct parse_dictionary_page_header_fn {
   __device__ bool operator()(byte_stream_s* bs)
   {
     auto op = thrust::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
@@ -391,7 +394,7 @@ struct gpuParseDictionaryPageHeader {
   }
 };
 
-struct gpuParseDataPageHeaderV2 {
+struct parse_data_page_header_v2_fn {
   __device__ bool operator()(byte_stream_s* bs)
   {
     auto op = thrust::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
@@ -405,15 +408,15 @@ struct gpuParseDataPageHeaderV2 {
   }
 };
 
-struct gpuParsePageHeader {
+struct parse_page_header_fn {
   __device__ bool operator()(byte_stream_s* bs)
   {
     auto op = thrust::make_tuple(ParquetFieldEnum<PageType>(1, bs->page_type),
                                  ParquetFieldInt32(2, bs->page.uncompressed_page_size),
                                  ParquetFieldInt32(3, bs->page.compressed_page_size),
-                                 ParquetFieldStruct<gpuParseDataPageHeader>(5),
-                                 ParquetFieldStruct<gpuParseDictionaryPageHeader>(7),
-                                 ParquetFieldStruct<gpuParseDataPageHeaderV2>(8));
+                                 ParquetFieldStruct<parse_data_page_header_fn>(5),
+                                 ParquetFieldStruct<parse_dictionary_page_header_fn>(7),
+                                 ParquetFieldStruct<parse_data_page_header_v2_fn>(8));
     return parse_header(op, bs);
   }
 };
@@ -432,7 +435,6 @@ void __launch_bounds__(decode_page_headers_block_size)
                              kernel_error::pointer error_code)
 {
   auto constexpr num_warps_per_block = decode_page_headers_block_size / cudf::detail::warp_size;
-  gpuParsePageHeader parse_page_header;
   __shared__ byte_stream_s bs_g[num_warps_per_block];
 
   kernel_error::value_type error[num_warps_per_block] = {0};
@@ -502,7 +504,7 @@ void __launch_bounds__(decode_page_headers_block_size)
         bs->page.num_nulls                         = 0;
         bs->page.lvl_bytes[level_type::DEFINITION] = 0;
         bs->page.lvl_bytes[level_type::REPETITION] = 0;
-        if (parse_page_header(bs) && bs->page.compressed_page_size >= 0) {
+        if (parse_page_header_fn{}(bs) && bs->page.compressed_page_size >= 0) {
           if (not is_supported_encoding(bs->page.encoding)) {
             error[warp_id] |= static_cast<int32_t>(decode_error::UNSUPPORTED_ENCODING);
           }
@@ -557,6 +559,116 @@ void __launch_bounds__(decode_page_headers_block_size)
     }
   }
 }
+
+/**
+ * @brief Functor to decode page headers from specified page locations
+ */
+struct decode_page_headers_with_pgidx_fn {
+  ColumnChunkDesc* colchunks;
+  PageInfo* pages;
+  uint8_t** page_locations;
+  size_t* chunk_page_offsets;
+  cudf::size_type num_chunks;
+  kernel_error::pointer error_code;
+
+  __device__ void operator()(size_type page_idx) const noexcept
+  {
+    // Binary search the the column chunk index for this page
+    auto const chunk_idx = static_cast<cudf::size_type>(
+      cuda::std::distance(
+        chunk_page_offsets,
+        thrust::upper_bound(
+          thrust::seq, chunk_page_offsets, chunk_page_offsets + num_chunks + 1, page_idx)) -
+      1);
+
+    // Check if the chunk index is valid
+    if (chunk_idx < 0 or chunk_idx >= num_chunks) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN),
+                error_code);
+      return;
+    }
+
+    byte_stream_s bs{};
+    bs.ck   = colchunks[chunk_idx];
+    bs.base = bs.cur = page_locations[page_idx];
+    bs.end           = bs.ck.compressed_data + bs.ck.compressed_size;
+    // Check if byte stream pointers are valid.
+    if (bs.end < bs.cur) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN),
+                error_code);
+      return;
+    }
+    bs.page.chunk_idx      = chunk_idx;
+    bs.page.src_col_schema = bs.ck.src_col_schema;
+    // this computation is only valid for flat schemas. for nested schemas,
+    // they will be recomputed in the preprocess step by examining repetition and
+    // definition levels
+    bs.page.chunk_row            = 0;
+    bs.page.num_rows             = 0;
+    bs.page.is_num_rows_adjusted = false;
+    bs.page.skipped_values       = -1;
+    bs.page.skipped_leaf_values  = 0;
+    bs.page.str_bytes            = 0;
+    bs.page.str_bytes_from_index = 0;
+    bs.page.num_valids           = 0;
+    bs.page.start_val            = 0;
+    bs.page.end_val              = 0;
+    bs.page.has_page_index       = false;
+    bs.page.temp_string_size     = 0;
+    bs.page.temp_string_buf      = nullptr;
+    bs.page.kernel_mask          = decode_kernel_mask::NONE;
+    bs.page.is_compressed        = true;
+
+    // this computation is only valid for flat schemas. for nested schemas,
+    // they will be recomputed in the preprocess step by examining repetition and
+    // definition levels
+    bs.page.chunk_row += bs.page.num_rows;
+    bs.page.num_rows      = 0;
+    bs.page.flags         = 0;
+    bs.page.str_bytes     = 0;
+    bs.page.str_bytes_all = 0;
+    // zero out V2 info
+    bs.page.num_nulls                         = 0;
+    bs.page.lvl_bytes[level_type::DEFINITION] = 0;
+    bs.page.lvl_bytes[level_type::REPETITION] = 0;
+
+    if (parse_page_header_fn{}(&bs) and bs.page.compressed_page_size >= 0) {
+      if (not is_supported_encoding(bs.page.encoding)) {
+        set_error(static_cast<kernel_error::value_type>(decode_error::UNSUPPORTED_ENCODING),
+                  error_code);
+        return;
+      }
+      switch (bs.page_type) {
+        case PageType::DATA_PAGE:
+          // this computation is only valid for flat schemas. for nested schemas,
+          // they will be recomputed in the preprocess step by examining repetition and
+          // definition levels
+          bs.page.num_rows = bs.page.num_input_values;
+          break;
+        case PageType::DATA_PAGE_V2:
+          bs.page.flags |= PAGEINFO_FLAGS_V2;
+          // V2 only uses RLE, so it was removed from the header
+          bs.page.definition_level_encoding = Encoding::RLE;
+          bs.page.repetition_level_encoding = Encoding::RLE;
+          break;
+        case PageType::DICTIONARY_PAGE: bs.page.flags |= PAGEINFO_FLAGS_DICTIONARY; break;
+        default:
+          set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_TYPE),
+                    error_code);
+          return;
+      }
+
+      bs.page.page_data   = const_cast<uint8_t*>(bs.cur);
+      bs.page.kernel_mask = kernel_mask_for_page(bs.page, bs.ck);
+    } else {
+      set_error(static_cast<kernel_error::value_type>(decode_error::EMPTY_PAGE), error_code);
+      return;
+    }
+
+    // Copy over the page info from byte stream
+    pages[page_idx] = bs.page;
+  }
+};
 
 /**
  * @brief Kernel for building dictionary index for the specified column chunks
@@ -638,6 +750,26 @@ void decode_page_headers(ColumnChunkDesc* chunks,
 
   decode_page_headers_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(
     chunks, chunk_pages, num_chunks, error_code);
+}
+
+void decode_page_headers_with_pgidx(ColumnChunkDesc* chunks,
+                                    PageInfo* pages,
+                                    uint8_t** page_locations,
+                                    size_t* chunk_page_offsets,
+                                    cudf::size_type num_chunks,
+                                    cudf::size_type num_pages,
+                                    kernel_error::pointer error_code,
+                                    rmm::cuda_stream_view stream)
+{
+  thrust::for_each(rmm::exec_policy_nosync(stream),
+                   thrust::counting_iterator(0),
+                   thrust::counting_iterator(num_pages),
+                   decode_page_headers_with_pgidx_fn{.colchunks          = chunks,
+                                                     .pages              = pages,
+                                                     .page_locations     = page_locations,
+                                                     .chunk_page_offsets = chunk_page_offsets,
+                                                     .num_chunks         = num_chunks,
+                                                     .error_code         = error_code});
 }
 
 void build_string_dictionary_index(ColumnChunkDesc* chunks,
