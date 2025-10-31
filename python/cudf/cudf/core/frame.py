@@ -408,6 +408,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
         """
         raise NotImplementedError
 
+    def __sizeof__(self):
+        return self.memory_usage(deep=True)
+
     @_performance_tracking
     def __len__(self) -> int:
         return self._num_rows
@@ -918,9 +921,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
         self,
         value: None | ScalarLike | Series = None,
         method: Literal["ffill", "bfill", "pad", "backfill", None] = None,
-        axis=None,
+        axis: Axis | None = None,
         inplace: bool = False,
-        limit=None,
+        limit: int | None = None,
     ) -> Self | None:
         """Fill null values with ``value`` or specified ``method``.
 
@@ -1808,9 +1811,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @_performance_tracking
     def min(
         self,
-        axis=0,
-        skipna=True,
-        numeric_only=False,
+        axis: Axis = 0,
+        skipna: bool = True,
+        numeric_only: bool = False,
         **kwargs,
     ):
         """
@@ -1859,9 +1862,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @_performance_tracking
     def max(
         self,
-        axis=0,
-        skipna=True,
-        numeric_only=False,
+        axis: Axis = 0,
+        skipna: bool = True,
+        numeric_only: bool = False,
         **kwargs,
     ):
         """
@@ -1905,7 +1908,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         )
 
     @_performance_tracking
-    def all(self, axis=0, skipna=True, **kwargs):
+    def all(self, axis: Axis = 0, skipna: bool = True, **kwargs):
         """
         Return whether all elements are True in DataFrame.
 
@@ -1958,7 +1961,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         )
 
     @_performance_tracking
-    def any(self, axis=0, skipna=True, **kwargs):
+    def any(self, axis: Axis = 0, skipna: bool = True, **kwargs):
         """
         Return whether any elements is True in DataFrame.
 

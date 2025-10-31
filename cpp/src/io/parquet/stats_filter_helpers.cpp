@@ -62,13 +62,14 @@ std::reference_wrapper<ast::expression const> stats_columns_collector::visit(
     v->accept(*this);
 
     // Return early if this is a unary operation
-    if (operator_arity == 1) { return expr; }
+    if (operator_arity == 1 and op != ast_operator::IS_NULL) { return expr; }
 
     // Else if this is a supported binary operation, mark the column as needed
     if (op == ast_operator::EQUAL or op == ast_operator::NOT_EQUAL or op == ast_operator::LESS or
         op == ast_operator::LESS_EQUAL or op == ast_operator::GREATER or
-        op == ast_operator::GREATER_EQUAL) {
+        op == ast_operator::GREATER_EQUAL or op == ast_operator::IS_NULL) {
       _columns_mask[v->get_column_index()] = true;
+      if (op == ast_operator::IS_NULL) { _has_is_null_operator = true; }
     } else {
       CUDF_FAIL("Unsupported binary operation in Statistics AST");
     }
@@ -80,9 +81,9 @@ std::reference_wrapper<ast::expression const> stats_columns_collector::visit(
   return expr;
 }
 
-thrust::host_vector<bool> stats_columns_collector::get_stats_columns_mask() &&
+std::pair<thrust::host_vector<bool>, bool> stats_columns_collector::get_stats_columns_mask() &&
 {
-  return std::move(_columns_mask);
+  return {std::move(_columns_mask), _has_is_null_operator};
 }
 
 std::vector<std::reference_wrapper<ast::expression const>> stats_columns_collector::visit_operands(
@@ -99,11 +100,13 @@ std::vector<std::reference_wrapper<ast::expression const>> stats_columns_collect
 
 stats_expression_converter::stats_expression_converter(ast::expression const& expr,
                                                        size_type num_columns,
+                                                       bool has_is_null_operator,
                                                        rmm::cuda_stream_view stream)
   : _always_true_scalar{std::make_unique<cudf::numeric_scalar<bool>>(true, true, stream)},
     _always_true{std::make_unique<ast::literal>(*_always_true_scalar)}
 {
-  _num_columns = num_columns;
+  _stats_cols_per_column = has_is_null_operator ? 3 : 2;
+  _num_columns           = num_columns;
   expr.accept(*this);
 }
 
@@ -124,16 +127,27 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
       "Second operand of binary operation with column reference must be a literal");
     v->accept(*this);
 
-    // For unary operators, push and return the `_always_true` expression
+    auto const col_index = v->get_column_index();
+
     if (operator_arity == 1) {
-      _stats_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
-      // Propagate the `_always_true` as expression to its unary operator parent
-      return *_always_true;
+      // Evaluate IS_NULL unary operator
+      if (op == ast_operator::IS_NULL) {
+        CUDF_EXPECTS(std::cmp_equal(_stats_cols_per_column, 3),
+                     "IS_NULL operator cannot be evaluated without nullability information column");
+        auto const& vnull =
+          _stats_expr.push(ast::column_reference{col_index * _stats_cols_per_column + 2});
+        _stats_expr.push(ast::operation{ast_operator::IDENTITY, vnull});
+        return _stats_expr.back();
+      }  // For all other unary operators, push and return the `_always_true` expression
+      else {
+        _stats_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
+        // Propagate the `_always_true` as expression to its unary operator parent
+        return *_always_true;
+      }
     }
 
     // Push literal into the ast::tree
-    auto const& literal  = _stats_expr.push(*dynamic_cast<ast::literal const*>(&operands[1].get()));
-    auto const col_index = v->get_column_index();
+    auto const& literal = _stats_expr.push(*dynamic_cast<ast::literal const*>(&operands[1].get()));
     switch (op) {
       /* transform to stats conditions. op(col, literal)
       col1 == val --> vmin <= val && vmax >= val
@@ -144,8 +158,10 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
       col1 <= val --> vmin <= val
       */
       case ast_operator::EQUAL: {
-        auto const& vmin = _stats_expr.push(ast::column_reference{col_index * 2});
-        auto const& vmax = _stats_expr.push(ast::column_reference{col_index * 2 + 1});
+        auto const& vmin =
+          _stats_expr.push(ast::column_reference{col_index * _stats_cols_per_column});
+        auto const& vmax =
+          _stats_expr.push(ast::column_reference{col_index * _stats_cols_per_column + 1});
         _stats_expr.push(ast::operation{
           ast::ast_operator::LOGICAL_AND,
           _stats_expr.push(ast::operation{ast_operator::GREATER_EQUAL, vmax, literal}),
@@ -153,8 +169,10 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
         break;
       }
       case ast_operator::NOT_EQUAL: {
-        auto const& vmin = _stats_expr.push(ast::column_reference{col_index * 2});
-        auto const& vmax = _stats_expr.push(ast::column_reference{col_index * 2 + 1});
+        auto const& vmin =
+          _stats_expr.push(ast::column_reference{col_index * _stats_cols_per_column});
+        auto const& vmax =
+          _stats_expr.push(ast::column_reference{col_index * _stats_cols_per_column + 1});
         _stats_expr.push(
           ast::operation{ast_operator::LOGICAL_OR,
                          _stats_expr.push(ast::operation{ast_operator::NOT_EQUAL, vmin, vmax}),
@@ -163,13 +181,15 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
       }
       case ast_operator::LESS: [[fallthrough]];
       case ast_operator::LESS_EQUAL: {
-        auto const& vmin = _stats_expr.push(ast::column_reference{col_index * 2});
+        auto const& vmin =
+          _stats_expr.push(ast::column_reference{col_index * _stats_cols_per_column});
         _stats_expr.push(ast::operation{op, vmin, literal});
         break;
       }
       case ast_operator::GREATER: [[fallthrough]];
       case ast_operator::GREATER_EQUAL: {
-        auto const& vmax = _stats_expr.push(ast::column_reference{col_index * 2 + 1});
+        auto const& vmax =
+          _stats_expr.push(ast::column_reference{col_index * _stats_cols_per_column + 1});
         _stats_expr.push(ast::operation{op, vmax, literal});
         break;
       }

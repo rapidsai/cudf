@@ -17,6 +17,7 @@ from typing import (
     Literal,
     TypeVar,
     cast,
+    overload,
 )
 from uuid import uuid4
 
@@ -1353,9 +1354,9 @@ class IndexedFrame(Frame):
     def sum(
         self,
         axis=no_default,
-        skipna=True,
-        numeric_only=False,
-        min_count=0,
+        skipna: bool = True,
+        numeric_only: bool = False,
+        min_count: int = 0,
         **kwargs,
     ):
         """
@@ -1460,7 +1461,13 @@ class IndexedFrame(Frame):
     prod = product
 
     @_performance_tracking
-    def mean(self, axis=0, skipna=True, numeric_only=False, **kwargs):
+    def mean(
+        self,
+        axis: Axis = 0,
+        skipna: bool = True,
+        numeric_only: bool = False,
+        **kwargs,
+    ):
         """
         Return the mean of the values for the requested axis.
 
@@ -1499,7 +1506,11 @@ class IndexedFrame(Frame):
         )
 
     def median(
-        self, axis=no_default, skipna=True, numeric_only=None, **kwargs
+        self,
+        axis=no_default,
+        skipna: bool = True,
+        numeric_only: bool = False,
+        **kwargs,
     ):
         """
         Return the median of the values for the requested axis.
@@ -1547,9 +1558,9 @@ class IndexedFrame(Frame):
     def std(
         self,
         axis=no_default,
-        skipna=True,
-        ddof=1,
-        numeric_only=False,
+        skipna: bool = True,
+        ddof: int = 1,
+        numeric_only: bool = False,
         **kwargs,
     ):
         """
@@ -1600,9 +1611,9 @@ class IndexedFrame(Frame):
     def var(
         self,
         axis=no_default,
-        skipna=True,
-        ddof=1,
-        numeric_only=False,
+        skipna: bool = True,
+        ddof: int = 1,
+        numeric_only: bool = False,
         **kwargs,
     ):
         """
@@ -1649,7 +1660,13 @@ class IndexedFrame(Frame):
         )
 
     @_performance_tracking
-    def kurtosis(self, axis=0, skipna=True, numeric_only=False, **kwargs):
+    def kurtosis(
+        self,
+        axis: Axis = 0,
+        skipna: bool = True,
+        numeric_only: bool = False,
+        **kwargs,
+    ):
         """
         Return Fisher's unbiased kurtosis of a sample.
 
@@ -1704,7 +1721,13 @@ class IndexedFrame(Frame):
     kurt = kurtosis
 
     @_performance_tracking
-    def skew(self, axis=0, skipna=True, numeric_only=False, **kwargs):
+    def skew(
+        self,
+        axis: Axis = 0,
+        skipna: bool = True,
+        numeric_only: bool = False,
+        **kwargs,
+    ):
         """
         Return unbiased Fisher-Pearson skew of a sample.
 
@@ -2609,19 +2632,47 @@ class IndexedFrame(Frame):
         scaled.index = self.index.copy(deep=False)
         return scaled
 
+    @overload
+    def sort_index(
+        self,
+        axis: Axis = ...,
+        level=...,
+        ascending: bool | Iterable[bool] = ...,
+        inplace: Literal[False] = ...,
+        kind: str = ...,
+        na_position: Literal["first", "last"] = ...,
+        sort_remaining: bool = ...,
+        ignore_index: bool = ...,
+        key=...,
+    ) -> Self: ...
+
+    @overload
+    def sort_index(
+        self,
+        axis: Axis = ...,
+        level=...,
+        ascending: bool | Iterable[bool] = ...,
+        inplace: Literal[True] = ...,
+        kind: str = ...,
+        na_position: Literal["first", "last"] = ...,
+        sort_remaining: bool = ...,
+        ignore_index: bool = ...,
+        key=...,
+    ) -> None: ...
+
     @_performance_tracking
     def sort_index(
         self,
-        axis=0,
+        axis: Axis = 0,
         level=None,
-        ascending=True,
-        inplace=False,
-        kind=None,
-        na_position="last",
-        sort_remaining=True,
-        ignore_index=False,
+        ascending: bool | Iterable[bool] = True,
+        inplace: bool = False,
+        kind: str = "quicksort",
+        na_position: Literal["first", "last"] = "last",
+        sort_remaining: bool = True,
+        ignore_index: bool = False,
         key=None,
-    ):
+    ) -> Self | None:
         """Sort object by labels (along an axis).
 
         Parameters
@@ -2706,7 +2757,7 @@ class IndexedFrame(Frame):
 
             * Not supporting: kind, sort_remaining=False
         """
-        if kind is not None:
+        if kind != "quicksort":
             raise NotImplementedError("kind is not yet supported")
 
         if key is not None:
@@ -2755,7 +2806,7 @@ class IndexedFrame(Frame):
                 )
                 out = self._gather(
                     GatherMap.from_column_unchecked(
-                        as_column(inds),
+                        as_column(inds),  # type: ignore[arg-type]
                         len(self),
                         nullify=False,
                     )
@@ -3525,7 +3576,7 @@ class IndexedFrame(Frame):
 
         # Mask and data column preallocated
         ans_col = _return_arr_from_dtype(retty, len(self))
-        ans_mask = as_column(True, length=len(self), dtype="bool")
+        ans_mask = as_column(True, length=len(self), dtype=np.dtype("bool"))
         output_args = [(ans_col, ans_mask), len(self)]
         input_args = _get_input_args_from_frame(self)
         launch_args = output_args + input_args + list(args)
@@ -3555,8 +3606,8 @@ class IndexedFrame(Frame):
     def sort_values(
         self,
         by,
-        axis=0,
-        ascending: bool | list[bool] = True,
+        axis: Axis = 0,
+        ascending: bool | Iterable[bool] = True,
         inplace: bool = False,
         kind: str = "quicksort",
         na_position: Literal["first", "last"] = "last",
@@ -3672,7 +3723,7 @@ class IndexedFrame(Frame):
 
     def _n_largest_or_smallest(
         self, largest: bool, n: int, columns, keep: Literal["first", "last"]
-    ):
+    ) -> Self:
         # Get column to operate on
         if isinstance(columns, str):
             columns = [columns]
