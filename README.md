@@ -55,7 +55,7 @@ and other RAPIDS packages.
 
 ### CUDA/GPU requirements
 
-* CUDA 12.0+ with a compatible NVIDIA driver
+* CUDA 12.2+ with a compatible NVIDIA driver
 * Volta architecture or better (Compute Capability >=7.0)
 
 ### Pip
