@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 import abc
 import copyreg
+import datetime
 import functools
 import importlib
 import inspect
@@ -183,6 +184,7 @@ Timedelta = make_final_proxy_type(
     "Timedelta",
     _Unusable,
     pd.Timedelta,
+    bases=(datetime.timedelta,),
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
@@ -197,6 +199,7 @@ Timestamp = make_final_proxy_type(
     "Timestamp",
     _Unusable,
     pd.Timestamp,
+    bases=(datetime.datetime,),
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
