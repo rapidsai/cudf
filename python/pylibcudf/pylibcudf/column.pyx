@@ -633,6 +633,8 @@ cdef class Column:
         calling libcudf algorithms, and should generally not be needed by users
         (even direct pylibcudf Cython users).
         """
+        assert stream is not None, "stream cannot be None"
+        assert mr is not None, "mr cannot be None"
         cdef DataType dtype = DataType.from_libcudf(libcudf_col.get().type())
         cdef size_type size = libcudf_col.get().size()
 

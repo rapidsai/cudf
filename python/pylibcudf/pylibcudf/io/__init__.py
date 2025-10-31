@@ -1,10 +1,11 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from . import (
     avro,
     csv,
     datasource,
+    experimental,
     json,
     orc,
     parquet,
@@ -22,6 +23,7 @@ __all__ = [
     "avro",
     "csv",
     "datasource",
+    "experimental",
     "json",
     "orc",
     "parquet",
