@@ -1578,7 +1578,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 else:
                     # disc. with pandas here
                     # pandas raises key error here
-                    self.insert(self._num_columns, arg, value)
+                    self._insert(
+                        loc=self._num_columns,
+                        name=arg,
+                        value=value,
+                        ignore_index=False,
+                    )
 
         elif can_convert_to_column(arg):
             mask = arg
@@ -3438,6 +3443,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             inplace=inplace,
         )
 
+    @_external_only_api(
+        "Use ._insert with ignore_index=True to avoid expensive index "
+        "equality checking and reindexing when the data is already aligned."
+    )
     @_performance_tracking
     def insert(
         self,
