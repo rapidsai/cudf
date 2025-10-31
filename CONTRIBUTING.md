@@ -89,12 +89,12 @@ for a minimal build of libcudf without using conda are also listed below.
 Compilers:
 
 * `gcc` version 13.3+
-* `nvcc` version 12.0+
+* `nvcc` version 12.2+
 * `cmake` version 3.29.6+
 
 CUDA/GPU Runtime:
 
-* CUDA 12.0+
+* CUDA 12.2+
 * Volta architecture or better ([Compute Capability](https://docs.nvidia.com/deploy/cuda-compatibility/) >=7.0)
 
 You can obtain CUDA from
