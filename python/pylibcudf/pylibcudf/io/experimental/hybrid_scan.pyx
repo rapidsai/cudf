@@ -14,6 +14,7 @@ from rmm.pylibrmm.stream cimport Stream
 
 from pylibcudf.column cimport Column
 from pylibcudf.io.parquet cimport ParquetReaderOptions
+from pylibcudf.io.text cimport ByteRangeInfo
 from pylibcudf.io.types cimport TableWithMetadata
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view, mutable_column_view
@@ -35,38 +36,10 @@ import pylibcudf.libcudf.io.hybrid_scan
 UseDataPageMask = pylibcudf.libcudf.io.hybrid_scan.use_data_page_mask
 
 __all__ = [
+    "FileMetaData",
     "HybridScanReader",
     "UseDataPageMask",
-    "FileMetaData",
-    "ByteRangeInfo",
 ]
-
-
-cdef class ByteRangeInfo:
-    """Information about a byte range in a file.
-
-    For details, see :cpp:class:`cudf::io::text::byte_range_info`
-
-    Parameters
-    ----------
-    offset : int
-        Offset in bytes from the start of the file
-    size : int
-        Size of the range in bytes
-    """
-
-    def __init__(self, size_t offset, size_t size):
-        self.c_obj = byte_range_info(offset, size)
-
-    @property
-    def offset(self):
-        """Get the offset in bytes."""
-        return self.c_obj.offset()
-
-    @property
-    def size(self):
-        """Get the size in bytes."""
-        return self.c_obj.size()
 
 
 cdef class FileMetaData:

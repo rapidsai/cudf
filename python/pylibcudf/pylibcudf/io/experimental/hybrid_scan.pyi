@@ -9,18 +9,12 @@ from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.column import Column
 from pylibcudf.io.parquet import ParquetReaderOptions
+from pylibcudf.io.text import ByteRangeInfo
 from pylibcudf.io.types import TableWithMetadata
 
 class UseDataPageMask(IntEnum):
     YES: int
     NO: int
-
-class ByteRangeInfo:
-    def __init__(self, offset: int, size: int) -> None: ...
-    @property
-    def offset(self) -> int: ...
-    @property
-    def size(self) -> int: ...
 
 class FileMetaData:
     @property

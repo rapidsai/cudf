@@ -16,12 +16,7 @@ from pylibcudf.libcudf.io.hybrid_scan cimport (
     use_data_page_mask,
 )
 from pylibcudf.libcudf.io.parquet_schema cimport FileMetaData as cpp_FileMetaData
-from pylibcudf.libcudf.io.text cimport byte_range_info
 from rmm.librmm.device_buffer cimport device_buffer
-
-
-cdef class ByteRangeInfo:
-    cdef byte_range_info c_obj
 
 
 cdef class FileMetaData:
