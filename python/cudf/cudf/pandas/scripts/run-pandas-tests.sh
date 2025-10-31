@@ -152,6 +152,8 @@ IGNORE_TESTS_THAT_CRASH_PYTEST_COLLECTION=("--ignore=tests/io/parser/common/test
 
 IGNORE_TESTS_THAT_TEST_PRIVATE_FUNTIONALITY=("--ignore=tests/test_nanops.py"
                                              "--ignore=tests/test_optional_dependency.py"
+                                             "--ignore=tests/util/test_assert_produces_warning.py"
+                                             "--ignore=tests/util/test_shares_memory.py"
                                              "--ignore=tests/util/test_validate_args.py"
                                              "--ignore=tests/util/test_validate_args_and_kwargs.py"
                                              "--ignore=tests/util/test_validate_inclusive.py"
