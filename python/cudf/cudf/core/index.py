@@ -2473,6 +2473,11 @@ class Index(SingleColumnFrame):
     def isin(self, values, level=None) -> cupy.ndarray:
         if level is not None:
             self._validate_index_level(level)
+        if is_scalar(values):
+            raise TypeError(
+                "only list-like objects are allowed to be passed "
+                f"to isin(), you passed a {type(values).__name__}"
+            )
         return self._column.isin(values).values
 
     def get_level_values(self, level: Hashable) -> Self:
