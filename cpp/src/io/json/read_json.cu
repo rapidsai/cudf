@@ -686,8 +686,10 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
     } else {
       h_buffers.emplace_back(sources[i]->host_read(range_offset, data_size));
       auto const& h_buffer = h_buffers.back();
+      auto const max_size  = std::distance(destination, reinterpret_cast<uint8_t*>(buffer.end()));
+      auto const copy_size = std::min(static_cast<size_t>(max_size), h_buffer->size());
       CUDF_CUDA_TRY(cudaMemcpyAsync(
-        destination, h_buffer->data(), h_buffer->size(), cudaMemcpyHostToDevice, stream.value()));
+        destination, h_buffer->data(), copy_size, cudaMemcpyDefault, stream.value()));
       bytes_read += h_buffer->size();
     }
     range_offset = 0;
@@ -720,7 +722,9 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
                  "Incorrect number of bytes read by multithreaded reader");
   }
 
-  return buffer.first(bytes_read + (delimiter_map.size() * num_delimiter_chars));
+  auto const return_size =
+    std::min(buffer.size(), bytes_read + (delimiter_map.size() * num_delimiter_chars));
+  return buffer.first(return_size);
 }
 
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
