@@ -239,15 +239,17 @@ async def default_node_multi(
 
             # Convert chunks to DataFrames right before evaluation
             # All chunks are guaranteed to be non-None by the assertion above
+            assert all(chunk is not None for chunk in ready_chunks), (
+                "All chunks must be non-None"
+            )
             dfs = [
                 DataFrame.from_table(
-                    chunk.table_view(),
+                    chunk.table_view(),  # type: ignore[union-attr]
                     list(child.schema.keys()),
                     list(child.schema.values()),
-                    chunk.stream,
+                    chunk.stream,  # type: ignore[union-attr]
                 )
                 for chunk, child in zip(ready_chunks, ir.children, strict=True)
-                if chunk is not None  # Type narrowing for mypy
             ]
 
             # Evaluate the IR node with current chunks
