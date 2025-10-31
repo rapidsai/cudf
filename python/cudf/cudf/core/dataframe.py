@@ -2058,6 +2058,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             out.index.name = objs[0].index.name
             out.index.names = objs[0].index.names
 
+        if isinstance(out.index, DatetimeIndex):
+            out.index._freq = out.index._safe_inferred_freq
         return out
 
     def astype(
