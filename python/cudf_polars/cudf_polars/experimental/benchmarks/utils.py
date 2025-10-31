@@ -879,11 +879,6 @@ def run_polars(
             executor_options=executor_options,
         )
 
-        if args.reset_memory_resource_pool:
-            import cudf_polars.callback
-
-            cudf_polars.callback.default_memory_resource.cache_clear()
-
     for q_id in run_config.queries:
         try:
             q = getattr(benchmark, f"q{q_id}")(run_config)
