@@ -1118,25 +1118,59 @@ def setup_logging(query_id: int, iteration: int) -> None:  # noqa: D103
         )
 
 
+PDSDS_TABLE_NAMES: list[str] = [
+    "call_center",
+    "catalog_page",
+    "catalog_returns",
+    "catalog_sales",
+    "customer",
+    "customer_address",
+    "customer_demographics",
+    "date_dim",
+    "household_demographics",
+    "income_band",
+    "inventory",
+    "item",
+    "promotion",
+    "reason",
+    "ship_mode",
+    "store",
+    "store_returns",
+    "store_sales",
+    "time_dim",
+    "warehouse",
+    "web_page",
+    "web_returns",
+    "web_sales",
+    "web_site",
+]
+
+PDSH_TABLE_NAMES: list[str] = [
+    "customer",
+    "lineitem",
+    "nation",
+    "orders",
+    "part",
+    "partsupp",
+    "region",
+    "supplier",
+]
+
+
 def execute_duckdb_query(
     query: str,
     dataset_path: Path,
     *,
     suffix: str = ".parquet",
+    query_set: str = "pdsh",
 ) -> pl.DataFrame:
     """Execute a query with DuckDB."""
     if duckdb is None:
         raise ImportError(duckdb_err)
-    tbl_names = [
-        "customer",
-        "lineitem",
-        "nation",
-        "orders",
-        "part",
-        "partsupp",
-        "region",
-        "supplier",
-    ]
+    if query_set == "pdsds":
+        tbl_names = PDSDS_TABLE_NAMES
+    else:
+        tbl_names = PDSH_TABLE_NAMES
     with duckdb.connect() as conn:
         for name in tbl_names:
             pattern = (Path(dataset_path) / name).as_posix() + suffix
@@ -1172,6 +1206,7 @@ def run_duckdb(
                 sql,
                 run_config.dataset_path,
                 suffix=run_config.suffix,
+                query_set=duckdb_queries_cls.name,
             )
             t1 = time.time()
             record = Record(query=q_id, iteration=i, duration=t1 - t0)
@@ -1179,6 +1214,10 @@ def run_duckdb(
                 print(result)
             print(f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s")
             records[q_id].append(record)
+
+    run_config = dataclasses.replace(run_config, records=dict(records))
+    if args.summarize:
+        run_config.summarize()
 
 
 def run_validate(
@@ -1222,7 +1261,11 @@ def run_validate(
         polars_query = get_pl(run_config)
         if baseline == "duckdb":
             base_sql = get_ddb(run_config)
-            base_result = execute_duckdb_query(base_sql, run_config.dataset_path)
+            base_result = execute_duckdb_query(
+                base_sql,
+                run_config.dataset_path,
+                query_set=duckdb_queries_cls.name,
+            )
         else:
             base_result = polars_query.collect(engine="streaming")
 
