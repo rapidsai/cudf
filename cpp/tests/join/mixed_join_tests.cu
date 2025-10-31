@@ -21,7 +21,6 @@
 #include <thrust/sort.h>
 
 #include <algorithm>
-#include <limits>
 #include <numeric>
 #include <random>
 #include <stdexcept>

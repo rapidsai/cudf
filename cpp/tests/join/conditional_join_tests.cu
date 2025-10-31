@@ -12,7 +12,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/join/conditional_join.hpp>
 #include <cudf/join/filtered_join.hpp>
-#include <cudf/join/hash_join.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -25,7 +25,6 @@
 
 #include <algorithm>
 #include <iostream>
-#include <limits>
 #include <numeric>
 #include <random>
 #include <stdexcept>
@@ -390,8 +389,7 @@ struct ConditionalInnerJoinTest : public ConditionalJoinPairReturnTest<T> {
     cudf::table_view right,
     cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
   {
-    cudf::hash_join hash_joiner(right, compare_nulls);
-    return hash_joiner.inner_join(left);
+    return cudf::inner_join(left, right, compare_nulls);
   }
 };
 
@@ -582,8 +580,7 @@ struct ConditionalLeftJoinTest : public ConditionalJoinPairReturnTest<T> {
     cudf::table_view right,
     cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
   {
-    cudf::hash_join hash_joiner(right, compare_nulls);
-    return hash_joiner.left_join(left);
+    return cudf::left_join(left, right, compare_nulls);
   }
 };
 
@@ -649,8 +646,7 @@ struct ConditionalFullJoinTest : public ConditionalJoinPairReturnTest<T> {
     cudf::table_view right,
     cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
   {
-    cudf::hash_join hash_joiner(right, compare_nulls);
-    return hash_joiner.full_join(left);
+    return cudf::full_join(left, right, compare_nulls);
   }
 };
 

@@ -56,10 +56,8 @@ get_trivial_left_join_indices(table_view const& left,
   thrust::sequence(rmm::exec_policy(stream), left_indices->begin(), left_indices->end(), 0);
   auto right_indices =
     std::make_unique<rmm::device_uvector<size_type>>(left.num_rows(), stream, mr);
-  thrust::uninitialized_fill(rmm::exec_policy(stream),
-                             right_indices->begin(),
-                             right_indices->end(),
-                             cudf::detail::JoinNoneValue);
+  thrust::uninitialized_fill(
+    rmm::exec_policy(stream), right_indices->begin(), right_indices->end(), JoinNoneValue);
   return std::pair(std::move(left_indices), std::move(right_indices));
 }
 
@@ -103,7 +101,7 @@ get_left_join_indices_complement(std::unique_ptr<rmm::device_uvector<size_type>>
   // If left table is empty in a full join call then all rows of the right table
   // should be represented in the joined indices. This is an optimization since
   // if left table is empty and full join is called all the elements in
-  // right_indices will be cudf::detail::JoinNoneValue, i.e. -1. This if path should
+  // right_indices will be JoinNoneValue, i.e. -1. This if path should
   // produce exactly the same result as the else path but will be faster.
   if (left_table_row_count == 0) {
     thrust::sequence(rmm::exec_policy(stream),
@@ -148,7 +146,7 @@ get_left_join_indices_complement(std::unique_ptr<rmm::device_uvector<size_type>>
   thrust::uninitialized_fill(rmm::exec_policy(stream),
                              left_invalid_indices->begin(),
                              left_invalid_indices->end(),
-                             cudf::detail::JoinNoneValue);
+                             JoinNoneValue);
 
   return std::pair(std::move(left_invalid_indices), std::move(right_indices_complement));
 }
