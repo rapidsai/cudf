@@ -42,6 +42,9 @@ namespace {
     case nvcompStatus_t::nvcompErrorInternal: return "nvcompErrorInternal";
     case nvcompStatus_t::nvcompErrorCannotCompress: return "nvcompErrorCannotCompress";
     case nvcompStatus_t::nvcompErrorWrongInputLength: return "nvcompErrorWrongInputLength";
+#if NVCOMP_VER_MAJOR >= 5 and NVCOMP_VER_MINOR >= 1
+    case nvcompStatus_t::nvcompErrorBatchSizeTooLarge: return "nvcompErrorBatchSizeTooLarge";
+#endif
   }
   return "nvcompStatus_t(" + std::to_string(static_cast<int>(status)) + ")";
 }
