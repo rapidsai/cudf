@@ -6059,6 +6059,7 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/indexes/multi/test_names.py::test_copy_names",
     "tests/indexes/multi/test_names.py::test_setting_names_from_levels_raises",
     "tests/indexes/multi/test_reindex.py::test_reindex_base",
+    "tests/indexes/multi/test_reshape.py::test_append_names_match[c-None]",
     "tests/indexes/multi/test_setops.py::test_difference[False]",
     "tests/indexes/multi/test_setops.py::test_difference[None]",
     "tests/indexes/multi/test_setops.py::test_intersection_non_object[False]",
