@@ -1,5 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import abc
 import copyreg
@@ -121,9 +120,15 @@ def make_final_proxy_type(
     )
 
 
-def make_intermediate_proxy_type(name, fast_type, slow_type):
+def make_intermediate_proxy_type(
+    name,
+    fast_type,
+    slow_type,
+    **kwargs,
+):
+    assert "module" not in kwargs
     return _make_intermediate_proxy_type(
-        name, fast_type, slow_type, module=slow_type.__module__
+        name, fast_type, slow_type, module=slow_type.__module__, **kwargs
     )
 
 
@@ -319,6 +324,8 @@ DataFrame = make_final_proxy_type(
         ),
         "_AXIS_ORDERS": _FastSlowAttribute("_AXIS_ORDERS", private=True),
         "flags": _FastSlowAttribute("flags", private=True),
+        "memory_usage": _FastSlowAttribute("memory_usage"),
+        "__sizeof__": _FastSlowAttribute("__sizeof__"),
     },
 )
 
@@ -357,6 +364,8 @@ Series = make_final_proxy_type(
         "__arrow_array__": arrow_array_method,
         "__cuda_array_interface__": cuda_array_interface,
         "__iter__": custom_iter,
+        "memory_usage": _FastSlowAttribute("memory_usage"),
+        "__sizeof__": _FastSlowAttribute("__sizeof__"),
         "dt": _AccessorAttr(CombinedDatetimelikeProperties),
         "str": _AccessorAttr(StringMethods),
         "list": _AccessorAttr(ListMethods),
@@ -422,6 +431,8 @@ Index = make_final_proxy_type(
         "str": _AccessorAttr(StringMethods),
         "cat": _AccessorAttr(_CategoricalAccessor),
         "__iter__": custom_iter,
+        "memory_usage": _FastSlowAttribute("memory_usage"),
+        "__sizeof__": _FastSlowAttribute("__sizeof__"),
         "__init__": _DELETE,
         "__new__": Index__new__,
         "__setattr__": Index__setattr__,
@@ -449,6 +460,7 @@ RangeIndex = make_final_proxy_type(
         "name": _FastSlowAttribute("name"),
         "nbytes": _FastSlowAttribute("nbytes", private=True),
         "array": _FastSlowAttribute("array", private=True),
+        "_range": _FastSlowAttribute("_range"),
     },
 )
 
@@ -1013,6 +1025,9 @@ DataFrameGroupBy = make_intermediate_proxy_type(
     "DataFrameGroupBy",
     cudf.core.groupby.groupby.DataFrameGroupBy,
     pd.core.groupby.DataFrameGroupBy,
+    additional_attributes={
+        "_grouper": _FastSlowAttribute("_grouper", private=True),
+    },
 )
 
 RollingGroupBy = make_intermediate_proxy_type(
@@ -1339,8 +1354,8 @@ def _df_query_method(self, *args, local_dict=None, global_dict=None, **kwargs):
     )
 
 
-DataFrame.eval = _df_eval_method  # type: ignore
-DataFrame.query = _df_query_method  # type: ignore
+DataFrame.eval = _df_eval_method
+DataFrame.query = _df_query_method
 
 _JsonReader = make_intermediate_proxy_type(
     "_JsonReader",

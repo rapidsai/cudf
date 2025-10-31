@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -175,7 +176,7 @@ def validate_range_arg(arg, arg_name: Literal["start", "stop", "step"]) -> int:
     return int(arg)
 
 
-class Index(SingleColumnFrame):  # type: ignore[misc]
+class Index(SingleColumnFrame):
     """
     Immutable sequence used for indexing and alignment.
 
@@ -218,6 +219,10 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
         # Subclasses should initialize with
         # SingleColumnFrame.__init__(self, {name: column})
         return None
+
+    @property
+    def _constructor(self):
+        return Index
 
     @property
     def _constructor_expanddim(self):
@@ -1777,25 +1782,6 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
 
         return self._gather(indices)
 
-    def _apply_boolean_mask(self, boolean_mask) -> Self:
-        """Apply boolean mask to each row of `self`.
-
-        Rows corresponding to `False` is dropped.
-        """
-        boolean_mask = as_column(boolean_mask)
-        if boolean_mask.dtype.kind != "b":
-            raise ValueError("boolean_mask is not boolean type.")
-
-        return self._from_columns_like_self(
-            [
-                ColumnBase.from_pylibcudf(col)
-                for col in stream_compaction.apply_boolean_mask(
-                    list(self._columns), boolean_mask
-                )
-            ],
-            column_names=self._column_names,
-        )
-
     def _new_index_for_reset_index(
         self, levels: tuple | None, name
     ) -> None | Index:
@@ -1891,11 +1877,40 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
         result.name = name
         return result
 
+    @cached_property
+    def inferred_type(self) -> str:
+        """
+        Return a string of the type inferred from the values.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index([1, 2, 3])
+        >>> idx
+        Index([1, 2, 3], dtype='int64')
+        >>> idx.inferred_type
+        'integer'
+        """
+        if self._is_object():
+            if len(self) == 0:
+                return "empty"
+            else:
+                return "string"
+        elif self._is_integer():
+            return "integer"
+        elif self._is_floating():
+            return "floating"
+        elif self._is_boolean():
+            return "boolean"
+        raise NotImplementedError(
+            f"inferred_type not implemented for dtype {self.dtype}"
+        )
+
     @_performance_tracking
     def memory_usage(self, deep: bool = False) -> int:
         return self._column.memory_usage
 
-    @cached_property  # type: ignore
+    @cached_property  # type: ignore[explicit-override]
     @_performance_tracking
     def is_unique(self) -> bool:
         return self._column.is_unique
@@ -2429,24 +2444,40 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
             inplace=inplace,
         )
 
-    def unique(self, level: int | None = None) -> Self:
-        if level is not None and level > 0:
-            raise IndexError(
-                f"Too many levels: Index has only 1 level, not {level + 1}"
+    def _validate_index_level(self, level) -> None:
+        """
+        Validate index level.
+
+        Same validation done as pandas. Use for methods that accept a level parameter.
+        """
+        if isinstance(level, int):
+            if level < 0 and level != -1:
+                raise IndexError(
+                    "Too many levels: Index has only 1 level, "
+                    f"{level} is not a valid level number"
+                )
+            if level > 0:
+                raise IndexError(
+                    f"Too many levels: Index has only 1 level, not {level + 1}"
+                )
+        elif level != self.name:
+            raise KeyError(
+                f"Requested level ({level}) does not match index name ({self.name})"
             )
+
+    def unique(self, level: int | None = None) -> Self:
+        if level is not None:
+            self._validate_index_level(level)
         return type(self)._from_column(self._column.unique(), name=self.name)
 
     def isin(self, values, level=None) -> cupy.ndarray:
-        if level is not None and level > 0:
-            raise IndexError(
-                f"Too many levels: Index has only 1 level, not {level + 1}"
-            )
+        if level is not None:
+            self._validate_index_level(level)
         if is_scalar(values):
             raise TypeError(
                 "only list-like objects are allowed to be passed "
                 f"to isin(), you passed a {type(values).__name__}"
             )
-
         return self._column.isin(values).values
 
     def get_level_values(self, level: Hashable) -> Self:
@@ -2497,12 +2528,7 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
     @copy_docstring(StringMethods)
     @_performance_tracking
     def str(self):
-        if self.dtype == CUDF_STRING_DTYPE:
-            return StringMethods(parent=self)
-        else:
-            raise AttributeError(
-                "Can only use .str accessor with string values!"
-            )
+        return StringMethods(parent=self)
 
     @cache
     @_warn_no_dask_cudf
@@ -2606,6 +2632,14 @@ class RangeIndex(Index):
     @_performance_tracking
     def name(self, value: Hashable) -> None:
         self._name = value
+
+    @property
+    def _constructor(self):
+        return RangeIndex
+
+    @cached_property
+    def inferred_type(self) -> str:
+        return "integer"
 
     @property
     @_performance_tracking
@@ -2946,10 +2980,8 @@ class RangeIndex(Index):
 
     def unique(self, level: int | None = None) -> Self:
         # RangeIndex always has unique values
-        if level is not None and level > 0:
-            raise IndexError(
-                f"Too many levels: Index has only 1 level, not {level + 1}"
-            )
+        if level is not None:
+            self._validate_index_level(level)
         return self.copy()
 
     @_performance_tracking
@@ -3161,7 +3193,7 @@ class RangeIndex(Index):
             return index
         # Evenly spaced values can return a
         # RangeIndex instead of a materialized Index.
-        if not index._column.has_nulls():  # type: ignore[attr-defined]
+        if not index._column.has_nulls():
             uniques = cupy.unique(cupy.diff(index.values))
             if len(uniques) == 1 and (diff := uniques[0].get()) != 0:
                 new_range = range(index[0], index[-1] + diff, diff)
@@ -3202,14 +3234,10 @@ class RangeIndex(Index):
     def _gather(self, gather_map, nullify=False, check_bounds=True):
         gather_map = as_column(gather_map)
         return Index._from_column(
-            self._column.take(gather_map, nullify, check_bounds),
+            self._column.take(
+                gather_map, nullify=nullify, check_bounds=check_bounds
+            ),
             name=self.name,
-        )
-
-    @_performance_tracking
-    def _apply_boolean_mask(self, boolean_mask) -> Index:
-        return Index._from_column(
-            self._column.apply_boolean_mask(boolean_mask), name=self.name
         )
 
     def repeat(self, repeats, axis=None):
@@ -3344,6 +3372,8 @@ class RangeIndex(Index):
         return 0 not in self._range
 
     def append(self, other):
+        if len(other) == 0:
+            return self.copy()
         result = self._as_int_index().append(other)
         return self._try_reconstruct_range_index(result)
 
@@ -3359,18 +3389,9 @@ class RangeIndex(Index):
             i = []
         return as_column(i, dtype=SIZE_TYPE_DTYPE)  # type: ignore[return-value]
 
-    def isin(self, values, level=None) -> cupy.ndarray:
-        if level is not None and level > 0:
-            raise IndexError(
-                f"Too many levels: Index has only 1 level, not {level + 1}"
-            )
-        if is_scalar(values):
-            raise TypeError(
-                "only list-like objects are allowed to be passed "
-                f"to isin(), you passed a {type(values).__name__}"
-            )
-
-        return self._column.isin(values).values
+    @_performance_tracking
+    def nans_to_nulls(self) -> Self:
+        return self.copy()
 
     def __pos__(self) -> Self:
         return self.copy()
@@ -3641,6 +3662,14 @@ class DatetimeIndex(Index):
         )
 
     @cached_property
+    def _constructor(self):
+        return DatetimeIndex
+
+    @cached_property
+    def inferred_type(self) -> str:
+        return "datetime64"
+
+    @cached_property
     def asi8(self) -> cupy.ndarray:
         return self._column.astype(np.dtype(np.int64)).values
 
@@ -3681,9 +3710,7 @@ class DatetimeIndex(Index):
         datetime.tzinfo or None
             Returns None when the array is tz-naive.
         """
-        if isinstance(self.dtype, pd.DatetimeTZDtype):
-            return self.dtype.tz
-        return None
+        return self._column.tz
 
     @property
     def tzinfo(self) -> tzinfo | None:
@@ -4552,6 +4579,14 @@ class TimedeltaIndex(Index):
         """
         raise NotImplementedError("as_unit is currently not implemented")
 
+    @cached_property
+    def _constructor(self):
+        return TimedeltaIndex
+
+    @cached_property
+    def inferred_type(self) -> str:
+        return "timedelta64"
+
     @property
     def freq(self) -> DateOffset | None:
         raise NotImplementedError("freq is currently not implemented")
@@ -4788,9 +4823,11 @@ class CategoricalIndex(Index):
         ):
             data = data._column
         else:
-            data = as_column(
-                data, dtype=cudf.CategoricalDtype() if dtype is None else dtype
-            )
+            if dtype is None or (
+                isinstance(dtype, str) and dtype == "category"
+            ):
+                dtype = cudf.CategoricalDtype()
+            data = as_column(data, dtype=dtype)
             # dtype has already been taken care
             dtype = None
 
@@ -4849,6 +4886,14 @@ class CategoricalIndex(Index):
     @property
     def ordered(self) -> bool:
         return self._column.ordered
+
+    @cached_property
+    def _constructor(self):
+        return CategoricalIndex
+
+    @cached_property
+    def inferred_type(self) -> str:
+        return "categorical"
 
     @property
     @_performance_tracking
@@ -5191,11 +5236,11 @@ class IntervalIndex(Index):
             if copy:
                 col = col.copy()
             interval_col = col._with_type_metadata(
-                IntervalDtype(col.dtype.subtype, closed)
+                IntervalDtype(col.dtype.subtype, closed)  # type: ignore[union-attr]
             )
 
         if dtype:
-            interval_col = interval_col.astype(dtype)  # type: ignore[assignment]
+            interval_col = interval_col.astype(dtype)
 
         SingleColumnFrame.__init__(
             self, ColumnAccessor({name: interval_col}, verify=False)
@@ -5204,6 +5249,14 @@ class IntervalIndex(Index):
     @property
     def closed(self) -> Literal["left", "right", "neither", "both"]:
         return self.dtype.closed
+
+    @property
+    def closed_left(self) -> bool:
+        return self.closed in ("left", "both")
+
+    @property
+    def closed_right(self) -> bool:
+        return self.closed in ("right", "both")
 
     @classmethod
     @_performance_tracking
@@ -5290,6 +5343,14 @@ class IntervalIndex(Index):
         )._with_type_metadata(dtype)
         return IntervalIndex._from_column(interval_col, name=name)
 
+    @cached_property
+    def _constructor(self):
+        return IntervalIndex
+
+    @cached_property
+    def inferred_type(self) -> str:
+        return "interval"
+
     @classmethod
     def from_arrays(
         cls,
@@ -5313,7 +5374,7 @@ class IntervalIndex(Index):
         pidx = pd.IntervalIndex.from_tuples(
             data, closed=closed, name=name, copy=copy, dtype=dtype
         )
-        return cls(pidx, name=name)  # type: ignore[return-value]
+        return cls(pidx, name=name)
 
     def __getitem__(self, index):
         raise NotImplementedError(

@@ -1,5 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import collections
@@ -13,6 +12,7 @@ import pathlib
 import pickle
 import pstats
 import subprocess
+import sys
 import tempfile
 import time
 import types
@@ -2123,3 +2123,19 @@ def test_pandas_objects_not_callable():
     assert isinstance(xpd.DataFrame, Callable)
     assert isinstance(xpd.Index, Callable)
     assert isinstance(xpd.RangeIndex, Callable)
+
+
+def test_memory_usage():
+    s = xpd.Series(range(10), index=[f"i-{i}" for i in range(10)], name="a")
+
+    res_deep = s.memory_usage(deep=True)
+    res = sys.getsizeof(s)
+
+    assert abs(res_deep - res) < 100
+
+
+def test_module_proxy_write_through_config(monkeypatch):
+    cf = xpd._config.config
+    cf.register_option("foo", 1)
+    monkeypatch.setattr(cf, "_registered_options", {})
+    cf.register_option("foo", 1)
