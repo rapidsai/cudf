@@ -130,8 +130,6 @@ def test_to_parquet_filter_with_colref_raises():
 
 
 def test_validate_to_ast_null_not_equals():
-    from cudf_polars.dsl.to_ast import validate_to_ast
-
     operand = expr_nodes.Literal(DataType(pl.datatypes.Boolean()), value=True)
 
     binop = expr_nodes.BinOp(
