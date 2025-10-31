@@ -829,7 +829,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/arrays/masked/test_arrow_compat.py::test_from_arrow_type_error[UInt64]",
     "tests/arrays/masked/test_arrow_compat.py::test_from_arrow_type_error[UInt8]",
     "tests/arrays/masked/test_arrow_compat.py::test_from_arrow_type_error[boolean]",
-    "tests/arrays/masked/test_function.py::test_round[Float32]",
     "tests/arrays/masked/test_indexing.py::TestSetitemValidation::test_setitem_validation_scalar_float[Float32-1.0]",
     "tests/arrays/masked/test_indexing.py::TestSetitemValidation::test_setitem_validation_scalar_float[Float32-1]",
     "tests/arrays/masked/test_indexing.py::TestSetitemValidation::test_setitem_validation_scalar_float[Float64-1.0]",
@@ -1203,7 +1202,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/arrays/test_datetimelike.py::test_searchsorted_datetimelike_with_listlike_invalid_dtype[arg0-values1]",
     "tests/arrays/test_datetimes.py::TestDatetimeArray::test_array_interface",
     "tests/arrays/test_datetimes.py::TestDatetimeArray::test_astype_to_same",
-    "tests/arrays/test_datetimes.py::TestDatetimeArray::test_shift_fill_value",
     "tests/arrays/test_datetimes.py::TestDatetimeArrayComparisons::test_cmp_dt64_arraylike_tznaive[eq]",
     "tests/arrays/test_datetimes.py::TestDatetimeArrayComparisons::test_cmp_dt64_arraylike_tznaive[ge]",
     "tests/arrays/test_datetimes.py::TestDatetimeArrayComparisons::test_cmp_dt64_arraylike_tznaive[gt]",
@@ -4042,7 +4040,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/frame/indexing/test_indexing.py::test_object_casting_indexing_wraps_datetimelike",
     "tests/frame/indexing/test_insert.py::TestDataFrameInsert::test_insert",
     "tests/frame/indexing/test_setitem.py::TestDataFrameSetItem::test_setitem_list_missing_columns[columns3-box3-expected3]",
-    "tests/frame/indexing/test_setitem.py::TestDataFrameSetItem::test_setitem_multi_index",
     "tests/frame/indexing/test_setitem.py::TestDataFrameSetItemWithExpansion::test_setitem_newcol_tuple_key",
     "tests/frame/indexing/test_setitem.py::TestDataFrameSetitemCopyViewSemantics::test_iloc_setitem_view_2dblock",
     "tests/frame/indexing/test_setitem.py::TestDataFrameSetitemCopyViewSemantics::test_setitem_column_update_inplace",
@@ -4130,18 +4127,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/frame/methods/test_describe.py::TestDataFrameDescribe::test_describe_datetime_columns",
     "tests/frame/methods/test_diff.py::TestDataFrameDiff::test_diff_all_int_dtype[int16]",
     "tests/frame/methods/test_diff.py::TestDataFrameDiff::test_diff_all_int_dtype[int8]",
-    "tests/frame/methods/test_dot.py::TestDataFrameDot::test_dot_1d_ndarray",
-    "tests/frame/methods/test_dot.py::TestDataFrameDot::test_dot_2d_ndarray",
-    "tests/frame/methods/test_dot.py::TestDataFrameDot::test_dot_aligns",
-    "tests/frame/methods/test_dot.py::TestDataFrameDot::test_dot_equiv_values_dot",
-    "tests/frame/methods/test_dot.py::TestDataFrameDot::test_dot_series",
-    "tests/frame/methods/test_dot.py::TestDataFrameDot::test_dot_series_alignment",
-    "tests/frame/methods/test_dot.py::TestSeriesDot::test_dot_1d_ndarray",
-    "tests/frame/methods/test_dot.py::TestSeriesDot::test_dot_2d_ndarray",
-    "tests/frame/methods/test_dot.py::TestSeriesDot::test_dot_aligns",
-    "tests/frame/methods/test_dot.py::TestSeriesDot::test_dot_equiv_values_dot",
-    "tests/frame/methods/test_dot.py::TestSeriesDot::test_dot_series",
-    "tests/frame/methods/test_dot.py::TestSeriesDot::test_dot_series_alignment",
     "tests/frame/methods/test_drop.py::TestDataFrameDrop::test_drop",
     "tests/frame/methods/test_drop.py::TestDataFrameDrop::test_drop_multiindex_not_lexsorted",
     "tests/frame/methods/test_drop.py::TestDataFrameDrop::test_drop_multiindex_other_level_nan",
@@ -4223,8 +4208,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/frame/methods/test_quantile.py::TestQuantileExtensionDtype::test_quantile_ea_with_na[Float64-Series]",
     "tests/frame/methods/test_quantile.py::TestQuantileExtensionDtype::test_quantile_ea_with_na[Int64-DataFrame]",
     "tests/frame/methods/test_quantile.py::TestQuantileExtensionDtype::test_quantile_ea_with_na[Int64-Series]",
-    "tests/frame/methods/test_rank.py::TestRank::test_rank",
-    "tests/frame/methods/test_rank.py::TestRank::test_rank_na_option",
     "tests/frame/methods/test_rank.py::TestRank::test_rank_string_dtype[string=string[pyarrow]]",
     "tests/frame/methods/test_rank.py::TestRank::test_rank_string_dtype[string[pyarrow]-Int64]",
     "tests/frame/methods/test_reindex.py::TestDataFrameSelectReindex::test_reindex",
@@ -6517,8 +6500,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/indexes/test_common.py::test_ndarray_compat_properties[tuples]",
     "tests/indexes/test_common.py::test_sort_values_invalid_na_position[nullable_int-None]",
     "tests/indexes/test_common.py::test_sort_values_invalid_na_position[nullable_int-middle]",
-    "tests/indexes/test_common.py::test_sort_values_with_missing[nullable_int-first]",
-    "tests/indexes/test_common.py::test_sort_values_with_missing[nullable_int-last]",
     "tests/indexes/test_datetimelike.py::TestDatetimeLike::test_argsort_matches_array[simple_index1]",
     "tests/indexes/test_datetimelike.py::TestDatetimeLike::test_argsort_matches_array[simple_index2]",
     "tests/indexes/test_indexing.py::TestGetIndexer::test_get_indexer_base[multi]",
@@ -10237,7 +10218,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/series/methods/test_map.py::test_map_int",
     "tests/series/methods/test_map.py::test_map_simple_str_callables_same_as_astype[<lambda>]",
     "tests/series/methods/test_map.py::test_map_simple_str_callables_same_as_astype[str]",
-    "tests/series/methods/test_matmul.py::TestMatmul::test_matmul",
     "tests/series/methods/test_nlargest.py::TestSeriesNLargestNSmallest::test_nlargest_boundary_datetimelike[nsmallest-datetime64[ns]]",
     "tests/series/methods/test_nlargest.py::TestSeriesNLargestNSmallest::test_nlargest_boundary_datetimelike[nsmallest-timedelta64[ns]]",
     "tests/series/methods/test_nlargest.py::TestSeriesNLargestNSmallest::test_nlargest_error[r4]",
@@ -12637,6 +12617,16 @@ NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS = {
     "tests/indexing/test_loc.py::TestLocSetitemWithExpansion::test_loc_setitem_with_expansion_nonunique_index[nullable_int]",
     "tests/reshape/merge/test_multi.py::TestMergeMulti::test_merge_na_keys",
     "tests/series/test_constructors.py::TestSeriesConstructors::test_constructor_maskedarray_hardened",
+    # We accelerate np.dot via cupy.dot when the proxy array inputs are backed by real
+    # cupy arrays. So it is possible for tests asserting equality like test_dot_2d_ndarray
+    # fail due to tiny FP differences.
+    "tests/frame/methods/test_dot.py::TestSeriesDot::test_dot_2d_ndarray",
+    # TODO: These tests pass when run locally: with pandas 2.3.3, numpy 2.2.6, and cupy 13.6.0
+    # bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh
+    #      -q tests/indexes/test_common.py::test_sort_values_with_missing[nullable_int-first]
+    # Investigate why.
+    "tests/indexes/test_common.py::test_sort_values_with_missing[nullable_int-first]",
+    "tests/indexes/test_common.py::test_sort_values_with_missing[nullable_int-last]",
 }
 
 
