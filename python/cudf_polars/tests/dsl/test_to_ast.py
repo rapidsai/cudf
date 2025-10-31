@@ -16,7 +16,12 @@ from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.containers.dataframe import DataFrame, NamedColumn
 from cudf_polars.dsl.ir import IRExecutionContext
-from cudf_polars.dsl.to_ast import insert_colrefs, to_ast, to_parquet_filter
+from cudf_polars.dsl.to_ast import (
+    insert_colrefs,
+    to_ast,
+    to_parquet_filter,
+    validate_to_ast,
+)
 from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 
@@ -80,7 +85,9 @@ def test_compute_column(expr, df):
         )
         with pytest.raises(NotImplementedError):
             e_with_colrefs.evaluate(table)
+
         try:
+            validate_to_ast(e_with_colrefs)
             ast = to_ast(e_with_colrefs, stream=stream)
         except (KeyError, NotImplementedError):
             return e.evaluate(table)
@@ -125,7 +132,7 @@ def test_to_parquet_filter_with_colref_raises():
 def test_validate_to_ast_null_not_equals():
     from cudf_polars.dsl.to_ast import validate_to_ast
 
-    operand = expr_nodes.Literal(DataType(pl.datatypes.Boolean()), True)
+    operand = expr_nodes.Literal(DataType(pl.datatypes.Boolean()), value=True)
 
     binop = expr_nodes.BinOp(
         DataType(pl.datatypes.Boolean()),
@@ -135,126 +142,3 @@ def test_validate_to_ast_null_not_equals():
     )
 
     validate_to_ast(binop)
-
-
-def test_validate_to_ast_boolean_function_isin():
-    from cudf_polars.dsl.to_ast import validate_to_ast
-
-    col = expr_nodes.Col(DataType(pl.datatypes.Int8()), "a")
-    haystack = expr_nodes.LiteralColumn(
-        DataType(pl.datatypes.List(pl.datatypes.Int8())),
-        [1, 2, 3, 4, 5],
-    )
-
-    isin_func = expr_nodes.BooleanFunction(
-        DataType(pl.datatypes.Boolean()),
-        expr_nodes.BooleanFunction.Name.IsIn,
-        col,
-        haystack,
-    )
-
-    # Should validate successfully for small haystack
-    with pytest.raises(TypeError, match="Should always be wrapped"):
-        # Will raise because Col is not wrapped, but validates the IsIn logic first
-        validate_to_ast(isin_func)
-
-
-# def test_validate_to_ast_boolean_function_parquet_col():
-#     """Test parquet filter validation with BooleanFunction on column (lines 209-212)."""
-#     from cudf_polars.dsl.to_ast import _validate_to_ast
-#     from cudf_polars.dsl.traversal import CachingVisitor
-
-#     col = expr_nodes.Col(DataType(pl.datatypes.Int8()), "a")
-
-#     is_null_func = expr_nodes.BooleanFunction(
-#         DataType(pl.datatypes.Boolean()),
-#         expr_nodes.BooleanFunction.Name.IsNull,
-#         col,
-#     )
-
-#     validator = CachingVisitor(_validate_to_ast, state={"for_parquet": True})
-#     with pytest.raises(NotImplementedError, match="Parquet filters don't support"):
-#         validator(is_null_func)
-
-
-# def test_validate_to_ast_boolean_function_isnull_isnotnull_not():
-#     """Test validate_to_ast with IsNull, IsNotNull, Not (lines 213-219)."""
-#     from cudf_polars.dsl.to_ast import validate_to_ast
-
-#     lit = expr_nodes.Literal(DataType(pl.datatypes.Int8()), 5)
-
-#     # Test IsNull
-#     is_null_func = expr_nodes.BooleanFunction(
-#         DataType(pl.datatypes.Boolean()),
-#         expr_nodes.BooleanFunction.Name.IsNull,
-#         lit,
-#     )
-#     validate_to_ast(is_null_func)  # Should not raise
-
-#     # Test IsNotNull
-#     is_not_null_func = expr_nodes.BooleanFunction(
-#         DataType(pl.datatypes.Boolean()),
-#         expr_nodes.BooleanFunction.Name.IsNotNull,
-#         lit,
-#     )
-#     validate_to_ast(is_not_null_func)  # Should not raise
-
-#     # Test Not
-#     not_func = expr_nodes.BooleanFunction(
-#         DataType(pl.datatypes.Boolean()),
-#         expr_nodes.BooleanFunction.Name.Not,
-#         lit,
-#     )
-#     validate_to_ast(not_func)  # Should not raise
-
-
-# def test_validate_to_ast_boolean_function_unsupported():
-#     """Test validate_to_ast with unsupported BooleanFunction (line 220)."""
-#     from cudf_polars.dsl.to_ast import validate_to_ast
-
-#     lit = expr_nodes.Literal(DataType(pl.datatypes.Int8()), 5)
-
-#     # IsFinite is not supported in AST conversion
-#     is_finite_func = expr_nodes.BooleanFunction(
-#         DataType(pl.datatypes.Boolean()),
-#         expr_nodes.BooleanFunction.Name.IsFinite,
-#         lit,
-#     )
-
-#     with pytest.raises(NotImplementedError, match="AST conversion does not support"):
-#         validate_to_ast(is_finite_func)
-
-
-# def test_validate_to_ast_unary_function_parquet():
-#     """Test parquet filter validation with UnaryFunction on column (lines 225-228)."""
-#     from cudf_polars.dsl.to_ast import _validate_to_ast
-#     from cudf_polars.dsl.traversal import CachingVisitor
-
-#     col = expr_nodes.Col(DataType(pl.datatypes.Float64()), "a")
-
-#     unary_func = expr_nodes.UnaryFunction(
-#         DataType(pl.datatypes.Float64()),
-#         "sin",
-#         {},
-#         col,
-#     )
-
-#     validator = CachingVisitor(_validate_to_ast, state={"for_parquet": True})
-#     with pytest.raises(NotImplementedError, match="Parquet filters don't support"):
-#         validator(unary_func)
-
-
-# def test_validate_to_ast_unary_function():
-#     """Test validate_to_ast with UnaryFunction (lines 229-230)."""
-#     from cudf_polars.dsl.to_ast import validate_to_ast
-
-#     lit = expr_nodes.Literal(DataType(pl.datatypes.Float64()), 5.0)
-
-#     unary_func = expr_nodes.UnaryFunction(
-#         DataType(pl.datatypes.Float64()),
-#         "sin",
-#         {},
-#         lit,
-#     )
-
-#     validate_to_ast(unary_func)  # Should not raise

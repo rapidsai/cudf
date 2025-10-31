@@ -212,7 +212,9 @@ def _to_ast(node: expr.Expr, self: Transformer) -> plc_expr.Expression:
     ------
     NotImplementedError or KeyError if the expression cannot be translated.
     """
-    raise NotImplementedError(f"Unhandled expression type {type(node)}")
+    raise NotImplementedError(
+        f"Unhandled expression type {type(node)}"
+    )  # pragma: no cover
 
 
 @_to_ast.register
@@ -316,7 +318,10 @@ def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
         )
     elif node.name is expr.BooleanFunction.Name.Not:
         return plc_expr.Operation(plc_expr.ASTOperator.NOT, self(node.children[0]))
-    raise NotImplementedError(f"AST conversion does not support {node.name}")
+    # we'll raise in validate_to_ast before reaching here.
+    raise NotImplementedError(
+        f"AST conversion does not support {node.name}"
+    )  # pragma: no cover
 
 
 @_to_ast.register
