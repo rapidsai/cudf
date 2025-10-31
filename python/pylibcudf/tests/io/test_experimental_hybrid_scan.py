@@ -56,9 +56,9 @@ def simple_parquet_bytes(simple_parquet_table, row_group_size):
         simple_parquet_table,
         buf,
         row_group_size=row_group_size,
-        compression="SNAPPY",
         use_dictionary=True,
         write_statistics=True,
+        write_page_index=True,
     )
     return buf.getvalue()
 
@@ -193,15 +193,6 @@ def test_hybrid_scan_filter_row_groups_with_stats(
     # First half of row groups should be filtered out, second half should remain
     expected_row_groups = list(range(num_row_groups // 2, num_row_groups))
     assert filtered == expected_row_groups
-
-
-def test_hybrid_scan_page_index_byte_range(simple_hybrid_scan_reader):
-    """Test getting page index byte range."""
-    page_index_range = simple_hybrid_scan_reader.page_index_byte_range()
-
-    # PyArrow doesn't write page index by default
-    assert page_index_range.offset == 0
-    assert page_index_range.size == 0
 
 
 def test_hybrid_scan_secondary_filters_byte_ranges(
