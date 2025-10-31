@@ -1599,14 +1599,6 @@ class chunked_parquet_writer {
   std::unique_ptr<parquet::detail::writer> writer;
 };
 
-/**
- * @brief Deprecated type alias for the `chunked_parquet_writer`
- *
- * @deprecated Use chunked_parquet_writer instead. This alias will be removed in a future release.
- */
-using parquet_chunked_writer [[deprecated("Use chunked_parquet_writer instead")]] =
-  chunked_parquet_writer;
-
 /** @} */  // end of group
 
 }  // namespace io

@@ -9,10 +9,10 @@ from utils import assert_column_eq
 import pylibcudf as plc
 
 
-@pytest.fixture(params=["float32", "float64"])
+@pytest.fixture(params=["int32", "int64"])
 def column(request, has_nulls):
-    values = [2.5, 2.49, 1.6, 8, -1.5, -1.7, -0.5, 0.5]
-    typ = {"float32": pa.float32(), "float64": pa.float64()}[request.param]
+    values = [250, 249, 160, 800, -150, -170, -50, 50]
+    typ = {"int32": pa.int32(), "int64": pa.int64()}[request.param]
     if has_nulls:
         values[2] = None
     return plc.Column.from_arrow(pa.array(values, type=typ))
@@ -21,7 +21,7 @@ def column(request, has_nulls):
 @pytest.mark.parametrize(
     "round_mode", ["half_towards_infinity", "half_to_even"]
 )
-@pytest.mark.parametrize("decimals", [0, 1, 2, 5])
+@pytest.mark.parametrize("decimals", [0, -1, -2])
 def test_round(column, round_mode, decimals):
     method = {
         "half_towards_infinity": plc.round.RoundingMethod.HALF_UP,
