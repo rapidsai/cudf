@@ -2444,24 +2444,35 @@ class Index(SingleColumnFrame):
             inplace=inplace,
         )
 
-    def unique(self, level: int | None = None) -> Self:
-        if level is not None and level > 0:
-            raise IndexError(
-                f"Too many levels: Index has only 1 level, not {level + 1}"
+    def _validate_index_level(self, level) -> None:
+        """
+        Validate index level.
+
+        Same validation done as pandas. Use for methods that accept a level parameter.
+        """
+        if isinstance(level, int):
+            if level < 0 and level != -1:
+                raise IndexError(
+                    "Too many levels: Index has only 1 level, "
+                    f"{level} is not a valid level number"
+                )
+            if level > 0:
+                raise IndexError(
+                    f"Too many levels: Index has only 1 level, not {level + 1}"
+                )
+        elif level != self.name:
+            raise KeyError(
+                f"Requested level ({level}) does not match index name ({self.name})"
             )
+
+    def unique(self, level: int | None = None) -> Self:
+        if level is not None:
+            self._validate_index_level(level)
         return type(self)._from_column(self._column.unique(), name=self.name)
 
     def isin(self, values, level=None) -> cupy.ndarray:
-        if level is not None and level > 0:
-            raise IndexError(
-                f"Too many levels: Index has only 1 level, not {level + 1}"
-            )
-        if is_scalar(values):
-            raise TypeError(
-                "only list-like objects are allowed to be passed "
-                f"to isin(), you passed a {type(values).__name__}"
-            )
-
+        if level is not None:
+            self._validate_index_level(level)
         return self._column.isin(values).values
 
     def get_level_values(self, level: Hashable) -> Self:
@@ -2964,10 +2975,8 @@ class RangeIndex(Index):
 
     def unique(self, level: int | None = None) -> Self:
         # RangeIndex always has unique values
-        if level is not None and level > 0:
-            raise IndexError(
-                f"Too many levels: Index has only 1 level, not {level + 1}"
-            )
+        if level is not None:
+            self._validate_index_level(level)
         return self.copy()
 
     @_performance_tracking
@@ -3374,19 +3383,6 @@ class RangeIndex(Index):
         except ValueError:
             i = []
         return as_column(i, dtype=SIZE_TYPE_DTYPE)  # type: ignore[return-value]
-
-    def isin(self, values, level=None) -> cupy.ndarray:
-        if level is not None and level > 0:
-            raise IndexError(
-                f"Too many levels: Index has only 1 level, not {level + 1}"
-            )
-        if is_scalar(values):
-            raise TypeError(
-                "only list-like objects are allowed to be passed "
-                f"to isin(), you passed a {type(values).__name__}"
-            )
-
-        return self._column.isin(values).values
 
     @_performance_tracking
     def nans_to_nulls(self) -> Self:
