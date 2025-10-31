@@ -424,8 +424,8 @@ class parquet_field_struct_list : public parquet_field {
       std::vector<cudf::host_span<uint8_t const>> all_ranges;
       all_ranges.reserve(n);
 
-      std::size_t struct_idx = 0;
-      for (std::size_t task_id = 0; task_id < num_tasks; ++task_id) {
+      uint32_t struct_idx = 0;
+      for (uint32_t task_id = 0; task_id < num_tasks; ++task_id) {
         auto const task_size = items_per_task + (task_id < remainder ? 1 : 0);
         auto const start_idx = std::min(n, struct_idx);
         auto const end_idx   = std::min(n, start_idx + task_size);
@@ -433,7 +433,7 @@ class parquet_field_struct_list : public parquet_field {
         if (start_idx >= end_idx) { break; }
 
         // Collect struct ranges for the next task
-        for (std::size_t i = start_idx; i < end_idx; ++i) {
+        for (auto i = start_idx; i < end_idx; ++i) {
           uint8_t const* const start = cpr->m_cur;
           cpr->skip_struct_field(static_cast<int>(FieldType::STRUCT));
           all_ranges.emplace_back(start, static_cast<size_t>(cpr->m_cur - start));
