@@ -675,10 +675,12 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   for (std::size_t i = start_source, cur_stream = 0;
        i < sources.size() && bytes_read < total_bytes_to_read;
        i++) {
-    if (sources[i]->is_empty()) continue;
-    auto data_size = std::min(sources[i]->size() - range_offset, total_bytes_to_read - bytes_read);
-    auto destination = reinterpret_cast<uint8_t*>(buffer.data()) + bytes_read +
-                       (num_delimiter_chars * delimiter_map.size());
+    if (sources[i]->is_empty()) { continue; }
+    auto const offset = bytes_read + (num_delimiter_chars * delimiter_map.size());
+    auto destination  = reinterpret_cast<uint8_t*>(buffer.data()) + offset;
+    auto const data_size =
+      std::min(std::min(sources[i]->size() - range_offset, total_bytes_to_read - bytes_read),
+               buffer.size() - offset);
     if (sources[i]->supports_device_read()) {
       thread_tasks.emplace_back(sources[i]->device_read_async(
         range_offset, data_size, destination, stream_pool[cur_stream++ % stream_pool.size()]));
@@ -686,10 +688,8 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
     } else {
       h_buffers.emplace_back(sources[i]->host_read(range_offset, data_size));
       auto const& h_buffer = h_buffers.back();
-      auto const max_size  = std::distance(destination, reinterpret_cast<uint8_t*>(buffer.end()));
-      auto const copy_size = std::min(static_cast<size_t>(max_size), h_buffer->size());
       CUDF_CUDA_TRY(cudaMemcpyAsync(
-        destination, h_buffer->data(), copy_size, cudaMemcpyDefault, stream.value()));
+        destination, h_buffer->data(), h_buffer->size(), cudaMemcpyDefault, stream.value()));
       bytes_read += h_buffer->size();
     }
     range_offset = 0;
