@@ -5,7 +5,6 @@
 
 #include "helpers.cuh"
 #include "output_utils.hpp"
-#include "single_pass_functors.cuh"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -57,8 +56,7 @@ struct result_column_creator {
     auto const target_type   = (agg == aggregation::SUM_WITH_OVERFLOW)
                                  ? data_type{type_id::BOOL8}
                                  : cudf::detail::target_type(col_type, agg);
-    auto const type_size     = cudf::type_dispatcher(target_type, size_of_functor{});
-    auto const adjusted_size = (type_size < 4 && output_size > 0)
+    auto const adjusted_size = (cudf::size_of(target_type) < 4 && output_size > 0)
                                  ? cudf::util::round_up_safe(output_size, static_cast<size_type>(4))
                                  : output_size;
 
@@ -68,8 +66,7 @@ struct result_column_creator {
     // Special handling for SUM_WITH_OVERFLOW which needs a struct column.
     if (agg != aggregation::SUM_WITH_OVERFLOW) {
       auto const mask_flag = nullable ? mask_state::ALL_NULL : mask_state::UNALLOCATED;
-      return make_fixed_width_column(
-        cudf::detail::target_type(col_type, agg), adjusted_size, mask_flag, stream, mr);
+      return make_fixed_width_column(target_type, adjusted_size, mask_flag, stream, mr);
     }
 
     auto const make_empty_column = [&](type_id type_id, size_type size, mask_state mask_state) {
