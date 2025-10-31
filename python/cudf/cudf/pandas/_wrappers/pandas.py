@@ -15,6 +15,7 @@ import pandas as pd
 # I suspect it relates to pyarrow's pandas-shim that gets imported
 # with this module https://github.com/rapidsai/cudf/issues/14521#issue-2015198786
 import pyarrow.dataset as ds  # noqa: F401
+from packaging.version import parse
 from pandas._testing import at, getitem, iat, iloc, loc, setitem
 from pandas.tseries.holiday import (
     AbstractHolidayCalendar as pd_AbstractHolidayCalendar,
@@ -2285,6 +2286,11 @@ def initial_setup():
         _original_MultiIndex_from_pandas
     )
     cudf.set_option("mode.pandas_compatible", True)
+
+    # Once we switch to pandas 3.0 CoW will be default
+    if parse(pd.__version__) <= parse("3.0.0"):
+        cudf.set_option("copy_on_write", True)
+        pd.set_option("mode.copy_on_write", True)
 
 
 def _reduce_obj(obj):
