@@ -3358,6 +3358,8 @@ class RangeIndex(Index):
         return 0 not in self._range
 
     def append(self, other):
+        if len(other) == 0:
+            return self.copy()
         result = self._as_int_index().append(other)
         return self._try_reconstruct_range_index(result)
 
