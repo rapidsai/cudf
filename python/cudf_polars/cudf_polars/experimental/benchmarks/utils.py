@@ -842,7 +842,10 @@ def parse_args(
         "--reset-memory-resource-pool",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Reset the memory resource pool between each iteration.",
+        help=(
+            "Reset the memory resource pool between each iteration. "
+            "Note: this only affects the single-node cluster."
+        ),
     )
 
     parsed_args = parser.parse_args(args)
