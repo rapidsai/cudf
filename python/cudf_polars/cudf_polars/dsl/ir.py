@@ -699,6 +699,7 @@ class Scan(IR):
                     plc.io.csv.CsvReaderOptions.builder(plc.io.SourceInfo([path]))
                     .nrows(n_rows)
                     .skiprows(skiprows + skip_rows)
+                    .skip_blank_lines(skip_blank_lines=False)
                     .lineterminator(str(eol))
                     .quotechar(str(quote))
                     .decimal(decimal)
