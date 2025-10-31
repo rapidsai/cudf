@@ -433,7 +433,7 @@ class parquet_field_struct_list : public parquet_field {
         if (start_idx >= n) { break; }
 
         // Collect struct ranges for the next task
-        for (std::size_t i = start_idx; i < end_idx && i < n; ++i) {
+        for (std::size_t i = start_idx; i < end_idx; ++i) {
           uint8_t const* const start = cpr->m_cur;
           cpr->skip_struct_field(static_cast<int>(FieldType::STRUCT));
           all_ranges.emplace_back(start, static_cast<size_t>(cpr->m_cur - start));
