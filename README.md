@@ -32,8 +32,9 @@ Operating System, GPU driver, and supported CUDA version information can be foun
 
 ### pip
 
-Each cudf library is available on PyPI. You will need to match the major version number of your installed CUDA version with a `-cu##` suffix
-when installing from PyPI.
+A stable release of each cudf library is available on PyPI. You will need to match the major version number of your installed CUDA version with a `-cu##` suffix when installing from PyPI.
+
+A development version of each library is available as a nightly release by including the `-i https://pypi.anaconda.org/rapidsai-wheels-nightly/simple` index.
 
 ```bash
 # CUDA 13
@@ -53,7 +54,9 @@ pip install dask-cudf-cu12
 
 ### conda
 
-Each cudf library is available to be installed with the conda package manager by specifying the `-c rapidsai` channel.
+A stable release of each cudf library is available to be installed with the conda package manager by specifying the `-c rapidsai` channel.
+
+A development version of each library is available as a nightly release by specifying the `-c rapidsai-nightly` channel instead.
 
 ```bash
 conda install -c rapidsai libcudf
@@ -62,8 +65,6 @@ conda install -c rapidsai cudf
 conda install -c rapidsai cudf-polars
 conda install -c rapidsai dask-cudf
 ```
-
-A development version of each library is available as a nightly release by specifying the `-c rapidsai-nightly` channel instead.
 
 ### source
 
