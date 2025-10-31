@@ -15,29 +15,37 @@ from cudf.testing import assert_eq
         -3,
         0,
         5,
-        pd.Series([1, -2, 3], index=["ints", "ints_with_na", "ints_same"]),
-        cudf.Series([-1, 2, 12], index=["ints", "ints_with_na", "ints_same"]),
-        {"ints": -1, "ints_with_na": 2, "ints_same": 3},
+        pd.Series(
+            [1, 4, 3, -6],
+            index=["floats", "ints", "floats_with_nan", "floats_same"],
+        ),
+        cudf.Series(
+            [-4, -2, 12], index=["ints", "floats_with_nan", "floats_same"]
+        ),
+        {"floats": -1, "ints": 15, "floats_will_nan": 2},
     ],
 )
 def test_dataframe_round(decimals):
     rng = np.random.default_rng(seed=0)
     gdf = cudf.DataFrame(
         {
-            "ints": rng.integers(-1000, 1000, 10),
-            "ints_with_na": [
-                14123,
-                2343,
-                None,
-                0,
-                -8302,
-                None,
-                94313,
-                None,
-                -8029,
-                None,
-            ],
-            "ints_same": np.repeat([123456], 10),
+            "floats": np.arange(0.5, 10.5, 1),
+            "ints": rng.normal(-100, 100, 10),
+            "floats_with_na": np.array(
+                [
+                    14.123,
+                    2.343,
+                    np.nan,
+                    0.0,
+                    -8.302,
+                    np.nan,
+                    94.313,
+                    None,
+                    -8.029,
+                    np.nan,
+                ]
+            ),
+            "floats_same": np.repeat([-0.6459412758761901], 10),
             "bools": rng.choice([True, None, False], 10),
             "strings": rng.choice(["abc", "xyz", None], 10),
             "struct": rng.choice([{"abc": 1}, {"xyz": 2}, None], 10),
