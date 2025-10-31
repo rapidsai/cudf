@@ -16,7 +16,7 @@ import pylibcudf as plc
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.expressions.base import ExecutionContext
-from cudf_polars.utils.versions import POLARS_VERSION_LT_1323
+from cudf_polars.utils.versions import POLARS_VERSION_LT_134, POLARS_VERSION_LT_1323
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable, Sequence
@@ -185,18 +185,21 @@ def decompose_single_agg(
         # mean/median on decimal: Polars returns float -> pre-cast
         decimal_unsupported = False
         if plc.traits.is_fixed_point(child_dtype):
-            if is_quantile:
+            cast_for_quantile = is_quantile and not POLARS_VERSION_LT_134
+            cast_for_mean_or_median = (
+                agg.name in {"mean", "median"}
+            ) and plc.traits.is_floating_point(agg.dtype.plc_type)
+
+            if cast_for_quantile or cast_for_mean_or_median:
+                child = expr.Cast(
+                    agg.dtype
+                    if plc.traits.is_floating_point(agg.dtype.plc_type)
+                    else DataType(pl.Float64()),
+                    child,
+                )
+                child_dtype = child.dtype.plc_type
+            elif is_quantile and POLARS_VERSION_LT_134:  # pragma: no cover
                 decimal_unsupported = True
-            elif agg.name in {"mean", "median"}:
-                tid = agg.dtype.plc_type.id()
-                if tid in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}:
-                    cast_to = (
-                        DataType(pl.Float64())
-                        if tid == plc.TypeId.FLOAT64
-                        else DataType(pl.Float32())
-                    )
-                    child = expr.Cast(cast_to, child)
-                    child_dtype = child.dtype.plc_type
 
         is_group_quantile_supported = plc.traits.is_integral(
             child_dtype

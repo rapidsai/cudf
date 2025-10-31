@@ -49,7 +49,7 @@ from cudf_polars.utils.cuda_stream import (
     get_joined_cuda_stream,
     get_new_cuda_stream,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_131
+from cudf_polars.utils.versions import POLARS_VERSION_LT_131, POLARS_VERSION_LT_134
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Iterable, Sequence
@@ -57,7 +57,7 @@ if TYPE_CHECKING:
 
     from typing_extensions import Self
 
-    from polars.polars import _expr_nodes as pl_expr
+    from polars import polars
 
     from rmm.pylibrmm.stream import Stream
 
@@ -307,6 +307,22 @@ def _parquet_physical_types(
     return dict(zip(schema.keys(), [c.type() for c in df.tbl.columns()], strict=True))
 
 
+def _cast_literal_to_decimal(
+    side: expr.Expr, lit: expr.Literal, phys_type_map: dict[str, plc.DataType]
+) -> expr.Expr:
+    if isinstance(side, expr.Cast):
+        col = side.children[0]
+        assert isinstance(col, expr.Col)
+        name = col.name
+    else:
+        assert isinstance(side, expr.Col)
+        name = side.name
+    if phys_type_map[name].id() in _DECIMAL_IDS:
+        scale = abs(phys_type_map[name].scale())
+        return expr.Cast(side.dtype, expr.Cast(DataType(pl.Decimal(38, scale)), lit))
+    return lit
+
+
 def _cast_literals_to_physical_types(
     node: expr.Expr, phys_type_map: dict[str, plc.DataType]
 ) -> expr.Expr:
@@ -315,32 +331,14 @@ def _cast_literals_to_physical_types(
         left = _cast_literals_to_physical_types(left, phys_type_map)
         right = _cast_literals_to_physical_types(right, phys_type_map)
         if node.op in _COMPARISON_BINOPS:
-            if (
-                isinstance(left, expr.Col)
-                and isinstance(right, expr.Literal)
-                and phys_type_map[left.name].id() in _DECIMAL_IDS
+            if isinstance(left, (expr.Col, expr.Cast)) and isinstance(
+                right, expr.Literal
             ):
-                right = expr.Cast(
-                    left.dtype,
-                    expr.Cast(
-                        DataType(pl.Decimal(38, abs(phys_type_map[left.name].scale()))),
-                        right,
-                    ),
-                )
-            elif (
-                isinstance(right, expr.Col)
-                and isinstance(left, expr.Literal)
-                and phys_type_map[right.name].id() in _DECIMAL_IDS
+                right = _cast_literal_to_decimal(left, right, phys_type_map)
+            elif isinstance(right, (expr.Col, expr.Cast)) and isinstance(
+                left, expr.Literal
             ):
-                left = expr.Cast(
-                    right.dtype,
-                    expr.Cast(
-                        DataType(
-                            pl.Decimal(38, abs(phys_type_map[right.name].scale()))
-                        ),
-                        left,
-                    ),
-                )
+                left = _cast_literal_to_decimal(right, left, phys_type_map)
 
         return node.reconstruct([left, right])
     return node
@@ -1839,6 +1837,23 @@ def _strip_predicate_casts(node: expr.Expr) -> expr.Expr:
         ):
             return child
 
+        if (
+            not POLARS_VERSION_LT_134
+            and isinstance(child, expr.ColRef)
+            and (
+                (
+                    plc.traits.is_floating_point(src.plc_type)
+                    and plc.traits.is_floating_point(dst.plc_type)
+                )
+                or (
+                    plc.traits.is_integral(src.plc_type)
+                    and plc.traits.is_integral(dst.plc_type)
+                    and src.plc_type.id() == dst.plc_type.id()
+                )
+            )
+        ):
+            return child
+
     if not node.children:
         return node
     return node.reconstruct([_strip_predicate_casts(child) for child in node.children])
@@ -1959,7 +1974,7 @@ class ConditionalJoin(IR):
     options: tuple[
         tuple[
             str,
-            pl_expr.Operator | Iterable[pl_expr.Operator],
+            polars._expr_nodes.Operator | Iterable[polars._expr_nodes.Operator],
         ]
         | None,
         bool,
@@ -2415,20 +2430,24 @@ class Join(IR):
                 stream=stream,
             )
             if coalesce and how == "Full":
+                left_key_names = left_on.column_names
+                right_key_names = right_on.column_names
+                left_key_cols = left.select(left_key_names).column_map
+                right_key_cols = right.select(right_key_names).column_map
+
                 left = left.with_columns(
                     (
                         Column(
                             plc.replace.replace_nulls(
-                                left_col.obj, right_col.obj, stream=stream
+                                left_key_cols[name].obj, _rc.obj, stream=stream
                             ),
-                            name=left_col.name,
-                            dtype=left_col.dtype,
+                            name=name,
+                            dtype=left_key_cols[name].dtype,
                         )
-                        for left_col, right_col in zip(
-                            left.select_columns(left_on.column_names_set),
-                            right.select_columns(right_on.column_names_set),
-                            strict=True,
-                        )
+                        for name in left_key_names
+                        if (_rc := right_key_cols.get(name)) is not None
+                        and _rc.dtype.plc_type.id()
+                        == left_key_cols[name].dtype.plc_type.id()
                     ),
                     replace_only=True,
                     stream=stream,
