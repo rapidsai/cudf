@@ -22,6 +22,9 @@ namespace cudf::detail {
 /**
  * @brief Kernel to evaluate predicate on gather map pairs and mark valid indices
  *
+ * This kernel evaluates a predicate on matched pairs from the gather map.
+ * Non-match indices from outer joins are always included without predicate evaluation.
+ *
  * @tparam max_block_size The size of the thread block, used to set launch bounds
  * @tparam has_nulls Indicates whether the expression may evaluate to null
  * @tparam has_complex_type Indicates whether the expression may contain complex types
@@ -33,7 +36,6 @@ __launch_bounds__(max_block_size) __global__
                                 cudf::device_span<cudf::size_type const> left_indices,
                                 cudf::device_span<cudf::size_type const> right_indices,
                                 cudf::ast::detail::expression_device_view device_expression_data,
-                                cudf::null_policy null_handling,
                                 bool* output_flags)
 {
   // Shared memory for intermediate storage
@@ -56,20 +58,22 @@ __launch_bounds__(max_block_size) __global__
 
     auto result = cudf::ast::detail::value_expression_result<bool, has_nulls>{};
 
-    // Check for null sentinels (used by outer joins for unmatched rows)
-    bool const has_null_index = (left_row_index == cudf::detail::JoinNoneValue ||
-                                 right_row_index == cudf::detail::JoinNoneValue);
+    // Check for non-match sentinels (used by outer joins for unmatched rows)
+    bool const has_non_match = (left_row_index == cudf::detail::JoinNoneValue ||
+                                right_row_index == cudf::detail::JoinNoneValue);
 
-    // Handle null indices based on the specified policy
-    if (has_null_index) {
-      output_flags[i] = (null_handling == cudf::null_policy::INCLUDE);
+    // Mixed join behavior: preserve unmatched rows, filter only matched rows
+    if (has_non_match) {
+      // Always include unmatched rows (non-match indices) without predicate evaluation
+      output_flags[i] = true;
     } else if (left_row_index >= 0 && left_row_index < left_table.num_rows() &&
                right_row_index >= 0 && right_row_index < right_table.num_rows()) {
-      // Valid indices - evaluate predicate
+      // Valid matched pair - evaluate predicate
       evaluator.evaluate(result, left_row_index, right_row_index, 0, thread_intermediate_storage);
       output_flags[i] = result.is_valid() && result.value();
     } else {
-      output_flags[i] = false;  // Mark as invalid for out-of-bounds indices
+      // Invalid indices (out of bounds - shouldn't happen in normal mixed join workflow)
+      output_flags[i] = false;
     }
   }
 }
@@ -84,7 +88,6 @@ void launch_filter_gather_map_kernel(
   cudf::device_span<cudf::size_type const> left_indices,
   cudf::device_span<cudf::size_type const> right_indices,
   cudf::ast::detail::expression_device_view device_expression_data,
-  cudf::null_policy null_handling,
   cudf::detail::grid_1d const& config,
   std::size_t shmem_per_block,
   bool* output_flags,
@@ -92,13 +95,7 @@ void launch_filter_gather_map_kernel(
 {
   filter_gather_map_kernel<MAX_BLOCK_SIZE, has_nulls, has_complex_type>
     <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
-      left_table,
-      right_table,
-      left_indices,
-      right_indices,
-      device_expression_data,
-      null_handling,
-      output_flags);
+      left_table, right_table, left_indices, right_indices, device_expression_data, output_flags);
 }
 
 }  // namespace cudf::detail

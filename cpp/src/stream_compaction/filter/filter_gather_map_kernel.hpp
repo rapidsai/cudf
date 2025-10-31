@@ -23,6 +23,7 @@ size_type constexpr MAX_BLOCK_SIZE = 256;
  *
  * This function selects and launches the appropriate kernel implementation based on whether
  * the expression may evaluate to null and whether the expression contains complex types.
+ * Non-match indices from outer joins are always included without predicate evaluation.
  *
  * @tparam has_nulls Indicates whether the expression may evaluate to null
  * @tparam has_complex_type Indicates whether the expression may contain complex types
@@ -32,7 +33,6 @@ size_type constexpr MAX_BLOCK_SIZE = 256;
  * @param left_indices Device span of left table indices
  * @param right_indices Device span of right table indices
  * @param device_expression_data Device data required to evaluate the expression
- * @param null_handling Policy for handling null indices (INCLUDE or EXCLUDE)
  * @param config Grid configuration for kernel launch
  * @param shmem_per_block Amount of shared memory to allocate per block
  * @param output_flags Output array to mark valid index pairs
@@ -45,7 +45,6 @@ void launch_filter_gather_map_kernel(
   cudf::device_span<cudf::size_type const> left_indices,
   cudf::device_span<cudf::size_type const> right_indices,
   cudf::ast::detail::expression_device_view device_expression_data,
-  cudf::null_policy null_handling,
   cudf::detail::grid_1d const& config,
   std::size_t shmem_per_block,
   bool* output_flags,

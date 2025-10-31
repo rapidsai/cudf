@@ -505,9 +505,10 @@ std::unique_ptr<table> filter(
  * The predicate can involve arbitrary column operations from both tables, enabling support
  * for "mixed join" workflows without materializing the full join table.
  *
- * This function handles null indices (represented by the minimum value of `size_type`) that
- * may be produced by outer joins. The `null_handling` parameter controls whether null indices are
- * included or excluded from the output.
+ * This function handles non-match indices (represented by the minimum value of `size_type`) that
+ * are produced by outer joins for unmatched rows. Non-match indices are always included in the
+ * output without predicate evaluation, matching mixed join behavior where unmatched rows are
+ * preserved.
  *
  * @throw std::invalid_argument if `left_indices` and `right_indices` have different sizes.
  *
@@ -524,8 +525,6 @@ std::unique_ptr<table> filter(
  * @param left_indices Device span of row indices in the left table.
  * @param right_indices Device span of row indices in the right table.
  * @param predicate An AST expression that returns a boolean for each pair of rows.
- * @param null_handling Policy for handling null indices. EXCLUDE (default) filters out null
- * indices, INCLUDE preserves them in the output.
  * @param stream CUDA stream used for kernel launches and memory operations.
  * @param mr Device memory resource used to allocate output gather map.
  *
@@ -539,7 +538,6 @@ filter_gather_map(cudf::table_view const& left,
                   cudf::device_span<size_type const> left_indices,
                   cudf::device_span<size_type const> right_indices,
                   ast::expression const& predicate,
-                  null_policy null_handling         = null_policy::EXCLUDE,
                   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
                   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
