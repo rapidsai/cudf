@@ -327,17 +327,8 @@ std::unique_ptr<column> slice_strings(strings_column_view const& input,
                "Parameter starts must have the same number of rows as strings.");
   CUDF_EXPECTS(stops_column.size() == input.size(),
                "Parameter stops must have the same number of rows as strings.");
-  CUDF_EXPECTS(cudf::have_same_types(starts_column, stops_column),
-               "Parameters starts and stops must be of the same type.",
-               cudf::data_type_error);
   CUDF_EXPECTS(starts_column.null_count() == 0, "Parameter starts must not contain nulls.");
   CUDF_EXPECTS(stops_column.null_count() == 0, "Parameter stops must not contain nulls.");
-  CUDF_EXPECTS(starts_column.type().id() != data_type{type_id::BOOL8}.id(),
-               "Positions values must not be bool type.",
-               cudf::data_type_error);
-  CUDF_EXPECTS(is_fixed_width(starts_column.type()),
-               "Positions values must be fixed width type.",
-               cudf::data_type_error);
 
   auto starts_iter = cudf::detail::indexalator_factory::make_input_iterator(starts_column);
   auto stops_iter  = cudf::detail::indexalator_factory::make_input_iterator(stops_column);
