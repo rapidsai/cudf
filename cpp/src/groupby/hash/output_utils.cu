@@ -5,10 +5,12 @@
 
 #include "helpers.cuh"
 #include "output_utils.hpp"
+#include "single_pass_functors.cuh"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
@@ -30,6 +32,8 @@ namespace {
  *
  * This functor handles the creation of appropriately typed and sized columns for each
  * aggregation, including special handling for SUM_WITH_OVERFLOW which requires a struct column.
+ * For data types smaller than 4 bytes, the output size is adjusted to be a multiple of 4 to
+ * ensure memory safety when atomic operations use 4-byte CAS loops to emulate smaller atomics.
  */
 struct result_column_creator {
   size_type output_size;
@@ -45,16 +49,25 @@ struct result_column_creator {
 
   std::unique_ptr<column> operator()(column_view const& col, aggregation::Kind const& agg) const
   {
+    // Calculate adjusted output size for atomic operation safety
+    auto const col_type =
+      is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
+    auto const target_type   = (agg == aggregation::SUM_WITH_OVERFLOW)
+                                 ? data_type{type_id::BOOL8}
+                                 : cudf::detail::target_type(col_type, agg);
+    auto const type_size     = cudf::type_dispatcher(target_type, size_of_functor{});
+    auto const adjusted_size = (type_size < 4 && output_size > 0)
+                                 ? cudf::util::round_up_safe(output_size, static_cast<size_type>(4))
+                                 : output_size;
+
     auto const nullable =
       agg != aggregation::COUNT_VALID && agg != aggregation::COUNT_ALL && col.has_nulls();
 
     // Special handling for SUM_WITH_OVERFLOW which needs a struct column.
     if (agg != aggregation::SUM_WITH_OVERFLOW) {
-      auto const col_type =
-        is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
       auto const mask_flag = nullable ? mask_state::ALL_NULL : mask_state::UNALLOCATED;
       return make_fixed_width_column(
-        cudf::detail::target_type(col_type, agg), output_size, mask_flag, stream, mr);
+        cudf::detail::target_type(col_type, agg), adjusted_size, mask_flag, stream, mr);
     }
 
     auto const make_empty_column = [&](type_id type_id, size_type size, mask_state mask_state) {
@@ -63,8 +76,7 @@ struct result_column_creator {
 
     auto make_children = [&make_empty_column](size_type size) {
       std::vector<std::unique_ptr<column>> children;
-      // Create sum child column (int64_t) - no null mask needed, struct-level mask handles
-      // nullability
+
       children.push_back(make_empty_column(type_id::INT64, size, mask_state::UNALLOCATED));
       // Create overflow child column (bool) - no null mask needed, only value matters
       children.push_back(make_empty_column(type_id::BOOL8, size, mask_state::UNALLOCATED));
@@ -72,13 +84,13 @@ struct result_column_creator {
     };
 
     auto [null_mask, null_count] = [&]() -> std::pair<rmm::device_buffer, size_type> {
-      if (output_size > 0 && nullable) {
-        return {create_null_mask(output_size, mask_state::ALL_NULL, stream, mr), output_size};
+      if (adjusted_size > 0 && nullable) {
+        return {create_null_mask(adjusted_size, mask_state::ALL_NULL, stream, mr), adjusted_size};
       }
       return {rmm::device_buffer{}, 0};
     }();
     return create_structs_hierarchy(
-      output_size, make_children(output_size), null_count, std::move(null_mask), stream);
+      adjusted_size, make_children(adjusted_size), null_count, std::move(null_mask), stream);
   }
 };
 
