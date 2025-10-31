@@ -427,8 +427,8 @@ class parquet_field_struct_list : public parquet_field {
       std::size_t struct_idx = 0;
       for (std::size_t task_id = 0; task_id < num_tasks; ++task_id) {
         auto const task_size = items_per_task + (task_id < remainder ? 1 : 0);
-        auto const start_idx = struct_idx;
-        auto const end_idx   = start_idx + task_size;
+        auto const start_idx = std::min(n, struct_idx);
+        auto const end_idx   = std::min(n, start_idx + task_size);
 
         if (start_idx >= n) { break; }
 
