@@ -301,8 +301,7 @@ class StringColumn(ColumnBase):
 
     def sum(
         self,
-        skipna: bool | None = None,
-        dtype: Dtype | None = None,
+        skipna: bool = True,
         min_count: int = 0,
     ) -> ScalarLike:
         result_col = self._process_for_reduction(
