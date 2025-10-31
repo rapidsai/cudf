@@ -408,6 +408,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
         """
         raise NotImplementedError
 
+    def __sizeof__(self):
+        return self.memory_usage(deep=True)
+
     @_performance_tracking
     def __len__(self) -> int:
         return self._num_rows

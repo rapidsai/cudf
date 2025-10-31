@@ -318,6 +318,8 @@ DataFrame = make_final_proxy_type(
         ),
         "_AXIS_ORDERS": _FastSlowAttribute("_AXIS_ORDERS", private=True),
         "flags": _FastSlowAttribute("flags", private=True),
+        "memory_usage": _FastSlowAttribute("memory_usage"),
+        "__sizeof__": _FastSlowAttribute("__sizeof__"),
     },
 )
 
@@ -356,6 +358,8 @@ Series = make_final_proxy_type(
         "__arrow_array__": arrow_array_method,
         "__cuda_array_interface__": cuda_array_interface,
         "__iter__": custom_iter,
+        "memory_usage": _FastSlowAttribute("memory_usage"),
+        "__sizeof__": _FastSlowAttribute("__sizeof__"),
         "dt": _AccessorAttr(CombinedDatetimelikeProperties),
         "str": _AccessorAttr(StringMethods),
         "list": _AccessorAttr(ListMethods),
@@ -421,6 +425,8 @@ Index = make_final_proxy_type(
         "str": _AccessorAttr(StringMethods),
         "cat": _AccessorAttr(_CategoricalAccessor),
         "__iter__": custom_iter,
+        "memory_usage": _FastSlowAttribute("memory_usage"),
+        "__sizeof__": _FastSlowAttribute("__sizeof__"),
         "__init__": _DELETE,
         "__new__": Index__new__,
         "__setattr__": Index__setattr__,
