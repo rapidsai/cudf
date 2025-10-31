@@ -131,20 +131,21 @@ def evaluate_logical_plan(
     # Run the network
     run_streaming_pipeline(nodes=nodes, py_executor=executor)
 
-    # Extract/return the concatenated result
-    return _concat(
-        *(
-            DataFrame.from_table(
-                chunk.table_view(),
-                list(ir.schema.keys()),
-                list(ir.schema.values()),
-                chunk.stream,
-            )
-            for msg in output.release()
-            for chunk in [TableChunk.from_message(msg)]
-        ),
-        context=ir_context,
-    )
+    # Extract/return the concatenated result.
+    # Keep chunks alive until after concatenation to prevent
+    # use-after-free with stream-ordered allocations
+    messages = output.release()
+    chunks = [TableChunk.from_message(msg) for msg in messages]
+    dfs = [
+        DataFrame.from_table(
+            chunk.table_view(),
+            list(ir.schema.keys()),
+            list(ir.schema.values()),
+            chunk.stream,
+        )
+        for chunk in chunks
+    ]
+    return _concat(*dfs, context=ir_context)
 
 
 def lower_ir_graph(

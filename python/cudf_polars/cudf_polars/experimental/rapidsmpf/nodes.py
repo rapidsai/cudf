@@ -208,12 +208,14 @@ async def default_node_multi(
         seq_num = 0
         n_children = len(chs_in)
         finished_channels: set[int] = set()
-        ready_chunks: list[DataFrame | None] = [None] * n_children
+        # Store TableChunk objects to keep data alive and prevent use-after-free
+        # with stream-ordered allocations
+        ready_chunks: list[TableChunk | None] = [None] * n_children
         chunk_count: list[int] = [0] * n_children
 
         while True:
             # Receive from all non-finished channels
-            for ch_idx, (ch_in, child) in enumerate(
+            for ch_idx, (ch_in, _child) in enumerate(
                 zip(chs_in, ir.children, strict=True)
             ):
                 if ch_idx in finished_channels:
@@ -225,13 +227,7 @@ async def default_node_multi(
                     finished_channels.add(ch_idx)
                 else:
                     # Store the new chunk (replacing previous if any)
-                    table_chunk = TableChunk.from_message(msg)
-                    ready_chunks[ch_idx] = DataFrame.from_table(
-                        table_chunk.table_view(),
-                        list(child.schema.keys()),
-                        list(child.schema.values()),
-                        table_chunk.stream,
-                    )
+                    ready_chunks[ch_idx] = TableChunk.from_message(msg)
                     chunk_count[ch_idx] += 1
                 assert ready_chunks[ch_idx] is not None, (
                     f"Channel {ch_idx} has no data after receive loop."
@@ -241,11 +237,24 @@ async def default_node_multi(
             if len(finished_channels) == n_children:
                 break
 
+            # Convert chunks to DataFrames right before evaluation
+            # All chunks are guaranteed to be non-None by the assertion above
+            dfs = [
+                DataFrame.from_table(
+                    chunk.table_view(),
+                    list(child.schema.keys()),
+                    list(child.schema.values()),
+                    chunk.stream,
+                )
+                for chunk, child in zip(ready_chunks, ir.children, strict=True)
+                if chunk is not None  # Type narrowing for mypy
+            ]
+
             # Evaluate the IR node with current chunks
             df = await asyncio.to_thread(
                 ir.do_evaluate,
                 *ir._non_child_args,
-                *ready_chunks,
+                *dfs,
                 context=ir_context,
             )
             await ch_out.data.send(
