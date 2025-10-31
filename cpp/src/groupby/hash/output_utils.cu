@@ -49,7 +49,9 @@ struct result_column_creator {
 
   std::unique_ptr<column> operator()(column_view const& col, aggregation::Kind const& agg) const
   {
-    // Calculate adjusted output size for atomic operation safety
+    // TODO: Remove size adjustment workaround once https://github.com/NVIDIA/cccl/issues/6430 is
+    // fixed. Currently padding small data types to multiples of 4 bytes for atomic operation
+    // safety.
     auto const col_type =
       is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
     auto const target_type   = (agg == aggregation::SUM_WITH_OVERFLOW)
