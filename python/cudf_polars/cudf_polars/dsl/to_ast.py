@@ -108,6 +108,12 @@ class ASTState(TypedDict):
     stream: Stream
 
 
+class ValidateState(TypedDict):
+    """State for validation of AST transformations."""
+
+    for_parquet: bool
+
+
 class ExprTransformerState(TypedDict):
     """
     State used for AST transformation when inserting column references.
@@ -126,11 +132,63 @@ class ExprTransformerState(TypedDict):
     table_ref: plc.expressions.TableReference
 
 
+ValidateTransformer: TypeAlias = GenericTransformer[expr.Expr, None, ValidateState]
 Transformer: TypeAlias = GenericTransformer[expr.Expr, plc_expr.Expression, ASTState]
 ExprTransformer: TypeAlias = GenericTransformer[
     expr.Expr, expr.Expr, ExprTransformerState
 ]
 """Protocol for transformation of Expr nodes."""
+
+
+@singledispatch
+def _validate_to_ast(node: expr.Expr, self: ValidateTransformer) -> None:
+    raise NotImplementedError(f"Unhandled expression type {type(node)}")
+
+
+@_validate_to_ast.register
+def _(node: expr.Literal, self: ValidateTransformer) -> None:
+    return None
+
+
+@_validate_to_ast.register
+def _(node: expr.ColRef, self: ValidateTransformer) -> None:
+    pass
+
+
+@_validate_to_ast.register
+def _(node: expr.BinOp, self: ValidateTransformer) -> None:
+    if node.op == plc.binaryop.BinaryOperator.NULL_NOT_EQUALS:
+        self(
+            expr.BinOp(
+                node.dtype, plc.binaryop.BinaryOperator.NULL_EQUALS, *node.children
+            )
+        )  # check for validation errors
+        return None
+    for child in node.children:
+        self(child)
+
+
+@_validate_to_ast.register
+def _(node: expr.BooleanFunction, self: ValidateTransformer) -> None:
+    if node.name is expr.BooleanFunction.Name.IsIn:
+        needles, haystack = node.children
+        if isinstance(haystack, expr.LiteralColumn) and len(haystack.value) < 16:
+            self(needles)
+            return None
+    if (
+        node.name is expr.BooleanFunction.Name.IsNull
+        or node.name is expr.BooleanFunction.Name.IsNotNull
+        or node.name is expr.BooleanFunction.Name.Not
+    ):
+        self(node.children[0])  # check for validation errors
+        return None
+    raise NotImplementedError(f"AST conversion does not support {node.name}")
+
+
+@_validate_to_ast.register
+def _(node: expr.UnaryFunction, self: ValidateTransformer) -> None:
+    self(node.children[0])  # check for validation errors
+    return None
 
 
 @singledispatch
@@ -154,7 +212,9 @@ def _to_ast(node: expr.Expr, self: Transformer) -> plc_expr.Expression:
     ------
     NotImplementedError or KeyError if the expression cannot be translated.
     """
-    raise NotImplementedError(f"Unhandled expression type {type(node)}")
+    raise NotImplementedError(
+        f"Unhandled expression type {type(node)}"
+    )  # pragma: no cover
 
 
 @_to_ast.register
@@ -258,7 +318,10 @@ def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
         )
     elif node.name is expr.BooleanFunction.Name.Not:
         return plc_expr.Operation(plc_expr.ASTOperator.NOT, self(node.children[0]))
-    raise NotImplementedError(f"AST conversion does not support {node.name}")
+    # we'll raise in validate_to_ast before reaching here.
+    raise NotImplementedError(
+        f"AST conversion does not support {node.name}"
+    )  # pragma: no cover
 
 
 @_to_ast.register
@@ -296,7 +359,15 @@ def to_parquet_filter(node: expr.Expr, stream: Stream) -> plc_expr.Expression | 
         return None
 
 
-def to_ast(node: expr.Expr, stream: Stream) -> plc_expr.Expression | None:
+def validate_to_ast(node: expr.Expr) -> None:
+    """Validate it."""
+    mapper: ValidateTransformer = CachingVisitor(
+        _validate_to_ast, state={"for_parquet": False}
+    )
+    return mapper(node)
+
+
+def to_ast(node: expr.Expr, stream: Stream) -> plc_expr.Expression:
     """
     Convert an expression to libcudf AST nodes suitable for compute_column.
 
@@ -320,10 +391,7 @@ def to_ast(node: expr.Expr, stream: Stream) -> plc_expr.Expression | None:
     mapper: Transformer = CachingVisitor(
         _to_ast, state={"for_parquet": False, "stream": stream}
     )
-    try:
-        return mapper(node)
-    except (KeyError, NotImplementedError):
-        return None
+    return mapper(node)
 
 
 def _insert_colrefs(node: expr.Expr, rec: ExprTransformer) -> expr.Expr:
