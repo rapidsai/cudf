@@ -330,6 +330,14 @@ files:
       key: experimental
     includes:
       - run_cudf_polars_experimental
+  py_run_cudf_polars_rapidsmpf:
+    output: pyproject
+    pyproject_dir: python/cudf_polars
+    extras:
+      table: project.optional-dependencies
+      key: rapidsmpf
+    includes:
+      - depends_on_rapidsmpf
   py_test_cudf_polars:
     output: pyproject
     pyproject_dir: python/cudf_polars
@@ -1143,6 +1151,32 @@ dependencies:
           - matrix:
             packages:
               - *rmm_unsuffixed
+  depends_on_rapidsmpf:
+    common:
+      - output_types: conda
+        packages:
+          - &rapidsmpf_unsuffixed rapidsmpf==25.12.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          - --extra-index-url=https://pypi.nvidia.com
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - rapidsmpf-cu12==25.12.*,>=0.0.0a0
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - rapidsmpf-cu13==25.12.*,>=0.0.0a0
+          - matrix:
+            packages:
+              - *rapidsmpf_unsuffixed
   depends_on_rapids_logger:
     common:
       - output_types: [conda, requirements, pyproject]
