@@ -518,8 +518,14 @@ def _decompose(
             *unique_input_irs,
         )
         partition_info[input_ir] = PartitionInfo(count=partition_count)
-    else:
+    elif len(unique_input_irs) == 1:
         input_ir = unique_input_irs[0]
+    else:
+        # All child IRs were Empty. Reuse the
+        # parent input_ir so the node still has valid
+        # input to attach to within the expression tree.
+        # See https://github.com/rapidsai/cudf/pull/20409
+        input_ir = rec.state["input_ir"]  # pragma: no cover; no test yet
 
     # Call into class-specific logic to decompose ``expr``
     return _decompose_expr_node(
