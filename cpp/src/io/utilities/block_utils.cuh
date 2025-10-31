@@ -4,7 +4,8 @@
  */
 
 #pragma once
-#include <cstdint>
+#include <cuda/std/cstdint>
+#include <cuda/std/cstring>
 
 namespace cudf {
 namespace io {
@@ -115,23 +116,16 @@ inline __device__ double Int128ToDouble_rn(uint64_t lo, int64_t hi)
 
 inline __device__ uint32_t unaligned_load32(uint8_t const* p)
 {
-  uint32_t ofs    = 3 & reinterpret_cast<uintptr_t>(p);
-  auto const* p32 = reinterpret_cast<uint32_t const*>(p - ofs);
-  uint32_t v      = p32[0];
-  return (ofs) ? __funnelshift_r(v, p32[1], ofs * 8) : v;
+  uint32_t value;
+  cuda::std::memcpy(&value, p, sizeof(uint32_t));
+  return value;
 }
 
 inline __device__ uint64_t unaligned_load64(uint8_t const* p)
 {
-  uint32_t ofs    = 3 & reinterpret_cast<uintptr_t>(p);
-  auto const* p32 = reinterpret_cast<uint32_t const*>(p - ofs);
-  uint32_t v0     = p32[0];
-  uint32_t v1     = p32[1];
-  if (ofs) {
-    v0 = __funnelshift_r(v0, v1, ofs * 8);
-    v1 = __funnelshift_r(v1, p32[2], ofs * 8);
-  }
-  return (((uint64_t)v1) << 32) | v0;
+  uint64_t value;
+  cuda::std::memcpy(&value, p, sizeof(uint64_t));
+  return value;
 }
 
 template <unsigned int nthreads, bool sync_before_store>
