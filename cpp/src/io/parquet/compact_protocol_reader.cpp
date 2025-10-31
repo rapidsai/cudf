@@ -430,7 +430,7 @@ class parquet_field_struct_list : public parquet_field {
         auto const start_idx = std::min(n, struct_idx);
         auto const end_idx   = std::min(n, start_idx + task_size);
 
-        if (start_idx >= n) { break; }
+        if (start_idx >= end_idx) { break; }
 
         // Collect struct ranges for the next task
         for (std::size_t i = start_idx; i < end_idx; ++i) {
