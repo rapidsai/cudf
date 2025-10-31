@@ -3827,8 +3827,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/extension/test_string.py::TestStringArray::test_value_counts_with_normalize[string=string[pyarrow]-False]",
     "tests/extension/test_string.py::TestStringArray::test_value_counts_with_normalize[string=string[pyarrow]-True]",
     "tests/frame/constructors/test_from_records.py::TestFromRecords::test_from_records_misc_brokenness3",
-    "tests/frame/constructors/test_from_records.py::TestFromRecords::test_from_records_series_categorical_index",
-    "tests/frame/constructors/test_from_records.py::TestFromRecords::test_from_records_series_list_dict",
     "tests/frame/constructors/test_from_records.py::TestFromRecords::test_from_records_with_datetimes",
     "tests/frame/indexing/test_getitem.py::TestGetitemBooleanMask::test_getitem_returns_view_when_column_is_unique_in_df",
     "tests/frame/indexing/test_getitem.py::TestGetitemCallable::test_loc_multiindex_columns_one_level",
