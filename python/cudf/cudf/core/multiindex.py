@@ -918,6 +918,8 @@ class MultiIndex(Index):
         | list[tuple[Any, ...]],
     ) -> DataFrameOrSeries:
         if isinstance(row_tuple, slice):
+            if row_tuple.step == 0:
+                raise ValueError("slice step cannot be zero")
             if row_tuple.start is None:
                 row_tuple = slice(self[0], row_tuple.stop, row_tuple.step)
             if row_tuple.stop is None:
