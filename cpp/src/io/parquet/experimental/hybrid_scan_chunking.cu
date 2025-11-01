@@ -32,8 +32,8 @@ using parquet::detail::pass_intermediate_data;
 
 void hybrid_scan_reader_impl::handle_chunking(
   read_mode mode,
-  std::vector<rmm::device_buffer> column_chunk_buffers,
-  cudf::host_span<std::vector<bool> const> data_page_mask)
+  std::vector<rmm::device_buffer>&& column_chunk_buffers,
+  cudf::host_span<bool const> data_page_mask)
 {
   // if this is our first time in here, setup the first pass.
   if (!_pass_itm_data) {
@@ -77,7 +77,8 @@ void hybrid_scan_reader_impl::handle_chunking(
   setup_next_subpass(mode);
 }
 
-void hybrid_scan_reader_impl::setup_next_pass(std::vector<rmm::device_buffer> column_chunk_buffers)
+void hybrid_scan_reader_impl::setup_next_pass(
+  std::vector<rmm::device_buffer>&& column_chunk_buffers)
 {
   auto const num_passes = _file_itm_data.num_passes();
   CUDF_EXPECTS(num_passes == 1,
