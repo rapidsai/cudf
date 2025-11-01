@@ -278,6 +278,109 @@ void reader_impl::allocate_level_decode_space()
   }
 }
 
+void reader_impl::set_page_string_offset_indices(size_t skip_rows,
+                                                 size_t num_rows,
+                                                 cudf::device_span<bool const> page_mask)
+{
+  auto& pass    = *_pass_itm_data;
+  auto& subpass = *pass.subpass;
+
+  auto is_string_col = [&](auto& chunk) {
+    return (chunk.physical_type == Type::BYTE_ARRAY ||
+            chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY) &&
+           (!chunk.logical_type.has_value() || chunk.logical_type->type != LogicalType::DECIMAL);
+  };
+
+  // Mask for non-dictionary, non-delta string columns (same as used in decode kernel)
+  constexpr uint32_t STRINGS_MASK_NON_DELTA_NON_DICT =
+    BitOr(decode_kernel_mask::STRING,
+          decode_kernel_mask::STRING_NESTED,
+          decode_kernel_mask::STRING_LIST,
+          decode_kernel_mask::STRING_STREAM_SPLIT,
+          decode_kernel_mask::STRING_STREAM_SPLIT_NESTED,
+          decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
+
+  // Mask for pages with lists (repetition levels)
+  constexpr uint32_t STRINGS_WITH_LISTS_MASK =
+    BitOr(decode_kernel_mask::STRING_LIST, decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
+
+  // Build a host vector to store the string offset indices for each page
+  std::vector<size_t> h_page_string_offset_indices(subpass.pages.size(), 0);
+
+  // Calculate size of offset buffer to allocate by iterating over pages directly
+  size_t total_num_offsets = 0;
+  for (size_t i = 0; i < subpass.pages.size(); ++i) {
+    auto& page  = subpass.pages[i];
+    auto& chunk = pass.chunks[page.chunk_idx];
+
+    // Check if this page is a non-dictionary string page using kernel mask
+    if ((BitAnd(page.kernel_mask, STRINGS_MASK_NON_DELTA_NON_DICT)) == 0) { continue; }
+
+    // Fixed length byte array: Offsets are fixed, no need to preprocess
+    if (chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY) { continue; }
+
+    h_page_string_offset_indices[i] = total_num_offsets;
+
+    // Check if this column is a list type
+    bool const is_list_col = BitAnd(page.kernel_mask, STRINGS_WITH_LISTS_MASK) != 0;
+
+    auto const page_start_row    = chunk.start_row + page.chunk_row;
+    auto const page_end_row      = page_start_row + page.num_rows;
+    auto const subpass_start_row = skip_rows;
+    auto const subpass_end_row   = subpass_start_row + num_rows;
+
+    if ((page_end_row <= subpass_start_row) || (page_start_row >= subpass_end_row)) {
+      continue;  // will skip the page
+    }
+
+    // For list columns, batch_size has been computed during preprocessing
+    // We can't access it here because page.nesting is a device pointer
+    // So we must over-allocate based on num_input_values
+
+    // For non-list columns, we don't know how many values we'll read, because we don't know
+    // how many nulls we'll skip. So we have to read through the skipped rows on the page.
+    auto const read_end_row = std::min(page_end_row, subpass_end_row);
+    size_t const page_num_values =
+      is_list_col ? page.num_input_values : (read_end_row - page_start_row);
+
+    // add to total, plus store last offset for each page
+    total_num_offsets += page_num_values + (page_num_values > 0 ? 1 : 0);
+  }
+
+  // Allocate the string offset buffer
+  _string_offset_buffer = rmm::device_uvector<uint32_t>(total_num_offsets, _stream, _mr);
+
+  // Set the string offset buffer for non-dictionary, non-FLBA string columns
+  for (size_t col_idx = 0; col_idx < pass.chunks.size(); ++col_idx) {
+    auto& chunk = pass.chunks[col_idx];
+    // Check if this is a string column without dictionary & not a fixed length byte array
+    if (is_string_col(chunk) && (chunk.num_dict_pages == 0) &&
+        (chunk.physical_type != Type::FIXED_LEN_BYTE_ARRAY)) {
+      chunk.column_string_offset_base = _string_offset_buffer.data();
+    }
+  }
+
+  // Copy the string offset indices to device
+  _page_string_offset_indices = cudf::detail::make_device_uvector_async(
+    h_page_string_offset_indices, _stream, cudf::get_current_device_resource_ref());
+
+  // Transfer the updated chunks to device
+  pass.chunks.host_to_device_async(_stream);
+  _stream.synchronize();
+
+  // Pre-process string offsets for non-dictionary string columns
+  detail::preprocess_string_offsets(subpass.pages,
+                                    pass.chunks,
+                                    _page_string_offset_indices,
+                                    page_mask,
+                                    skip_rows,
+                                    num_rows,
+                                    _stream);
+
+  // Wait for string offset preprocessing to complete before launching decode kernels
+  _stream.synchronize();
+}
+
 std::pair<bool, std::future<void>> reader_impl::read_column_chunks()
 {
   auto const& row_groups_info = _pass_itm_data->row_groups;
