@@ -9,9 +9,19 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import DEFAULT_CLUSTER, assert_sink_result_equal
+from cudf_polars.testing.asserts import (
+    DEFAULT_CLUSTER,
+    DEFAULT_RUNTIME,
+    assert_sink_result_equal,
+)
 from cudf_polars.utils.config import ConfigOptions
 from cudf_polars.utils.versions import POLARS_VERSION_LT_130
+
+# TODO: Add Sink support to the rapidsmpf runtime.
+pytestmark = pytest.mark.skipif(
+    DEFAULT_RUNTIME == "rapidsmpf",
+    reason="Sink not yet supported for rapidsmpf runtime.",
+)
 
 
 @pytest.fixture(scope="module")
@@ -38,6 +48,7 @@ def test_sink_parquet_single_file(
         executor_options={
             "max_rows_per_partition": max_rows_per_partition,
             "cluster": "single",
+            "runtime": DEFAULT_RUNTIME,
             "sink_to_directory": False,
         },
     )
@@ -67,6 +78,7 @@ def test_sink_parquet_directory(
         executor_options={
             "max_rows_per_partition": max_rows_per_partition,
             "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
             "sink_to_directory": True,
         },
     )
@@ -113,6 +125,7 @@ def test_sink_parquet_raises(df, tmp_path):
         executor_options={
             "max_rows_per_partition": 100_000,
             "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
             "sink_to_directory": False,
         },
     )
@@ -126,6 +139,7 @@ def test_sink_parquet_raises(df, tmp_path):
         executor_options={
             "max_rows_per_partition": 100_000,
             "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
             "sink_to_directory": True,
         },
     )
@@ -155,6 +169,7 @@ def test_sink_csv(
         executor_options={
             "max_rows_per_partition": max_rows_per_partition,
             "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
         },
     )
 
@@ -181,6 +196,7 @@ def test_sink_ndjson(df, tmp_path, max_rows_per_partition):
         executor_options={
             "max_rows_per_partition": max_rows_per_partition,
             "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
         },
     )
 

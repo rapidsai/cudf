@@ -17,7 +17,11 @@ from cudf_polars.experimental.statistics import (
     collect_statistics,
     find_equivalence_sets,
 )
-from cudf_polars.testing.asserts import DEFAULT_CLUSTER, assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    DEFAULT_CLUSTER,
+    DEFAULT_RUNTIME,
+    assert_gpu_result_equal,
+)
 from cudf_polars.testing.io import make_lazy_frame, make_partitioned_source
 from cudf_polars.utils.config import ConfigOptions
 
@@ -40,7 +44,8 @@ def engine():
         executor="streaming",
         executor_options={
             "cluster": DEFAULT_CLUSTER,
-            "shuffle_method": "tasks",
+            "runtime": DEFAULT_RUNTIME,
+            "shuffle_method": DEFAULT_RUNTIME,  # Names coincide
             "target_partition_size": 10_000,
             "max_rows_per_partition": 1_000,
             "stats_planning": {"use_reduction_planning": True},
@@ -133,6 +138,7 @@ def test_base_stats_parquet(
         executor_options={
             "target_partition_size": 10_000,
             "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
         },
         parquet_options={
             "max_footer_samples": max_footer_samples,
@@ -229,6 +235,7 @@ def test_base_stats_parquet_groupby(
         executor_options={
             "target_partition_size": 10_000,
             "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
             "stats_planning": {"use_reduction_planning": True},
         },
         parquet_options={
@@ -450,7 +457,8 @@ def test_stats_planning(
         executor="streaming",
         executor_options={
             "cluster": DEFAULT_CLUSTER,
-            "shuffle_method": "tasks",
+            "runtime": DEFAULT_RUNTIME,
+            "shuffle_method": DEFAULT_RUNTIME,  # Names coincide
             "target_partition_size": 10_000,
             "max_rows_per_partition": 1_000,
             "stats_planning": {
