@@ -128,7 +128,7 @@ def expand_key(
     if isinstance(key, tuple):
         # Key potentially indexes rows and columns, slice-expand to
         # shape of frame
-        if sum(k is Ellipsis for k in key) > 1:
+        if len(key) > 1 and sum(k is Ellipsis for k in key) > 1:
             raise IndexError("indexer may only contain one '...' entry")
         indexers = key + (slice(None),) * (dim - len(key))
         if len(indexers) > dim:
