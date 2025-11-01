@@ -422,6 +422,10 @@ class SingleColumnFrame(Frame, NotIterable):
         else:
             arg = as_column(arg)
             if len(arg) == 0:
+                if arg.dtype.kind == "f":
+                    raise IndexError(
+                        "arrays used as indices must be of integer type"
+                    )
                 arg = column_empty(0, dtype=SIZE_TYPE_DTYPE)
             if arg.dtype.kind in "iu":
                 return self._column.take(arg)

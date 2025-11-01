@@ -1015,6 +1015,8 @@ class MultiIndex(Index):
             start, stop, step = index.indices(len(self))
             idx = range(start, stop, step)
         elif is_scalar(index):
+            if isinstance(index, float):
+                raise IndexError("indexing with a float is disallowed.")
             idx = [index]
         else:
             idx = index
