@@ -17,6 +17,7 @@ import pylibcudf as plc
 
 import cudf
 from cudf.api.types import is_scalar
+from cudf.core._compat import PANDAS_GE_230
 from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column, column_empty
@@ -492,11 +493,10 @@ class StringColumn(ColumnBase, Scannable):
             elif (
                 self.dtype.storage == "python"
                 and self.dtype.na_value is np.nan
+                and PANDAS_GE_230
             ):
-                pandas_array = (
-                    pd.core.arrays.string_.StringArray._from_sequence(
-                        self.to_arrow()
-                    )
+                pandas_array = pd.core.arrays.string_.StringArrayNumpySemantics._from_sequence(
+                    self.to_arrow()
                 )
             else:
                 raise NotImplementedError(
