@@ -20,6 +20,7 @@ from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
@@ -77,7 +78,7 @@ def plc_flags_from_re_flags(
     return plc_flags
 
 
-class StringColumn(ColumnBase):
+class StringColumn(ColumnBase, Scannable):
     """
     Implements operations for Columns of String type
 
@@ -114,6 +115,10 @@ class StringColumn(ColumnBase):
         "__pow__",
         "__truediv__",
         "__floordiv__",
+    }
+    _VALID_SCANS = {
+        "cummin",
+        "cummax",
     }
 
     def __init__(
@@ -327,6 +332,11 @@ class StringColumn(ColumnBase):
             self._dtype = dtype
         return self
 
+    def _scan(self, op: str):
+        return self.scan(op.replace("cum", ""), True)._with_type_metadata(
+            self.dtype
+        )
+
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         if dtype.kind == "b":
             result = self.count_characters() > np.int8(0)
@@ -473,11 +483,26 @@ class StringColumn(ColumnBase):
         if (
             cudf.get_option("mode.pandas_compatible")
             and isinstance(self.dtype, pd.StringDtype)
-            and "pyarrow" in self.dtype.storage
+            and self.dtype.storage in ["pyarrow", "python"]
         ):
-            pandas_array = self.dtype.__from_arrow__(
-                self.to_arrow().cast(pa.large_string())
-            )
+            if self.dtype.storage == "pyarrow":
+                pandas_array = self.dtype.__from_arrow__(
+                    self.to_arrow().cast(pa.large_string())
+                )
+            elif (
+                self.dtype.storage == "python"
+                and self.dtype.na_value is np.nan
+            ):
+                pandas_array = (
+                    pd.core.arrays.string_.StringArray._from_sequence(
+                        self.to_arrow()
+                    )
+                )
+            else:
+                raise NotImplementedError(
+                    f"Conversion for storage type "
+                    f"{self.dtype.storage} is not implemented"
+                )
             return pd.Index(pandas_array, copy=False)
         return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
