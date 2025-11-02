@@ -490,18 +490,13 @@ class StringColumn(ColumnBase, Scannable):
                 pandas_array = self.dtype.__from_arrow__(
                     self.to_arrow().cast(pa.large_string())
                 )
-            elif (
-                self.dtype.storage == "python"
-                and self.dtype.na_value is np.nan
-                and PANDAS_GE_230
-            ):
+            elif self.dtype.na_value is np.nan and PANDAS_GE_230:
                 pandas_array = pd.core.arrays.string_.StringArrayNumpySemantics._from_sequence(
                     self.to_arrow()
                 )
             else:
-                raise NotImplementedError(
-                    f"Conversion for storage type "
-                    f"{self.dtype.storage} is not implemented"
+                return super().to_pandas(
+                    nullable=nullable, arrow_type=arrow_type
                 )
             return pd.Index(pandas_array, copy=False)
         return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
