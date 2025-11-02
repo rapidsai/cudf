@@ -16,7 +16,12 @@ from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.containers.dataframe import DataFrame, NamedColumn
 from cudf_polars.dsl.ir import IRExecutionContext
-from cudf_polars.dsl.to_ast import insert_colrefs, to_ast, to_parquet_filter
+from cudf_polars.dsl.to_ast import (
+    insert_colrefs,
+    to_ast,
+    to_parquet_filter,
+    validate_to_ast,
+)
 from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 
@@ -80,14 +85,18 @@ def test_compute_column(expr, df):
         )
         with pytest.raises(NotImplementedError):
             e_with_colrefs.evaluate(table)
-        ast = to_ast(e_with_colrefs, stream=stream)
-        if ast is not None:
+
+        try:
+            validate_to_ast(e_with_colrefs)
+            ast = to_ast(e_with_colrefs, stream=stream)
+        except (KeyError, NotImplementedError):
+            return e.evaluate(table)
+        else:
             return NamedColumn(
                 plc.transform.compute_column(table.table, ast, stream=stream),
                 name=e.name,
                 dtype=e.value.dtype,
             )
-        return e.evaluate(table)
 
     got = DataFrame(map(compute_column, ir.exprs), stream=stream).to_polars()
 
@@ -118,3 +127,16 @@ def test_to_parquet_filter_with_colref_raises():
 
     with pytest.raises(TypeError):
         to_parquet_filter(colref, stream=get_cuda_stream())
+
+
+def test_validate_to_ast_null_not_equals():
+    operand = expr_nodes.Literal(DataType(pl.datatypes.Boolean()), value=True)
+
+    binop = expr_nodes.BinOp(
+        DataType(pl.datatypes.Boolean()),
+        plc.binaryop.BinaryOperator.NULL_NOT_EQUALS,
+        operand,
+        operand,
+    )
+
+    validate_to_ast(binop)
