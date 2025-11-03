@@ -2,16 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 
 import polars as pl
 
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
-    assert_ir_translation_raises,
     get_default_engine,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_132
+from cudf_polars.utils.versions import POLARS_VERSION_LT_130, POLARS_VERSION_LT_132
 
 
 @pytest.fixture(params=[False, True], ids=["nulls_not_equal", "nulls_equal"])
@@ -54,10 +55,10 @@ def right():
 @pytest.mark.parametrize(
     "maintain_order", ["left", "left_right", "right_left", "right"]
 )
-def test_join_maintain_order_param_unsupported(left, right, maintain_order):
+def test_join_maintain_order(left, right, maintain_order):
     q = left.join(right, on=pl.col("a"), how="inner", maintain_order=maintain_order)
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_gpu_result_equal(q)
 
 
 @pytest.mark.parametrize(
@@ -172,3 +173,142 @@ def test_cross_join_empty_right_table(request):
     )
 
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("maintain_order", ["left_right", "right_left"])
+@pytest.mark.parametrize("how", ["inner", "full"])
+def test_join_maintain_order_inner_full(left, right, how, maintain_order, nulls_equal):
+    q = left.join(
+        right, on="a", how=how, nulls_equal=nulls_equal, maintain_order=maintain_order
+    )
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("maintain_order", ["left", "left_right"])
+def test_join_maintain_order_left(left, right, maintain_order, nulls_equal):
+    q = left.join(
+        right,
+        on="a",
+        how="left",
+        nulls_equal=nulls_equal,
+        maintain_order=maintain_order,
+    )
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("maintain_order", ["right", "right_left"])
+def test_join_maintain_order_right(left, right, maintain_order, nulls_equal):
+    q = left.join(
+        right,
+        on="a",
+        how="right",
+        nulls_equal=nulls_equal,
+        maintain_order=maintain_order,
+    )
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("maintain_order", ["left_right", "right_left"])
+@pytest.mark.parametrize("join_expr", [pl.col("a"), ["c", "a"]])
+@pytest.mark.parametrize("how", ["inner", "full"])
+def test_join_maintain_order_multiple_keys(left, right, how, join_expr, maintain_order):
+    q = left.join(right, on=join_expr, how=how, maintain_order=maintain_order)
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "maintain_order,how",
+    [
+        ("left", "left"),
+        ("left_right", "left"),
+        ("right", "right"),
+        ("right_left", "right"),
+        ("left_right", "full"),
+        ("right_left", "full"),
+    ],
+)
+def test_join_maintain_order_with_coalesce(left, right, maintain_order, how):
+    q = left.join(right, on="a", how=how, coalesce=True, maintain_order=maintain_order)
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "maintain_order,how,zlice",
+    [
+        ("left_right", "inner", (0, 3)),
+        ("right_left", "inner", (1, 3)),
+        ("left_right", "full", (0, 4)),
+        ("right_left", "full", (2, 3)),
+    ],
+)
+def test_join_maintain_order_with_slice(left, right, maintain_order, how, zlice):
+    # Need to disable slice pushdown to make the test deterministic. We want to materialize
+    # the full join result and then slice
+    q = left.join(right, on="a", how=how, maintain_order=maintain_order).slice(*zlice)
+    assert_gpu_result_equal(
+        q,
+        polars_collect_kwargs={"slice_pushdown": False}
+        if POLARS_VERSION_LT_130
+        else {"optimizations": pl.QueryOptFlags(slice_pushdown=False)},
+    )
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("foo") > pl.col("bar"),
+        pl.col("foo") >= pl.col("bar"),
+        pl.col("foo") < pl.col("bar"),
+        pl.col("foo") <= pl.col("bar"),
+        pl.col("foo") == pl.col("bar"),
+        pytest.param(
+            pl.col("foo") != pl.col("bar"),
+            marks=pytest.mark.xfail(reason="nested loop join"),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "left_dtype,right_dtype",
+    [
+        (pl.Decimal(15, 2), pl.Decimal(15, 2)),
+        (pl.Decimal(15, 4), pl.Decimal(15, 2)),
+        (pl.Decimal(15, 2), pl.Decimal(15, 4)),
+        (pl.Decimal(15, 2), pl.Float32),
+        (pl.Decimal(15, 2), pl.Float64),
+    ],
+)
+def test_cross_join_filter_with_decimals(request, expr, left_dtype, right_dtype):
+    request.applymarker(
+        pytest.mark.xfail(
+            POLARS_VERSION_LT_132
+            and isinstance(left_dtype, pl.Decimal)
+            and isinstance(right_dtype, pl.Decimal)
+            and "==" in repr(expr),
+            reason="Hash Inner Join between i128 and i128",
+        )
+    )
+    left = pl.LazyFrame(
+        {
+            "foo": [Decimal("1.00"), Decimal("2.50"), Decimal("3.00")],
+            "foo1": [10, 20, 30],
+        },
+        schema={"foo": left_dtype, "foo1": pl.Int64},
+    )
+
+    if isinstance(right_dtype, pl.Decimal):
+        right = pl.LazyFrame(
+            {
+                "bar": [Decimal("2").scaleb(-right_dtype.scale)],
+                "foo1": ["x"],
+            },
+            schema={"bar": right_dtype, "foo1": pl.String},
+        )
+    else:
+        right = pl.LazyFrame(
+            {"bar": [2.0], "foo1": ["x"]},
+            schema={"bar": right_dtype, "foo1": pl.String},
+        )
+
+    q = left.join(right, how="cross").filter(expr)
+
+    assert_gpu_result_equal(q, check_row_order=False)

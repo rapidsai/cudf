@@ -1,4 +1,5 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
@@ -16,6 +17,9 @@ from pylibcudf.libcudf.groupby cimport (
 )
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.types cimport null_order, order
+
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .table cimport Table
@@ -41,11 +45,32 @@ cdef class GroupBy:
     cdef unique_ptr[vector[order]] _column_order
     cdef unique_ptr[vector[null_order]] _null_precedence
 
-    cpdef tuple aggregate(self, list requests)
-    cpdef tuple scan(self, list requests)
-    cpdef tuple shift(self, Table values, list offset, list fill_values)
-    cpdef tuple replace_nulls(self, Table values, list replace_policies)
-    cpdef tuple get_groups(self, Table values=*)
+    cpdef tuple aggregate(
+        self, list requests, Stream stream=*, DeviceMemoryResource mr=*
+    )
+    cpdef tuple scan(self, list requests, Stream stream=*, DeviceMemoryResource mr=*)
+    cpdef tuple shift(
+        self,
+        Table values,
+        list offset,
+        list fill_values,
+        Stream stream=*,
+        DeviceMemoryResource mr=*,
+    )
+    cpdef tuple replace_nulls(
+        self,
+        Table values,
+        list replace_policies,
+        Stream stream=*,
+        DeviceMemoryResource mr=*,
+    )
+    cpdef tuple get_groups(
+        self, Table values=*, Stream stream=*, DeviceMemoryResource mr=*
+    )
 
     @staticmethod
-    cdef tuple _parse_outputs(pair[unique_ptr[table], vector[aggregation_result]] c_res)
+    cdef tuple _parse_outputs(
+        pair[unique_ptr[table], vector[aggregation_result]] c_res,
+        Stream stream,
+        DeviceMemoryResource mr,
+    )

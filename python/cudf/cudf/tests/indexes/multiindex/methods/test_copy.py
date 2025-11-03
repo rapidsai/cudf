@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import operator
 from functools import reduce
@@ -98,7 +99,11 @@ def test_multiindex_copy_deep(data, copy_on_write, deep):
             assert all((x == y) for x, y in zip(lptrs, rptrs, strict=True))
 
         elif isinstance(data, pd.MultiIndex):
-            data = cudf.MultiIndex.from_pandas(data)
+            data = cudf.MultiIndex(
+                levels=data.levels,
+                codes=data.codes,
+                names=data.names,
+            )
             same_ref = (not deep) or (
                 cudf.get_option("copy_on_write") and not deep
             )

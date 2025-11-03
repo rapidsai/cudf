@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -21,6 +10,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -481,8 +471,11 @@ TYPED_TEST(ListsDictionaryLeafTest, FromNested)
   cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask2.data()), 1, 2, false);
   cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask2.data()), 6, 7, false);
   cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask2.data()), 11, 12, false);
-  auto nested =
-    cudf::make_lists_column(15, offsets2.release(), leaf2.release(), 3, std::move(mask2));
+  auto nested = [&] {
+    auto tmp =
+      cudf::make_lists_column(15, offsets2.release(), leaf2.release(), 3, std::move(mask2));
+    return cudf::purge_nonempty_nulls(tmp->view());
+  }();
 
   offset_t offsets3{0, 5, 10, 15};
   auto mask3 = cudf::create_null_mask(3, cudf::mask_state::UNALLOCATED);
@@ -612,8 +605,11 @@ TYPED_TEST(ListsStructsLeafTest, FromNested)
   cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask2.data()), 0, 1, false);
   cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask2.data()), 3, 4, false);
   cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask2.data()), 6, 7, false);
-  auto data2 = cudf::make_lists_column(
-    9, offset_t{0, 0, 1, 2, 2, 3, 4, 4, 5, 6}.release(), leaf2.release(), 3, std::move(mask2));
+  auto data2 = [&] {
+    auto tmp = cudf::make_lists_column(
+      9, offset_t{0, 0, 1, 2, 2, 3, 4, 4, 5, 6}.release(), leaf2.release(), 3, std::move(mask2));
+    return cudf::purge_nonempty_nulls(tmp->view());
+  }();
   auto expected = cudf::make_lists_column(3,
                                           offset_t{0, 3, 6, 9}.release(),
                                           std::move(data2),
@@ -709,8 +705,9 @@ TEST_F(ListsZeroLengthColumnTest, SuperimposeNulls)
     auto const valid_iter        = cudf::test::iterators::null_at(2);
     auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valid_iter, valid_iter + 3);
 
-    return cudf::make_lists_column(
+    auto tmp = cudf::make_lists_column(
       3, std::move(offsets), std::move(child), null_count, std::move(null_mask));
+    return cudf::purge_nonempty_nulls(tmp->view());
   }();
 
   auto const expected_child =

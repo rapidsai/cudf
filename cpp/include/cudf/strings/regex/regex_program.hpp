@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -54,14 +43,16 @@ struct regex_program {
                                                regex_flags flags      = regex_flags::DEFAULT,
                                                capture_groups capture = capture_groups::EXTRACT);
 
-  regex_program() = delete;
+  regex_program()                                = delete;
+  regex_program(regex_program const&)            = delete;
+  regex_program& operator=(regex_program const&) = delete;
 
   /**
    * @brief Move constructor
    *
    * @param other Object to move from
    */
-  regex_program(regex_program&& other);
+  regex_program(regex_program&& other) noexcept;
 
   /**
    * @brief Move operator assignment
@@ -69,7 +60,7 @@ struct regex_program {
    * @param other Object to move from
    * @return this object
    */
-  regex_program& operator=(regex_program&& other);
+  regex_program& operator=(regex_program&& other) noexcept;
 
   /**
    * @brief Return the pattern used to create this instance

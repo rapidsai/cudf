@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "sort_column_impl.cuh"
@@ -77,7 +66,7 @@ CUDF_KERNEL void resolve_segment_indices(device_span<size_type const> d_offsets,
 std::unique_ptr<column> segmented_top_k_order(column_view const& col,
                                               column_view const& segment_offsets,
                                               size_type k,
-                                              order sort_order,
+                                              order topk_order,
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
 {
@@ -99,10 +88,10 @@ std::unique_ptr<column> segmented_top_k_order(column_view const& col,
                "segment_offsets must not have nulls",
                std::invalid_argument);
 
-  auto const nulls   = sort_order == order::ASCENDING ? null_order::AFTER : null_order::BEFORE;
+  auto const nulls   = topk_order == order::ASCENDING ? null_order::AFTER : null_order::BEFORE;
   auto const temp_mr = cudf::get_current_device_resource_ref();
   auto const indices = cudf::detail::segmented_sorted_order(
-    cudf::table_view({col}), segment_offsets, {sort_order}, {nulls}, stream, temp_mr);
+    cudf::table_view({col}), segment_offsets, {topk_order}, {nulls}, stream, temp_mr);
   auto const d_indices = indices->mutable_view().begin<size_type>();
 
   auto segment_sizes = rmm::device_uvector<size_type>(segment_offsets.size() - 1, stream);
@@ -128,14 +117,14 @@ std::unique_ptr<column> segmented_top_k_order(column_view const& col,
 std::unique_ptr<column> segmented_top_k(column_view const& col,
                                         column_view const& segment_offsets,
                                         size_type k,
-                                        order sort_order,
+                                        order topk_order,
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
 {
   if (col.is_empty()) { return cudf::make_empty_column(col.type()); }
 
   auto ordered =
-    cudf::detail::segmented_top_k_order(col, segment_offsets, k, sort_order, stream, mr);
+    cudf::detail::segmented_top_k_order(col, segment_offsets, k, topk_order, stream, mr);
   auto lv = cudf::lists_column_view(ordered->view());
   if (lv.is_empty()) { return cudf::make_empty_lists_column(col.type(), stream, mr); }
 
@@ -161,22 +150,22 @@ std::unique_ptr<column> segmented_top_k(column_view const& col,
 std::unique_ptr<column> segmented_top_k(column_view const& col,
                                         column_view const& segment_offsets,
                                         size_type k,
-                                        order sort_order,
+                                        order topk_order,
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::segmented_top_k(col, segment_offsets, k, sort_order, stream, mr);
+  return detail::segmented_top_k(col, segment_offsets, k, topk_order, stream, mr);
 }
 
 std::unique_ptr<column> segmented_top_k_order(column_view const& col,
                                               column_view const& segment_offsets,
                                               size_type k,
-                                              order sort_order,
+                                              order topk_order,
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::segmented_top_k_order(col, segment_offsets, k, sort_order, stream, mr);
+  return detail::segmented_top_k_order(col, segment_offsets, k, topk_order, stream, mr);
 }
 }  // namespace cudf

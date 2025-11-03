@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import itertools
 
 import cupy as cp
@@ -84,7 +85,7 @@ def test_sample_axis_1(
             "int": [1, 3, 5, 4, 2],
         },
     )
-    df = cudf.DataFrame.from_pandas(pdf)
+    df = cudf.DataFrame(pdf)
 
     weights = make_weights_axis_1(len(pdf.columns))
 
@@ -200,7 +201,7 @@ def test_sample_invalid_n_frac_combo(axis):
             "int": [1, 3, 5, 4, 2],
         },
     )
-    df = cudf.DataFrame.from_pandas(pdf)
+    df = cudf.DataFrame(pdf)
 
     assert_exceptions_equal(
         lfunc=pdf.sample,
@@ -213,7 +214,7 @@ def test_sample_invalid_n_frac_combo(axis):
 @pytest.mark.parametrize("n, frac", [(100, None), (None, 3)])
 def test_oversample_without_replace(n, frac, axis):
     pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5]})
-    df = cudf.DataFrame.from_pandas(pdf)
+    df = cudf.DataFrame(pdf)
 
     assert_exceptions_equal(
         lfunc=pdf.sample,

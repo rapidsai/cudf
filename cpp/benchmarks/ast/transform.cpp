@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
@@ -49,11 +38,25 @@ enum class TreeType {
                    // child column reference
 };
 
+enum class engine_type : uint8_t { AST = 0, JIT = 1 };
+
+static engine_type engine_from_string(std::string_view str)
+{
+  if (str == "ast") {
+    return engine_type::AST;
+  } else if (str == "jit") {
+    return engine_type::JIT;
+  } else {
+    CUDF_FAIL("unrecognized engine enum: " + std::string(str));
+  }
+}
+
 template <typename key_type, TreeType tree_type, bool reuse_columns, bool Nullable>
 static void BM_ast_transform(nvbench::state& state)
 {
   auto const num_rows    = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const tree_levels = static_cast<cudf::size_type>(state.get_int64("tree_levels"));
+  auto const engine      = engine_from_string(state.get_string("engine"));
 
   // Create table data
   auto const num_columns = reuse_columns ? 1 : tree_levels + 1;
@@ -94,8 +97,19 @@ static void BM_ast_transform(nvbench::state& state)
   state.add_global_memory_reads<key_type>(static_cast<size_t>(num_rows) * (tree_levels + 1));
   state.add_global_memory_writes<key_type>(num_rows);
 
-  state.exec(nvbench::exec_tag::sync,
-             [&](nvbench::launch&) { cudf::compute_column(table, root_expression); });
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
+    switch (engine) {
+      case engine_type::AST: {
+        cudf::compute_column(table, root_expression);
+        break;
+      }
+      case engine_type::JIT: {
+        cudf::compute_column_jit(table, root_expression);
+        break;
+      }
+      default: CUDF_FAIL("Invalid engine type");
+    }
+  });
 }
 
 template <cudf::ast::ast_operator cmp_op, cudf::ast::ast_operator reduce_op>
@@ -105,6 +119,7 @@ static void BM_string_compare_ast_transform(nvbench::state& state)
   auto const num_rows     = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const tree_levels  = static_cast<cudf::size_type>(state.get_int64("tree_levels"));
   auto const hit_rate     = static_cast<cudf::size_type>(state.get_int64("hit_rate"));
+  auto const engine       = engine_from_string(state.get_string("engine"));
 
   CUDF_EXPECTS(tree_levels > 0, "benchmarks require 1 or more comparisons");
 
@@ -155,8 +170,19 @@ static void BM_string_compare_ast_transform(nvbench::state& state)
 
   auto const& expression = tree.back();
 
-  state.exec(nvbench::exec_tag::sync,
-             [&](nvbench::launch&) { cudf::compute_column(table, expression); });
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
+    switch (engine) {
+      case engine_type::AST: {
+        cudf::compute_column(table, expression);
+        break;
+      }
+      case engine_type::JIT: {
+        cudf::compute_column_jit(table, expression);
+        break;
+      }
+      default: CUDF_FAIL("Invalid engine type");
+    }
+  });
 }
 
 #define AST_TRANSFORM_BENCHMARK_DEFINE(name, key_type, tree_type, reuse_columns, nullable) \
@@ -167,7 +193,8 @@ static void BM_string_compare_ast_transform(nvbench::state& state)
   NVBENCH_BENCH(name)                                                                      \
     .set_name(#name)                                                                       \
     .add_int64_axis("tree_levels", {1, 5, 10})                                             \
-    .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000, 100'000'000})
+    .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000, 100'000'000})             \
+    .add_string_axis("engine", {"ast", "jit"})
 
 AST_TRANSFORM_BENCHMARK_DEFINE(
   ast_int32_imbalanced_unique, int32_t, TreeType::IMBALANCED_LEFT, false, false);
@@ -193,7 +220,8 @@ AST_TRANSFORM_BENCHMARK_DEFINE(
     .add_int64_axis("string_width", {32, 64, 128, 256})                        \
     .add_int64_axis("num_rows", {32768, 262144, 2097152})                      \
     .add_int64_axis("tree_levels", {1, 2, 3, 4})                               \
-    .add_int64_axis("hit_rate", {50, 100})
+    .add_int64_axis("hit_rate", {50, 100})                                     \
+    .add_string_axis("engine", {"ast", "jit"})
 
 AST_STRING_COMPARE_TRANSFORM_BENCHMARK_DEFINE(ast_string_equal_logical_and,
                                               cudf::ast::ast_operator::EQUAL,

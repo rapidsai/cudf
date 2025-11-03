@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 
 import numpy as np
@@ -236,3 +237,9 @@ def test_date_range_start_end_freq(start, end, freq):
         expect.to_numpy().astype("int64"),
         got.to_pandas().to_numpy().astype("int64"),
     )
+
+
+def test_date_range_noniso_start_end_string():
+    result = cudf.date_range("20161101", "20161130", freq="4h")
+    expected = pd.date_range("20161101", "20161130", freq="4h")
+    assert_eq(result, expected)

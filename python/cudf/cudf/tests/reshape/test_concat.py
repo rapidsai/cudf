@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import warnings
 from contextlib import contextmanager
@@ -61,8 +62,8 @@ def make_frames(index=None, nulls="none"):
         mask = mask[:5]
         df.loc[mask, "y"] = np.nan
         df2.loc[mask, "y"] = np.nan
-    gdf = cudf.DataFrame.from_pandas(df)
-    gdf2 = cudf.DataFrame.from_pandas(df2)
+    gdf = cudf.DataFrame(df)
+    gdf2 = cudf.DataFrame(df2)
     if index:
         df = df.set_index(index)
         df2 = df2.set_index(index)
@@ -2775,8 +2776,8 @@ def test_concat_with_axis():
 
     # concat only series
     concat_s = pd.concat([df1.x, df1.y], axis=1)
-    cs1 = cudf.Series.from_pandas(df1.x)
-    cs2 = cudf.Series.from_pandas(df1.y)
+    cs1 = cudf.Series(df1.x)
+    cs2 = cudf.Series(df1.y)
     concat_cdf_s = cudf.concat([cs1, cs2], axis=1)
 
     assert_eq(concat_cdf_s, concat_s, check_index_type=True)
@@ -2784,7 +2785,7 @@ def test_concat_with_axis():
     rng = np.random.default_rng(seed=0)
     # concat series and dataframes
     s3 = pd.Series(rng.random(5))
-    cs3 = cudf.Series.from_pandas(s3)
+    cs3 = cudf.Series(s3)
 
     concat_cdf_all = cudf.concat([cdf1, cs3, cdf2], axis=1)
     concat_df_all = pd.concat([df1, s3, df2], axis=1)

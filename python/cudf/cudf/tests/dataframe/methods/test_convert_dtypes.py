@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import pandas as pd
 import pytest
 
@@ -36,7 +37,7 @@ def test_convert_dtypes():
             for k, v, d in zip(data.keys(), data.values(), dtypes, strict=True)
         }
     )
-    gdf = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
     expect = df[nullable_columns].convert_dtypes()
     got = gdf[nullable_columns].convert_dtypes().to_pandas(nullable=True)
     assert_eq(expect, got)

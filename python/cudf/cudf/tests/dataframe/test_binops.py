@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import operator
 
 import numpy as np
@@ -381,7 +382,7 @@ def test_df_sr_binop(psr, colnames, binary_op):
     data = [[3.0, 2.0, 5.0], [3.0, None, 5.0], [6.0, 7.0, np.nan]]
     data = dict(zip(colnames, data, strict=True))
 
-    gsr = cudf.Series.from_pandas(psr).astype("float64")
+    gsr = cudf.Series(psr).astype("float64")
 
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas(nullable=True)
@@ -453,3 +454,244 @@ def test_df_sr_binop_col_order(op):
     got = out[expect.columns]
 
     assert_eq(expect, got)
+
+
+def test_different_shapes_and_columns(request, arithmetic_op):
+    if arithmetic_op is operator.pow:
+        msg = "TODO: Support `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`"
+        request.applymarker(pytest.mark.xfail(reason=msg))
+
+    # Empty frame on the right side
+    pd_frame = arithmetic_op(pd.DataFrame({"x": [1, 2]}), pd.DataFrame({}))
+    cd_frame = arithmetic_op(cudf.DataFrame({"x": [1, 2]}), cudf.DataFrame({}))
+    assert_eq(cd_frame, pd_frame)
+
+    # Empty frame on the left side
+    pd_frame = pd.DataFrame({}) + pd.DataFrame({"x": [1, 2]})
+    cd_frame = cudf.DataFrame({}) + cudf.DataFrame({"x": [1, 2]})
+    assert_eq(cd_frame, pd_frame)
+
+    # Note: the below rely on a discrepancy between cudf and pandas
+    # While pandas inserts columns in alphabetical order, cudf inserts in the
+    # order of whichever column comes first. So the following code will not
+    # work if the names of columns are reversed i.e. ('y', 'x') != ('x', 'y')
+
+    # More rows on the left side
+    pd_frame = pd.DataFrame({"x": [1, 2, 3]}) + pd.DataFrame({"y": [1, 2]})
+    cd_frame = cudf.DataFrame({"x": [1, 2, 3]}) + cudf.DataFrame({"y": [1, 2]})
+    assert_eq(cd_frame, pd_frame)
+
+    # More rows on the right side
+    pd_frame = pd.DataFrame({"x": [1, 2]}) + pd.DataFrame({"y": [1, 2, 3]})
+    cd_frame = cudf.DataFrame({"x": [1, 2]}) + cudf.DataFrame({"y": [1, 2, 3]})
+    assert_eq(cd_frame, pd_frame)
+
+
+def test_different_shapes_and_same_columns(arithmetic_op):
+    pd_frame = arithmetic_op(
+        pd.DataFrame({"x": [1, 2]}), pd.DataFrame({"x": [1, 2, 3]})
+    )
+    cd_frame = arithmetic_op(
+        cudf.DataFrame({"x": [1, 2]}), cudf.DataFrame({"x": [1, 2, 3]})
+    )
+    # cast x as float64 so it matches pandas dtype
+    cd_frame["x"] = cd_frame["x"].astype(np.float64)
+    assert_eq(cd_frame, pd_frame)
+
+
+def test_different_shapes_and_columns_with_unaligned_indices(
+    request, arithmetic_op
+):
+    if arithmetic_op is operator.pow:
+        msg = "TODO: Support `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`"
+        request.applymarker(pytest.mark.xfail(reason=msg))
+
+    # Test with a RangeIndex
+    pdf1 = pd.DataFrame({"x": [4, 3, 2, 1], "y": [7, 3, 8, 6]})
+    # Test with an Index
+    pdf2 = pd.DataFrame(
+        {"x": [1, 2, 3, 7], "y": [4, 5, 6, 7]}, index=[0, 1, 3, 4]
+    )
+    # Test with an Index in a different order
+    pdf3 = pd.DataFrame(
+        {"x": [4, 5, 6, 7], "y": [1, 2, 3, 7], "z": [0, 5, 3, 7]},
+        index=[0, 3, 5, 3],
+    )
+    gdf1 = cudf.DataFrame(pdf1)
+    gdf2 = cudf.DataFrame(pdf2)
+    gdf3 = cudf.DataFrame(pdf3)
+
+    pd_frame = arithmetic_op(arithmetic_op(pdf1, pdf2), pdf3)
+    cd_frame = arithmetic_op(arithmetic_op(gdf1, gdf2), gdf3)
+    # cast x and y as float64 so it matches pandas dtype
+    cd_frame["x"] = cd_frame["x"].astype(np.float64)
+    cd_frame["y"] = cd_frame["y"].astype(np.float64)
+
+    # Sort both frames by index and then by all columns to ensure consistent ordering
+    pd_sorted = pd_frame.sort_index().sort_values(list(pd_frame.columns))
+    cd_sorted = cd_frame.sort_index().sort_values(list(cd_frame.columns))
+    assert_eq(cd_sorted, pd_sorted)
+
+    pdf1 = pd.DataFrame({"x": [1, 1]}, index=["a", "a"])
+    pdf2 = pd.DataFrame({"x": [2]}, index=["a"])
+    gdf1 = cudf.DataFrame(pdf1)
+    gdf2 = cudf.DataFrame(pdf2)
+    pd_frame = arithmetic_op(pdf1, pdf2)
+    cd_frame = arithmetic_op(gdf1, gdf2)
+
+    # Sort both frames consistently for comparison
+    pd_sorted = pd_frame.sort_index().sort_values(list(pd_frame.columns))
+    cd_sorted = cd_frame.sort_index().sort_values(list(cd_frame.columns))
+    assert_eq(pd_sorted, cd_sorted)
+
+
+@pytest.mark.parametrize(
+    "pdf2",
+    [
+        pd.DataFrame({"a": [3, 2, 1]}, index=[3, 2, 1]),
+        pd.DataFrame([3, 2]),
+    ],
+)
+def test_df_different_index_shape(pdf2, comparison_op):
+    df1 = cudf.DataFrame([1, 2, 3], index=[1, 2, 3])
+
+    pdf1 = df1.to_pandas()
+    df2 = cudf.DataFrame(pdf2)
+
+    assert_exceptions_equal(
+        lfunc=comparison_op,
+        rfunc=comparison_op,
+        lfunc_args_and_kwargs=([pdf1, pdf2],),
+        rfunc_args_and_kwargs=([df1, df2],),
+    )
+
+
+@pytest.mark.parametrize("nulls", ["none", "some"])
+@pytest.mark.parametrize("fill_value", [None, 27])
+@pytest.mark.parametrize("other", ["df", "scalar"])
+def test_operator_func_dataframe(
+    arithmetic_op_method, nulls, fill_value, other
+):
+    num_rows = 100
+    num_cols = 3
+
+    def gen_df():
+        rng = np.random.default_rng(seed=0)
+        data = rng.random((num_rows, num_cols)) * 10000
+        if nulls == "some":
+            data.ravel()[
+                rng.choice(
+                    num_rows * num_cols,
+                    size=int(num_rows * num_cols / 2),
+                    replace=False,
+                )
+            ] = np.nan
+        return pd.DataFrame(data, columns=["A", "B", "C"])
+
+    pdf1 = gen_df()
+    pdf2 = gen_df() if other == "df" else 59.0
+    gdf1 = cudf.DataFrame(pdf1)
+    gdf2 = cudf.DataFrame(pdf2) if other == "df" else 59.0
+
+    got = getattr(gdf1, arithmetic_op_method)(gdf2, fill_value=fill_value)
+    expect = getattr(pdf1, arithmetic_op_method)(pdf2, fill_value=fill_value)[
+        list(got._data)
+    ]
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("nulls", ["none", "some"])
+@pytest.mark.parametrize("other", ["df", "scalar"])
+def test_logical_operator_func_dataframe(comparison_op_method, nulls, other):
+    num_rows = 100
+    num_cols = 3
+
+    def gen_df():
+        rng = np.random.default_rng(seed=0)
+        data = rng.random((num_rows, num_cols)) * 10000
+        if nulls == "some":
+            data.ravel()[
+                rng.choice(
+                    num_rows * num_cols,
+                    size=int(num_rows * num_cols / 2),
+                    replace=False,
+                )
+            ] = np.nan
+        return pd.DataFrame(data, columns=["A", "B", "C"])
+
+    pdf1 = gen_df()
+    pdf2 = gen_df() if other == "df" else 59.0
+    gdf1 = cudf.DataFrame(pdf1, nan_as_null=False)
+    gdf2 = cudf.DataFrame(pdf2, nan_as_null=False) if other == "df" else 59.0
+
+    got = getattr(gdf1, comparison_op_method)(gdf2)
+    expect = getattr(pdf1, comparison_op_method)(pdf2)[list(got._data)]
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("data", [None, [-9, 7], [12, 18]])
+@pytest.mark.parametrize("scalar", [1, 3, 12, np.nan])
+def test_empty_column(binary_op, data, scalar):
+    gdf = cudf.DataFrame(columns=["a", "b"])
+    if data is not None:
+        gdf["a"] = data
+
+    pdf = gdf.to_pandas()
+
+    got = binary_op(gdf, scalar)
+    expected = binary_op(pdf, scalar)
+
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        lambda: cudf.DataFrame(
+            [[1, 2, 3, 4], [5, 6, 7, 8], [10, 11, 12, 13], [14, 15, 16, 17]]
+        ),
+        lambda: cudf.DataFrame(
+            [
+                [1.2, 2.3, 3.4, 4.5],
+                [5.6, 6.7, 7.8, 8.9],
+                [7.43, 4.2, 23.2, 23.2],
+                [9.1, 2.4, 4.5, 65.34],
+            ]
+        ),
+        lambda: cudf.Series([14, 15, 16, 17]),
+        lambda: cudf.Series([14.15, 15.16, 16.17, 17.18]),
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        lambda: cudf.DataFrame([[9, 10], [11, 12], [13, 14], [15, 16]]),
+        lambda: cudf.DataFrame(
+            [[9.4, 10.5], [11.6, 12.7], [13.8, 14.9], [15.1, 16.2]]
+        ),
+        lambda: cudf.Series([5, 6, 7, 8]),
+        lambda: cudf.Series([5.6, 6.7, 7.8, 8.9]),
+        lambda: np.array([5, 6, 7, 8]),
+        lambda: [25.5, 26.6, 27.7, 28.8],
+    ],
+)
+def test_binops_dot(df, other):
+    df = df()
+    other = other()
+    pdf = df.to_pandas()
+    host_other = other.to_pandas() if hasattr(other, "to_pandas") else other
+
+    expected = pdf @ host_other
+    got = df @ other
+
+    assert_eq(expected, got)
+
+
+def test_binop_dot_preserve_index():
+    ser = cudf.Series(range(2), index=["A", "B"])
+    df = cudf.DataFrame(np.eye(2), columns=["A", "B"], index=["A", "B"])
+    result = ser @ df
+    expected = ser.to_pandas() @ df.to_pandas()
+    assert_eq(result, expected)

@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import cupy as cp
 import numpy as np
@@ -7,7 +8,6 @@ import pytest
 
 import cudf
 from cudf.testing import assert_eq
-from cudf.testing._utils import expand_bits_to_bytes, random_bitmask
 
 
 def test_empty_dataframe_to_cupy():
@@ -77,8 +77,9 @@ def test_dataframe_to_cupy_single_column(has_nulls, use_na_value):
     df = cudf.DataFrame({"a": data})
 
     if has_nulls and not use_na_value:
-        with pytest.raises(ValueError, match="Column must have no nulls"):
-            df.to_cupy()
+        result = df.to_cupy()
+        expected = df.fillna(np.nan).to_cupy()
+        assert_eq(result, expected)
         return
 
     na_value = 0.0 if use_na_value else None
@@ -101,20 +102,20 @@ def test_dataframe_to_cupy_null_values():
     refvalues = {}
     rng = np.random.default_rng(seed=0)
     for k in "abcd":
-        df[k] = data = rng.random(nelem)
-        bitmask = random_bitmask(nelem)
-        df[k] = df[k]._column.set_mask(bitmask)
-        boolmask = np.asarray(
-            expand_bits_to_bytes(bitmask)[:nelem], dtype=np.bool_
-        )
+        data = rng.random(nelem)
+        boolmask = rng.choice([True, False], size=nelem)
         data[~boolmask] = na
+        df[k] = data
+        df.loc[~boolmask, k] = None
         refvalues[k] = data
 
-    # Check null value causes error
-    with pytest.raises(ValueError):
-        df.to_cupy()
-    with pytest.raises(ValueError):
-        df.to_numpy()
+    result = df.to_cupy()
+    expected = df.fillna(np.nan).to_cupy()
+    assert_eq(result, expected)
+
+    result = df.to_numpy()
+    expected = df.fillna(np.nan).to_numpy()
+    assert_eq(result, expected)
 
     for k in df.columns:
         df[k] = df[k].fillna(na)

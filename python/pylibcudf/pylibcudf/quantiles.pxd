@@ -1,6 +1,8 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libcpp.vector cimport vector
 from pylibcudf.libcudf.types cimport interpolation, sorted
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
@@ -13,7 +15,8 @@ cpdef Column quantile(
     interpolation interp = *,
     Column ordered_indices = *,
     bint exact = *,
-    Stream stream = *
+    Stream stream = *,
+    DeviceMemoryResource mr = *,
 )
 
 cpdef Table quantiles(
@@ -23,5 +26,6 @@ cpdef Table quantiles(
     sorted is_input_sorted = *,
     list column_order = *,
     list null_precedence = *,
-    Stream stream = *
+    Stream stream = *,
+    DeviceMemoryResource mr = *,
 )

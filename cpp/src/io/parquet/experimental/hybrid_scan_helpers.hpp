@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -283,8 +272,8 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    *
    * @param row_mask Boolean column indicating which rows need to be read after page-pruning
    * @param row_group_indices Input row groups indices
-   * @param output_dtypes Datatypes of output columns
-   * @param output_column_schemas schema indices of output columns
+   * @param input_columns Input column information
+   * @param row_mask_offset Offset into the row mask column for the current pass
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return A vector of boolean vectors indicating which data pages need to be decoded to produce
@@ -293,8 +282,8 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   [[nodiscard]] std::vector<std::vector<bool>> compute_data_page_mask(
     cudf::column_view row_mask,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
-    cudf::host_span<cudf::data_type const> output_dtypes,
-    cudf::host_span<cudf::size_type const> output_column_schemas,
+    cudf::host_span<input_column_info const> input_columns,
+    cudf::size_type row_mask_offset,
     rmm::cuda_stream_view stream) const;
 };
 

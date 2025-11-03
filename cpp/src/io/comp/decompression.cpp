@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "decompression.hpp"
@@ -785,26 +774,27 @@ void decompress(compression_type compression,
 
   // sort inputs by size, largest first
   auto const [sorted_inputs, sorted_outputs, order] =
-    sort_tasks(inputs, outputs, stream, cudf::get_current_device_resource_ref());
+    sort_decompression_tasks(inputs, outputs, stream, cudf::get_current_device_resource_ref());
   auto inputs_view  = device_span<device_span<uint8_t const> const>(sorted_inputs);
   auto outputs_view = device_span<device_span<uint8_t> const>(sorted_outputs);
+
+  auto const split_idx = split_decompression_tasks(
+    inputs_view,
+    outputs_view,
+    get_host_engine_state(compression),
+    getenv_or("LIBCUDF_HOST_DECOMPRESSION_THRESHOLD", default_host_decompression_auto_threshold),
+    getenv_or("LIBCUDF_HOST_DECOMPRESSION_RATIO", default_host_device_decompression_cost_ratio),
+    stream);
 
   auto tmp_results = cudf::detail::make_device_uvector_async<detail::codec_exec_result>(
     results, stream, cudf::get_current_device_resource_ref());
   auto results_view = device_span<codec_exec_result>(tmp_results);
 
-  auto const split_idx = find_split_index(
-    inputs_view,
-    get_host_engine_state(compression),
-    getenv_or("LIBCUDF_HOST_DECOMPRESSION_THRESHOLD", default_host_decompression_auto_threshold),
-    getenv_or("LIBCUDF_HOST_DECOMPRESSION_RATIO", default_host_device_decompression_work_ratio),
-    stream);
-
   auto const streams = cudf::detail::fork_streams(stream, 2);
   detail::device_decompress(compression,
-                            inputs_view.subspan(split_idx, sorted_inputs.size() - split_idx),
-                            outputs_view.subspan(split_idx, sorted_outputs.size() - split_idx),
-                            results_view.subspan(split_idx, tmp_results.size() - split_idx),
+                            inputs_view.subspan(split_idx, inputs_view.size() - split_idx),
+                            outputs_view.subspan(split_idx, outputs_view.size() - split_idx),
+                            results_view.subspan(split_idx, results_view.size() - split_idx),
                             max_uncomp_chunk_size,
                             max_total_uncomp_size,
                             streams[0]);
@@ -834,11 +824,11 @@ void decompress(compression_type compression,
 {
   auto const nvcomp_type = detail::to_nvcomp_compression(compression);
   switch (compression) {
+    case compression_type::LZ4:
     case compression_type::ZSTD:
       return not detail::nvcomp::is_decompression_disabled(nvcomp_type.value());
     case compression_type::BROTLI:
     case compression_type::GZIP:
-    case compression_type::LZ4:
     case compression_type::SNAPPY:
     case compression_type::ZLIB:
     case compression_type::NONE: return true;

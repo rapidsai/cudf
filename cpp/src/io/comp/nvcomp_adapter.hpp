@@ -1,24 +1,13 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
 #include "io/comp/compression.hpp"
 
-#include <cudf/io/nvcomp_adapter.hpp>
+#include <cudf/io/detail/nvcomp_adapter.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -120,6 +109,15 @@ size_t batched_decompress_temp_size(compression_type compression,
  * @returns maximum chunk size
  */
 [[nodiscard]] std::optional<size_t> compress_max_allowed_chunk_size(compression_type compression);
+
+/**
+ * @brief Loads the nvCOMP library.
+ *
+ * Can be used to load the nvCOMP library before its first use. Eager loading can help avoid issues
+ * due to the device memory allocations performed during the dynamic loading of the library (e.g.
+ * when loading after the memory pools have been created).
+ */
+void load_nvcomp_library();
 
 /**
  * @brief Device batch compression of given type.

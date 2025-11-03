@@ -5,11 +5,8 @@
 
 from __future__ import annotations
 
-import functools
 from typing import TYPE_CHECKING
 
-import polars as pl
-import polars.datatypes.convert
 from polars.exceptions import InvalidOperationError
 
 import pylibcudf as plc
@@ -22,11 +19,16 @@ from pylibcudf.strings.convert.convert_integers import (
 from pylibcudf.traits import is_floating_point
 
 from cudf_polars.containers import DataType
+from cudf_polars.containers.datatype import _dtype_from_header, _dtype_to_header
 from cudf_polars.utils import conversion
 from cudf_polars.utils.dtypes import is_order_preserving_cast
 
 if TYPE_CHECKING:
     from typing_extensions import Self
+
+    from polars import Series as pl_Series
+
+    from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.typing import (
         ColumnHeader,
@@ -36,22 +38,6 @@ if TYPE_CHECKING:
     )
 
 __all__: list[str] = ["Column"]
-
-
-def _dtype_short_repr_to_dtype(dtype_str: str) -> pl.DataType:
-    """Convert a Polars dtype short repr to a Polars dtype."""
-    # limitations of dtype_short_repr_to_dtype described in
-    # py-polars/polars/datatypes/convert.py#L299
-    if dtype_str.startswith("list["):
-        stripped = dtype_str.removeprefix("list[").removesuffix("]")
-        return pl.List(_dtype_short_repr_to_dtype(stripped))
-    pl_type = polars.datatypes.convert.dtype_short_repr_to_dtype(dtype_str)
-    if pl_type is None:
-        raise ValueError(f"{dtype_str} was not able to be parsed by Polars.")
-    if isinstance(pl_type, polars.datatypes.DataTypeClass):
-        return pl_type()
-    else:
-        return pl_type
 
 
 class Column:
@@ -85,7 +71,10 @@ class Column:
 
     @classmethod
     def deserialize(
-        cls, header: ColumnHeader, frames: tuple[memoryview, plc.gpumemoryview]
+        cls,
+        header: ColumnHeader,
+        frames: tuple[memoryview[bytes], plc.gpumemoryview],
+        stream: Stream,
     ) -> Self:
         """
         Create a Column from a serialized representation returned by `.serialize()`.
@@ -96,6 +85,10 @@ class Column:
             The (unpickled) metadata required to reconstruct the object.
         frames
             Two-tuple of frames (a memoryview and a gpumemoryview).
+        stream
+            CUDA stream used for device memory operations and kernel launches
+            on this column. The caller is responsible for ensuring that
+            the data in ``frames`` is valid on ``stream``.
 
         Returns
         -------
@@ -104,7 +97,7 @@ class Column:
         """
         packed_metadata, packed_gpu_data = frames
         (plc_column,) = plc.contiguous_split.unpack_from_memoryviews(
-            packed_metadata, packed_gpu_data
+            packed_metadata, packed_gpu_data, stream
         ).columns()
         return cls(plc_column, **cls.deserialize_ctor_kwargs(header["column_kwargs"]))
 
@@ -113,20 +106,18 @@ class Column:
         column_kwargs: ColumnOptions,
     ) -> DeserializedColumnOptions:
         """Deserialize the constructor kwargs for a Column."""
-        dtype = DataType(  # pragma: no cover
-            _dtype_short_repr_to_dtype(column_kwargs["dtype"])
-        )
         return {
             "is_sorted": column_kwargs["is_sorted"],
             "order": column_kwargs["order"],
             "null_order": column_kwargs["null_order"],
             "name": column_kwargs["name"],
-            "dtype": dtype,
+            "dtype": DataType(_dtype_from_header(column_kwargs["dtype"])),
         }
 
     def serialize(
         self,
-    ) -> tuple[ColumnHeader, tuple[memoryview, plc.gpumemoryview]]:
+        stream: Stream,
+    ) -> tuple[ColumnHeader, tuple[memoryview[bytes], plc.gpumemoryview]]:
         """
         Serialize the Column into header and frames.
 
@@ -145,7 +136,7 @@ class Column:
         frames
             Two-tuple of frames suitable for passing to `plc.contiguous_split.unpack_from_memoryviews`
         """
-        packed = plc.contiguous_split.pack(plc.Table([self.obj]))
+        packed = plc.contiguous_split.pack(plc.Table([self.obj]), stream=stream)
         header: ColumnHeader = {
             "column_kwargs": self.serialize_ctor_kwargs(),
             "frame_count": 2,
@@ -159,13 +150,19 @@ class Column:
             "order": self.order,
             "null_order": self.null_order,
             "name": self.name,
-            "dtype": pl.polars.dtype_str_repr(self.dtype.polars),
+            "dtype": _dtype_to_header(self.dtype.polars_type),
         }
 
-    @functools.cached_property
-    def obj_scalar(self) -> plc.Scalar:
+    def obj_scalar(self, stream: Stream) -> plc.Scalar:
         """
         A copy of the column object as a pylibcudf Scalar.
+
+        Parameters
+        ----------
+        stream
+            CUDA stream used for device memory operations and kernel launches.
+            ``self.obj`` must be valid on this stream, and the result will be
+            valid on this stream.
 
         Returns
         -------
@@ -178,7 +175,7 @@ class Column:
         """
         if not self.is_scalar:
             raise ValueError(f"Cannot convert a column of length {self.size} to scalar")
-        return plc.copying.get_element(self.obj, 0)
+        return plc.copying.get_element(self.obj, 0, stream=stream)
 
     def rename(self, name: str | None, /) -> Self:
         """
@@ -228,6 +225,7 @@ class Column:
         *,
         order: plc.types.Order,
         null_order: plc.types.NullOrder,
+        stream: Stream,
     ) -> bool:
         """
         Check if the column is sorted.
@@ -238,6 +236,9 @@ class Column:
             The requested sort order.
         null_order
             Where nulls sort to.
+        stream
+            CUDA stream used for device memory operations and kernel launches
+            on this Column. The data in ``self.obj`` must be valid on this stream.
 
         Returns
         -------
@@ -254,14 +255,16 @@ class Column:
             return self.order == order and (
                 self.null_count == 0 or self.null_order == null_order
             )
-        if plc.sorting.is_sorted(plc.Table([self.obj]), [order], [null_order]):
+        if plc.sorting.is_sorted(
+            plc.Table([self.obj]), [order], [null_order], stream=stream
+        ):
             self.sorted = plc.types.Sorted.YES
             self.order = order
             self.null_order = null_order
             return True
         return False
 
-    def astype(self, dtype: DataType) -> Column:
+    def astype(self, dtype: DataType, stream: Stream) -> Column:
         """
         Cast the column to as the requested dtype.
 
@@ -269,6 +272,9 @@ class Column:
         ----------
         dtype
             Datatype to cast to.
+        stream
+            CUDA stream used for device memory operations and kernel launches
+            on this Column. The data in ``self.obj`` must be valid on this stream.
 
         Returns
         -------
@@ -284,7 +290,7 @@ class Column:
         This only produces a copy if the requested dtype doesn't match
         the current one.
         """
-        plc_dtype = dtype.plc
+        plc_dtype = dtype.plc_type
         if self.obj.type() == plc_dtype:
             return self
 
@@ -292,12 +298,16 @@ class Column:
             plc_dtype.id() == plc.TypeId.STRING
             or self.obj.type().id() == plc.TypeId.STRING
         ):
-            return Column(self._handle_string_cast(plc_dtype), dtype=dtype)
+            return Column(
+                self._handle_string_cast(plc_dtype, stream=stream), dtype=dtype
+            )
         elif plc.traits.is_integral_not_bool(
             self.obj.type()
         ) and plc.traits.is_timestamp(plc_dtype):
-            upcasted = plc.unary.cast(self.obj, plc.DataType(plc.TypeId.INT64))
-            result = plc.column.Column(
+            upcasted = plc.unary.cast(
+                self.obj, plc.DataType(plc.TypeId.INT64), stream=stream
+            )
+            plc_col = plc.column.Column(
                 plc_dtype,
                 upcasted.size(),
                 upcasted.data(),
@@ -306,11 +316,11 @@ class Column:
                 upcasted.offset(),
                 upcasted.children(),
             )
-            return Column(result, dtype=dtype).sorted_like(self)
+            return Column(plc_col, dtype=dtype).sorted_like(self)
         elif plc.traits.is_integral_not_bool(plc_dtype) and plc.traits.is_timestamp(
             self.obj.type()
         ):
-            result = plc.column.Column(
+            plc_col = plc.column.Column(
                 plc.DataType(plc.TypeId.INT64),
                 self.obj.size(),
                 self.obj.data(),
@@ -319,42 +329,46 @@ class Column:
                 self.obj.offset(),
                 self.obj.children(),
             )
-            return Column(plc.unary.cast(result, plc_dtype), dtype=dtype).sorted_like(
-                self
-            )
+            return Column(
+                plc.unary.cast(plc_col, plc_dtype, stream=stream), dtype=dtype
+            ).sorted_like(self)
         else:
-            result = Column(plc.unary.cast(self.obj, plc_dtype), dtype=dtype)
+            result = Column(
+                plc.unary.cast(self.obj, plc_dtype, stream=stream), dtype=dtype
+            )
             if is_order_preserving_cast(self.obj.type(), plc_dtype):
                 return result.sorted_like(self)
             return result
 
-    def _handle_string_cast(self, dtype: plc.DataType) -> plc.Column:
+    def _handle_string_cast(self, dtype: plc.DataType, stream: Stream) -> plc.Column:
         if dtype.id() == plc.TypeId.STRING:
             if is_floating_point(self.obj.type()):
-                return from_floats(self.obj)
+                return from_floats(self.obj, stream=stream)
             else:
-                return from_integers(self.obj)
+                return from_integers(self.obj, stream=stream)
         else:
             if is_floating_point(dtype):
-                floats = is_float(self.obj)
+                floats = is_float(self.obj, stream=stream)
                 if not plc.reduce.reduce(
                     floats,
                     plc.aggregation.all(),
                     plc.DataType(plc.TypeId.BOOL8),
+                    stream=stream,
                 ).to_py():
                     raise InvalidOperationError("Conversion from `str` failed.")
                 return to_floats(self.obj, dtype)
             else:
-                integers = is_integer(self.obj)
+                integers = is_integer(self.obj, stream=stream)
                 if not plc.reduce.reduce(
                     integers,
                     plc.aggregation.all(),
                     plc.DataType(plc.TypeId.BOOL8),
+                    stream=stream,
                 ).to_py():
                     raise InvalidOperationError("Conversion from `str` failed.")
-                return to_integers(self.obj, dtype)
+                return to_integers(self.obj, dtype, stream=stream)
 
-    def copy_metadata(self, from_: pl.Series, /) -> Self:
+    def copy_metadata(self, from_: pl_Series, /) -> Self:
         """
         Copy metadata from a host series onto self.
 
@@ -439,27 +453,44 @@ class Column:
             dtype=self.dtype,
         )
 
-    def mask_nans(self) -> Self:
+    def mask_nans(self, stream: Stream) -> Self:
         """Return a shallow copy of self with nans masked out."""
         if plc.traits.is_floating_point(self.obj.type()):
             old_count = self.null_count
-            mask, new_count = plc.transform.nans_to_nulls(self.obj)
+            mask, new_count = plc.transform.nans_to_nulls(self.obj, stream=stream)
             result = type(self)(self.obj.with_mask(mask, new_count), self.dtype)
             if old_count == new_count:
                 return result.sorted_like(self)
             return result
         return self.copy()
 
-    @functools.cached_property
-    def nan_count(self) -> int:
-        """Return the number of NaN values in the column."""
+    def nan_count(self, stream: Stream) -> int:
+        """
+        Return the number of NaN values in the column.
+
+        Parameters
+        ----------
+        stream
+            CUDA stream used for device memory operations and kernel launches.
+            ``self.obj`` must be valid on this stream, and the result will be
+            valid on this stream.
+
+        Returns
+        -------
+        Number of NaN values in the column.
+        """
+        result: int
         if self.size > 0 and plc.traits.is_floating_point(self.obj.type()):
-            return plc.reduce.reduce(
-                plc.unary.is_nan(self.obj),
+            # See https://github.com/rapidsai/cudf/issues/20202 for we type ignore
+            result = plc.reduce.reduce(  # type: ignore[assignment]
+                plc.unary.is_nan(self.obj, stream=stream),
                 plc.aggregation.sum(),
                 plc.types.SIZE_TYPE,
+                stream=stream,
             ).to_py()
-        return 0
+        else:
+            result = 0
+        return result
 
     @property
     def size(self) -> int:
@@ -471,7 +502,7 @@ class Column:
         """Return the number of Null values in the column."""
         return self.obj.null_count()
 
-    def slice(self, zlice: Slice | None) -> Self:
+    def slice(self, zlice: Slice | None, stream: Stream) -> Self:
         """
         Slice a column.
 
@@ -480,6 +511,9 @@ class Column:
         zlice
             optional, tuple of start and length, negative values of start
             treated as for python indexing. If not provided, returns self.
+        stream
+            CUDA stream used for device memory operations and kernel launches
+            on this Column. The data in ``self.obj`` must be valid on this stream.
 
         Returns
         -------
@@ -490,6 +524,7 @@ class Column:
         (table,) = plc.copying.slice(
             plc.Table([self.obj]),
             conversion.from_polars_slice(zlice, num_rows=self.size),
+            stream=stream,
         )
         (column,) = table.columns()
         return type(self)(column, name=self.name, dtype=self.dtype).sorted_like(self)

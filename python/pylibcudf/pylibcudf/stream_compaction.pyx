@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -17,11 +18,12 @@ from pylibcudf.libcudf.types cimport (
 
 from pylibcudf.libcudf.stream_compaction import \
     duplicate_keep_option as DuplicateKeepOption  # no-cython-lint, isort:skip
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .table cimport Table
-from .utils cimport _get_stream
+from .utils cimport _get_stream, _get_memory_resource
 
 __all__ = [
     "DuplicateKeepOption",
@@ -37,7 +39,11 @@ __all__ = [
 ]
 
 cpdef Table drop_nulls(
-    Table source_table, list keys, size_type keep_threshold, Stream stream=None
+    Table source_table,
+    list keys,
+    size_type keep_threshold,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Filters out rows from the input table based on the presence of nulls.
 
@@ -61,16 +67,21 @@ cpdef Table drop_nulls(
     cdef vector[size_type] c_keys = keys
 
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_stream_compaction.drop_nulls(
-            source_table.view(), c_keys, keep_threshold, stream.view()
+            source_table.view(), c_keys, keep_threshold, stream.view(), mr.get_mr()
         )
-    return Table.from_libcudf(move(c_result), stream)
+    return Table.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Table drop_nans(
-    Table source_table, list keys, size_type keep_threshold, Stream stream=None
+    Table source_table,
+    list keys,
+    size_type keep_threshold,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Filters out rows from the input table based on the presence of NaNs.
 
@@ -94,16 +105,20 @@ cpdef Table drop_nans(
     cdef vector[size_type] c_keys = keys
 
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_stream_compaction.drop_nans(
-            source_table.view(), c_keys, keep_threshold, stream.view()
+            source_table.view(), c_keys, keep_threshold, stream.view(), mr.get_mr()
         )
-    return Table.from_libcudf(move(c_result), stream)
+    return Table.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Table apply_boolean_mask(
-    Table source_table, Column boolean_mask, Stream stream=None
+    Table source_table,
+    Column boolean_mask,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Filters out rows from the input table based on a boolean mask.
 
@@ -124,12 +139,13 @@ cpdef Table apply_boolean_mask(
     cdef unique_ptr[table] c_result
 
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_stream_compaction.apply_boolean_mask(
-            source_table.view(), boolean_mask.view(), stream.view()
+            source_table.view(), boolean_mask.view(), stream.view(), mr.get_mr()
         )
-    return Table.from_libcudf(move(c_result), stream)
+    return Table.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Table unique(
@@ -138,6 +154,7 @@ cpdef Table unique(
     duplicate_keep_option keep,
     null_equality nulls_equal,
     Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Filter duplicate consecutive rows from the input table.
 
@@ -169,12 +186,13 @@ cpdef Table unique(
     cdef vector[size_type] c_keys = keys
 
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_stream_compaction.unique(
-            input.view(), c_keys, keep, nulls_equal, stream.view()
+            input.view(), c_keys, keep, nulls_equal, stream.view(), mr.get_mr()
         )
-    return Table.from_libcudf(move(c_result), stream)
+    return Table.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Table distinct(
@@ -184,6 +202,7 @@ cpdef Table distinct(
     null_equality nulls_equal,
     nan_equality nans_equal,
     Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Get the distinct rows from the input table.
 
@@ -212,12 +231,14 @@ cpdef Table distinct(
     cdef vector[size_type] c_keys = keys
 
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_stream_compaction.distinct(
-            input.view(), c_keys, keep, nulls_equal, nans_equal, stream.view()
+            input.view(), c_keys, keep, nulls_equal, nans_equal, stream.view(),
+            mr.get_mr()
         )
-    return Table.from_libcudf(move(c_result), stream)
+    return Table.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Column distinct_indices(
@@ -226,6 +247,7 @@ cpdef Column distinct_indices(
     null_equality nulls_equal,
     nan_equality nans_equal,
     Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Get the indices of the distinct rows from the input table.
 
@@ -250,12 +272,13 @@ cpdef Column distinct_indices(
     cdef unique_ptr[column] c_result
 
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_stream_compaction.distinct_indices(
-            input.view(), keep, nulls_equal, nans_equal, stream.view()
+            input.view(), keep, nulls_equal, nans_equal, stream.view(), mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Table stable_distinct(
@@ -265,6 +288,7 @@ cpdef Table stable_distinct(
     null_equality nulls_equal,
     nan_equality nans_equal,
     Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Get the distinct rows from the input table, preserving input order.
 
@@ -293,12 +317,14 @@ cpdef Table stable_distinct(
     cdef vector[size_type] c_keys = keys
 
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_stream_compaction.stable_distinct(
-            input.view(), c_keys, keep, nulls_equal, nans_equal, stream.view()
+            input.view(), c_keys, keep, nulls_equal, nans_equal, stream.view(),
+            mr.get_mr()
         )
-    return Table.from_libcudf(move(c_result), stream)
+    return Table.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef size_type unique_count(

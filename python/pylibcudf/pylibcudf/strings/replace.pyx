@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -15,7 +16,8 @@ from pylibcudf.libcudf.strings.replace cimport (
 )
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
-from pylibcudf.utils cimport _get_stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 __all__ = ["replace", "replace_multiple", "replace_slice"]
@@ -24,8 +26,9 @@ cpdef Column replace(
     Column input,
     Scalar target,
     Scalar repl,
-    size_type maxrepl = -1,
-    Stream stream=None
+    size_type maxrepl=-1,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Replaces target string within each string with the specified replacement string.
 
@@ -58,6 +61,7 @@ cpdef Column replace(
     target_str = <string_scalar *>(target.c_obj.get())
     repl_str = <string_scalar *>(repl.c_obj.get())
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_replace(
@@ -65,18 +69,20 @@ cpdef Column replace(
             target_str[0],
             repl_str[0],
             maxrepl,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Column replace_multiple(
     Column input,
     Column target,
     Column repl,
-    size_type maxrepl = -1,
-    Stream stream=None
+    size_type maxrepl=-1,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Replaces target string within each string with the specified replacement string.
 
@@ -104,26 +110,29 @@ cpdef Column replace_multiple(
     """
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_replace_multiple(
             input.view(),
             target.view(),
             repl.view(),
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Column replace_slice(
     Column input,
     # TODO: default scalar values
     # https://github.com/rapidsai/cudf/issues/15505
-    Scalar repl = None,
-    size_type start = 0,
-    size_type stop = -1,
-    Stream stream=None
+    Scalar repl=None,
+    size_type start=0,
+    size_type stop=-1,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Replaces each string in the column with the provided repl string
     within the [start,stop) character position range.
@@ -154,10 +163,11 @@ cpdef Column replace_slice(
     """
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     if repl is None:
         repl = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view())
+            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
         )
 
     cdef const string_scalar* scalar_str = <string_scalar*>(repl.c_obj.get())
@@ -168,7 +178,8 @@ cpdef Column replace_slice(
             scalar_str[0],
             start,
             stop,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)

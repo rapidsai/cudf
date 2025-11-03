@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 
 import numpy as np
@@ -14,7 +15,7 @@ from cudf.testing._utils import assert_exceptions_equal
 @pytest.mark.parametrize("subset", ["a", ["a"], ["a", "B"]])
 def test_duplicated_with_misspelled_column_name(subset):
     df = pd.DataFrame({"A": [0, 0, 1], "B": [0, 0, 1], "C": [0, 0, 1]})
-    gdf = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
 
     assert_exceptions_equal(
         lfunc=df.drop_duplicates,
@@ -29,7 +30,7 @@ def test_drop_duplicates_with_duplicate_column_names():
     df = pd.DataFrame(
         [[1, 2, 5], [3, 4, 6], [3, 4, 7]], columns=["a", "a", "b"]
     )
-    df = cudf.DataFrame.from_pandas(df)
+    df = cudf.DataFrame(df)
 
     result0 = df.drop_duplicates()
     assert_eq(result0, df)
@@ -48,7 +49,7 @@ def test_drop_duplicates():
             "D": range(8),
         }
     )
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     # single column
     result = gdf.copy()
     result.drop_duplicates("AAA", inplace=True)
@@ -118,37 +119,37 @@ def test_drop_duplicates_integers():
     pdf = pd.DataFrame(
         {"x": [7, 6, 3, 3, 4, 8, 0], "y": [0, 6, 5, 5, 9, 1, 2]}
     )
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     assert_eq(gdf.drop_duplicates(), pdf.drop_duplicates())
 
 
 def test_drop_duplicates_integers_positive():
     pdf = pd.DataFrame([[1, 0], [0, 2]])
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     assert_eq(gdf.drop_duplicates(), pdf.drop_duplicates())
 
 
 def test_drop_duplicates_integers_negative():
     pdf = pd.DataFrame([[-2, 0], [0, -4]])
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     assert_eq(gdf.drop_duplicates(), pdf.drop_duplicates())
 
 
 def test_drop_duplicates_integers_max():
     x = np.iinfo(np.int64).max / 3 * 2
     pdf = pd.DataFrame([[-x, x], [0, x + 4]])
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     assert_eq(gdf.drop_duplicates(), pdf.drop_duplicates())
 
     pdf = pd.DataFrame([[-x, x], [x, x + 4]])
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     assert_eq(gdf.drop_duplicates(), pdf.drop_duplicates())
 
 
 def test_drop_duplicates_integers_unique():
     pdf = pd.DataFrame([i] * 9 for i in range(16))
     pdf = pd.concat([pdf, pd.DataFrame([[1] + [0] * 8])], ignore_index=True)
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     assert_eq(gdf.drop_duplicates(), pdf.drop_duplicates())
 
 
@@ -163,7 +164,7 @@ def test_drop_duplicates_for_take_all(subset, keep):
             "D": range(8),
         }
     )
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     result = gdf.drop_duplicates(subset, keep=keep)
     expected = pdf.drop_duplicates(subset, keep=keep)
     assert_eq(result, expected)
@@ -187,7 +188,7 @@ def test_drop_duplicates_tuple():
             "D": range(8),
         }
     )
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     # single column
     result = gdf.drop_duplicates(("AA", "AB"))
     expected = pdf.drop_duplicates(("AA", "AB"))
@@ -219,7 +220,7 @@ def test_drop_duplicates_tuple():
     ],
 )
 def test_drop_duplicates_empty(df):
-    df = cudf.DataFrame.from_pandas(df)
+    df = cudf.DataFrame(df)
     result = df.drop_duplicates()
     assert_eq(result, df)
 
@@ -236,7 +237,7 @@ def test_dataframe_drop_duplicates_numeric_method():
             "C": [1, 1, 1, 4, 5],
         }
     )
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     assert_eq(gdf.drop_duplicates(), pdf.drop_duplicates())
 
     # subset columns, single columns
@@ -269,7 +270,7 @@ def test_dataframe_drop_duplicates_method():
         [(1, 2, "a"), (2, 3, "b"), (3, 4, "c"), (2, 3, "d"), (3, 5, "c")],
         columns=["n1", "n2", "s1"],
     )
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     assert_eq(gdf.drop_duplicates(), pdf.drop_duplicates())
 
     assert_eq(
@@ -292,7 +293,7 @@ def test_dataframe_drop_duplicates_method():
     )
     assert gdf.drop_duplicates("s1", inplace=True) is None
 
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     assert_eq(gdf.drop_duplicates("n1"), pdf.drop_duplicates("n1"))
     assert_eq(gdf.drop_duplicates("n2"), pdf.drop_duplicates("n2"))
     assert_eq(gdf.drop_duplicates("s1"), pdf.drop_duplicates("s1"))
@@ -348,7 +349,7 @@ def test_drop_duplicates_NA():
             "D": range(8),
         }
     )
-    df = cudf.DataFrame.from_pandas(df)
+    df = cudf.DataFrame(df)
     # single column
     result = df.drop_duplicates("A")
     expected = df.to_pandas().loc[[0, 2, 3]]
@@ -385,7 +386,7 @@ def test_drop_duplicates_NA():
             "D": range(8),
         }
     )
-    df = cudf.DataFrame.from_pandas(df)
+    df = cudf.DataFrame(df)
     # single column
     result = df.drop_duplicates("C")
     expected = df[:2]
@@ -421,7 +422,7 @@ def test_drop_duplicates_NA_for_take_all():
             "C": [1.0, np.nan, np.nan, np.nan, 1.0, 2.0, 3, 1.0],
         }
     )
-    df = cudf.DataFrame.from_pandas(pdf)
+    df = cudf.DataFrame(pdf)
 
     # single column with None
     result = df.drop_duplicates("A")
@@ -471,7 +472,7 @@ def test_drop_duplicates_inplace():
             "D": range(8),
         }
     )
-    orig = cudf.DataFrame.from_pandas(orig)
+    orig = cudf.DataFrame(orig)
     # single column
     df = orig.copy()
     df.drop_duplicates("A", inplace=True)
@@ -545,7 +546,7 @@ def test_drop_duplicates_multi_index():
     )
     rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(rng.integers(0, 2, (8, 4)), index=idx)
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     expected = pdf.drop_duplicates()
     result = gdf.drop_duplicates()

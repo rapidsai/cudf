@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 
 import numpy as np
@@ -88,7 +89,7 @@ def test_set_index_multi(drop):
         }
     )
     df["e"] = df["d"].astype("category")
-    gdf = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
 
     assert_eq(gdf.set_index("a", drop=drop), gdf.set_index(["a"], drop=drop))
     assert_eq(

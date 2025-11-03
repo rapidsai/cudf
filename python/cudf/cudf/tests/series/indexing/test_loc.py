@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import cupy as cp
 import numpy as np
@@ -40,7 +41,7 @@ def test_series_set_item_index_reference():
 
 def test_series_loc_numerical():
     ps = pd.Series([1, 2, 3, 4, 5], index=[5, 6, 7, 8, 9])
-    gs = cudf.Series.from_pandas(ps)
+    gs = cudf.Series(ps)
 
     assert_eq(ps.loc[5], gs.loc[5])
     assert_eq(ps.loc[6], gs.loc[6])
@@ -58,7 +59,7 @@ def test_series_loc_numerical():
 
 def test_series_loc_float_index():
     ps = pd.Series([1, 2, 3, 4, 5], index=[5.43, 6.34, 7.34, 8.0, 9.1])
-    gs = cudf.Series.from_pandas(ps)
+    gs = cudf.Series(ps)
 
     assert_eq(ps.loc[5.43], gs.loc[5.43])
     assert_eq(ps.loc[8], gs.loc[8])
@@ -76,7 +77,7 @@ def test_series_loc_string():
     ps = pd.Series(
         [1, 2, 3, 4, 5], index=["one", "two", "three", "four", "five"]
     )
-    gs = cudf.Series.from_pandas(ps)
+    gs = cudf.Series(ps)
 
     assert_eq(ps.loc["one"], gs.loc["one"])
     assert_eq(ps.loc["five"], gs.loc["five"])
@@ -95,7 +96,7 @@ def test_series_loc_datetime():
     ps = pd.Series(
         [1, 2, 3, 4, 5], index=pd.date_range("20010101", "20010105")
     )
-    gs = cudf.Series.from_pandas(ps)
+    gs = cudf.Series(ps)
 
     # a few different ways of specifying a datetime label:
     assert_eq(ps.loc["20010101"], gs.loc["20010101"])
@@ -158,7 +159,7 @@ def test_series_loc_categorical():
     ps = pd.Series(
         [1, 2, 3, 4, 5], index=pd.Categorical(["a", "b", "c", "d", "e"])
     )
-    gs = cudf.Series.from_pandas(ps)
+    gs = cudf.Series(ps)
 
     assert_eq(ps.loc["a"], gs.loc["a"])
     assert_eq(ps.loc["e"], gs.loc["e"])
@@ -206,7 +207,9 @@ def test_dataframe_series_loc_multiindex(obj):
     )
 
     gobj = cudf.from_pandas(obj)
-    gindex = cudf.MultiIndex.from_pandas(pindex)
+    gindex = cudf.MultiIndex(
+        levels=pindex.levels, codes=pindex.codes, names=pindex.names
+    )
 
     # cudf MultiIndex as arg
     expected = obj.loc[pindex]

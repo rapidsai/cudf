@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import datetime
 import decimal
@@ -242,7 +243,7 @@ def test_to_from_pandas_nulls(nulls):
     elif nulls == "all":
         # Fill all the values with NaT
         pd_data[:] = np.datetime64("nat", "ns")
-    gdf_data = cudf.Series.from_pandas(pd_data)
+    gdf_data = cudf.Series(pd_data)
 
     expect = pd_data
     got = gdf_data.to_pandas()

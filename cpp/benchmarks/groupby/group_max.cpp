@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
@@ -36,7 +25,7 @@ void groupby_max_helper(nvbench::state& state,
     return create_random_column(cudf::type_to_id<int32_t>(), row_count{num_rows}, profile);
   }();
 
-  auto const vals = [&] {
+  auto const make_values = [&]() {
     auto builder = data_profile_builder().cardinality(0).distribution(
       cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, num_rows);
     if (null_probability > 0) {
@@ -46,24 +35,27 @@ void groupby_max_helper(nvbench::state& state,
     }
     return create_random_column(
       cudf::type_to_id<Type>(), row_count{num_rows}, data_profile{builder});
-  }();
+  };
 
   auto const num_aggregations = state.get_int64("num_aggregations");
 
   auto keys_view = keys->view();
-  auto gb_obj    = cudf::groupby::groupby(cudf::table_view({keys_view, keys_view, keys_view}));
 
+  std::vector<std::unique_ptr<cudf::column>> val_cols;
   std::vector<cudf::groupby::aggregation_request> requests;
   for (int64_t i = 0; i < num_aggregations; i++) {
-    requests.emplace_back(cudf::groupby::aggregation_request());
-    requests[i].values = vals->view();
+    requests.emplace_back();
+    val_cols.emplace_back(make_values());
+    requests[i].values = val_cols.back()->view();
     requests[i].aggregations.push_back(cudf::make_max_aggregation<cudf::groupby_aggregation>());
   }
 
   auto const mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.exec(nvbench::exec_tag::sync,
-             [&](nvbench::launch& launch) { auto const result = gb_obj.aggregate(requests); });
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    auto gb_obj       = cudf::groupby::groupby(cudf::table_view({keys_view, keys_view, keys_view}));
+    auto const result = gb_obj.aggregate(requests);
+  });
   auto const elapsed_time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(
     static_cast<double>(num_rows * num_aggregations) / elapsed_time / 1'000'000., "Mrows/s");
@@ -101,5 +93,5 @@ NVBENCH_BENCH_TYPES(bench_groupby_max,
 
 NVBENCH_BENCH_TYPES(bench_groupby_max_cardinality, NVBENCH_TYPE_AXES(nvbench::type_list<int32_t>))
   .set_name("groupby_max_cardinality")
-  .add_int64_axis("num_aggregations", {1})
-  .add_int64_axis("cardinality", {10, 20, 50, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000});
+  .add_int64_axis("num_aggregations", {1, 2, 3, 4, 5, 6, 7, 8})
+  .add_int64_axis("cardinality", {20, 50, 100, 1'000, 10'000, 100'000, 1'000'000});

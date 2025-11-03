@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import numpy as np
 import pandas as pd
 import pytest
@@ -152,7 +153,7 @@ def test_groupby_dtypes(groups):
 
 def test_ngroups():
     pdf = pd.DataFrame({"a": [1, 1, 3], "b": range(3)})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     pgb = pdf.groupby("a")
     ggb = gdf.groupby("a")
@@ -162,14 +163,14 @@ def test_ngroups():
 
 def test_ndim():
     pdf = pd.DataFrame({"a": [1, 1, 3], "b": range(3)})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     pgb = pdf.groupby("a")
     ggb = gdf.groupby("a")
     assert pgb.ndim == ggb.ndim
 
     pser = pd.Series(range(3))
-    gser = cudf.Series.from_pandas(pser)
+    gser = cudf.Series(pser)
     pgb = pser.groupby([0, 0, 1])
     ggb = gser.groupby(cudf.Series([0, 0, 1]))
     assert pgb.ndim == ggb.ndim

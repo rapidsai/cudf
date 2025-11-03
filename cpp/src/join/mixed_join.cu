@@ -1,22 +1,10 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "join_common_utils.cuh"
 #include "join_common_utils.hpp"
-#include "mixed_join_common_utils.cuh"
 #include "mixed_join_kernel.hpp"
 #include "mixed_join_size_kernel.hpp"
 
@@ -25,7 +13,6 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
-#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/join/mixed_join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -38,9 +25,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/zip_iterator.h>
-#include <thrust/transform.h>
+#include <thrust/fill.h>
+#include <thrust/scan.h>
 
 #include <optional>
 #include <utility>
@@ -49,28 +35,36 @@ namespace cudf {
 namespace detail {
 
 namespace {
-
 /**
- * @brief Precompute input pairs and hash indices for mixed join operations
+ * @brief Precomputes double hashing indices and row hash values for mixed join operations.
  *
- * Precomputes input pairs and hash indices in a single pass to reduce code duplication
- * between mixed_join and compute_mixed_join_output_size functions.
+ * This function exists as a performance optimization to work around the register spilling issue
+ * reported in https://github.com/NVIDIA/cuCollections/issues/761. The new cuco hash table
+ * implementation suffers from register spilling due to longer register live ranges, which can
+ * cause up to 20x performance degradation.
  *
- * Precomputation reduces register pressure in probing kernels by avoiding expensive
- * on-the-fly calculations of iterator transforms and hash table indices.
+ * By precomputing the double hashing indices (initial slot and step size) and row hash values
+ * in a separate pass, we reduce register pressure in the subsequent count and retrieve kernels.
+ * This approach yields approximately 20% speedup compared to the legacy multimap-based
+ * implementation.
  *
- * @tparam HashProbe Type of the device hasher for computing probe keys
- * @param hash_table Hash table for probing
- * @param hash_probe Device hasher for probe keys
- * @param probe_table_num_rows Number of rows in probe table
- * @param stream CUDA stream
- * @param mr Memory resource
- * @return Pair of device vectors: precomputed input pairs and hash indices
+ * The tradeoff is that we cannot use cuco's device APIs directly in mixed join operations.
+ * Instead, we must reimplement the entire double hashing probing logic in cudf without relying
+ * on cuco's device APIs. This should be revisited and potentially removed once issue #761 is
+ * fully resolved.
+ *
+ * @param hash_table The cuco multiset hash table
+ * @param hash_probe Hash function for computing row hashes
+ * @param probe_table_num_rows Number of rows in the probe table
+ * @param stream CUDA stream for operations
+ * @param mr Memory resource for allocations
+ * @return A pair of device vectors: (input_pairs, hash_indices) where input_pairs contains
+ *         (row_hash, row_index) pairs and hash_indices contains (initial_slot, step_size) pairs
  */
 template <typename HashProbe>
 std::pair<rmm::device_uvector<cuco::pair<hash_value_type, size_type>>,
-          rmm::device_uvector<cuda::std::pair<size_type, size_type>>>
-precompute_mixed_join_data(mixed_join_hash_table_t const& hash_table,
+          rmm::device_uvector<cuda::std::pair<hash_value_type, hash_value_type>>>
+precompute_mixed_join_data(mixed_multiset_type const& hash_table,
                            HashProbe const& hash_probe,
                            size_type probe_table_num_rows,
                            rmm::cuda_stream_view stream,
@@ -78,12 +72,15 @@ precompute_mixed_join_data(mixed_join_hash_table_t const& hash_table,
 {
   auto input_pairs =
     rmm::device_uvector<cuco::pair<hash_value_type, size_type>>(probe_table_num_rows, stream, mr);
-  auto hash_indices =
-    rmm::device_uvector<cuda::std::pair<size_type, size_type>>(probe_table_num_rows, stream, mr);
+  auto hash_indices = rmm::device_uvector<cuda::std::pair<hash_value_type, hash_value_type>>(
+    probe_table_num_rows, stream, mr);
 
-  auto const extent                        = hash_table.capacity();
+  auto const capacity                      = hash_table.capacity();
   auto const probe_hash_fn                 = hash_table.hash_function();
-  static constexpr std::size_t bucket_size = mixed_join_hash_table_t::bucket_size;
+  static constexpr std::size_t bucket_size = mixed_multiset_type::bucket_size;
+
+  auto const num_buckets           = capacity / bucket_size;
+  auto const num_buckets_minus_one = num_buckets - 1;
 
   // Functor to pre-compute both input pairs and initial slots and step sizes for double hashing.
   auto precompute_fn = [=] __device__(size_type i) {
@@ -93,14 +90,12 @@ precompute_mixed_join_data(mixed_join_hash_table_t const& hash_table,
     auto const hash1_val = cuda::std::get<0>(probe_hash_fn)(probe_key);
     auto const hash2_val = cuda::std::get<1>(probe_hash_fn)(probe_key);
 
-    // Double hashing logic: initial position and step size
-    auto const init_idx = (hash1_val % (extent / bucket_size)) * bucket_size;
-    auto const step_val =
-      ((hash2_val % (extent / bucket_size - std::size_t{1})) + std::size_t{1}) * bucket_size;
+    auto const init_idx = static_cast<hash_value_type>(
+      (static_cast<std::size_t>(hash1_val) % num_buckets) * bucket_size);
+    auto const step_val = static_cast<hash_value_type>(
+      ((static_cast<std::size_t>(hash2_val) % num_buckets_minus_one) + 1) * bucket_size);
 
-    return cuda::std::pair{
-      probe_key,
-      cuda::std::pair{static_cast<size_type>(init_idx), static_cast<size_type>(step_val)}};
+    return cuda::std::pair{probe_key, cuda::std::pair{init_idx, step_val}};
   };
 
   // Single transform to fill both arrays using zip iterator
@@ -114,37 +109,218 @@ precompute_mixed_join_data(mixed_join_hash_table_t const& hash_table,
   return std::make_pair(std::move(input_pairs), std::move(hash_indices));
 }
 
-}  // anonymous namespace
+struct mixed_join_setup_data {
+  bool swap_tables;
+  size_type outer_num_rows;
+  cudf::nullate::DYNAMIC has_nulls;
+  ast::detail::expression_parser parser;
+  mixed_multiset_type hash_table;
+  std::shared_ptr<detail::row::equality::preprocessed_table> preprocessed_build;
+  std::shared_ptr<detail::row::equality::preprocessed_table> preprocessed_probe;
+  std::unique_ptr<table_device_view, std::function<void(table_device_view*)>> left_conditional_view;
+  std::unique_ptr<table_device_view, std::function<void(table_device_view*)>>
+    right_conditional_view;
+  detail::grid_1d config;
+  thread_index_type shmem_size_per_block;
+  row_equality equality_probe;
+  cudf::device_span<cuco::pair<hash_value_type, size_type>> hash_table_storage;
+  rmm::device_uvector<cuco::pair<hash_value_type, size_type>> input_pairs;
+  rmm::device_uvector<cuda::std::pair<hash_value_type, hash_value_type>> hash_indices;
+};
 
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
-mixed_join(table_view const& left_equality,
-           table_view const& right_equality,
-           table_view const& left_conditional,
-           table_view const& right_conditional,
-           ast::expression const& binary_predicate,
-           null_equality compare_nulls,
-           join_kind join_type,
-           std::optional<std::size_t> const& output_size,
-           rmm::cuda_stream_view stream,
-           rmm::device_async_resource_ref mr)
+mixed_join_setup_data setup_mixed_join_common(table_view const& left_equality,
+                                              table_view const& right_equality,
+                                              table_view const& left_conditional,
+                                              table_view const& right_conditional,
+                                              ast::expression const& binary_predicate,
+                                              null_equality compare_nulls,
+                                              join_kind join_type,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(left_conditional.num_rows() == left_equality.num_rows(),
                "The left conditional and equality tables must have the same number of rows.");
   CUDF_EXPECTS(right_conditional.num_rows() == right_equality.num_rows(),
                "The right conditional and equality tables must have the same number of rows.");
 
+  auto const right_num_rows = right_conditional.num_rows();
+  auto const left_num_rows  = left_conditional.num_rows();
+  auto const swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
+  auto const outer_num_rows = swap_tables ? right_num_rows : left_num_rows;
+
+  // If evaluating the expression may produce null outputs we create a nullable
+  // output column and follow the null-supporting expression evaluation code path.
+  auto const has_nulls = cudf::nullate::DYNAMIC{
+    cudf::has_nulls(left_equality) || cudf::has_nulls(right_equality) ||
+    binary_predicate.may_evaluate_null(left_conditional, right_conditional, stream)};
+
+  auto parser = ast::detail::expression_parser{
+    binary_predicate, left_conditional, right_conditional, has_nulls, stream, mr};
+  CUDF_EXPECTS(parser.output_type().id() == type_id::BOOL8,
+               "The expression must produce a boolean output.",
+               cudf::data_type_error);
+
+  // TODO: The non-conditional join impls start with a dictionary matching,
+  // figure out what that is and what it's needed for (and if conditional joins
+  // need to do the same).
+  auto& probe = swap_tables ? right_equality : left_equality;
+  auto& build = swap_tables ? left_equality : right_equality;
+
+  // Create hash table with load factor following hash join pattern
+  mixed_multiset_type hash_table{
+    cuco::extent{static_cast<std::size_t>(build.num_rows())},
+    cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
+    cuco::empty_key{cuco::pair{std::numeric_limits<hash_value_type>::max(), cudf::JoinNoMatch}},
+    {},
+    {},
+    {},
+    {},
+    rmm::mr::polymorphic_allocator<char>{},
+    stream.value()};
+
+  // TODO: To add support for nested columns we will need to flatten in many
+  // places. However, this probably isn't worth adding any time soon since we
+  // won't be able to support AST conditions for those types anyway.
+  auto const row_bitmask =
+    cudf::detail::bitmask_and(build, stream, cudf::get_current_device_resource_ref()).first;
+  auto preprocessed_build = detail::row::equality::preprocessed_table::create(build, stream);
+  build_join_hash_table(build,
+                        preprocessed_build,
+                        hash_table,
+                        has_nulls,
+                        compare_nulls,
+                        static_cast<bitmask_type const*>(row_bitmask.data()),
+                        stream);
+
+  auto left_conditional_view  = table_device_view::create(left_conditional, stream);
+  auto right_conditional_view = table_device_view::create(right_conditional, stream);
+
+  // For inner joins we support optimizing the join by launching one thread for
+  // whichever table is larger rather than always using the left table.
+  detail::grid_1d const config(outer_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
+  auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
+
+  auto preprocessed_probe = detail::row::equality::preprocessed_table::create(probe, stream);
+  auto const row_hash     = cudf::detail::row::hash::row_hasher{preprocessed_probe};
+  auto const hash_probe   = row_hash.device_hasher(has_nulls);
+  auto const row_comparator =
+    cudf::detail::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
+  auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
+
+  // Precompute hash table storage and input data
+  auto hash_table_storage = cudf::device_span<cuco::pair<hash_value_type, size_type>>{
+    hash_table.data(), hash_table.capacity()};
+  CUDF_EXPECTS(reinterpret_cast<std::uintptr_t>(hash_table_storage.data()) %
+                   (2 * sizeof(cuco::pair<hash_value_type, size_type>)) ==
+                 0,
+               "Hash table storage must be aligned to 2-element boundary");
+  auto [input_pairs, hash_indices] =
+    precompute_mixed_join_data(hash_table, hash_probe, outer_num_rows, stream, mr);
+
+  return {swap_tables,
+          outer_num_rows,
+          has_nulls,
+          std::move(parser),
+          std::move(hash_table),
+          std::move(preprocessed_build),
+          std::move(preprocessed_probe),
+          std::move(left_conditional_view),
+          std::move(right_conditional_view),
+          config,
+          shmem_size_per_block,
+          equality_probe,
+          hash_table_storage,
+          std::move(input_pairs),
+          std::move(hash_indices)};
+}
+
+/**
+ * @brief Helper function to compute the output size for mixed joins by launching count kernels.
+ *
+ * This function encapsulates the common logic needed by both mixed_join and
+ * compute_mixed_join_output_size to count the number of matches per row.
+ */
+std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>>
+compute_mixed_join_matches_per_row(
+  cudf::nullate::DYNAMIC has_nulls,
+  table_device_view const& left_conditional_view,
+  table_device_view const& right_conditional_view,
+  bool is_outer_join,
+  bool swap_tables,
+  row_equality const& equality_probe,
+  cudf::device_span<cuco::pair<hash_value_type, size_type>> hash_table_storage,
+  cuco::pair<hash_value_type, size_type> const* input_pairs,
+  cuda::std::pair<hash_value_type, hash_value_type> const* hash_indices,
+  cudf::ast::detail::expression_device_view device_expression_data,
+  size_type outer_num_rows,
+  detail::grid_1d config,
+  thread_index_type shmem_size_per_block,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  auto matches_per_row = std::make_unique<rmm::device_uvector<size_type>>(
+    static_cast<std::size_t>(outer_num_rows), stream, mr);
+  auto matches_per_row_span = cudf::device_span<size_type>{
+    matches_per_row->begin(), static_cast<std::size_t>(outer_num_rows)};
+
+  if (has_nulls) {
+    launch_mixed_join_count<true>(left_conditional_view,
+                                  right_conditional_view,
+                                  is_outer_join,
+                                  swap_tables,
+                                  equality_probe,
+                                  hash_table_storage,
+                                  input_pairs,
+                                  hash_indices,
+                                  device_expression_data,
+                                  matches_per_row_span,
+                                  config,
+                                  shmem_size_per_block,
+                                  stream);
+  } else {
+    launch_mixed_join_count<false>(left_conditional_view,
+                                   right_conditional_view,
+                                   is_outer_join,
+                                   swap_tables,
+                                   equality_probe,
+                                   hash_table_storage,
+                                   input_pairs,
+                                   hash_indices,
+                                   device_expression_data,
+                                   matches_per_row_span,
+                                   config,
+                                   shmem_size_per_block,
+                                   stream);
+  }
+
+  std::size_t const size = thrust::reduce(rmm::exec_policy_nosync(stream),
+                                          matches_per_row_span.begin(),
+                                          matches_per_row_span.end(),
+                                          std::size_t{0});
+
+  return {size, std::move(matches_per_row)};
+}
+}  // anonymous namespace
+
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+mixed_join(
+  table_view const& left_equality,
+  table_view const& right_equality,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
+  ast::expression const& binary_predicate,
+  null_equality compare_nulls,
+  join_kind join_type,
+  std::optional<std::pair<std::size_t, device_span<size_type const>>> const& output_size_data,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
   CUDF_EXPECTS((join_type != join_kind::LEFT_SEMI_JOIN) && (join_type != join_kind::LEFT_ANTI_JOIN),
                "Left semi and anti joins should use mixed_join_semi.");
 
-  auto const right_num_rows{right_conditional.num_rows()};
-  auto const left_num_rows{left_conditional.num_rows()};
-  auto const swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
-
-  // The "probe" table is the table we iterate over during the join operation.
-  // For performance optimization, we choose the larger table as the probe table.
-  // The kernels are launched with one thread per row of the probe table.
-  auto const probe_table_num_rows{swap_tables ? right_num_rows : left_num_rows};
+  auto const right_num_rows = right_conditional.num_rows();
+  auto const left_num_rows  = left_conditional.num_rows();
 
   // We can immediately filter out cases where the right table is empty. In
   // some cases, we return all the rows of the left table with a corresponding
@@ -177,108 +353,64 @@ mixed_join(table_view const& left_equality,
     }
   }
 
-  // If evaluating the expression may produce null outputs we create a nullable
-  // output column and follow the null-supporting expression evaluation code
-  // path.
-  auto const has_nulls = cudf::nullate::DYNAMIC{
-    cudf::has_nulls(left_equality) || cudf::has_nulls(right_equality) ||
-    binary_predicate.may_evaluate_null(left_conditional, right_conditional, stream)};
+  auto setup = setup_mixed_join_common(left_equality,
+                                       right_equality,
+                                       left_conditional,
+                                       right_conditional,
+                                       binary_predicate,
+                                       compare_nulls,
+                                       join_type,
+                                       stream,
+                                       mr);
 
-  auto const parser = ast::detail::expression_parser{
-    binary_predicate, left_conditional, right_conditional, has_nulls, stream, mr};
-  CUDF_EXPECTS(parser.output_type().id() == type_id::BOOL8,
-               "The expression must produce a boolean output.",
-               cudf::data_type_error);
+  bool const is_outer_join =
+    (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN);
 
-  // TODO: The non-conditional join impls start with a dictionary matching,
-  // figure out what that is and what it's needed for (and if conditional joins
-  // need to do the same).
-  auto& probe     = swap_tables ? right_equality : left_equality;
-  auto& build     = swap_tables ? left_equality : right_equality;
-  auto probe_view = table_device_view::create(probe, stream);
-  auto build_view = table_device_view::create(build, stream);
+  // If the join size data was not provided as an input, compute it here.
+  std::size_t join_size = 0;
+  // Using an optional because we only need to allocate a new vector if one was
+  // not passed as input, and rmm::device_uvector is not default constructible
+  std::optional<rmm::device_uvector<size_type>> matches_per_row{};
+  device_span<size_type const> matches_per_row_span{};
 
-  mixed_join_hash_table_t hash_table{
-    cuco::extent{static_cast<std::size_t>(build.num_rows())},
-    cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
-    cuco::empty_key{
-      cuco::pair{std::numeric_limits<hash_value_type>::max(), cudf::detail::JoinNoneValue}},
-    {},
-    {},
-    {},
-    {},
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream.value()},
-    stream.value()};
-
-  // TODO: To add support for nested columns we will need to flatten in many
-  // places. However, this probably isn't worth adding any time soon since we
-  // won't be able to support AST conditions for those types anyway.
-  auto const row_bitmask =
-    cudf::detail::bitmask_and(build, stream, cudf::get_current_device_resource_ref()).first;
-  auto const preprocessed_build = detail::row::equality::preprocessed_table::create(build, stream);
-  build_join_hash_table(build,
-                        preprocessed_build,
-                        hash_table,
-                        has_nulls,
-                        compare_nulls,
-                        static_cast<bitmask_type const*>(row_bitmask.data()),
-                        stream);
-  auto hash_table_storage = cudf::device_span<cuco::pair<hash_value_type, size_type>>{
-    hash_table.data(), hash_table.capacity()};
-
-  auto left_conditional_view  = table_device_view::create(left_conditional, stream);
-  auto right_conditional_view = table_device_view::create(right_conditional, stream);
-
-  // For inner joins we support optimizing the join by launching one thread for
-  // whichever table is larger rather than always using the left table.
-  detail::grid_1d const config(probe_table_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
-  auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
-  join_kind const kernel_join_type =
-    join_type == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : join_type;
-
-  // If the join size was not provided as an input, compute it here.
-  std::size_t join_size;
-
-  auto const preprocessed_probe = detail::row::equality::preprocessed_table::create(probe, stream);
-  auto const row_hash           = cudf::detail::row::hash::row_hasher{preprocessed_probe};
-  auto const hash_probe         = row_hash.device_hasher(has_nulls);
-  auto const row_comparator =
-    cudf::detail::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
-  auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
-
-  auto [input_pairs, hash_indices] =
-    precompute_mixed_join_data(hash_table, hash_probe, probe_table_num_rows, stream, mr);
-
-  if (output_size.has_value()) {
-    join_size = output_size.value();
+  if (output_size_data.has_value()) {
+    join_size            = output_size_data->first;
+    matches_per_row_span = output_size_data->second;
   } else {
-    if (has_nulls) {
-      join_size = launch_compute_mixed_join_output_size<true>(*left_conditional_view,
-                                                              *right_conditional_view,
-                                                              kernel_join_type,
-                                                              equality_probe,
-                                                              hash_table_storage,
-                                                              input_pairs.data(),
-                                                              hash_indices.data(),
-                                                              parser.device_expression_data,
-                                                              swap_tables,
-                                                              config,
-                                                              shmem_size_per_block,
-                                                              stream);
-    } else {
-      join_size = launch_compute_mixed_join_output_size<false>(*left_conditional_view,
-                                                               *right_conditional_view,
-                                                               kernel_join_type,
-                                                               equality_probe,
-                                                               hash_table_storage,
-                                                               input_pairs.data(),
-                                                               hash_indices.data(),
-                                                               parser.device_expression_data,
-                                                               swap_tables,
-                                                               config,
-                                                               shmem_size_per_block,
-                                                               stream);
-    }
+    auto [size, matches] = compute_mixed_join_matches_per_row(setup.has_nulls,
+                                                              *setup.left_conditional_view,
+                                                              *setup.right_conditional_view,
+                                                              is_outer_join,
+                                                              setup.swap_tables,
+                                                              setup.equality_probe,
+                                                              setup.hash_table_storage,
+                                                              setup.input_pairs.data(),
+                                                              setup.hash_indices.data(),
+                                                              setup.parser.device_expression_data,
+                                                              setup.outer_num_rows,
+                                                              setup.config,
+                                                              setup.shmem_size_per_block,
+                                                              stream,
+                                                              mr);
+    join_size            = size;
+    matches_per_row      = std::move(*matches);
+    matches_per_row_span = cudf::device_span<size_type const>{
+      matches_per_row->begin(), static_cast<std::size_t>(setup.outer_num_rows)};
+  }
+
+  // Given the number of matches per row, we need to compute the offsets for insertion.
+  auto join_result_offsets =
+    rmm::device_uvector<size_type>{static_cast<std::size_t>(setup.outer_num_rows), stream, mr};
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+                         matches_per_row_span.begin(),
+                         matches_per_row_span.end(),
+                         join_result_offsets.begin());
+
+  // Get total count from scan result: last offset + last matches_per_row
+  if (setup.outer_num_rows > 0 && !output_size_data.has_value()) {
+    auto const last_offset  = join_result_offsets.element(setup.outer_num_rows - 1, stream);
+    auto const last_matches = matches_per_row->element(setup.outer_num_rows - 1, stream);
+    join_size               = last_offset + last_matches;
   }
 
   // The initial early exit clauses guarantee that we will not reach this point
@@ -298,35 +430,37 @@ mixed_join(table_view const& left_equality,
   auto const& join_output_l = left_indices->data();
   auto const& join_output_r = right_indices->data();
 
-  if (has_nulls) {
-    launch_mixed_join<true>(*left_conditional_view,
-                            *right_conditional_view,
-                            kernel_join_type,
-                            equality_probe,
-                            hash_table_storage,
-                            input_pairs.data(),
-                            hash_indices.data(),
+  if (setup.has_nulls) {
+    launch_mixed_join<true>(*setup.left_conditional_view,
+                            *setup.right_conditional_view,
+                            is_outer_join,
+                            setup.swap_tables,
+                            setup.equality_probe,
+                            setup.hash_table_storage,
+                            setup.input_pairs.data(),
+                            setup.hash_indices.data(),
+                            setup.parser.device_expression_data,
                             join_output_l,
                             join_output_r,
-                            parser.device_expression_data,
-                            swap_tables,
-                            config,
-                            shmem_size_per_block,
+                            join_result_offsets.data(),
+                            setup.config,
+                            setup.shmem_size_per_block,
                             stream);
   } else {
-    launch_mixed_join<false>(*left_conditional_view,
-                             *right_conditional_view,
-                             kernel_join_type,
-                             equality_probe,
-                             hash_table_storage,
-                             input_pairs.data(),
-                             hash_indices.data(),
+    launch_mixed_join<false>(*setup.left_conditional_view,
+                             *setup.right_conditional_view,
+                             is_outer_join,
+                             setup.swap_tables,
+                             setup.equality_probe,
+                             setup.hash_table_storage,
+                             setup.input_pairs.data(),
+                             setup.hash_indices.data(),
+                             setup.parser.device_expression_data,
                              join_output_l,
                              join_output_r,
-                             parser.device_expression_data,
-                             swap_tables,
-                             config,
-                             shmem_size_per_block,
+                             join_result_offsets.data(),
+                             setup.config,
+                             setup.shmem_size_per_block,
                              stream);
   }
 
@@ -342,19 +476,17 @@ mixed_join(table_view const& left_equality,
   return join_indices;
 }
 
-std::size_t compute_mixed_join_output_size(table_view const& left_equality,
-                                           table_view const& right_equality,
-                                           table_view const& left_conditional,
-                                           table_view const& right_conditional,
-                                           ast::expression const& binary_predicate,
-                                           null_equality compare_nulls,
-                                           join_kind join_type,
-                                           rmm::cuda_stream_view stream)
+std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>>
+compute_mixed_join_output_size(table_view const& left_equality,
+                               table_view const& right_equality,
+                               table_view const& left_conditional,
+                               table_view const& right_conditional,
+                               ast::expression const& binary_predicate,
+                               null_equality compare_nulls,
+                               join_kind join_type,
+                               rmm::cuda_stream_view stream,
+                               rmm::device_async_resource_ref mr)
 {
-  // Until we add logic to handle the number of non-matches in the right table,
-  // full joins are not supported in this function. Note that this does not
-  // prevent actually performing full joins since we do that by calculating the
-  // left join and then concatenating the complementary right indices.
   CUDF_EXPECTS(join_type != join_kind::FULL_JOIN,
                "Size estimation is not available for full joins.");
 
@@ -362,161 +494,78 @@ std::size_t compute_mixed_join_output_size(table_view const& left_equality,
     (join_type != join_kind::LEFT_SEMI_JOIN) && (join_type != join_kind::LEFT_ANTI_JOIN),
     "Left semi and anti join size estimation should use compute_mixed_join_output_size_semi.");
 
-  CUDF_EXPECTS(left_conditional.num_rows() == left_equality.num_rows(),
-               "The left conditional and equality tables must have the same number of rows.");
-  CUDF_EXPECTS(right_conditional.num_rows() == right_equality.num_rows(),
-               "The right conditional and equality tables must have the same number of rows.");
+  auto const right_num_rows = right_conditional.num_rows();
+  auto const left_num_rows  = left_conditional.num_rows();
 
-  auto const right_num_rows{right_conditional.num_rows()};
-  auto const left_num_rows{left_conditional.num_rows()};
-  auto const swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
+  // Handle empty table cases early
+  if (right_num_rows == 0 || left_num_rows == 0) {
+    auto const outer_num_rows =
+      ((join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows)) ? right_num_rows
+                                                                                 : left_num_rows;
+    auto matches_per_row = std::make_unique<rmm::device_uvector<size_type>>(
+      static_cast<std::size_t>(outer_num_rows), stream, mr);
+    auto matches_per_row_span = cudf::device_span<size_type>{
+      matches_per_row->begin(), static_cast<std::size_t>(outer_num_rows)};
 
-  // The "probe" table is the table we iterate over during the join operation.
-  // For performance optimization, we choose the larger table as the probe table.
-  // The kernels are launched with one thread per row of the probe table.
-  auto const probe_table_num_rows{swap_tables ? right_num_rows : left_num_rows};
-
-  // We can immediately filter out cases where one table is empty.
-  if (right_num_rows == 0) {
-    switch (join_type) {
-      // Left joins return all the row indices from left with a corresponding NULL from the right.
-      case join_kind::LEFT_JOIN: {
-        return left_num_rows;
-      }
-      // Inner joins return empty output because no matches can exist.
-      case join_kind::INNER_JOIN: {
-        return 0;
-      }
-      default: CUDF_FAIL("Invalid join kind."); break;
-    }
-  } else if (left_num_rows == 0) {
-    switch (join_type) {
-      // Left and inner joins all return empty sets.
-      case join_kind::LEFT_JOIN:
-      case join_kind::INNER_JOIN: {
-        return 0;
-      }
-      default: CUDF_FAIL("Invalid join kind."); break;
+    if (right_num_rows == 0 && join_type == join_kind::LEFT_JOIN) {
+      thrust::fill(rmm::exec_policy_nosync(stream),
+                   matches_per_row_span.begin(),
+                   matches_per_row_span.end(),
+                   1);
+      return {left_num_rows, std::move(matches_per_row)};
+    } else {
+      thrust::fill(rmm::exec_policy_nosync(stream),
+                   matches_per_row_span.begin(),
+                   matches_per_row_span.end(),
+                   0);
+      return {0, std::move(matches_per_row)};
     }
   }
 
-  auto mr = cudf::get_current_device_resource_ref();
+  auto setup = setup_mixed_join_common(left_equality,
+                                       right_equality,
+                                       left_conditional,
+                                       right_conditional,
+                                       binary_predicate,
+                                       compare_nulls,
+                                       join_type,
+                                       stream,
+                                       mr);
 
-  // If evaluating the expression may produce null outputs we create a nullable
-  // output column and follow the null-supporting expression evaluation code
-  // path.
-  auto const has_nulls = cudf::nullate::DYNAMIC{
-    cudf::has_nulls(left_equality) || cudf::has_nulls(right_equality) ||
-    binary_predicate.may_evaluate_null(left_conditional, right_conditional, stream)};
+  bool const is_outer_join = (join_type == join_kind::LEFT_JOIN);
 
-  auto const parser = ast::detail::expression_parser{
-    binary_predicate, left_conditional, right_conditional, has_nulls, stream, mr};
-  CUDF_EXPECTS(parser.output_type().id() == type_id::BOOL8,
-               "The expression must produce a boolean output.",
-               cudf::data_type_error);
-
-  // TODO: The non-conditional join impls start with a dictionary matching,
-  // figure out what that is and what it's needed for (and if conditional joins
-  // need to do the same).
-  auto& probe     = swap_tables ? right_equality : left_equality;
-  auto& build     = swap_tables ? left_equality : right_equality;
-  auto probe_view = table_device_view::create(probe, stream);
-  auto build_view = table_device_view::create(build, stream);
-
-  mixed_join_hash_table_t hash_table{
-    cuco::extent{static_cast<size_t>(build.num_rows())},
-    cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
-    cuco::empty_key{
-      cuco::pair{std::numeric_limits<hash_value_type>::max(), cudf::detail::JoinNoneValue}},
-    {},
-    {},
-    {},
-    {},
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream.value()},
-    stream.value()};
-
-  // TODO: To add support for nested columns we will need to flatten in many
-  // places. However, this probably isn't worth adding any time soon since we
-  // won't be able to support AST conditions for those types anyway.
-  auto const row_bitmask        = cudf::detail::bitmask_and(build, stream, mr).first;
-  auto const preprocessed_build = detail::row::equality::preprocessed_table::create(build, stream);
-  build_join_hash_table(build,
-                        preprocessed_build,
-                        hash_table,
-                        has_nulls,
-                        compare_nulls,
-                        static_cast<bitmask_type const*>(row_bitmask.data()),
-                        stream);
-  auto hash_table_storage = cudf::device_span<cuco::pair<hash_value_type, size_type>>{
-    hash_table.data(), hash_table.capacity()};
-
-  auto left_conditional_view  = table_device_view::create(left_conditional, stream);
-  auto right_conditional_view = table_device_view::create(right_conditional, stream);
-
-  // For inner joins we support optimizing the join by launching one thread for
-  // whichever table is larger rather than always using the left table.
-  detail::grid_1d const config(probe_table_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
-  auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
-
-  auto const preprocessed_probe = detail::row::equality::preprocessed_table::create(probe, stream);
-  auto const row_hash           = cudf::detail::row::hash::row_hasher{preprocessed_probe};
-  auto const hash_probe         = row_hash.device_hasher(has_nulls);
-  auto const row_comparator =
-    cudf::detail::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
-  auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
-
-  // Precompute input pairs and hash indices using common utility function
-  auto [input_pairs, hash_indices] =
-    precompute_mixed_join_data(hash_table, hash_probe, probe_table_num_rows, stream, mr);
-
-  // Determine number of output rows without actually building the output to simply
-  // find what the size of the output will be.
-  std::size_t const size = [&]() {
-    if (has_nulls) {
-      return launch_compute_mixed_join_output_size<true>(*left_conditional_view,
-                                                         *right_conditional_view,
-                                                         join_type,
-                                                         equality_probe,
-                                                         hash_table_storage,
-                                                         input_pairs.data(),
-                                                         hash_indices.data(),
-                                                         parser.device_expression_data,
-                                                         swap_tables,
-                                                         config,
-                                                         shmem_size_per_block,
-                                                         stream);
-    } else {
-      return launch_compute_mixed_join_output_size<false>(*left_conditional_view,
-                                                          *right_conditional_view,
-                                                          join_type,
-                                                          equality_probe,
-                                                          hash_table_storage,
-                                                          input_pairs.data(),
-                                                          hash_indices.data(),
-                                                          parser.device_expression_data,
-                                                          swap_tables,
-                                                          config,
-                                                          shmem_size_per_block,
-                                                          stream);
-    }
-  }();
-
-  return size;
+  // Use the helper function to compute matches per row
+  return compute_mixed_join_matches_per_row(setup.has_nulls,
+                                            *setup.left_conditional_view,
+                                            *setup.right_conditional_view,
+                                            is_outer_join,
+                                            setup.swap_tables,
+                                            setup.equality_probe,
+                                            setup.hash_table_storage,
+                                            setup.input_pairs.data(),
+                                            setup.hash_indices.data(),
+                                            setup.parser.device_expression_data,
+                                            setup.outer_num_rows,
+                                            setup.config,
+                                            setup.shmem_size_per_block,
+                                            stream,
+                                            mr);
 }
 
 }  // namespace detail
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-mixed_inner_join(table_view const& left_equality,
-                 table_view const& right_equality,
-                 table_view const& left_conditional,
-                 table_view const& right_conditional,
-                 ast::expression const& binary_predicate,
-                 null_equality compare_nulls,
-                 std::optional<std::size_t> const output_size,
-                 rmm::cuda_stream_view stream,
-                 rmm::device_async_resource_ref mr)
+mixed_inner_join(
+  table_view const& left_equality,
+  table_view const& right_equality,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
+  ast::expression const& binary_predicate,
+  null_equality compare_nulls,
+  std::optional<std::pair<std::size_t, device_span<size_type const>>> const output_size_data,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::mixed_join(left_equality,
@@ -526,18 +575,20 @@ mixed_inner_join(table_view const& left_equality,
                             binary_predicate,
                             compare_nulls,
                             detail::join_kind::INNER_JOIN,
-                            output_size,
+                            output_size_data,
                             stream,
                             mr);
 }
 
-std::size_t mixed_inner_join_size(table_view const& left_equality,
-                                  table_view const& right_equality,
-                                  table_view const& left_conditional,
-                                  table_view const& right_conditional,
-                                  ast::expression const& binary_predicate,
-                                  null_equality compare_nulls,
-                                  rmm::cuda_stream_view stream)
+std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_inner_join_size(
+  table_view const& left_equality,
+  table_view const& right_equality,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
+  ast::expression const& binary_predicate,
+  null_equality compare_nulls,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::compute_mixed_join_output_size(left_equality,
@@ -547,7 +598,8 @@ std::size_t mixed_inner_join_size(table_view const& left_equality,
                                                 binary_predicate,
                                                 compare_nulls,
                                                 detail::join_kind::INNER_JOIN,
-                                                stream);
+                                                stream,
+                                                mr);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -558,7 +610,7 @@ mixed_left_join(table_view const& left_equality,
                 table_view const& right_conditional,
                 ast::expression const& binary_predicate,
                 null_equality compare_nulls,
-                std::optional<std::size_t> const output_size,
+                output_size_data_type const output_size_data,
                 rmm::cuda_stream_view stream,
                 rmm::device_async_resource_ref mr)
 {
@@ -570,18 +622,20 @@ mixed_left_join(table_view const& left_equality,
                             binary_predicate,
                             compare_nulls,
                             detail::join_kind::LEFT_JOIN,
-                            output_size,
+                            output_size_data,
                             stream,
                             mr);
 }
 
-std::size_t mixed_left_join_size(table_view const& left_equality,
-                                 table_view const& right_equality,
-                                 table_view const& left_conditional,
-                                 table_view const& right_conditional,
-                                 ast::expression const& binary_predicate,
-                                 null_equality compare_nulls,
-                                 rmm::cuda_stream_view stream)
+std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_left_join_size(
+  table_view const& left_equality,
+  table_view const& right_equality,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
+  ast::expression const& binary_predicate,
+  null_equality compare_nulls,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::compute_mixed_join_output_size(left_equality,
@@ -591,7 +645,8 @@ std::size_t mixed_left_join_size(table_view const& left_equality,
                                                 binary_predicate,
                                                 compare_nulls,
                                                 detail::join_kind::LEFT_JOIN,
-                                                stream);
+                                                stream,
+                                                mr);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -602,7 +657,7 @@ mixed_full_join(table_view const& left_equality,
                 table_view const& right_conditional,
                 ast::expression const& binary_predicate,
                 null_equality compare_nulls,
-                std::optional<std::size_t> const output_size,
+                output_size_data_type const output_size_data,
                 rmm::cuda_stream_view stream,
                 rmm::device_async_resource_ref mr)
 {
@@ -614,7 +669,7 @@ mixed_full_join(table_view const& left_equality,
                             binary_predicate,
                             compare_nulls,
                             detail::join_kind::FULL_JOIN,
-                            output_size,
+                            output_size_data,
                             stream,
                             mr);
 }

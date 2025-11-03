@@ -8,6 +8,7 @@ import polars as pl
 
 from cudf_polars import Translator
 from cudf_polars.dsl import ir
+from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.utils.versions import POLARS_VERSION_LT_1323
@@ -56,7 +57,11 @@ def test_cache(request):
             return result
 
     node_cache = HitCounter()
-    qir.evaluate(cache=node_cache, timer=None)
+    qir.evaluate(
+        cache=node_cache,
+        timer=None,
+        context=IRExecutionContext.from_config_options(t.config_options),
+    )
     assert len(node_cache) == 0
     assert node_cache.hits == 3
 

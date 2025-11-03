@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
@@ -30,6 +19,7 @@
 #include <jit/cache.hpp>
 #include <jit/helpers.hpp>
 #include <jit/parser.hpp>
+#include <jit/row_ir.hpp>
 #include <jit/span.cuh>
 #include <jit/util.hpp>
 #include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
@@ -42,10 +32,7 @@ namespace {
 jitify2::Kernel get_kernel(std::string const& kernel_name, std::string const& cuda_source)
 {
   return cudf::jit::get_program_cache(*transform_jit_kernel_cu_jit)
-    .get_kernel(kernel_name,
-                {},
-                {{"cudf/detail/operation-udf.hpp", cuda_source}},
-                {"-arch=sm_.", "--device-int128"});
+    .get_kernel(kernel_name, {}, {{"cudf/detail/operation-udf.hpp", cuda_source}}, {"-arch=sm_."});
 }
 
 jitify2::ConfiguredKernel build_transform_kernel(
@@ -318,8 +305,7 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
                "Optional types are not supported in PTX UDFs",
                std::invalid_argument);
 
-  auto const base_column = std::max_element(
-    inputs.begin(), inputs.end(), [](auto& a, auto& b) { return a.size() < b.size(); });
+  auto const base_column = cudf::jit::get_transform_base_column(inputs);
 
   transformation::jit::perform_checks(*base_column, output_type, inputs);
 
@@ -347,6 +333,25 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
 {
   CUDF_FUNC_RANGE();
   return detail::transform(inputs, udf, output_type, is_ptx, user_data, is_null_aware, stream, mr);
+}
+
+std::unique_ptr<column> compute_column_jit(table_view const& table,
+                                           ast::expression const& expr,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr)
+{
+  cudf::detail::row_ir::ast_args ast_args{.table = table};
+  auto args = cudf::detail::row_ir::ast_converter::compute_column(
+    cudf::detail::row_ir::target::CUDA, expr, ast_args, stream, mr);
+
+  return cudf::transform(args.columns,
+                         args.udf,
+                         args.output_type,
+                         args.is_ptx,
+                         args.user_data,
+                         args.is_null_aware,
+                         stream,
+                         mr);
 }
 
 }  // namespace cudf

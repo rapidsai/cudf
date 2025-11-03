@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -605,6 +594,11 @@ struct corresponding_rolling_operator<InputType, aggregation::Kind::VARIANCE> {
 };
 
 template <typename InputType>
+struct corresponding_rolling_operator<InputType, aggregation::Kind::STD> {
+  using type = DeviceRollingVariance<InputType>;  // uses the variance agg
+};
+
+template <typename InputType>
 struct corresponding_rolling_operator<InputType, aggregation::Kind::LEAD> {
   using type = DeviceRollingLead<InputType>;
 };
@@ -629,6 +623,16 @@ template <typename InputType>
 struct create_rolling_operator<InputType, aggregation::Kind::VARIANCE> {
   auto operator()(size_type min_periods, rolling_aggregation const& agg)
   {
+    return DeviceRollingVariance<InputType>{
+      min_periods, dynamic_cast<cudf::detail::var_aggregation const&>(agg)._ddof};
+  }
+};
+
+template <typename InputType>
+struct create_rolling_operator<InputType, aggregation::Kind::STD> {
+  auto operator()(size_type min_periods, rolling_aggregation const& agg)
+  {
+    // uses the variance agg
     return DeviceRollingVariance<InputType>{
       min_periods, dynamic_cast<cudf::detail::var_aggregation const&>(agg)._ddof};
   }

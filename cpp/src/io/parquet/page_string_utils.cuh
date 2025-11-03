@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -169,9 +158,12 @@ __device__ void update_string_offsets_for_pruned_pages(
   namespace cg = cooperative_groups;
 
   // Initial string offset
-  auto const initial_value = state->page.str_offset;
-  auto value_count         = state->page.num_input_values;
-  auto const tid           = cg::this_thread_block().thread_rank();
+  auto const initial_value = page.str_offset;
+  // The value count is either the leaf-level batch size in case of lists or the number of
+  // effective rows being read by this page
+  auto const value_count =
+    has_lists ? page.nesting[state->col.max_nesting_depth - 1].batch_size : state->num_rows;
+  auto const tid = cg::this_thread_block().thread_rank();
 
   // Offsets pointer contains string sizes in case of large strings and actual offsets
   // otherwise
@@ -189,10 +181,6 @@ __device__ void update_string_offsets_for_pruned_pages(
     auto const input_col_idx       = page.chunk_idx % chunks_per_rowgroup;
     compute_initial_large_strings_offset<has_lists>(state, initial_str_offsets[input_col_idx]);
   } else {
-    // if no repetition we haven't calculated start/end bounds and instead just skipped
-    // values until we reach first_row. account for that here.
-    if constexpr (not has_lists) { value_count -= state->first_row; }
-
     // Write the initial offset at all positions to indicate zero sized strings
     for (int idx = tid; idx < value_count; idx += block_size) {
       offptr[idx] = initial_value;
@@ -245,7 +233,11 @@ __device__ inline int calc_threads_per_string_log2(int avg_string_length)  // re
  * @param t The current thread's index
  * @param string_output_offset Starting offset into the output column data for writing
  */
-template <int block_size, bool has_lists_t, bool split_decode_t, typename state_buf>
+template <int block_size,
+          bool has_lists_t,
+          bool split_decode_t,
+          copy_mode copy_mode_t,
+          typename state_buf>
 __device__ size_t decode_strings(
   page_state_s* s, state_buf* const sb, int start, int end, int t, size_t string_output_offset)
 {
@@ -265,9 +257,13 @@ __device__ size_t decode_strings(
 
     // Index from value buffer (doesn't include nulls) to final array (has gaps for nulls)
     int const dst_pos = [&]() {
-      int dst_pos = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(thread_pos)];
-      if constexpr (!has_lists_t) { dst_pos -= s->first_row; }
-      return dst_pos;
+      if constexpr (copy_mode_t == copy_mode::DIRECT) {
+        return thread_pos - s->first_row;
+      } else {
+        int dst_pos = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(thread_pos)];
+        if constexpr (!has_lists_t) { dst_pos -= s->first_row; }
+        return dst_pos;
+      }
     }();
 
     // src_pos represents the logical row position we want to read from. But in the case of

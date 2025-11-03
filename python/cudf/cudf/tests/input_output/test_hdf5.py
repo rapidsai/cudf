@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import os
 from string import ascii_letters
@@ -46,7 +47,7 @@ def pdf(request):
 @pytest.fixture
 def gdf(pdf):
     pdf, nrows = pdf
-    return (cudf.DataFrame.from_pandas(pdf), nrows)
+    return (cudf.DataFrame(pdf), nrows)
 
 
 @pytest.fixture(params=["fixed", "table"])

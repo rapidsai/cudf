@@ -1,18 +1,7 @@
 /*
  *
- *  Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ *  SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ *  SPDX-License-Identifier: Apache-2.0
  *
  */
 
@@ -2465,11 +2454,11 @@ public class TableTest extends CudfTestBase {
              .column(  0,   1, 2,   3,   4,   5,   6, 7, 8,   9)
              .column(inv, inv, 2, inv, inv, inv, inv, 0, 1, inv)
              .build()) {
-      long rowCount = Table.mixedLeftJoinRowCount(leftKeys, rightKeys, left, right,
+      MixedJoinSize sizeInfo = Table.mixedLeftJoinSize(leftKeys, rightKeys, left, right,
           condition, NullEquality.UNEQUAL);
-      assertEquals(expected.getRowCount(), rowCount);
+      assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
       GatherMap[] maps = Table.mixedLeftJoinGatherMaps(leftKeys, rightKeys, left, right, condition,
-          NullEquality.UNEQUAL, rowCount);
+          NullEquality.UNEQUAL, sizeInfo);
       try {
         verifyJoinGatherMaps(maps, expected);
       } finally {
@@ -2501,11 +2490,11 @@ public class TableTest extends CudfTestBase {
              .column(0,   1,   2,   3,   4,   5,   6, 7, 7, 8,   9)
              .column(0, inv, inv, inv, inv, inv, inv, 0, 2, 1, inv)
              .build()) {
-      long rowCount = Table.mixedLeftJoinRowCount(leftKeys, rightKeys, left, right,
+      MixedJoinSize sizeInfo = Table.mixedLeftJoinSize(leftKeys, rightKeys, left, right,
           condition, NullEquality.EQUAL);
-      assertEquals(expected.getRowCount(), rowCount);
+      assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
       GatherMap[] maps = Table.mixedLeftJoinGatherMaps(leftKeys, rightKeys, left, right, condition,
-              NullEquality.EQUAL, rowCount);
+              NullEquality.EQUAL, sizeInfo);
       try {
         verifyJoinGatherMaps(maps, expected);
       } finally {
@@ -2980,11 +2969,11 @@ public class TableTest extends CudfTestBase {
              .column(2, 7, 8)
              .column(2, 0, 1)
              .build()) {
-      long rowCount = Table.mixedInnerJoinRowCount(leftKeys, rightKeys, left, right,
+      MixedJoinSize sizeInfo = Table.mixedInnerJoinSize(leftKeys, rightKeys, left, right,
           condition, NullEquality.UNEQUAL);
-      assertEquals(expected.getRowCount(), rowCount);
+      assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
       GatherMap[] maps = Table.mixedInnerJoinGatherMaps(leftKeys, rightKeys, left, right, condition,
-          NullEquality.UNEQUAL, rowCount);
+          NullEquality.UNEQUAL, sizeInfo);
       try {
         verifyJoinGatherMaps(maps, expected);
       } finally {
@@ -3015,11 +3004,11 @@ public class TableTest extends CudfTestBase {
              .column(0, 7, 7, 8)
              .column(0, 0, 2, 1)
              .build()) {
-      long rowCount = Table.mixedInnerJoinRowCount(leftKeys, rightKeys, left, right,
+      MixedJoinSize sizeInfo = Table.mixedInnerJoinSize(leftKeys, rightKeys, left, right,
           condition, NullEquality.EQUAL);
-      assertEquals(expected.getRowCount(), rowCount);
+      assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
       GatherMap[] maps = Table.mixedInnerJoinGatherMaps(leftKeys, rightKeys, left, right, condition,
-          NullEquality.EQUAL, rowCount);
+          NullEquality.EQUAL, sizeInfo);
       try {
         verifyJoinGatherMaps(maps, expected);
       } finally {

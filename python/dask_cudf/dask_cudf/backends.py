@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import warnings
 from collections.abc import Iterator
@@ -61,15 +62,9 @@ def _nonempty_index(idx):
         values = cudf.core.column.as_column(data)
         return cudf.DatetimeIndex(values, name=idx.name)
     elif isinstance(idx, cudf.CategoricalIndex):
-        values = cudf.core.column.CategoricalColumn(
-            data=None,
-            size=None,
-            dtype=idx.dtype,
-            children=(
-                cudf.core.column.as_column([0, 0], dtype=np.dtype(np.uint8)),
-            ),
-        )
-        return cudf.CategoricalIndex(values, name=idx.name)
+        codes = cudf.core.column.as_column([0, 0], dtype=np.dtype(np.uint8))
+        column = codes._with_type_metadata(idx.dtype)
+        return cudf.CategoricalIndex._from_column(column, name=idx.name)
     elif isinstance(idx, cudf.MultiIndex):
         levels = [meta_nonempty(lev) for lev in idx.levels]
         codes = [[0, 0]] * idx.nlevels
@@ -110,13 +105,10 @@ def _get_non_empty_data(
             dtype=np.dtype(np.uint8),
             length=2,
         )
-        return cudf.core.column.CategoricalColumn(
-            data=None,
-            size=codes.size,
-            dtype=cudf.CategoricalDtype(
+        return codes._with_type_metadata(
+            cudf.CategoricalDtype(
                 categories=categories, ordered=s.dtype.ordered
-            ),
-            children=(codes,),  # type: ignore[arg-type]
+            )
         )
     elif isinstance(s.dtype, cudf.ListDtype):
         leaf_type = s.dtype.leaf_type

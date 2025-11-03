@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import decimal
 import string
 
@@ -88,7 +89,7 @@ def test_dataframe_transpose(
             data[:] = null_rep
         pdf[colname] = data
 
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     got_function = gdf.transpose()
     got_property = gdf.T
@@ -126,7 +127,7 @@ def test_dataframe_transpose_category():
         }
     )
 
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     got_function = gdf.transpose()
     got_property = gdf.T

@@ -1,23 +1,11 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
 #include <cudf/column/column_view.hpp>
-#include <cudf/concatenate.hpp>
 #include <cudf/detail/interop.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
@@ -39,21 +27,11 @@ struct generated_test_data {
       string_data(length),
       validity(length),
       bool_validity(length),
-      list_int64_data(3 * length),
-      list_int64_data_validity(3 * length),
       list_offsets(length + 1)
   {
-    cudf::size_type length_of_individual_list = 3;
+    auto validity_generator = []() { return rand() % 7 != 0; };
 
     std::generate(int64_data.begin(), int64_data.end(), []() { return rand() % 500000; });
-    std::generate(list_int64_data.begin(), list_int64_data.end(), []() { return rand() % 500000; });
-    auto validity_generator = []() { return rand() % 7 != 0; };
-    std::generate(
-      list_int64_data_validity.begin(), list_int64_data_validity.end(), validity_generator);
-    std::generate(
-      list_offsets.begin(), list_offsets.end(), [length_of_individual_list, n = 0]() mutable {
-        return (n++) * length_of_individual_list;
-      });
     std::generate(bool_data.begin(), bool_data.end(), validity_generator);
     std::generate(
       string_data.begin(), string_data.end(), []() { return rand() % 7 != 0 ? "CUDF" : "Rocks"; });
@@ -64,6 +42,18 @@ struct generated_test_data {
                    bool_validity.cend(),
                    std::back_inserter(bool_data_validity),
                    [](auto val) { return static_cast<uint8_t>(val); });
+    list_validity = bool_data_validity;
+
+    constexpr cudf::size_type length_of_individual_list = 3;
+    list_offsets[0]                                     = 0;
+    for (cudf::size_type i = 0; i < length; ++i) {
+      list_offsets[i + 1] = list_offsets[i] + (list_validity[i] ? length_of_individual_list : 0);
+    }
+    list_int64_data.resize(list_offsets.back());
+    list_int64_data_validity.resize(list_int64_data.size());
+    std::generate(list_int64_data.begin(), list_int64_data.end(), []() { return rand() % 500000; });
+    std::generate(
+      list_int64_data_validity.begin(), list_int64_data_validity.end(), validity_generator);
   }
 
   std::vector<int64_t> int64_data;
@@ -75,6 +65,7 @@ struct generated_test_data {
   std::vector<int64_t> list_int64_data;
   std::vector<uint8_t> list_int64_data_validity;
   std::vector<int32_t> list_offsets;
+  std::vector<uint8_t> list_validity;
 };
 
 // no-op allocator/deallocator to set into ArrowArray buffers that we don't

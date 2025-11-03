@@ -1,15 +1,8 @@
 # =============================================================================
-# Copyright (c) 2021-2025, NVIDIA CORPORATION.
-#
-# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
-# in compliance with the License. You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software distributed under the License
-# is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
-# or implied. See the License for the specific language governing permissions and limitations under
-# the License.
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
 # =============================================================================
 
 # Create `jitify_preprocess` executable
@@ -48,7 +41,7 @@ function(jit_preprocess_files)
         $<TARGET_FILE:jitify_preprocess> ${ARG_FILE} -o ${ARG_OUTPUT_DIR} -i -std=c++20
         -remove-unused-globals -D_FILE_OFFSET_BITS=64 -D__CUDACC_RTC__ -DCUDF_RUNTIME_JIT
         -I${CUDF_SOURCE_DIR}/include -I${CUDF_SOURCE_DIR}/src ${includes}
-        --no-preinclude-workarounds --no-replace-pragma-once --diag-suppress=47
+        --no-preinclude-workarounds --no-replace-pragma-once --diag-suppress=47 --device-int128
       COMMENT "Custom command to JIT-compile files."
     )
   endforeach()

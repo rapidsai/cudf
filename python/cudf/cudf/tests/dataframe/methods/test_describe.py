@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
 import pandas as pd
@@ -151,7 +152,7 @@ def test_dataframe_describe_include_all():
     [None, "all", ["object"], ["int"], ["object", "int", "category"]],
 )
 def test_describe_misc_include(pdf, include):
-    df = cudf.DataFrame.from_pandas(pdf)
+    df = cudf.DataFrame(pdf)
 
     expected = pdf.describe(include=include)
     actual = df.describe(include=include)
@@ -211,7 +212,7 @@ def test_describe_misc_include(pdf, include):
     "exclude", [None, ["object"], ["int"], ["object", "int", "category"]]
 )
 def test_describe_misc_exclude(pdf, exclude):
-    df = cudf.DataFrame.from_pandas(pdf)
+    df = cudf.DataFrame(pdf)
 
     expected = pdf.describe(exclude=exclude)
     actual = df.describe(exclude=exclude)

@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
 import pandas as pd
@@ -120,7 +121,7 @@ def test_to_arrow(nelem, all_supported_types_as_str):
             ),
         }
     )
-    gdf = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
 
     pa_df = pa.Table.from_pandas(
         df, preserve_index=False
@@ -146,7 +147,7 @@ def test_to_arrow(nelem, all_supported_types_as_str):
 
 def test_to_arrow_categorical():
     df = pd.DataFrame({"a": pd.Series(["a", "b", "c"], dtype="category")})
-    gdf = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
 
     pa_df = pa.Table.from_pandas(
         df, preserve_index=False

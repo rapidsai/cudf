@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -381,7 +370,7 @@ std::unique_ptr<table> stable_segmented_sort_by_key(
  *
  * @param col Column to compute top k
  * @param k Number of values to return
- * @param sort_order The desired sort order for the top k values.
+ * @param topk_order The desired sort order for the top k values.
  *                   Default is high to low.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
@@ -390,7 +379,7 @@ std::unique_ptr<table> stable_segmented_sort_by_key(
 std::unique_ptr<column> top_k(
   column_view const& col,
   size_type k,
-  order sort_order                  = order::DESCENDING,
+  order topk_order                  = order::DESCENDING,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -404,7 +393,7 @@ std::unique_ptr<column> top_k(
  *
  * @param col Column to compute top k
  * @param k Number of values to return
- * @param sort_order The desired sort order for the top k values.
+ * @param topk_order The desired sort order for the top k values.
  *                   Default is high to low.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
@@ -413,7 +402,7 @@ std::unique_ptr<column> top_k(
 std::unique_ptr<column> top_k_order(
   column_view const& col,
   size_type k,
-  order sort_order                  = order::DESCENDING,
+  order topk_order                  = order::DESCENDING,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -439,7 +428,7 @@ std::unique_ptr<column> top_k_order(
  * @param col Column to compute top k
  * @param segment_offsets Start offset index for each contiguous segment
  * @param k Number of values to return for each segment
- * @param sort_order DESCENDING is the largest k values (default).
+ * @param topk_order DESCENDING is the largest k values (default).
  *                   ASCENDING is the smallest k values.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
@@ -449,7 +438,7 @@ std::unique_ptr<column> segmented_top_k(
   column_view const& col,
   column_view const& segment_offsets,
   size_type k,
-  order sort_order                  = order::DESCENDING,
+  order topk_order                  = order::DESCENDING,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -475,7 +464,7 @@ std::unique_ptr<column> segmented_top_k(
  * @param col Column to compute top k
  * @param segment_offsets Start offset index for each contiguous segment
  * @param k Number of values to return for each segment
- * @param sort_order DESCENDING is the indices of the largest k values (default).
+ * @param topk_order DESCENDING is the indices of the largest k values (default).
  *                   ASCENDING is the indices of the smallest k values.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
@@ -485,7 +474,7 @@ std::unique_ptr<column> segmented_top_k_order(
   column_view const& col,
   column_view const& segment_offsets,
   size_type k,
-  order sort_order                  = order::DESCENDING,
+  order topk_order                  = order::DESCENDING,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "parquet_common.hpp"
@@ -251,8 +240,8 @@ int read_dict_bits(std::unique_ptr<cudf::io::datasource> const& source,
                    cudf::io::parquet::PageLocation const& page_loc)
 {
   using namespace cudf::io::parquet;
-  CUDF_EXPECTS(page_loc.offset > 0, "Cannot find page header");
-  CUDF_EXPECTS(page_loc.compressed_page_size > 0, "Invalid page header length");
+  CUDF_EXPECTS(page_loc.offset > 0, "Cannot find data page header");
+  CUDF_EXPECTS(page_loc.compressed_page_size > 0, "Invalid data page header length");
 
   PageHeader page_hdr;
   auto const page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
@@ -667,7 +656,7 @@ std::pair<cudf::table, std::string> create_parquet_typed_with_stats(std::string 
   auto col2 = testdata::unordered<T>();
 
   auto const written_table = table_view{{col0, col1, col2}};
-  auto const filepath      = temp_env->get_temp_filepath("FilterTyped.parquet");
+  auto const filepath      = temp_env->get_temp_filepath(filename);
   {
     cudf::io::table_input_metadata expected_metadata(written_table);
     expected_metadata.column_metadata[0].set_name("col0");

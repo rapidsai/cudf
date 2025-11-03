@@ -1,15 +1,8 @@
 # =============================================================================
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
-#
-# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
-# in compliance with the License. You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software distributed under the License
-# is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
-# or implied. See the License for the specific language governing permissions and limitations under
-# the License.
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
 # =============================================================================
 
 find_package(Threads REQUIRED)
@@ -175,7 +168,6 @@ ConfigureNVBench(NDSH_Q10_NVBENCH ndsh/q10.cpp ndsh/utilities.cpp)
 
 # ##################################################################################################
 # * filter benchmark -------------------------------------------------------------------
-
 ConfigureNVBench(FILTER_NVBENCH filter/minmax_filter.cpp)
 
 # ##################################################################################################
@@ -268,11 +260,6 @@ ConfigureNVBench(FILL_NVBENCH filling/repeat.cpp)
 
 # ##################################################################################################
 # * groupby benchmark -----------------------------------------------------------------------------
-ConfigureBench(
-  GROUPBY_BENCH groupby/group_sum.cpp groupby/group_nth.cpp groupby/group_shift.cpp
-  groupby/group_struct_values.cpp groupby/group_no_requests.cpp groupby/group_scan.cpp
-)
-
 ConfigureNVBench(
   GROUPBY_NVBENCH
   groupby/group_complex_keys.cpp
@@ -280,9 +267,15 @@ ConfigureNVBench(
   groupby/group_m2_var_std.cpp
   groupby/group_max.cpp
   groupby/group_max_multithreaded.cpp
+  groupby/group_no_requests.cpp
+  groupby/group_nth.cpp
   groupby/group_nunique.cpp
   groupby/group_rank.cpp
+  groupby/group_scan.cpp
+  groupby/group_shift.cpp
   groupby/group_struct_keys.cpp
+  groupby/group_struct_values.cpp
+  groupby/group_sum.cpp
 )
 
 # ##################################################################################################
@@ -323,11 +316,29 @@ ConfigureNVBench(
 )
 
 # ##################################################################################################
+# * parquet reader filter benchmark
+# ----------------------------------------------------------------------
+ConfigureNVBench(PARQUET_READER_FILTER_NVBENCH io/parquet/parquet_reader_filter.cpp)
+
+# ##################################################################################################
 # * parquet experimental reader benchmark
 # ----------------------------------------------------------------------
 ConfigureNVBench(
   PARQUET_EXPERIMENTAL_READER_NVBENCH io/parquet/experimental/parquet_dictionary_page_filter.cpp
 )
+
+# ##################################################################################################
+# * parquet deletion vector benchmark
+# ----------------------------------------------------------------------
+ConfigureNVBench(
+  PARQUET_DELETION_VECTORS_NVBENCH io/parquet/experimental/parquet_deletion_vectors.cpp
+)
+target_compile_definitions(
+  PARQUET_DELETION_VECTORS_NVBENCH
+  PRIVATE DISABLENEON=1 ROARING_DISABLE_X64=1 ROARING_DISABLE_AVX=1
+          CROARING_COMPILER_SUPPORTS_AVX512=0
+)
+target_link_libraries(PARQUET_DELETION_VECTORS_NVBENCH PRIVATE roaring)
 
 # ##################################################################################################
 # * parquet multithread reader benchmark
@@ -412,6 +423,7 @@ ConfigureNVBench(
   string/find.cpp
   string/find_instance.cpp
   string/find_multiple.cpp
+  string/intcast.cpp
   string/join_strings.cpp
   string/lengths.cpp
   string/like.cpp

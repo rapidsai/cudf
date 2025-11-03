@@ -1,4 +1,5 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -6,6 +7,7 @@ from typing import Any, overload
 
 import pyarrow as pa
 
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.column import Column
@@ -16,6 +18,8 @@ from pylibcudf.types import DataType
 @dataclass
 class ColumnMetadata:
     name: str = ...
+    timezone: str = ...
+    precision: int | None = ...
     children_meta: list[ColumnMetadata] = ...
 
 @overload
@@ -25,9 +29,20 @@ def from_arrow(
     obj: pa.Scalar[Any], *, data_type: DataType | None = None
 ) -> Scalar: ...
 @overload
-def from_arrow(obj: pa.Array[Any]) -> Column: ...
+def from_arrow(
+    obj: pa.Array[Any],
+    *,
+    data_type: DataType | None = None,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
 @overload
-def from_arrow(obj: pa.Table) -> Table: ...
+def from_arrow(
+    obj: pa.Table,
+    *,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Table: ...
 @overload
 def to_arrow(
     obj: DataType,
@@ -51,6 +66,12 @@ def to_arrow(
     obj: Scalar, metadata: ColumnMetadata | str | None = None
 ) -> pa.Scalar[Any]: ...
 def from_dlpack(
-    managed_tensor: Any, stream: Stream | None = None
+    managed_tensor: Any,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
-def to_dlpack(input: Table, stream: Stream | None = None) -> Any: ...
+def to_dlpack(
+    input: Table,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Any: ...

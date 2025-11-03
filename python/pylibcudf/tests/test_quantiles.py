@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
 import pyarrow as pa
@@ -174,7 +175,7 @@ def test_quantiles(
             "interp cannot be an arithmetic interpolation strategy for quantiles"
         )
 
-    pa_tbl_data = plc.interop.to_arrow(plc_tbl_data, ["a", "b"])
+    pa_tbl_data = plc_tbl_data.to_arrow(["a", "b"])
 
     expect = _pyarrow_quantiles(
         pa_tbl_data,
@@ -227,6 +228,6 @@ def test_quantile_q_array_like(col_data, q):
 )
 def test_quantiles_q_array_like(plc_tbl_data, q):
     got = plc.quantiles.quantiles(plc_tbl_data, q=q)
-    pa_tbl_data = plc.interop.to_arrow(plc_tbl_data, ["a", "b"])
+    pa_tbl_data = plc_tbl_data.to_arrow(["a", "b"])
     expect = _pyarrow_quantiles(pa_tbl_data, q=q)
     assert_table_eq(expect, got)

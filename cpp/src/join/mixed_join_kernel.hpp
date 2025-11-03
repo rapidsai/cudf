@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -33,7 +22,9 @@ namespace CUDF_EXPORT cudf {
 namespace detail {
 
 /**
- * @brief Performs a mixed join using hash lookup and expression evaluation.
+ * @brief Performs a join using the combination of a hash lookup to identify
+ * equal rows between one pair of tables and the evaluation of an expression
+ * containing an arbitrary expression.
  *
  * This method probes the hash table with each row in the probe table using a
  * custom equality comparator that also checks that the conditional expression
@@ -42,37 +33,36 @@ namespace detail {
  *
  * @tparam has_nulls Whether or not the inputs may contain nulls.
  *
- * @param left_table The left table
- * @param right_table The right table
- * @param join_type The type of join to be performed
- * @param equality_probe The equality comparator used when probing the hash table
- * @param hash_table_storage The hash table storage for probing operations
- * @param input_pairs Array of hash-value/row-index pairs for probing
- * @param hash_indices Array of hash index pairs for efficient lookup
- * @param join_output_l The left result of the join operation
- * @param join_output_r The right result of the join operation
- * @param device_expression_data Container of device data required to evaluate the desired
- * expression
- * @param swap_tables If true, the kernel was launched with one thread per right row and
- * the kernel needs to internally loop over left rows. Otherwise, loop over right rows
- * @param config Grid configuration for kernel launch
- * @param shmem_size_per_block Shared memory size per block in bytes
- * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param[in] left_table The left table
+ * @param[in] right_table The right table
+ * @param[in] join_type The type of join to be performed
+ * @param[in] equality_probe The equality comparator used when probing the hash table.
+ * @param[in] hash_table_storage Device span of the hash table storage
+ * @param[in] input_pairs Precomputed input pairs for probing
+ * @param[in] hash_indices Precomputed hash indices for efficient probing
+ * @param[out] join_output_l The left result of the join operation
+ * @param[out] join_output_r The right result of the join operation
+ * @param[in] device_expression_data Container of device data required to evaluate the desired
+ * expression.
+ * @param[in] join_result_offsets Prefix sum of matches_per_row to get output offsets
+ * @param[in] swap_tables If true, the kernel was launched with one thread per right row and
+ * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
  */
 template <bool has_nulls>
 void launch_mixed_join(
-  cudf::table_device_view left_table,
-  cudf::table_device_view right_table,
-  join_kind join_type,
+  table_device_view left_table,
+  table_device_view right_table,
+  bool is_outer_join,
+  bool swap_tables,
   row_equality equality_probe,
   cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
-  cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
-  cudf::size_type* join_output_l,
-  cudf::size_type* join_output_r,
+  cuda::std::pair<uint32_t, uint32_t> const* hash_indices,
   cudf::ast::detail::expression_device_view device_expression_data,
-  bool swap_tables,
-  detail::grid_1d const& config,
+  size_type* join_output_l,
+  size_type* join_output_r,
+  cudf::size_type const* join_result_offsets,
+  detail::grid_1d config,
   int64_t shmem_size_per_block,
   rmm::cuda_stream_view stream);
 

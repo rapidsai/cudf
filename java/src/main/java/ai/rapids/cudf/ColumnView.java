@@ -1,18 +1,7 @@
 /*
  *
- *  Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ *  SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ *  SPDX-License-Identifier: Apache-2.0
  *
  */
 
@@ -1105,51 +1094,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(dateTimeRound(getNativeView(), freq.getNativeId()));
   }
 
-  /**
-   * Rounds all the values in a column to the specified number of decimal places.
-   *
-   * @param decimalPlaces Number of decimal places to round to. If negative, this
-   *                      specifies the number of positions to the left of the decimal point.
-   * @param mode          Rounding method(either HALF_UP or HALF_EVEN)
-   * @return a new ColumnVector with rounded values.
-   */
-  public ColumnVector round(int decimalPlaces, RoundMode mode) {
-    return new ColumnVector(round(this.getNativeView(), decimalPlaces, mode.nativeId));
-  }
-
-  /**
-   * Rounds all the values in a column with decimal places = 0. Default number of decimal places
-   * to round to is 0.
-   *
-   * @param round Rounding method(either HALF_UP or HALF_EVEN)
-   * @return a new ColumnVector with rounded values.
-   */
-  public ColumnVector round(RoundMode round) {
-    return round(0, round);
-  }
-
-  /**
-   * Rounds all the values in a column to the specified number of decimal places with HALF_UP
-   * (default) as Rounding method.
-   *
-   * @param decimalPlaces Number of decimal places to round to. If negative, this
-   *                      specifies the number of positions to the left of the decimal point.
-   * @return a new ColumnVector with rounded values.
-   */
-  public ColumnVector round(int decimalPlaces) {
-    return round(decimalPlaces, RoundMode.HALF_UP);
-  }
-
-  /**
-   * Rounds all the values in a column with these default values:
-   * decimalPlaces = 0
-   * Rounding method = RoundMode.HALF_UP
-   *
-   * @return a new ColumnVector with rounded values.
-   */
-  public ColumnVector round() {
-    return round(0, RoundMode.HALF_UP);
-  }
 
   /////////////////////////////////////////////////////////////////////////////
   // ARITHMETIC
@@ -1395,6 +1339,28 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public Scalar sum(DType outType) {
     return reduce(ReductionAggregation.sum(), outType);
+  }
+
+  /**
+   * Find and return a scalar of type INT32 containing index of the minimum value in the column.
+   * If there are multiple minimum values, index of the first encountered minimum value is returned.
+   * If the input column is empty or all nulls, an empty scalar is returned.
+   *
+   * If the input is floating point type and contains NaNs, the result is undefined.
+   */
+  public Scalar argMin() {
+    return reduce(ReductionAggregation.argMin(), DType.INT32);
+  }
+
+  /**
+   * Find and return a scalar of type INT32 containing the index of the maximum value in the column.
+   * If there are multiple maximum values, index of the first encountered maximum value is returned.
+   * If the input column is empty or all nulls, an empty scalar is returned.
+   *
+   * If the input is floating point type and contains NaNs, the result is undefined.
+   */
+  public Scalar argMax() {
+    return reduce(ReductionAggregation.argMax(), DType.INT32);
   }
 
   /**
@@ -4709,7 +4675,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long findAndReplaceAll(long valuesHandle, long replaceHandle, long myself) throws CudfException;
 
-  private static native long round(long nativeHandle, int decimalPlaces, int roundingMethod) throws CudfException;
 
   private static native long reverseStringsOrLists(long inputHandle);
 

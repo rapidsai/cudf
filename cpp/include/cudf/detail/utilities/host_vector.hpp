@@ -1,17 +1,6 @@
 /*
- *  Copyright 2024 NVIDIA Corporation
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ *  SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION
+ *  SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -20,6 +9,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/aligned.hpp>
 
@@ -103,12 +93,20 @@ class rmm_host_allocator {
    */
   rmm_host_allocator() = delete;
 
+#if CCCL_MAJOR_VERSION > 3 || (CCCL_MAJOR_VERSION == 3 && CCCL_MINOR_VERSION >= 1)
+  template <class... Properties>
+  using async_host_resource_ref = cuda::mr::resource_ref<cuda::mr::host_accessible, Properties...>;
+#else
+  template <class... Properties>
+  using async_host_resource_ref =
+    cuda::mr::async_resource_ref<cuda::mr::host_accessible, Properties...>;
+#endif
+
   /**
    * @brief Construct from a `cudf::host_async_resource_ref`
    */
   template <class... Properties>
-  rmm_host_allocator(cuda::mr::async_resource_ref<cuda::mr::host_accessible, Properties...> _mr,
-                     rmm::cuda_stream_view _stream)
+  rmm_host_allocator(async_host_resource_ref<Properties...> _mr, rmm::cuda_stream_view _stream)
     : mr(_mr),
       stream(_stream),
       _is_device_accessible{contains_property<cuda::mr::device_accessible, Properties...>}
@@ -145,7 +143,7 @@ class rmm_host_allocator {
    *        It is the responsibility of the caller to destroy
    *        the objects stored at \p p.
    */
-  inline void deallocate(pointer p, size_type cnt)
+  inline void deallocate(pointer p, size_type cnt) noexcept
   {
     mr.deallocate_async(p, cnt * sizeof(value_type), rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream);
   }
@@ -202,6 +200,17 @@ class host_vector : public thrust::host_vector<T, rmm_host_allocator<T>> {
   host_vector(rmm_host_allocator<T> const& alloc) : base(alloc) {}
 
   host_vector(size_t size, rmm_host_allocator<T> const& alloc) : base(size, alloc) {}
+
+  [[nodiscard]] operator host_span<T const>() const
+  {
+    return host_span<T const>{
+      base::data(), base::size(), base::get_allocator().is_device_accessible()};
+  }
+
+  [[nodiscard]] operator host_span<T>()
+  {
+    return host_span<T>{base::data(), base::size(), base::get_allocator().is_device_accessible()};
+  }
 };
 
 }  // namespace detail

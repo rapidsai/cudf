@@ -1,15 +1,8 @@
 # =============================================================================
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
-#
-# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
-# in compliance with the License. You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software distributed under the License
-# is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
-# or implied. See the License for the specific language governing permissions and limitations under
-# the License.
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
 # =============================================================================
 
 # ##################################################################################################
@@ -25,7 +18,7 @@ rapids_test_init()
 function(ConfigureTest CMAKE_TEST_NAME)
   set(options)
   set(one_value GPUS PERCENT STREAM_MODE)
-  set(multi_value EXTRA_LIBS)
+  set(multi_value EXTRA_LIBS EXTRA_COMPILE_DEFINITIONS)
   cmake_parse_arguments(_CUDF_TEST "${options}" "${one_value}" "${multi_value}" ${ARGN})
 
   if(NOT DEFINED _CUDF_TEST_GPUS AND NOT DEFINED _CUDF_TEST_PERCENT)
@@ -60,6 +53,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
 
   target_compile_definitions(
     ${CMAKE_TEST_NAME} PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1
+                               ${_CUDF_TEST_EXTRA_COMPILE_DEFINITIONS}
   )
 
   target_link_libraries(
@@ -161,7 +155,7 @@ ConfigureTest(
   groupby/sum_of_squares_tests.cpp
   groupby/sum_scan_tests.cpp
   groupby/sum_tests.cpp
-  groupby/tdigest_tests.cu
+  groupby/tdigest_tests.cpp
   groupby/var_tests.cpp
   GPUS 1
   PERCENT 100
@@ -229,7 +223,7 @@ ConfigureTest(
   reductions/reduction_tests.cpp
   reductions/scan_tests.cpp
   reductions/segmented_reduction_tests.cpp
-  reductions/tdigest_tests.cu
+  reductions/tdigest_tests.cpp
   GPUS 1
   PERCENT 70
 )
@@ -342,6 +336,19 @@ ConfigureTest(
   io/parquet_test.cpp
 )
 ConfigureTest(
+  PARQUET_DELETION_VECTORS_TEST
+  io/parquet_deletion_vectors_test.cu
+  io/parquet_common.cpp
+  io/parquet_test.cpp
+  EXTRA_LIBS
+  roaring
+  EXTRA_COMPILE_DEFINITIONS
+  DISABLENEON=1
+  ROARING_DISABLE_X64=1
+  ROARING_DISABLE_AVX=1
+  CROARING_COMPILER_SUPPORTS_AVX512=0
+)
+ConfigureTest(
   JSON_TEST io/json/json_test.cpp io/json/json_chunked_reader.cu
   GPUS 1
   PERCENT 30 EXTRA_LIBS ${ARROW_LIBRARIES}
@@ -401,7 +408,7 @@ ConfigureTest(
   copying/utility_tests.cpp
   copying/reverse_tests.cpp
   GPUS 1
-  PERCENT 70
+  PERCENT 100
 )
 
 # ##################################################################################################
@@ -413,6 +420,7 @@ ConfigureTest(
   utilities_tests/column_debug_tests.cpp
   utilities_tests/column_utilities_tests.cpp
   utilities_tests/column_wrapper_tests.cpp
+  utilities_tests/context_tests.cpp
   utilities_tests/default_stream_tests.cpp
   utilities_tests/io_utilities_tests.cpp
   utilities_tests/lists_column_wrapper_tests.cpp
@@ -472,14 +480,17 @@ ConfigureTest(
 
 # ##################################################################################################
 # * table tests -----------------------------------------------------------------------------------
+ConfigureTest(TABLE_TEST table/table_tests.cpp table/table_view_tests.cu)
+
+# ##################################################################################################
+# * row operator tests ----------------------------------------------------------------------------
 ConfigureTest(
-  TABLE_TEST
-  table/table_tests.cpp
-  table/table_view_tests.cu
-  table/row_operators_tests.cpp
-  table/experimental_row_operator_tests.cu
-  table/row_operator_tests_utilities.cu
-  table/row_operator_tests_utilities2.cu
+  ROW_OPERATOR_TEST
+  row_operator/row_operator_tests.cu
+  row_operator/nan_tests.cpp
+  row_operator/self_comparison_utilities.cu
+  row_operator/two_table_comparison_utilities.cu
+  row_operator/two_table_equality_utilities.cu
 )
 
 # ##################################################################################################
@@ -701,6 +712,8 @@ ConfigureTest(LABEL_BINS_TEST labeling/label_bins_tests.cpp)
 ConfigureTest(JIT_PARSER_TEST jit/parse_ptx_function.cpp)
 target_include_directories(JIT_PARSER_TEST PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
 
+ConfigureTest(ROW_IR_TEST jit/row_ir.cpp)
+
 # ##################################################################################################
 # * stream testing ---------------------------------------------------------------------------------
 if(CUDF_BUILD_STREAMS_TEST_UTIL)
@@ -726,6 +739,9 @@ ConfigureTest(
 )
 ConfigureTest(STREAM_IO_ORC_TEST streams/io/orc_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_IO_PARQUET_TEST streams/io/parquet_test.cpp STREAM_MODE testing)
+ConfigureTest(
+  STREAM_IO_HYBRID_SCAN_TEST streams/io/experimental/hybrid_scan_test.cpp STREAM_MODE testing
+)
 ConfigureTest(STREAM_JOIN_TEST streams/join_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_LABELING_BINS_TEST streams/labeling_bins_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_LISTS_TEST streams/lists_test.cpp STREAM_MODE testing)

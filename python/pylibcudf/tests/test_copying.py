@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -1025,10 +1026,9 @@ def test_get_element(input_column):
     index = 1
     pa_input_column, plc_input_column = input_column
     result = plc.copying.get_element(plc_input_column, index)
-
     assert (
-        plc.interop.to_arrow(
-            result, metadata_from_arrow_type(pa_input_column.type)
+        result.to_arrow(
+            metadata=metadata_from_arrow_type(pa_input_column.type)
         ).as_py()
         == pa_input_column[index].as_py()
     )

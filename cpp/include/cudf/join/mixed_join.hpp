@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -39,6 +28,15 @@ namespace CUDF_EXPORT cudf {
  */
 
 /**
+ * @brief Type alias for output size data used in mixed joins.
+ *
+ * This type represents an optional pair containing:
+ * - The exact output size of the join operation
+ * - A device span of per-row match counts for each row in the larger input table
+ */
+using output_size_data_type = std::optional<std::pair<std::size_t, device_span<size_type const>>>;
+
+/**
  * @brief Returns a pair of row index vectors corresponding to all pairs of
  * rows between the specified tables where the columns of the equality table
  * are equal and the predicate evaluates to true on the conditional tables.
@@ -53,7 +51,7 @@ namespace CUDF_EXPORT cudf {
  * responsibility to choose a suitable compare_nulls value AND use appropriate
  * null-safe operators in the expression.
  *
- * If the specified output size is less than the actual output size, the behavior is undefined.
+ * If the provided output size or per-row counts are incorrect, behavior is undefined.
  *
  * @code{.pseudo}
  * left_equality: {{0, 1, 2}}
@@ -76,7 +74,8 @@ namespace CUDF_EXPORT cudf {
  * @param right_conditional The right table used for the conditional join
  * @param binary_predicate The condition on which to join
  * @param compare_nulls Whether or not null values join to each other or not
- * @param output_size An optional value indicating the exact output size (may be
+ * @param output_size_data An optional pair of values indicating the exact output size and the
+ * number of matches for each row in the larger of the two input tables, left or right (may be
  * precomputed using the corresponding mixed_inner_join_size API).
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
@@ -92,7 +91,7 @@ mixed_inner_join(table_view const& left_equality,
                  table_view const& right_conditional,
                  ast::expression const& binary_predicate,
                  null_equality compare_nulls            = null_equality::EQUAL,
-                 std::optional<std::size_t> output_size = {},
+                 output_size_data_type output_size_data = {},
                  rmm::cuda_stream_view stream           = cudf::get_default_stream(),
                  rmm::device_async_resource_ref mr      = cudf::get_current_device_resource_ref());
 
@@ -113,7 +112,7 @@ mixed_inner_join(table_view const& left_equality,
  * responsibility to choose a suitable compare_nulls value AND use appropriate
  * null-safe operators in the expression.
  *
- * If the specified output size is less than the actual output size, the behavior is undefined.
+ * If the provided output size or per-row counts are incorrect, behavior is undefined.
  *
  * @code{.pseudo}
  * left_equality: {{0, 1, 2}}
@@ -136,7 +135,8 @@ mixed_inner_join(table_view const& left_equality,
  * @param right_conditional The right table used for the conditional join
  * @param binary_predicate The condition on which to join
  * @param compare_nulls Whether or not null values join to each other or not
- * @param output_size An optional value indicating the exact output size (may be
+ * @param output_size_data An optional pair of values indicating the exact output size and the
+ * number of matches for each row in the larger of the two input tables, left or right (may be
  * precomputed using the corresponding mixed_left_join_size API).
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
@@ -152,7 +152,7 @@ mixed_left_join(table_view const& left_equality,
                 table_view const& right_conditional,
                 ast::expression const& binary_predicate,
                 null_equality compare_nulls            = null_equality::EQUAL,
-                std::optional<std::size_t> output_size = {},
+                output_size_data_type output_size_data = {},
                 rmm::cuda_stream_view stream           = cudf::get_default_stream(),
                 rmm::device_async_resource_ref mr      = cudf::get_current_device_resource_ref());
 
@@ -173,7 +173,7 @@ mixed_left_join(table_view const& left_equality,
  * responsibility to choose a suitable compare_nulls value AND use appropriate
  * null-safe operators in the expression.
  *
- * If the specified output size is less than the actual output size, the behavior is undefined.
+ * If the provided output size or per-row counts are incorrect, behavior is undefined.
  *
  * @code{.pseudo}
  * left_equality: {{0, 1, 2}}
@@ -196,7 +196,9 @@ mixed_left_join(table_view const& left_equality,
  * @param right_conditional The right table used for the conditional join
  * @param binary_predicate The condition on which to join
  * @param compare_nulls Whether or not null values join to each other or not
- * @param output_size An optional value indicating the exact output size
+ * @param output_size_data An optional pair of values indicating the exact output size and the
+ * number of matches for each row in the larger of the two input tables, left or right (may be
+ * precomputed using the corresponding mixed_full_join_size API).
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
@@ -211,7 +213,7 @@ mixed_full_join(table_view const& left_equality,
                 table_view const& right_conditional,
                 ast::expression const& binary_predicate,
                 null_equality compare_nulls            = null_equality::EQUAL,
-                std::optional<std::size_t> output_size = {},
+                output_size_data_type output_size_data = {},
                 rmm::cuda_stream_view stream           = cudf::get_default_stream(),
                 rmm::device_async_resource_ref mr      = cudf::get_current_device_resource_ref());
 
@@ -334,16 +336,23 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
  * @param binary_predicate The condition on which to join
  * @param compare_nulls Whether or not null values join to each other or not
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
- * @return The size that would result from performing the requested join.
+ * @return A pair containing the size that would result from performing the
+ * requested join and the number of matches for each row in one of the two
+ * tables. Which of the two tables is an implementation detail and should not
+ * be relied upon, simply passed to the corresponding `mixed_inner_join` API as
+ * is.
  */
-std::size_t mixed_inner_join_size(table_view const& left_equality,
-                                  table_view const& right_equality,
-                                  table_view const& left_conditional,
-                                  table_view const& right_conditional,
-                                  ast::expression const& binary_predicate,
-                                  null_equality compare_nulls  = null_equality::EQUAL,
-                                  rmm::cuda_stream_view stream = cudf::get_default_stream());
+std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_inner_join_size(
+  table_view const& left_equality,
+  table_view const& right_equality,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
+  ast::expression const& binary_predicate,
+  null_equality compare_nulls       = null_equality::EQUAL,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns the exact number of matches (rows) when performing a
@@ -369,16 +378,23 @@ std::size_t mixed_inner_join_size(table_view const& left_equality,
  * @param binary_predicate The condition on which to join
  * @param compare_nulls Whether or not null values join to each other or not
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
- * @return The size that would result from performing the requested join.
+ * @return A pair containing the size that would result from performing the
+ * requested join and the number of matches for each row in one of the two
+ * tables. Which of the two tables is an implementation detail and should not
+ * be relied upon, simply passed to the corresponding `mixed_left_join` API as
+ * is.
  */
-std::size_t mixed_left_join_size(table_view const& left_equality,
-                                 table_view const& right_equality,
-                                 table_view const& left_conditional,
-                                 table_view const& right_conditional,
-                                 ast::expression const& binary_predicate,
-                                 null_equality compare_nulls  = null_equality::EQUAL,
-                                 rmm::cuda_stream_view stream = cudf::get_default_stream());
+std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_left_join_size(
+  table_view const& left_equality,
+  table_view const& right_equality,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
+  ast::expression const& binary_predicate,
+  null_equality compare_nulls       = null_equality::EQUAL,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 

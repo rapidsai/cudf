@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import cupy as cp
 import numpy as np
@@ -102,7 +103,7 @@ def test_unique_fails_value_error():
         ValueError,
         match="Must pass cudf.Series, cudf.Index, or cupy.ndarray object",
     ):
-        cudf.unique(cudf.DataFrame.from_pandas(df))
+        cudf.unique(cudf.DataFrame(df))
 
 
 def test_unique_fails_not_implemented_error():

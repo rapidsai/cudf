@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
 import pandas as pd
@@ -27,7 +28,7 @@ def test_series_take(ntake):
 def test_series_take_positional():
     psr = pd.Series([1, 2, 3, 4, 5], index=["a", "b", "c", "d", "e"])
 
-    gsr = cudf.Series.from_pandas(psr)
+    gsr = cudf.Series(psr)
 
     take_indices = [1, 2, 0, 3]
 

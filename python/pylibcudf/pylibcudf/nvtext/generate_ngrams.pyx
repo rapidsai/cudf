@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libc.stdint cimport uint32_t
 from libcpp.memory cimport unique_ptr
@@ -14,7 +15,8 @@ from pylibcudf.libcudf.nvtext.generate_ngrams cimport (
 from pylibcudf.libcudf.scalar.scalar cimport string_scalar
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
-from pylibcudf.utils cimport _get_stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 __all__ = [
@@ -24,7 +26,11 @@ __all__ = [
 ]
 
 cpdef Column generate_ngrams(
-    Column input, size_type ngrams, Scalar separator, Stream stream=None
+    Column input,
+    size_type ngrams,
+    Scalar separator,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Returns a single column of strings by generating ngrams from a strings column.
@@ -51,19 +57,24 @@ cpdef Column generate_ngrams(
     cdef const string_scalar* c_separator = <const string_scalar*>separator.c_obj.get()
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_generate_ngrams(
             c_strings,
             ngrams,
             c_separator[0],
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Column generate_character_ngrams(
-    Column input, size_type ngrams = 2, Stream stream=None
+    Column input,
+    size_type ngrams = 2,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Returns a lists column of ngrams of characters within each string.
@@ -87,18 +98,24 @@ cpdef Column generate_character_ngrams(
     cdef column_view c_strings = input.view()
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_generate_character_ngrams(
             c_strings,
             ngrams,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Column hash_character_ngrams(
-    Column input, size_type ngrams, uint32_t seed, Stream stream=None
+    Column input,
+    size_type ngrams,
+    uint32_t seed,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Returns a lists column of hash values of the characters in each string
@@ -124,12 +141,14 @@ cpdef Column hash_character_ngrams(
     cdef column_view c_strings = input.view()
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_hash_character_ngrams(
             c_strings,
             ngrams,
             seed,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)

@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import codecs
 import gzip
@@ -1854,7 +1855,7 @@ def test_csv_write_no_caller_manipulation():
 @pytest.mark.parametrize("index", [True, False])
 @pytest.mark.parametrize("columns", [["a"], [""], None])
 def test_csv_write_empty_column_name(pdf, index, columns):
-    df = cudf.DataFrame.from_pandas(pdf)
+    df = cudf.DataFrame(pdf)
     expected = pdf.to_csv(index=index, columns=columns)
     actual = df.to_csv(index=index, columns=columns)
 
@@ -2136,7 +2137,7 @@ def test_default_integer_bitwidth_extremes(
     # Test that integer columns in csv are _inferred_ as user specified
     # bitwidth
     buf = BytesIO()
-    cudf.DataFrame.from_pandas(numeric_extremes_dataframe).to_csv(buf)
+    cudf.DataFrame(numeric_extremes_dataframe).to_csv(buf)
     buf.seek(0)
     read = cudf.read_csv(buf)
 

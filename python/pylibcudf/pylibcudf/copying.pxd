@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp cimport bool as cbool
 from pylibcudf.libcudf.copying cimport (
@@ -7,6 +8,7 @@ from pylibcudf.libcudf.copying cimport (
 )
 from pylibcudf.libcudf.types cimport size_type
 
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
@@ -38,17 +40,28 @@ cpdef Table gather(
     Table source_table,
     Column gather_map,
     out_of_bounds_policy bounds_policy,
-    Stream stream=*
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef Table scatter(
-    TableOrListOfScalars source, Column scatter_map, Table target_table, Stream stream=*
+    TableOrListOfScalars source,
+    Column scatter_map,
+    Table target_table,
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
 
-cpdef ColumnOrTable empty_like(ColumnOrTable input)
+cpdef ColumnOrTable empty_like(
+    ColumnOrTable input, Stream stream=*, DeviceMemoryResource mr=*
+)
 
 cpdef Column allocate_like(
-    Column input_column, mask_allocation_policy policy, size=*, Stream stream=*
+    Column input_column,
+    mask_allocation_policy policy,
+    size=*,
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef Column copy_range_in_place(
@@ -57,7 +70,7 @@ cpdef Column copy_range_in_place(
     size_type input_begin,
     size_type input_end,
     size_type target_begin,
-    Stream stream=*
+    Stream stream=*,
 )
 
 cpdef Column copy_range(
@@ -66,10 +79,17 @@ cpdef Column copy_range(
     size_type input_begin,
     size_type input_end,
     size_type target_begin,
-    Stream stream=*
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
 
-cpdef Column shift(Column input, size_type offset, Scalar fill_value, Stream stream=*)
+cpdef Column shift(
+    Column input,
+    size_type offset,
+    Scalar fill_value,
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
+)
 
 cpdef list slice(ColumnOrTable input, list indices, Stream stream=*)
 
@@ -79,14 +99,21 @@ cpdef Column copy_if_else(
     LeftCopyIfElseOperand lhs,
     RightCopyIfElseOperand rhs,
     Column boolean_mask,
-    Stream stream=*
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef Table boolean_mask_scatter(
     TableOrListOfScalars input,
     Table target,
     Column boolean_mask,
-    Stream stream=*
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
 
-cpdef Scalar get_element(Column input_column, size_type index, Stream stream=*)
+cpdef Scalar get_element(
+    Column input_column,
+    size_type index,
+    Stream stream=*,
+    DeviceMemoryResource mr=*
+)

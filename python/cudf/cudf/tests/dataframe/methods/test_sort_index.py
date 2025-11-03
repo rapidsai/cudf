@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import itertools
 
 import numpy as np
@@ -16,7 +17,7 @@ from cudf.testing import assert_eq
 
 def test_dataframe_empty_sort_index():
     pdf = pd.DataFrame({"x": []})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     expect = pdf.sort_index()
     got = gdf.sort_index()
@@ -50,7 +51,7 @@ def test_dataframe_sort_index(
         {"b": [1, 3, 2], "a": [1, 4, 3], "c": [4, 1, 5]},
         index=index,
     )
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     expected = pdf.sort_index(
         axis=axis,
@@ -116,7 +117,7 @@ def test_dataframe_mulitindex_sort_index(
             "d": [1, 2, 8],
         }
     ).set_index(["b", "a", 1])
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     expected = pdf.sort_index(
         axis=axis,

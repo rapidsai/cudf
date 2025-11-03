@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libc.stddef cimport size_t
 from libc.stdint cimport int32_t
@@ -7,6 +8,7 @@ from pylibcudf.libcudf.types cimport (
     size_of as cpp_size_of,
     size_type,
     type_id,
+    bitmask_type
 )
 from pylibcudf.libcudf.utilities.type_dispatcher cimport type_to_id
 
@@ -23,6 +25,13 @@ from pylibcudf.libcudf.types import order as Order  # no-cython-lint, isort:skip
 from pylibcudf.libcudf.types import sorted as Sorted  # no-cython-lint, isort:skip
 
 from functools import cache
+
+try:
+    import pyarrow as pa
+    pa_err = None
+except ImportError as e:
+    pa = None
+    pa_err = e
 
 try:
     import pyarrow as pa
@@ -189,6 +198,60 @@ cdef class DataType:
         ret.c_obj = dt
         return ret
 
+    def to_arrow(self, **kwargs):
+        """
+        Convert a datatype to arrow.
+
+        Returns
+        -------
+        pyarrow.DataType
+
+        Notes
+        -----
+        Translation of some types requires extra information as a keyword
+        argument. Specifically:
+
+        - When translating a decimal type, provide ``precision``
+        - When translating a struct type, provide ``fields``
+        - When translating a list type, provide the wrapped ``value_type``
+        """
+        if pa_err is not None:
+            raise RuntimeError(
+                "pyarrow was not found on your system. Please "
+                "pip install pylibcudf with the [pyarrow] extra for a "
+                "compatible pyarrow version."
+            ) from pa_err
+        if self.id() in {
+            type_id.DECIMAL32,
+            type_id.DECIMAL64,
+            type_id.DECIMAL128
+        }:
+            if not (precision := kwargs.get("precision")):
+                raise ValueError(
+                    "Precision must be provided for decimal types"
+                )
+                # no pa.decimal32 or pa.decimal64
+            return pa.decimal128(precision, -self.scale())
+        elif self.id() == type_id.STRUCT:
+            if not (fields := kwargs.get("fields")):
+                raise ValueError(
+                    "Fields must be provided for struct types"
+                )
+            return pa.struct(fields)
+        elif self.id() == type_id.LIST:
+            if not (value_type := kwargs.get("value_type")):
+                raise ValueError(
+                    "Value type must be provided for list types"
+                )
+            return pa.list_(value_type)
+        else:
+            try:
+                return LIBCUDF_TO_ARROW_TYPES[self.id()]
+            except KeyError:
+                raise TypeError(
+                    f"Unable to convert {self.id()} to arrow datatype"
+                )
+
     @staticmethod
     def from_arrow(pa_typ) -> DataType:
         """
@@ -307,6 +370,8 @@ def _from_arrow(obj: pa.DataType) -> DataType:
 
 SIZE_TYPE = DataType(type_to_id[size_type]())
 SIZE_TYPE_ID = SIZE_TYPE.id()
+BITMASK_TYPE = DataType(type_to_id[bitmask_type]())
+
 
 TypeId.__str__ = TypeId.__repr__
 NanPolicy.__str__ = NanPolicy.__repr__

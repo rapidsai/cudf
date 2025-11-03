@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import pyarrow as pa
 import pytest
@@ -21,14 +22,13 @@ def test_minhash(minhash_input_data, width):
         if seed_type == pa.uint32()
         else plc.nvtext.minhash.minhash64
     )
-    result = minhash_func(
+    pa_result = minhash_func(
         plc.Column.from_arrow(input_arr),
         0,
         plc.Column.from_arrow(seeds),
         plc.Column.from_arrow(seeds),
         width,
-    )
-    pa_result = plc.interop.to_arrow(result)
+    ).to_arrow()
     assert all(
         len(got) == len(seeds)
         for got, s in zip(pa_result, input_arr, strict=True)
@@ -70,14 +70,13 @@ def test_minhash_ngrams(minhash_ngrams_input_data, ngrams):
         if seed_type == pa.uint32()
         else plc.nvtext.minhash.minhash64_ngrams
     )
-    result = minhash_func(
+    pa_result = minhash_func(
         plc.Column.from_arrow(input_arr),
         ngrams,
         0,
         plc.Column.from_arrow(ab),
         plc.Column.from_arrow(ab),
-    )
-    pa_result = plc.interop.to_arrow(result)
+    ).to_arrow()
     assert all(
         len(got) == len(ab)
         for got, s in zip(pa_result, input_arr, strict=True)

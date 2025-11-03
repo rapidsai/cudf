@@ -1,21 +1,11 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "join_common_utils.cuh"
 
+#include <cudf/join/join.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -48,6 +38,12 @@ bool is_trivial_join(table_view const& left, table_view const& right, join_kind 
   // return immediately
   if ((join_kind::LEFT_SEMI_JOIN == join_type) && (0 == right.num_rows())) { return true; }
 
+  // If left semi- or anti- join, and the left table is empty, return immediately
+  if ((join_kind::LEFT_SEMI_JOIN == join_type || join_kind::LEFT_ANTI_JOIN == join_type) &&
+      (0 == left.num_rows())) {
+    return true;
+  }
+
   return false;
 }
 
@@ -62,7 +58,7 @@ get_trivial_left_join_indices(table_view const& left,
   auto right_indices =
     std::make_unique<rmm::device_uvector<size_type>>(left.num_rows(), stream, mr);
   thrust::uninitialized_fill(
-    rmm::exec_policy(stream), right_indices->begin(), right_indices->end(), JoinNoneValue);
+    rmm::exec_policy(stream), right_indices->begin(), right_indices->end(), cudf::JoinNoMatch);
   return std::pair(std::move(left_indices), std::move(right_indices));
 }
 
@@ -106,8 +102,8 @@ get_left_join_indices_complement(std::unique_ptr<rmm::device_uvector<size_type>>
   // If left table is empty in a full join call then all rows of the right table
   // should be represented in the joined indices. This is an optimization since
   // if left table is empty and full join is called all the elements in
-  // right_indices will be JoinNoneValue, i.e. -1. This if path should
-  // produce exactly the same result as the else path but will be faster.
+  // right_indices will be cudf::JoinNoMatch, i.e. `cuda::std::numeric_limits<size_type>::min()`.
+  // This if path should produce exactly the same result as the else path but will be faster.
   if (left_table_row_count == 0) {
     thrust::sequence(rmm::exec_policy(stream),
                      right_indices_complement->begin(),
@@ -151,7 +147,7 @@ get_left_join_indices_complement(std::unique_ptr<rmm::device_uvector<size_type>>
   thrust::uninitialized_fill(rmm::exec_policy(stream),
                              left_invalid_indices->begin(),
                              left_invalid_indices->end(),
-                             JoinNoneValue);
+                             cudf::JoinNoMatch);
 
   return std::pair(std::move(left_invalid_indices), std::move(right_indices_complement));
 }

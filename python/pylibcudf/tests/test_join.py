@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
 import pyarrow as pa
@@ -79,7 +80,9 @@ def test_conditional_join(
     pleft = plc.Table.from_arrow(left)
     pright = plc.Table.from_arrow(right)
 
-    g_left, g_right = map(plc.interop.to_arrow, join_type(pleft, pright, expr))
+    g_left, g_right = map(
+        lambda self: self.to_arrow(), join_type(pleft, pright, expr)
+    )
 
     assert set(g_left.to_pylist()) == expect_left
     assert set(g_right.to_pylist()) == expect_right
@@ -97,7 +100,7 @@ def test_conditional_semianti_join(left, right, expr, join_type, expect):
     pleft = plc.Table.from_arrow(left)
     pright = plc.Table.from_arrow(right)
 
-    g_left = plc.interop.to_arrow(join_type(pleft, pright, expr))
+    g_left = join_type(pleft, pright, expr).to_arrow()
 
     assert set(g_left.to_pylist()) == expect
 
@@ -127,7 +130,7 @@ def test_mixed_join(
     pright = plc.Table.from_arrow(right)
 
     g_left, g_right = map(
-        plc.interop.to_arrow,
+        lambda self: self.to_arrow(),
         join_type(
             plc.Table(pleft.columns()[1:]),
             plc.Table(pright.columns()[1:]),
@@ -161,15 +164,13 @@ def test_mixed_semianti_join(
     pleft = plc.Table.from_arrow(left)
     pright = plc.Table.from_arrow(right)
 
-    g_left = plc.interop.to_arrow(
-        join_type(
-            plc.Table(pleft.columns()[1:]),
-            plc.Table(pright.columns()[1:]),
-            pleft,
-            pright,
-            expr,
-            null_equality,
-        )
-    )
+    g_left = join_type(
+        plc.Table(pleft.columns()[1:]),
+        plc.Table(pright.columns()[1:]),
+        pleft,
+        pright,
+        expr,
+        null_equality,
+    ).to_arrow()
 
     assert set(g_left.to_pylist()) == expect

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -27,6 +16,29 @@
 #include <vector>
 
 namespace CUDF_EXPORT cudf {
+
+namespace detail {
+namespace row_ir {
+
+/**
+ * @brief The base class for all IR nodes
+ *
+ * This class defines the interface for IR nodes, which can be instantiated and used to generate
+ * code. Each IR node represents a specific operation or value in the program. They represent a
+ * single-static-assignment (SSA) variable in the program IR. It is separate from the AST as it
+ * contains more detailed program information and analysis that would be needed to instantiate the
+ * program and generate correct and robust code.
+ */
+struct node;
+
+/**
+ * @brief A converter that converts AST expressions to IR nodes and CUDA UDFs.
+ */
+struct ast_converter;
+
+}  // namespace row_ir
+}  // namespace detail
+
 namespace ast {
 /**
  * @addtogroup expressions
@@ -63,6 +75,15 @@ struct expression {
    */
   virtual std::reference_wrapper<expression const> accept(
     detail::expression_transformer& visitor) const = 0;
+
+  /**
+   * @brief Accepts an `row_ir::ast_converter` class.
+   *
+   * @param visitor The `row_ir::ast_converter` converting this expression tree
+   * @return The IR node representing this expression
+   */
+  [[nodiscard]] virtual std::unique_ptr<cudf::detail::row_ir::node> accept(
+    cudf::detail::row_ir::ast_converter& visitor) const = 0;
 
   /**
    * @brief Returns true if the expression may evaluate to null.
@@ -161,6 +182,16 @@ class generic_scalar_device_view : public cudf::detail::scalar_device_view_base 
   {
   }
 
+  /** @brief Construct a new generic scalar device view object from a fixed-point scalar
+   *
+   * @param s The fixed-point scalar to construct from
+   */
+  template <typename T>
+  generic_scalar_device_view(cudf::fixed_point_scalar<T>& s)
+    : generic_scalar_device_view{s.type(), s.data(), s.validity_data()}
+  {
+  }
+
  protected:
   void const* _data{};      ///< Pointer to device memory containing the value
   size_type const _size{};  ///< Size of the string in bytes for string scalar
@@ -238,6 +269,16 @@ class literal : public expression {
   literal(cudf::string_scalar& value) : scalar(value), value(value) {}
 
   /**
+   * @brief Construct a new literal object.
+   *
+   * @param value A fixed-point scalar value
+   */
+  template <typename T>
+  literal(cudf::fixed_point_scalar<T>& value) : scalar(value), value(value)
+  {
+  }
+
+  /**
    * @brief Get the data type.
    *
    * @return The data type of the literal
@@ -268,6 +309,12 @@ class literal : public expression {
    */
   std::reference_wrapper<expression const> accept(
     detail::expression_transformer& visitor) const override;
+
+  /**
+   * @copydoc expression::accept
+   */
+  [[nodiscard]] std::unique_ptr<cudf::detail::row_ir::node> accept(
+    cudf::detail::row_ir::ast_converter& visitor) const override;
 
   [[nodiscard]] bool may_evaluate_null(table_view const& left,
                                        table_view const& right,
@@ -375,6 +422,12 @@ class column_reference : public expression {
     return (table_source == table_reference::LEFT ? left : right).column(column_index).has_nulls();
   }
 
+  /**
+   * @copydoc expression::accept
+   */
+  [[nodiscard]] std::unique_ptr<cudf::detail::row_ir::node> accept(
+    cudf::detail::row_ir::ast_converter& visitor) const override;
+
  private:
   cudf::size_type column_index;
   table_reference table_source;
@@ -441,6 +494,12 @@ class operation : public expression {
                                        table_view const& right,
                                        rmm::cuda_stream_view stream) const override;
 
+  /**
+   * @copydoc expression::accept
+   */
+  [[nodiscard]] std::unique_ptr<cudf::detail::row_ir::node> accept(
+    cudf::detail::row_ir::ast_converter& visitor) const override;
+
  private:
   ast_operator op;
   std::vector<std::reference_wrapper<expression const>> operands;
@@ -483,6 +542,12 @@ class column_name_reference : public expression {
   {
     return true;
   }
+
+  /**
+   * @copydoc expression::accept
+   */
+  [[nodiscard]] std::unique_ptr<cudf::detail::row_ir::node> accept(
+    cudf::detail::row_ir::ast_converter& visitor) const override;
 
  private:
   std::string column_name;
@@ -581,5 +646,4 @@ class tree {
 
 /** @} */  // end of group
 }  // namespace ast
-
 }  // namespace CUDF_EXPORT cudf

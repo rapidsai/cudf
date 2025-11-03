@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.column cimport Column
@@ -10,7 +11,8 @@ from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
 from pylibcudf.strings.regex_program cimport RegexProgram
 from pylibcudf.table cimport Table
-from pylibcudf.utils cimport _get_stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from cython.operator import dereference
@@ -27,13 +29,17 @@ __all__ = [
 ]
 
 cpdef Table split(
-    Column strings_column, Scalar delimiter, size_type maxsplit, Stream stream=None
+    Column strings_column,
+    Scalar delimiter,
+    size_type maxsplit,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Returns a list of columns by splitting each string using the
     specified delimiter.
 
-    For details, see :cpp:func:`cudf::strings::split`.
+    For details, see :cpp:func:`split`.
 
     Parameters
     ----------
@@ -60,26 +66,32 @@ cpdef Table split(
         delimiter.c_obj.get()
     )
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_split.split(
             strings_column.view(),
             dereference(c_delimiter),
             maxsplit,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Table.from_libcudf(move(c_result), stream)
+    return Table.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Table rsplit(
-    Column strings_column, Scalar delimiter, size_type maxsplit, Stream stream=None
+    Column strings_column,
+    Scalar delimiter,
+    size_type maxsplit,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Returns a list of columns by splitting each string using the
     specified delimiter starting from the end of each string.
 
-    For details, see :cpp:func:`cudf::strings::rsplit`.
+    For details, see :cpp:func:`rsplit`.
 
     Parameters
     ----------
@@ -106,24 +118,30 @@ cpdef Table rsplit(
         delimiter.c_obj.get()
     )
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_split.rsplit(
             strings_column.view(),
             dereference(c_delimiter),
             maxsplit,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Table.from_libcudf(move(c_result), stream)
+    return Table.from_libcudf(move(c_result), stream, mr)
 
 cpdef Column split_record(
-    Column strings, Scalar delimiter, size_type maxsplit, Stream stream=None
+    Column strings,
+    Scalar delimiter,
+    size_type maxsplit,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Splits individual strings elements into a list of strings.
 
-    For details, see :cpp:func:`cudf::strings::split_record`.
+    For details, see :cpp:func:`split_record`.
 
     Parameters
     ----------
@@ -147,26 +165,32 @@ cpdef Column split_record(
         delimiter.c_obj.get()
     )
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_split.split_record(
             strings.view(),
             dereference(c_delimiter),
             maxsplit,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Column rsplit_record(
-    Column strings, Scalar delimiter, size_type maxsplit, Stream stream=None
+    Column strings,
+    Scalar delimiter,
+    size_type maxsplit,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Splits individual strings elements into a list of strings starting
     from the end of each string.
 
-    For details, see :cpp:func:`cudf::strings::rsplit_record`.
+    For details, see :cpp:func:`rsplit_record`.
 
     Parameters
     ----------
@@ -190,26 +214,32 @@ cpdef Column rsplit_record(
         delimiter.c_obj.get()
     )
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_split.rsplit_record(
             strings.view(),
             dereference(c_delimiter),
             maxsplit,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Table split_re(
-    Column input, RegexProgram prog, size_type maxsplit, Stream stream=None
+    Column input,
+    RegexProgram prog,
+    size_type maxsplit,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Splits strings elements into a table of strings columns
     using a regex_program's pattern to delimit each string.
 
-    For details, see :cpp:func:`cudf::strings::split_re`.
+    For details, see :cpp:func:`split_re`.
 
     Parameters
     ----------
@@ -230,26 +260,32 @@ cpdef Table split_re(
     """
     cdef unique_ptr[table] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_split.split_re(
             input.view(),
             prog.c_obj.get()[0],
             maxsplit,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Table.from_libcudf(move(c_result), stream)
+    return Table.from_libcudf(move(c_result), stream, mr)
 
 cpdef Table rsplit_re(
-    Column input, RegexProgram prog, size_type maxsplit, Stream stream=None
+    Column input,
+    RegexProgram prog,
+    size_type maxsplit,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Splits strings elements into a table of strings columns
     using a regex_program's pattern to delimit each string starting from
     the end of the string.
 
-    For details, see :cpp:func:`cudf::strings::rsplit_re`.
+    For details, see :cpp:func:`rsplit_re`.
 
     Parameters
     ----------
@@ -270,25 +306,31 @@ cpdef Table rsplit_re(
     """
     cdef unique_ptr[table] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_split.rsplit_re(
             input.view(),
             prog.c_obj.get()[0],
             maxsplit,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Table.from_libcudf(move(c_result), stream)
+    return Table.from_libcudf(move(c_result), stream, mr)
 
 cpdef Column split_record_re(
-    Column input, RegexProgram prog, size_type maxsplit, Stream stream=None
+    Column input,
+    RegexProgram prog,
+    size_type maxsplit,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Splits strings elements into a list column of strings using the given
     regex_program to delimit each string.
 
-    For details, see :cpp:func:`cudf::strings::split_record_re`.
+    For details, see :cpp:func:`split_record_re`.
 
     Parameters
     ----------
@@ -309,25 +351,28 @@ cpdef Column split_record_re(
     """
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_split.split_record_re(
             input.view(),
             prog.c_obj.get()[0],
             maxsplit,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 cpdef Column rsplit_record_re(
-    Column input, RegexProgram prog, size_type maxsplit, Stream stream=None
+    Column input, RegexProgram prog, size_type maxsplit, Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Splits strings elements into a list column of strings using the given
     regex_program to delimit each string starting from the end of the string.
 
-    For details, see :cpp:func:`cudf::strings::rsplit_record_re`.
+    For details, see :cpp:func:`rsplit_record_re`.
 
     Parameters
     ----------
@@ -348,13 +393,15 @@ cpdef Column rsplit_record_re(
     """
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_split.rsplit_record_re(
             input.view(),
             prog.c_obj.get()[0],
             maxsplit,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)

@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import cupy as cp
 import pyarrow as pa
@@ -32,10 +33,9 @@ def test_tile(reshape_data, cnt):
     raw_data, reshape_plc_tbl = reshape_data
     got = plc.reshape.tile(reshape_plc_tbl, cnt)
 
-    tiled_data = [pa.array(col * cnt) for col in raw_data]
-
     expect = pa.Table.from_arrays(
-        tiled_data, schema=plc.interop.to_arrow(reshape_plc_tbl).schema
+        [pa.array(col * cnt) for col in raw_data],
+        schema=reshape_plc_tbl.to_arrow().schema,
     )
 
     assert_table_eq(expect, got)

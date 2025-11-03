@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import string
 
@@ -70,7 +71,7 @@ def test_dataframe_sort_values_sliced(sliceobj):
     df = pd.DataFrame({"a": rng.random(20)})
 
     expect = df[sliceobj]["a"].sort_values()
-    gdf = DataFrame.from_pandas(df)
+    gdf = DataFrame(df)
     got = gdf[sliceobj]["a"].sort_values()
     assert (got.to_pandas() == expect).all()
 
@@ -92,7 +93,7 @@ def test_dataframe_multi_column(
         )
         pdf[colname] = data
 
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = DataFrame(pdf)
 
     got = gdf.sort_values(by, ascending=ascending, na_position=na_position)
     expect = pdf.sort_values(by, ascending=ascending, na_position=na_position)
@@ -126,7 +127,7 @@ def test_dataframe_multi_column_nulls(
             data[:] = np.nan
         pdf[colname] = data
 
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = DataFrame(pdf)
 
     got = gdf.sort_values(by, ascending=ascending, na_position=na_position)
     expect = pdf.sort_values(by, ascending=ascending, na_position=na_position)
@@ -146,7 +147,7 @@ def test_dataframe_multi_column_nulls_multiple_ascending(
     pdf = pd.DataFrame(
         {"a": [3, 1, None, 2, 2, None, 1], "b": [1, 2, 3, 4, 5, 6, 7]}
     )
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = DataFrame(pdf)
     expect = pdf.sort_values(
         by=["a", "b"], ascending=ascending, na_position=na_position
     )
@@ -177,7 +178,7 @@ def test_dataframe_sort_values_kind(numeric_types_as_str, kind):
 
 def test_sort_values_by_index_level():
     df = pd.DataFrame({"a": [1, 3, 2]}, index=pd.Index([1, 3, 2], name="b"))
-    cudf_df = DataFrame.from_pandas(df)
+    cudf_df = DataFrame(df)
     result = cudf_df.sort_values("b")
     expected = df.sort_values("b")
     assert_eq(result, expected)
@@ -185,7 +186,7 @@ def test_sort_values_by_index_level():
 
 def test_sort_values_by_ambiguous():
     df = pd.DataFrame({"a": [1, 3, 2]}, index=pd.Index([1, 3, 2], name="a"))
-    cudf_df = DataFrame.from_pandas(df)
+    cudf_df = DataFrame(df)
 
     assert_exceptions_equal(
         lfunc=df.sort_values,
@@ -222,9 +223,23 @@ def test_sort_values_datetime():
 
 def test_dataframe_loc_duplicate_index_scalar():
     pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5]}, index=[1, 2, 1, 4, 2])
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     pdf_sorted = pdf.sort_values(by=list(pdf.columns), axis=0)
     gdf_sorted = gdf.sort_values(by=list(gdf.columns), axis=0)
 
     assert_eq(pdf_sorted, gdf_sorted)
+
+
+def test_dataframe_sort_values_multindex():
+    df = cudf.DataFrame(
+        {"a": [2, 1, 2, 1], "b": [1, 2, 1, 2], "c": [4, 3, 2, 1]}
+    )
+    df = df.set_index(["a", "b"])
+    pdf = df.to_pandas()
+
+    expected = pdf.sort_values(by="a", ascending=True)
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = df.sort_values(by="a", ascending=True)
+
+    assert_eq(expected, result)

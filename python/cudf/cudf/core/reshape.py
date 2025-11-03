@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import itertools
@@ -713,7 +714,7 @@ def melt(
         [frame[val]._column for val in value_vars]
     )
 
-    result = cudf.DataFrame._from_data(mdata)
+    result = cudf.DataFrame._from_data(mdata, attrs=frame.attrs)
     if not ignore_index:
         taker = np.tile(np.arange(len(frame)), frame.shape[1] - len(id_vars))
         result.index = frame.index.take(taker)
@@ -1039,6 +1040,7 @@ def pivot(
     result = _pivot(
         data._data.select_by_label(cols_to_select), index_data, column_data
     )
+    result._attrs = data.attrs  # type: ignore[has-type]
 
     # MultiIndex to Index
     if not values_is_list:
@@ -1165,6 +1167,7 @@ def unstack(df, level, fill_value=None, sort: bool = True):
         res.index.names = (
             tuple(df._data.to_pandas_index.names) + df.index.names
         )
+        res._attrs = df.attrs
         return res
     else:
         index = df.index.droplevel(level)
@@ -1182,6 +1185,7 @@ def unstack(df, level, fill_value=None, sort: bool = True):
             )
             columns.names = new_names
         result = _pivot(df, index, columns)
+        result._attrs = df.attrs  # type: ignore[has-type]
         if result.index.nlevels == 1:
             result.index = result.index.get_level_values(result.index.names[0])
         return result
@@ -1505,5 +1509,5 @@ def pivot_table(
         table.columns = table._data.to_pandas_index.droplevel(0)
     if len(index) == 0 and len(columns) > 0:
         table = table.T
-
+    table._attrs = data.attrs
     return table

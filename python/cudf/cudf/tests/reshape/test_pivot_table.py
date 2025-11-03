@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
 import pandas as pd
@@ -31,7 +32,7 @@ def test_pivot_table_simple(aggfunc):
         aggfunc=aggfunc,
         fill_value=fill_value,
     )
-    cdf = cudf.DataFrame.from_pandas(pdf)
+    cdf = cudf.DataFrame(pdf)
     actual = cudf.pivot_table(
         cdf,
         values=["D", "E"],
@@ -65,7 +66,7 @@ def test_dataframe_pivot_table_simple(aggfunc):
         aggfunc=aggfunc,
         fill_value=fill_value,
     )
-    cdf = cudf.DataFrame.from_pandas(pdf)
+    cdf = cudf.DataFrame(pdf)
     actual = cdf.pivot_table(
         values=["D", "E"],
         index=["A", "B"],

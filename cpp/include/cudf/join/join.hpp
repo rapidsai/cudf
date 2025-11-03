@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -25,6 +14,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/std/limits>
+
 namespace CUDF_EXPORT cudf {
 
 /**
@@ -32,6 +23,18 @@ namespace CUDF_EXPORT cudf {
  * @{
  * @file
  */
+
+/**
+ * @brief Sentinel value used to indicate an unmatched row index in join operations.
+ *
+ * This value is used in join result indices to represent rows that do not have a match
+ * in the other table (e.g., in left joins, full joins, or when using filter_gather_map
+ * with null indices from outer joins).
+ *
+ * The value is set to the minimum possible value for `size_type` to ensure it's easily
+ * distinguishable from valid row indices, which are always non-negative.
+ */
+CUDF_HOST_DEVICE constexpr size_type JoinNoMatch = cuda::std::numeric_limits<size_type>::min();
 
 /**
  * @brief Holds context information about matches between tables during a join operation.
@@ -112,8 +115,7 @@ inner_join(cudf::table_view const& left_keys,
  * The first returned vector contains all the row indices from the left
  * table (in unspecified order). The corresponding value in the
  * second returned vector is either (1) the row index of the matched row
- * from the right table, if there is a match  or  (2) an unspecified
- * out-of-bounds value.
+ * from the right table, if there is a match  or  (2) `JoinNoMatch`.
  *
  * @code{.pseudo}
  * Left: {{0, 1, 2}}
@@ -153,7 +155,7 @@ left_join(cudf::table_view const& left_keys,
  *
  * Taken pairwise, the values from the returned vectors are one of:
  * (1) row indices corresponding to matching rows from the left and
- * right tables, (2) a row index and an unspecified out-of-bounds value,
+ * right tables, (2) a row index and `JoinNoMatch`,
  * representing a row from one table without a match in the other.
  *
  * @code{.pseudo}
@@ -192,6 +194,8 @@ full_join(cudf::table_view const& left_keys,
  * @brief Returns a vector of row indices corresponding to a left semi-join
  * between the specified tables.
  *
+ * @deprecated Use the object-oriented filtered_join `cudf::filtered_join::anti_join` instead
+ *
  * The returned vector contains the row indices from the left table
  * for which there is a matching row in the right table.
  *
@@ -211,7 +215,7 @@ full_join(cudf::table_view const& left_keys,
  * the result of performing a left semi join between two tables with
  * `left_keys` and `right_keys` as the join keys .
  */
-std::unique_ptr<rmm::device_uvector<size_type>> left_semi_join(
+[[deprecated]] std::unique_ptr<rmm::device_uvector<size_type>> left_semi_join(
   cudf::table_view const& left_keys,
   cudf::table_view const& right_keys,
   null_equality compare_nulls       = null_equality::EQUAL,
@@ -221,6 +225,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> left_semi_join(
 /**
  * @brief Returns a vector of row indices corresponding to a left anti join
  * between the specified tables.
+ *
+ * @deprecated Use the object-oriented filtered_join `cudf::filtered_join::semi_join` instead
  *
  * The returned vector contains the row indices from the left table
  * for which there is no matching row in the right table.
@@ -244,7 +250,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> left_semi_join(
  * the result of performing a left anti join between two tables with
  * `left_keys` and `right_keys` as the join keys .
  */
-std::unique_ptr<rmm::device_uvector<size_type>> left_anti_join(
+[[deprecated]] std::unique_ptr<rmm::device_uvector<size_type>> left_anti_join(
   cudf::table_view const& left_keys,
   cudf::table_view const& right_keys,
   null_equality compare_nulls       = null_equality::EQUAL,

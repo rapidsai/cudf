@@ -1,5 +1,6 @@
 #!/bin/bash
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 ########################
 # cuDF Version Updater #
 ########################
@@ -37,6 +38,7 @@ function sed_runner() {
 # Centralized version file update
 echo "${NEXT_FULL_TAG}" > VERSION
 echo "${NEXT_FULL_TAG}" > python/cudf/cudf/VERSION
+echo "branch-${NEXT_SHORT_TAG}" > RAPIDS_BRANCH
 
 # Wheel testing script
 sed_runner "s/branch-.*/branch-${NEXT_SHORT_TAG}/g" ci/test_wheel_dask_cudf.sh

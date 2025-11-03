@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -21,19 +10,12 @@
 #include "mixed_join_common_utils.cuh"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
-#include <cudf/ast/detail/expression_parser.hpp>
-#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
-
-#include <cooperative_groups.h>
-#include <cub/cub.cuh>
-#include <thrust/iterator/discard_iterator.h>
 
 namespace CUDF_EXPORT cudf {
 namespace detail {
@@ -46,39 +28,43 @@ namespace detail {
  * evaluates to true between the left/right tables when a match is found
  * between probe and build rows.
  *
- * Uses the current device memory resource for internal allocations.
- *
+ * @tparam block_size The number of threads per block for this kernel
  * @tparam has_nulls Whether or not the inputs may contain nulls.
  *
- * @param left_table The left table
- * @param right_table The right table
- * @param join_type The type of join to be performed
- * @param equality_probe The equality comparator used when probing the hash table
- * @param hash_table_storage The hash table storage for probing operations
- * @param input_pairs Array of hash-value/row-index pairs for probing
- * @param hash_indices Array of hash index pairs for efficient lookup
- * @param device_expression_data Container of device data required to evaluate the desired
- * expression
- * @param swap_tables If true, the kernel was launched with one thread per right row and
- * the kernel needs to internally loop over left rows. Otherwise, loop over right rows
- * @param config Grid configuration for kernel launch
- * @param shmem_size_per_block Shared memory size per block in bytes
- * @param stream CUDA stream used for device memory operations and kernel launches
- *
- * @return The resulting output size
+ * @param[in] left_table The left table
+ * @param[in] right_table The right table
+ * @param[in] probe The table with which to probe the hash table for matches.
+ * @param[in] build The table with which the hash table was built.
+ * @param[in] hash_probe The hasher used for the probe table.
+ * @param[in] equality_probe The equality comparator used when probing the hash table.
+ * @param[in] join_type The type of join to be performed
+ * @param[in] hash_table_view The hash table built from `build`.
+ * @param[in] device_expression_data Container of device data required to evaluate the desired
+ * expression.
+ * @param[in] swap_tables If true, the kernel was launched with one thread per right row and
+ * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
+ * @param[out] output_size The resulting output size
+ * @param[out] matches_per_row The number of matches in one pair of
+ * equality/conditional tables for each row in the other pair of tables. If
+ * swap_tables is true, matches_per_row corresponds to the right_table,
+ * otherwise it corresponds to the left_table. Note that corresponding swap of
+ * left/right tables to determine which is the build table and which is the
+ * probe table has already happened on the host.
  */
+
 template <bool has_nulls>
-std::size_t launch_compute_mixed_join_output_size(
+void launch_mixed_join_count(
   table_device_view left_table,
   table_device_view right_table,
-  join_kind join_type,
+  bool is_outer_join,
+  bool swap_tables,
   row_equality equality_probe,
   cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
-  cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
+  cuda::std::pair<uint32_t, uint32_t> const* hash_indices,
   ast::detail::expression_device_view device_expression_data,
-  bool swap_tables,
-  detail::grid_1d const& config,
+  cudf::device_span<cudf::size_type> matches_per_row,
+  detail::grid_1d config,
   int64_t shmem_size_per_block,
   rmm::cuda_stream_view stream);
 

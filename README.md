@@ -1,99 +1,140 @@
-# <div align="left"><img src="img/rapids_logo.png" width="90px"/>&nbsp;cuDF - GPU DataFrames</div>
+# <div align="left"><img src="img/rapids_logo.png" width="90px"/>&nbsp;cuDF - A GPU-accelerated DataFrame library for tabular data processing</div>
 
-## 📢 cuDF can now be used as a no-code-change accelerator for pandas! To learn more, see [here](https://rapids.ai/cudf-pandas/)!
+cuDF (pronounced "KOO-dee-eff") is an [Apache 2.0 licensed](LICENSE), GPU-accelerated DataFrame library
+for tabular data processing. The cuDF library is one part of the [RAPIDS](https://rapids.ai/) GPU
+Accelerated Data Science suite of libraries.
 
-cuDF (pronounced "KOO-dee-eff") is a GPU DataFrame library
-for loading, joining, aggregating, filtering, and otherwise
-manipulating data. cuDF leverages
-[libcudf](https://docs.rapids.ai/api/libcudf/stable/), a
-blazing-fast C++/CUDA dataframe library and the [Apache
-Arrow](https://arrow.apache.org/) columnar format to provide a
-GPU-accelerated pandas API.
+## About
 
-You can import `cudf` directly and use it like `pandas`:
+cuDF is composed of multiple libraries including:
+
+* [libcudf](https://docs.rapids.ai/api/cudf/stable/libcudf_docs/): A CUDA C++ library with [Apache Arrow](https://arrow.apache.org/) compliant
+data structures and fundamental algorithms for tabular data.
+* [pylibcudf](https://docs.rapids.ai/api/cudf/stable/pylibcudf/): A Python library providing [Cython](https://cython.org/) bindings for libcudf.
+* [cudf](https://docs.rapids.ai/api/cudf/stable/user_guide/): A Python library providing
+    - A DataFrame library mirroring the [pandas](https://pandas.pydata.org/) API
+    - A zero-code change accelerator, [cudf.pandas](https://docs.rapids.ai/api/cudf/stable/cudf_pandas/), for existing pandas code.
+* [cudf-polars](https://docs.rapids.ai/api/cudf/stable/cudf_polars/): A Python library providing a GPU engine for [Polars](https://pola.rs/)
+* [dask-cudf](https://docs.rapids.ai/api/dask-cudf/stable/): A Python library providing a GPU backend for [Dask](https://www.dask.org/) DataFrames
+
+Notable projects that use cuDF include:
+
+* [Spark RAPIDS](https://github.com/NVIDIA/spark-rapids): A GPU accelerator plugin for [Apache Spark](https://spark.apache.org/)
+* [Velox-cuDF](https://github.com/facebookincubator/velox/blob/main/velox/experimental/cudf/README.md): A [Velox](https://velox-lib.io/)
+extension module to execute Velox plans on the GPU
+* [Sirius](https://www.sirius-db.com/): A GPU-native SQL engine providing extensions for libraries like [DuckDB](https://duckdb.org/)
+
+## Installation
+
+### System Requirements
+
+Operating System, GPU driver, and supported CUDA version information can be found at the [RAPIDS Installation Guide](https://docs.rapids.ai/install/#system-req)
+
+### pip
+
+A stable release of each cudf library is available on PyPI. You will need to match the major version number of your installed CUDA version with a `-cu##` suffix when installing from PyPI.
+
+A development version of each library is available as a nightly release by including the `-i https://pypi.anaconda.org/rapidsai-wheels-nightly/simple` index.
+
+```bash
+# CUDA 13
+pip install libcudf-cu13
+pip install pylibcudf-cu13
+pip install cudf-cu13
+pip install cudf-polars-cu13
+pip install dask-cudf-cu13
+
+# CUDA 12
+pip install libcudf-cu12
+pip install pylibcudf-cu12
+pip install cudf-cu12
+pip install cudf-polars-cu12
+pip install dask-cudf-cu12
+```
+
+### conda
+
+A stable release of each cudf library is available to be installed with the conda package manager by specifying the `-c rapidsai` channel.
+
+A development version of each library is available as a nightly release by specifying the `-c rapidsai-nightly` channel instead.
+
+```bash
+conda install -c rapidsai libcudf
+conda install -c rapidsai pylibcudf
+conda install -c rapidsai cudf
+conda install -c rapidsai cudf-polars
+conda install -c rapidsai dask-cudf
+```
+
+### source
+
+To install cuDF from source, please follow [the contribution guide](CONTRIBUTING.md#setting-up-your-build-environment) detailing
+how to setup the build environment.
+
+## Examples
+
+The following examples showcase reading a parquet file, dropping missing rows with a null value,
+and performing a groupby aggregation on the data.
+
+### cudf
+
+`import cudf` and the APIs are largely similar to pandas.
 
 ```python
 import cudf
 
-tips_df = cudf.read_csv("https://github.com/plotly/datasets/raw/master/tips.csv")
-tips_df["tip_percentage"] = tips_df["tip"] / tips_df["total_bill"] * 100
-
-# display average tip by dining party size
-print(tips_df.groupby("size").tip_percentage.mean())
+df = cudf.read_parquet("data.parquet")
+df.dropna().groupby(["A", "B"]).mean()
 ```
 
-Or, you can use cuDF as a no-code-change accelerator for pandas, using
-[`cudf.pandas`](https://docs.rapids.ai/api/cudf/stable/cudf_pandas).
-`cudf.pandas` supports 100% of the pandas API, utilizing cuDF for
-supported operations and falling back to pandas when needed:
+### cudf.pandas
+
+With a Python file containing pandas code:
 
 ```python
-%load_ext cudf.pandas  # pandas operations now use the GPU!
-
 import pandas as pd
 
-tips_df = pd.read_csv("https://github.com/plotly/datasets/raw/master/tips.csv")
-tips_df["tip_percentage"] = tips_df["tip"] / tips_df["total_bill"] * 100
-
-# display average tip by dining party size
-print(tips_df.groupby("size").tip_percentage.mean())
+df = cudf.read_parquet("data.parquet")
+df.dropna().groupby(["A", "B"]).mean()
 ```
 
-## Resources
-
-- [Try cudf.pandas now](https://nvda.ws/rapids-cudf): Explore `cudf.pandas` on a free GPU enabled instance on Google Colab!
-- [Install](https://docs.rapids.ai/install): Instructions for installing cuDF and other [RAPIDS](https://rapids.ai) libraries.
-- [cudf (Python) documentation](https://docs.rapids.ai/api/cudf/stable/)
-- [libcudf (C++/CUDA) documentation](https://docs.rapids.ai/api/libcudf/stable/)
-- [RAPIDS Community](https://rapids.ai/learn-more/#get-involved): Get help, contribute, and collaborate.
-
-See the [RAPIDS install page](https://docs.rapids.ai/install) for
-the most up-to-date information and commands for installing cuDF
-and other RAPIDS packages.
-
-## Installation
-
-### CUDA/GPU requirements
-
-* CUDA 12.0+ with a compatible NVIDIA driver
-* Volta architecture or better (Compute Capability >=7.0)
-
-### Pip
-
-cuDF can be installed via `pip` from the NVIDIA Python Package Index.
-Be sure to select the appropriate cuDF package depending
-on the major version of CUDA available in your environment:
+Use cudf.pandas by invoking `python` with `-m cudf.pandas`
 
 ```bash
-# CUDA 13
-pip install cudf-cu13
-
-# CUDA 12
-pip install cudf-cu12
+$ python -m cudf.pandas script.py
 ```
 
-### Conda
+If running the pandas code in an interactive Jupyter environment, call `%load_ext cudf.pandas` before
+importing pandas.
 
-cuDF can be installed with conda (via [miniforge](https://github.com/conda-forge/miniforge)) from the `rapidsai` channel:
+```python
+In [1]: %load_ext cudf.pandas
 
-```bash
-# CUDA 13
-conda install -c rapidsai -c conda-forge cudf=25.10 cuda-version=13.0
+In [2]: import pandas as pd
 
-# CUDA 12
-conda install -c rapidsai -c conda-forge cudf=25.10 cuda-version=12.9
+In [3]: df = cudf.read_parquet("data.parquet")
+
+In [4]: df.dropna().groupby(["A", "B"]).mean()
 ```
 
-We also provide [nightly Conda packages](https://anaconda.org/rapidsai-nightly) built from the HEAD
-of our latest development branch.
+### cudf-polars
 
-Note: cuDF is supported only on Linux, and with Python versions 3.10 and later.
+Using Polars' [lazy API](https://docs.pola.rs/user-guide/lazy/), call `collect` with `engine="gpu"` to run
+the operation on the GPU
 
-See the [RAPIDS installation guide](https://docs.rapids.ai/install) for more OS and version info.
+```python
+import polars as pl
 
-## Build/Install from Source
-See build [instructions](CONTRIBUTING.md#setting-up-your-build-environment).
+lf = pl.scan_parquet("data.parquet")
+lf.drop_nulls().group_by(["A", "B"]).mean().collect(engine="gpu")
+```
+
+## Questions and Discussion
+
+For bug reports or feature requests, please [file an issue](https://github.com/rapidsai/cudf/issues/new/choose) on the GitHub issue tracker.
+
+For questions or discussion about cuDF and GPU data processing, feel free to post in the [RAPIDS Slack](https://rapids.ai/slack-invite) workspace.
 
 ## Contributing
 
-Please see our [guide for contributing to cuDF](CONTRIBUTING.md).
+cuDF is open to contributions from the community! Please see our [guide for contributing to cuDF](CONTRIBUTING.md) for more information.

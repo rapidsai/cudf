@@ -1,4 +1,5 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import random
 
@@ -95,7 +96,7 @@ def test_from_pandas():
         }
     )
 
-    gdf = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
 
     # Test simple around to/from cudf
     ingested = dd.from_pandas(gdf, npartitions=2)
@@ -146,7 +147,7 @@ def test_query():
     df = pd.DataFrame(
         {"x": rng.integers(0, 5, size=10), "y": rng.normal(size=10)}
     )
-    gdf = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
     expr = "x > 2"
 
     dd.assert_eq(gdf.query(expr), df.query(expr))
@@ -164,7 +165,7 @@ def test_query_local_dict():
     df = pd.DataFrame(
         {"x": rng.integers(0, 5, size=10), "y": rng.normal(size=10)}
     )
-    gdf = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
     ddf = dask_cudf.from_cudf(gdf, npartitions=2)
 
     val = 2
@@ -183,7 +184,7 @@ def test_head():
             "y": rng.normal(size=100),
         }
     )
-    gdf = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
     dgf = dd.from_pandas(gdf, npartitions=2)
 
     dd.assert_eq(dgf.head(), df.head())
@@ -249,7 +250,7 @@ def test_set_index_2(nelem):
         )
         expect = df.set_index("x").sort_index()
 
-        dgf = dd.from_pandas(cudf.DataFrame.from_pandas(df), npartitions=4)
+        dgf = dd.from_pandas(cudf.DataFrame(df), npartitions=4)
         res = dgf.set_index("x")  # sort by default
         got = res.compute().to_pandas()
 
@@ -268,7 +269,7 @@ def test_set_index_w_series():
         )
         expect = df.set_index(df.x).sort_index()
 
-        dgf = dd.from_pandas(cudf.DataFrame.from_pandas(df), npartitions=4)
+        dgf = dd.from_pandas(cudf.DataFrame(df), npartitions=4)
         res = dgf.set_index(dgf.x)  # sort by default
         got = res.compute().to_pandas()
 
@@ -299,7 +300,7 @@ def test_assign():
         {"x": rng.integers(0, 5, size=20), "y": rng.normal(size=20)}
     )
 
-    dgf = dd.from_pandas(cudf.DataFrame.from_pandas(df), npartitions=2)
+    dgf = dd.from_pandas(cudf.DataFrame(df), npartitions=2)
     pdcol = pd.Series(np.arange(20) + 1000)
     newcol = dd.from_pandas(cudf.Series(pdcol), npartitions=dgf.npartitions)
     got = dgf.assign(z=newcol)
@@ -316,7 +317,7 @@ def test_setitem_scalar_integer(data_type):
     df = pd.DataFrame(
         {"x": rng.integers(0, 5, size=20), "y": rng.normal(size=20)}
     )
-    dgf = dd.from_pandas(cudf.DataFrame.from_pandas(df), npartitions=2)
+    dgf = dd.from_pandas(cudf.DataFrame(df), npartitions=2)
 
     df["z"] = scalar
     dgf["z"] = scalar
@@ -332,7 +333,7 @@ def test_setitem_scalar_float(data_type):
     df = pd.DataFrame(
         {"x": rng.integers(0, 5, size=20), "y": rng.normal(size=20)}
     )
-    dgf = dd.from_pandas(cudf.DataFrame.from_pandas(df), npartitions=2)
+    dgf = dd.from_pandas(cudf.DataFrame(df), npartitions=2)
 
     df["z"] = scalar
     dgf["z"] = scalar
@@ -347,7 +348,7 @@ def test_setitem_scalar_datetime():
     df = pd.DataFrame(
         {"x": rng.integers(0, 5, size=20), "y": rng.normal(size=20)}
     )
-    dgf = dd.from_pandas(cudf.DataFrame.from_pandas(df), npartitions=2)
+    dgf = dd.from_pandas(cudf.DataFrame(df), npartitions=2)
 
     df["z"] = scalar
     dgf["z"] = scalar
@@ -369,7 +370,7 @@ def test_repartition_timeseries(start, stop):
         partition_freq=start,
         dtypes={"x": int, "y": float},
     )
-    gdf = pdf.map_partitions(cudf.DataFrame.from_pandas)
+    gdf = pdf.map_partitions(cudf.DataFrame)
 
     a = pdf.repartition(freq=stop)
     b = gdf.repartition(freq=stop)
@@ -384,7 +385,7 @@ def test_repartition_simple_divisions(start, stop):
     pdf = pd.DataFrame({"x": range(100)})
 
     pdf = dd.from_pandas(pdf, npartitions=start)
-    gdf = pdf.map_partitions(cudf.DataFrame.from_pandas)
+    gdf = pdf.map_partitions(cudf.DataFrame)
 
     a = pdf.repartition(npartitions=stop)
     b = gdf.repartition(npartitions=stop)

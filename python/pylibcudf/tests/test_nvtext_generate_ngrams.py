@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import pyarrow as pa
 import pytest
@@ -42,10 +43,9 @@ def test_generate_character_ngrams(input_col, ngram):
 @pytest.mark.parametrize("ngram", [2, 3])
 @pytest.mark.parametrize("seed", [0, 3])
 def test_hash_character_ngrams(input_col, ngram, seed):
-    result = plc.nvtext.generate_ngrams.hash_character_ngrams(
+    pa_result = plc.nvtext.generate_ngrams.hash_character_ngrams(
         plc.Column.from_arrow(input_col), ngram, seed
-    )
-    pa_result = plc.interop.to_arrow(result)
+    ).to_arrow()
     assert all(
         len(got) == max(0, len(s.as_py()) - ngram + 1)
         for got, s in zip(pa_result, input_col, strict=True)

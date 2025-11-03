@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from rmm import DeviceBuffer
 from rmm.mr import DeviceMemoryResource
@@ -9,12 +10,16 @@ from pylibcudf.table import Table
 
 class PackedColumns:
     def __init__(self): ...
-    def release(self) -> tuple[memoryview[bytes], gpumemoryview]: ...
+    def release(
+        self, stream: Stream | None = None
+    ) -> tuple[memoryview[bytes], gpumemoryview]: ...
 
-def pack(input: Table) -> PackedColumns: ...
-def unpack(input: PackedColumns) -> Table: ...
+def pack(input: Table, stream: Stream | None = None) -> PackedColumns: ...
+def unpack(input: PackedColumns, stream: Stream | None = None) -> Table: ...
 def unpack_from_memoryviews(
-    metadata: memoryview[bytes], gpu_data: gpumemoryview
+    metadata: memoryview[bytes],
+    gpu_data: gpumemoryview,
+    stream: Stream | None = None,
 ) -> Table: ...
 
 class ChunkedPack:
@@ -24,7 +29,7 @@ class ChunkedPack:
         input: Table,
         user_buffer_size: int,
         stream: Stream,
-        temp_mr: DeviceMemoryResource,
+        temp_mr: DeviceMemoryResource | None = None,
     ) -> ChunkedPack: ...
     def has_next(self) -> bool: ...
     def get_total_contiguous_size(self) -> int: ...

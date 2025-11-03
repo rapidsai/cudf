@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import io
@@ -69,15 +70,11 @@ def assert_column_eq(
     if isinstance(lhs, (pa.Array, pa.ChunkedArray)) and isinstance(
         rhs, plc.Column
     ):
-        rhs = plc.interop.to_arrow(
-            rhs, metadata=metadata_from_arrow_type(lhs.type)
-        )
+        rhs = rhs.to_arrow(metadata=metadata_from_arrow_type(lhs.type))
     elif isinstance(lhs, plc.Column) and isinstance(
         rhs, (pa.Array, pa.ChunkedArray)
     ):
-        lhs = plc.interop.to_arrow(
-            lhs, metadata=metadata_from_arrow_type(rhs.type)
-        )
+        lhs = lhs.to_arrow(metadata=metadata_from_arrow_type(rhs.type))
     else:
         raise ValueError(
             "One of the inputs must be a Column and the other an Array"

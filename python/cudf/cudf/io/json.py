@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import os
@@ -193,10 +194,10 @@ def read_json(
                     processed_dtypes.append((k, lib_type, child_types))
             elif isinstance(dtype, Collection):
                 for col_dtype in dtype:
+                    # Ignore child columns since we cannot specify their dtypes
+                    # when passing a list
                     processed_dtypes.append(
-                        # Ignore child columns since we cannot specify their dtypes
-                        # when passing a list
-                        _get_cudf_schema_element_from_dtype(col_dtype)[0]
+                        _get_cudf_schema_element_from_dtype(col_dtype)[0]  # type: ignore[arg-type]
                     )
             else:
                 raise TypeError("`dtype` must be 'list like' or 'dict'")
@@ -220,6 +221,7 @@ def read_json(
                 for name, col in zip(res_col_names, res_cols, strict=True)
             }
             df = DataFrame._from_data(data)
+            # TODO: _add_df_col_struct_names expects dict but receives Mapping
             ioutils._add_df_col_struct_names(df, res_child_names)
             return df
         else:
@@ -270,9 +272,9 @@ def read_json(
             **kwargs,
         )
         if isinstance(pd_value, pd.DataFrame):
-            df = DataFrame.from_pandas(pd_value)
+            df = DataFrame(pd_value)
         else:
-            df = Series.from_pandas(pd_value)
+            df = Series(pd_value)
 
     if dtype is None:
         dtype = True
@@ -337,11 +339,12 @@ def _plc_write_json(
     rows_per_chunk: int = 1024 * 64,  # 64K rows
 ) -> None:
     try:
+        # TODO: TableWithMetadata expects list[ColumnNameSpec] but receives list[tuple[Hashable, Any]]
         tbl_w_meta = plc.io.TableWithMetadata(
             plc.Table(
                 [col.to_pylibcudf(mode="read") for col in table._columns]
             ),
-            colnames,
+            colnames,  # type: ignore[arg-type]
         )
         options = (
             plc.io.json.JsonWriterOptions.builder(

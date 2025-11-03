@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
 import pandas as pd
@@ -43,9 +44,9 @@ def test_dataframe_isnull_isna_and_reverse(na_data, nan_as_null, api_call):
         nan_contains.any().any() and not nan_contains.all().all()
     ):
         with pytest.raises(cudf.errors.MixedTypeError):
-            cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
+            cudf.DataFrame(df, nan_as_null=nan_as_null)
     else:
-        gdf = cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
+        gdf = cudf.DataFrame(df, nan_as_null=nan_as_null)
 
         assert_eq(getattr(df, api_call)(), getattr(gdf, api_call)())
 

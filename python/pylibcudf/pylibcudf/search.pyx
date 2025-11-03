@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -7,10 +8,11 @@ from pylibcudf.libcudf cimport search as cpp_search
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.types cimport null_order, order
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from .column cimport Column
 from .table cimport Table
-from .utils cimport _get_stream
+from .utils cimport _get_stream, _get_memory_resource
 
 __all__ = ["contains", "lower_bound", "upper_bound"]
 
@@ -19,7 +21,8 @@ cpdef Column lower_bound(
     Table needles,
     list column_order,
     list null_precedence,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Find smallest indices in haystack where needles may be inserted to retain order.
 
@@ -37,6 +40,8 @@ cpdef Column lower_bound(
         Whether nulls should come before or after non-nulls.
     stream : Stream | None
         CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned column's device memory.
 
     Returns
     -------
@@ -48,6 +53,7 @@ cpdef Column lower_bound(
     cdef vector[null_order] c_null_precedence = null_precedence
 
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_search.lower_bound(
@@ -56,8 +62,9 @@ cpdef Column lower_bound(
             c_orders,
             c_null_precedence,
             stream.view(),
+            mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Column upper_bound(
@@ -65,7 +72,8 @@ cpdef Column upper_bound(
     Table needles,
     list column_order,
     list null_precedence,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Find largest indices in haystack where needles may be inserted to retain order.
 
@@ -83,6 +91,8 @@ cpdef Column upper_bound(
         Whether nulls should come before or after non-nulls.
     stream : Stream | None
         CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned column's device memory.
 
     Returns
     -------
@@ -94,6 +104,7 @@ cpdef Column upper_bound(
     cdef vector[null_order] c_null_precedence = null_precedence
 
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_search.upper_bound(
@@ -102,11 +113,14 @@ cpdef Column upper_bound(
             c_orders,
             c_null_precedence,
             stream.view(),
+            mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
-cpdef Column contains(Column haystack, Column needles, Stream stream=None):
+cpdef Column contains(
+    Column haystack, Column needles, Stream stream=None, DeviceMemoryResource mr=None
+):
     """Check whether needles are present in haystack.
 
     For details, see :cpp:func:`contains`.
@@ -119,6 +133,8 @@ cpdef Column contains(Column haystack, Column needles, Stream stream=None):
         The values for which to search.
     stream : Stream | None
         CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned column's device memory.
 
     Returns
     -------
@@ -128,11 +144,13 @@ cpdef Column contains(Column haystack, Column needles, Stream stream=None):
     cdef unique_ptr[column] c_result
 
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_search.contains(
             haystack.view(),
             needles.view(),
             stream.view(),
+            mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)

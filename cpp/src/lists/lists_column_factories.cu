@@ -1,23 +1,11 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -137,30 +125,16 @@ std::unique_ptr<column> make_lists_column(size_type num_rows,
   CUDF_EXPECTS(offsets_column->null_count() == 0, "Offsets column should not contain nulls");
   CUDF_EXPECTS(child_column != nullptr, "Must pass a valid child column");
 
-  // Save type_id of the child column for later use.
-  auto const child_type_id = child_column->type().id();
-
   std::vector<std::unique_ptr<column>> children;
   children.emplace_back(std::move(offsets_column));
   children.emplace_back(std::move(child_column));
 
-  auto output = std::make_unique<column>(cudf::data_type{type_id::LIST},
-                                         num_rows,
-                                         rmm::device_buffer{},
-                                         std::move(null_mask),
-                                         null_count,
-                                         std::move(children));
-
-  if (num_rows == 0) { return output; }
-
-  // We need to enforce all null lists to be empty.
-  // `has_nonempty_nulls` is less expensive than `purge_nonempty_nulls` and can save some
-  // run time if we don't have any non-empty nulls.
-  if (auto const output_cv = output->view(); detail::has_nonempty_nulls(output_cv, stream)) {
-    return detail::purge_nonempty_nulls(output_cv, stream, mr);
-  }
-
-  return output;
+  return std::make_unique<column>(cudf::data_type{type_id::LIST},
+                                  num_rows,
+                                  rmm::device_buffer{},
+                                  std::move(null_mask),
+                                  null_count,
+                                  std::move(children));
 }
 
 }  // namespace cudf

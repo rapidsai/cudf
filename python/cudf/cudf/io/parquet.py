@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import datetime
@@ -10,6 +11,7 @@ import shutil
 import tempfile
 import warnings
 from collections import defaultdict
+from collections.abc import Hashable, Sequence
 from contextlib import ExitStack
 from functools import partial, reduce
 from typing import TYPE_CHECKING, Any, Literal
@@ -44,7 +46,7 @@ except ImportError:
     import json
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Hashable
+    from collections.abc import Callable, Hashable, Sequence
 
     from typing_extensions import Self
 
@@ -129,9 +131,14 @@ def _plc_write_parquet(
         )
         tbl_meta = plc.io.types.TableInputMetadata(plc_table)
         for level, idx_name in enumerate(table.index.names):
-            tbl_meta.column_metadata[level].set_name(
-                ioutils._index_level_name(idx_name, level, table._column_names)
+            idx_name_str = ioutils._index_level_name(
+                idx_name, level, table._column_names
             )
+            if not isinstance(idx_name_str, str):
+                raise ValueError(
+                    f"Index name must be a string, got {type(idx_name_str)}"
+                )
+            tbl_meta.column_metadata[level].set_name(idx_name_str)
         num_index_cols_meta = table.index.nlevels
     else:
         plc_table = plc.Table(
@@ -691,7 +698,7 @@ def _parse_metadata(meta) -> tuple[bool, Any, None | np.dtype]:
 @_performance_tracking
 def read_parquet_metadata(
     filepath_or_buffer,
-) -> tuple[int, int, list[Hashable], int, list[dict[str, int]]]:
+) -> tuple[int, int, Sequence[Hashable], int, Sequence[dict[str, int]]]:
     """{docstring}"""
 
     # List of filepaths or buffers
@@ -1378,14 +1385,12 @@ def _read_parquet(
             del tbl_w_meta
 
             while reader.has_next():
-                tbl = reader.read_chunk().tbl
-
-                for i in range(tbl.num_columns()):
+                columns = reader.read_chunk().tbl.columns()
+                # Iterate in reverse to avoid O(n²) cost from popping
+                for i in range(len(concatenated_columns) - 1, -1, -1):
                     concatenated_columns[i] = plc.concatenate.concatenate(
-                        [concatenated_columns[i], tbl._columns[i]]
+                        [concatenated_columns[i], columns.pop()]
                     )
-                    # Drop residual columns to save memory
-                    tbl._columns[i] = None
 
             data = {
                 name: ColumnBase.from_pylibcudf(col)
@@ -1452,7 +1457,7 @@ def _read_parquet(
         ):
             filepaths_or_buffers = filepaths_or_buffers[0]
 
-        return DataFrame.from_pandas(
+        return DataFrame(
             pd.read_parquet(
                 filepaths_or_buffers,
                 columns=columns,
@@ -1605,7 +1610,18 @@ def to_parquet(
             index = True
 
         pa_table = df.to_arrow(preserve_index=index)
-        return pq.write_to_dataset(
+        # Check for conflicting arguments in kwargs
+        if "root_path" in kwargs:
+            raise ValueError(
+                "'root_path' should be passed as 'path' argument to to_parquet(), not in kwargs"
+            )
+        if "partition_cols" in kwargs:
+            raise ValueError(
+                "'partition_cols' should be passed directly to to_parquet(), not in kwargs"
+            )
+        # Type ignore: mypy complains about potential duplicate arguments from *args
+        # but our API design allows passing additional args/kwargs to pyarrow
+        return pq.write_to_dataset(  # type: ignore[misc]
             pa_table,
             root_path=path,
             partition_cols=partition_cols,
@@ -2355,9 +2371,19 @@ def _set_col_metadata(
 
 
 def _get_comp_type(
-    compression: Literal["snappy", "ZSTD", "ZLIB", "LZ4", None],
+    compression: Literal[
+        "snappy",
+        "SNAPPY",
+        "GZIP",
+        "BROTLI",
+        "LZ4",
+        "ZSTD",
+        "ZLIB",
+        "NONE",
+        None,
+    ],
 ) -> plc.io.types.CompressionType:
-    if compression is None:
+    if compression is None or compression == "NONE":
         return plc.io.types.CompressionType.NONE
     result = getattr(plc.io.types.CompressionType, compression.upper(), None)
     if result is None:
@@ -2378,7 +2404,7 @@ def _get_stat_freq(
 
 def _process_metadata(
     df: DataFrame,
-    names: list[Hashable],
+    names: Sequence[Hashable],
     per_file_user_data: list,
     row_groups,
     filepaths_or_buffers,
@@ -2424,7 +2450,7 @@ def _process_metadata(
         # update the decimal precision of each column
         for col in names:
             if isinstance(df._data[col].dtype, DecimalDtype):
-                df._data[col].dtype.precision = meta_data_per_column[col][
+                df._data[col].dtype.precision = meta_data_per_column[col][  # type: ignore[union-attr]
                     "metadata"
                 ]["precision"]
 
@@ -2480,7 +2506,7 @@ def _process_metadata(
                     idx = Index._from_column(column_empty(0))
             else:
                 start = range_index_meta["start"] + skip_rows  # type: ignore[operator]
-                stop = range_index_meta["stop"]
+                stop = int(range_index_meta["stop"])  # type: ignore[arg-type]
                 if nrows > -1:
                     stop = start + nrows
                 idx = RangeIndex(
@@ -2512,3 +2538,55 @@ def _process_metadata(
         df._data.label_dtype = column_index_type
 
     return df
+
+
+def is_supported_read_parquet(
+    compression: Literal["SNAPPY", "GZIP", "BROTLI", "LZ4", "ZSTD", "NONE"],
+) -> bool:
+    """Check if the compression type is supported for reading Parquet files.
+
+    Parameters
+    ----------
+    compression : str
+        The compression type to check (e.g., "SNAPPY", "GZIP", "LZ4")
+
+    Returns
+    -------
+    bool
+        True if the compression type is supported for reading Parquet files
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.io.parquet.is_supported_read_parquet("LZ4")  # doctest: +SKIP
+    True
+    """
+    return plc.io.parquet.is_supported_read_parquet(
+        _get_comp_type(compression)
+    )
+
+
+def is_supported_write_parquet(
+    compression: Literal["SNAPPY", "GZIP", "BROTLI", "LZ4", "ZSTD", "NONE"],
+) -> bool:
+    """Check if the compression type is supported for writing Parquet files.
+
+    Parameters
+    ----------
+    compression : str
+        The compression type to check (e.g., "SNAPPY", "GZIP", "LZ4")
+
+    Returns
+    -------
+    bool
+        True if the compression type is supported for writing Parquet files
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.io.parquet.is_supported_write_parquet("SNAPPY")  # doctest: +SKIP
+    True
+    """
+    return plc.io.parquet.is_supported_write_parquet(
+        _get_comp_type(compression)
+    )

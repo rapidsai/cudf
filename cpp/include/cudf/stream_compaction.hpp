@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -32,6 +21,10 @@ namespace CUDF_EXPORT cudf {
  * @file
  * @brief Column APIs for filtering rows
  */
+
+namespace ast {
+class expression;
+}
 
 /**
  * @brief Filters a table to remove null elements with threshold count.
@@ -437,7 +430,7 @@ cudf::size_type distinct_count(table_view const& input,
  *
  * @throws std::invalid_argument if any of the input columns have different sizes (except scalars of
  * size 1)
- * @throws std::invalid_argument if `output_type` or any of the inputs are not fixed-width or string
+ * @throws std::invalid_argument if the output or any of the inputs are not fixed-width or string
  * types
  * @throws cudf::logic_error if JIT is not supported by the runtime
  * @throws std::invalid_argument if the size of `copy_mask` does not match the number of input
@@ -445,26 +438,52 @@ cudf::size_type distinct_count(table_view const& input,
  *
  * The size of the resulting column is the size of the largest column.
  *
- * @param columns       Immutable views of the columns to filter
+ * @param predicate_columns Immutable views of the predicate columns
  * @param predicate_udf The PTX/CUDA string of the transform function to apply
- * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
- * @param user_data     User-defined device data to pass to the UDF.
- * @param copy_mask     Optional vector of booleans indicating which columns to copy from the input
- *                      columns to the output. If not provided, all columns are copied.
+ * @param filter_columns Immutable view of the columns to be filtered
+ * @param is_ptx true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
+ * @param user_data User-defined device data to pass to the UDF.
  * @param is_null_aware Signifies the UDF will receive row inputs as optional values
- * @param stream        CUDA stream used for device memory operations and kernel launches
- * @param mr            Device memory resource used to allocate the returned column's device memory
- * @return              The filtered target columns
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return The filtered target columns
  */
 std::vector<std::unique_ptr<column>> filter(
-  std::vector<column_view> const& columns,
+  std::vector<column_view> const& predicate_columns,
   std::string const& predicate_udf,
+  std::vector<column_view> const& filter_columns,
   bool is_ptx,
-  std::optional<void*> user_data             = std::nullopt,
-  std::optional<std::vector<bool>> copy_mask = std::nullopt,
-  null_aware is_null_aware                   = null_aware::NO,
-  rmm::cuda_stream_view stream               = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr          = cudf::get_current_device_resource_ref());
+  std::optional<void*> user_data    = std::nullopt,
+  null_aware is_null_aware          = null_aware::NO,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Creates new table by applying a filter function against every
+ * element of the input columns.
+ *
+ * Null values in the input columns are considered as not matching the filter.
+ *
+ * Computes:
+ * `out[i]... = predicate(columns[i]... ) ? (columns[i]...): not-applied`.
+ *
+ * @throws std::invalid_argument if the output or any of the inputs are not fixed-width or string
+ * types
+ * @throws cudf::logic_error if JIT is not supported by the runtime
+ *
+ * @param predicate_table The table used for predicate expression evaluation
+ * @param predicate_expr The predicate filter expression
+ * @param filter_table The table to be filtered
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return The filtered table
+ */
+std::unique_ptr<table> filter(
+  table_view const& predicate_table,
+  ast::expression const& predicate_expr,
+  table_view const& filter_table,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */
 }  // namespace CUDF_EXPORT cudf

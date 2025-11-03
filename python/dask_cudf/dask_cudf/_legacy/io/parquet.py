@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import contextlib
 import itertools
 import warnings
@@ -20,7 +21,7 @@ except ImportError:
     create_metadata_file_dd = None
 
 import cudf
-from cudf.core.column import CategoricalColumn, as_column
+from cudf.core.column import as_column
 from cudf.io import write_to_dataset
 from cudf.io.parquet import _apply_post_filters, _normalize_filters
 from cudf.utils import ioutils
@@ -165,14 +166,10 @@ class CudfEngine(ArrowDatasetEngine):
                         partitions[i].keys.get_loc(index2),
                         length=len(df),
                     )
-                    df[name] = CategoricalColumn(
-                        data=None,
-                        size=codes.size,
-                        dtype=cudf.CategoricalDtype(
+                    df[name] = codes._with_type_metadata(
+                        cudf.CategoricalDtype(
                             categories=partitions[i].keys, ordered=False
-                        ),
-                        offset=codes.offset,
-                        children=(codes,),
+                        )
                     )
                 elif name not in df.columns:
                     # Add non-categorical partition column

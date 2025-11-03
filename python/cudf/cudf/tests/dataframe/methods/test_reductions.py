@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import cupy as cp
 import numpy as np
@@ -179,7 +180,7 @@ def test_reduction_column_multiindex():
 )
 def test_dataframe_axis_0_preserve_column_type_in_index(columns):
     pd_df = pd.DataFrame([[1, 2]], columns=columns)
-    cudf_df = cudf.DataFrame.from_pandas(pd_df)
+    cudf_df = cudf.DataFrame(pd_df)
     result = cudf_df.sum(axis=0)
     expected = pd_df.sum(axis=0)
     assert_eq(result, expected, check_index_type=True)
@@ -198,7 +199,10 @@ def test_dataframe_reduction_error():
 
 
 def test_mean_timeseries(numeric_only):
-    gdf = cudf.datasets.timeseries()
+    gdf = cudf.DataFrame(
+        {"a": ["a", "b", "c"], "b": range(3), "c": [-1.0, 12.2, 0.0]},
+        index=pd.date_range("2020-01-01", periods=3, name="timestamp"),
+    )
     if not numeric_only:
         gdf = gdf.select_dtypes(include="number")
     pdf = gdf.to_pandas()
@@ -316,7 +320,7 @@ def test_dataframe_axis1_unsupported_ops(op):
 )
 def test_dataframe_reductions(data, axis, func, skipna):
     pdf = pd.DataFrame(data=data)
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     # Reductions can fail in numerous possible ways when attempting row-wise
     # reductions, which are only partially supported. Catching the appropriate
@@ -365,7 +369,7 @@ def test_dataframe_reductions(data, axis, func, skipna):
 )
 def test_dataframe_count_reduction(data):
     pdf = pd.DataFrame(data=data)
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     assert_eq(pdf.count(), gdf.count())
 
@@ -401,7 +405,7 @@ def test_quantile(q, numeric_only):
     pdf = pd.DataFrame(
         {"date": ts, "delta": td, "val": rng.standard_normal(len(ts))}
     )
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     assert_eq(pdf["date"].quantile(q), gdf["date"].quantile(q))
     assert_eq(pdf["delta"].quantile(q), gdf["delta"].quantile(q))
@@ -473,7 +477,7 @@ def test_all(data):
     dtype = None if data else float
     if np.array(data).ndim <= 1:
         pdata = pd.Series(data=data, dtype=dtype)
-        gdata = cudf.Series.from_pandas(pdata)
+        gdata = cudf.Series(pdata)
         got = gdata.all()
         expected = pdata.all()
         assert_eq(got, expected)
@@ -481,7 +485,7 @@ def test_all(data):
         pdata = pd.DataFrame(data, columns=["a", "b"], dtype=dtype).replace(
             [None], False
         )
-        gdata = cudf.DataFrame.from_pandas(pdata)
+        gdata = cudf.DataFrame(pdata)
 
         # test bool_only
         if pdata["b"].dtype == "bool":
@@ -531,7 +535,7 @@ def test_any(data, axis):
             assert_eq(got, expected)
     else:
         pdata = pd.DataFrame(data, columns=["a", "b"])
-        gdata = cudf.DataFrame.from_pandas(pdata)
+        gdata = cudf.DataFrame(pdata)
 
         # test bool_only
         if pdata["b"].dtype == "bool":
@@ -546,7 +550,7 @@ def test_any(data, axis):
 
 def test_empty_dataframe_any(axis):
     pdf = pd.DataFrame({}, columns=["a", "b"], dtype=float)
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     got = gdf.any(axis=axis)
     expected = pdf.any(axis=axis)
     assert_eq(got, expected, check_index_type=False)

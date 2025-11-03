@@ -1,5 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -9,9 +8,15 @@ import cupy._core.flags
 import numpy
 from packaging import version
 
+from cudf.options import _env_get_bool
+
 from ..fast_slow_proxy import (
+    _fast_arg,
     _fast_slow_function_call,
     _FastSlowAttribute,
+    _maybe_wrap_result,
+    _raise_fallback_error,
+    _slow_arg,
     is_proxy_object,
     make_final_proxy_type,
     make_intermediate_proxy_type,
@@ -95,7 +100,11 @@ def wrap_ndarray(cls, arr: cupy.ndarray | numpy.ndarray, constructor):
         and arr.shape == ()
         and constructor not in _CONSTRUCTORS
     ):
-        return arr.dtype.type(arr.item())
+        value = arr.item()
+        if arr.dtype.kind in "mM":
+            unit, _ = numpy.datetime_data(arr.dtype)
+            return arr.dtype.type(value, unit)
+        return arr.dtype.type(value)
     else:
         # Note, this super call means that the constructed ndarray
         # class cannot be subclassed (because then super(cls,
@@ -143,6 +152,47 @@ def ndarray__reduce__(self):
     )
 
 
+def _is_cupy_backed_and_non_datetime_array(x) -> bool:
+    if is_proxy_object(x):
+        x = x._fsproxy_wrapped
+    return (
+        isinstance(x, cupy.ndarray)
+        and x.dtype is not None
+        and x.dtype.kind not in ("M", "m")
+    )
+
+
+def ndarray__array_function__(self, func, types, args, kwargs):
+    name = func.__name__
+    try:
+        cupy_func = getattr(cupy, name)
+    except AttributeError:
+        if getattr(func, "__module__", "").startswith("numpy.linalg"):
+            cupy_func = getattr(cupy.linalg, name, None)
+        else:
+            cupy_func = None
+
+    if cupy_func is not None and all(
+        _is_cupy_backed_and_non_datetime_array(a) for a in args
+    ):
+        fast_args, fast_kwargs = _fast_arg(args), _fast_arg(kwargs)
+        if name == "fft":
+            cupy_func = cupy_func.fft
+        try:
+            res = cupy_func(*fast_args, **fast_kwargs)
+        except Exception as err:
+            slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
+            if _env_get_bool("CUDF_PANDAS_FAIL_ON_FALLBACK", False):
+                _raise_fallback_error(err, slow_args[0].__name__)
+            res = func(*slow_args, **slow_kwargs)
+        return _maybe_wrap_result(res, func, *args, **kwargs)
+
+    slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
+    return _maybe_wrap_result(
+        func(*slow_args, **slow_kwargs), func, *args, **kwargs
+    )
+
+
 ndarray = make_final_proxy_type(
     "ndarray",
     cupy.ndarray,
@@ -152,6 +202,7 @@ ndarray = make_final_proxy_type(
     bases=(ProxyNDarrayBase,),
     additional_attributes={
         "__array__": array_method,
+        "__array_function__": ndarray__array_function__,
         # So that pa.array(wrapped-numpy-array) works
         "__arrow_array__": arrow_array_method,
         "__cuda_array_interface__": cuda_array_interface,
@@ -187,7 +238,9 @@ if version.parse(numpy.__version__) >= version.parse("2.0"):
     # NumPy 2 introduced `_core` and gives warnings for access to `core`.
     from numpy._core.multiarray import flagsobj as _numpy_flagsobj
 else:
-    from numpy.core.multiarray import flagsobj as _numpy_flagsobj
+    from numpy.core.multiarray import (  # type: ignore[no-redef]
+        flagsobj as _numpy_flagsobj,
+    )
 
 # Mapping flags between slow and fast types
 _ndarray_flags = make_intermediate_proxy_type(

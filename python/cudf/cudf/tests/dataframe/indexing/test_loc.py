@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import re
 import weakref
 from contextlib import contextmanager
@@ -614,7 +615,7 @@ def test_dataframe_loc(scalar):
     )
     pdf.index.name = "index"
 
-    df = cudf.DataFrame.from_pandas(pdf)
+    df = cudf.DataFrame(pdf)
 
     assert_eq(df.loc[:, ["a"]], pdf.loc[:, ["a"]])
 
@@ -647,7 +648,7 @@ def test_dataframe_loc_slice(step):
     )
     pdf.index.name = "index"
 
-    df = cudf.DataFrame.from_pandas(pdf)
+    df = cudf.DataFrame(pdf)
     begin = 110
     end = 122
 
@@ -695,7 +696,7 @@ def test_dataframe_loc_arraylike():
     )
     pdf.index.name = "index"
 
-    df = cudf.DataFrame.from_pandas(pdf)
+    df = cudf.DataFrame(pdf)
     # Make int64 index
     offset = 50
     df2 = df[offset:]
@@ -724,7 +725,7 @@ def test_dataframe_loc_mask(mask, arg):
     pdf = pd.DataFrame(
         {"a": ["a", "b", "c", "d", "e"], "b": ["f", "g", "h", "i", "j"]}
     )
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     assert_eq(pdf.loc[mask, arg], gdf.loc[mask, arg])
 
@@ -787,7 +788,7 @@ def test_sliced_indexing():
     a = list(range(4, 4 + 150))
     b = list(range(0, 0 + 150))
     pdf = pd.DataFrame({"a": a, "b": b})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     pdf = pdf.set_index("a")
     gdf = gdf.set_index("a")
     pidx = pdf.index[:75]
@@ -1356,7 +1357,7 @@ def test_loc_datetime_random_with_ts(scalar):
 @pytest.mark.parametrize("dtype", ["category", "timedelta64[ns]"])
 def test_loc_iloc_setitem_col_slice_non_cupy_types(indexer, dtype):
     df_pd = pd.DataFrame(range(2), dtype=dtype)
-    df_cudf = cudf.DataFrame.from_pandas(df_pd)
+    df_cudf = cudf.DataFrame(df_pd)
     getattr(df_pd, indexer)[:, 0] = getattr(df_pd, indexer)[:, 0]
     getattr(df_cudf, indexer)[:, 0] = getattr(df_cudf, indexer)[:, 0]
     assert_eq(df_pd, df_cudf)

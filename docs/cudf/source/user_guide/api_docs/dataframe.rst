@@ -108,7 +108,6 @@ Function application, GroupBy & window
    DataFrame.agg
    DataFrame.apply
    DataFrame.applymap
-   DataFrame.apply_chunks
    DataFrame.groupby
    DataFrame.map
    DataFrame.pipe
@@ -245,6 +244,14 @@ Time Series-related
 
    DataFrame.shift
    DataFrame.resample
+
+
+Metadata
+~~~~~~~~
+.. autosummary::
+   :toctree: api/
+
+   DataFrame.attrs
 
 Serialization / IO / conversion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

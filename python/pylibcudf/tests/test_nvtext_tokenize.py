@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import pyarrow as pa
 import pytest
@@ -88,8 +89,8 @@ def test_tokenize_with_vocabulary(input_col, default_id):
         plc.Scalar.from_arrow(pa.scalar(" ")),
         default_id,
     )
-    expect_type = plc.interop.to_arrow(
-        got.type(), value_type=pa.list_(pa.int32()).value_type
+    expect_type = got.type().to_arrow(
+        value_type=pa.list_(pa.int32()).value_type
     )
     if default_id == -1:
         expect = pa.array([[0], [-1, -1], [2]], type=expect_type)

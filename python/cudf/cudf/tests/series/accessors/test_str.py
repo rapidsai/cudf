@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import json
 import re
@@ -1387,25 +1388,16 @@ def test_string_starts_ends(data, pat):
     ],
 )
 def test_string_starts_ends_list_like_pat(data, pat):
-    gs = cudf.Series(data)
+    pd_data = pd.Series(data)
+    cudf_data = cudf.Series(data)
 
-    starts_expected = []
-    ends_expected = []
-    for i in range(len(pat)):
-        if data[i] is None:
-            starts_expected.append(None)
-            ends_expected.append(None)
-        else:
-            if pat[i] is None:
-                starts_expected.append(False)
-                ends_expected.append(False)
-            else:
-                starts_expected.append(data[i].startswith(pat[i]))
-                ends_expected.append(data[i].endswith(pat[i]))
-    starts_expected = pd.Series(starts_expected)
-    ends_expected = pd.Series(ends_expected)
-    assert_eq(starts_expected, gs.str.startswith(pat), check_dtype=False)
-    assert_eq(ends_expected, gs.str.endswith(pat), check_dtype=False)
+    result = cudf_data.str.startswith(pat)
+    expected = pd_data.str.startswith(pat)
+    assert_eq(result, expected)
+
+    result = cudf_data.str.endswith(pat)
+    expected = pd_data.str.endswith(pat)
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize(
@@ -1530,14 +1522,14 @@ def test_string_replace_multi():
     assert_eq(expect, got)
 
     ps = pd.Series(["foo", "fuz", np.nan])
-    gs = cudf.Series.from_pandas(ps)
+    gs = cudf.Series(ps)
 
     expect = ps.str.replace("f.", "ba", regex=True)
     got = gs.str.replace(["f."], ["ba"], regex=True)
     assert_eq(expect, got)
 
     ps = pd.Series(["f.o", "fuz", np.nan])
-    gs = cudf.Series.from_pandas(ps)
+    gs = cudf.Series(ps)
 
     expect = ps.str.replace("f.", "ba", regex=False)
     got = gs.str.replace(["f."], ["ba"], regex=False)
@@ -2853,3 +2845,18 @@ def test_string_misc_name(ps_gs, name):
     assert_eq(ps + ps, gs + gs)
     assert_eq(ps + "RAPIDS", gs + "RAPIDS")
     assert_eq("RAPIDS" + ps, "RAPIDS" + gs)
+
+
+def test_string_list_get_access():
+    ps = pd.Series(["a,b,c", "d,e,f", None, "g,h,i"])
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.str.split(",")
+    got = gs.str.split(",")
+
+    assert_eq(expect, got)
+
+    expect = expect.str.get(1)
+    got = got.str.get(1)
+
+    assert_eq(expect, got)

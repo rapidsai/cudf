@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
 import pandas as pd
@@ -23,7 +24,9 @@ def test_cov():
     assert_eq(pdf.cov(), gdf.cov())
 
 
-@pytest.mark.xfail(reason="cupy-based cov does not support nulls")
+@pytest.mark.xfail(
+    raises=NotImplementedError, reason="cupy-based cov does not support nulls"
+)
 def test_cov_nans():
     pdf = pd.DataFrame(
         {

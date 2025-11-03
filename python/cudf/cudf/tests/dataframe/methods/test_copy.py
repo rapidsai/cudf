@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from copy import copy, deepcopy
 
 import cupy as cp
@@ -43,7 +44,7 @@ def test_dataframe_deep_copy(copy_fn):
     pdf = pd.DataFrame(
         [[1, 2, 3], [4, 5, 6], [7, 8, 9]], columns=["a", "b", "c"]
     )
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     copy_pdf = copy_fn(pdf)
     copy_gdf = copy_fn(gdf)
     copy_pdf["b"] = [0, 0, 0]
@@ -67,7 +68,7 @@ def test_cudf_dataframe_copy(copy_fn, ncols, all_supported_types_as_str):
             for i in range(ncols)
         }
     )
-    df = cudf.DataFrame.from_pandas(pdf)
+    df = cudf.DataFrame(pdf)
     copy_df = copy_fn(df)
     assert_eq(df, copy_df)
 
@@ -85,7 +86,7 @@ def test_cudf_dataframe_copy_then_insert(
             for i in range(ncols)
         }
     )
-    df = cudf.DataFrame.from_pandas(pdf)
+    df = cudf.DataFrame(pdf)
     copy_df = copy_fn(df)
     copy_pdf = copy_fn(pdf)
     copy_df["aa"] = pd.Series(rng.integers(0, 1000, 20)).astype(
@@ -102,7 +103,7 @@ def test_deep_copy_write_in_place():
     pdf = pd.DataFrame(
         [[1, 2, 3], [4, 5, 6], [7, 8, 9]], columns=["a", "b", "c"]
     )
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     cdf = gdf.copy(deep=True)
     sr = gdf["b"]
 
@@ -117,7 +118,7 @@ def test_shallow_copy_write_in_place():
     pdf = pd.DataFrame(
         [[1, 2, 3], [4, 5, 6], [7, 8, 9]], columns=["a", "b", "c"]
     )
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     cdf = gdf.copy(deep=False)
     sr = gdf["a"]
 
@@ -133,7 +134,7 @@ def test_dataframe_copy_shallow():
     pdf = pd.DataFrame(
         [[1, 2, 3], [4, 5, 6], [7, 8, 9]], columns=["a", "b", "c"]
     )
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     copy_pdf = pdf.copy(deep=False)
     copy_gdf = gdf.copy(deep=False)
     copy_pdf["b"] = [0, 0, 0]

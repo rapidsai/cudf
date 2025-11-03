@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import datetime
 
 import numpy as np
@@ -14,7 +15,7 @@ def test_issue_165():
     data = [(start_date + datetime.timedelta(days=x)) for x in range(6)]
     df_pandas["dates"] = data
     df_pandas["num"] = [1, 2, 3, 4, 5, 6]
-    df_cudf = DataFrame.from_pandas(df_pandas)
+    df_cudf = DataFrame(df_pandas)
 
     base = df_pandas.query("dates==@start_date")
     test = df_cudf.query("dates==@start_date")

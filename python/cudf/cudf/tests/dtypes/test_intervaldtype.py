@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import pandas as pd
 from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
@@ -47,5 +48,5 @@ def test_interval_dtype_from_pandas(
     pd_type = pd.IntervalDtype(
         signed_integer_types_as_str, closed=interval_closed
     )
-    got = cudf.IntervalDtype.from_pandas(pd_type)
+    got = cudf.IntervalDtype(pd_type.subtype, closed=pd_type.closed)
     assert expect == got

@@ -1,8 +1,10 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from enum import IntEnum
 from typing import TypeVar
 
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.column import Column
@@ -25,19 +27,26 @@ def gather(
     gather_map: Column,
     bounds_policy: OutOfBoundsPolicy,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
 def scatter(
     source: Table | list[Scalar],
     scatter_map: Column,
     target_table: Table,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
-def empty_like(input: ColumnOrTable) -> ColumnOrTable: ...
+def empty_like(
+    input: ColumnOrTable,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> ColumnOrTable: ...
 def allocate_like(
     input_column: Column,
     policy: MaskAllocationPolicy,
     size: int | None = None,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def copy_range_in_place(
     input_column: Column,
@@ -54,12 +63,14 @@ def copy_range(
     input_end: int,
     target_begin: int,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def shift(
     input: Column,
     offset: int,
     fill_value: Scalar,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def slice(
     input: ColumnOrTable, indices: list[int], stream: Stream | None = None
@@ -72,13 +83,18 @@ def copy_if_else(
     rhs: Column | Scalar,
     boolean_mask: Column,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def boolean_mask_scatter(
     input: Table | list[Scalar],
     target: Table,
     boolean_mask: Column,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
 def get_element(
-    input_column: Column, index: int, stream: Stream | None = None
+    input_column: Column,
+    index: int,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Scalar: ...

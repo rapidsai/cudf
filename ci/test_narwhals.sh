@@ -1,5 +1,6 @@
 #!/bin/bash
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
 
@@ -27,6 +28,15 @@ rapids-pip-retry install -U -e .
 rapids-logger "Check narwhals versions"
 python -c "import narwhals; print(narwhals.show_versions())"
 
+# test_to_numpy[cudf]: Passes as of https://github.com/rapidsai/cudf/pull/19923
+# test_fill_null_strategies_with_limit_as_none[cudf]: Narwhals passes inplace=None instead of a bool
+# test_fill_null_series_limit_as_none[cudf]: Narwhals passes inplace=None instead of a bool
+TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF=" \
+test_to_numpy[cudf] or \
+test_fill_null_strategies_with_limit_as_none[cudf] or \
+test_fill_null_series_limit_as_none[cudf] \
+"
+
 rapids-logger "Run narwhals tests for cuDF"
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
     --cache-clear \
@@ -34,15 +44,20 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
     -p env \
     -p no:pytest_benchmark \
     -p cudf.testing.narwhals_test_plugin \
+    -k "not ( \
+        ${TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF} \
+    )" \
     --numprocesses=8 \
     --dist=worksteal \
     --constructors=cudf
 
 # test_datetime[polars[lazy]]: Fixed in the next narwhals release >2.0.1
 # test_nan[polars[lazy]]: Passes as of https://github.com/rapidsai/cudf/pull/19742
+# test_to_datetime_tz_aware[polars[lazy]-None]: Fixed in the Narwhals version that supports polars 1.33.1
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_POLARS=" \
 test_datetime[polars[lazy]] or \
-test_nan[polars[lazy]] \
+test_nan[polars[lazy]] or \
+test_to_datetime_tz_aware[polars[lazy]-None] \
 "
 
 rapids-logger "Run narwhals tests for cuDF Polars"
@@ -100,8 +115,13 @@ test_pandas_object_series \
 
 # test_dtypes: With cudf.pandas loaded, to_pandas() preserves Arrow dtypes like list and struct, so pandas
 # columns aren't object anymore. The test expects object, causing a mismatch.
+# test_get_dtype_backend: We now preserve arrow extension dtypes
+# (e.g. bool[pyarrow], duration[ns][pyarrow]).
+# test_explode_multiple_cols[pandas-l1-more_columns0-expected0] matches pandas now so needs a skip in the test
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_PANDAS=" \
-test_dtypes \
+test_dtypes or \
+test_explode_multiple_cols or \
+(test_get_dtype_backend and pyarrow and (pandas or modin)) \
 "
 
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \

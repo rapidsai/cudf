@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 # Run Pandas unit tests with cudf.pandas.
@@ -59,6 +58,7 @@ markers = [
   "clipboard: mark a pd.read_clipboard test",
   "arm_slow: mark a test as slow for arm64 architecture",
   "skip_ubsan: Tests known to fail UBSAN check",
+  "fails_arm_wheels: Tests known to fail on arm64 wheels",
 ]
 EOF
 
@@ -146,15 +146,37 @@ and not test_frame_op_subclass_nonclass_constructor \
 and not test_round_trip_current \
 and not test_pickle_frame_v124_unpickle_130"
 
-PYTEST_IGNORES=("--ignore=tests/io/parser/common/test_read_errors.py"
-                "--ignore=tests/io/test_clipboard.py" # crashes pytest workers (possibly due to fixture patching clipboard functionality)
+IGNORE_TESTS_THAT_CRASH_PYTEST_COLLECTION=("--ignore=tests/io/parser/common/test_read_errors.py"
+                                           "--ignore=tests/io/test_clipboard.py"
+)
+
+IGNORE_TESTS_THAT_TEST_PRIVATE_FUNTIONALITY=("--ignore=tests/test_nanops.py"
+                                             "--ignore=tests/test_optional_dependency.py"
+                                             "--ignore=tests/util/test_assert_produces_warning.py"
+                                             "--ignore=tests/util/test_shares_memory.py"
+                                             "--ignore=tests/util/test_validate_args.py"
+                                             "--ignore=tests/util/test_validate_args_and_kwargs.py"
+                                             "--ignore=tests/util/test_validate_inclusive.py"
+                                             "--ignore=tests/util/test_validate_kwargs.py"
+                                             "--ignore=tests/util/test_util.py"
+                                             "--ignore=tests/util/test_rewrite_warning.py"
+                                             "--ignore=tests/util/test_deprecate_nonkeyword_arguments.py"
+                                             "--ignore=tests/util/test_deprecate_kwarg.py"
+                                             "--ignore=tests/util/test_deprecate.py"
+                                             "--ignore=tests/util/test_doc.py"
+                                             "--ignore=tests/tslibs/"
+                                             "--ignore=tests/libs/"
+                                             "--ignore=tests/internals/"
+                                             "--ignore=tests/groupby/test_libgroupby.py"
+                                             "--ignore=tests/frame/test_block_internals.py"
 )
 
 
 PANDAS_CI="1" python -m pytest -p cudf.pandas \
     --import-mode=importlib \
     -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and $TEST_THAT_NEED_REASON_TO_SKIP and $TEST_THAT_USE_STRING_DTYPE_GROUPBY and $TEST_THAT_USE_WEAKREFS" \
-    "${PYTEST_IGNORES[@]}" \
+    "${IGNORE_TESTS_THAT_CRASH_PYTEST_COLLECTION[@]}" \
+    "${IGNORE_TESTS_THAT_TEST_PRIVATE_FUNTIONALITY[@]}" \
     "$@"
 
 mv ./*.json ..
