@@ -355,7 +355,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::an
   if (_build.num_rows() == 0) {
     auto result =
       std::make_unique<rmm::device_uvector<cudf::size_type>>(probe.num_rows(), stream, mr);
-    thrust::sequence(rmm::exec_policy(stream), result->begin(), result->end());
+    thrust::sequence(rmm::exec_policy_nosync(stream), result->begin(), result->end());
     return result;
   }
 
