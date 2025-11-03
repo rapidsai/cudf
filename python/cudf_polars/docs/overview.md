@@ -742,15 +742,17 @@ and convert back to polars:
 ```python
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.dsl.ir import IRExecutionContext
+from rmm.pylibrmm.stream import DEFAULT_STREAM
 import polars as pl
 
 q = ...
 
 # Convert to our IR
-ir = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
+translator = Translator(q._ldf.visit(), pl.GPUEngine())
+ir = translator.translate_ir()
 
 # DataFrame living on the device
-result = ir.evaluate(cache={}, timer=None, context=IRExecutionContext())
+result = ir.evaluate(cache={}, timer=None, context=IRExecutionContext.from_config_options(translator.config_options))
 
 # Polars dataframe
 host_result = result.to_polars()

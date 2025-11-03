@@ -2137,8 +2137,8 @@ TEST_F(JsonReaderTest, JSONLinesRecoveringSync)
   // Set up host pinned memory pool to avoid implicit synchronizations to test for any potential
   // races due to missing host-device synchronizations
   using host_pooled_mr = rmm::mr::pool_memory_resource<rmm::mr::pinned_host_memory_resource>;
-  host_pooled_mr mr{std::make_shared<rmm::mr::pinned_host_memory_resource>().get(),
-                    size_t{128} * 1024 * 1024};
+  auto pinned_mr       = std::make_shared<rmm::mr::pinned_host_memory_resource>();
+  host_pooled_mr mr{pinned_mr.get(), size_t{128} * 1024 * 1024};
 
   // Set new resource
   auto last_mr = cudf::set_pinned_memory_resource(mr);
