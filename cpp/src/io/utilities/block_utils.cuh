@@ -32,10 +32,10 @@ inline __device__ uint32_t ballot(int pred) { return __ballot_sync(~0, pred); }
 template <cudf::size_type size, typename T>
 inline __device__ T warp_reduce_or(T acc)
 {
-  static_assert(size >= 2 and size <= cudf::detail::warp_size and (size & (size - 1)) == 0,
+  static_assert(size >= 1 and size <= cudf::detail::warp_size and (size & (size - 1)) == 0,
                 "Size must be a power of 2 and less than or equal to the warp size");
-  if constexpr (size == 2) {
-    return acc | shuffle_xor(acc, 1);
+  if constexpr (size == 1) {
+    return acc;
   } else {
     acc = warp_reduce_or<size / 2>(acc);
     return acc | shuffle_xor(acc, size / 2);
