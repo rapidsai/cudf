@@ -4,6 +4,8 @@
  */
 
 #pragma once
+#include <cooperative_groups.h>
+#include <cub/cub.cuh>
 #include <cuda/std/cstdint>
 #include <cuda/std/cstring>
 
@@ -123,45 +125,42 @@ inline __device__ T unaligned_load(uint8_t const* p)
   return value;
 }
 
-template <unsigned int nthreads, bool sync_before_store>
-inline __device__ void memcpy_block(void* dstv, void const* srcv, uint32_t len, uint32_t t)
+template <uint32_t nthreads, bool sync_before_store>
+inline __device__ void memcpy_block(void* dstv,
+                                    void const* srcv,
+                                    uint32_t len,
+                                    cooperative_groups::thread_block const& block)
 {
+  auto const t    = block.thread_rank();
   auto* dst       = static_cast<uint8_t*>(dstv);
   auto const* src = static_cast<uint8_t const*>(srcv);
-  uint32_t dst_align_bytes, src_align_bytes, src_align_bits;
   // Align output to 32-bit
-  dst_align_bytes = 3 & -reinterpret_cast<intptr_t>(dst);
+  auto const dst_align_bytes = static_cast<uint32_t>(0x3 & -reinterpret_cast<intptr_t>(dst));
   if (dst_align_bytes != 0) {
-    uint32_t align_len = min(dst_align_bytes, len);
-    uint8_t b;
-    if (t < align_len) { b = src[t]; }
-    if constexpr (sync_before_store) { __syncthreads(); }
-    if (t < align_len) { dst[t] = b; }
+    auto const align_len = cuda::std::min<uint32_t>(dst_align_bytes, len);
+    uint8_t byte;
+    if (t < align_len) { byte = src[t]; }
+    if constexpr (sync_before_store) { block.sync(); }
+    if (t < align_len) { dst[t] = byte; }
     src += align_len;
     dst += align_len;
     len -= align_len;
   }
-  src_align_bytes = (uint32_t)(3 & reinterpret_cast<uintptr_t>(src));
-  src_align_bits  = src_align_bytes * 8;
-  while (len >= 4) {
-    auto const* src32 = reinterpret_cast<uint32_t const*>(src - src_align_bytes);
-    uint32_t copy_cnt = min(len >> 2, nthreads);
-    uint32_t v;
-    if (t < copy_cnt) {
-      v = src32[t];
-      if (src_align_bits != 0) { v = __funnelshift_r(v, src32[t + 1], src_align_bits); }
-    }
-    if constexpr (sync_before_store) { __syncthreads(); }
-    if (t < copy_cnt) { reinterpret_cast<uint32_t*>(dst)[t] = v; }
-    src += copy_cnt * 4;
-    dst += copy_cnt * 4;
-    len -= copy_cnt * 4;
+  while (len >= sizeof(uint32_t)) {
+    auto const copy_cnt = cuda::std::min<uint32_t>(len >> 2, nthreads);
+    uint32_t value;
+    if (t < copy_cnt) { value = unaligned_load<uint32_t>(src + (t * sizeof(uint32_t))); }
+    if constexpr (sync_before_store) { block.sync(); }
+    if (t < copy_cnt) { reinterpret_cast<uint32_t*>(dst)[t] = value; }
+    src += copy_cnt * sizeof(uint32_t);
+    dst += copy_cnt * sizeof(uint32_t);
+    len -= copy_cnt * sizeof(uint32_t);
   }
   if (len != 0) {
-    uint8_t b;
-    if (t < len) { b = src[t]; }
-    if constexpr (sync_before_store) { __syncthreads(); }
-    if (t < len) { dst[t] = b; }
+    uint8_t byte;
+    if (t < len) { byte = src[t]; }
+    if constexpr (sync_before_store) { block.sync(); }
+    if (t < len) { dst[t] = byte; }
   }
 }
 
