@@ -3,7 +3,7 @@
 from libc.stdint cimport int32_t
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
-from pylibcudf.libcudf.round cimport round_decimal as cpp_round, rounding_method
+from pylibcudf.libcudf.round cimport round as cpp_round, rounding_method
 
 from pylibcudf.libcudf.round import \
     rounding_method as RoundingMethod  # no-cython-lint
@@ -27,7 +27,7 @@ cpdef Column round(
 ):
     """Rounds all the values in a column to the specified number of decimal places.
 
-    For details, see :cpp:func:`round_decimal`.
+    For details, see :cpp:func:`round`.
 
     Parameters
     ----------

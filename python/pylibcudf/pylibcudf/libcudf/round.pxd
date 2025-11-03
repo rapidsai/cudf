@@ -16,7 +16,7 @@ cdef extern from "cudf/round.hpp" namespace "cudf" nogil:
         HALF_UP
         HALF_EVEN
 
-    cdef unique_ptr[column] round_decimal (
+    cdef unique_ptr[column] round (
         const column_view& input,
         int32_t decimal_places,
         rounding_method method,
