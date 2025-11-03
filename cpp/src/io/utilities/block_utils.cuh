@@ -159,6 +159,7 @@ inline __device__ void memcpy_block(void* dstv,
     dst += copy_cnt * sizeof(uint32_t);
     len -= copy_cnt * sizeof(uint32_t);
   }
+  // Copy the remaining bytes
   if (len != 0) {
     uint8_t byte;
     if (t < len) { byte = src[t]; }
