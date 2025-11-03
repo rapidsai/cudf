@@ -917,12 +917,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 ) and isinstance(codes, pa.ChunkedArray):
                     result = cls.from_pylibcudf(
                         plc.Table.from_arrow(
-                            pa.table({None: codes})
+                            pa.table({None: codes})  # type: ignore[dict-item]
                         ).columns()[0]
                     )
                     categories = cls.from_pylibcudf(
                         plc.Table.from_arrow(
-                            pa.table({None: dictionary})
+                            pa.table({None: dictionary})  # type: ignore[dict-item]
                         ).columns()[0]
                     )
                 else:
@@ -940,7 +940,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 "16"
             ) and isinstance(array, pa.ChunkedArray):
                 result = cls.from_pylibcudf(
-                    plc.Table.from_arrow(pa.table({None: array})).columns()[0]
+                    plc.Table.from_arrow(
+                        pa.table({None: array})  # type: ignore[dict-item]
+                    ).columns()[0]
                 )
             else:
                 result = cls.from_pylibcudf(plc.Column.from_arrow(array))

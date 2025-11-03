@@ -2138,11 +2138,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         max_rows = pd.options.display.max_rows
         if max_rows in {0, None}:
             max_rows = len(self)
+        # Type narrow: max_rows is now guaranteed to be int after the check above
+        assert max_rows is not None
         nrows = max(max_rows, 1)
-        ncols = (
-            pd.options.display.max_columns
-            if pd.options.display.max_columns
-            else pd.options.display.width / 2
+        ncols_option = pd.options.display.max_columns
+        ncols: int | float = (
+            ncols_option if ncols_option else pd.options.display.width / 2
         )
 
         if len(self) <= nrows and self._num_columns <= ncols:
@@ -6672,6 +6673,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                                 else:
                                     res_dtype = np.dtype("int64")
                             elif op == "sum_of_squares":
+                                # common_dtype is not None here due to is_numeric_dtype check above
+                                assert common_dtype is not None
                                 res_dtype = find_common_type(
                                     (common_dtype, np.dtype(np.uint64))
                                 )
@@ -6700,8 +6703,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                         if op in {"any", "all"}:
                             res_dtype = np.dtype(np.bool_)
                     res = res.nans_to_nulls()
-                    new_dtype = get_dtype_of_same_kind(common_dtype, res_dtype)
-                    res = res.astype(new_dtype)
+                    # common_dtype can be None if all dtypes are incompatible
+                    if common_dtype is not None:
+                        new_dtype = get_dtype_of_same_kind(
+                            common_dtype, res_dtype
+                        )
+                        res = res.astype(new_dtype)
 
                 return Series._from_column(res, index=idx, attrs=self.attrs)
 
@@ -7594,8 +7601,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 [col.dtype for col in columns if col is not None]
             )
 
+            # Use object dtype as fallback if no common type found
+            dtype_for_empty = (
+                common_type if common_type is not None else np.dtype("object")
+            )
             all_nulls = functools.cache(
-                functools.partial(column_empty, self.shape[0], common_type)
+                functools.partial(column_empty, self.shape[0], dtype_for_empty)
             )
 
             # homogenize the dtypes of the columns
