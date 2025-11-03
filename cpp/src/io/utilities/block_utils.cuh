@@ -150,7 +150,7 @@ inline __device__ void memcpy_block(void* dstv,
     len -= align_len;
   }
   while (len >= sizeof(uint32_t)) {
-    auto const copy_cnt = cuda::std::min<uint32_t>(len >> 2, nthreads);
+    auto const copy_cnt = cuda::std::min<uint32_t>(len / sizeof(uint32_t), nthreads);
     uint32_t value;
     if (t < copy_cnt) { value = unaligned_load<uint32_t>(src + (t * sizeof(uint32_t))); }
     if constexpr (sync_before_store) { block.sync(); }
