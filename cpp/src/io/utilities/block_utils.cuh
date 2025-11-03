@@ -149,6 +149,7 @@ inline __device__ void memcpy_block(void* dstv,
     dst += align_len;
     len -= align_len;
   }
+  // Copy 32-bit chunks
   while (len >= sizeof(uint32_t)) {
     auto const copy_cnt = cuda::std::min<uint32_t>(len / sizeof(uint32_t), nthreads);
     uint32_t value;
