@@ -675,12 +675,10 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   for (std::size_t i = start_source, cur_stream = 0;
        i < sources.size() && bytes_read < total_bytes_to_read;
        i++) {
-    if (sources[i]->is_empty()) { continue; }
-    auto const offset = bytes_read + (num_delimiter_chars * delimiter_map.size());
-    auto destination  = reinterpret_cast<uint8_t*>(buffer.data()) + offset;
-    auto const data_size =
-      std::min(std::min(sources[i]->size() - range_offset, total_bytes_to_read - bytes_read),
-               buffer.size() - offset);
+    if (sources[i]->is_empty()) continue;
+    auto data_size = std::min(sources[i]->size() - range_offset, total_bytes_to_read - bytes_read);
+    auto destination = reinterpret_cast<uint8_t*>(buffer.data()) + bytes_read +
+                       (num_delimiter_chars * delimiter_map.size());
     if (sources[i]->supports_device_read()) {
       thread_tasks.emplace_back(sources[i]->device_read_async(
         range_offset, data_size, destination, stream_pool[cur_stream++ % stream_pool.size()]));
@@ -689,7 +687,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
       h_buffers.emplace_back(sources[i]->host_read(range_offset, data_size));
       auto const& h_buffer = h_buffers.back();
       CUDF_CUDA_TRY(cudaMemcpyAsync(
-        destination, h_buffer->data(), h_buffer->size(), cudaMemcpyDefault, stream.value()));
+        destination, h_buffer->data(), h_buffer->size(), cudaMemcpyHostToDevice, stream.value()));
       bytes_read += h_buffer->size();
     }
     range_offset = 0;
@@ -722,9 +720,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
                  "Incorrect number of bytes read by multithreaded reader");
   }
 
-  auto const return_size =
-    std::min(buffer.size(), bytes_read + (delimiter_map.size() * num_delimiter_chars));
-  return buffer.first(return_size);
+  return buffer.first(bytes_read + (delimiter_map.size() * num_delimiter_chars));
 }
 
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
