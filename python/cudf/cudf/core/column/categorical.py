@@ -119,8 +119,9 @@ class CategoricalColumn(column.ColumnBase):
         )
         self._codes = self.children[0].set_mask(self.mask)
 
+    @classmethod
     def _get_data_buffer_from_pylibcudf_column(
-        self, plc_column: plc.Column, exposed: bool
+        cls, plc_column: plc.Column, exposed: bool
     ) -> None:
         """
         This column considers the plc_column (i.e. codes) as children

@@ -208,11 +208,15 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self._base_mask = None
         self._data = None
         self._children = None
+        # CategoricalColumn overrides this method
         data = self._get_data_buffer_from_pylibcudf_column(
             self.plc_column, exposed
         )
-        mask = self._get_mask_buffer_from_pylibcudf_column(
-            self.plc_column, exposed
+        mask_view = plc_column.null_mask()
+        mask = (
+            as_buffer(mask_view.obj, exposed=exposed)
+            if mask_view is not None
+            else None
         )
         children = self._get_children_from_pylibcudf_column(
             self.plc_column,
@@ -223,8 +227,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self.set_base_data(data)
         self.set_base_mask(mask)
 
+    @classmethod
     def _get_data_buffer_from_pylibcudf_column(
-        self, plc_column: plc.Column, exposed: bool
+        cls, plc_column: plc.Column, exposed: bool
     ) -> Buffer | None:
         """
         Extract the data buffer from a pylibcudf.Column.
@@ -247,33 +252,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return (
             as_buffer(data_view.obj, exposed=exposed)
             if data_view is not None
-            else None
-        )
-
-    def _get_mask_buffer_from_pylibcudf_column(
-        self, plc_column: plc.Column, exposed: bool
-    ) -> Buffer | None:
-        """
-        Extract the mask buffer from a pylibcudf.Column.
-
-        Necessary to wrap the mask buffer in a cuDF Buffer for spilling support.
-
-        Parameters
-        ----------
-        plc_column : plc.Column
-            The pylibcudf.Column to extract the mask buffer from.
-        exposed : bool
-            Whether the mask buffer is exposed.
-
-        Returns
-        -------
-        Buffer | None
-            The mask buffer.
-        """
-        mask_view = plc_column.null_mask()
-        return (
-            as_buffer(mask_view.obj, exposed=exposed)
-            if mask_view is not None
             else None
         )
 
@@ -1148,7 +1126,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 null_count=self.null_count,
                 exposed=False,
             )
-            # copy-on-write logic tracked on the Buffers
+            # copy-on-write and spilling logic tracked on the Buffers
             # so copy over the Buffers from self
             col.set_base_children(
                 tuple(child.copy(deep=False) for child in self.base_children)
