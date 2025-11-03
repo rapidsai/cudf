@@ -1147,9 +1147,16 @@ def unstack(df, level, fill_value=None, sort: bool = True):
     if df.empty:
         raise ValueError("Cannot unstack an empty dataframe.")
 
-    if not is_scalar(level) and len(level) > 1 and df.index.nlevels > 1:
+    if (
+        not is_scalar(level)
+        and len(level) > 1
+        and df.index.nlevels > 1
+        and cudf.get_option("mode.pandas_compatible")
+    ):
         # We currently produce columns in the wrong order vs pandas
-        # See https://github.com/rapidsai/cudf/issues/20446
+        # See https://github.com/rapidsai/cudf/issues/20446.
+        # We should plan to remove once we rewrite pivot and unstack
+        # for better performance. See https://github.com/rapidsai/cudf/issues/20469
         raise NotImplementedError(
             "Unstacking multiple index levels is not yet pandas compatible"
         )
