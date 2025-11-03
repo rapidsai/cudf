@@ -105,6 +105,6 @@ def test_dataframe_round_decimal():
 
 
 def test_dataframe_round_dict_decimal_validation():
-    df = cudf.DataFrame({"A": [123, 456], "B": [789, 12]})
+    df = cudf.DataFrame({"A": [0.12], "B": [0.13]})
     with pytest.raises(TypeError):
         df.round({"A": 1, "B": 0.5})

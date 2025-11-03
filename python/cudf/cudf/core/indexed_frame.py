@@ -4072,50 +4072,16 @@ class IndexedFrame(Frame):
                 "decimals must be an integer, a dict-like or a Series"
             )
 
-        def _round_column(col, name, decimals_dict, how):
-            if name not in decimals_dict:
-                return col.copy(deep=True)
-
-            # Handle float columns with numpy round
-            if col.dtype.kind == "f":
-                # Convert to numpy, round, and convert back
-                arr = col.values.get()
-                if how == "half_up":
-                    # Implement half_up rounding for floats
-                    # For half_up: 0.5 always rounds away from zero
-                    multiplier = 10.0 ** decimals_dict[name]
-                    # Add small epsilon to ensure 0.5 rounds up correctly
-                    rounded_arr = (
-                        np.floor(
-                            arr * multiplier
-                            + np.copysign(0.5, arr)
-                            + np.finfo(arr.dtype).eps
-                        )
-                        / multiplier
-                    )
-                else:
-                    # Use numpy's default half_even rounding
-                    rounded_arr = np.round(arr, decimals_dict[name])
-                # Create new column from rounded array, preserving null mask
-                from cudf.core.column import as_column
-
-                rounded_col = as_column(rounded_arr, dtype=col.dtype)
-                # Preserve the null mask from the original column
-                if col.nullable:
-                    rounded_col = rounded_col.set_mask(col.mask)
-                return rounded_col
-
-            # Handle integer and decimal columns with round_decimal
-            if col.dtype.kind in "iu" or isinstance(
-                col.dtype, (cudf.Decimal32Dtype, cudf.Decimal64Dtype)
-            ):
-                return col.round(decimals_dict[name], how=how)
-
-            # For other types, just copy
-            return col.copy(deep=True)
-
         cols = (
-            _round_column(col, name, decimals, how)
+            col.round(decimals[name], how=how)
+            if name in decimals
+            and (
+                col.dtype.kind in "fiu"
+                or isinstance(
+                    col.dtype, (cudf.Decimal32Dtype, cudf.Decimal64Dtype)
+                )
+            )
+            else col.copy(deep=True)
             for name, col in self._column_labels_and_values
         )
         return self._from_data_like_self(
