@@ -2640,6 +2640,7 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/extension/test_arrow.py::TestArrowArray::test_invert[uint32]",
     "tests/extension/test_arrow.py::TestArrowArray::test_invert[uint64]",
     "tests/extension/test_arrow.py::TestArrowArray::test_invert[uint8]",
+    "tests/extension/test_arrow.py::TestArrowArray::test_reduce_frame[decimal128(7, 3)-median-True]"
     "tests/extension/test_arrow.py::TestArrowArray::test_reduce_frame[decimal128(7, 3)-mean-False]",
     "tests/extension/test_arrow.py::TestArrowArray::test_reduce_frame[decimal128(7, 3)-prod-False]",
     "tests/extension/test_arrow.py::TestArrowArray::test_reduce_frame[decimal128(7, 3)-sum-False]",

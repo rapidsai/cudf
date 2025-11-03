@@ -255,6 +255,12 @@ class DecimalBaseColumn(NumericalBaseColumn):
                     other = other.astype(self.dtype)
             other_cudf_dtype = other.dtype
         elif isinstance(other, (int, Decimal)):
+            if cudf.get_option("mode.pandas_compatible") and not isinstance(
+                self.dtype, DecimalDtype
+            ):
+                raise NotImplementedError(
+                    "binaryop with arbitrary decimal not support in pandas compatibility mode"
+                )
             other_cudf_dtype = self.dtype._from_decimal(Decimal(other))  # type: ignore[union-attr]
         elif isinstance(other, float):
             return self._binaryop(as_column(other, length=len(self)), op)
