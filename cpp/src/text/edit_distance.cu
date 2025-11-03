@@ -81,16 +81,21 @@ __device__ cudf::size_type compute_distance(cudf::string_view const& d_str,
   return v0[n];
 }
 
+constexpr cudf::size_type row_pad_size = 2;  // each row has potentially 2 extra values
+
 struct calculate_compute_buffer_fn {
   cudf::column_device_view d_strings;
   cudf::column_device_view d_targets;
-  int32_t pad;
-  int32_t count;
+  int32_t pad{row_pad_size};
+  int32_t count{3};  // number of concurrent rows for each iteration
 
   __device__ std::ptrdiff_t operator()(cudf::size_type idx) const
   {
     if (d_strings.is_null(idx)) { return 0; }
-    if (d_targets.size() > 1 && d_targets.is_null(idx)) { return 0; }
+    if ((d_targets.size() > 1 && d_targets.is_null(idx)) ||
+        (d_targets.size() == 1 && d_targets.is_null(0))) {
+      return 0;
+    }
     auto d_str = d_strings.element<cudf::string_view>(idx);
     auto d_tgt = d_targets.size() == 1 ? d_targets.element<cudf::string_view>(0)
                                        : d_targets.element<cudf::string_view>(idx);
@@ -142,8 +147,8 @@ __device__ void compute_distance(Iterator input1,
 
   // setup the 3 working vectors for this string
   auto v0 = d_buffer;
-  auto v1 = v0 + length1 + 2;
-  auto v2 = v1 + length1 + 2;
+  auto v1 = v0 + length1 + row_pad_size;
+  auto v2 = v1 + length1 + row_pad_size;
   if (lane_idx == 0) {
     v0[0] = 0;  // first diagonal
     v1[0] = 1;  // second diagonal
@@ -164,8 +169,8 @@ __device__ void compute_distance(Iterator input1,
   // top-left of the matrix
   // includes the diagonal one after the max(length1,length2) diagonal
   for (auto idx = 0; idx < length1; ++idx, ++input1) {
-    auto const n = idx + 2;      // diagonal length
-    auto const a = n > length1;  // extra diagonal adjust
+    auto const n = idx + row_pad_size;  // diagonal length
+    auto const a = n > length1;         // extra diagonal adjust
 
     auto jdx = static_cast<cudf::size_type>(lane_idx);
     auto it1 = input1;
@@ -243,7 +248,10 @@ CUDF_KERNEL void levenshtein_kernel(cudf::column_device_view d_strings,
   auto d_str1 = d_strings.is_null(str_idx) ? cudf::string_view{}
                                            : d_strings.element<cudf::string_view>(str_idx);
   auto d_str2 = [&] {  // d_targets is also allowed to have only one valid entry
-    if (d_targets.size() > 1 && d_targets.is_null(str_idx)) { return cudf::string_view{}; }
+    if ((d_targets.size() > 1 && d_targets.is_null(str_idx)) ||
+        (d_targets.size() == 1 && d_targets.is_null(0))) {
+      return cudf::string_view{};
+    }
     return d_targets.size() == 1 ? d_targets.element<cudf::string_view>(0)
                                  : d_targets.element<cudf::string_view>(str_idx);
   }();
@@ -292,7 +300,7 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& inp
                     thrust::counting_iterator<cudf::size_type>(0),
                     thrust::counting_iterator<cudf::size_type>(input.size()),
                     offsets.begin(),
-                    calculate_compute_buffer_fn{*d_strings, *d_targets, 2, 3});
+                    calculate_compute_buffer_fn{*d_strings, *d_targets});
 
   // get the total size of the temporary compute buffer
   // and convert sizes to offsets in-place

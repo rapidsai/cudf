@@ -20,20 +20,13 @@ struct TextEditDistanceTest : public cudf::test::BaseFixture {};
 
 TEST_F(TextEditDistanceTest, EditDistance)
 {
-  std::vector<char const*> h_strings{"dog", nullptr, "cat", "mouse", "pup", "", "puppy", "thé"};
-  cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  auto sv = cudf::strings_column_view(strings);
+  auto const input = cudf::test::strings_column_wrapper(
+    {"dog", "", "cat", "mouse", "pup", "", "puppy", "thé"}, {1, 0, 1, 1, 1, 1, 1, 1});
+  auto sv = cudf::strings_column_view(input);
 
   {
-    std::vector<char const*> h_targets{
-      "hog", "not", "cake", "house", "fox", nullptr, "puppy", "the"};
-    cudf::test::strings_column_wrapper targets(
-      h_targets.begin(),
-      h_targets.end(),
-      thrust::make_transform_iterator(h_targets.begin(), [](auto str) { return str != nullptr; }));
+    auto const targets = cudf::test::strings_column_wrapper(
+      {"hog", "not", "cake", "house", "fox", "", "puppy", "the"}, {1, 1, 1, 1, 1, 0, 1, 1});
     auto tv = cudf::strings_column_view(targets);
 
     auto results = nvtext::edit_distance(sv, tv);
@@ -62,7 +55,7 @@ TEST_F(TextEditDistanceTest, EditDistance)
 
 TEST_F(TextEditDistanceTest, EditDistanceLong)
 {
-  auto input1 = cudf::test::strings_column_wrapper(
+  auto const input1 = cudf::test::strings_column_wrapper(
     {"the lady brown fox jumps down the wall of the castle with wide windows",
      "the lady brown fox jumps down the wall of thé castlé with wide windows",
      "thé lady brown fox jumps down the wall of the castle with wide windows",
@@ -70,7 +63,7 @@ TEST_F(TextEditDistanceTest, EditDistanceLong)
      "why the lazy brown dog jumps upon the hill of the castle with long windows",
      "the lazy brown dog jumps upon the hill of the castle",
      "lazy brown dog jumps upon hill"});
-  auto input2 = cudf::test::strings_column_wrapper(
+  auto const input2 = cudf::test::strings_column_wrapper(
     {"the lazy brown dog jumps upon the hill of the castle with long windows"});
   auto sv1 = cudf::strings_column_view(input1);
   auto sv2 = cudf::strings_column_view(input2);
