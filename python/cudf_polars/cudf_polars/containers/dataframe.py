@@ -56,15 +56,21 @@ def _create_polars_column_metadata(
 # This is also defined in pylibcudf.interop
 class _ObjectWithArrowMetadata:
     def __init__(
-        self, obj: plc.Table | plc.Column, metadata: list[plc.interop.ColumnMetadata]
+        self,
+        obj: plc.Table | plc.Column,
+        metadata: list[plc.interop.ColumnMetadata],
+        stream: Stream,
     ) -> None:
         self.obj = obj
         self.metadata = metadata
+        self.stream = stream
 
     def __arrow_c_array__(
         self, requested_schema: None = None
     ) -> tuple[CapsuleType, CapsuleType]:
-        return self.obj._to_schema(self.metadata), self.obj._to_host_array()
+        return self.obj._to_schema(self.metadata), self.obj._to_host_array(
+            stream=self.stream
+        )
 
 
 # Pacify the type checker. DataFrame init asserts that all the columns
@@ -108,7 +114,9 @@ class DataFrame:
             _create_polars_column_metadata(name, dtype.polars_type)
             for name, dtype in zip(name_map, self.dtypes, strict=True)
         ]
-        table_with_metadata = _ObjectWithArrowMetadata(self.table, metadata)
+        table_with_metadata = _ObjectWithArrowMetadata(
+            self.table, metadata, self.stream
+        )
         df = pl.DataFrame(table_with_metadata)
         return df.rename(name_map).with_columns(
             pl.col(c.name).set_sorted(descending=c.order == plc.types.Order.DESCENDING)
@@ -241,6 +249,7 @@ class DataFrame:
         table = plc.contiguous_split.unpack_from_memoryviews(
             packed_metadata,
             packed_gpu_data,
+            stream,
         )
         return cls(
             (
@@ -252,6 +261,7 @@ class DataFrame:
 
     def serialize(
         self,
+        stream: Stream | None = None,
     ) -> tuple[DataFrameHeader, tuple[memoryview[bytes], plc.gpumemoryview]]:
         """
         Serialize the table into header and frames.
@@ -264,6 +274,12 @@ class DataFrame:
             >>> from cudf_polars.experimental.dask_serialize import register
             >>> register()
 
+        Parameters
+        ----------
+        stream
+            CUDA stream used for device memory operations and kernel launches
+            on this dataframe.
+
         Returns
         -------
         header
@@ -271,7 +287,7 @@ class DataFrame:
         frames
             Two-tuple of frames suitable for passing to `plc.contiguous_split.unpack_from_memoryviews`
         """
-        packed = plc.contiguous_split.pack(self.table, stream=self.stream)
+        packed = plc.contiguous_split.pack(self.table, stream=stream)
 
         # Keyword arguments for `Column.__init__`.
         columns_kwargs: list[ColumnOptions] = [

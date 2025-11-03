@@ -147,6 +147,8 @@ def make_final_proxy_type(
     slow_to_fast: callable
         Function that accepts a single argument of type `slow_type`
         and returns an object of type `fast_type`
+    module: str | None
+        Module name to assign to the generated proxy type.
     additional_attributes
         Mapping of additional attributes to add to the class
        (optional), these will override any defaulted attributes (e.g.
@@ -209,7 +211,7 @@ def make_final_proxy_type(
     def as_cpu_object(self):
         return self._fsproxy_fast_to_slow()
 
-    @property  # type: ignore
+    @property  # type: ignore[misc]
     def _fsproxy_state(self) -> _State:
         return (
             _State.FAST
@@ -253,7 +255,7 @@ def make_final_proxy_type(
 
     metaclass = _FastSlowProxyMeta
     if metaclasses:
-        metaclass = types.new_class(  # type: ignore
+        metaclass = types.new_class(  # type: ignore[assignment]
             f"{name}_Meta",
             (*metaclasses, _FastSlowProxyMeta),
             {},
@@ -286,6 +288,7 @@ def make_intermediate_proxy_type(
     slow_type: type,
     *,
     module: str | None = None,
+    additional_attributes: Mapping[str, Any] | None = None,
 ) -> type[_IntermediateProxy]:
     """
     Defines a proxy type for a pair of "intermediate" fast and slow
@@ -302,6 +305,13 @@ def make_intermediate_proxy_type(
         The name of the class returned
     fast_type: type
     slow_type: type
+    module: str | None
+        Module name to assign to the generated proxy type.
+    additional_attributes
+        Mapping of additional attributes to add to the class
+       (optional), these will override any defaulted attributes (e.g.
+       ``__init__``). If you want to remove a defaulted attribute
+       completely, pass the special sentinel ``_DELETE`` as a value.
     """
 
     def __init__(self, *args, **kwargs):
@@ -312,7 +322,7 @@ def make_intermediate_proxy_type(
             f"Cannot directly instantiate object of type {type(self)}"
         )
 
-    @property  # type: ignore
+    @property  # type: ignore[misc]
     def _fsproxy_state(self):
         return (
             _State.FAST
@@ -354,6 +364,11 @@ def make_intermediate_proxy_type(
     for method in _SPECIAL_METHODS:
         if method in slow_dir and getattr(slow_type, method, False):
             cls_dict[method] = _FastSlowAttribute(method)
+
+    if additional_attributes is None:
+        additional_attributes = {}
+    for k, v in additional_attributes.items():
+        cls_dict[k] = v
 
     for slow_name in dir(slow_type):
         if slow_name in cls_dict or slow_name.startswith("__"):
@@ -715,7 +730,7 @@ class _CallableProxyMixin:
     """
 
     # For wrapped callables isinstance(self, FunctionType) should return True
-    __class__ = types.FunctionType  # type: ignore
+    __class__ = types.FunctionType  # type: ignore[assignment]
 
     def __call__(self, *args, **kwargs) -> Any:
         result, _ = _fast_slow_function_call(
@@ -840,7 +855,7 @@ class _FastSlowAttribute:
                 if instance is not None:
                     return _maybe_wrap_result(
                         getattr(instance._fsproxy_slow, self._name),
-                        None,  # type: ignore
+                        None,  # type: ignore[arg-type]
                     )
                 else:
                     raise e
@@ -874,7 +889,7 @@ class _FastSlowAttribute:
                 if self._private:
                     return _maybe_wrap_result(
                         getattr(instance._fsproxy_slow, self._name),
-                        None,  # type: ignore
+                        None,  # type: ignore[arg-type]
                     )
                 return _fast_slow_function_call(
                     getattr,
@@ -1387,7 +1402,7 @@ PROXY_BASE_CLASSES: set[type] = {
 }
 
 
-NUMPY_TYPES: set[type[np.generic]] = set(np.sctypeDict.values())  # type: ignore[arg-type]
+NUMPY_TYPES: set[type[np.generic]] = set(np.sctypeDict.values())
 
 
 _SPECIAL_METHODS: set[str] = {

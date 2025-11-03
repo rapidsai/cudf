@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -81,7 +82,7 @@ class CategoricalColumn(column.ColumnBase):
     """
 
     dtype: CategoricalDtype
-    _children: tuple[NumericalColumn]  # type: ignore[assignment]
+    _children: tuple[NumericalColumn]
     _VALID_REDUCTIONS = {
         "max",
         "min",
@@ -103,7 +104,7 @@ class CategoricalColumn(column.ColumnBase):
         mask: Buffer | None,
         offset: int,
         null_count: int,
-        children: tuple[NumericalColumn],  # type: ignore[assignment]
+        children: tuple[NumericalColumn],
     ):
         if data is not None:
             raise ValueError(f"{data=} must be None")
@@ -242,7 +243,7 @@ class CategoricalColumn(column.ColumnBase):
     def _reduce(
         self,
         op: str,
-        skipna: bool | None = None,
+        skipna: bool = True,
         min_count: int = 0,
         *args,
         **kwargs,
@@ -438,7 +439,7 @@ class CategoricalColumn(column.ColumnBase):
             # However, it seems that this functionality has been broken for a
             # long time so for now we're just having mypy ignore and we'll come
             # back to this.
-            if fill_value in self.categories:  # type: ignore
+            if fill_value in self.categories:  # type: ignore[operator]
                 replaced = self.fillna(fill_value)
             else:
                 new_categories = self.categories.append(
@@ -703,7 +704,7 @@ class CategoricalColumn(column.ColumnBase):
         elif newsize == 0:
             codes_col = column.column_empty(0, head.codes.dtype)
         else:
-            codes_col = column.concat_columns(codes)  # type: ignore[arg-type]
+            codes_col = column.concat_columns(codes)
 
         return codes_col._with_type_metadata(CategoricalDtype(categories=cats))  # type: ignore[return-value]
 

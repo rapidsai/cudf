@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -309,7 +310,7 @@ class TemporalBaseColumn(ColumnBase):
             return self.copy(deep=True)
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
-        if to_dtype.kind == self.dtype.kind:  # type: ignore[union-attr]
+        if to_dtype.kind == self.dtype.kind:
             to_res, _ = np.datetime_data(to_dtype)
             # call-overload must be ignored because numpy stubs only accept literal strings
             # for time units (e.g., "ns", "us") to allow compile-time validation,
@@ -337,7 +338,7 @@ class TemporalBaseColumn(ColumnBase):
             return False
 
     def mean(
-        self, skipna: bool | None = None, min_count: int = 0
+        self, skipna: bool = True, min_count: int = 0
     ) -> pd.Timestamp | pd.Timedelta:
         return self._PD_SCALAR(
             self.astype(self._UNDERLYING_DTYPE).mean(  # type:ignore[call-arg]
@@ -347,7 +348,7 @@ class TemporalBaseColumn(ColumnBase):
         ).as_unit(self.time_unit)
 
     def std(
-        self, skipna: bool | None = None, min_count: int = 0, ddof: int = 1
+        self, skipna: bool = True, min_count: int = 0, ddof: int = 1
     ) -> pd.Timedelta:
         return pd.Timedelta(
             self.astype(self._UNDERLYING_DTYPE).std(  # type:ignore[call-arg]
@@ -356,9 +357,7 @@ class TemporalBaseColumn(ColumnBase):
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
-    def median(
-        self, skipna: bool | None = None
-    ) -> pd.Timestamp | pd.Timedelta:
+    def median(self, skipna: bool = True) -> pd.Timestamp | pd.Timedelta:
         return self._PD_SCALAR(
             self.astype(self._UNDERLYING_DTYPE).median(skipna=skipna),  # type:ignore[call-arg]
             unit=self.time_unit,
