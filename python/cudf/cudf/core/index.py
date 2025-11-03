@@ -9,7 +9,6 @@ import operator
 import warnings
 from collections.abc import Hashable, MutableMapping
 from functools import cache, cached_property
-from numbers import Number
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import cupy
@@ -2821,21 +2820,25 @@ class RangeIndex(Index):
 
     @_performance_tracking
     def __getitem__(self, index):
+        if index is Ellipsis:
+            index = slice(None)
         if isinstance(index, slice):
-            sl_start, sl_stop, sl_step = index.indices(len(self))
-
-            lo = self.start + sl_start * self.step
-            hi = self.start + sl_stop * self.step
-            st = self.step * sl_step
-            return RangeIndex(start=lo, stop=hi, step=st, name=self.name)
-
-        elif isinstance(index, Number):
-            len_self = len(self)
-            if index < 0:
-                index += len_self
-            if not (0 <= index < len_self):
-                raise IndexError("Index out of bounds")
-            return self.start + index * self.step
+            return type(self)(self._range[index], name=self.name)
+        elif is_integer(index):
+            new_key = int(index)
+            try:
+                return self._range[new_key]
+            except IndexError as err:
+                raise IndexError(
+                    f"index {index} is out of bounds for axis 0 with size {len(self)}"
+                ) from err
+        elif is_scalar(index):
+            raise IndexError(
+                "only integers, slices (`:`), "
+                "ellipsis (`...`), numpy.newaxis (`None`) "
+                "and integer or boolean "
+                "arrays are valid indices"
+            )
         return self._as_int_index()[index]
 
     def _get_columns_by_label(self, labels) -> Index:
