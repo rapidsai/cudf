@@ -44,7 +44,7 @@ async def shutdown_on_error(
     # TODO: This probably belongs in rapidsmpf.
     try:
         yield
-    except Exception:
+    except BaseException:
         await asyncio.gather(*(ch.shutdown(context) for ch in channels))
         raise
 

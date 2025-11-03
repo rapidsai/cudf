@@ -574,16 +574,16 @@ def test_cuda_stream_policy_default_rapidsmpf(monkeypatch: pytest.MonkeyPatch) -
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(executor_options={"runtime": "rapidsmpf"})
     )
-    assert config.cuda_stream_policy == CUDAStreamPolicy.POOL
+    assert config.cuda_stream_policy == CUDAStreamPolicy.DEFAULT
 
-    # Default from user argument
+    # "new" user argument
     monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "new")
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(executor_options={"runtime": "rapidsmpf"})
     )
     assert config.cuda_stream_policy == CUDAStreamPolicy.NEW
 
-    # Default from user argument
+    # "pool" user argument
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
             executor_options={"runtime": "rapidsmpf"},
