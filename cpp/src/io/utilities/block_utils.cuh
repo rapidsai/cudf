@@ -42,65 +42,23 @@ inline __device__ T warp_reduce_or(T acc)
   }
 }
 
-template <typename T>
-inline __device__ T WarpReducePos2(T pos, uint32_t t)
+template <cudf::size_type size, typename T>
+inline __device__ T warp_reduce_pos(T pos, uint32_t t)
 {
-  T tmp = shuffle(pos, t & 0x1e);
-  pos += (t & 1) ? tmp : 0;
-  return pos;
-}
-template <typename T>
-inline __device__ T WarpReducePos4(T pos, uint32_t t)
-{
-  T tmp;
-  pos = WarpReducePos2(pos, t);
-  tmp = shuffle(pos, (t & 0x1c) | 1);
-  pos += (t & 2) ? tmp : 0;
-  return pos;
-}
-template <typename T>
-inline __device__ T WarpReducePos8(T pos, uint32_t t)
-{
-  T tmp;
-  pos = WarpReducePos4(pos, t);
-  tmp = shuffle(pos, (t & 0x18) | 3);
-  pos += (t & 4) ? tmp : 0;
-  return pos;
-}
-template <typename T>
-inline __device__ T WarpReducePos16(T pos, uint32_t t)
-{
-  T tmp;
-  pos = WarpReducePos8(pos, t);
-  tmp = shuffle(pos, (t & 0x10) | 7);
-  pos += (t & 8) ? tmp : 0;
-  return pos;
-}
-template <typename T>
-inline __device__ T WarpReducePos32(T pos, uint32_t t)
-{
-  T tmp;
-  pos = WarpReducePos16(pos, t);
-  tmp = shuffle(pos, 0xf);
-  pos += (t & 16) ? tmp : 0;
-  return pos;
-}
-
-inline __device__ double Int128ToDouble_rn(uint64_t lo, int64_t hi)
-{
-  double sign;
-  if (hi < 0) {
-    sign = -1.0;
-    lo   = (~lo) + 1;
-    hi   = (~hi) + (lo == 0);
+  static_assert(size >= 2 and size <= cudf::detail::warp_size and (size & (size - 1)) == 0,
+                "Size must be a power of 2 between 2 and warp_size");
+  if constexpr (size == 2) {
+    T const tmp = shuffle(pos, t & 0x1e);
+    return pos + ((t & 1) ? tmp : 0);
   } else {
-    sign = 1.0;
+    pos         = warp_reduce_pos<size / 2>(pos, t);
+    T const tmp = shuffle(pos, (t & ~(size - 1)) | (size / 2 - 1));
+    return pos + ((t & (size / 2)) ? tmp : 0);
   }
-  return sign * __fma_rn(__ll2double_rn(hi), 4294967296.0 * 4294967296.0, __ull2double_rn(lo));
 }
 
 template <typename T>
-  requires(cuda::std::is_same_v<T, uint32_t> or cuda::std::is_same_v<T, uint64_t>)
+  requires(cuda::std::is_integral_v<T>)
 inline __device__ T unaligned_load(uint8_t const* p)
 {
   T value;
