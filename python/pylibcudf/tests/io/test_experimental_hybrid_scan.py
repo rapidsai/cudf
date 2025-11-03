@@ -533,3 +533,77 @@ def test_hybrid_scan_chunked_reading(
 
     # We should have read at least one chunk
     assert chunks_read > 0
+
+
+def test_hybrid_scan_metadata_with_page_index(
+    simple_parquet_bytes,
+    simple_hybrid_scan_reader,
+    simple_parquet_options,
+    num_rows,
+):
+    """Test that page index setup enables page-level filtering.
+
+    This test mirrors the C++ TestMetadata test. It verifies that:
+    1. Before setup_page_index(), methods requiring page index will fail
+    2. After fetching page index bytes and calling setup_page_index(),
+       the page index is available and page-level operations work correctly
+    """
+    # Set a filter for testing (not critical, but needed for page index stats)
+    filter_threshold = num_rows // 10
+    filter_expression = Operation(
+        ASTOperator.GREATER_EQUAL,
+        ColumnNameReference("col0"),
+        Literal(
+            plc.Scalar.from_arrow(
+                pa.scalar(filter_threshold, type=pa.uint32())
+            )
+        ),
+    )
+    simple_parquet_options.set_filter(filter_expression)
+
+    # Get initial metadata to verify reader is working
+    metadata = simple_hybrid_scan_reader.parquet_metadata()
+    assert metadata.num_rows == num_rows
+    assert metadata.version > 0
+
+    # Get all row groups
+    all_row_groups = simple_hybrid_scan_reader.all_row_groups(
+        simple_parquet_options
+    )
+    assert len(all_row_groups) > 0
+
+    # Try to use build_row_mask_with_page_index_stats BEFORE setup_page_index
+    # This should raise an error because page index is not set up yet
+    try:
+        simple_hybrid_scan_reader.build_row_mask_with_page_index_stats(
+            all_row_groups, simple_parquet_options
+        )
+        # If we get here, the test should fail
+        pytest.fail("Expected error when using page index before setup")
+    except RuntimeError:
+        # This is expected - page index not set up yet
+        pass
+
+    # Get page index byte range from the reader
+    page_index_byte_range = simple_hybrid_scan_reader.page_index_byte_range()
+    assert page_index_byte_range.size > 0
+
+    # Fetch page index bytes from the parquet file
+    page_index_bytes = simple_parquet_bytes[
+        page_index_byte_range.offset : page_index_byte_range.offset
+        + page_index_byte_range.size
+    ]
+
+    # Setup page index with the fetched bytes
+    simple_hybrid_scan_reader.setup_page_index(page_index_bytes)
+
+    # Now try to use build_row_mask_with_page_index_stats AFTER setup_page_index
+    # This should work successfully
+    row_mask = simple_hybrid_scan_reader.build_row_mask_with_page_index_stats(
+        all_row_groups, simple_parquet_options
+    )
+
+    # Verify the row mask was created successfully
+    assert row_mask is not None
+    assert row_mask.size() > 0
+    assert row_mask.type().id() == plc.types.TypeId.BOOL8
