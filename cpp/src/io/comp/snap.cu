@@ -159,7 +159,7 @@ static __device__ uint32_t FindFourByteMatch(snap_state_s* s,
   if (t == 0) { s->copy_length = 0; }
   do {
     bool valid4               = (pos + t + 4 <= len);
-    uint32_t data32           = (valid4) ? cudf::io::unaligned_load32(src + pos + t) : 0;
+    uint32_t data32           = (valid4) ? cudf::io::unaligned_load<uint32_t>(src + pos + t) : 0;
     uint32_t hash             = (valid4) ? snap_hash(data32) : 0;
     uint32_t local_match      = HashMatchAny(hash, t);
     uint32_t local_match_lane = 31 - __clz(local_match & ((1 << t) - 1));
@@ -173,7 +173,7 @@ static __device__ uint32_t FindFourByteMatch(snap_state_s* s,
         offset = (pos & ~0xffff) | s->hash_map[hash];
         if (offset >= pos) { offset = (offset >= 0x1'0000) ? offset - 0x1'0000 : pos; }
         match = (offset < pos && offset + max_copy_distance >= pos + t &&
-                 cudf::io::unaligned_load32(src + offset) == data32);
+                 cudf::io::unaligned_load<uint32_t>(src + offset) == data32);
       }
     } else {
       match       = 0;

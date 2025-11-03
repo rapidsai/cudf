@@ -114,17 +114,12 @@ inline __device__ double Int128ToDouble_rn(uint64_t lo, int64_t hi)
   return sign * __fma_rn(__ll2double_rn(hi), 4294967296.0 * 4294967296.0, __ull2double_rn(lo));
 }
 
-inline __device__ uint32_t unaligned_load32(uint8_t const* p)
+template <typename T>
+  requires(std::is_same_v<T, uint32_t> or std::is_same_v<T, uint64_t>)
+inline __device__ T unaligned_load(uint8_t const* p)
 {
-  uint32_t value;
-  cuda::std::memcpy(&value, p, sizeof(uint32_t));
-  return value;
-}
-
-inline __device__ uint64_t unaligned_load64(uint8_t const* p)
-{
-  uint64_t value;
-  cuda::std::memcpy(&value, p, sizeof(uint64_t));
+  T value;
+  cuda::std::memcpy(&value, p, sizeof(T));
   return value;
 }
 

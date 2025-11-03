@@ -182,7 +182,7 @@ avro_decode_row(schemadesc_s const* schema,
         if (dataptr != nullptr && dst_row >= 0) {
           uint32_t v;
           if (cur + 3 < end) {
-            v = unaligned_load32(cur);
+            v = unaligned_load<uint32_t>(cur);
             cur += 4;
           } else {
             v = 0;
@@ -198,7 +198,7 @@ avro_decode_row(schemadesc_s const* schema,
         if (dataptr != nullptr && dst_row >= 0) {
           uint64_t v;
           if (cur + 7 < end) {
-            v = unaligned_load64(cur);
+            v = unaligned_load<uint64_t>(cur);
             cur += 8;
           } else {
             v = 0;
