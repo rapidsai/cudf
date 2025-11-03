@@ -918,10 +918,18 @@ class MultiIndex(Index):
         | list[tuple[Any, ...]],
     ) -> DataFrameOrSeries:
         if isinstance(row_tuple, slice):
+            if row_tuple.step == 0:
+                raise ValueError("slice step cannot be zero")
             if row_tuple.start is None:
                 row_tuple = slice(self[0], row_tuple.stop, row_tuple.step)
             if row_tuple.stop is None:
                 row_tuple = slice(row_tuple.start, self[-1], row_tuple.step)
+            if isinstance(row_tuple.start, bool) or isinstance(
+                row_tuple.stop, bool
+            ):
+                raise TypeError(
+                    f"{row_tuple}: boolean values can not be used in a slice"
+                )
         self._validate_indexer(row_tuple)
         valid_indices = self._get_valid_indices_by_tuple(
             df.index, row_tuple, len(df)
@@ -1013,6 +1021,8 @@ class MultiIndex(Index):
             start, stop, step = index.indices(len(self))
             idx = range(start, stop, step)
         elif is_scalar(index):
+            if isinstance(index, float):
+                raise IndexError("indexing with a float is disallowed.")
             idx = [index]
         else:
             idx = index
