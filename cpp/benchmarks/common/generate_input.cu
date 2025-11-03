@@ -464,7 +464,7 @@ struct string_generator {
       if (i == end - 1 && ch >= '\x7F') ch = ' ';  // last element ASCII only.
       if (ch >= '\x7F') {                          // x7F is at the top edge of ASCII
         chars[i++] = '\xC4';                       // these characters are assigned two bytes
-        ch         = ch | 0x80;
+        ch         = (ch >> 2) | 0x80;
       }
       chars[i] = static_cast<char>(ch);
     }
