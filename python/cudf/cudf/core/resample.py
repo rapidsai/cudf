@@ -275,6 +275,8 @@ class _ResampleGrouping(_Grouping):
             cast_bin_labels = cast_bin_labels[:nbins]
 
         cast_bin_labels.name = self.names[0]
+        if isinstance(cast_bin_labels, cudf.DatetimeIndex):
+            cast_bin_labels._freq = cudf.core.index._validate_freq(freq)
         self.bin_labels = cast_bin_labels
 
         # replace self._key_columns with the binned key column:

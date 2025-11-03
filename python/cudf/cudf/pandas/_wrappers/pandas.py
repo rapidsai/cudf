@@ -68,6 +68,7 @@ from pandas.io.sas.sas_xport import (  # isort: skip
 from pandas.core.resample import (  # isort: skip
     Resampler as pd_Resampler,
     TimeGrouper as pd_TimeGrouper,
+    DatetimeIndexResampler as pd_DatetimeIndexResampler,
 )
 
 try:
@@ -1146,6 +1147,10 @@ DataFrameResampler = make_intermediate_proxy_type(
 
 SeriesResampler = make_intermediate_proxy_type(
     "SeriesResampler", cudf.core.resample.SeriesResampler, pd_Resampler
+)
+
+DatetimeIndexResampler = make_intermediate_proxy_type(
+    "DatetimeIndexResampler", _Unusable, pd_DatetimeIndexResampler
 )
 
 StataReader = make_intermediate_proxy_type(
