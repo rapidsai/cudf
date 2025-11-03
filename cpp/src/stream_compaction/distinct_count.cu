@@ -16,7 +16,6 @@
 #include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
-#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -133,7 +132,8 @@ cudf::size_type distinct_count(table_view const& keys,
 
   auto const comparator_helper = [&](auto const row_equal) {
     using hasher_type = decltype(hash_key);
-    auto key_set      = cuco::static_set{cuco::extent{compute_hash_table_size(num_rows)},
+    auto key_set      = cuco::static_set{cuco::extent{num_rows},
+                                    cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
                                     cuco::empty_key<cudf::size_type>{-1},
                                     row_equal,
                                     cuco::linear_probing<1, hasher_type>{hash_key},

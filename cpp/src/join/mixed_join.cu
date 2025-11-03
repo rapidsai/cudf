@@ -13,7 +13,6 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
-#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/join/mixed_join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -167,13 +166,11 @@ mixed_join_setup_data setup_mixed_join_common(table_view const& left_equality,
   auto& probe = swap_tables ? right_equality : left_equality;
   auto& build = swap_tables ? left_equality : right_equality;
 
-  // Create hash table with computed size following hash join pattern
-  auto const hash_table_size = compute_hash_table_size(build.num_rows());
+  // Create hash table with load factor following hash join pattern
   mixed_multiset_type hash_table{
-    cuco::extent{hash_table_size},
+    cuco::extent{static_cast<std::size_t>(build.num_rows())},
     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
-    cuco::empty_key{
-      cuco::pair{std::numeric_limits<hash_value_type>::max(), cudf::detail::JoinNoneValue}},
+    cuco::empty_key{cuco::pair{std::numeric_limits<hash_value_type>::max(), cudf::JoinNoMatch}},
     {},
     {},
     {},
