@@ -131,8 +131,9 @@ inline __device__ void memcpy_block(void* dstv,
                                     uint32_t len,
                                     cooperative_groups::thread_block const& block)
 {
-  static_assert(nthreads >= sizeof(uint32_t),
-                "nthreads must be greater than or equal to the size of uint32_t");
+  static_assert(
+    nthreads >= sizeof(uint32_t),
+    "The kernel block size (nthreads) must be greater than or equal to the size of uint32_t");
   auto const t    = block.thread_rank();
   auto* dst       = static_cast<uint8_t*>(dstv);
   auto const* src = static_cast<uint8_t const*>(srcv);
