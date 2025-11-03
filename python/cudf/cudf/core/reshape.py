@@ -1147,6 +1147,13 @@ def unstack(df, level, fill_value=None, sort: bool = True):
     if df.empty:
         raise ValueError("Cannot unstack an empty dataframe.")
 
+    if not is_scalar(level) and len(level) > 1 and df.index.nlevels > 1:
+        # We currently produce columns in the wrong order vs pandas
+        # See https://github.com/rapidsai/cudf/issues/20446
+        raise NotImplementedError(
+            "Unstacking multiple index levels is not yet pandas compatible"
+        )
+
     if fill_value is not None:
         raise NotImplementedError("fill_value is not supported.")
     elif sort is False:
