@@ -255,7 +255,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
 
     def sum(
         self,
-        skipna: bool | None = None,
+        skipna: bool = True,
         min_count: int = 0,
     ) -> pd.Timedelta:
         return self._PD_SCALAR(
