@@ -274,10 +274,9 @@ class RunConfig:
 
         # Handle "auto" stream policy
         if stream_policy == "auto":
-            if runtime == "rapidsmpf":
-                stream_policy = "pool"
-            else:
-                stream_policy = "default"
+            # TODO: Use pool by default for rapidsmpf runtime
+            # once stream-ordering bugs are fixed.
+            stream_policy = "default"
 
         # Deal with deprecated scheduler argument
         # and non-streaming executors
