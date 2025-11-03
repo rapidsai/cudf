@@ -4,6 +4,8 @@
  */
 
 #pragma once
+#include <cudf/detail/utilities/cuda.cuh>
+
 #include <cooperative_groups.h>
 #include <cub/cub.cuh>
 #include <cuda/std/cstdint>
@@ -24,39 +26,20 @@ inline __device__ T shuffle_xor(T var, uint32_t delta)
   return __shfl_xor_sync(~0, var, delta);
 }
 
-inline __device__ void syncwarp() { __syncwarp(); }
-
 inline __device__ uint32_t ballot(int pred) { return __ballot_sync(~0, pred); }
 
 // Warp reduction helpers
-template <typename T>
-inline __device__ T WarpReduceOr2(T acc)
+template <cudf::size_type size, typename T>
+inline __device__ T warp_reduce_or(T acc)
 {
-  return acc | shuffle_xor(acc, 1);
-}
-template <typename T>
-inline __device__ T WarpReduceOr4(T acc)
-{
-  acc = WarpReduceOr2(acc);
-  return acc | shuffle_xor(acc, 2);
-}
-template <typename T>
-inline __device__ T WarpReduceOr8(T acc)
-{
-  acc = WarpReduceOr4(acc);
-  return acc | shuffle_xor(acc, 4);
-}
-template <typename T>
-inline __device__ T WarpReduceOr16(T acc)
-{
-  acc = WarpReduceOr8(acc);
-  return acc | shuffle_xor(acc, 8);
-}
-template <typename T>
-inline __device__ T WarpReduceOr32(T acc)
-{
-  acc = WarpReduceOr16(acc);
-  return acc | shuffle_xor(acc, 16);
+  static_assert(size >= 2 and size <= cudf::detail::warp_size and (size & (size - 1)) == 0,
+                "Size must be a power of 2 and less than or equal to the warp size");
+  if constexpr (size == 2) {
+    return acc | shuffle_xor(acc, 1);
+  } else {
+    acc = warp_reduce_or<size / 2>(acc);
+    return acc | shuffle_xor(acc, size / 2);
+  }
 }
 
 template <typename T>
