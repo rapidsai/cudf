@@ -2259,9 +2259,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # check empty case
         if len(self) <= self.null_count:
             if reduction_op == "sum" or reduction_op == "sum_of_squares":
-                return self.dtype.type(0)
+                return col_dtype.type(0)
             if reduction_op == "product":
-                return self.dtype.type(1)
+                return col_dtype.type(1)
             if reduction_op == "any":
                 return False
 

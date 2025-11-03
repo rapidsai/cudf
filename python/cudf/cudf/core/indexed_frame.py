@@ -3011,6 +3011,8 @@ class IndexedFrame(Frame):
         -----
         This slicing has normal python semantics.
         """
+        if arg.step == 0:
+            raise ValueError("slice step cannot be zero")
         num_rows = len(self)
         if num_rows == 0:
             return self
