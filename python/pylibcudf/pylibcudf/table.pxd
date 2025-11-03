@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.table.table cimport table
@@ -27,6 +28,10 @@ cdef class Table:
     cdef Table from_table_view(const table_view& tv, Table owner)
 
     @staticmethod
-    cdef Table from_table_view_of_arbitrary(const table_view& tv, object owner)
+    cdef Table from_table_view_of_arbitrary(
+        const table_view& tv,
+        object owner,
+        Stream stream,
+    )
 
     cpdef list columns(self)

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -333,8 +322,30 @@ struct update_target_element<Source, aggregation::ARGMIN> {
  * @brief Function object to update a single element in a target column by
  * performing an aggregation operation with a single element from a source
  * column.
+ *
+ * This functor only supports aggregations that can be done in a "single pass",
+ * i.e., given an initial value `r = R`, the aggregation `op` can be computed on a series
+ * of elements `e[i] for i in [0,n)` just by updating `r = op(r, e[i])` using any order
+ * of the values `e[i]`.
+ *
+ * The initial value and validity of `R` depends on the specific aggregation. For example:
+ *  - SUM: 0 and NULL
+ *  - MIN: Max value of type and NULL
+ *  - MAX: Min value of type and NULL
+ *  - COUNT_VALID: 0 and VALID
+ *  - COUNT_ALL:   0 and VALID
+ *  - ARGMAX: `ARGMAX_SENTINEL` and NULL
+ *  - ARGMIN: `ARGMIN_SENTINEL` and NULL
+ *
+ * It is required that the elements of `target` be initialized with the corresponding
+ * initial values and validity specified above.
+ *
+ * Handling of null elements in both `source` and `target` depends on the aggregation. For example:
+ *  - SUM, MIN, MAX, ARGMIN, ARGMAX:  `source` is skipped, `target` is updated from null to valid
+ *    upon first successful aggregation
+ *  - COUNT_VALID, COUNT_ALL:  `source` is skipped, `target` cannot be null
  */
-struct elementwise_aggregator {
+struct element_aggregator {
   template <typename Source, aggregation::Kind k>
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
@@ -354,64 +365,4 @@ struct elementwise_aggregator {
   }
 };
 
-/**
- * @brief Updates a row in `target` by performing elementwise aggregation
- * operations with a row in `source`.
- *
- * For the row in `target` specified by `target_index`, each element at `i` is
- * updated by:
- * ```c++
- * target_row[i] = aggs[i](target_row[i], source_row[i])
- * ```
- *
- * This function only supports aggregations that can be done in a "single pass",
- * i.e., given an initial value `R`, the aggregation `op` can be computed on a series
- * of elements `e[i] for i in [0,n)` by computing `R = op(e[i],R)` for any order
- * of the values of `i`.
- *
- * The initial value and validity of `R` depends on the aggregation:
- * SUM: 0 and NULL
- * MIN: Max value of type and NULL
- * MAX: Min value of type and NULL
- * COUNT_VALID: 0 and VALID
- * COUNT_ALL:   0 and VALID
- * ARGMAX: `ARGMAX_SENTINEL` and NULL
- * ARGMIN: `ARGMIN_SENTINEL` and NULL
- *
- * It is required that the elements of `target` be initialized with the corresponding
- * initial values and validity specified above.
- *
- * Handling of null elements in both `source` and `target` depends on the aggregation:
- * SUM, MIN, MAX, ARGMIN, ARGMAX:
- *  - `source`: Skipped
- *  - `target`: Updated from null to valid upon first successful aggregation
- * COUNT_VALID, COUNT_ALL:
- *  - `source`: Skipped
- *  - `target`: Cannot be null
- *
- * @param target Table containing the row to update
- * @param target_index Index of the row to update in `target`
- * @param source Table containing the row used to update the row in `target`.
- * The invariant `source.num_columns() >= target.num_columns()` must hold.
- * @param source_index Index of the row to use in `source`
- * @param aggs Array of aggregations to perform between elements of the `target`
- * and `source` rows. Must contain at least `target.num_columns()` valid
- * `aggregation::Kind` values.
- */
-__device__ inline void aggregate_row(mutable_table_device_view target,
-                                     size_type target_index,
-                                     table_device_view source,
-                                     size_type source_index,
-                                     aggregation::Kind const* aggs)
-{
-  for (auto i = 0; i < target.num_columns(); ++i) {
-    dispatch_type_and_aggregation(source.column(i).type(),
-                                  aggs[i],
-                                  elementwise_aggregator{},
-                                  target.column(i),
-                                  target_index,
-                                  source.column(i),
-                                  source_index);
-  }
-}
 }  // namespace cudf::detail

@@ -1,4 +1,5 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable, Sequence
 from typing import Any, Protocol, TypedDict
@@ -88,11 +89,13 @@ class Column:
     def from_rmm_buffer(
         buff: DeviceBuffer, dtype: DataType, size: int, children: list[Column]
     ) -> Column: ...
-    def to_arrow(self, metadata: list | str | None = None) -> ArrowLike: ...
+    def to_arrow(
+        self, metadata: list | str | None = None, stream: Stream | None = None
+    ) -> ArrowLike: ...
     # Private methods below are included because polars is currently using them,
     # but we want to remove stubs for these private methods eventually
     def _to_schema(self, metadata: Any = None) -> Any: ...
-    def _to_host_array(self) -> Any: ...
+    def _to_host_array(self, stream: Stream) -> Any: ...
     @staticmethod
     def from_arrow(
         obj: ArrowLike,

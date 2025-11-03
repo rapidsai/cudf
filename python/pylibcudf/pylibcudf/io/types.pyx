@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
 
@@ -398,6 +399,8 @@ cdef class TableWithMetadata:
         DeviceMemoryResource mr
     ):
         """Create a Python TableWithMetadata from a libcudf table_with_metadata"""
+        assert stream is not None, "stream cannot be None"
+        assert mr is not None, "mr cannot be None"
         cdef TableWithMetadata out = TableWithMetadata.__new__(TableWithMetadata)
         out.tbl = Table.from_libcudf(move(tbl_with_meta.tbl), stream, mr)
         out.metadata = tbl_with_meta.metadata

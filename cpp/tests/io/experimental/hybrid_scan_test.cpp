@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "hybrid_scan_common.hpp"
@@ -136,7 +125,7 @@ void test_hybrid_scan(std::vector<cudf::column_view> const& columns)
   auto stream     = cudf::get_default_stream();
   auto mr         = cudf::get_current_device_resource_ref();
   auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-    cudf::get_current_device_resource(), bloom_filter_alignment);
+    cudf::get_current_device_resource_ref(), bloom_filter_alignment);
 
   // Read parquet using the hybrid scan reader
   auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
@@ -210,7 +199,7 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanAllColumns)
   auto stream     = cudf::get_default_stream();
   auto mr         = cudf::get_current_device_resource_ref();
   auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-    cudf::get_current_device_resource(), bloom_filter_alignment);
+    cudf::get_current_device_resource_ref(), bloom_filter_alignment);
 
   // Read parquet using the hybrid scan reader
   auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
@@ -267,7 +256,7 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanSelectColumns)
   auto stream     = cudf::get_default_stream();
   auto mr         = cudf::get_current_device_resource_ref();
   auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-    cudf::get_current_device_resource(), bloom_filter_alignment);
+    cudf::get_current_device_resource_ref(), bloom_filter_alignment);
 
   {
     auto const payload_column_names = std::vector<std::string>{"col0", "col2"};
@@ -356,7 +345,7 @@ TEST_F(HybridScanTest, PruneDataPagesOnlyAndScanAllColumns)
   auto stream     = cudf::get_default_stream();
   auto mr         = cudf::get_current_device_resource_ref();
   auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-    cudf::get_current_device_resource(), bloom_filter_alignment);
+    cudf::get_current_device_resource_ref(), bloom_filter_alignment);
 
   // Read parquet using the hybrid scan reader
   auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =

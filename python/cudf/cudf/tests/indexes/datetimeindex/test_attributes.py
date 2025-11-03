@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
 import pandas as pd
@@ -182,3 +183,22 @@ def test_datetime_index_is_unique_monotonic(testlist):
     assert index.is_unique == index_pd.is_unique
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
     assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
+
+
+def test_datetimeindex_constructor():
+    gidx = cudf.DatetimeIndex(["2020-01-01", "2020-01-02"])
+
+    assert gidx._constructor is cudf.DatetimeIndex
+
+
+@pytest.mark.parametrize(
+    "dates",
+    [
+        pd.date_range("2020-01-01", periods=5),
+        pd.date_range("2020-01-01", periods=5, freq="h"),
+    ],
+)
+def test_datetimeindex_inferred_type(dates):
+    gidx = cudf.DatetimeIndex(dates)
+    pidx = pd.DatetimeIndex(dates)
+    assert_eq(gidx.inferred_type, pidx.inferred_type)

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "hybrid_scan_helpers.hpp"
@@ -27,7 +16,6 @@
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
-#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_checks.hpp>
@@ -97,7 +85,7 @@ using hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<T>;
 using storage_type     = cuco::bucket_storage<slot_type,
                                               BUCKET_SIZE,
                                               cuco::extent<std::size_t>,
-                                              cudf::detail::cuco_allocator<char>>;
+                                              rmm::mr::polymorphic_allocator<char>>;
 using storage_ref_type = typename storage_type::ref_type;
 
 /**
@@ -1105,9 +1093,8 @@ struct dictionary_caster {
     auto const total_num_literals     = static_cast<cudf::size_type>(literals.size());
 
     // Create a single bulk storage used by all cuco hash sets
-    auto set_storage = storage_type{
-      total_set_storage_size,
-      cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}};
+    auto set_storage =
+      storage_type{total_set_storage_size, rmm::mr::polymorphic_allocator<char>{}, stream.value()};
 
     // Initialize storage with the empty key sentinel
     set_storage.initialize_async(EMPTY_KEY_SENTINEL, {stream.value()});
