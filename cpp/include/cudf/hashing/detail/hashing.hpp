@@ -61,7 +61,7 @@ std::unique_ptr<column> xxhash_64(table_view const& input,
                                   rmm::device_async_resource_ref mr);
 
 /* SPDX-SnippetBegin
- * SPDX-FileCopyrightText: Copyright 2005-2014 Daniel James.
+ * SPDX-SnippetCopyrightText: Copyright 2005-2014 Daniel James.
  * SPDX-License-Identifier: BSL-1.0
  *
  * Copyright 2005-2014 Daniel James.
@@ -86,7 +86,7 @@ CUDF_HOST_DEVICE constexpr uint32_t hash_combine(uint32_t lhs, uint32_t rhs)
 // SPDX-SnippetEnd
 
 /* SPDX-SnippetBegin
- * SPDX-FileCopyrightText: Copyright 2005-2014 Daniel James.
+ * SPDX-SnippetCopyrightText: Copyright 2005-2014 Daniel James.
  * SPDX-License-Identifier: BSL-1.0
  *
  * Copyright 2005-2014 Daniel James.
