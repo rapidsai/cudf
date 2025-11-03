@@ -739,8 +739,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 and is_pandas_nullable_extension_dtype(self.dtype)
             )
         ) and is_pandas_nullable_extension_dtype(
+            # Type error: dict expects np.dtype keys and ExtensionDtype values,
+            # but self.dtype could already be an ExtensionDtype, which makes the
+            # argument types invalid according to mypy.
             pandas_nullable_dtype := np_dtypes_to_pandas_dtypes.get(
-                self.dtype, self.dtype
+                self.dtype,  # type: ignore[arg-type,dict-item]
+                self.dtype,  # type: ignore[arg-type]
             )
         ):
             pandas_array = pandas_nullable_dtype.__from_arrow__(pa_array)  # type: ignore[attr-defined]
@@ -2426,6 +2430,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 ]
             )
         other_col = as_column(other)
+        if common_dtype is None:
+            raise TypeError(
+                f"Cannot find a common type between {self.dtype} and "
+                f"{other_col.dtype if not other_is_scalar else type(other)}"
+            )
         if (
             is_mixed_with_object_dtype(other_col, self)
             or (self.dtype.kind == "b" and common_dtype.kind != "b")
@@ -2471,6 +2480,9 @@ def column_empty(
     dtype : Dtype
         Type of the column.
     """
+    # Normalize dtype before calling any internal functions
+    dtype = cudf.dtype(dtype)
+
     if (is_struct := isinstance(dtype, StructDtype)) or isinstance(
         dtype, ListDtype
     ):
@@ -3352,8 +3364,13 @@ def concat_columns(objs: Sequence[ColumnBase]) -> ColumnBase:
         for dtype in not_null_col_dtypes
     ):
         common_dtype = find_common_type(not_null_col_dtypes)
+        if common_dtype is None:
+            raise ValueError(
+                f"Cannot find common type for datetime columns with dtypes: "
+                f"{not_null_col_dtypes}"
+            )
         # Cast all columns to the common dtype
-        objs = [obj.astype(common_dtype) for obj in objs]  # type: ignore[arg-type]
+        objs = [obj.astype(common_dtype) for obj in objs]
 
     # Find the first non-null column:
     head = next((obj for obj in objs if obj.null_count != len(obj)), objs[0])

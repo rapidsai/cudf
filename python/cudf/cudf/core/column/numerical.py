@@ -291,6 +291,10 @@ class NumericalColumn(NumericalBaseColumn):
 
         if out_dtype is None:
             out_dtype = find_common_type((self.dtype, other_cudf_dtype))
+            # For numerical types, find_common_type should always return a dtype
+            assert out_dtype is not None, (
+                f"Could not find common type between {self.dtype} and {other_cudf_dtype}"
+            )
             if op in {"__mod__", "__floordiv__"}:
                 tmp = self if reflect else other
                 tmp_dtype = self.dtype if reflect else other_cudf_dtype
@@ -539,6 +543,9 @@ class NumericalColumn(NumericalBaseColumn):
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
+        # Normalize dtype from Dtype (which may include strings) to DtypeObj
+        dtype = cudf.dtype(dtype)
+
         if dtype == self.dtype:
             return self
 
