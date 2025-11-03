@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -21,8 +21,12 @@ namespace cudf {
 /**
  * @brief Get the current device memory resource.
  *
+ * @deprecated Since 25.12. Use get_current_device_resource_ref() instead.
+ * This function will be removed in 26.02.
+ *
  * @return The current device memory resource.
  */
+[[deprecated("Use get_current_device_resource_ref() instead. Will be removed in 26.02.")]]
 inline rmm::mr::device_memory_resource* get_current_device_resource()
 {
   return rmm::mr::get_current_device_resource();
