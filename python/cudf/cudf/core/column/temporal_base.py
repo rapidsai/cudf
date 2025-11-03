@@ -319,18 +319,14 @@ class TemporalBaseColumn(ColumnBase, Scannable):
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if to_dtype.kind == self.dtype.kind:
             to_res, _ = np.datetime_data(to_dtype)
-            if cudf.get_option("mode.pandas_compatible"):
-                max_val = self.max()
-                if isinstance(max_val, (pd.Timedelta, pd.Timestamp)):
-                    max_val = max_val.to_numpy()
-                max_val = max_val.astype(self._UNDERLYING_DTYPE, copy=False)
-                min_val = self.min()
-                if isinstance(min_val, (pd.Timedelta, pd.Timestamp)):
-                    min_val = min_val.to_numpy()
-                min_val = min_val.astype(self._UNDERLYING_DTYPE, copy=False)
-            else:
-                max_val = self.max().astype(self._UNDERLYING_DTYPE, copy=False)
-                min_val = self.min().astype(self._UNDERLYING_DTYPE, copy=False)
+            max_val = self.max()
+            if isinstance(max_val, (pd.Timedelta, pd.Timestamp)):
+                max_val = max_val.to_numpy()
+            max_val = max_val.astype(self._UNDERLYING_DTYPE, copy=False)
+            min_val = self.min()
+            if isinstance(min_val, (pd.Timedelta, pd.Timestamp)):
+                min_val = min_val.to_numpy()
+            min_val = min_val.astype(self._UNDERLYING_DTYPE, copy=False)
             # call-overload must be ignored because numpy stubs only accept literal strings
             # for time units (e.g., "ns", "us") to allow compile-time validation,
             # but we're passing variables (self.time_unit) with time units that
