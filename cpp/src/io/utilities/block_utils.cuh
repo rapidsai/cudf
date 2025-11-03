@@ -117,7 +117,7 @@ inline __device__ double Int128ToDouble_rn(uint64_t lo, int64_t hi)
 }
 
 template <typename T>
-  requires(std::is_same_v<T, uint32_t> or std::is_same_v<T, uint64_t>)
+  requires(cuda::std::is_same_v<T, uint32_t> or cuda::std::is_same_v<T, uint64_t>)
 inline __device__ T unaligned_load(uint8_t const* p)
 {
   T value;
