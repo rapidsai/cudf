@@ -869,6 +869,7 @@ dependencies:
           - hypothesis>=6.131.7
           - pytest-benchmark
           - pytest-cases>=3.8.2
+          - s3fs>=2022.3.0
           - scipy
           - zstandard
       - output_types: conda
@@ -878,7 +879,6 @@ dependencies:
           - botocore>=1.24.21
           - msgpack-python
           - moto>=4.0.8
-          - s3fs>=2022.3.0
       - output_types: [pyproject, requirements]
         packages:
           - msgpack
