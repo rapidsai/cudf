@@ -121,39 +121,43 @@ async def dataframescan_node(
                 )
             )
 
-        # Read data
-        if max_io_threads == 1:
-            # Sequential execution - no need for Lineariser
-            for seq_num, ir_slice in enumerate(ir_slices):
+        # Read data.
+        # Use Lineariser to ensure ordered delivery.
+        num_producers = min(max_io_threads, len(ir_slices))
+        lineariser = Lineariser(ch_out.data, num_producers)
+        next_task_idx = 0
+
+        async def _producer(ch_out: Channel) -> None:
+            """Producer that pulls ir_slices using a shared counter."""
+            nonlocal next_task_idx
+            while True:
+                # Atomically grab next task index
+                task_idx = next_task_idx
+                if task_idx >= len(ir_slices):
+                    break
+                next_task_idx += 1
+
+                # Process task with its sequence number
                 await read_chunk(
-                    context, io_throttle, ir_slice, seq_num, ch_out.data, ir_context
-                )
-            await ch_out.data.drain(context)
-        else:
-            # Concurrent execution - use Lineariser to ensure ordered delivery
-            lineariser = Lineariser(ch_out.data, len(ir_slices))
-            input_channels = lineariser.get_inputs()
-
-            # Start the lineariser drain task (must run concurrently with producers)
-            tasks = [lineariser.drain(context)]
-
-            # Start all read tasks
-            for seq_num, (ir_slice, ch_in) in enumerate(
-                zip(ir_slices, input_channels, strict=True)
-            ):
-                tasks.append(
-                    read_chunk_linearised(
-                        context,
-                        io_throttle,
-                        ir_slice,
-                        seq_num,
-                        ch_in,
-                        ir_context,
-                    )
+                    context,
+                    io_throttle,
+                    ir_slices[task_idx],
+                    task_idx,
+                    ch_out,
+                    ir_context,
                 )
 
-            # Wait for all tasks to complete (drain + all producers)
-            await asyncio.gather(*tasks)
+            # Done - drain this producer's channel
+            await ch_out.drain(context)
+
+        # Start the lineariser drain task (must run concurrently with producers)
+        tasks = [lineariser.drain(context)]
+
+        # Start all producer tasks
+        tasks.extend(_producer(ch_in) for ch_in in lineariser.get_inputs())
+
+        # Wait for all tasks to complete (drain + all producers)
+        await asyncio.gather(*tasks)
 
 
 @generate_ir_sub_network.register(DataFrameScan)
@@ -261,56 +265,6 @@ async def read_chunk(
         )
 
 
-async def read_chunk_linearised(
-    context: Context,
-    io_throttle: asyncio.Semaphore,
-    scan: IR,
-    seq_num: int,
-    ch_out: Channel,
-    ir_context: IRExecutionContext,
-) -> None:
-    """
-    Read a chunk from disk and send it to a lineariser input channel.
-
-    This function is used with Lineariser to ensure ordered delivery
-    of chunks even when I/O operations complete out of order.
-
-    Parameters
-    ----------
-    context
-        The rapidsmpf context.
-    io_throttle
-        The IO throttle.
-    scan
-        The Scan or DataFrameScan node.
-    seq_num
-        The sequence number.
-    ch_out
-        The lineariser input channel for this producer.
-    ir_context
-        The execution context for the IR node.
-    """
-    async with io_throttle:
-        # Evaluate the Scan-node
-        df = await asyncio.to_thread(
-            scan.do_evaluate,
-            *scan._non_child_args,
-            context=ir_context,
-        )
-        # Send to channel (lineariser will handle ordering)
-        msg = Message(
-            seq_num,
-            TableChunk.from_pylibcudf_table(
-                df.table,
-                df.stream,
-                exclusive_view=True,
-            ),
-        )
-        await ch_out.send(context, msg)
-    # Signal completion for this producer
-    await ch_out.drain(context)
-
-
 @define_py_node()
 async def scan_node(
     context: Context,
@@ -407,40 +361,44 @@ async def scan_node(
                     )
                 )
 
-        # Read data
+        # Read data.
+        # Use Lineariser to ensure ordered delivery
         io_throttle = asyncio.Semaphore(max_io_threads)
-        if max_io_threads == 1:
-            # Sequential execution - no need for Lineariser
-            for seq_num, scan in enumerate(scans):
+        num_producers = min(max_io_threads, len(scans))
+        lineariser = Lineariser(ch_out.data, num_producers)
+        next_task_idx = 0
+
+        async def _producer(ch_out: Channel) -> None:
+            """Producer that pulls scan tasks from shared counter."""
+            nonlocal next_task_idx
+            while True:
+                # Atomically grab next task index
+                task_idx = next_task_idx
+                if task_idx >= len(scans):
+                    break
+                next_task_idx += 1
+
+                # Process task with its sequence number
                 await read_chunk(
-                    context, io_throttle, scan, seq_num, ch_out.data, ir_context
-                )
-            await ch_out.data.drain(context)
-        else:
-            # Concurrent execution - use Lineariser to ensure ordered delivery
-            lineariser = Lineariser(ch_out.data, len(scans))
-            input_channels = lineariser.get_inputs()
-
-            # Start the lineariser drain task (must run concurrently with producers)
-            tasks = [lineariser.drain(context)]
-
-            # Start all read tasks
-            for seq_num, (scan, ch_in) in enumerate(
-                zip(scans, input_channels, strict=True)
-            ):
-                tasks.append(
-                    read_chunk_linearised(
-                        context,
-                        io_throttle,
-                        scan,
-                        seq_num,
-                        ch_in,
-                        ir_context,
-                    )
+                    context,
+                    io_throttle,
+                    scans[task_idx],
+                    task_idx,
+                    ch_out,
+                    ir_context,
                 )
 
-            # Wait for all tasks to complete (drain + all producers)
-            await asyncio.gather(*tasks)
+            # Done - drain this producer's channel
+            await ch_out.drain(context)
+
+        # Start the lineariser drain task (must run concurrently with producers)
+        tasks = [lineariser.drain(context)]
+
+        # Start all producer tasks
+        tasks.extend(_producer(ch_in) for ch_in in lineariser.get_inputs())
+
+        # Wait for all tasks to complete (drain + all producers)
+        await asyncio.gather(*tasks)
 
 
 @generate_ir_sub_network.register(Scan)
