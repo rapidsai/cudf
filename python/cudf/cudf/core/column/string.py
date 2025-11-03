@@ -491,8 +491,8 @@ class StringColumn(ColumnBase, Scannable):
                     self.to_arrow().cast(pa.large_string())
                 )
             elif self.dtype.na_value is np.nan and PANDAS_GE_230:
-                pandas_array = pd.core.arrays.string_.StringArrayNumpySemantics._from_sequence(
-                    self.to_arrow()
+                pandas_array = pd.array(
+                    self.to_arrow().to_pandas(), dtype=self.dtype
                 )
             else:
                 return super().to_pandas(
