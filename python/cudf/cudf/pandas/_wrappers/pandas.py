@@ -120,9 +120,15 @@ def make_final_proxy_type(
     )
 
 
-def make_intermediate_proxy_type(name, fast_type, slow_type):
+def make_intermediate_proxy_type(
+    name,
+    fast_type,
+    slow_type,
+    **kwargs,
+):
+    assert "module" not in kwargs
     return _make_intermediate_proxy_type(
-        name, fast_type, slow_type, module=slow_type.__module__
+        name, fast_type, slow_type, module=slow_type.__module__, **kwargs
     )
 
 
@@ -1019,6 +1025,9 @@ DataFrameGroupBy = make_intermediate_proxy_type(
     "DataFrameGroupBy",
     cudf.core.groupby.groupby.DataFrameGroupBy,
     pd.core.groupby.DataFrameGroupBy,
+    additional_attributes={
+        "_grouper": _FastSlowAttribute("_grouper", private=True),
+    },
 )
 
 RollingGroupBy = make_intermediate_proxy_type(
