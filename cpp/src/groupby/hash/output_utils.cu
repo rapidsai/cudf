@@ -54,7 +54,7 @@ struct result_column_creator {
       agg != aggregation::COUNT_VALID && agg != aggregation::COUNT_ALL && col.has_nulls();
     // TODO: Remove adjusted buffer size workaround once https://github.com/NVIDIA/cccl/issues/6430
     // is fixed. Use adjusted buffer size for small data types to ensure atomic operation safety.
-    auto const make_empty_column = [&](data_type d_type, size_type size, mask_state state) {
+    auto const make_uninitialized_column = [&](data_type d_type, size_type size, mask_state state) {
       auto const type_size = cudf::size_of(d_type);
       if (type_size < 4) {
         auto adjusted_size = cudf::util::round_up_safe(size, static_cast<size_type>(4));
@@ -69,14 +69,14 @@ struct result_column_creator {
     if (agg != aggregation::SUM_WITH_OVERFLOW) {
       auto const target_type = cudf::detail::target_type(col_type, agg);
       auto const mask_flag   = nullable ? mask_state::ALL_NULL : mask_state::UNALLOCATED;
-      return make_empty_column(target_type, output_size, mask_flag);
+      return make_uninitialized_column(target_type, output_size, mask_flag);
     }
-    auto make_children = [&make_empty_column](size_type size) {
+    auto make_children = [&make_uninitialized_column](size_type size) {
       std::vector<std::unique_ptr<column>> children;
       children.push_back(
-        make_empty_column(data_type{type_id::INT64}, size, mask_state::UNALLOCATED));
+        make_uninitialized_column(data_type{type_id::INT64}, size, mask_state::UNALLOCATED));
       children.push_back(
-        make_empty_column(data_type{type_id::BOOL8}, size, mask_state::UNALLOCATED));
+        make_uninitialized_column(data_type{type_id::BOOL8}, size, mask_state::UNALLOCATED));
       return children;
     };
 
