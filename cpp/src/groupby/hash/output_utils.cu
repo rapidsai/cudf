@@ -63,8 +63,7 @@ struct result_column_creator {
 
     auto make_children = [&make_empty_column, col_type = col.type()](size_type size) {
       std::vector<std::unique_ptr<column>> children;
-      // Create sum child column (int64_t) - no null mask needed, struct-level mask handles
-      // nullability
+      // Create sum child column - no null mask needed, struct-level mask handles nullability
       children.push_back(make_empty_column(col_type.id(), size, mask_state::UNALLOCATED));
       // Create overflow child column (bool) - no null mask needed, only value matters
       children.push_back(make_empty_column(type_id::BOOL8, size, mask_state::UNALLOCATED));
