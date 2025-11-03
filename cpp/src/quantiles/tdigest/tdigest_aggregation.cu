@@ -17,7 +17,6 @@
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/fixed_point/conv.hpp>
 #include <cudf/lists/lists_column_view.hpp>
@@ -1446,7 +1445,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
                         thrust::make_discard_iterator(),
                         merged_min_col->mutable_view().begin<double>(),
                         cuda::std::equal_to{},  // key equality check
-                        cudf::detail::minimum{});
+                        cuda::minimum{});
 
   auto merged_max_col = cudf::make_numeric_column(
     data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, mr);
@@ -1461,7 +1460,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
                         thrust::make_discard_iterator(),
                         merged_max_col->mutable_view().begin<double>(),
                         cuda::std::equal_to{},  // key equality check
-                        cudf::detail::maximum{});
+                        cuda::maximum{});
 
   auto tdigest_offsets = tdv.centroids().offsets();
 

@@ -14,7 +14,6 @@
 #include <cudf/detail/unary.hpp>
 #include <cudf/detail/utilities/cast_functor.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/reduction/detail/segmented_reduction.cuh>
 #include <cudf/types.hpp>
@@ -239,7 +238,7 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
                                             counts.begin(),
                                             counts.end(),
                                             size_type{0},
-                                            cudf::detail::maximum<size_type>{});
+                                            cuda::maximum<size_type>{});
 
       auto const new_scale = numeric::scale_type{col.type().scale() * max_count};
 
