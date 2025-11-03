@@ -9,6 +9,7 @@ import dataclasses
 import math
 from typing import TYPE_CHECKING, Any
 
+from rapidsmpf.streaming.core.lineariser import Lineariser
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
@@ -24,7 +25,6 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
     lower_ir_node,
 )
 from cudf_polars.experimental.rapidsmpf.nodes import (
-    PyLineariser,
     define_py_node,
     shutdown_on_error,
 )
@@ -130,26 +130,29 @@ async def dataframescan_node(
                 )
             await ch_out.data.drain(context)
         else:
-            # Concurrent execution - use PyLineariser to ensure ordered delivery
-            lineariser = PyLineariser(ch_out.data, len(ir_slices))
+            # Concurrent execution - use Lineariser to ensure ordered delivery
+            lineariser = Lineariser(ch_out.data, len(ir_slices))
+            input_channels = lineariser.get_inputs()
 
-            # Start the lineariser drain task
+            # Start the lineariser drain task (must run concurrently with producers)
             tasks = [lineariser.drain(context)]
 
             # Start all read tasks
-            for seq_num, ir_slice in enumerate(ir_slices):
+            for seq_num, (ir_slice, ch_in) in enumerate(
+                zip(ir_slices, input_channels, strict=True)
+            ):
                 tasks.append(
                     read_chunk_linearised(
                         context,
                         io_throttle,
                         ir_slice,
                         seq_num,
-                        lineariser.get_input_queue(seq_num),
+                        ch_in,
                         ir_context,
                     )
                 )
 
-            # Wait for all tasks to complete
+            # Wait for all tasks to complete (drain + all producers)
             await asyncio.gather(*tasks)
 
 
@@ -263,13 +266,13 @@ async def read_chunk_linearised(
     io_throttle: asyncio.Semaphore,
     scan: IR,
     seq_num: int,
-    queue: asyncio.Queue,
+    ch_out: Channel,
     ir_context: IRExecutionContext,
 ) -> None:
     """
-    Read a chunk from disk and send it to a lineariser queue.
+    Read a chunk from disk and send it to a lineariser input channel.
 
-    This function is used with PyLineariser to ensure ordered delivery
+    This function is used with Lineariser to ensure ordered delivery
     of chunks even when I/O operations complete out of order.
 
     Parameters
@@ -282,8 +285,8 @@ async def read_chunk_linearised(
         The Scan or DataFrameScan node.
     seq_num
         The sequence number.
-    queue
-        The lineariser input queue for this producer.
+    ch_out
+        The lineariser input channel for this producer.
     ir_context
         The execution context for the IR node.
     """
@@ -294,7 +297,7 @@ async def read_chunk_linearised(
             *scan._non_child_args,
             context=ir_context,
         )
-        # Send to queue (lineariser will handle ordering)
+        # Send to channel (lineariser will handle ordering)
         msg = Message(
             seq_num,
             TableChunk.from_pylibcudf_table(
@@ -303,9 +306,9 @@ async def read_chunk_linearised(
                 exclusive_view=True,
             ),
         )
-        await queue.put(msg)
+        await ch_out.send(context, msg)
     # Signal completion for this producer
-    await queue.put(None)
+    await ch_out.drain(context)
 
 
 @define_py_node()
@@ -414,26 +417,29 @@ async def scan_node(
                 )
             await ch_out.data.drain(context)
         else:
-            # Concurrent execution - use PyLineariser to ensure ordered delivery
-            lineariser = PyLineariser(ch_out.data, len(scans))
+            # Concurrent execution - use Lineariser to ensure ordered delivery
+            lineariser = Lineariser(ch_out.data, len(scans))
+            input_channels = lineariser.get_inputs()
 
-            # Start the lineariser drain task
+            # Start the lineariser drain task (must run concurrently with producers)
             tasks = [lineariser.drain(context)]
 
             # Start all read tasks
-            for seq_num, scan in enumerate(scans):
+            for seq_num, (scan, ch_in) in enumerate(
+                zip(scans, input_channels, strict=True)
+            ):
                 tasks.append(
                     read_chunk_linearised(
                         context,
                         io_throttle,
                         scan,
                         seq_num,
-                        lineariser.get_input_queue(seq_num),
+                        ch_in,
                         ir_context,
                     )
                 )
 
-            # Wait for all tasks to complete
+            # Wait for all tasks to complete (drain + all producers)
             await asyncio.gather(*tasks)
 
 
