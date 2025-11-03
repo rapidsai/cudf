@@ -259,7 +259,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 self.dtype, DecimalDtype
             ):
                 raise NotImplementedError(
-                    "binaryop with arbitrary decimal not support in pandas compatibility mode"
+                    "binary operations with arbitrary decimal types are not supported in pandas compatibility mode"
                 )
             other_cudf_dtype = self.dtype._from_decimal(Decimal(other))  # type: ignore[union-attr]
         elif isinstance(other, float):
