@@ -32,8 +32,13 @@
 
 #include <cuco/utility/error.hpp>
 
+#include <algorithm>
+#include <iterator>
 #include <limits>
+#include <memory>
 #include <numeric>
+#include <utility>
+#include <vector>
 
 namespace {
 template <typename T>
@@ -53,9 +58,9 @@ void expect_match_counts_equal(rmm::device_uvector<cudf::size_type> const& actua
   stream.synchronize();
 
   ASSERT_EQ(host_actual_counts.size(), expected_counts.size());
-  for (size_t i = 0; i < expected_counts.size(); ++i) {
-    EXPECT_EQ(host_actual_counts[i], expected_counts[i]) << "Mismatch at index " << i;
-  }
+  EXPECT_TRUE(
+    std::equal(host_actual_counts.begin(), host_actual_counts.end(), expected_counts.begin()))
+    << "Match counts do not equal expected counts";
 }
 
 using JoinResult = std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
