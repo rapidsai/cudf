@@ -61,9 +61,7 @@ async def get_small_table(
     small_chunks = []
     while (msg := await ch_small.data.recv(context)) is not None:
         small_chunks.append(TableChunk.from_message(msg))
-
-    if len(small_chunks) == 0:
-        raise ValueError("Empty small side")
+    assert small_chunks, "Empty small side"
 
     return [
         DataFrame.from_table(

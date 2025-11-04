@@ -18,6 +18,7 @@ from cudf_polars.utils.config import ConfigOptions
 from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 # TODO: Add Sink support to the rapidsmpf runtime.
+# See: https://github.com/rapidsai/cudf/issues/20485
 pytestmark = pytest.mark.skipif(
     DEFAULT_RUNTIME == "rapidsmpf",
     reason="Sink not yet supported for rapidsmpf runtime.",

@@ -15,6 +15,7 @@ from cudf_polars.testing.asserts import (
 from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 # TODO: Add multi-partition Sort support to the rapidsmpf runtime.
+# See: https://github.com/rapidsai/cudf/issues/20486
 pytestmark = pytest.mark.skipif(
     DEFAULT_RUNTIME == "rapidsmpf",
     reason="Sort not yet supported for rapidsmpf runtime.",
