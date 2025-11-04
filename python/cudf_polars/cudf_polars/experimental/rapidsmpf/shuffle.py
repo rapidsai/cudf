@@ -94,11 +94,15 @@ class LocalShuffle:
     ):
         self.context = context
         self.br = context.br()
-        self.op_id = _get_new_shuffle_id()
         self.num_partitions = num_partitions
         self.columns_to_hash = columns_to_hash
         self.stream = stream
-        statistics = context.statistics()
+        self._insertion_finished = False
+
+    def __enter__(self) -> LocalShuffle:
+        """Enter the local shuffle instance context manager."""
+        self.op_id = _get_new_shuffle_id()
+        statistics = self.context.statistics()
         comm = new_communicator(Options(get_environment_variables()))
         progress_thread = ProgressThread(comm, statistics)
         self.shuffler = Shuffler(
@@ -109,10 +113,6 @@ class LocalShuffle:
             br=self.br,
             statistics=statistics,
         )
-        self._insertion_finished = False
-
-    def __enter__(self) -> LocalShuffle:
-        """Enter the local shuffle instance context manager."""
         return self
 
     def __exit__(
