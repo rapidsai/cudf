@@ -278,6 +278,77 @@ void reader_impl::allocate_level_decode_space()
   }
 }
 
+namespace {
+
+/**
+ * @brief Functor to compute the number of string offsets needed for each page.
+ *
+ * For list columns, this uses the batch_size computed during preprocessing from the nesting
+ * information, which is only accessible on the device. For non-list columns, it estimates based
+ * on row counts.
+ */
+struct compute_page_offset_count {
+  device_span<PageInfo const> pages;
+  device_span<ColumnChunkDesc const> chunks;
+  size_t skip_rows;
+  size_t num_rows;
+
+  __device__ size_t operator()(size_t page_idx) const
+  {
+    // Mask for non-dictionary, non-delta string columns (same as used in decode kernel)
+    constexpr uint32_t STRINGS_MASK_NON_DELTA_NON_DICT =
+      BitOr(decode_kernel_mask::STRING,
+            decode_kernel_mask::STRING_NESTED,
+            decode_kernel_mask::STRING_LIST,
+            decode_kernel_mask::STRING_STREAM_SPLIT,
+            decode_kernel_mask::STRING_STREAM_SPLIT_NESTED,
+            decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
+
+    // Mask for pages with lists (repetition levels)
+    constexpr uint32_t STRINGS_WITH_LISTS_MASK =
+      BitOr(decode_kernel_mask::STRING_LIST, decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
+
+    auto const& page  = pages[page_idx];
+    auto const& chunk = chunks[page.chunk_idx];
+
+    // Check if this page is a non-dictionary string page using kernel mask
+    if (BitAnd(page.kernel_mask, STRINGS_MASK_NON_DELTA_NON_DICT) == 0) { return 0; }
+
+    // Fixed length byte array: Offsets are fixed, no need to preprocess
+    if (chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY) { return 0; }
+
+    auto const page_start_row    = chunk.start_row + page.chunk_row;
+    auto const page_end_row      = page_start_row + page.num_rows;
+    auto const subpass_start_row = skip_rows;
+    auto const subpass_end_row   = subpass_start_row + num_rows;
+
+    if ((page_end_row <= subpass_start_row) || (page_start_row >= subpass_end_row)) {
+      return 0;  // will skip the page
+    }
+
+    // Check if this column is a list type
+    bool const is_list_col = BitAnd(page.kernel_mask, STRINGS_WITH_LISTS_MASK) != 0;
+
+    size_t page_num_values;
+    if (is_list_col) {
+      // For list columns, use batch_size computed during preprocessing
+      // batch_size is at the leaf level (highest nesting depth)
+      auto const leaf_depth = page.num_output_nesting_levels - 1;
+      page_num_values       = page.nesting[leaf_depth].batch_size;
+    } else {
+      // For non-list columns, we don't know how many values we'll read, because we don't know
+      // how many nulls we'll skip. So we have to read through the skipped rows on the page.
+      auto const read_end_row = min(page_end_row, subpass_end_row);
+      page_num_values         = read_end_row - page_start_row;
+    }
+
+    // add 1 for the final offset if we have any values
+    return page_num_values + (page_num_values > 0 ? 1 : 0);
+  }
+};
+
+}  // namespace
+
 void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t num_rows)
 {
   auto& pass    = *_pass_itm_data;
@@ -289,61 +360,28 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
            (!chunk.logical_type.has_value() || chunk.logical_type->type != LogicalType::DECIMAL);
   };
 
-  // Mask for non-dictionary, non-delta string columns (same as used in decode kernel)
-  constexpr uint32_t STRINGS_MASK_NON_DELTA_NON_DICT =
-    BitOr(decode_kernel_mask::STRING,
-          decode_kernel_mask::STRING_NESTED,
-          decode_kernel_mask::STRING_LIST,
-          decode_kernel_mask::STRING_STREAM_SPLIT,
-          decode_kernel_mask::STRING_STREAM_SPLIT_NESTED,
-          decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
+  // Compute the number of offsets per page on the GPU using batch_size from nesting info
+  auto const num_pages = subpass.pages.size();
+  rmm::device_uvector<size_t> d_page_offset_counts(num_pages, _stream);
 
-  // Mask for pages with lists (repetition levels)
-  constexpr uint32_t STRINGS_WITH_LISTS_MASK =
-    BitOr(decode_kernel_mask::STRING_LIST, decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
+  thrust::transform(rmm::exec_policy_nosync(_stream),
+                    thrust::counting_iterator<size_t>(0),
+                    thrust::counting_iterator<size_t>(num_pages),
+                    d_page_offset_counts.begin(),
+                    compute_page_offset_count{subpass.pages, pass.chunks, skip_rows, num_rows});
 
-  // Build a host vector to store the string offset indices for each page
-  std::vector<size_t> h_page_string_offset_indices(subpass.pages.size(), 0);
+  // Compute prefix sum (exclusive scan) to get indices for each page
+  _page_string_offset_indices = rmm::device_uvector<size_t>(num_pages, _stream);
+  thrust::exclusive_scan(rmm::exec_policy_nosync(_stream),
+                         d_page_offset_counts.begin(),
+                         d_page_offset_counts.end(),
+                         _page_string_offset_indices.begin());
 
-  // Calculate size of offset buffer to allocate by iterating over pages directly
-  size_t total_num_offsets = 0;
-  for (size_t i = 0; i < subpass.pages.size(); ++i) {
-    auto& page  = subpass.pages[i];
-    auto& chunk = pass.chunks[page.chunk_idx];
+  // Compute the total number of offsets needed
+  size_t total_num_offsets = thrust::reduce(
+    rmm::exec_policy_nosync(_stream), d_page_offset_counts.begin(), d_page_offset_counts.end());
 
-    // Check if this page is a non-dictionary string page using kernel mask
-    if ((BitAnd(page.kernel_mask, STRINGS_MASK_NON_DELTA_NON_DICT)) == 0) { continue; }
-
-    // Fixed length byte array: Offsets are fixed, no need to preprocess
-    if (chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY) { continue; }
-
-    h_page_string_offset_indices[i] = total_num_offsets;
-
-    // Check if this column is a list type
-    bool const is_list_col = BitAnd(page.kernel_mask, STRINGS_WITH_LISTS_MASK) != 0;
-
-    auto const page_start_row    = chunk.start_row + page.chunk_row;
-    auto const page_end_row      = page_start_row + page.num_rows;
-    auto const subpass_start_row = skip_rows;
-    auto const subpass_end_row   = subpass_start_row + num_rows;
-
-    if ((page_end_row <= subpass_start_row) || (page_start_row >= subpass_end_row)) {
-      continue;  // will skip the page
-    }
-
-    // For list columns, batch_size has been computed during preprocessing
-    // We can't access it here because page.nesting is a device pointer
-    // So we must over-allocate based on num_input_values
-
-    // For non-list columns, we don't know how many values we'll read, because we don't know
-    // how many nulls we'll skip. So we have to read through the skipped rows on the page.
-    auto const read_end_row = std::min(page_end_row, subpass_end_row);
-    size_t const page_num_values =
-      is_list_col ? page.num_input_values : (read_end_row - page_start_row);
-
-    // add to total, plus store last offset for each page
-    total_num_offsets += page_num_values + (page_num_values > 0 ? 1 : 0);
-  }
+  _stream.synchronize();
 
   // Allocate the string offset buffer
   _string_offset_buffer = rmm::device_uvector<uint32_t>(total_num_offsets, _stream, _mr);
@@ -357,10 +395,6 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
       chunk.column_string_offset_base = _string_offset_buffer.data();
     }
   }
-
-  // Copy the string offset indices to device
-  _page_string_offset_indices = cudf::detail::make_device_uvector_async(
-    h_page_string_offset_indices, _stream, cudf::get_current_device_resource_ref());
 
   // Transfer the updated chunks to device
   pass.chunks.host_to_device_async(_stream);
