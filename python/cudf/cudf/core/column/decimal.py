@@ -245,7 +245,9 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 )
             elif other.dtype.kind in {"i", "u"}:
                 other = other.astype(
-                    type(self.dtype)(self.dtype.MAX_PRECISION, 0)  # type: ignore[call-overload, union-attr]
+                    cast(type[DecimalDtype], type(self.dtype))(
+                        self.dtype.MAX_PRECISION, 0
+                    )  # type: ignore[union-attr]
                 )
             elif not isinstance(self.dtype, other.dtype.__class__):
                 # This branch occurs if we have a DecimalBaseColumn of a

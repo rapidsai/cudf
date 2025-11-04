@@ -210,7 +210,7 @@ class ColumnAccessor(MutableMapping):
     @property
     def level_names(self) -> tuple[Hashable, ...]:
         if self.is_cached("to_pandas_index"):
-            return self.to_pandas_index.names
+            return tuple(self.to_pandas_index.names)
         if self._level_names is None or len(self._level_names) == 0:
             return tuple((None,) * max(1, self.nlevels))
         else:
