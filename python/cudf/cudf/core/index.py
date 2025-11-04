@@ -2914,7 +2914,7 @@ class RangeIndex(Index):
         via `default_integer_bitwidth` as 32 bit in `cudf.options`
         """
         dtype: np.dtype = np.dtype(np.int64)
-        return _maybe_convert_to_default_type(dtype)
+        return cast(np.dtype, _maybe_convert_to_default_type(dtype))
 
     @property
     def _dtypes(self) -> Generator[tuple[Hashable, np.dtype], None, None]:

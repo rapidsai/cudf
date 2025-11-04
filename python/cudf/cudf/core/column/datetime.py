@@ -1,5 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -162,15 +161,6 @@ class DatetimeColumn(TemporalBaseColumn):
                 # attr was not called yet, so ignore.
                 pass
 
-    def _scan(self, op: str) -> ColumnBase:
-        if op not in {"cummin", "cummax"}:
-            raise TypeError(
-                f"Accumulation {op} not supported for {self.dtype}"
-            )
-        return self.scan(op.replace("cum", ""), True)._with_type_metadata(
-            self.dtype
-        )
-
     def __contains__(self, item: ScalarLike) -> bool:
         try:
             ts = self._PD_SCALAR(item).as_unit(self.time_unit)  # type: ignore[arg-type]
@@ -251,7 +241,7 @@ class DatetimeColumn(TemporalBaseColumn):
             last_day_col = type(self).from_pylibcudf(
                 plc.datetime.last_day_of_month(self.to_pylibcudf(mode="read"))
             )
-        return (self.day == last_day_col.day).fillna(False)
+        return (self.day == last_day_col.day).fillna(False)  # type: ignore[attr-defined]
 
     @functools.cached_property
     def is_quarter_end(self) -> ColumnBase:
@@ -570,7 +560,7 @@ class DatetimeColumn(TemporalBaseColumn):
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
         if isinstance(other, cudf.DateOffset):
-            return other._datetime_binop(self, op, reflect=reflect)
+            return other._datetime_binop(self, op, reflect=reflect)  # type: ignore[attr-defined]
         other = self._normalize_binop_operand(other)
         if other is NotImplemented:
             return NotImplemented
@@ -665,10 +655,10 @@ class DatetimeColumn(TemporalBaseColumn):
 
         lhs_binop: plc.Scalar | ColumnBase = (
             pa_scalar_to_plc_scalar(lhs) if isinstance(lhs, pa.Scalar) else lhs
-        )
+        )  # type: ignore[assignment]
         rhs_binop: plc.Scalar | ColumnBase = (
             pa_scalar_to_plc_scalar(rhs) if isinstance(rhs, pa.Scalar) else rhs
-        )
+        )  # type: ignore[assignment]
 
         result_col = binaryop.binaryop(lhs_binop, rhs_binop, op, out_dtype)
         if out_dtype.kind != "b" and op == "__add__":
@@ -685,11 +675,11 @@ class DatetimeColumn(TemporalBaseColumn):
             return DatetimeTZColumn(
                 data=self.base_data,  # type: ignore[arg-type]
                 dtype=dtype,
-                mask=self.base_mask,
+                mask=self.base_mask,  # type: ignore[arg-type]
                 size=self.size,
                 offset=self.offset,
                 null_count=self.null_count,
-                children=self.base_children,
+                children=self.base_children,  # type: ignore[arg-type]
             )
         if cudf.get_option("mode.pandas_compatible") and dtype is not None:
             self._dtype = get_dtype_of_same_type(dtype, self.dtype)
@@ -844,19 +834,19 @@ class DatetimeTZColumn(DatetimeColumn):
         """Return UTC time as naive timestamps."""
         return DatetimeColumn(
             data=self.base_data,  # type: ignore[arg-type]
-            dtype=_get_base_dtype(self.dtype),
-            mask=self.base_mask,
+            dtype=_get_base_dtype(cast(pd.DatetimeTZDtype, self.dtype)),
+            mask=self.base_mask,  # type: ignore[arg-type]
             size=self.size,
             offset=self.offset,
             null_count=self.null_count,
-            children=self.base_children,
+            children=self.base_children,  # type: ignore[arg-type]
         )
 
     @functools.cached_property
     def _local_time(self) -> DatetimeColumn:
         """Return the local time as naive timestamps."""
         transition_times, offsets = get_tz_data(str(self.dtype.tz))  # type: ignore[union-attr]
-        base_dtype = _get_base_dtype(self.dtype)
+        base_dtype = _get_base_dtype(cast(pd.DatetimeTZDtype, self.dtype))
         indices = (
             transition_times.astype(base_dtype).searchsorted(
                 self.astype(base_dtype), side="right"
@@ -879,7 +869,7 @@ class DatetimeTZColumn(DatetimeColumn):
             else:
                 casted = self
             return casted.tz_convert(str(dtype.tz))
-        return super().as_datetime_column(dtype)
+        return super().as_datetime_column(cast(np.dtype, dtype))
 
     @acquire_spill_lock()
     def _get_dt_field(

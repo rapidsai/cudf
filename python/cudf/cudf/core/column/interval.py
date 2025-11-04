@@ -155,7 +155,7 @@ class IntervalColumn(StructColumn):
         pd_type = self.dtype.to_pandas()  # type: ignore[union-attr]
         return pd.Index(pd_type.__from_arrow__(self.to_arrow()), dtype=pd_type)
 
-    def element_indexing(
+    def element_indexing(  # type: ignore[override]
         self, index: int
     ) -> pd.Interval | dict[Any, Any] | None:
         result = super().element_indexing(index)
