@@ -33,7 +33,7 @@ std::vector<cudf::io::table_with_metadata> split_byte_range_reading(
   auto total_source_size = [&sources]() {
     return std::accumulate(sources.begin(), sources.end(), 0ul, [=](size_t sum, auto& source) {
       auto const size = source->size();
-      return sum + size;
+      return sum + size + 1;
     });
   }();
   auto find_first_delimiter_in_chunk =
