@@ -36,21 +36,6 @@ jobs:
         UPDATE_LINKED_ISSUES: true
       secrets: inherit
 
-    update-sprint:
-      # This job sets the PR and its linked issues to the current "Weekly Sprint"
-      uses: rapidsai/shared-workflows/.github/workflows/project-get-set-iteration-field.yaml@main
-      if: ${{ github.event.pull_request.state == 'open' && needs.get-project-id.outputs.ITEM_PROJECT_ID != '' }}
-      needs: get-project-id
-      with:
-        PROJECT_ID: "PVT_kwDOAp2shc4AiNzl"
-        ITERATION_FIELD_ID: "PVTIF_lADOAp2shc4AiNzlzgbU_po"
-        ITERATION_FIELD_NAME: "Weekly Sprint"
-        ITEM_PROJECT_ID: "${{ needs.get-project-id.outputs.ITEM_PROJECT_ID }}"
-        ITEM_NODE_ID: "${{ github.event.pull_request.node_id }}"
-        UPDATE_ITEM: true
-        UPDATE_LINKED_ISSUES: true
-      secrets: inherit
-
     process-branch-name:
       if: ${{ github.event.pull_request.state == 'open' && needs.get-project-id.outputs.ITEM_PROJECT_ID != '' }}
       needs: get-project-id
