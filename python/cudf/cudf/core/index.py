@@ -47,7 +47,8 @@ from cudf.core.copy_types import GatherMap
 from cudf.core.dtypes import IntervalDtype, dtype as cudf_dtype
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.single_column_frame import SingleColumnFrame
-from cudf.core.tools.datetimes import DateOffset
+
+# from cudf.core.tools.datetimes import DateOffset
 from cudf.errors import MixedTypeError
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -74,7 +75,7 @@ if TYPE_CHECKING:
     from cudf.core.frame import Frame
     from cudf.core.multiindex import MultiIndex
     from cudf.core.series import Series
-    from cudf.core.tools.datetimes import MonthEnd, YearEnd
+    from cudf.core.tools.datetimes import DateOffset, MonthEnd, YearEnd
 
 
 def ensure_index(index_like: Any, nan_as_null=no_default) -> Index:
@@ -3527,8 +3528,6 @@ class DatetimeIndex(Index):
         "nanoseconds",
     ]
 
-    ONE_MONTH = DateOffset(months=1)
-    YEAR_END = DateOffset._from_freqstr("YE-DEC")
     MONTHLY_PERIODS = {
         pd.Timedelta("28 days"),
         pd.Timedelta("29 days"),
@@ -3621,7 +3620,7 @@ class DatetimeIndex(Index):
         # existing pandas index needs no additional validation
         if self._freq is not None and not was_pd_index:
             unique_vals = self.to_series().diff().unique()
-            if self._freq == self.ONE_MONTH:
+            if self._freq == cudf.DateOffset(months=1):
                 possible = pd.Series(list(self.MONTHLY_PERIODS | {pd.NaT}))
                 if unique_vals.isin(possible).sum() != len(unique_vals):
                     raise ValueError("No unique frequency found")
@@ -3808,7 +3807,7 @@ class DatetimeIndex(Index):
             ):
                 # Could be year end or could be an anchored year end
                 if self.is_year_end.all():
-                    return self.YEAR_END
+                    return cudf.DateOffset._from_freqstr("YE-DEC")
                 else:
                     raise NotImplementedError()
             elif all(x in self.MONTHLY_PERIODS for x in uniques_host):

@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import re
 import warnings
+from functools import lru_cache
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
@@ -719,6 +720,7 @@ class DateOffset:
         return repr_str
 
     @classmethod
+    @lru_cache(maxsize=128)
     def _from_freqstr(cls, freqstr: str) -> Self | MonthEnd | YearEnd:
         """
         Parse a string and return a DateOffset object
@@ -738,7 +740,7 @@ class DateOffset:
         # and automatically swapped on construction
         if freq_part in ("M", "ME"):
             return MonthEnd()
-        elif freq_part == ("Y", "YE"):
+        elif freq_part in ("Y", "YE"):
             return YearEnd()
 
         if freq_part not in cls._CODES_TO_UNITS:
