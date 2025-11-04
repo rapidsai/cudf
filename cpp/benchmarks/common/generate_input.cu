@@ -443,12 +443,18 @@ struct valid_or_zero {
   }
 };
 
+enum class string_encoding {
+  ASCII,
+  UTF8,
+};
+
+template <string_encoding Encoding = string_encoding::UTF8>
 struct string_generator {
   char* chars;
   thrust::minstd_rand engine;
   thrust::uniform_int_distribution<unsigned char> char_dist;
   string_generator(char* c, thrust::minstd_rand& engine)
-    : chars(c), engine(engine), char_dist(32, 137)
+    : chars(c), engine(engine), char_dist(32, Encoding == string_encoding::ASCII ? 126 : 137)
   // ~90% ASCII, ~10% UTF-8.
   // ~80% not-space, ~20% space.
   // range 32-127 is ASCII; 127-136 will be multi-byte UTF-8
@@ -461,10 +467,12 @@ struct string_generator {
     engine.discard(begin);
     for (auto i = begin; i < end; ++i) {
       auto ch = char_dist(engine);
-      if (i == end - 1 && ch >= '\x7F') ch = ' ';  // last element ASCII only.
-      if (ch >= '\x7F') {                          // x7F is at the top edge of ASCII
-        chars[i++] = '\xC4';                       // these characters are assigned two bytes
-        ch         = (ch >> 2) | 0x80;
+      if constexpr (Encoding == string_encoding::UTF8) {
+        if (i == end - 1 && ch >= '\x7F') ch = ' ';  // last element ASCII only.
+        if (ch >= '\x7F') {                          // x7F is at the top edge of ASCII
+          chars[i++] = '\xC4';                       // these characters are assigned two bytes
+          ch         = (ch >> 2) | 0x80;
+        }
       }
       chars[i] = static_cast<char>(ch);
     }
@@ -475,6 +483,7 @@ struct string_generator {
  * @brief Create a UTF-8 string column with the average length.
  *
  */
+template <string_encoding Encoding = string_encoding::UTF8>
 std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile const& profile,
                                                                thrust::minstd_rand& engine,
                                                                cudf::size_type num_rows)
@@ -509,7 +518,7 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
   thrust::for_each_n(thrust::device,
                      thrust::make_zip_iterator(offsets_itr, offsets_itr + 1),
                      num_rows,
-                     string_generator{chars.data(), engine});
+                     string_generator<Encoding>{chars.data(), engine});
 
   auto [result_bitmask, null_count] =
     profile.get_null_probability().has_value()
@@ -1047,6 +1056,14 @@ std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(
                                   cudf::get_default_stream(),
                                   cudf::get_current_device_resource_ref());
   }
+}
+
+std::unique_ptr<cudf::column> create_ascii_string_column(data_profile const& profile,
+                                                         cudf::size_type num_rows,
+                                                         unsigned seed = 1)
+{
+  auto engine = deterministic_engine(seed);
+  return create_random_utf8_string_column<string_encoding::ASCII>(profile, engine, num_rows);
 }
 
 std::vector<cudf::type_id> get_type_or_group(int32_t id)
