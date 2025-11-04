@@ -4,11 +4,11 @@
  */
 #include "nvcomp_adapter.cuh"
 
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
@@ -125,11 +125,8 @@ void skip_unsupported_inputs(device_span<size_t> input_sizes,
 std::pair<size_t, size_t> max_chunk_and_total_input_size(device_span<size_t const> input_sizes,
                                                          rmm::cuda_stream_view stream)
 {
-  auto const max = thrust::reduce(rmm::exec_policy(stream),
-                                  input_sizes.begin(),
-                                  input_sizes.end(),
-                                  0ul,
-                                  cudf::detail::maximum<size_t>());
+  auto const max = thrust::reduce(
+    rmm::exec_policy(stream), input_sizes.begin(), input_sizes.end(), 0ul, cuda::maximum<size_t>());
   auto const sum = thrust::reduce(rmm::exec_policy(stream), input_sizes.begin(), input_sizes.end());
   return {max, sum};
 }

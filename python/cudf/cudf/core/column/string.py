@@ -17,7 +17,6 @@ import pylibcudf as plc
 
 import cudf
 from cudf.api.types import is_scalar
-from cudf.core._compat import PANDAS_GE_230
 from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column, column_empty
@@ -490,9 +489,9 @@ class StringColumn(ColumnBase, Scannable):
                 pandas_array = self.dtype.__from_arrow__(
                     self.to_arrow().cast(pa.large_string())
                 )
-            elif self.dtype.na_value is np.nan and PANDAS_GE_230:
-                pandas_array = pd.core.arrays.string_.StringArrayNumpySemantics._from_sequence(
-                    self.to_arrow()
+            elif self.dtype.na_value is np.nan:
+                pandas_array = pd.array(
+                    self.to_arrow().to_pandas(), dtype=self.dtype
                 )
             else:
                 return super().to_pandas(
