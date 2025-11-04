@@ -225,6 +225,13 @@ class TimeDeltaColumn(TemporalBaseColumn):
             result = result.fillna(op == "__ne__")
         return result
 
+    def _scan(self, op: str) -> ColumnBase:
+        if op == "cumprod":
+            raise TypeError("cumprod not supported for Timedelta.")
+        return self.scan(op.replace("cum", ""), True)._with_type_metadata(
+            self.dtype
+        )
+
     def total_seconds(self) -> ColumnBase:
         conversion = unit_to_nanoseconds_conversion[self.time_unit] / 1e9
         # Typecast to decimal128 to avoid floating point precision issues
