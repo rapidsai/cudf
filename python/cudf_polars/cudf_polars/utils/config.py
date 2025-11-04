@@ -203,6 +203,13 @@ class ShuffleMethod(str, enum.Enum):
     _RAPIDSMPF_SINGLE = "rapidsmpf-single"
 
 
+class MemoryResourceType(str, enum.Enum):
+    """The default memory resource to use for the client process."""
+
+    ASYNC = "async"
+    MANAGED = "managed"
+
+
 T = TypeVar("T")
 
 
@@ -312,8 +319,23 @@ class ParquetOptions:
             raise TypeError("max_row_group_samples must be an int")
 
 
-def default_blocksize(cluster: str) -> int:
-    """Return the default blocksize."""
+def default_blocksize(
+    cluster: str, client_memory_resource: MemoryResourceType | None = None
+) -> int:
+    """
+    Return the default blocksize.
+
+    Parameters
+    ----------
+    cluster
+        The cluster configuration for the streaming executor.
+    client_memory_resource
+        The default memory resource to use for the client process.
+
+    Returns
+    -------
+    The default blocksize in bytes.
+    """
     device_size = get_total_device_memory()
     if device_size is None:  # pragma: no cover
         # System doesn't have proper "GPU memory".
@@ -322,6 +344,7 @@ def default_blocksize(cluster: str) -> int:
 
     if (
         cluster == "distributed"
+        or client_memory_resource == "async"
         or _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) == 0
     ):
         # Distributed execution requires a conservative
@@ -500,6 +523,14 @@ class StreamingExecutor:
     rapidsmpf_spill
         Whether to wrap task arguments and output in objects that are
         spillable by 'rapidsmpf'.
+    client_device_threshold
+        Threshold for spilling data from device memory in rapidsmpf.
+        Default is 50% of device memory on the client process.
+        This argument is only used by the "rapidsmpf" runtime.
+    client_memory_resource
+        The default memory resource to use for the client process.
+        Default is "async" for the "rapidsmpf" runtime, and "managed"
+        for the "tasks" runtime.
     sink_to_directory
         Whether multi-partition sink operations should write to a directory
         rather than a single file. By default, this will be set to True for
@@ -585,6 +616,18 @@ class StreamingExecutor:
             f"{_env_prefix}__RAPIDSMPF_SPILL", _bool_converter, default=False
         )
     )
+    client_device_threshold: float = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__CLIENT_DEVICE_THRESHOLD", float, default=0.5
+        )
+    )
+    client_memory_resource: MemoryResourceType | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__CLIENT_MEMORY_RESOURCE",
+            MemoryResourceType.__call__,
+            default=None,
+        )
+    )
     sink_to_directory: bool | None = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__SINK_TO_DIRECTORY", _bool_converter, default=None
@@ -596,9 +639,7 @@ class StreamingExecutor:
 
     def __post_init__(self) -> None:  # noqa: D105
         # Check for rapidsmpf runtime
-        if (
-            self.runtime == "rapidsmpf"
-        ):  # pragma: no cover; rapidsmpf runtime not tested in CI yet
+        if self.runtime == "rapidsmpf":  # pragma: no cover; requires rapidsmpf runtime
             if not rapidsmpf_single_available():
                 raise ValueError("The rapidsmpf streaming engine requires rapidsmpf.")
             if self.shuffle_method == "tasks":
@@ -606,6 +647,19 @@ class StreamingExecutor:
                     "The rapidsmpf streaming engine does not support task-based shuffling."
                 )
             object.__setattr__(self, "shuffle_method", "rapidsmpf")
+
+        # Set default client memory resource
+        if self.client_memory_resource is None:
+            if (
+                self.runtime == "rapidsmpf"
+            ):  # pragma: no cover; requires rapidsmpf runtime
+                object.__setattr__(
+                    self, "client_memory_resource", MemoryResourceType.ASYNC
+                )
+            else:
+                object.__setattr__(
+                    self, "client_memory_resource", MemoryResourceType.MANAGED
+                )
 
         # Handle backward compatibility for deprecated scheduler parameter
         if self.scheduler is not None:
@@ -666,14 +720,21 @@ class StreamingExecutor:
         )
         if self.target_partition_size == 0:
             object.__setattr__(
-                self, "target_partition_size", default_blocksize(self.cluster)
+                self,
+                "target_partition_size",
+                default_blocksize(self.cluster, self.client_memory_resource),
             )
         if self.broadcast_join_limit == 0:
             object.__setattr__(
                 self,
                 "broadcast_join_limit",
-                # Usually better to avoid shuffling for single gpu
-                2 if self.cluster == "distributed" else 32,
+                # Usually better to avoid shuffling for single gpu with UVM
+                2
+                if (
+                    self.cluster == "distributed"
+                    or self.client_memory_resource == "async"
+                )
+                else 32,
             )
         object.__setattr__(self, "cluster", Cluster(self.cluster))
         object.__setattr__(self, "shuffle_method", ShuffleMethod(self.shuffle_method))
@@ -710,6 +771,8 @@ class StreamingExecutor:
             raise TypeError("rapidsmpf_spill must be bool")
         if not isinstance(self.sink_to_directory, bool):
             raise TypeError("sink_to_directory must be bool")
+        if not isinstance(self.client_device_threshold, float):
+            raise TypeError("client_device_threshold must be a float")
 
         # RapidsMPF spill is only supported for distributed clusters for now.
         # This is because the spilling API is still within the RMPF-Dask integration.

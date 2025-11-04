@@ -94,12 +94,13 @@ def evaluate_logical_plan(
     mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
     rmm.mr.set_current_device_resource(mr)
     memory_available: MutableMapping[MemoryType, LimitAvailableMemory] | None = None
-    single_spill_device = options.get_or_default(
-        # For now, spilling can be enabled via the env
-        # variable RAPIDSMPF_POLARS_SINGLE_SPILL_DEVICE
-        "polars_single_spill_device",
-        default_value=1.0,
-    )
+    # single_spill_device = options.get_or_default(
+    #     # For now, spilling can be enabled via the env
+    #     # variable RAPIDSMPF_POLARS_SINGLE_SPILL_DEVICE
+    #     "polars_single_spill_device",
+    #     default_value=1.0,
+    # )
+    single_spill_device = config_options.executor.client_device_threshold
     if single_spill_device > 0.0 and single_spill_device < 1.0:
         total_memory = rmm.mr.available_device_memory()[1]
         memory_available = {

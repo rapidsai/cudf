@@ -339,6 +339,7 @@ def test_validate_shuffle_method_defaults(
         "broadcast_join_limit",
         "rapidsmpf_spill",
         "sink_to_directory",
+        "client_device_threshold",
     ],
 )
 def test_validate_max_rows_per_partition(option: str) -> None:
