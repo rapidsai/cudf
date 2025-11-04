@@ -3793,8 +3793,8 @@ class DatetimeIndex(Index):
 
             kwds = {}
             for component in self._allowed:
-                if getattr(cmps, component) != 0:
-                    kwds[component] = getattr(cmps, component)
+                if (c := getattr(cmps, component)) != 0:
+                    kwds[component] = c
 
             return cudf.DateOffset(**kwds)
 

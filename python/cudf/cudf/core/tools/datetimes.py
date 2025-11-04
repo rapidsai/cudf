@@ -542,10 +542,10 @@ class DateOffset:
     _FREQSTR_REGEX = re.compile("([-+]?[0-9]*)([a-zA-Z]+)")
 
     def __eq__(self, other):
-        if not isinstance(other, (DateOffset, str)):
-            return NotImplemented
         if isinstance(other, str):
             return self._maybe_as_fast_pandas_offset() == other
+        if not isinstance(other, DateOffset):
+            return NotImplemented
         return self.kwds == other.kwds
 
     def __init__(self, n=1, normalize=False, **kwds):
@@ -736,14 +736,9 @@ class DateOffset:
 
         # Certain frequency strings are deprecated in pandas
         # and automatically swapped on construction
-        if freq_part == "M":
-            freq_part == "ME"
-        if freq_part == "Y":
-            freq_part = "YE"
-
-        if freq_part == "ME":
+        if freq_part in ("M", "ME"):
             return MonthEnd()
-        elif freq_part == "YE":
+        elif freq_part == ("Y", "YE"):
             return YearEnd()
 
         if freq_part not in cls._CODES_TO_UNITS:
