@@ -10,10 +10,10 @@
 #include "rle_stream.cuh"
 
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/strings/detail/gather.cuh>
 
+#include <cuda/functional>
 #include <thrust/logical.h>
 #include <thrust/transform_scan.h>
 
@@ -540,8 +540,7 @@ __device__ thrust::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const* d
     // note: warp_sum will only be valid on lane 0.
     auto const warp_sum = WarpReduce(temp_storage[warp_id]).Sum(lane_sum);
     __syncwarp();
-    auto const warp_max =
-      WarpReduce(temp_storage[warp_id]).Reduce(lane_max, cudf::detail::maximum{});
+    auto const warp_max = WarpReduce(temp_storage[warp_id]).Reduce(lane_max, cuda::maximum{});
 
     if (lane_id == 0) {
       total_bytes += warp_sum;
