@@ -3,11 +3,10 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from pylibcudf.exception_handler cimport libcudf_exception_handler
-from pylibcudf.libcudf.types cimport data_type
 from pylibcudf.libcudf.column.column_view cimport column_view
-from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.fixed_point.fixed_point cimport scale_type
-from pylibcudf.libcudf.types cimport int128 as int128_t
+from pylibcudf.libcudf.scalar.scalar cimport scalar
+from pylibcudf.libcudf.types cimport data_type, int128 as int128_t
 
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
 from rmm.librmm.memory_resource cimport device_memory_resource

@@ -2,11 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from pylibcudf.io.types cimport SourceInfo
-from pylibcudf.libcudf.io.parquet_metadata cimport(
+from pylibcudf.libcudf.io.parquet_metadata cimport (
+    parquet_column_schema,
     parquet_metadata,
     parquet_schema,
-    parquet_column_schema,
 )
+
 
 cdef class ParquetColumnSchema:
     cdef parquet_column_schema column_schema

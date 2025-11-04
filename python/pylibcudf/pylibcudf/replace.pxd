@@ -3,8 +3,9 @@
 
 from libcpp cimport bool
 from pylibcudf.libcudf.replace cimport replace_policy
-from rmm.pylibrmm.stream cimport Stream
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .scalar cimport Scalar

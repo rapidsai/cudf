@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
+
 from cython.operator import dereference
 
 from pylibcudf.column cimport Column
@@ -11,9 +12,10 @@ from pylibcudf.libcudf.scalar.scalar_factories cimport (
     make_string_scalar as cpp_make_string_scalar,
 )
 from pylibcudf.libcudf.strings cimport contains as cpp_contains
-from pylibcudf.strings.regex_program cimport RegexProgram
 from pylibcudf.scalar cimport Scalar
-from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from pylibcudf.strings.regex_program cimport RegexProgram
+from pylibcudf.utils cimport _get_memory_resource, _get_stream
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 

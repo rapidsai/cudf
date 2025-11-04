@@ -25,12 +25,17 @@ from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from pylibcudf.libcudf cimport expressions as libcudf_exp
+from pylibcudf.libcudf.fixed_point.fixed_point cimport (
+    decimal32,
+    decimal64,
+    decimal128,
+)
 from pylibcudf.libcudf.scalar.scalar cimport (
     duration_scalar,
+    fixed_point_scalar,
     numeric_scalar,
     string_scalar,
     timestamp_scalar,
-    fixed_point_scalar,
 )
 from pylibcudf.libcudf.types cimport size_type, type_id
 from pylibcudf.libcudf.wrappers.durations cimport (
@@ -47,12 +52,10 @@ from pylibcudf.libcudf.wrappers.timestamps cimport (
     timestamp_s,
     timestamp_us,
 )
-from pylibcudf.libcudf.fixed_point.fixed_point cimport decimal128, decimal64, decimal32
 
 from .scalar cimport Scalar
-from .traits cimport is_chrono, is_numeric, is_fixed_point
+from .traits cimport is_chrono, is_fixed_point, is_numeric
 from .types cimport DataType
-
 
 # Aliases for simplicity
 ctypedef unique_ptr[libcudf_exp.expression] expression_ptr

@@ -3,27 +3,26 @@
 
 from libc.stddef cimport size_t
 from libc.stdint cimport uintptr_t
+from libcpp.limits cimport numeric_limits
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
-from libcpp.limits cimport numeric_limits
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.reshape cimport (
-    interleave_columns as cpp_interleave_columns,
-    tile as cpp_tile,
-    table_to_array as cpp_table_to_array,
     byte,
+    interleave_columns as cpp_interleave_columns,
+    table_to_array as cpp_table_to_array,
+    tile as cpp_tile,
 )
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.types cimport size_type
-
 from pylibcudf.libcudf.utilities.span cimport device_span
 
-from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .table cimport Table
-from .utils cimport _get_stream, _get_memory_resource
+from .utils cimport _get_memory_resource, _get_stream
 
 __all__ = ["interleave_columns", "tile", "table_to_array"]
 

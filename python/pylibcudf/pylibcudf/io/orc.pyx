@@ -7,19 +7,17 @@ from libcpp.vector cimport vector
 
 import datetime
 
-from rmm.pylibrmm.stream cimport Stream
-from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
-
-from pylibcudf.io.types cimport SourceInfo, TableWithMetadata, SinkInfo
-
+from pylibcudf.io.types cimport SinkInfo, SourceInfo, TableWithMetadata
 from pylibcudf.libcudf.io.orc cimport (
-    orc_reader_options,
-    read_orc as cpp_read_orc,
-    write_orc as cpp_write_orc,
+    chunked_orc_writer_options,
     is_supported_read_orc as cpp_is_supported_read_orc,
     is_supported_write_orc as cpp_is_supported_write_orc,
+    orc_chunked_writer,
+    orc_reader_options,
+    orc_writer_options,
+    read_orc as cpp_read_orc,
+    write_orc as cpp_write_orc,
 )
-
 from pylibcudf.libcudf.io.orc_metadata cimport (
     binary_statistics,
     bucket_statistics,
@@ -34,27 +32,18 @@ from pylibcudf.libcudf.io.orc_metadata cimport (
     string_statistics,
     timestamp_statistics,
 )
-
 from pylibcudf.libcudf.io.types cimport (
-    table_with_metadata,
     compression_type,
     statistics_freq,
+    table_with_metadata,
 )
-
-from pylibcudf.libcudf.io.orc cimport (
-    orc_chunked_writer,
-    orc_writer_options,
-    chunked_orc_writer_options,
-)
-
 from pylibcudf.libcudf.types cimport size_type
-
 from pylibcudf.types cimport DataType
-
+from pylibcudf.utils cimport _get_memory_resource, _get_stream
 from pylibcudf.variant cimport get_if, holds_alternative
 
-from pylibcudf.utils cimport _get_stream, _get_memory_resource
-
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 __all__ = [
     "OrcColumnStatistics",

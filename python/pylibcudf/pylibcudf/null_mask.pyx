@@ -3,20 +3,20 @@
 from libcpp.memory cimport make_unique
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
-from pylibcudf.libcudf cimport null_mask as cpp_null_mask
-from pylibcudf.libcudf.types cimport mask_state, size_type, bitmask_type
 from pylibcudf.gpumemoryview cimport gpumemoryview
+from pylibcudf.libcudf cimport null_mask as cpp_null_mask
+from pylibcudf.libcudf.types cimport bitmask_type, mask_state, size_type
 
 from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
-from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from pylibcudf.libcudf.types import mask_state as MaskState  # no-cython-lint
 
 from .column cimport Column
 from .table cimport Table
-from .utils cimport _get_stream, _get_memory_resource
+from .utils cimport _get_memory_resource, _get_stream
 
 __all__ = [
     "bitmask_allocation_size_bytes",

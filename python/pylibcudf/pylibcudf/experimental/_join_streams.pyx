@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.vector cimport vector
-
 from pylibcudf.libcudf.detail.utilities cimport stream_pool as cpp_stream_pool
 from pylibcudf.libcudf.utilities.span cimport host_span
 

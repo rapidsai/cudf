@@ -3,6 +3,7 @@
 
 from pylibcudf.libcudf.interop cimport column_metadata
 
+
 cdef void _release_schema(object schema_capsule) noexcept
 
 cdef void _release_array(object array_capsule) noexcept

@@ -4,11 +4,11 @@
 from libc.stddef cimport size_t
 from libc.stdint cimport int32_t
 from pylibcudf.libcudf.types cimport (
+    bitmask_type,
     data_type,
     size_of as cpp_size_of,
     size_type,
     type_id,
-    bitmask_type
 )
 from pylibcudf.libcudf.utilities.type_dispatcher cimport type_to_id
 

@@ -3,20 +3,21 @@
 
 from cython.operator import dereference
 
-from libcpp.memory cimport unique_ptr, make_unique
+from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.nvtext.deduplicate cimport (
     build_suffix_array as cpp_build_suffix_array,
-    suffix_array_type as cpp_suffix_array_type,
     resolve_duplicates as cpp_resolve_duplicates,
     resolve_duplicates_pair as cpp_resolve_duplicates_pair,
+    suffix_array_type as cpp_suffix_array_type,
 )
 from pylibcudf.libcudf.types cimport size_type
-from pylibcudf.utils cimport _get_stream, _get_memory_resource
-from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from pylibcudf.utils cimport _get_memory_resource, _get_stream
+
 from rmm.librmm.device_buffer cimport device_buffer
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 __all__ = [

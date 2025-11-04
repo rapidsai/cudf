@@ -12,15 +12,16 @@ from pylibcudf.libcudf.strings_udf cimport (
     get_character_cases_table as cpp_get_character_cases_table,
     get_character_flags_table as cpp_get_character_flags_table,
     get_special_case_mapping_table as cpp_get_special_case_mapping_table,
-    to_string_view_array as cpp_to_string_view_array,
     managed_udf_string,
+    to_string_view_array as cpp_to_string_view_array,
 )
 from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
-from rmm.pylibrmm.stream import DEFAULT_STREAM
-from rmm.mr import get_current_device_resource
 
 import numpy as np
+
+from rmm.mr import get_current_device_resource
+from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 
 def column_to_string_view_array(plc_Column strings_col):

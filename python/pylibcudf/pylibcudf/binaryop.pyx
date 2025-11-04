@@ -19,7 +19,7 @@ from rmm.pylibrmm.stream cimport Stream
 from .column cimport Column
 from .scalar cimport Scalar
 from .types cimport DataType
-from .utils cimport _get_stream, _get_memory_resource
+from .utils cimport _get_memory_resource, _get_stream
 
 __all__ = ["BinaryOperator", "binary_operation", "is_supported_operation"]
 

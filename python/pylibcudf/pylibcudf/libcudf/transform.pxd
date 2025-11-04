@@ -12,10 +12,15 @@ from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.expressions cimport expression
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
-from pylibcudf.libcudf.types cimport bitmask_type, data_type, size_type, null_aware
+from pylibcudf.libcudf.types cimport (
+    bitmask_type,
+    data_type,
+    null_aware,
+    size_type,
+)
 
-from rmm.librmm.device_buffer cimport device_buffer
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.device_buffer cimport device_buffer
 from rmm.librmm.memory_resource cimport device_memory_resource
 
 

@@ -18,12 +18,13 @@ from pylibcudf.libcudf.types cimport (
 
 from pylibcudf.libcudf.stream_compaction import \
     duplicate_keep_option as DuplicateKeepOption  # no-cython-lint, isort:skip
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .table cimport Table
-from .utils cimport _get_stream, _get_memory_resource
+from .utils cimport _get_memory_resource, _get_stream
 
 __all__ = [
     "DuplicateKeepOption",

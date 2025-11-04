@@ -12,14 +12,15 @@ from pylibcudf.libcudf.column.column_factories cimport (
     make_timestamp_column as cpp_make_timestamp_column,
 )
 from pylibcudf.libcudf.types cimport mask_state, size_type
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from .types cimport DataType, type_id
 
 from .types import MaskState, TypeId
-from .utils cimport _get_stream, _get_memory_resource
 
+from .utils cimport _get_memory_resource, _get_stream
 
 __all__ = [
     "make_duration_column",

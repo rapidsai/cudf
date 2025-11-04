@@ -12,8 +12,8 @@ from pylibcudf.libcudf.types cimport (
     type_id,
 )
 
-from rmm.librmm.device_buffer cimport device_buffer
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.device_buffer cimport device_buffer
 from rmm.librmm.memory_resource cimport device_memory_resource
 
 

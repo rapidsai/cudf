@@ -7,8 +7,8 @@ from pylibcudf.libcudf.column.column cimport column, column_view
 from pylibcudf.libcudf.table.table cimport table, table_view
 from pylibcudf.libcudf.utilities.span cimport host_span
 
-from rmm.librmm.device_buffer cimport device_buffer
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.device_buffer cimport device_buffer
 from rmm.librmm.memory_resource cimport device_memory_resource
 
 

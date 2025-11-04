@@ -10,9 +10,10 @@ from pylibcudf.libcudf.strings.convert cimport (
     convert_booleans as cpp_convert_booleans,
 )
 from pylibcudf.scalar cimport Scalar
-from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from pylibcudf.utils cimport _get_memory_resource, _get_stream
 
 from cython.operator import dereference
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 

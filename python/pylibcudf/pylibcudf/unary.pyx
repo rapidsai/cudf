@@ -7,15 +7,16 @@ from libcpp.utility cimport move
 from pylibcudf.libcudf cimport unary as cpp_unary
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.unary cimport unary_operator
-from rmm.pylibrmm.stream cimport Stream
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from pylibcudf.libcudf.unary import \
     unary_operator as UnaryOperator  # no-cython-lint
 
 from .column cimport Column
 from .types cimport DataType
-from .utils cimport _get_stream, _get_memory_resource
+from .utils cimport _get_memory_resource, _get_stream
 
 __all__ = [
     "UnaryOperator",

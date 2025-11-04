@@ -3,20 +3,23 @@
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
-
 from pylibcudf.libcudf.rolling cimport (
-    bounded_closed, bounded_open, current_row, rolling_request, unbounded
+    bounded_closed,
+    bounded_open,
+    current_row,
+    rolling_request,
+    unbounded,
 )
 from pylibcudf.libcudf.types cimport null_order, order, size_type
-from rmm.pylibrmm.stream cimport Stream
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from .aggregation cimport Aggregation
 from .column cimport Column
 from .scalar cimport Scalar
 from .table cimport Table
 from .types cimport DataType
-
 
 ctypedef fused WindowType:
     Column

@@ -45,8 +45,12 @@ from pylibcudf.libcudf.types cimport (
 )
 from pylibcudf.lists cimport ColumnOrScalar, ColumnOrSizeType
 
-from pylibcudf.libcudf.lists.combine import concatenate_null_policy as ConcatenateNullPolicy # no-cython-lint
-from pylibcudf.libcudf.lists.contains import duplicate_find_option as DuplicateFindOption # no-cython-lint
+from pylibcudf.libcudf.lists.combine import (  # no-cython-lint
+    concatenate_null_policy as ConcatenateNullPolicy,
+)
+from pylibcudf.libcudf.lists.contains import (  # no-cython-lint
+    duplicate_find_option as DuplicateFindOption,
+)
 
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
@@ -54,7 +58,7 @@ from rmm.pylibrmm.stream cimport Stream
 from .column cimport Column, ListColumnView
 from .scalar cimport Scalar
 from .table cimport Table
-from .utils cimport _get_stream, _get_memory_resource
+from .utils cimport _get_memory_resource, _get_stream
 
 __all__ = [
     "ConcatenateNullPolicy",

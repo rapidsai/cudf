@@ -2,12 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp cimport bool
-from pylibcudf.libcudf.types cimport (
-    nan_equality, null_equality, null_order, order, size_type
-)
 from pylibcudf.libcudf.copying cimport out_of_bounds_policy
 from pylibcudf.libcudf.lists.combine cimport concatenate_null_policy
 from pylibcudf.libcudf.lists.contains cimport duplicate_find_option
+from pylibcudf.libcudf.types cimport (
+    nan_equality,
+    null_equality,
+    null_order,
+    order,
+    size_type,
+)
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 

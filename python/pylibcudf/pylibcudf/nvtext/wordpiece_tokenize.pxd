@@ -5,8 +5,10 @@ from libcpp.memory cimport unique_ptr
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.nvtext.wordpiece_tokenize cimport wordpiece_vocabulary
 from pylibcudf.libcudf.types cimport size_type
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+
 
 cdef class WordPieceVocabulary:
     cdef unique_ptr[wordpiece_vocabulary] c_obj

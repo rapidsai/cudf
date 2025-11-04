@@ -13,13 +13,14 @@ from pylibcudf.libcudf.quantiles cimport (
 )
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.types cimport null_order, order, sorted
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .table cimport Table
 from .types cimport interpolation
-from .utils cimport _get_stream, _get_memory_resource
+from .utils cimport _get_memory_resource, _get_stream
 
 __all__ = ["quantile", "quantiles"]
 

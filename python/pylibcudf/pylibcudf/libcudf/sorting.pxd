@@ -10,13 +10,8 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
-from pylibcudf.libcudf.types cimport (
-    order,
-    null_order,
-    null_policy,
-    null_order,
-    size_type
-)
+from pylibcudf.libcudf.types cimport null_order, null_policy, order, size_type
+
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
 from rmm.librmm.memory_resource cimport device_memory_resource
 

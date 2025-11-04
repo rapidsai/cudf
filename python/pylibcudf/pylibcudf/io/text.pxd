@@ -5,8 +5,13 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from pylibcudf.column cimport Column
 from pylibcudf.io.types cimport Stream
+from pylibcudf.libcudf.io.text cimport (
+    byte_range_info,
+    data_chunk_source,
+    parse_options,
+)
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
-from pylibcudf.libcudf.io.text cimport parse_options, data_chunk_source, byte_range_info
 
 
 cdef class ByteRangeInfo:

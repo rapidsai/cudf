@@ -15,7 +15,8 @@ from pylibcudf.libcudf.strings.convert cimport (
 )
 from pylibcudf.scalar cimport Scalar
 from pylibcudf.types cimport type_id
-from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from pylibcudf.utils cimport _get_memory_resource, _get_stream
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 

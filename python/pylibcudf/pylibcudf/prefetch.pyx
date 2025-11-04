@@ -3,7 +3,6 @@
 
 from pylibcudf.libcudf cimport prefetch as cpp_prefetch
 
-
 __all__ = ["disable", "disable_debugging", "enable", "enable_debugging"]
 
 cpdef enable():

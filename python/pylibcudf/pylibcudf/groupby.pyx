@@ -27,8 +27,7 @@ from .aggregation cimport Aggregation
 from .column cimport Column
 from .table cimport Table
 from .types cimport null_order, null_policy, order, sorted
-from .utils cimport _as_vector, _get_stream, _get_memory_resource
-
+from .utils cimport _as_vector, _get_memory_resource, _get_stream
 
 __all__ = ["GroupBy", "GroupByRequest"]
 

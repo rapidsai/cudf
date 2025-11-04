@@ -7,12 +7,12 @@ from pylibcudf.libcudf cimport transpose as cpp_transpose
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.table.table_view cimport table_view
 
-from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .table cimport Table
-from .utils cimport _get_stream, _get_memory_resource
+from .utils cimport _get_memory_resource, _get_stream
 
 __all__ = ["transpose"]
 

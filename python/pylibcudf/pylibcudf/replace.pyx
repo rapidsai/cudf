@@ -9,15 +9,16 @@ from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.libcudf cimport replace as cpp_replace
 from pylibcudf.libcudf.column.column cimport column
-from rmm.pylibrmm.stream cimport Stream
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from pylibcudf.libcudf.replace import \
     replace_policy as ReplacePolicy  # no-cython-lint
 
 from .column cimport Column
 from .scalar cimport Scalar
-from .utils cimport _get_stream, _get_memory_resource
+from .utils cimport _get_memory_resource, _get_stream
 
 __all__ = [
     "ReplacePolicy",

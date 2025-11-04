@@ -13,13 +13,13 @@ from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.types cimport null_equality
 
 from rmm.librmm.device_buffer cimport device_buffer
-from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .expressions cimport Expression
 from .table cimport Table
-from .utils cimport _get_stream, _get_memory_resource
+from .utils cimport _get_memory_resource, _get_stream
 
 __all__ = [
     "conditional_full_join",

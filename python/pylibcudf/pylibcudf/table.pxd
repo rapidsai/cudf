@@ -4,8 +4,10 @@
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
-from rmm.pylibrmm.stream cimport Stream
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
+
 
 cdef class Table:
     # List[pylibcudf.Column]

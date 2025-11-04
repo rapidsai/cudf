@@ -12,15 +12,15 @@ from pylibcudf.libcudf.aggregation cimport rolling_aggregation
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.types cimport size_type
-from rmm.pylibrmm.stream cimport Stream
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from .aggregation cimport Aggregation
 from .column cimport Column
 from .scalar cimport Scalar
 from .types cimport DataType
-from .utils cimport _get_stream, _get_memory_resource
-
+from .utils cimport _get_memory_resource, _get_stream
 
 __all__ = [
     "BoundedClosed",

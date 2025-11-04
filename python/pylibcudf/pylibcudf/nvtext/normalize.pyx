@@ -9,7 +9,8 @@ from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.nvtext cimport normalize as cpp_normalize
-from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from pylibcudf.utils cimport _get_memory_resource, _get_stream
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 

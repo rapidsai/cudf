@@ -10,7 +10,8 @@ from pylibcudf.libcudf.scalar.scalar cimport string_scalar
 from pylibcudf.libcudf.strings cimport translate as cpp_translate
 from pylibcudf.libcudf.types cimport char_utf8
 from pylibcudf.scalar cimport Scalar
-from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from pylibcudf.utils cimport _get_memory_resource, _get_stream
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 

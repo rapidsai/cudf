@@ -2,8 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from pylibcudf.table cimport Table
-from rmm.pylibrmm.stream cimport Stream
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
+
 
 cpdef Table from_dlpack(
     object managed_tensor, Stream stream=*, DeviceMemoryResource mr=*

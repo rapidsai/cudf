@@ -3,12 +3,11 @@
 
 from libc.stddef cimport size_t
 from libc.stdint cimport uintptr_t
-
 from pylibcudf.libcudf.types cimport size_type
 
-from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .scalar cimport Scalar

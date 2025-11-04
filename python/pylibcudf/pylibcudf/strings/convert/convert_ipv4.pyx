@@ -6,7 +6,8 @@ from libcpp.utility cimport move
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings.convert cimport convert_ipv4 as cpp_convert_ipv4
-from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from pylibcudf.utils cimport _get_memory_resource, _get_stream
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 

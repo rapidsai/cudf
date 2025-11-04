@@ -10,8 +10,8 @@ from pylibcudf.libcudf.column.column_view cimport (
 )
 from pylibcudf.libcudf.types cimport data_type, size_type
 
-from rmm.librmm.device_buffer cimport device_buffer
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.device_buffer cimport device_buffer
 from rmm.librmm.memory_resource cimport device_memory_resource
 
 

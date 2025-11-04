@@ -5,8 +5,8 @@ from libcpp.string cimport string
 from libcpp.unordered_map cimport unordered_map
 from libcpp.vector cimport vector
 from pylibcudf.exception_handler cimport libcudf_exception_handler
-from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.libcudf.io.types cimport source_info
+from pylibcudf.libcudf.types cimport size_type
 
 
 cdef extern from "cudf/io/parquet_metadata.hpp" namespace "cudf::io" nogil:

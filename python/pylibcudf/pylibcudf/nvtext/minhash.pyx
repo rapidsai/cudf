@@ -9,11 +9,12 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.nvtext.minhash cimport (
     minhash as cpp_minhash,
     minhash64 as cpp_minhash64,
-    minhash_ngrams as cpp_minhash_ngrams,
     minhash64_ngrams as cpp_minhash64_ngrams,
+    minhash_ngrams as cpp_minhash_ngrams,
 )
 from pylibcudf.libcudf.types cimport size_type
-from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from pylibcudf.utils cimport _get_memory_resource, _get_stream
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 

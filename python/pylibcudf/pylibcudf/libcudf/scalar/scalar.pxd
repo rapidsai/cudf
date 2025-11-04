@@ -8,6 +8,7 @@ from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.fixed_point.fixed_point cimport scale_type
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport data_type
+
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
 from rmm.librmm.memory_resource cimport device_memory_resource
 

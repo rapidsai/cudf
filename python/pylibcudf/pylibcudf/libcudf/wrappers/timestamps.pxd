@@ -3,11 +3,11 @@
 from libc.stdint cimport int32_t, int64_t
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.wrappers.durations cimport (
-    duration_s,
-    duration_ms,
-    duration_us,
-    duration_ns,
     duration_D,
+    duration_ms,
+    duration_ns,
+    duration_s,
+    duration_us,
 )
 
 

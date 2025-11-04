@@ -13,11 +13,11 @@ from pylibcudf.libcudf.expressions cimport expression
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport null_equality, size_type
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
-from rmm.librmm.memory_resource cimport device_memory_resource
-
-from rmm.librmm.device_uvector cimport device_uvector
 from pylibcudf.libcudf.utilities.span cimport device_span
+
+from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.device_uvector cimport device_uvector
+from rmm.librmm.memory_resource cimport device_memory_resource
 
 ctypedef unique_ptr[device_uvector[size_type]] gather_map_type
 ctypedef pair[gather_map_type, gather_map_type] gather_map_pair_type

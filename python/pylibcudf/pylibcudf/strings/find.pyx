@@ -7,7 +7,8 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings cimport find as cpp_find
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
-from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from pylibcudf.utils cimport _get_memory_resource, _get_stream
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 

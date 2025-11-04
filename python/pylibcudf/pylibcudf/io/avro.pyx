@@ -4,21 +4,16 @@
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
-
-from rmm.pylibrmm.stream cimport Stream
-from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
-
 from pylibcudf.io.types cimport SourceInfo, TableWithMetadata
-
 from pylibcudf.libcudf.io.avro cimport (
     avro_reader_options,
     read_avro as cpp_read_avro,
 )
-
 from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.utils cimport _get_memory_resource, _get_stream
 
-from pylibcudf.utils cimport _get_stream, _get_memory_resource
-
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 __all__ = ["read_avro", "AvroReaderOptions", "AvroReaderOptionsBuilder"]
 

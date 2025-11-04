@@ -6,8 +6,10 @@ from pylibcudf.column cimport Column
 from pylibcudf.libcudf.nvtext.tokenize cimport tokenize_vocabulary
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+
 
 cdef class TokenizeVocabulary:
     cdef unique_ptr[tokenize_vocabulary] c_obj

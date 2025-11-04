@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from libc.stddef cimport size_t
+
 import functools
 import operator
 
 from .types cimport DataType, size_of, type_id
-
 
 __all__ = ["gpumemoryview"]
 

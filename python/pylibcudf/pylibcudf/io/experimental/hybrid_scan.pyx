@@ -6,30 +6,34 @@ from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
-
-from rmm.librmm.device_buffer cimport device_buffer
-from rmm.pylibrmm.device_buffer cimport DeviceBuffer
-from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
-from rmm.pylibrmm.stream cimport Stream
-
 from pylibcudf.column cimport Column
 from pylibcudf.io.parquet cimport ParquetReaderOptions
 from pylibcudf.io.text cimport ByteRangeInfo
 from pylibcudf.io.types cimport TableWithMetadata
 from pylibcudf.libcudf.column.column cimport column
-from pylibcudf.libcudf.column.column_view cimport column_view, mutable_column_view
+from pylibcudf.libcudf.column.column_view cimport (
+    column_view,
+    mutable_column_view,
+)
 from pylibcudf.libcudf.io.hybrid_scan cimport (
     const_size_type,
     const_uint8_t,
     hybrid_scan_reader as cpp_hybrid_scan_reader,
     use_data_page_mask as cpp_use_data_page_mask,
 )
-from pylibcudf.libcudf.io.parquet_schema cimport FileMetaData as cpp_FileMetaData
+from pylibcudf.libcudf.io.parquet_schema cimport (
+    FileMetaData as cpp_FileMetaData,
+)
 from pylibcudf.libcudf.io.text cimport byte_range_info
 from pylibcudf.libcudf.io.types cimport table_with_metadata
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.libcudf.utilities.span cimport host_span
 from pylibcudf.utils cimport _get_memory_resource, _get_stream
+
+from rmm.librmm.device_buffer cimport device_buffer
+from rmm.pylibrmm.device_buffer cimport DeviceBuffer
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 import pylibcudf.libcudf.io.hybrid_scan
 

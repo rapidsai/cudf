@@ -5,8 +5,10 @@ from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.nvtext.normalize cimport character_normalizer
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+
 
 cdef class CharacterNormalizer:
     cdef unique_ptr[character_normalizer] c_obj

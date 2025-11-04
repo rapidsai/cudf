@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from libc.stdint cimport uint64_t, uintptr_t
 
+
 cdef class gpumemoryview:
     # TODO: Eventually probably want to make this opaque, but for now it's fine
     # to treat this object as something like a POD struct

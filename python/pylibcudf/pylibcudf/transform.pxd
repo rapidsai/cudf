@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 from libcpp cimport bool
 from pylibcudf.libcudf.types cimport bitmask_type, data_type, null_aware
-from rmm.pylibrmm.stream cimport Stream
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .expressions cimport Expression

@@ -5,6 +5,7 @@ from libcpp.memory cimport unique_ptr
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.nvtext.byte_pair_encode cimport bpe_merge_pairs
 from pylibcudf.scalar cimport Scalar
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 

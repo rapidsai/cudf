@@ -2,31 +2,32 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
-from libcpp.functional cimport reference_wrapper
 from libcpp cimport bool
+from libcpp.functional cimport reference_wrapper
 from libcpp.memory cimport unique_ptr
-from libcpp.optional cimport optional, nullopt
+from libcpp.optional cimport nullopt, optional
 from libcpp.utility cimport move, pair
 from pylibcudf.libcudf.aggregation cimport reduce_aggregation, scan_aggregation
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.reduce cimport (
-    reduce as cpp_reduce,
-    scan as cpp_scan,
-    minmax as cpp_minmax,
-    scan_type,
     constscalar,
     is_valid_aggregation as cpp_is_valid_aggregation,
+    minmax as cpp_minmax,
+    reduce as cpp_reduce,
+    scan as cpp_scan,
+    scan_type,
 )
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.types cimport null_policy
-from rmm.pylibrmm.stream cimport Stream
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from .aggregation cimport Aggregation
 from .column cimport Column
 from .scalar cimport Scalar
 from .types cimport DataType
-from .utils cimport _get_stream, _get_memory_resource
+from .utils cimport _get_memory_resource, _get_stream
 
 from pylibcudf.libcudf.reduce import scan_type as ScanType  # no-cython-lint
 

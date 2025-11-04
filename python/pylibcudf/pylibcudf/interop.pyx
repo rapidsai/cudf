@@ -10,8 +10,8 @@ from cpython.pycapsule cimport (
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from functools import singledispatch
 import warnings
+from functools import singledispatch
 
 from pylibcudf.libcudf.interop cimport (
     DLManagedTensor,
@@ -20,14 +20,15 @@ from pylibcudf.libcudf.interop cimport (
 )
 from pylibcudf.libcudf.table.table cimport table
 
-from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .scalar cimport Scalar
 from .table cimport Table
 from .types cimport DataType
-from .utils cimport _get_stream, _get_memory_resource
+from .utils cimport _get_memory_resource, _get_stream
+
 from ._interop_helpers import ColumnMetadata
 
 try:

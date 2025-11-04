@@ -1,13 +1,9 @@
 # SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
+from libc.stdint cimport uint64_t
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
-from libc.stdint cimport uint64_t
-
-from rmm.librmm.device_buffer cimport device_buffer
-from rmm.pylibrmm.stream cimport Stream
-from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport (
     column_view,
@@ -16,9 +12,13 @@ from pylibcudf.libcudf.column.column_view cimport (
 from pylibcudf.libcudf.lists.lists_column_view cimport lists_column_view
 from pylibcudf.libcudf.types cimport bitmask_type, size_type
 
+from rmm.librmm.device_buffer cimport device_buffer
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
+
 from .gpumemoryview cimport gpumemoryview
-from .types cimport DataType
 from .scalar cimport Scalar
+from .types cimport DataType
 
 
 cdef class OwnerWithCAI:

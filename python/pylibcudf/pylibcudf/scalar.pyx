@@ -13,15 +13,16 @@ from libc.stdint cimport (
     uint32_t,
     uint64_t,
 )
-from libcpp.limits cimport numeric_limits
 from libcpp cimport bool as cbool
+from libcpp.limits cimport numeric_limits
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
+from pylibcudf.libcudf.fixed_point.fixed_point cimport decimal128, scale_type
 from pylibcudf.libcudf.scalar.scalar cimport (
-    scalar,
     duration_scalar,
     fixed_point_scalar,
     numeric_scalar,
+    scalar,
     string_scalar,
     timestamp_scalar,
 )
@@ -30,26 +31,24 @@ from pylibcudf.libcudf.scalar.scalar_factories cimport (
     make_duration_scalar,
     make_empty_scalar_like,
     make_fixed_point_scalar,
-    make_string_scalar,
     make_numeric_scalar,
+    make_string_scalar,
     make_timestamp_scalar,
 )
-from pylibcudf.libcudf.types cimport type_id
-from pylibcudf.libcudf.types cimport int128 as int128_t
+from pylibcudf.libcudf.types cimport int128 as int128_t, type_id
 from pylibcudf.libcudf.wrappers.durations cimport (
+    duration_D,
     duration_ms,
     duration_ns,
-    duration_us,
     duration_s,
-    duration_D,
+    duration_us,
 )
-from pylibcudf.libcudf.fixed_point.fixed_point cimport scale_type, decimal128
 from pylibcudf.libcudf.wrappers.timestamps cimport (
-    timestamp_s,
-    timestamp_ms,
-    timestamp_us,
-    timestamp_ns,
     timestamp_D,
+    timestamp_ms,
+    timestamp_ns,
+    timestamp_s,
+    timestamp_us,
 )
 
 from rmm.pylibrmm.memory_resource cimport (
@@ -62,7 +61,9 @@ from .column cimport Column
 from .traits cimport is_floating_point
 from .types cimport DataType
 from .utils cimport _get_memory_resource, _get_stream
+
 from functools import singledispatch
+
 from ._interop_helpers import ArrowLike, ColumnMetadata
 
 try:

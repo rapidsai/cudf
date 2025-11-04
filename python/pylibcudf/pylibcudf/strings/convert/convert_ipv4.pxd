@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from pylibcudf.column cimport Column
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 

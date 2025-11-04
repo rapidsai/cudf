@@ -1,9 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
-from pylibcudf.libcudf.types cimport mask_state, size_type
-
 from pylibcudf.gpumemoryview cimport gpumemoryview
+from pylibcudf.libcudf.types cimport mask_state, size_type
 
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource

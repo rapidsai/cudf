@@ -1,69 +1,65 @@
 # SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
+from cpython.pycapsule cimport PyCapsule_GetPointer, PyCapsule_New
 from cython.operator cimport dereference
-
-from cpython.pycapsule cimport (
-    PyCapsule_GetPointer,
-    PyCapsule_New,
-)
-
 from libc.stdint cimport uintptr_t
-
 from libcpp.limits cimport numeric_limits
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
-
 from pylibcudf.libcudf.column.column cimport column, column_contents
 from pylibcudf.libcudf.column.column_factories cimport make_column_from_scalar
+from pylibcudf.libcudf.copying cimport get_element
 from pylibcudf.libcudf.interop cimport (
     ArrowArray,
     ArrowArrayStream,
-    ArrowSchema,
     ArrowDeviceArray,
+    ArrowSchema,
     arrow_column,
     column_metadata,
-    to_arrow_host_raw,
     to_arrow_device_raw,
+    to_arrow_host_raw,
     to_arrow_schema_raw,
 )
 from pylibcudf.libcudf.null_mask cimport bitmask_allocation_size_bytes
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.strings.strings_column_view cimport strings_column_view
-from pylibcudf.libcudf.types cimport size_type, size_of as cpp_size_of, bitmask_type
+from pylibcudf.libcudf.types cimport (
+    bitmask_type,
+    size_of as cpp_size_of,
+    size_type,
+)
 from pylibcudf.libcudf.utilities.traits cimport is_fixed_width
-from pylibcudf.libcudf.copying cimport get_element
-
 
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
-from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
-from .gpumemoryview cimport gpumemoryview
+from ._interop_helpers cimport (
+    _metadata_to_libcudf,
+    _release_array,
+    _release_device_array,
+    _release_schema,
+)
 from .filling cimport sequence
 from .gpumemoryview cimport gpumemoryview
 from .scalar cimport Scalar
-from .traits cimport (
-    is_fixed_width as plc_is_fixed_width,
-    is_nested,
-)
+from .traits cimport is_fixed_width as plc_is_fixed_width, is_nested
 from .types cimport DataType, size_of, type_id
-from ._interop_helpers cimport (
-    _release_schema,
-    _release_array,
-    _release_device_array,
-    _metadata_to_libcudf,
-)
-from .utils cimport _get_stream, _get_memory_resource
-
-from .gpumemoryview import _datatype_from_dtype_desc
-from ._interop_helpers import ArrowLike, ColumnMetadata, _ObjectWithArrowMetadata
+from .utils cimport _get_memory_resource, _get_stream
 
 import array
-from itertools import accumulate
 import functools
 import operator
+from itertools import accumulate
 from typing import Iterable
+
+from ._interop_helpers import (
+    ArrowLike,
+    ColumnMetadata,
+    _ObjectWithArrowMetadata,
+)
+from .gpumemoryview import _datatype_from_dtype_desc
 
 try:
     import pyarrow as pa

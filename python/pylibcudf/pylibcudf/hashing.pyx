@@ -18,12 +18,13 @@ from pylibcudf.libcudf.hash cimport (
     xxhash_64 as cpp_xxhash_64,
 )
 from pylibcudf.libcudf.table.table cimport table
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .table cimport Table
-from .utils cimport _get_stream, _get_memory_resource
+from .utils cimport _get_memory_resource, _get_stream
 
 __all__ = [
     "LIBCUDF_DEFAULT_HASH_SEED",

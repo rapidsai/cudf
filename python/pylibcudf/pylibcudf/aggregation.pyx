@@ -32,9 +32,9 @@ from pylibcudf.libcudf.aggregation cimport (
     make_max_aggregation,
     make_mean_aggregation,
     make_median_aggregation,
-    make_merge_m2_aggregation,
     make_merge_histogram_aggregation,
     make_merge_lists_aggregation,
+    make_merge_m2_aggregation,
     make_merge_sets_aggregation,
     make_merge_tdigest_aggregation,
     make_min_aggregation,
@@ -80,7 +80,6 @@ from pylibcudf.libcudf.aggregation import \
 from pylibcudf.libcudf.aggregation import udf_type as UdfType  # no-cython-lint
 
 from .types cimport DataType
-
 
 __all__ = [
     "Aggregation",

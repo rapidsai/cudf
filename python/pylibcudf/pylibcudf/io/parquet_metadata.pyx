@@ -4,7 +4,6 @@
 from pylibcudf.io.types cimport SourceInfo
 from pylibcudf.libcudf.io cimport parquet_metadata as cpp_parquet_metadata
 
-
 __all__ = [
     "ParquetColumnSchema",
     "ParquetMetadata",

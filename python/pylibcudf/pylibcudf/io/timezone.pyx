@@ -10,10 +10,11 @@ from pylibcudf.libcudf.io.timezone cimport (
 )
 from pylibcudf.libcudf.table.table cimport table
 
-from ..utils cimport _get_stream, _get_memory_resource
-from ..table cimport Table
-from .types cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+
+from ..table cimport Table
+from ..utils cimport _get_memory_resource, _get_stream
+from .types cimport Stream
 
 __all__ = ["make_timezone_transition_table"]
 

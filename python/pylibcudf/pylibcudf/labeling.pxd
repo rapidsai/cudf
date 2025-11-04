@@ -3,10 +3,10 @@
 from libcpp cimport bool
 from pylibcudf.libcudf.labeling cimport inclusive
 
-from .column cimport Column
-
-from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
+
+from .column cimport Column
 
 
 cpdef Column label_bins(

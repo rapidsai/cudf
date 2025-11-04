@@ -39,8 +39,7 @@ from rmm.pylibrmm.stream cimport Stream
 from .column cimport Column
 from .scalar cimport Scalar
 from .table cimport Table
-from .utils cimport _as_vector, _get_stream, _get_memory_resource
-
+from .utils cimport _as_vector, _get_memory_resource, _get_stream
 
 __all__ = [
     "MaskAllocationPolicy",

@@ -9,11 +9,11 @@ from pylibcudf.libcudf.labeling cimport inclusive
 
 from pylibcudf.libcudf.labeling import inclusive as Inclusive  # no-cython-lint
 
-from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
-from .utils cimport _get_stream, _get_memory_resource
+from .utils cimport _get_memory_resource, _get_stream
 
 __all__ = ["Inclusive", "label_bins"]
 

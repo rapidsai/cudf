@@ -14,7 +14,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from ..column cimport Column
-from ..utils cimport _get_stream, _get_memory_resource
+from ..utils cimport _get_memory_resource, _get_stream
 
 __all__ = ["edit_distance", "edit_distance_matrix"]
 

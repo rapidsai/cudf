@@ -12,7 +12,8 @@ from pylibcudf.libcudf.nvtext.wordpiece_tokenize cimport (
     wordpiece_tokenize as cpp_wordpiece_tokenize,
 )
 from pylibcudf.libcudf.types cimport size_type
-from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from pylibcudf.utils cimport _get_memory_resource, _get_stream
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 

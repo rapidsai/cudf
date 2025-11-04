@@ -3,10 +3,10 @@
 from libc.stdint cimport int32_t
 from pylibcudf.libcudf.round cimport rounding_method
 
-from .column cimport Column
-
-from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
+
+from .column cimport Column
 
 
 cpdef Column round(

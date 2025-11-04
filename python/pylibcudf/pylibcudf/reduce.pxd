@@ -3,8 +3,9 @@
 
 from libcpp cimport bool
 from pylibcudf.libcudf.reduce cimport scan_type
-from rmm.pylibrmm.stream cimport Stream
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from .aggregation cimport Aggregation
 from .column cimport Column

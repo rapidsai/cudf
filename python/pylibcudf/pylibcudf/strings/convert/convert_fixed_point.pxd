@@ -3,6 +3,7 @@
 
 from pylibcudf.column cimport Column
 from pylibcudf.types cimport DataType
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 

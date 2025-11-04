@@ -24,12 +24,13 @@ from pylibcudf.libcudf.datetime import \
     rounding_frequency as RoundingFrequency  # no-cython-lint
 
 from cython.operator cimport dereference
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .scalar cimport Scalar
-from .utils cimport _get_stream, _get_memory_resource
+from .utils cimport _get_memory_resource, _get_stream
 
 __all__ = [
     "DatetimeComponent",

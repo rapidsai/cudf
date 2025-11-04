@@ -6,13 +6,13 @@ from libc.stdint cimport uint64_t
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
-
 from pylibcudf.column cimport Column
-from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from pylibcudf.io.types cimport Stream
-from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.io cimport text as cpp_text
+from pylibcudf.utils cimport _get_memory_resource, _get_stream
+
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 __all__ = [
     "ByteRangeInfo",

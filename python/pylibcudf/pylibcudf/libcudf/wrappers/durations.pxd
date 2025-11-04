@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from libc.stdint cimport int32_t, int64_t
-
 from pylibcudf.exception_handler cimport libcudf_exception_handler
+
 
 cdef extern from "<ratio>" namespace "std" nogil:
     cdef cppclass milli:

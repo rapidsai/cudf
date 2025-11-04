@@ -5,22 +5,21 @@ from cython.operator import dereference
 
 from libcpp.functional cimport reference_wrapper
 from libcpp.vector cimport vector
-
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 
-from .scalar cimport Scalar
-
-from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport (
     DeviceMemoryResource,
     get_current_device_resource,
 )
+from rmm.pylibrmm.stream cimport Stream
 
-from rmm.pylibrmm.stream import DEFAULT_STREAM, PER_THREAD_DEFAULT_STREAM
+from .scalar cimport Scalar
+
+import os
 
 from cuda.bindings import runtime
 
-import os
+from rmm.pylibrmm.stream import DEFAULT_STREAM, PER_THREAD_DEFAULT_STREAM
 
 # Check the environment for the variable CUDF_PER_THREAD_STREAM. If it is set,
 # then set the module-scope CUDF_DEFAULT_STREAM variable here to

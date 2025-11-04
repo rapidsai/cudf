@@ -7,6 +7,7 @@ from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.strings.regex_program cimport regex_program
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.types cimport size_type
+
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
 from rmm.librmm.memory_resource cimport device_memory_resource
 

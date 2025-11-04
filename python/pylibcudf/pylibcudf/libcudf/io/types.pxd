@@ -7,14 +7,15 @@ from libc.stdint cimport int32_t, uint8_t
 from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.memory cimport unique_ptr
+from libcpp.optional cimport optional
 from libcpp.string cimport string
 from libcpp.unordered_map cimport unordered_map
 from libcpp.vector cimport vector
-from libcpp.optional cimport optional
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.types cimport size_type
-from pylibcudf.libcudf.utilities.span cimport host_span, device_span
+from pylibcudf.libcudf.utilities.span cimport device_span, host_span
+
 
 cdef extern from "<cstddef>" namespace "std":
     cdef cppclass byte:

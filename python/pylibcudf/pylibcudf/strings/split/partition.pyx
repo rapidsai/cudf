@@ -11,7 +11,8 @@ from pylibcudf.libcudf.strings.split cimport partition as cpp_partition
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.scalar cimport Scalar
 from pylibcudf.table cimport Table
-from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from pylibcudf.utils cimport _get_memory_resource, _get_stream
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 

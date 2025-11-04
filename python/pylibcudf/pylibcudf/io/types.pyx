@@ -2,37 +2,32 @@
 # SPDX-License-Identifier: Apache-2.0
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
-
 from cython.operator cimport dereference
-
 from libc.stdint cimport int32_t, uint8_t
-
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
-
 from pylibcudf.io.datasource cimport Datasource
-
 from pylibcudf.libcudf.io.data_sink cimport data_sink
 from pylibcudf.libcudf.io.datasource cimport datasource
 from pylibcudf.libcudf.io.types cimport (
-    const_byte,
     column_encoding,
     column_in_metadata,
     column_name_info,
+    const_byte,
     partition_info,
     source_info,
     table_input_metadata,
     table_with_metadata,
 )
 from pylibcudf.libcudf.types cimport size_type
-from pylibcudf.libcudf.utilities.span cimport host_span, device_span
+from pylibcudf.libcudf.utilities.span cimport device_span, host_span
 
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
-from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 import codecs
 import errno
@@ -42,13 +37,16 @@ import re
 
 from pylibcudf.libcudf.io.json import \
     json_recovery_mode_t as JSONRecoveryMode  # no-cython-lint
-from pylibcudf.libcudf.io.types import (
-    column_encoding as ColumnEncoding,  # no-cython-lint
-    compression_type as CompressionType,  # no-cython-lint
-    dictionary_policy as DictionaryPolicy,  # no-cython-lint
-    quote_style as QuoteStyle,  # no-cython-lint
-    statistics_freq as StatisticsFreq,  # no-cython-lint
-)
+from pylibcudf.libcudf.io.types import \
+    column_encoding as ColumnEncoding  # no-cython-lint
+from pylibcudf.libcudf.io.types import \
+    compression_type as CompressionType  # no-cython-lint
+from pylibcudf.libcudf.io.types import \
+    dictionary_policy as DictionaryPolicy  # no-cython-lint
+from pylibcudf.libcudf.io.types import \
+    quote_style as QuoteStyle  # no-cython-lint
+from pylibcudf.libcudf.io.types import \
+    statistics_freq as StatisticsFreq  # no-cython-lint
 
 __all__ = [
     "ColumnEncoding",

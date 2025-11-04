@@ -8,12 +8,13 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 from pylibcudf.libcudf cimport partitioning as cpp_partitioning
 from pylibcudf.libcudf.table.table cimport table
-from rmm.pylibrmm.stream cimport Stream
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .table cimport Table
-from .utils cimport _get_stream, _get_memory_resource
+from .utils cimport _get_memory_resource, _get_stream
 
 __all__ = [
     "hash_partition",

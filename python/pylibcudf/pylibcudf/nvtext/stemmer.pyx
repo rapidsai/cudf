@@ -13,9 +13,12 @@ from pylibcudf.libcudf.nvtext.stemmer cimport (
 )
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.nvtext.stemmer cimport ColumnOrSize
-from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from pylibcudf.utils cimport _get_memory_resource, _get_stream
 
-from pylibcudf.libcudf.nvtext.stemmer import letter_type as LetterType # no-cython-lint
+from pylibcudf.libcudf.nvtext.stemmer import (  # no-cython-lint
+    letter_type as LetterType,
+)
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 

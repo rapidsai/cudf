@@ -7,10 +7,10 @@ from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.types cimport size_type
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
-from rmm.librmm.memory_resource cimport device_memory_resource
 
+from rmm.librmm.cuda_stream_view cimport cuda_stream_view
 from rmm.librmm.device_uvector cimport device_uvector
+from rmm.librmm.memory_resource cimport device_memory_resource
 
 ctypedef unique_ptr[device_uvector[size_type]] suffix_array_type
 

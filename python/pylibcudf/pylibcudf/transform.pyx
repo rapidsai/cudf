@@ -2,13 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
-
 from libcpp.memory cimport unique_ptr
 from libcpp.optional cimport optional
 from libcpp.string cimport string
-from libcpp.vector cimport vector
 from libcpp.utility cimport move, pair
-
+from libcpp.vector cimport vector
 from pylibcudf.libcudf cimport transform as cpp_transform
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
@@ -18,14 +16,14 @@ from pylibcudf.libcudf.types cimport bitmask_type, size_type
 
 from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
-from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .expressions cimport Expression
 from .gpumemoryview cimport gpumemoryview
 from .types cimport DataType, null_aware
-from .utils cimport _get_stream, _get_memory_resource
+from .utils cimport _get_memory_resource, _get_stream
 
 __all__ = [
     "bools_to_mask",

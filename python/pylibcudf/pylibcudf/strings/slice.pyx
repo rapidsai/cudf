@@ -14,10 +14,11 @@ from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
 
 from cython.operator import dereference
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
-from ..utils cimport _get_stream, _get_memory_resource
+from ..utils cimport _get_memory_resource, _get_stream
 
 __all__ = ["slice_strings"]
 

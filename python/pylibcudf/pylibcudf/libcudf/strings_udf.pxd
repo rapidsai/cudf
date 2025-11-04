@@ -11,6 +11,7 @@ from pylibcudf.libcudf.types cimport size_type
 
 from rmm.librmm.device_buffer cimport device_buffer
 
+
 cdef extern from "cudf/strings/udf/managed_udf_string.cuh" namespace \
         "cudf::strings::udf" nogil:
     cdef cppclass managed_udf_string
