@@ -645,7 +645,7 @@ class NumericalColumn(NumericalBaseColumn):
         Return the smallest dtype which can represent all elements of self.
         """
         if self.null_count == len(self):
-            return self.dtype
+            return cast(np.dtype, self.dtype)
 
         min_value, max_value = self.min(), self.max()
         either_is_inf = np.isinf(min_value) or np.isinf(max_value)
@@ -666,7 +666,7 @@ class NumericalColumn(NumericalBaseColumn):
                 ),
             )
         else:
-            return self.dtype
+            return cast(np.dtype, self.dtype)
 
     def find_and_replace(
         self,
@@ -795,15 +795,17 @@ class NumericalColumn(NumericalBaseColumn):
         """
         # Convert potential pandas extension dtypes to numpy dtypes
         # For example, convert Int32Dtype to np.dtype('int32')
-        self_dtype_numpy = (
+        self_dtype_numpy = cast(
+            np.dtype,
             np.dtype(self.dtype.numpy_dtype)
             if hasattr(self.dtype, "numpy_dtype")
-            else self.dtype
+            else self.dtype,
         )
-        to_dtype_numpy = (
+        to_dtype_numpy = cast(
+            np.dtype,
             np.dtype(to_dtype.numpy_dtype)
             if hasattr(to_dtype, "numpy_dtype")
-            else to_dtype
+            else to_dtype,
         )
 
         if self_dtype_numpy.kind == to_dtype_numpy.kind:
