@@ -227,6 +227,8 @@ class RunConfig:
     queries: list[int]
     suffix: str
     executor: ExecutorType
+    runtime: str
+    stream_policy: str
     cluster: str
     scheduler: str  # Deprecated, kept for backward compatibility
     n_workers: int
@@ -267,6 +269,15 @@ class RunConfig:
         executor: ExecutorType = args.executor
         cluster = args.cluster
         scheduler = args.scheduler
+        runtime = args.runtime
+        stream_policy = args.stream_policy
+
+        # Handle "auto" stream policy
+        if stream_policy == "auto":
+            # TODO: Use pool by default for rapidsmpf runtime
+            # once stream-ordering bugs are fixed.
+            # See: https://github.com/rapidsai/cudf/issues/20484
+            stream_policy = "default"
 
         # Deal with deprecated scheduler argument
         # and non-streaming executors
@@ -335,6 +346,8 @@ class RunConfig:
             executor=executor,
             cluster=cluster,
             scheduler=scheduler,
+            runtime=runtime,
+            stream_policy=stream_policy,
             n_workers=args.n_workers,
             shuffle=args.shuffle,
             gather_shuffle_stats=args.rapidsmpf_dask_statistics,
@@ -374,7 +387,9 @@ class RunConfig:
             print(f"path: {self.dataset_path}")
             print(f"scale_factor: {self.scale_factor}")
             print(f"executor: {self.executor}")
+            print(f"stream_policy: {self.stream_policy}")
             if self.executor == "streaming":
+                print(f"runtime: {self.runtime}")
                 print(f"cluster: {self.cluster}")
                 print(f"blocksize: {self.blocksize}")
                 print(f"shuffle_method: {self.shuffle}")
@@ -415,20 +430,25 @@ def get_executor_options(
     """Generate executor_options for GPUEngine."""
     executor_options: dict[str, Any] = {}
 
-    if run_config.blocksize:
-        executor_options["target_partition_size"] = run_config.blocksize
-    if run_config.max_rows_per_partition:
-        executor_options["max_rows_per_partition"] = run_config.max_rows_per_partition
-    if run_config.shuffle:
-        executor_options["shuffle_method"] = run_config.shuffle
-    if run_config.broadcast_join_limit:
-        executor_options["broadcast_join_limit"] = run_config.broadcast_join_limit
-    if run_config.rapidsmpf_spill:
-        executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
-    if run_config.cluster == "distributed":
-        executor_options["cluster"] = "distributed"
-    if run_config.stats_planning:
-        executor_options["stats_planning"] = {"use_reduction_planning": True}
+    if run_config.executor == "streaming":
+        if run_config.blocksize:
+            executor_options["target_partition_size"] = run_config.blocksize
+        if run_config.max_rows_per_partition:
+            executor_options["max_rows_per_partition"] = (
+                run_config.max_rows_per_partition
+            )
+        if run_config.shuffle:
+            executor_options["shuffle_method"] = run_config.shuffle
+        if run_config.broadcast_join_limit:
+            executor_options["broadcast_join_limit"] = run_config.broadcast_join_limit
+        if run_config.rapidsmpf_spill:
+            executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
+        if run_config.cluster == "distributed":
+            executor_options["cluster"] = "distributed"
+        if run_config.stats_planning:
+            executor_options["stats_planning"] = {"use_reduction_planning": True}
+        executor_options["client_device_threshold"] = run_config.spill_device
+        executor_options["runtime"] = run_config.runtime
 
     if (
         benchmark
@@ -467,7 +487,7 @@ def print_query_plan(
         if args.explain_logical:
             print(f"\nQuery {q_id} - Logical plan\n")
             print(explain_query(q, engine, physical=False))
-        if args.explain:
+        if args.explain and run_config.executor == "streaming":
             print(f"\nQuery {q_id} - Physical plan\n")
             print(explain_query(q, engine))
     else:
@@ -672,6 +692,22 @@ def parse_args(
                 - distributed : Use Dask for multi-GPU execution"""),
     )
     parser.add_argument(
+        "--runtime",
+        type=str,
+        choices=["tasks", "rapidsmpf"],
+        default="tasks",
+        help="Runtime to use for the streaming executor (tasks or rapidsmpf).",
+    )
+    parser.add_argument(
+        "--stream-policy",
+        type=str,
+        choices=["auto", "default", "new", "pool"],
+        default="auto",
+        help=textwrap.dedent("""\
+            CUDA stream policy (auto, default, new, pool).
+            Default: auto (use the default policy for the runtime)"""),
+    )
+    parser.add_argument(
         "--n-workers",
         default=1,
         type=int,
@@ -869,6 +905,10 @@ def run_polars(
         executor_options = get_executor_options(run_config, benchmark=benchmark)
         engine = pl.GPUEngine(
             raise_on_fail=True,
+            memory_resource=rmm.mr.CudaAsyncMemoryResource()
+            if run_config.rmm_async
+            else None,
+            cuda_stream_policy=run_config.stream_policy,
             executor=run_config.executor,
             executor_options=executor_options,
         )
@@ -928,7 +968,10 @@ def run_polars(
             if args.print_results:
                 print(result)
 
-            print(f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s")
+            print(
+                f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s",
+                flush=True,
+            )
             records[q_id].append(record)
 
     run_config = dataclasses.replace(run_config, records=dict(records))
