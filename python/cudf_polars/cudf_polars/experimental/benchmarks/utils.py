@@ -838,6 +838,15 @@ def parse_args(
         default=False,
         help="Enable statistics planning.",
     )
+    parser.add_argument(
+        "--reset-memory-resource",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Reset the memory resource between each iteration. "
+            "Note: this only affects the single-node cluster."
+        ),
+    )
 
     parsed_args = parser.parse_args(args)
 
@@ -927,6 +936,11 @@ def run_polars(
             )
             if args.print_results:
                 print(result)
+
+            if run_config.executor != "cpu" and args.reset_memory_resource:
+                import cudf_polars.callback
+
+                cudf_polars.callback.default_memory_resource.cache_clear()
 
             print(f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s")
             records[q_id].append(record)
