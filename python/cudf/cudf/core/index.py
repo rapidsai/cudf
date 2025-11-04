@@ -76,8 +76,6 @@ if TYPE_CHECKING:
     from cudf.core.series import Series
     from cudf.core.tools.datetimes import MonthEnd, YearEnd
 
-ONE_MONTH = DateOffset(months=1)
-
 
 def ensure_index(index_like: Any, nan_as_null=no_default) -> Index:
     """
@@ -3519,6 +3517,29 @@ class DatetimeIndex(Index):
         ),
     }
 
+    _allowed = [
+        "days",
+        "hours",
+        "minutes",
+        "seconds",
+        "milliseconds",
+        "microseconds",
+        "nanoseconds",
+    ]
+
+    ONE_MONTH = DateOffset(months=1)
+    YEAR_END = DateOffset._from_freqstr("YE-DEC")
+    MONTHLY_PERIODS = {
+        pd.Timedelta("28 days"),
+        pd.Timedelta("29 days"),
+        pd.Timedelta("30 days"),
+        pd.Timedelta("31 days"),
+    }
+    YEARLY_PERIODS = {
+        pd.Timedelta("365 days"),
+        pd.Timedelta("366 days"),
+    }
+
     @_performance_tracking
     def __init__(
         self,
@@ -3600,25 +3621,12 @@ class DatetimeIndex(Index):
         # existing pandas index needs no additional validation
         if self._freq is not None and not was_pd_index:
             unique_vals = self.to_series().diff().unique()
-            if self._freq == ONE_MONTH:
-                possible = pd.Series(
-                    [
-                        pd.NaT,
-                        pd.to_timedelta("28 days"),
-                        pd.to_timedelta("31 days"),
-                        pd.to_timedelta("30 days"),
-                    ]
-                )
+            if self._freq == self.ONE_MONTH:
+                possible = pd.Series(list(self.MONTHLY_PERIODS | {pd.NaT}))
                 if unique_vals.isin(possible).sum() != len(unique_vals):
                     raise ValueError("No unique frequency found")
             elif self._freq == cudf.DateOffset(years=1):
-                possible = pd.Series(
-                    [
-                        pd.NaT,
-                        pd.to_timedelta("365 days"),
-                        pd.to_timedelta("366 days"),
-                    ]
-                )
+                possible = pd.Series(list(self.YEARLY_PERIODS | {pd.NaT}))
                 if unique_vals.isin(possible).sum() != len(unique_vals):
                     raise ValueError("No unique frequency found")
             else:
@@ -3783,18 +3791,8 @@ class DatetimeIndex(Index):
             assert isinstance(freq, pd.Timedelta)
             cmps = freq.components
 
-            allowed = [
-                "days",
-                "hours",
-                "minutes",
-                "seconds",
-                "milliseconds",
-                "microseconds",
-                "nanoseconds",
-            ]
-
             kwds = {}
-            for component in allowed:
+            for component in self._allowed:
                 if getattr(cmps, component) != 0:
                     kwds[component] = getattr(cmps, component)
 
@@ -3810,19 +3808,10 @@ class DatetimeIndex(Index):
             ):
                 # Could be year end or could be an anchored year end
                 if self.is_year_end.all():
-                    return cudf.DateOffset._from_freqstr("YE-DEC")
+                    return self.YEAR_END
                 else:
                     raise NotImplementedError()
-            elif all(
-                x
-                in {
-                    pd.Timedelta("28 days"),
-                    pd.Timedelta("29 days"),
-                    pd.Timedelta("30 days"),
-                    pd.Timedelta("31 days"),
-                }
-                for x in uniques_host
-            ):
+            elif all(x in self.MONTHLY_PERIODS for x in uniques_host):
                 if self.is_month_end.all():
                     return cudf.DateOffset._from_freqstr("ME")
             else:
