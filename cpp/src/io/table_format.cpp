@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "cudf/detail/nvtx/ranges.hpp"
@@ -21,7 +10,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
-#include <cudf/io/raw_format.hpp>
+#include <cudf/io/table_format.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -37,25 +26,25 @@ namespace io {
 namespace {
 
 /**
- * @brief Validate the raw format header
+ * @brief Validate the table format header
  *
  * @param header The header to validate
  * @throws cudf::logic_error If the header is invalid
  */
-void validate_header(raw_format_header const& header)
+void validate_header(table_format_header const& header)
 {
-  CUDF_EXPECTS(header.magic == raw_format_header::magic_number,
-               "Invalid magic number in raw format header");
-  CUDF_EXPECTS(header.format_version == raw_format_header::version,
-               "Unsupported raw format version");
+  CUDF_EXPECTS(header.magic == table_format_header::magic_number,
+               "Invalid magic number in table format header");
+  CUDF_EXPECTS(header.format_version == table_format_header::version,
+               "Unsupported table format version");
 }
 
 }  // anonymous namespace
 
-void write_raw(cudf::table_view const& input,
-               sink_info const& sink_info,
-               rmm::cuda_stream_view stream,
-               rmm::device_async_resource_ref mr)
+void write_table(cudf::table_view const& input,
+                 sink_info const& sink_info,
+                 rmm::cuda_stream_view stream,
+                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -66,21 +55,21 @@ void write_raw(cudf::table_view const& input,
     case io_type::HOST_BUFFER: sink = data_sink::create(sink_info.buffers()[0]); break;
     case io_type::VOID: sink = data_sink::create(); break;
     case io_type::USER_IMPLEMENTED: sink = data_sink::create(sink_info.user_sinks()[0]); break;
-    default: CUDF_FAIL("Unsupported sink type for raw format");
+    default: CUDF_FAIL("Unsupported sink type for table format");
   }
 
   // Pack the table into contiguous memory
   auto packed = cudf::pack(input, stream, mr);
 
   // Create and populate the header
-  raw_format_header header;
-  header.magic           = raw_format_header::magic_number;
-  header.format_version  = raw_format_header::version;
+  table_format_header header;
+  header.magic           = table_format_header::magic_number;
+  header.format_version  = table_format_header::version;
   header.metadata_length = packed.metadata->size();
   header.data_length     = packed.gpu_data->size();
 
   // Write the header
-  sink->host_write(&header, sizeof(raw_format_header));
+  sink->host_write(&header, sizeof(table_format_header));
 
   // Write the metadata
   sink->host_write(packed.metadata->data(), header.metadata_length);
@@ -99,12 +88,12 @@ void write_raw(cudf::table_view const& input,
   sink->flush();
 }
 
-packed_table read_raw(source_info const& source_info,
-                      rmm::cuda_stream_view stream,
-                      rmm::device_async_resource_ref mr)
+packed_table read_table(source_info const& source_info,
+                        rmm::cuda_stream_view stream,
+                        rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  CUDF_EXPECTS(source_info.num_sources() == 1, "Raw format only supports single source");
+  CUDF_EXPECTS(source_info.num_sources() == 1, "Table format only supports single source");
 
   // Create datasource from source_info based on type
   std::unique_ptr<datasource> source;
@@ -117,14 +106,14 @@ packed_table read_raw(source_info const& source_info,
     case io_type::USER_IMPLEMENTED:
       source = datasource::create(source_info.user_sources()[0]);
       break;
-    default: CUDF_FAIL("Unsupported source type for raw format");
+    default: CUDF_FAIL("Unsupported source type for table format");
   }
 
   // Read the header
-  raw_format_header header;
-  auto header_size = sizeof(raw_format_header);
+  table_format_header header;
+  auto header_size = sizeof(table_format_header);
   CUDF_EXPECTS(source->size() >= header_size,
-               "File too small to contain a valid raw format header");
+               "File too small to contain a valid table format header");
 
   source->host_read(0, header_size, reinterpret_cast<uint8_t*>(&header));
 

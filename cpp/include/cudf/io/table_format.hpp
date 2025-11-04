@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -30,16 +19,16 @@ namespace CUDF_EXPORT cudf {
 namespace io {
 
 /**
- * @addtogroup io_raw
+ * @addtogroup io_table
  * @{
  * @file
- * @brief Raw binary table format APIs for serialization and deserialization
+ * @brief Table binary format APIs for serialization and deserialization
  */
 
 /**
  * @brief Simple binary file format header
  *
- * The raw format stores a table in a simple binary layout:
+ * The table format stores a table in a simple binary layout:
  * - Magic number (4 bytes): "CUDF"
  * - Version (4 bytes): uint32_t format version (currently 1)
  * - Metadata length (8 bytes): uint64_t size of the metadata buffer in bytes
@@ -47,7 +36,7 @@ namespace io {
  * - Metadata (variable): serialized column metadata from pack()
  * - Data (variable): contiguous device data from pack()
  */
-struct raw_format_header {
+struct table_format_header {
   static constexpr uint32_t magic_number = 0x46445543;  ///< "CUDF" in little-endian
   static constexpr uint32_t version      = 1;           ///< Format version
 
@@ -58,7 +47,7 @@ struct raw_format_header {
 };
 
 /**
- * @brief Write a table using the raw binary format.
+ * @brief Write a table using the table binary format.
  *
  * This function uses `cudf::pack` to serialize a table into a contiguous format,
  * then writes it to the specified sink with a simple header containing metadata
@@ -80,13 +69,13 @@ struct raw_format_header {
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr An optional memory resource to use for all device allocations
  */
-void write_raw(cudf::table_view const& input,
-               sink_info const& sink_info,
-               rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-               rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+void write_table(cudf::table_view const& input,
+                 sink_info const& sink_info,
+                 rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                 rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Read a table in raw binary format.
+ * @brief Read a table in table binary format.
  *
  * This function reads the header from the datasource, validates the format,
  * and uses `cudf::unpack` to deserialize the table.
@@ -106,9 +95,10 @@ void write_raw(cudf::table_view const& input,
  * @param mr An optional memory resource to use for all device allocations
  * @return A packed_table containing the deserialized table view and its backing data
  */
-packed_table read_raw(source_info const& source_info,
-                      rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-                      rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+packed_table read_table(
+  source_info const& source_info,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 }  // namespace io

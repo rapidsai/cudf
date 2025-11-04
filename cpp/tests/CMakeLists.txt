@@ -342,7 +342,7 @@ target_link_libraries(DATA_CHUNK_SOURCE_TEST PRIVATE ZLIB::ZLIB)
 ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
 ConfigureTest(FST_TEST io/fst/fst_test.cu)
 ConfigureTest(TYPE_INFERENCE_TEST io/type_inference_test.cu)
-ConfigureTest(RAW_FORMAT_TEST io/raw_format_test.cpp)
+ConfigureTest(TABLE_FORMAT_TEST io/table_format_test.cpp)
 
 # ##################################################################################################
 # * sort tests ------------------------------------------------------------------------------------

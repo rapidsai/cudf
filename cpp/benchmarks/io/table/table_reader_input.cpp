@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
@@ -21,17 +10,17 @@
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet.hpp>
-#include <cudf/io/raw_format.hpp>
+#include <cudf/io/table_format.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <nvbench/nvbench.cuh>
 
 constexpr cudf::size_type num_cols = 64;
 
-void raw_read_common(cudf::size_type num_rows_to_read,
-                     cudf::size_type num_cols_to_read,
-                     cuio_source_sink_pair& source_sink,
-                     nvbench::state& state)
+void table_read_common(cudf::size_type num_rows_to_read,
+                       cudf::size_type num_cols_to_read,
+                       cuio_source_sink_pair& source_sink,
+                       nvbench::state& state)
 {
   auto const data_size = static_cast<size_t>(state.get_int64("data_size"));
 
@@ -42,7 +31,7 @@ void raw_read_common(cudf::size_type num_rows_to_read,
       try_drop_l3_cache();
 
       timer.start();
-      auto result = cudf::io::read_raw(source_sink.make_source_info());
+      auto result = cudf::io::read_table(source_sink.make_source_info());
       timer.stop();
 
       CUDF_EXPECTS(result.table.num_columns() == num_cols_to_read, "Unexpected number of columns");
@@ -57,9 +46,9 @@ void raw_read_common(cudf::size_type num_rows_to_read,
 }
 
 template <data_type DataType>
-void BM_raw_read_data_common(nvbench::state& state,
-                             data_profile const& profile,
-                             nvbench::type_list<nvbench::enum_type<DataType>>)
+void BM_table_read_data_common(nvbench::state& state,
+                               data_profile const& profile,
+                               nvbench::type_list<nvbench::enum_type<DataType>>)
 {
   auto const d_type      = get_type_or_group(static_cast<int32_t>(DataType));
   auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
@@ -71,24 +60,24 @@ void BM_raw_read_data_common(nvbench::state& state,
       create_random_table(cycle_dtypes(d_type, num_cols), table_size_bytes{data_size}, profile);
     auto const view = tbl->view();
 
-    cudf::io::write_raw(view, source_sink.make_sink_info());
+    cudf::io::write_table(view, source_sink.make_sink_info());
     return view.num_rows();
   }();
 
-  raw_read_common(num_rows_written, num_cols, source_sink, state);
+  table_read_common(num_rows_written, num_cols, source_sink, state);
 }
 
 template <data_type DataType>
-void BM_raw_read_data(nvbench::state& state,
-                      nvbench::type_list<nvbench::enum_type<DataType>> type_list)
+void BM_table_read_data(nvbench::state& state,
+                        nvbench::type_list<nvbench::enum_type<DataType>> type_list)
 {
   auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
   auto const run_length  = static_cast<cudf::size_type>(state.get_int64("run_length"));
-  BM_raw_read_data_common<DataType>(
+  BM_table_read_data_common<DataType>(
     state, data_profile_builder().cardinality(cardinality).avg_run_length(run_length), type_list);
 }
 
-void BM_raw_read_long_strings(nvbench::state& state)
+void BM_table_read_long_strings(nvbench::state& state)
 {
   auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
   auto const data_size   = static_cast<size_t>(state.get_int64("data_size"));
@@ -115,30 +104,30 @@ void BM_raw_read_long_strings(nvbench::state& state)
       create_random_table(cycle_dtypes(d_type, num_cols), table_size_bytes{data_size}, profile);
     auto const view = tbl->view();
 
-    cudf::io::write_raw(view, source_sink.make_sink_info());
+    cudf::io::write_table(view, source_sink.make_sink_info());
     return view.num_rows();
   }();
 
-  raw_read_common(num_rows_written, num_cols, source_sink, state);
+  table_read_common(num_rows_written, num_cols, source_sink, state);
 }
 
 template <data_type DataType>
-void BM_raw_read_fixed_width_struct(nvbench::state& state,
-                                    nvbench::type_list<nvbench::enum_type<DataType>> type_list)
+void BM_table_read_fixed_width_struct(nvbench::state& state,
+                                      nvbench::type_list<nvbench::enum_type<DataType>> type_list)
 {
   auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
   auto const run_length  = static_cast<cudf::size_type>(state.get_int64("run_length"));
   std::vector<cudf::type_id> s_types{
     cudf::type_id::INT32, cudf::type_id::FLOAT32, cudf::type_id::INT64};
-  BM_raw_read_data_common<DataType>(state,
-                                    data_profile_builder()
-                                      .cardinality(cardinality)
-                                      .avg_run_length(run_length)
-                                      .struct_types(s_types),
-                                    type_list);
+  BM_table_read_data_common<DataType>(state,
+                                      data_profile_builder()
+                                        .cardinality(cardinality)
+                                        .avg_run_length(run_length)
+                                        .struct_types(s_types),
+                                      type_list);
 }
 
-void BM_raw_read_io_compression(nvbench::state& state)
+void BM_table_read_io_compression(nvbench::state& state)
 {
   auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
                                          static_cast<int32_t>(data_type::FLOAT),
@@ -163,14 +152,14 @@ void BM_raw_read_io_compression(nvbench::state& state)
       data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
     auto const view = tbl->view();
 
-    cudf::io::write_raw(view, source_sink.make_sink_info());
+    cudf::io::write_table(view, source_sink.make_sink_info());
     return view.num_rows();
   }();
 
-  raw_read_common(num_rows_written, num_cols, source_sink, state);
+  table_read_common(num_rows_written, num_cols, source_sink, state);
 }
 
-void BM_raw_read_io_small_mixed(nvbench::state& state)
+void BM_table_read_io_small_mixed(nvbench::state& state)
 {
   auto const d_type =
     std::pair<cudf::type_id, cudf::type_id>{cudf::type_id::STRING, cudf::type_id::INT32};
@@ -193,15 +182,15 @@ void BM_raw_read_io_small_mixed(nvbench::state& state)
       data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
     auto const view = tbl->view();
 
-    cudf::io::write_raw(view, source_sink.make_sink_info());
+    cudf::io::write_table(view, source_sink.make_sink_info());
   }
 
-  raw_read_common(num_rows, n_col, source_sink, state);
+  table_read_common(num_rows, n_col, source_sink, state);
 }
 
 template <data_type DataType>
-void BM_raw_read_wide_tables(nvbench::state& state,
-                             nvbench::type_list<nvbench::enum_type<DataType>> type_list)
+void BM_table_read_wide_tables(nvbench::state& state,
+                               nvbench::type_list<nvbench::enum_type<DataType>> type_list)
 {
   auto const d_type = get_type_or_group(static_cast<int32_t>(DataType));
 
@@ -219,14 +208,14 @@ void BM_raw_read_wide_tables(nvbench::state& state,
       data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
     auto const view = tbl->view();
 
-    cudf::io::write_raw(view, source_sink.make_sink_info());
+    cudf::io::write_table(view, source_sink.make_sink_info());
     return view.num_rows();
   }();
 
-  raw_read_common(num_rows_written, n_col, source_sink, state);
+  table_read_common(num_rows_written, n_col, source_sink, state);
 }
 
-void BM_raw_read_wide_tables_mixed(nvbench::state& state)
+void BM_table_read_wide_tables_mixed(nvbench::state& state)
 {
   auto const d_type = []() {
     auto d_type1 = get_type_or_group(static_cast<int32_t>(data_type::INTEGRAL));
@@ -250,11 +239,11 @@ void BM_raw_read_wide_tables_mixed(nvbench::state& state)
       data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
     auto const view = tbl->view();
 
-    cudf::io::write_raw(view, source_sink.make_sink_info());
+    cudf::io::write_table(view, source_sink.make_sink_info());
     return view.num_rows();
   }();
 
-  raw_read_common(num_rows_written, n_col, source_sink, state);
+  table_read_common(num_rows_written, n_col, source_sink, state);
 }
 
 using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
@@ -267,8 +256,8 @@ using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
                                             data_type::LIST,
                                             data_type::STRUCT>;
 
-NVBENCH_BENCH_TYPES(BM_raw_read_data, NVBENCH_TYPE_AXES(d_type_list))
-  .set_name("raw_read_decode")
+NVBENCH_BENCH_TYPES(BM_table_read_data, NVBENCH_TYPE_AXES(d_type_list))
+  .set_name("table_read_decode")
   .set_type_axes_names({"data_type"})
   .add_string_axis("io_type", {"FILEPATH"})
   .set_min_samples(4)
@@ -276,16 +265,16 @@ NVBENCH_BENCH_TYPES(BM_raw_read_data, NVBENCH_TYPE_AXES(d_type_list))
   .add_int64_axis("run_length", {1, 32})
   .add_int64_axis("data_size", {512 << 20});
 
-NVBENCH_BENCH(BM_raw_read_io_compression)
-  .set_name("raw_read_io_compression")
+NVBENCH_BENCH(BM_table_read_io_compression)
+  .set_name("table_read_io_compression")
   .add_string_axis("io_type", {"FILEPATH"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32})
   .add_int64_axis("data_size", {512 << 20});
 
-NVBENCH_BENCH(BM_raw_read_io_small_mixed)
-  .set_name("raw_read_io_small_mixed")
+NVBENCH_BENCH(BM_table_read_io_small_mixed)
+  .set_name("table_read_io_small_mixed")
   .add_string_axis("io_type", {"FILEPATH"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
@@ -294,8 +283,8 @@ NVBENCH_BENCH(BM_raw_read_io_small_mixed)
   .add_int64_axis("data_size", {512 << 20});
 
 using d_type_list_wide_table = nvbench::enum_type_list<data_type::DECIMAL, data_type::STRING>;
-NVBENCH_BENCH_TYPES(BM_raw_read_wide_tables, NVBENCH_TYPE_AXES(d_type_list_wide_table))
-  .set_name("raw_read_wide_tables")
+NVBENCH_BENCH_TYPES(BM_table_read_wide_tables, NVBENCH_TYPE_AXES(d_type_list_wide_table))
+  .set_name("table_read_wide_tables")
   .set_min_samples(4)
   .set_type_axes_names({"data_type"})
   .add_int64_axis("data_size", {1024 << 20, 2048 << 20})
@@ -303,8 +292,8 @@ NVBENCH_BENCH_TYPES(BM_raw_read_wide_tables, NVBENCH_TYPE_AXES(d_type_list_wide_
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});
 
-NVBENCH_BENCH(BM_raw_read_wide_tables_mixed)
-  .set_name("raw_read_wide_tables_mixed")
+NVBENCH_BENCH(BM_table_read_wide_tables_mixed)
+  .set_name("table_read_wide_tables_mixed")
   .set_min_samples(4)
   .add_int64_axis("data_size", {1024 << 20, 2048 << 20})
   .add_int64_axis("num_cols", {256, 512, 1024})
@@ -313,8 +302,8 @@ NVBENCH_BENCH(BM_raw_read_wide_tables_mixed)
 
 // a benchmark for structs that only contain fixed-width types
 using d_type_list_struct_only = nvbench::enum_type_list<data_type::STRUCT>;
-NVBENCH_BENCH_TYPES(BM_raw_read_fixed_width_struct, NVBENCH_TYPE_AXES(d_type_list_struct_only))
-  .set_name("raw_read_fixed_width_struct")
+NVBENCH_BENCH_TYPES(BM_table_read_fixed_width_struct, NVBENCH_TYPE_AXES(d_type_list_struct_only))
+  .set_name("table_read_fixed_width_struct")
   .set_type_axes_names({"data_type"})
   .add_string_axis("io_type", {"FILEPATH"})
   .set_min_samples(4)
@@ -322,8 +311,8 @@ NVBENCH_BENCH_TYPES(BM_raw_read_fixed_width_struct, NVBENCH_TYPE_AXES(d_type_lis
   .add_int64_axis("run_length", {1, 32})
   .add_int64_axis("data_size", {512 << 20});
 
-NVBENCH_BENCH(BM_raw_read_long_strings)
-  .set_name("raw_read_long_strings")
+NVBENCH_BENCH(BM_table_read_long_strings)
+  .set_name("table_read_long_strings")
   .add_string_axis("io_type", {"FILEPATH"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
