@@ -1,0 +1,251 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+"""
+Check IR node consistency in cudf_polars.
+
+Verifies that the `do_evaluate` method signatures in IR subclasses
+
+- Are a classmethod
+- Accept `*_non_child` positional arguments, followed by
+- `*children` positional arguments, followed by
+- A keyword-only `context` argument
+"""
+
+from __future__ import annotations
+
+import argparse
+import ast
+import sys
+
+ErrorRecord = dict[
+    str, str | int
+]  # Keys: "class", "arg", "error", "lineno", "filename"
+
+
+def extract_tuple_from_node(node: ast.AST) -> tuple[str, ...] | None:
+    """Extract a tuple of strings from an AST node."""
+    if isinstance(node, ast.Tuple):
+        return tuple(
+            elt.value for elt in node.elts if isinstance(elt, ast.Constant)
+        )
+    return None
+
+
+def get_non_child(class_node: ast.ClassDef) -> tuple[str, ...] | None:
+    """Get _non_child attribute from a class definition."""
+    for item in class_node.body:
+        # Handle annotated assignment: _non_child: ClassVar[...] = (...)
+        if isinstance(item, ast.AnnAssign) and isinstance(
+            item.target, ast.Name
+        ):
+            if item.target.id == "_non_child" and item.value:
+                return extract_tuple_from_node(item.value)
+        # Handle regular assignment: _non_child = (...)
+        elif isinstance(item, ast.Assign):
+            for target in item.targets:
+                if isinstance(target, ast.Name) and target.id == "_non_child":
+                    return extract_tuple_from_node(item.value)
+    return None
+
+
+def get_do_evaluate_node(class_node: ast.ClassDef) -> ast.FunctionDef | None:
+    """Get the do_evaluate method node from a class definition."""
+    for item in class_node.body:
+        if isinstance(item, ast.FunctionDef) and item.name == "do_evaluate":
+            return item
+    return None
+
+
+def get_do_evaluate_params(method_node: ast.FunctionDef) -> list[str]:
+    """Get parameter names from do_evaluate method."""
+    params = []
+    for arg in method_node.args.args:
+        # Skip 'cls' and 'self' parameters
+        if arg.arg not in ("cls", "self"):
+            params.append(arg.arg)
+    # Don't include keyword-only args like 'context'
+    return params
+
+
+def get_type_annotation_name(annotation: ast.expr | None) -> str | None:
+    """Extract the name from a type annotation."""
+    if annotation is None:
+        return None
+    if isinstance(annotation, ast.Name):
+        return annotation.id
+    # Handle complex types like list[str], dict[str, Any], etc.
+    # We just want the base type name
+    if isinstance(annotation, ast.Subscript):
+        if isinstance(annotation.value, ast.Name):
+            return annotation.value.id
+    return None
+
+
+def is_ir_subclass(class_node: ast.ClassDef) -> bool:
+    """Check if a class is a subclass of IR."""
+    if not class_node.bases:
+        return False
+
+    for base in class_node.bases:
+        if isinstance(base, ast.Name) and base.id == "IR":
+            return True
+    return False
+
+
+def analyze_content(content: str, filename: str) -> list[ErrorRecord]:
+    """Analyze the Python file content for IR node consistency."""
+    tree = ast.parse(content, filename=filename)
+
+    records: list[ErrorRecord] = []
+
+    # Find all class definitions
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            if not is_ir_subclass(node):
+                continue
+
+            class_name = node.name
+
+            non_child = get_non_child(node)
+            if non_child is None:
+                continue
+
+            method_node = get_do_evaluate_node(node)
+            if method_node is None:
+                # Some nodes (e.g. ErrorNode) don't have a do_evaluate method
+                continue
+
+            do_evaluate_params = get_do_evaluate_params(method_node)
+
+            # Check each non_child element
+            for i, nc in enumerate(non_child):
+                if nc not in do_evaluate_params:
+                    records.append(
+                        {
+                            "class": class_name,
+                            "arg": nc,
+                            "error": "Missing",
+                            "lineno": method_node.lineno,
+                            "filename": filename,
+                        }
+                    )
+                elif do_evaluate_params.index(nc) != i:
+                    records.append(
+                        {
+                            "class": class_name,
+                            "arg": nc,
+                            "error": "Wrong position",
+                            "lineno": method_node.lineno,
+                            "filename": filename,
+                        }
+                    )
+
+            # Check that all *remaining* args in do_evaluate are 'DataFrame' type
+            # Skip 'cls' or 'self' parameter
+            regular_args = [
+                arg
+                for arg in method_node.args.args
+                if arg.arg not in ("cls", "self")
+            ]
+
+            # Check args after _non_child parameters
+            for arg in regular_args[len(non_child) :]:
+                type_name = get_type_annotation_name(arg.annotation)
+                if type_name != "DataFrame":
+                    records.append(
+                        {
+                            "class": class_name,
+                            "arg": arg.arg,
+                            "error": f"Wrong type annotation '{type_name}' (expected 'DataFrame')",
+                            "lineno": method_node.lineno,
+                            "filename": filename,
+                        }
+                    )
+
+            # Check that the only kw-only argument is 'context' with type 'IRExecutionContext'
+            kwonly_args = method_node.args.kwonlyargs
+            if len(kwonly_args) != 1:
+                records.append(
+                    {
+                        "class": class_name,
+                        "arg": "kwonly",
+                        "error": f"Expected 1 keyword-only argument, found {len(kwonly_args)}",
+                        "lineno": method_node.lineno,
+                        "filename": filename,
+                    }
+                )
+            elif kwonly_args[0].arg != "context":
+                records.append(
+                    {
+                        "class": class_name,
+                        "arg": kwonly_args[0].arg,
+                        "error": "Keyword-only argument should be named 'context'",
+                        "lineno": method_node.lineno,
+                        "filename": filename,
+                    }
+                )
+            else:
+                # Check type annotation
+                type_name = get_type_annotation_name(kwonly_args[0].annotation)
+                if type_name != "IRExecutionContext":
+                    records.append(
+                        {
+                            "class": class_name,
+                            "arg": "context",
+                            "error": f"Wrong type annotation '{type_name}' (expected 'IRExecutionContext')",
+                            "lineno": method_node.lineno,
+                            "filename": filename,
+                        }
+                    )
+
+    return records
+
+
+def main() -> int:
+    """Main entry point for the CLI."""
+    parser = argparse.ArgumentParser(
+        description="Check IR node do_evaluate signatures match _non_child declarations"
+    )
+    parser.add_argument(
+        "files",
+        nargs="+",
+        type=argparse.FileType("r"),
+        help="Path(s) to Python file(s) to check (use '-' for stdin)",
+    )
+
+    args = parser.parse_args()
+
+    all_records: list[ErrorRecord] = []
+
+    try:
+        for file in args.files:
+            content = file.read()
+            filename = file.name
+            file.close()
+
+            records = analyze_content(content, filename)
+            all_records.extend(records)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+
+    if all_records:
+        print("Found errors in IR node signatures:", end="\n\n")
+        for record in all_records:
+            filename = record["filename"]
+            lineno = record["lineno"]
+            class_name = record["class"]
+            error = record["error"]
+            arg = record["arg"]
+            print(
+                f"  {filename}:{lineno}: {class_name}: {error} argument '{arg}'"
+            )
+        return 1
+    else:
+        return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
