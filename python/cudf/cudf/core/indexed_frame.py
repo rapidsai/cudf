@@ -7032,6 +7032,9 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
             "mode.pandas_compatible"
         ) and val_col.can_cast_safely(col.dtype):
             to_type = col.dtype
+    # to_type should not be None here - if no common type, use object dtype
+    if to_type is None:
+        to_type = np.dtype("object")
     val_col = val_col.astype(to_type)
     old_col = col.astype(to_type)
     res_col = concat_columns([old_col, val_col])._with_type_metadata(to_type)

@@ -1437,8 +1437,8 @@ class Frame(BinaryOperand, Scannable, Serializable):
         sources = [
             (
                 col
-                if is_dtype_equal(col.dtype, common_dtype)
-                or common_dtype is None
+                if common_dtype is None
+                or is_dtype_equal(col.dtype, common_dtype)
                 else col.astype(common_dtype)
             )
             for col, common_dtype in zip(
@@ -1447,7 +1447,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         ]
         values = [
             val
-            if is_dtype_equal(val.dtype, common_dtype) or common_dtype is None
+            if common_dtype is None or is_dtype_equal(val.dtype, common_dtype)
             else val.astype(common_dtype)
             for val, common_dtype in zip(
                 values, common_dtype_list, strict=True
