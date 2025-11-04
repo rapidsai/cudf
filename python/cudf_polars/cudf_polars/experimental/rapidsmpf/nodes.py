@@ -204,6 +204,8 @@ async def fanout_node_bounded(
     chs_out
         The output ChannelPairs.
     """
+    # TODO: Use rapidsmpf fanout node once available.
+    # See: https://github.com/rapidsai/rapidsmpf/issues/560
     async with shutdown_on_error(context, ch_in.data, *[ch.data for ch in chs_out]):
         while (msg := await ch_in.data.recv(context)) is not None:
             table_chunk = TableChunk.from_message(msg)
@@ -252,6 +254,8 @@ async def fanout_node_unbounded(
     chs_out
         The output ChannelPairs.
     """
+    # TODO: Use rapidsmpf fanout node once available.
+    # See: https://github.com/rapidsai/rapidsmpf/issues/560
     async with shutdown_on_error(context, ch_in.data, *[ch.data for ch in chs_out]):
         # FIFO buffer for each output channel
         output_buffers: list[list[Message]] = [[] for _ in chs_out]
