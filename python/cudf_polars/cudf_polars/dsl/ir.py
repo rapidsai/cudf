@@ -2603,6 +2603,7 @@ class Distinct(IR):
                 keep,
                 plc.types.NullEquality.EQUAL,
                 plc.types.NanEquality.ALL_EQUAL,
+                df.stream,
             )
         # TODO: Is this sortedness setting correct
         result = DataFrame(

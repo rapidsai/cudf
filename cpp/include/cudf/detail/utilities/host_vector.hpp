@@ -93,14 +93,8 @@ class rmm_host_allocator {
    */
   rmm_host_allocator() = delete;
 
-#if CCCL_MAJOR_VERSION > 3 || (CCCL_MAJOR_VERSION == 3 && CCCL_MINOR_VERSION >= 1)
   template <class... Properties>
   using async_host_resource_ref = cuda::mr::resource_ref<cuda::mr::host_accessible, Properties...>;
-#else
-  template <class... Properties>
-  using async_host_resource_ref =
-    cuda::mr::async_resource_ref<cuda::mr::host_accessible, Properties...>;
-#endif
 
   /**
    * @brief Construct from a `cudf::host_async_resource_ref`

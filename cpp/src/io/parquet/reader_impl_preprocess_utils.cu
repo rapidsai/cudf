@@ -9,7 +9,6 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 
@@ -474,7 +473,7 @@ void decode_page_headers(pass_intermediate_data& pass,
                                             level_bit_size,
                                             level_bit_size + pass.chunks.size(),
                                             0,
-                                            cudf::detail::maximum<int>());
+                                            cuda::maximum<int>());
   pass.level_type_size     = std::max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
 
   // sort the pages in chunk/schema order.
