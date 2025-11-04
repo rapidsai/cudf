@@ -5,7 +5,7 @@
 # cmake-format: on
 # =============================================================================
 
-set(cython_sources json.pyx types.pyx)
+set(cython_sources hybrid_scan.pyx json.pyx types.pyx)
 
 set(linked_libraries cudf::cudf)
 

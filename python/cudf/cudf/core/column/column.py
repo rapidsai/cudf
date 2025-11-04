@@ -1736,7 +1736,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             result.dtype,
             (cudf.Decimal128Dtype, cudf.Decimal64Dtype, cudf.Decimal32Dtype),
         ):
-            result.dtype.precision = dtype.precision  # type: ignore[union-attr]
+            if cudf.get_option("mode.pandas_compatible") and not isinstance(
+                dtype, DecimalDtype
+            ):
+                result._dtype = dtype
+            else:
+                result.dtype.precision = dtype.precision  # type: ignore[union-attr]
         if cudf.get_option("mode.pandas_compatible") and result.dtype != dtype:
             result._dtype = dtype
         return result
@@ -2259,9 +2264,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # check empty case
         if len(self) <= self.null_count:
             if reduction_op == "sum" or reduction_op == "sum_of_squares":
-                return self.dtype.type(0)
+                return col_dtype.type(0)
             if reduction_op == "product":
-                return self.dtype.type(1)
+                return col_dtype.type(1)
             if reduction_op == "any":
                 return False
 
