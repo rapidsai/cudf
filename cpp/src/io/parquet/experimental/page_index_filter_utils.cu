@@ -196,7 +196,7 @@ std::pair<std::vector<size_type>, size_type> compute_page_row_offsets(
   return {std::move(page_row_offsets), max_page_size};
 }
 
-rmm::device_uvector<size_type> make_page_indices_async(
+rmm::device_uvector<size_type> compute_page_indices_async(
   cudf::host_span<cudf::size_type const> page_row_counts,
   cudf::host_span<cudf::size_type const> page_row_offsets,
   cudf::size_type total_rows,

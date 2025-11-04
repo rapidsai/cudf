@@ -381,7 +381,7 @@ struct page_stats_caster : public stats_caster_base {
 
       // Construct a row indices mapping based on page row counts and offsets
       auto const page_indices =
-        make_page_indices_async(page_row_counts, page_row_offsets, total_rows, stream);
+        compute_page_indices_async(page_row_counts, page_row_offsets, total_rows, stream);
 
       // For non-strings columns, directly gather the page-level column data and bitmask to the
       // row-level.
@@ -786,7 +786,7 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
 }
 
 template <typename ColumnView>
-cudf::detail::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
+thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   ColumnView const& row_mask,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   cudf::host_span<input_column_info const> input_columns,
@@ -806,7 +806,7 @@ cudf::detail::host_vector<bool> aggregate_reader_metadata::compute_data_page_mas
                      row_mask.template begin<bool>() + row_mask_offset,
                      row_mask.template begin<bool>() + row_mask_offset + total_rows,
                      cuda::std::identity{})) {
-    return cudf::detail::make_empty_host_vector<bool>(0, stream);
+    return thrust::host_vector<bool>(0, stream);
   }
 
   CUDF_EXPECTS(row_mask_offset + total_rows <= row_mask.size(),
@@ -818,8 +818,8 @@ cudf::detail::host_vector<bool> aggregate_reader_metadata::compute_data_page_mas
   // Return early if page index is not present
   if (not has_page_index) {
     CUDF_LOG_WARN("Encountered missing Parquet page index for one or more output columns");
-    return cudf::detail::make_empty_host_vector<bool>(
-      0, stream);  // An empty data page mask indicates all pages are required
+    return thrust::host_vector<bool>(
+      0);  // An empty data page mask indicates all pages are required
   }
 
   // Collect column schema indices from the input columns.
@@ -849,37 +849,37 @@ cudf::detail::host_vector<bool> aggregate_reader_metadata::compute_data_page_mas
         col_page_offsets.emplace_back(page_row_offsets.size());
       });
   } else {
-    auto constexpr num_threads = 2;
-    std::vector<std::future<std::vector<std::pair<std::vector<size_type>, size_type>>>>
-      page_row_offset_tasks{};
-    page_row_offset_tasks.reserve(num_threads);
-    auto const cols_per_thread = cudf::util::div_rounding_up_unsafe(num_columns, num_threads);
+    auto constexpr max_tasks         = 2;
+    using task_page_row_offsets_type = std::vector<std::pair<std::vector<size_type>, size_type>>;
+    std::vector<std::future<task_page_row_offsets_type>> page_row_offset_tasks{};
+    page_row_offset_tasks.reserve(max_tasks);
+    auto const cols_per_thread = cudf::util::div_rounding_up_unsafe(num_columns, max_tasks);
 
     // Submit page row offset compute tasks
-    std::transform(
-      thrust::counting_iterator(0),
-      thrust::counting_iterator(num_threads),
-      std::back_inserter(page_row_offset_tasks),
-      [&](auto const tid) {
-        return cudf::detail::host_worker_pool().submit_task([&, tid = tid]() {
-          auto const start_col = std::min(tid * cols_per_thread, num_columns);
-          auto const end_col   = std::min(start_col + cols_per_thread, num_columns);
-          std::vector<std::pair<std::vector<size_type>, size_type>> thread_page_row_offsets{};
-          thread_page_row_offsets.reserve(end_col - start_col);
-          std::transform(thrust::counting_iterator(start_col),
+    std::transform(thrust::counting_iterator(0),
+                   thrust::counting_iterator(max_tasks),
+                   std::back_inserter(page_row_offset_tasks),
+                   [&](auto const tid) {
+                     return cudf::detail::host_worker_pool().submit_task([&, tid = tid]() {
+                       auto const start_col = std::min(tid * cols_per_thread, num_columns);
+                       auto const end_col   = std::min(start_col + cols_per_thread, num_columns);
+                       task_page_row_offsets_type task_page_row_offsets{};
+                       task_page_row_offsets.reserve(end_col - start_col);
+                       std::transform(
+                         thrust::counting_iterator(start_col),
                          thrust::counting_iterator(end_col),
-                         std::back_inserter(thread_page_row_offsets),
+                         std::back_inserter(task_page_row_offsets),
                          [&](auto const col_idx) {
                            return compute_page_row_offsets(
                              per_file_metadata, row_group_indices, column_schema_indices[col_idx]);
                          });
-          return thread_page_row_offsets;
-        });
-      });
+                       return task_page_row_offsets;
+                     });
+                   });
 
     std::for_each(page_row_offset_tasks.begin(), page_row_offset_tasks.end(), [&](auto& task) {
-      auto const& thread_page_row_offsets = task.get();
-      for (auto& [col_page_row_offsets, col_max_page_size] : thread_page_row_offsets) {
+      auto const& task_page_row_offsets = task.get();
+      for (auto& [col_page_row_offsets, col_max_page_size] : task_page_row_offsets) {
         page_row_offsets.insert(
           page_row_offsets.end(), col_page_row_offsets.begin(), col_page_row_offsets.end());
         max_page_size = std::max<size_type>(max_page_size, col_max_page_size);
@@ -952,32 +952,36 @@ cudf::detail::host_vector<bool> aggregate_reader_metadata::compute_data_page_mas
   //  Copy over search results to host
   auto host_results      = cudf::detail::make_host_vector_async(device_data_page_mask, stream);
   auto const total_pages = page_row_offsets.size() - num_columns;
-  auto data_page_mask    = cudf::detail::make_empty_host_vector<bool>(total_pages, stream);
+  auto data_page_mask    = thrust::host_vector<bool>(total_pages, stream);
   auto host_results_iter = host_results.begin();
   stream.synchronize();
+
   // Discard results for invalid ranges. i.e. ranges starting at the last page of a column and
   // ending at the first page of the next column
+  auto num_pages_inserted = 0;
   std::for_each(thrust::counting_iterator<size_t>(0),
                 thrust::counting_iterator(num_columns),
                 [&](auto col_idx) {
                   auto const col_num_pages =
                     col_page_offsets[col_idx + 1] - col_page_offsets[col_idx] - 1;
-                  data_page_mask.insert(
-                    data_page_mask.end(), host_results_iter, host_results_iter + col_num_pages);
+                  data_page_mask.insert(data_page_mask.begin() + num_pages_inserted,
+                                        host_results_iter,
+                                        host_results_iter + col_num_pages);
                   host_results_iter += col_num_pages + 1;
+                  num_pages_inserted += col_num_pages;
                 });
   return data_page_mask;
 }
 
 // Instantiate the templates with ColumnView as cudf::column_view and cudf::mutable_column_view
-template cudf::detail::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask<
+template thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask<
   cudf::column_view>(cudf::column_view const& row_mask,
                      cudf::host_span<std::vector<size_type> const> row_group_indices,
                      cudf::host_span<input_column_info const> input_columns,
                      cudf::size_type row_mask_offset,
                      rmm::cuda_stream_view stream) const;
 
-template cudf::detail::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask<
+template thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask<
   cudf::mutable_column_view>(cudf::mutable_column_view const& row_mask,
                              cudf::host_span<std::vector<size_type> const> row_group_indices,
                              cudf::host_span<input_column_info const> input_columns,

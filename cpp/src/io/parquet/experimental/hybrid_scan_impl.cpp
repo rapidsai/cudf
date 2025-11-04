@@ -444,7 +444,7 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
     (mask_data_pages == use_data_page_mask::YES)
       ? _extended_metadata->compute_data_page_mask(
           row_mask, row_group_indices, _input_columns, _rows_processed_so_far, stream)
-      : cudf::detail::make_empty_host_vector<bool>(0, stream);
+      : thrust::host_vector<bool>(0);
 
   prepare_data(
     read_mode::READ_ALL, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
@@ -474,7 +474,7 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
     (mask_data_pages == use_data_page_mask::YES)
       ? _extended_metadata->compute_data_page_mask(
           row_mask, row_group_indices, _input_columns, _rows_processed_so_far, stream)
-      : cudf::detail::make_empty_host_vector<bool>(0, stream);
+      : thrust::host_vector<bool>(0);
 
   prepare_data(
     read_mode::READ_ALL, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
@@ -513,7 +513,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
     (mask_data_pages == use_data_page_mask::YES)
       ? _extended_metadata->compute_data_page_mask(
           row_mask, row_group_indices, _input_columns, _rows_processed_so_far, _stream)
-      : cudf::detail::make_empty_host_vector<bool>(0, _stream);
+      : thrust::host_vector<bool>(0);
 
   prepare_data(
     read_mode::CHUNKED_READ, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
@@ -564,7 +564,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
     (mask_data_pages == use_data_page_mask::YES)
       ? _extended_metadata->compute_data_page_mask(
           row_mask, row_group_indices, _input_columns, _rows_processed_so_far, _stream)
-      : cudf::detail::make_empty_host_vector<bool>(0, _stream);
+      : thrust::host_vector<bool>(0);
 
   prepare_data(
     read_mode::CHUNKED_READ, row_group_indices, std::move(column_chunk_buffers), data_page_mask);

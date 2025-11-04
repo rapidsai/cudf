@@ -283,7 +283,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    *         the output table based on the input row mask across all input columns
    */
   template <typename ColumnView>
-  [[nodiscard]] cudf::detail::host_vector<bool> compute_data_page_mask(
+  [[nodiscard]] thrust::host_vector<bool> compute_data_page_mask(
     ColumnView const& row_mask,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::host_span<input_column_info const> input_columns,

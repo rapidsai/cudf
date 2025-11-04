@@ -50,12 +50,13 @@ compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_fil
                                     rmm::cuda_stream_view stream);
 
 /**
- * @brief Compute page row offsets for a given column schema index
+ * @brief Computes page row offsets and the size (number of rows) of the largest page for a given
+ * column schema index
  *
  * @param per_file_metadata Span of parquet footer metadata
  * @param row_group_indices Span of input row group indices
  * @param schema_idx Column's schema index
- * @return Pair of page row offsets and the size of the largest page in this
+ * @return A pair of page row offsets and the size of the largest page in this
  * column
  */
 [[nodiscard]] std::pair<std::vector<size_type>, size_type> compute_page_row_offsets(
@@ -64,7 +65,7 @@ compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_fil
   size_type schema_idx);
 
 /**
- * @brief Make a device vector where each row contains the index of the page it belongs to
+ * @brief Computes a device vector where each row contains the index of the page it belongs to
  *
  * @param page_row_counts Span of page row counts
  * @param page_row_offsets Span of page row offsets
@@ -72,7 +73,7 @@ compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_fil
  * @param stream CUDA stream
  * @return Device vector where each row contains the index of the page it belongs to
  */
-[[nodiscard]] rmm::device_uvector<size_type> make_page_indices_async(
+[[nodiscard]] rmm::device_uvector<size_type> compute_page_indices_async(
   cudf::host_span<cudf::size_type const> page_row_counts,
   cudf::host_span<cudf::size_type const> page_row_offsets,
   cudf::size_type total_rows,
