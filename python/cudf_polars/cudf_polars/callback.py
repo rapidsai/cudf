@@ -220,14 +220,6 @@ def _callback(
     if timer is not None:
         assert should_time
 
-    # Check if we are using an async memory resource for the client
-    if (
-        memory_resource is None
-        and config_options.executor.name == "streaming"
-        and config_options.executor.client_memory_resource == "async"
-    ):
-        memory_resource = rmm.mr.CudaAsyncMemoryResource()
-
     with (
         nvtx.annotate(message="ExecuteIR", domain=CUDF_POLARS_NVTX_DOMAIN),
         # Device must be set before memory resource is obtained.

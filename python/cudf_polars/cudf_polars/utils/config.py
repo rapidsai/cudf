@@ -203,13 +203,6 @@ class ShuffleMethod(str, enum.Enum):
     _RAPIDSMPF_SINGLE = "rapidsmpf-single"
 
 
-class MemoryResourceType(str, enum.Enum):
-    """The default memory resource to use for the client process."""
-
-    ASYNC = "async"
-    MANAGED = "managed"
-
-
 T = TypeVar("T")
 
 
@@ -319,42 +312,22 @@ class ParquetOptions:
             raise TypeError("max_row_group_samples must be an int")
 
 
-def default_blocksize(
-    cluster: str, client_memory_resource: MemoryResourceType | None = None
-) -> int:
-    """
-    Return the default blocksize.
-
-    Parameters
-    ----------
-    cluster
-        The cluster configuration for the streaming executor.
-    client_memory_resource
-        The default memory resource to use for the client process.
-
-    Returns
-    -------
-    The default blocksize in bytes.
-    """
+def default_blocksize(cluster: str) -> int:
+    """Return the default blocksize."""
     device_size = get_total_device_memory()
     if device_size is None:  # pragma: no cover
         # System doesn't have proper "GPU memory".
         # Fall back to a conservative 1GB default.
         return 1_000_000_000
 
-    if cluster == "distributed":
-        # Distributed execution requires a conservative
-        # blocksize for now. We are also more conservative
-        # when UVM is disabled.
-        blocksize = int(device_size * 0.025)
-    elif (
-        client_memory_resource == "async"
+    if (
+        cluster == "distributed"
         or _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) == 0
     ):
         # Distributed execution requires a conservative
         # blocksize for now. We are also more conservative
         # when UVM is disabled.
-        blocksize = int(device_size * 0.05)
+        blocksize = int(device_size * 0.025)
     else:
         # Single-GPU execution can lean on UVM to
         # support a much larger blocksize.
@@ -531,10 +504,6 @@ class StreamingExecutor:
         Threshold for spilling data from device memory in rapidsmpf.
         Default is 50% of device memory on the client process.
         This argument is only used by the "rapidsmpf" runtime.
-    client_memory_resource
-        The default memory resource to use for the client process.
-        Default is "async" for the "rapidsmpf" runtime, and "managed"
-        for the "tasks" runtime.
     sink_to_directory
         Whether multi-partition sink operations should write to a directory
         rather than a single file. By default, this will be set to True for
@@ -625,13 +594,6 @@ class StreamingExecutor:
             f"{_env_prefix}__CLIENT_DEVICE_THRESHOLD", float, default=0.5
         )
     )
-    client_memory_resource: MemoryResourceType | None = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__CLIENT_MEMORY_RESOURCE",
-            MemoryResourceType.__call__,
-            default=None,
-        )
-    )
     sink_to_directory: bool | None = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__SINK_TO_DIRECTORY", _bool_converter, default=None
@@ -651,19 +613,6 @@ class StreamingExecutor:
                     "The rapidsmpf streaming engine does not support task-based shuffling."
                 )
             object.__setattr__(self, "shuffle_method", "rapidsmpf")
-
-        # Set default client memory resource
-        if self.client_memory_resource is None:
-            if (
-                self.runtime == "rapidsmpf"
-            ):  # pragma: no cover; requires rapidsmpf runtime
-                object.__setattr__(
-                    self, "client_memory_resource", MemoryResourceType.ASYNC
-                )
-            else:
-                object.__setattr__(
-                    self, "client_memory_resource", MemoryResourceType.MANAGED
-                )
 
         # Handle backward compatibility for deprecated scheduler parameter
         if self.scheduler is not None:
@@ -726,7 +675,7 @@ class StreamingExecutor:
             object.__setattr__(
                 self,
                 "target_partition_size",
-                default_blocksize(self.cluster, self.client_memory_resource),
+                default_blocksize(self.cluster),
             )
         if self.broadcast_join_limit == 0:
             object.__setattr__(

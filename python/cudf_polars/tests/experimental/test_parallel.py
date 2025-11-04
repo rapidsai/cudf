@@ -270,18 +270,3 @@ def test_fallback_on_concat_zlice(engine: pl.GPUEngine) -> None:
             UserWarning, match="This slice not supported for multiple partitions."
         ):
             assert_gpu_result_equal(q, engine=engine)
-
-
-def test_async_memory_resource():
-    df = pl.LazyFrame({"a": [1, 2, 3], "b": [3, 4, 5], "c": [5, 6, 7], "d": [7, 9, 8]})
-    q = df.select(pl.col("a") - (pl.col("b") + pl.col("c") * 2), pl.col("d")).sort("d")
-
-    engine = GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "cluster": DEFAULT_CLUSTER,
-            "client_memory_resource": "async",
-        },
-    )
-    assert_gpu_result_equal(q, engine=engine)
