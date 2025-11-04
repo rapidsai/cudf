@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -29,5 +29,10 @@ public final class UnaryOperation extends AstExpression {
     ExpressionType.UNARY_EXPRESSION.serialize(bb);
     op.serialize(bb);
     input.serialize(bb);
+  }
+
+  @Override
+  public String toString() {
+    return op + "(" + input + ")";
   }
 }
