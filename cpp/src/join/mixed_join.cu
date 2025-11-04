@@ -170,8 +170,7 @@ mixed_join_setup_data setup_mixed_join_common(table_view const& left_equality,
   mixed_multiset_type hash_table{
     cuco::extent{static_cast<std::size_t>(build.num_rows())},
     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
-    cuco::empty_key{
-      cuco::pair{std::numeric_limits<hash_value_type>::max(), cudf::detail::JoinNoneValue}},
+    cuco::empty_key{cuco::pair{std::numeric_limits<hash_value_type>::max(), cudf::JoinNoMatch}},
     {},
     {},
     {},
