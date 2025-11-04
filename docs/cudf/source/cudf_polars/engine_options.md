@@ -110,7 +110,7 @@ the memory resource to use by:
 3. Relying on the default behavior, which creates a memory resource for you (details below).
 
 By default, cudf-polars will create a new RMM Memory Resource for you, which is cached and reused
-for each query. The type of that memory resource is hardware-dependent. GPUs that support[Unified Virtual Memory] memory,
+for each query. The type of that memory resource is hardware-dependent. GPUs that support [Unified Virtual Memory] memory,
 use a {class}`rmm.mr.ManagedMemoryResource` wrapped in a {class}`rmm.mr.PoolMemoryResource` and {class}`rmm.mr.PrefetchResourceAdaptor`.
 Otherwise, {class}`rmm.mr.CudaAsyncMemoryResource` is used.
 
@@ -142,7 +142,7 @@ mr = rmm.mr.CudaAsyncMemory()
 engine = pl.GPUEngine(memory_resource=mr)
 ```
 
-Passing a concrete memory resource takes precedence of passing the `memory_resource_config` options,
+Passing a concrete memory resource takes precedence over passing the `memory_resource_config` options,
 which takes precedence over the default memory resource.
 
 Note that providing a concrete memory resource isn't an option with the distributed scheduler,
