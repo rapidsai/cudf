@@ -144,6 +144,7 @@ class MultiIndex(Index):
 
     _levels: list[cudf.Index] | None
     _codes: list[column.ColumnBase] | None
+    _name: Any
 
     @_performance_tracking
     def __init__(
@@ -1723,12 +1724,13 @@ class MultiIndex(Index):
             )
             for code in self._codes  # type: ignore[union-attr]
         )
+        codes_list: list[np.ndarray] = [col.values_host for col in pd_codes]
         return pd.MultiIndex(
             levels=[
                 level.to_pandas(nullable=nullable, arrow_type=arrow_type)
                 for level in self.levels
             ],
-            codes=[col.values_host for col in pd_codes],
+            codes=codes_list,  # type: ignore[arg-type]
             names=self.names,
         )
 
