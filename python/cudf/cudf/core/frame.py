@@ -410,7 +410,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
     def __sizeof__(self):
         if cudf.get_option("mode.pandas_compatible"):
-            return self.memory_usage(deep=True, index=True).sum()
+            return self.memory_usage(deep=True, index=True)
         return object.__sizeof__(self)
 
     @_performance_tracking
