@@ -2019,6 +2019,7 @@ ArrowExtensionArray = make_final_proxy_type(
         "__abs__": _FastSlowAttribute("__abs__"),
         "__contains__": _FastSlowAttribute("__contains__"),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+        "__arrow_array__": arrow_array_method,
     },
 )
 
