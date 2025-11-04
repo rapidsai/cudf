@@ -342,15 +342,19 @@ def default_blocksize(
         # Fall back to a conservative 1GB default.
         return 1_000_000_000
 
-    if (
-        cluster == "distributed"
-        or client_memory_resource == "async"
+    if cluster == "distributed":
+        # Distributed execution requires a conservative
+        # blocksize for now. We are also more conservative
+        # when UVM is disabled.
+        blocksize = int(device_size * 0.025)
+    elif (
+        client_memory_resource == "async"
         or _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) == 0
     ):
         # Distributed execution requires a conservative
         # blocksize for now. We are also more conservative
         # when UVM is disabled.
-        blocksize = int(device_size * 0.025)
+        blocksize = int(device_size * 0.05)
     else:
         # Single-GPU execution can lean on UVM to
         # support a much larger blocksize.
@@ -729,12 +733,7 @@ class StreamingExecutor:
                 self,
                 "broadcast_join_limit",
                 # Usually better to avoid shuffling for single gpu with UVM
-                2
-                if (
-                    self.cluster == "distributed"
-                    or self.client_memory_resource == "async"
-                )
-                else 32,
+                2 if self.cluster == "distributed" else 32,
             )
         object.__setattr__(self, "cluster", Cluster(self.cluster))
         object.__setattr__(self, "shuffle_method", ShuffleMethod(self.shuffle_method))
