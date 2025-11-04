@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import datetime
@@ -20,13 +21,13 @@ import pyarrow as pa
 import cudf
 from cudf.api.types import is_list_like
 from cudf.core._compat import PANDAS_LT_300
+from cudf.core.dtypes import recursively_update_struct_names
 from cudf.utils.docutils import docfmt_partial
 from cudf.utils.dtypes import cudf_dtype_to_pa_type, np_dtypes_to_pandas_dtypes
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Hashable
+    from collections.abc import Callable, Hashable, Mapping
 
-    from cudf.core.column import ColumnBase
     from cudf.core.dataframe import DataFrame
 
 
@@ -2384,24 +2385,11 @@ def _prefetch_remote_buffers(
         return paths
 
 
-def _add_df_col_struct_names(df: DataFrame, child_names_dict: dict) -> None:
+def _add_df_col_struct_names(
+    df: DataFrame, child_names_dict: Mapping[Any, Any]
+) -> None:
     for name, child_names in child_names_dict.items():
         col = df._data[name]
-        df._data[name] = _update_col_struct_field_names(col, child_names)
-
-
-def _update_col_struct_field_names(
-    col: ColumnBase, child_names: dict
-) -> ColumnBase:
-    if col.children:
-        children = list(col.children)
-        for i, (child, names) in enumerate(
-            zip(children, child_names.values(), strict=True)
-        ):
-            children[i] = _update_col_struct_field_names(child, names)
-        col.set_base_children(tuple(children))
-
-    if isinstance(col.dtype, cudf.StructDtype):
-        col = col._rename_fields(child_names.keys())  # type: ignore[attr-defined]
-
-    return col
+        df._data[name] = col._with_type_metadata(
+            recursively_update_struct_names(col.dtype, child_names)
+        )

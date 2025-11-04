@@ -1,8 +1,9 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, TypeGuard
 
 import numpy as np
 import pandas as pd
@@ -20,7 +21,9 @@ if TYPE_CHECKING:
     from cudf._typing import DtypeObj
     from cudf.core.dtypes import DecimalDtype
 
-np_dtypes_to_pandas_dtypes = {
+np_dtypes_to_pandas_dtypes: dict[
+    np.dtype[Any], pd.core.dtypes.base.ExtensionDtype
+] = {
     np.dtype("uint8"): pd.UInt8Dtype(),
     np.dtype("uint16"): pd.UInt16Dtype(),
     np.dtype("uint32"): pd.UInt32Dtype(),
@@ -202,7 +205,7 @@ def min_signed_type(x: int, min_size: int = 8) -> np.dtype:
     that can represent the integer ``x``
     """
     for int_dtype in (np.int8, np.int16, np.int32, np.int64):
-        dtype = np.dtype(int_dtype)
+        dtype: np.dtype[Any] = np.dtype(int_dtype)
         if (dtype.itemsize * 8) >= min_size:
             if np.iinfo(int_dtype).min <= x <= np.iinfo(int_dtype).max:
                 return dtype
@@ -216,7 +219,7 @@ def min_unsigned_type(x: int, min_size: int = 8) -> np.dtype:
     that can represent the integer ``x``
     """
     for int_dtype in (np.uint8, np.uint16, np.uint32, np.uint64):
-        dtype = np.dtype(int_dtype)
+        dtype: np.dtype[Any] = np.dtype(int_dtype)
         if (dtype.itemsize * 8) >= min_size:
             if 0 <= x <= np.iinfo(int_dtype).max:
                 return dtype
@@ -244,7 +247,12 @@ def is_mixed_with_object_dtype(lhs, rhs):
     )
 
 
-def _get_nan_for_dtype(dtype: DtypeObj) -> DtypeObj:
+def _get_nan_for_dtype(dtype: DtypeObj) -> np.generic:
+    """Return the appropriate NaN/NaT value for the given dtype.
+
+    Returns a numpy scalar (np.generic subclass) representing the
+    null value for the dtype (e.g., np.float64('nan'), np.datetime64('NaT')).
+    """
     if dtype.kind in "mM":
         time_unit, _ = np.datetime_data(dtype)
         return dtype.type("nat", time_unit)
@@ -289,10 +297,10 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
             )
             for dtype in dtypes
         ):
-            if len({dtype._categories.dtype for dtype in dtypes}) == 1:
+            if len({dtype._categories.dtype for dtype in dtypes}) == 1:  # type: ignore[union-attr]
                 return cudf.CategoricalDtype(
                     cudf.core.column.concat_columns(
-                        [dtype._categories for dtype in dtypes]
+                        [dtype._categories for dtype in dtypes]  # type: ignore[union-attr]
                     ).unique()
                 )
             else:
@@ -449,7 +457,9 @@ def is_pandas_nullable_numpy_dtype(dtype_to_check) -> bool:
     )
 
 
-def is_pandas_nullable_extension_dtype(dtype_to_check) -> bool:
+def is_pandas_nullable_extension_dtype(
+    dtype_to_check: Any,
+) -> TypeGuard[pd.core.dtypes.base.ExtensionDtype]:
     if is_pandas_nullable_numpy_dtype(dtype_to_check) or isinstance(
         dtype_to_check, pd.ArrowDtype
     ):
@@ -534,6 +544,11 @@ def get_dtype_of_same_kind(source_dtype: DtypeObj, target_dtype: DtypeObj):
     if isinstance(source_dtype, pd.ArrowDtype):
         return dtype_to_pandas_arrowdtype(target_dtype)
     elif is_pandas_nullable_extension_dtype(source_dtype):
+        if (
+            isinstance(source_dtype, pd.StringDtype)
+            and source_dtype.na_value is np.nan
+        ):
+            return target_dtype
         return dtype_to_pandas_nullable_extension_type(target_dtype)
     else:
         return target_dtype
@@ -760,7 +775,7 @@ def is_dtype_obj_decimal128(obj):
     )
 
 
-SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES = {
+SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES: dict[np.dtype[Any], plc.types.TypeId] = {
     np.dtype("int8"): plc.types.TypeId.INT8,
     np.dtype("int16"): plc.types.TypeId.INT16,
     np.dtype("int32"): plc.types.TypeId.INT32,

@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 #
 # cudf documentation build configuration file, created by
 # sphinx-quickstart on Wed May  3 10:59:22 2017.
@@ -26,7 +27,7 @@ import sys
 import tempfile
 import warnings
 import xml.etree.ElementTree as ET
-from enum import IntEnum
+from enum import IntEnum, IntFlag
 from typing import Any
 
 import cudf
@@ -605,6 +606,7 @@ nitpick_ignore = [
     ("py:class", "StringColumn"),
     ("py:class", "ColumnLike"),
     ("py:class", "DtypeObj"),
+    ("py:class", "Axis"),
     ("py:class", "ArrowLike"),
 ]
 
@@ -684,7 +686,7 @@ class PLCIntEnumDocumenter(ClassDocumenter):
     ) -> bool:
         try:
             return issubclass(
-                member, IntEnum
+                member, (IntEnum, IntFlag)
             ) and member.__module__.startswith("pylibcudf")
         except TypeError:
             return False
@@ -703,7 +705,7 @@ class PLCIntEnumDocumenter(ClassDocumenter):
 
         if self.object.__name__ != "Kind":
             self.add_line(
-                f"See also :cpp:enum:`cudf::{self.object.__name__}`.",
+                f"See also :cpp:enum:`{self.object.__name__}`.",
                 source_name,
             )
         self.add_line("", source_name)

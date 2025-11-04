@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 
 import cupy as cp
@@ -34,9 +35,10 @@ def test_ufunc_index(request, numpy_ufunc):
     # Avoid zeros in either array to skip division by 0 errors. Also limit the
     # scale to avoid issues with overflow, etc. We use ints because some
     # operations (like bitwise ops) are not defined for floats.
+    rng = np.random.default_rng(0)
     pandas_args = args = [
         cudf.Index(
-            cp.random.randint(low=1, high=10, size=N),
+            rng.integers(low=1, high=10, size=N),
         )
         for _ in range(numpy_ufunc.nin)
     ]
@@ -61,7 +63,8 @@ def test_binary_ufunc_index_array(ufunc, reflect):
     # Avoid zeros in either array to skip division by 0 errors. Also limit the
     # scale to avoid issues with overflow, etc. We use ints because some
     # operations (like bitwise ops) are not defined for floats.
-    args = [cudf.Index(cp.random.rand(N)) for _ in range(ufunc.nin)]
+    rng = np.random.default_rng(0)
+    args = [cudf.Index(rng.random(N)) for _ in range(ufunc.nin)]
 
     arg1 = args[1].to_cupy()
 

@@ -1,4 +1,5 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 [build-system]
 build-backend = "rapids_build_backend.build"
@@ -59,6 +60,7 @@ test = [
     "pytest-cases>=3.8.2",
     "pytest-cov",
     "pytest-xdist",
+    "s3fs>=2022.3.0",
     "scipy",
     "tzdata",
     "zstandard",

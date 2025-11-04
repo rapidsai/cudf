@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 cimport pylibcudf.libcudf.io.types as cudf_io_types
 from libcpp.string cimport string
 from libcpp.vector cimport vector
@@ -8,8 +9,7 @@ from rmm.librmm.cuda_stream_view cimport cuda_stream_view
 from rmm.librmm.memory_resource cimport device_memory_resource
 
 
-cdef extern from "cudf/io/avro.hpp" \
-        namespace "cudf::io" nogil:
+cdef extern from "cudf/io/avro.hpp" namespace "cudf::io" nogil:
 
     cdef cppclass avro_reader_options:
         avro_reader_options() except +libcudf_exception_handler
@@ -20,6 +20,7 @@ cdef extern from "cudf/io/avro.hpp" \
 
         # setters
 
+        void set_source(cudf_io_types.source_info src) except +libcudf_exception_handler
         void set_columns(vector[string] col_names) except +libcudf_exception_handler
         void set_skip_rows(size_type val) except +libcudf_exception_handler
         void set_num_rows(size_type val) except +libcudf_exception_handler
@@ -47,16 +48,7 @@ cdef extern from "cudf/io/avro.hpp" \
         avro_reader_options build() except +libcudf_exception_handler
 
     cdef cudf_io_types.table_with_metadata read_avro(
-        avro_reader_options &options
-    ) except +libcudf_exception_handler
-
-    cdef cudf_io_types.table_with_metadata read_avro(
         avro_reader_options &options,
-        cuda_stream_view &stream,
-    ) except +libcudf_exception_handler
-
-    cdef cudf_io_types.table_with_metadata read_avro(
-        avro_reader_options &options,
-        cuda_stream_view &stream,
-        device_memory_resource* mr,
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "cudf_jni_apis.hpp"
@@ -545,7 +534,6 @@ class pinned_fallback_host_memory_resource {
   }
   // NOLINTEND(bugprone-easily-swappable-parameters)
 
-#if CCCL_MAJOR_VERSION > 3 || (CCCL_MAJOR_VERSION == 3 && CCCL_MINOR_VERSION >= 1)
   /**
    * @brief Allocates pinned host memory of size at least \p bytes bytes.
    *
@@ -614,7 +602,6 @@ class pinned_fallback_host_memory_resource {
   {
     return deallocate_async(ptr, bytes, alignment, stream);
   }
-#endif
 
   /**
    * @briefreturn{true if the specified resource is the same type as this resource.}
@@ -649,15 +636,9 @@ class pinned_fallback_host_memory_resource {
 };
 
 // carryover from RMM pinned_host_memory_resource
-#if CCCL_MAJOR_VERSION > 3 || (CCCL_MAJOR_VERSION == 3 && CCCL_MINOR_VERSION >= 1)
 static_assert(cuda::mr::resource_with<pinned_fallback_host_memory_resource,
                                       cuda::mr::device_accessible,
                                       cuda::mr::host_accessible>);
-#else
-static_assert(cuda::mr::async_resource_with<pinned_fallback_host_memory_resource,
-                                            cuda::mr::device_accessible,
-                                            cuda::mr::host_accessible>);
-#endif
 
 // we set this to our fallback resource if we have set it.
 std::unique_ptr<pinned_fallback_host_memory_resource> pinned_fallback_mr;

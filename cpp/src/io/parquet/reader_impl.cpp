@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "reader_impl.hpp"
@@ -34,14 +23,12 @@
 #include <bitset>
 #include <limits>
 #include <numeric>
+#include <stdexcept>
 #include <utility>
 
 namespace cudf::io::parquet::detail {
 
-void reader_impl::decode_page_data(read_mode mode,
-                                   size_t skip_rows,
-                                   size_t num_rows,
-                                   cudf::device_span<bool const> page_mask)
+void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_rows)
 {
   CUDF_FUNC_RANGE();
 
@@ -220,7 +207,7 @@ void reader_impl::decode_page_data(read_mode mode,
                              skip_rows,
                              level_type_size,
                              decoder_mask,
-                             page_mask,
+                             _subpass_page_mask,
                              initial_str_offsets,
                              error_code.data(),
                              streams[s_idx++]);
@@ -278,7 +265,7 @@ void reader_impl::decode_page_data(read_mode mode,
                             num_rows,
                             skip_rows,
                             level_type_size,
-                            page_mask,
+                            _subpass_page_mask,
                             initial_str_offsets,
                             error_code.data(),
                             streams[s_idx++]);
@@ -291,7 +278,7 @@ void reader_impl::decode_page_data(read_mode mode,
                                    num_rows,
                                    skip_rows,
                                    level_type_size,
-                                   page_mask,
+                                   _subpass_page_mask,
                                    initial_str_offsets,
                                    error_code.data(),
                                    streams[s_idx++]);
@@ -304,7 +291,7 @@ void reader_impl::decode_page_data(read_mode mode,
                         num_rows,
                         skip_rows,
                         level_type_size,
-                        page_mask,
+                        _subpass_page_mask,
                         error_code.data(),
                         streams[s_idx++]);
   }
@@ -331,7 +318,7 @@ void reader_impl::decode_page_data(read_mode mode,
                            num_rows,
                            skip_rows,
                            level_type_size,
-                           page_mask,
+                           _subpass_page_mask,
                            error_code.data(),
                            streams[s_idx++]);
   }
@@ -388,7 +375,7 @@ void reader_impl::decode_page_data(read_mode mode,
                              num_rows,
                              skip_rows,
                              level_type_size,
-                             page_mask,
+                             _subpass_page_mask,
                              error_code.data(),
                              streams[s_idx++]);
   }
@@ -487,7 +474,7 @@ void reader_impl::decode_page_data(read_mode mode,
 reader_impl::reader_impl()
   : _options{},
     _pass_page_mask{cudf::detail::make_host_vector<bool>(0, cudf::get_default_stream())},
-    _subpass_page_mask{cudf::detail::make_host_vector<bool>(0, cudf::get_default_stream())}
+    _subpass_page_mask{cudf::detail::hostdevice_vector<bool>(0, cudf::get_default_stream())}
 {
 }
 
@@ -521,7 +508,7 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
              options.is_enabled_use_jit_filter()},
     _sources{std::move(sources)},
     _pass_page_mask{cudf::detail::make_host_vector<bool>(0, _stream)},
-    _subpass_page_mask{cudf::detail::make_host_vector<bool>(0, _stream)},
+    _subpass_page_mask{cudf::detail::hostdevice_vector<bool>(0, _stream)},
     _output_chunk_read_limit{chunk_read_limit},
     _input_pass_read_limit{pass_read_limit}
 {
@@ -603,9 +590,7 @@ void reader_impl::populate_metadata(table_metadata& out_metadata)
                                      out_metadata.per_file_user_data[0].end()};
 }
 
-void reader_impl::preprocess_chunk_strings(read_mode mode,
-                                           row_range const& read_info,
-                                           cudf::device_span<bool const> page_mask)
+void reader_impl::preprocess_chunk_strings(read_mode mode, row_range const& read_info)
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
@@ -635,7 +620,7 @@ void reader_impl::preprocess_chunk_strings(read_mode mode,
     constexpr bool compute_all_string_sizes = false;
     compute_page_string_sizes_pass1(subpass.pages,
                                     pass.chunks,
-                                    page_mask,
+                                    _subpass_page_mask,
                                     read_info.skip_rows,
                                     read_info.num_rows,
                                     subpass.kernel_mask,
@@ -686,10 +671,6 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
   auto& subpass         = *pass.subpass;
   auto const& read_info = subpass.output_chunk_read_info[subpass.current_output_chunk];
 
-  CUDF_EXPECTS(_subpass_page_mask.size() == subpass.pages.size(),
-               "Page mask size must be equal to the number of pages in the subpass");
-  auto page_mask = cudf::detail::make_device_uvector_async(_subpass_page_mask, _stream, _mr);
-
   // computes:
   // PageNestingInfo::batch_size for each level of nesting, for each page, taking row bounds into
   // account. PageInfo::skipped_values, which tells us where to start decoding in the input to
@@ -698,6 +679,7 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
   if (uses_custom_row_bounds(mode)) {
     compute_page_sizes(subpass.pages,
                        pass.chunks,
+                       _subpass_page_mask,
                        read_info.skip_rows,
                        read_info.num_rows,
                        false,  // num_rows is already computed
@@ -706,13 +688,13 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
   }
 
   // preprocess strings
-  preprocess_chunk_strings(mode, read_info, page_mask);
+  preprocess_chunk_strings(mode, read_info);
 
   // Allocate memory buffers for the output columns.
   allocate_columns(mode, read_info.skip_rows, read_info.num_rows);
 
   // Parse data into the output buffers.
-  decode_page_data(mode, read_info.skip_rows, read_info.num_rows, page_mask);
+  decode_page_data(mode, read_info.skip_rows, read_info.num_rows);
 
   // Create the final output cudf columns.
   for (size_t i = 0; i < _output_buffers.size(); ++i) {
@@ -878,7 +860,10 @@ table_with_metadata reader_impl::read()
 {
   CUDF_EXPECTS(_output_chunk_read_limit == 0,
                "Reading the whole file must not have non-zero byte_limit.");
-
+  CUDF_EXPECTS(!_options.num_rows.has_value() ||
+                 _options.num_rows.value() <= std::numeric_limits<size_type>::max(),
+               "Requested number of rows to read exceeds column size limit",
+               std::overflow_error);
   prepare_data(read_mode::READ_ALL);
   return read_chunk_internal(read_mode::READ_ALL);
 }

@@ -1,5 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import abc
 import copyreg
@@ -69,6 +68,7 @@ from pandas.io.sas.sas_xport import (  # isort: skip
 from pandas.core.resample import (  # isort: skip
     Resampler as pd_Resampler,
     TimeGrouper as pd_TimeGrouper,
+    DatetimeIndexResampler as pd_DatetimeIndexResampler,
 )
 
 try:
@@ -121,9 +121,15 @@ def make_final_proxy_type(
     )
 
 
-def make_intermediate_proxy_type(name, fast_type, slow_type):
+def make_intermediate_proxy_type(
+    name,
+    fast_type,
+    slow_type,
+    **kwargs,
+):
+    assert "module" not in kwargs
     return _make_intermediate_proxy_type(
-        name, fast_type, slow_type, module=slow_type.__module__
+        name, fast_type, slow_type, module=slow_type.__module__, **kwargs
     )
 
 
@@ -237,6 +243,12 @@ ListMethods = make_intermediate_proxy_type(
     pd_ListAccessor,
 )
 
+SparseAccessor = make_intermediate_proxy_type(
+    "SparseAccessor",
+    _Unusable,
+    pd.core.arrays.sparse.accessor.SparseAccessor,
+)
+
 StructAccessor = make_intermediate_proxy_type(
     "StructAccessor",
     cudf.core.accessors.struct.StructMethods,
@@ -302,6 +314,19 @@ DataFrame = make_final_proxy_type(
         "__iter__": custom_iter,
         "attrs": _FastSlowAttribute("attrs"),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+        "style": _FastSlowAttribute("style", private=True),
+        "_mgr": _FastSlowAttribute("_mgr", private=True),
+        "plot": _FastSlowAttribute("plot", private=True),
+        "sparse": _FastSlowAttribute("sparse", private=True),
+        "expanding": _FastSlowAttribute("expanding", private=True),
+        "_AXIS_LEN": _FastSlowAttribute("_AXIS_LEN", private=True),
+        "_AXIS_TO_AXIS_NUMBER": _FastSlowAttribute(
+            "_AXIS_TO_AXIS_NUMBER", private=True
+        ),
+        "_AXIS_ORDERS": _FastSlowAttribute("_AXIS_ORDERS", private=True),
+        "flags": _FastSlowAttribute("flags", private=True),
+        "memory_usage": _FastSlowAttribute("memory_usage"),
+        "__sizeof__": _FastSlowAttribute("__sizeof__"),
     },
 )
 
@@ -340,6 +365,8 @@ Series = make_final_proxy_type(
         "__arrow_array__": arrow_array_method,
         "__cuda_array_interface__": cuda_array_interface,
         "__iter__": custom_iter,
+        "memory_usage": _FastSlowAttribute("memory_usage"),
+        "__sizeof__": _FastSlowAttribute("__sizeof__"),
         "dt": _AccessorAttr(CombinedDatetimelikeProperties),
         "str": _AccessorAttr(StringMethods),
         "list": _AccessorAttr(ListMethods),
@@ -350,6 +377,15 @@ Series = make_final_proxy_type(
         "_accessors": set(),
         "dtype": property(_Series_dtype),
         "attrs": _FastSlowAttribute("attrs"),
+        "_mgr": _FastSlowAttribute("_mgr", private=True),
+        "array": _FastSlowAttribute("array", private=True),
+        "sparse": _FastSlowAttribute("sparse", private=True),
+        "_AXIS_LEN": _FastSlowAttribute("_AXIS_LEN", private=True),
+        "_AXIS_TO_AXIS_NUMBER": _FastSlowAttribute(
+            "_AXIS_TO_AXIS_NUMBER", private=True
+        ),
+        "_AXIS_ORDERS": _FastSlowAttribute("_AXIS_ORDERS", private=True),
+        "flags": _FastSlowAttribute("flags", private=True),
     },
 )
 
@@ -396,6 +432,8 @@ Index = make_final_proxy_type(
         "str": _AccessorAttr(StringMethods),
         "cat": _AccessorAttr(_CategoricalAccessor),
         "__iter__": custom_iter,
+        "memory_usage": _FastSlowAttribute("memory_usage"),
+        "__sizeof__": _FastSlowAttribute("__sizeof__"),
         "__init__": _DELETE,
         "__new__": Index__new__,
         "__setattr__": Index__setattr__,
@@ -405,6 +443,8 @@ Index = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "name": _FastSlowAttribute("name"),
+        "nbytes": _FastSlowAttribute("nbytes", private=True),
+        "array": _FastSlowAttribute("array", private=True),
     },
 )
 
@@ -419,6 +459,9 @@ RangeIndex = make_final_proxy_type(
         "__init__": _DELETE,
         "__setattr__": Index__setattr__,
         "name": _FastSlowAttribute("name"),
+        "nbytes": _FastSlowAttribute("nbytes", private=True),
+        "array": _FastSlowAttribute("array", private=True),
+        "_range": _FastSlowAttribute("_range"),
     },
 )
 
@@ -468,6 +511,8 @@ CategoricalIndex = make_final_proxy_type(
         "__init__": _DELETE,
         "__setattr__": Index__setattr__,
         "name": _FastSlowAttribute("name"),
+        "nbytes": _FastSlowAttribute("nbytes", private=True),
+        "array": _FastSlowAttribute("array", private=True),
     },
 )
 
@@ -503,6 +548,8 @@ DatetimeIndex = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "name": _FastSlowAttribute("name"),
+        "nbytes": _FastSlowAttribute("nbytes", private=True),
+        "array": _FastSlowAttribute("array", private=True),
     },
 )
 
@@ -542,6 +589,8 @@ TimedeltaIndex = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "name": _FastSlowAttribute("name"),
+        "nbytes": _FastSlowAttribute("nbytes", private=True),
+        "array": _FastSlowAttribute("array", private=True),
     },
 )
 
@@ -667,14 +716,14 @@ Grouper = make_final_proxy_type(
         **{
             k: getattr(fast, k)
             for k in {"key", "level", "freq", "closed", "label"}
-            if getattr(fast, k) is not None
+            if getattr(fast, k, None) is not None
         }
     ),
     slow_to_fast=lambda slow: cudf.Grouper(
         **{
             k: getattr(slow, k)
             for k in {"key", "level", "freq", "closed", "label"}
-            if getattr(slow, k) is not None
+            if getattr(slow, k, None) is not None
         }
     ),
 )
@@ -977,6 +1026,9 @@ DataFrameGroupBy = make_intermediate_proxy_type(
     "DataFrameGroupBy",
     cudf.core.groupby.groupby.DataFrameGroupBy,
     pd.core.groupby.DataFrameGroupBy,
+    additional_attributes={
+        "_grouper": _FastSlowAttribute("_grouper", private=True),
+    },
 )
 
 RollingGroupBy = make_intermediate_proxy_type(
@@ -1095,6 +1147,10 @@ DataFrameResampler = make_intermediate_proxy_type(
 
 SeriesResampler = make_intermediate_proxy_type(
     "SeriesResampler", cudf.core.resample.SeriesResampler, pd_Resampler
+)
+
+DatetimeIndexResampler = make_intermediate_proxy_type(
+    "DatetimeIndexResampler", _Unusable, pd_DatetimeIndexResampler
 )
 
 StataReader = make_intermediate_proxy_type(
@@ -1303,8 +1359,8 @@ def _df_query_method(self, *args, local_dict=None, global_dict=None, **kwargs):
     )
 
 
-DataFrame.eval = _df_eval_method  # type: ignore
-DataFrame.query = _df_query_method  # type: ignore
+DataFrame.eval = _df_eval_method
+DataFrame.query = _df_query_method
 
 _JsonReader = make_intermediate_proxy_type(
     "_JsonReader",
@@ -1968,6 +2024,7 @@ ArrowExtensionArray = make_final_proxy_type(
         "__abs__": _FastSlowAttribute("__abs__"),
         "__contains__": _FastSlowAttribute("__contains__"),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+        "__arrow_array__": arrow_array_method,
     },
 )
 

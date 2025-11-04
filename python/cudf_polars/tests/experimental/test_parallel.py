@@ -14,8 +14,12 @@ from polars.testing import assert_frame_equal
 from cudf_polars import Translator
 from cudf_polars.dsl.expressions.base import Col, NamedExpr
 from cudf_polars.dsl.traversal import traversal
-from cudf_polars.experimental.parallel import get_scheduler, lower_ir_graph, task_graph
-from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
+from cudf_polars.experimental.parallel import (
+    get_scheduler,
+    lower_ir_graph,
+    task_graph,
+)
+from cudf_polars.testing.asserts import DEFAULT_CLUSTER, assert_gpu_result_equal
 from cudf_polars.utils.config import ConfigOptions
 from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
@@ -30,7 +34,7 @@ def test_evaluate_streaming():
         engine=GPUEngine(
             raise_on_fail=True,
             executor="streaming",
-            executor_options={"scheduler": DEFAULT_SCHEDULER},
+            executor_options={"cluster": DEFAULT_CLUSTER},
         )
     )
     assert_frame_equal(expected, got_gpu)
@@ -87,7 +91,7 @@ def engine():
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 2,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
         },
     )
 
@@ -120,7 +124,7 @@ def test_preserve_partitioning():
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 2,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
             "broadcast_join_limit": 2,
             "unique_fraction": {"a": 1.0},
         },
@@ -143,15 +147,15 @@ def test_preserve_partitioning():
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_synchronous_scheduler():
-    # Test that the synchronous scheduler clears
+def test_single_cluster():
+    # Test that the single cluster clears
     # the cache as tasks are executed.
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 4,
-            "scheduler": "synchronous",
+            "cluster": "single",
         },
     )
     left = pl.LazyFrame(
@@ -173,7 +177,11 @@ def test_synchronous_scheduler():
     config_options = ConfigOptions.from_polars_engine(engine)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
     ir, partition_info = lower_ir_graph(ir, config_options)
-    graph, key = task_graph(ir, partition_info, config_options)
+    graph, key = task_graph(
+        ir,
+        partition_info,
+        config_options,
+    )
     scheduler = get_scheduler(config_options)
     cache = {}
     result = scheduler(graph, key, cache=cache)
@@ -207,7 +215,11 @@ def test_task_graph_is_pickle_serializable(engine):
     config_options = ConfigOptions.from_polars_engine(engine)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
     ir, partition_info = lower_ir_graph(ir, config_options)
-    graph, _ = task_graph(ir, partition_info, config_options)
+    graph, _ = task_graph(
+        ir,
+        partition_info,
+        config_options,
+    )
 
     pickle.loads(pickle.dumps(graph))  # no exception
 

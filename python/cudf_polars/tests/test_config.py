@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import sys
+from typing import Any
 
 import pytest
 
@@ -15,12 +16,13 @@ import rmm
 
 import cudf_polars.utils.config
 from cudf_polars.callback import default_memory_resource
-from cudf_polars.dsl.ir import DataFrameScan
+from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.config import ConfigOptions
+from cudf_polars.utils.config import CUDAStreamPolicy, ConfigOptions
+from cudf_polars.utils.cuda_stream import get_cuda_stream, get_new_cuda_stream
 from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
@@ -176,10 +178,10 @@ def test_validate_streaming_executor_shuffle_method(
     assert config.executor.name == "streaming"
     assert config.executor.shuffle_method == "tasks"
 
-    # rapidsmpf with distributed scheduler
+    # rapidsmpf with distributed cluster
     engine = pl.GPUEngine(
         executor="streaming",
-        executor_options={"shuffle_method": "rapidsmpf", "scheduler": "distributed"},
+        executor_options={"shuffle_method": "rapidsmpf", "cluster": "distributed"},
     )
     if rapidsmpf_distributed_available:
         config = ConfigOptions.from_polars_engine(engine)
@@ -191,10 +193,10 @@ def test_validate_streaming_executor_shuffle_method(
         ):
             ConfigOptions.from_polars_engine(engine)
 
-    # rapidsmpf with sync scheduler
+    # rapidsmpf with single cluster
     engine = pl.GPUEngine(
         executor="streaming",
-        executor_options={"shuffle_method": "rapidsmpf", "scheduler": "synchronous"},
+        executor_options={"shuffle_method": "rapidsmpf", "cluster": "single"},
     )
 
     if rapidsmpf_single_available:
@@ -234,20 +236,60 @@ def test_validate_fallback_mode() -> None:
         )
 
 
-def test_validate_scheduler() -> None:
+def test_validate_cluster() -> None:
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
             executor="streaming",
         )
     )
     assert config.executor.name == "streaming"
-    assert config.executor.scheduler == "synchronous"
+    assert config.executor.cluster == "single"
 
-    with pytest.raises(ValueError, match="'foo' is not a valid Scheduler"):
+    with pytest.raises(ValueError, match="'foo' is not a valid Cluster"):
         ConfigOptions.from_polars_engine(
             pl.GPUEngine(
                 executor="streaming",
-                executor_options={"scheduler": "foo"},
+                executor_options={"cluster": "foo"},
+            )
+        )
+
+
+def test_scheduler_deprecated() -> None:
+    # Test that using deprecated scheduler parameter emits warning
+    # and correctly maps to cluster parameter
+
+    # Test scheduler="synchronous" maps to cluster="single"
+    with pytest.warns(FutureWarning, match="'scheduler' parameter is deprecated"):
+        config = ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"scheduler": "synchronous"},
+            )
+        )
+    assert config.executor.name == "streaming"
+    assert config.executor.cluster == "single"
+    assert config.executor.scheduler is None  # Should be cleared after mapping
+
+    # Test scheduler="distributed" maps to cluster="distributed"
+    with pytest.warns(FutureWarning, match="'scheduler' parameter is deprecated"):
+        config = ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"scheduler": "distributed"},
+            )
+        )
+    assert config.executor.name == "streaming"
+    assert config.executor.cluster == "distributed"
+    assert config.executor.scheduler is None  # Should be cleared after mapping
+
+    # Test that specifying both cluster and scheduler raises an error
+    with pytest.raises(
+        ValueError, match="Cannot specify both 'scheduler' and 'cluster'"
+    ):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"cluster": "single", "scheduler": "synchronous"},
             )
         )
 
@@ -262,15 +304,13 @@ def test_validate_shuffle_method_defaults(
         )
     )
     assert config.executor.name == "streaming"
-    assert (
-        config.executor.shuffle_method == "tasks"
-    )  # Default for synchronous scheduler
+    assert config.executor.shuffle_method == "tasks"  # Default for single cluster
 
-    # Test default for distributed scheduler depends on rapidsmpf availability
+    # Test default for distributed cluster depends on rapidsmpf availability
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
             executor="streaming",
-            executor_options={"scheduler": "distributed"},
+            executor_options={"cluster": "distributed"},
         )
     )
     assert config.executor.name == "streaming"
@@ -355,7 +395,7 @@ def test_config_option_from_env(
     monkeypatch: pytest.MonkeyPatch, *, rapidsmpf_distributed_available: bool
 ) -> None:
     with monkeypatch.context() as m:
-        m.setenv("CUDF_POLARS__EXECUTOR__SCHEDULER", "distributed")
+        m.setenv("CUDF_POLARS__EXECUTOR__CLUSTER", "distributed")
         m.setenv("CUDF_POLARS__EXECUTOR__FALLBACK_MODE", "silent")
         m.setenv("CUDF_POLARS__EXECUTOR__MAX_ROWS_PER_PARTITION", "42")
         m.setenv("CUDF_POLARS__EXECUTOR__UNIQUE_FRACTION", '{"a": 0.5}')
@@ -364,6 +404,7 @@ def test_config_option_from_env(
         m.setenv("CUDF_POLARS__EXECUTOR__BROADCAST_JOIN_LIMIT", "44")
         m.setenv("CUDF_POLARS__EXECUTOR__RAPIDSMPF_SPILL", "1")
         m.setenv("CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY", "1")
+        m.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "new")
 
         if rapidsmpf_distributed_available:
             m.setenv("CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD", "rapidsmpf")
@@ -373,7 +414,7 @@ def test_config_option_from_env(
         engine = pl.GPUEngine()
         config = ConfigOptions.from_polars_engine(engine)
         assert config.executor.name == "streaming"
-        assert config.executor.scheduler == "distributed"
+        assert config.executor.cluster == "distributed"
         assert config.executor.fallback_mode == "silent"
         assert config.executor.max_rows_per_partition == 42
         assert config.executor.unique_fraction == {"a": 0.5}
@@ -382,6 +423,7 @@ def test_config_option_from_env(
         assert config.executor.broadcast_join_limit == 44
         assert config.executor.rapidsmpf_spill is True
         assert config.executor.sink_to_directory is True
+        assert config.cuda_stream_policy == CUDAStreamPolicy.NEW
 
         if rapidsmpf_distributed_available:
             assert config.executor.shuffle_method == "rapidsmpf"
@@ -452,7 +494,7 @@ def test_validate_parquet_options(option: str) -> None:
 def test_validate_raise_on_fail() -> None:
     with pytest.raises(TypeError, match="'raise_on_fail' must be"):
         ConfigOptions.from_polars_engine(
-            pl.GPUEngine(executor="streaming", raise_on_fail=object())  # type: ignore[arg-type]
+            pl.GPUEngine(executor="streaming", raise_on_fail=object())
         )
 
 
@@ -464,6 +506,29 @@ def test_validate_executor() -> None:
 def test_default_executor() -> None:
     config = ConfigOptions.from_polars_engine(pl.GPUEngine())
     assert config.executor.name == "streaming"
+
+
+@pytest.mark.parametrize(
+    "cuda_stream_policy, expected",
+    [
+        (CUDAStreamPolicy.DEFAULT, get_cuda_stream),
+        (CUDAStreamPolicy.NEW, get_new_cuda_stream),
+    ],
+)
+def test_ir_execution_context_from_config_options(
+    cuda_stream_policy: CUDAStreamPolicy, expected: Any
+) -> None:
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(cuda_stream_policy=cuda_stream_policy)
+    )
+    context = IRExecutionContext.from_config_options(config)
+    assert context.get_cuda_stream is expected
+    context.get_cuda_stream()  # no exception
+
+
+def test_validate_cuda_stream_policy() -> None:
+    with pytest.raises(ValueError, match="'foo' is not a valid CUDAStreamPolicy"):
+        ConfigOptions.from_polars_engine(pl.GPUEngine(cuda_stream_policy="foo"))
 
 
 @pytest.mark.parametrize(
