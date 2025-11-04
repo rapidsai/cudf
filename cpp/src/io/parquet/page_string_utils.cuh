@@ -298,11 +298,14 @@ __device__ size_t decode_strings(page_state_s* s,
         } else {
           input_thread_string_offset = str_offsets[thread_pos];
           int const next_offset      = str_offsets[thread_pos + 1];
-          string_length              = (next_offset == input_thread_string_offset)
-                                         ? 0
-                                         : next_offset - input_thread_string_offset - 4;
+          // The memory is laid out as: 4-byte length, string, 4-byte length, string, ...
+          // String length = subtract the offsets and the stored length of the next string
+          // Except at the end of the dictionary, where the last string offset is repeated.
+          string_length = (next_offset == input_thread_string_offset)
+                            ? 0
+                            : next_offset - input_thread_string_offset - sizeof(int32_t);
         }
-        if (input_thread_string_offset >= (uint32_t)s->dict_size) {
+        if (input_thread_string_offset >= static_cast<uint32_t>(s->dict_size)) {
           return string_index_pair{nullptr, 0};
         }
         auto const thread_input_string =

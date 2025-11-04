@@ -192,7 +192,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
 
     // Allocate string offset buffers and get string offsets for non-dictionary, non-FLBA string
     // columns
-    set_page_string_offset_indices(skip_rows, num_rows, _subpass_page_mask);
+    compute_page_string_offset_indices(skip_rows, num_rows);
   }
 
   // create this before we fork streams

@@ -260,9 +260,7 @@ class reader_impl {
    * @param num_rows The number of rows to read in this subpass
    * @param page_mask The page mask for this subpass
    */
-  void set_page_string_offset_indices(size_t skip_rows,
-                                      size_t num_rows,
-                                      cudf::device_span<bool const> page_mask);
+  void compute_page_string_offset_indices(size_t skip_rows, size_t num_rows);
 
   /**
    * @brief Allocate nesting information storage for all pages and set pointers to it.

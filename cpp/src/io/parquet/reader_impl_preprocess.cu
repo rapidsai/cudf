@@ -278,9 +278,7 @@ void reader_impl::allocate_level_decode_space()
   }
 }
 
-void reader_impl::set_page_string_offset_indices(size_t skip_rows,
-                                                 size_t num_rows,
-                                                 cudf::device_span<bool const> page_mask)
+void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t num_rows)
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
@@ -372,7 +370,7 @@ void reader_impl::set_page_string_offset_indices(size_t skip_rows,
   detail::preprocess_string_offsets(subpass.pages,
                                     pass.chunks,
                                     _page_string_offset_indices,
-                                    page_mask,
+                                    _subpass_page_mask,
                                     skip_rows,
                                     num_rows,
                                     _stream);

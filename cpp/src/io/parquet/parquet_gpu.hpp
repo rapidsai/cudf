@@ -460,7 +460,7 @@ struct ColumnChunkDesc {
   bitmask_type** valid_map_base{};            // base pointers of valid bit map for this column
   void** column_data_base{};                  // base pointers of column data
   void** column_string_base{};                // base pointers of column string data
-  uint32_t* column_string_offset_base{};      // base pointers of column string offset data
+  uint32_t* column_string_offset_base{};      // base pointer of column string offset data
   Compression codec{};                        // compressed codec enum
   std::optional<LogicalType> logical_type{};  // logical type
   int32_t ts_clock_rate{};  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)

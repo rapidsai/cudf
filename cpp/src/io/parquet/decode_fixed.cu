@@ -930,7 +930,8 @@ constexpr bool is_split_decode()
  * @param num_rows Maximum number of rows to read
  * @param page_mask Boolean vector indicating which pages need to be decoded
  * @param initial_str_offsets Vector to store the initial offsets for large nested string cols
- * @param page_string_offset_indices Device span of page string offset indices
+ * @param page_string_offset_indices Device span of offsets, indexed per-page, into the column's
+ * string offset buffer
  * @param error_code Error code to set if an error is encountered
  */
 template <typename level_t, int decode_block_size_t, decode_kernel_mask kernel_mask_t>
