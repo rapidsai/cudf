@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 import abc
 import copyreg
+import datetime
 import functools
 import importlib
 import inspect
@@ -190,6 +191,7 @@ Timedelta = make_final_proxy_type(
     "Timedelta",
     _Unusable,
     pd.Timedelta,
+    bases=(datetime.timedelta,),
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
@@ -204,6 +206,7 @@ Timestamp = make_final_proxy_type(
     "Timestamp",
     _Unusable,
     pd.Timestamp,
+    bases=(datetime.datetime,),
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
@@ -2293,15 +2296,6 @@ def initial_setup():
     cudf.set_option("mode.pandas_compatible", True)
 
 
-def _reduce_obj(obj):
-    from cudf.pandas.module_accelerator import disable_module_accelerator
-
-    with disable_module_accelerator():
-        pickled_args = pickle.dumps(obj.__reduce__())
-
-    return _unpickle_obj, (pickled_args,)
-
-
 def _unpickle_obj(pickled_args):
     from cudf.pandas.module_accelerator import disable_module_accelerator
 
@@ -2309,6 +2303,24 @@ def _unpickle_obj(pickled_args):
         unpickler, args = pickle.loads(pickled_args)
     obj = unpickler(*args)
     return obj
+
+
+def _reduce_proxied_td_obj(obj):
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        pickled_args = pickle.dumps(obj._fsproxy_wrapped.__reduce__())
+
+    return _unpickle_obj, (pickled_args,)
+
+
+def _reduce_obj(obj):
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        pickled_args = pickle.dumps(obj.__reduce__())
+
+    return _unpickle_obj, (pickled_args,)
 
 
 def _generic_reduce_obj(obj, unpickle_func):
@@ -2362,8 +2374,10 @@ def _unpickle_offset_obj(pickled_args):
     return obj
 
 
+copyreg.dispatch_table[Timestamp] = _reduce_proxied_td_obj
 copyreg.dispatch_table[pd.Timestamp] = _reduce_obj
 # same reducer/unpickler can be used for Timedelta:
+copyreg.dispatch_table[Timedelta] = _reduce_proxied_td_obj
 copyreg.dispatch_table[pd.Timedelta] = _reduce_obj
 
 # TODO: Need to find a way to unpickle cross-version(old) pickled objects.
