@@ -13,9 +13,9 @@ jobs:
   # Please keep pr-builder as the top job here
   pr-builder:
     needs:
-      # - check-nightly-ci
-      # - changed-files
-      # - checks
+      - check-nightly-ci
+      - changed-files
+      - checks
       # - conda-cpp-build
       # - cpp-linters
       # - conda-cpp-checks
@@ -39,100 +39,100 @@ jobs:
       # - unit-tests-cudf-pandas
       # - pandas-tests
       # - narwhals-tests
-      # - telemetry-setup
+      - telemetry-setup
       # - third-party-integration-tests-cudf-pandas
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@main
     if: always()
     with:
       needs: ${{ toJSON(needs) }}
-  # telemetry-setup:
-  #   continue-on-error: true
-  #   runs-on: ubuntu-latest
-  #   env:
-  #     OTEL_SERVICE_NAME: 'pr-cudf'
-  #   steps:
-  #     - name: Telemetry setup
-  #       if: ${{ vars.TELEMETRY_ENABLED == 'true' }}
-  #       uses: rapidsai/shared-actions/telemetry-dispatch-stash-base-env-vars@main
-  # check-nightly-ci:
-  #   runs-on: ubuntu-latest
-  #   env:
-  #     RAPIDS_GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #   steps:
-  #     - name: Check if nightly CI is passing
-  #       uses: rapidsai/shared-actions/check_nightly_success/dispatch@main
-  #       with:
-  #         repo: cudf
-  # changed-files:
-  #   secrets: inherit
-  #   needs: telemetry-setup
-  #   uses: rapidsai/shared-workflows/.github/workflows/changed-files.yaml@main
-  #   with:
-  #     files_yaml: |
-  #       test_cpp:
-  #         - '**'
-  #         - '!.devcontainer/**'
-  #         - '!CONTRIBUTING.md'
-  #         - '!README.md'
-  #         - '!ci/cudf_pandas_scripts/**'
-  #         - '!ci/release/update-version.sh'
-  #         - '!docs/**'
-  #         - '!img/**'
-  #         - '!java/**'
-  #         - '!notebooks/**'
-  #         - '!python/**'
-  #       test_cudf_pandas:
-  #         - '**'
-  #         - '!.clang-format'
-  #         - '!.devcontainer/**'
-  #         - '!CONTRIBUTING.md'
-  #         - '!README.md'
-  #         - '!ci/release/update-version.sh'
-  #         - '!docs/**'
-  #         - '!img/**'
-  #         - '!java/**'
-  #         - '!notebooks/**'
-  #       test_java:
-  #         - '**'
-  #         - '!.clang-format'
-  #         - '!.devcontainer/**'
-  #         - '!CONTRIBUTING.md'
-  #         - '!README.md'
-  #         - '!ci/cudf_pandas_scripts/**'
-  #         - '!ci/release/update-version.sh'
-  #         - '!docs/**'
-  #         - '!img/**'
-  #         - '!notebooks/**'
-  #         - '!python/**'
-  #       test_notebooks:
-  #         - '**'
-  #         - '!.clang-format'
-  #         - '!.devcontainer/**'
-  #         - '!CONTRIBUTING.md'
-  #         - '!README.md'
-  #         - '!ci/cudf_pandas_scripts/**'
-  #         - '!ci/release/update-version.sh'
-  #         - '!java/**'
-  #       test_python:
-  #         - '**'
-  #         - '!.clang-format'
-  #         - '!.devcontainer/**'
-  #         - '!CONTRIBUTING.md'
-  #         - '!README.md'
-  #         - '!ci/cudf_pandas_scripts/**'
-  #         - '!ci/release/update-version.sh'
-  #         - '!docs/**'
-  #         - '!img/**'
-  #         - '!java/**'
-  #         - '!notebooks/**'
-  # checks:
-  #   secrets: inherit
-  #   needs: telemetry-setup
-  #   uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@main
-  #   with:
-  #     enable_check_generated_files: false
-  #     ignored_pr_jobs: "telemetry-summarize spark-rapids-jni wheel-tests-cudf-polars-with-rapidsmpf"
+  telemetry-setup:
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    env:
+      OTEL_SERVICE_NAME: 'pr-cudf'
+    steps:
+      - name: Telemetry setup
+        if: ${{ vars.TELEMETRY_ENABLED == 'true' }}
+        uses: rapidsai/shared-actions/telemetry-dispatch-stash-base-env-vars@main
+  check-nightly-ci:
+    runs-on: ubuntu-latest
+    env:
+      RAPIDS_GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Check if nightly CI is passing
+        uses: rapidsai/shared-actions/check_nightly_success/dispatch@main
+        with:
+          repo: cudf
+  changed-files:
+    secrets: inherit
+    needs: telemetry-setup
+    uses: rapidsai/shared-workflows/.github/workflows/changed-files.yaml@main
+    with:
+      files_yaml: |
+        test_cpp:
+          - '**'
+          - '!.devcontainer/**'
+          - '!CONTRIBUTING.md'
+          - '!README.md'
+          - '!ci/cudf_pandas_scripts/**'
+          - '!ci/release/update-version.sh'
+          - '!docs/**'
+          - '!img/**'
+          - '!java/**'
+          - '!notebooks/**'
+          - '!python/**'
+        test_cudf_pandas:
+          - '**'
+          - '!.clang-format'
+          - '!.devcontainer/**'
+          - '!CONTRIBUTING.md'
+          - '!README.md'
+          - '!ci/release/update-version.sh'
+          - '!docs/**'
+          - '!img/**'
+          - '!java/**'
+          - '!notebooks/**'
+        test_java:
+          - '**'
+          - '!.clang-format'
+          - '!.devcontainer/**'
+          - '!CONTRIBUTING.md'
+          - '!README.md'
+          - '!ci/cudf_pandas_scripts/**'
+          - '!ci/release/update-version.sh'
+          - '!docs/**'
+          - '!img/**'
+          - '!notebooks/**'
+          - '!python/**'
+        test_notebooks:
+          - '**'
+          - '!.clang-format'
+          - '!.devcontainer/**'
+          - '!CONTRIBUTING.md'
+          - '!README.md'
+          - '!ci/cudf_pandas_scripts/**'
+          - '!ci/release/update-version.sh'
+          - '!java/**'
+        test_python:
+          - '**'
+          - '!.clang-format'
+          - '!.devcontainer/**'
+          - '!CONTRIBUTING.md'
+          - '!README.md'
+          - '!ci/cudf_pandas_scripts/**'
+          - '!ci/release/update-version.sh'
+          - '!docs/**'
+          - '!img/**'
+          - '!java/**'
+          - '!notebooks/**'
+  checks:
+    secrets: inherit
+    needs: telemetry-setup
+    uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@main
+    with:
+      enable_check_generated_files: false
+      ignored_pr_jobs: "telemetry-summarize spark-rapids-jni wheel-tests-cudf-polars-with-rapidsmpf"
   # conda-cpp-build:
   #   needs: checks
   #   secrets: inherit
@@ -398,14 +398,14 @@ jobs:
   #   uses: ./.github/workflows/spark-rapids-jni.yaml
   #   if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_java
 
-  # telemetry-summarize:
-  #   # This job must use a self-hosted runner to record telemetry traces.
-  #   runs-on: linux-amd64-cpu4
-  #   needs: pr-builder
-  #   if: ${{ vars.TELEMETRY_ENABLED == 'true' && !cancelled() }}
-  #   continue-on-error: true
-  #   steps:
-  #     - name: Telemetry summarize
-  #       uses: rapidsai/shared-actions/telemetry-dispatch-summarize@main
-  #   env:
-  #     GH_TOKEN: ${{ github.token }}
+  telemetry-summarize:
+    # This job must use a self-hosted runner to record telemetry traces.
+    runs-on: linux-amd64-cpu4
+    needs: pr-builder
+    if: ${{ vars.TELEMETRY_ENABLED == 'true' && !cancelled() }}
+    continue-on-error: true
+    steps:
+      - name: Telemetry summarize
+        uses: rapidsai/shared-actions/telemetry-dispatch-summarize@main
+    env:
+      GH_TOKEN: ${{ github.token }}
