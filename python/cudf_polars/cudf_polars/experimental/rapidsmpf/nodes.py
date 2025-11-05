@@ -38,6 +38,8 @@ async def default_node_single(
     ir_context: IRExecutionContext,
     ch_out: ChannelPair,
     ch_in: ChannelPair,
+    *,
+    preserve_partitioning: bool = False,
 ) -> None:
     """
     Single-channel default node for rapidsmpf.
@@ -54,6 +56,8 @@ async def default_node_single(
         The output ChannelPair.
     ch_in
         The input ChannelPair.
+    preserve_partitioning
+        Whether to preserve the partitioning metadata.
 
     Notes
     -----
@@ -65,7 +69,13 @@ async def default_node_single(
         # Forward metadata.
         # TODO: Preserve partitioning information when possible.
         metadata = await ch_in.recv_metadata(context)
-        await ch_out.send_metadata(context, metadata)
+        assert isinstance(metadata, Metadata), (
+            f"Expected Metadata, got {type(metadata)}."
+        )
+        await ch_out.send_metadata(
+            context,
+            metadata.copy(preserve_partitioning=preserve_partitioning),
+        )
 
         while (msg := await ch_in.data.recv(context)) is not None:
             chunk = TableChunk.from_message(msg)
@@ -96,6 +106,8 @@ async def default_node_multi(
     ir_context: IRExecutionContext,
     ch_out: ChannelPair,
     chs_in: tuple[ChannelPair, ...],
+    *,
+    preserve_partitioning: int | None = None,
 ) -> None:
     """
     Pointwise node for rapidsmpf.
@@ -112,6 +124,9 @@ async def default_node_multi(
         The output ChannelPair.
     chs_in
         Tuple of input ChannelPairs.
+    preserve_partitioning
+        Index of the input channel to preserve the partitioning information for.
+        If None, no partitioning information is preserved.
 
     Notes
     -----
@@ -129,12 +144,14 @@ async def default_node_multi(
         # Merge and forward basic metadata.
         # TODO: Preserve partitioning information when possible.
         metadata = Metadata(1)
-        for ch_in in chs_in:
+        for idx, ch_in in enumerate(chs_in):
             md_child = await ch_in.recv_metadata(context)
             assert isinstance(md_child, Metadata), (
                 f"Expected Metadata, got {type(md_child)}."
             )
             metadata.count = max(md_child.count, metadata.count)
+            if idx == preserve_partitioning:
+                metadata.partitioned_on = md_child.partitioned_on
         await ch_out.send_metadata(context, metadata)
 
         seq_num = 0

@@ -114,31 +114,37 @@ async def broadcast_join_node(
         ch_out.metadata,
         ch_out.data,
     ):
+        metadata_left = await ch_left.recv_metadata(context)
+        metadata_right = await ch_right.recv_metadata(context)
+        assert isinstance(metadata_left, Metadata), (
+            f"Expected Metadata, got {type(metadata_left)}."
+        )
+        assert isinstance(metadata_right, Metadata), (
+            f"Expected Metadata, got {type(metadata_right)}."
+        )
+        partitioned_on: tuple[str, ...] = ()
+
         if broadcast_side == "right":
             # Broadcast right, stream left
             small_ch = ch_right
             large_ch = ch_left
             small_child = ir.children[1]
             large_child = ir.children[0]
+            chunk_count = metadata_left.count
+            partitioned_on = metadata_left.partitioned_on
         else:
             # Broadcast left, stream right
             small_ch = ch_left
             large_ch = ch_right
             small_child = ir.children[0]
             large_child = ir.children[1]
+            chunk_count = metadata_right.count
+            if ir.options[0] == "Right":
+                partitioned_on = metadata_right.partitioned_on
 
-        # Receive metadata from both sides and forward merged metadata.
-        # TODO: Preserve partitioning information when possible.
-        metadata_small = await small_ch.recv_metadata(context)
-        metadata_large = await large_ch.recv_metadata(context)
-        assert isinstance(metadata_small, Metadata), (
-            f"Expected Metadata, got {type(metadata_small)}."
-        )
-        assert isinstance(metadata_large, Metadata), (
-            f"Expected Metadata, got {type(metadata_large)}."
-        )
         # Output count is determined by the large side (streaming side)
-        await ch_out.send_metadata(context, Metadata(metadata_large.count))
+        new_metadata = Metadata(chunk_count, partitioned_on=partitioned_on)
+        await ch_out.send_metadata(context, new_metadata)
 
         # Collect small-side chunks
         small_dfs = await get_small_table(context, small_child, small_ch)
@@ -225,6 +231,7 @@ def _(ir: Join, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
 
     if pwise_join:
         # Partition-wise join (use default_node_multi)
+        preserve_partitioning = 1 if ir.options[0] == "Right" else 0
         nodes.append(
             default_node_multi(
                 rec.state["context"],
@@ -235,6 +242,7 @@ def _(ir: Join, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
                     channels[left].reserve_output_slot(),
                     channels[right].reserve_output_slot(),
                 ),
+                preserve_partitioning=preserve_partitioning,
             )
         )
         return nodes, channels

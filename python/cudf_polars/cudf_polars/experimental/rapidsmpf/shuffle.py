@@ -211,13 +211,12 @@ async def local_shuffle_node(
     async with shutdown_on_error(
         context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
     ):
-        # Receive and forward metadata (updating count to num_partitions).
-        metadata = await ch_in.recv_metadata(context)
-        assert isinstance(metadata, Metadata), (
-            f"Expected Metadata, got {type(metadata)}."
-        )
-        # TODO: Update partitioning information.
-        await ch_out.send_metadata(context, Metadata(num_partitions))
+        # Receive and send metadata
+        _ = await ch_in.recv_metadata(context)
+        column_names = list(ir.schema.keys())
+        partitioned_on = tuple(column_names[i] for i in columns_to_hash)
+        new_metadata = Metadata(num_partitions, partitioned_on=partitioned_on)
+        await ch_out.send_metadata(context, new_metadata)
 
         # Create LocalShuffle context manager to handle shuffler lifecycle
         # TODO: Use ir_context to get the stream (not available yet)
