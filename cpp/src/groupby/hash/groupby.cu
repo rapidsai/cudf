@@ -13,6 +13,7 @@
 #include <cudf/detail/groupby.hpp>
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -114,6 +115,8 @@ struct can_use_hash_groupby_fn {
     requires(cudf::is_fixed_point<T>())
   bool operator()() const
   {
+    if constexpr (std::is_same_v<T, numeric::decimal128> && K == aggregation::SUM) { return true; }
+
     using TargetType       = cudf::detail::target_type_t<T, K>;
     using DeviceTargetType = std::
       conditional_t<uses_underlying_type<K>(), cudf::device_storage_type_t<TargetType>, TargetType>;
