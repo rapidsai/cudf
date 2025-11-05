@@ -489,48 +489,44 @@ struct page_stats_caster : public stats_caster_base {
 };
 
 /**
- * @brief Functor to build the NEXT Fenwick tree level from the current level data
+ * @brief Functor to build a Fenwick tree level from the previous level data
  *
  * @param tree_level_ptrs Pointers to the start of Fenwick tree level data
- * @param current_level Current tree level
+ * @param prev_level Previous tree level
+ * @param prev_level_size Size of the previous tree level
  * @param current_level_size Size of the current tree level
- * @param next_level_size Size of the next tree level
  */
-struct build_next_fenwick_tree_level_functor {
+struct build_fenwick_tree_level_functor {
   bool** tree_level_ptrs;
-  cudf::size_type current_level;
+  cudf::size_type prev_level;
+  cudf::size_type prev_level_size;
   cudf::size_type current_level_size;
-  cudf::size_type next_level_size;
 
   /**
    * @brief Builds the next Fenwick tree level from the current level data
    * by ORing two elements at the current level.
    *
-   * elem_next_level[idx] = elem_current_level[idx * 2] OR elem_current_level[idx * 2 + 1];
+   * elem_current_level[idx] = elem_prev_level[idx * 2] OR elem_prev_level[idx * 2 + 1];
    *
-   * @param next_level_idx Next tree level element index
+   * @param current_level_idx Current tree level element index
    */
-  __device__ void operator()(cudf::size_type next_level_idx) const noexcept
+  __device__ void operator()(cudf::size_type current_level_idx) const noexcept
   {
-    auto const current_level_ptr = tree_level_ptrs[current_level];
-    auto next_level_ptr          = tree_level_ptrs[current_level + 1];
+    auto const prev_level_ptr = tree_level_ptrs[prev_level];
+    auto current_level_ptr    = tree_level_ptrs[prev_level + 1];
 
-    // Handle the odd-sized remaining element if current_level_size is odd
-    if (current_level_size % 2 and next_level_idx == next_level_size - 1) {
-      next_level_ptr[next_level_idx] = current_level_ptr[current_level_size - 1];
+    // Handle the odd-sized remaining element if prev_level_size is odd
+    if (prev_level_size % 2 and current_level_idx == current_level_size - 1) {
+      current_level_ptr[current_level_idx] = prev_level_ptr[prev_level_size - 1];
     } else {
-      next_level_ptr[next_level_idx] =
-        current_level_ptr[(next_level_idx * 2)] or current_level_ptr[(next_level_idx * 2) + 1];
+      current_level_ptr[current_level_idx] =
+        prev_level_ptr[(current_level_idx * 2)] or prev_level_ptr[(current_level_idx * 2) + 1];
     }
   }
 };
 
 /**
  * @brief Functor to binary search a `true` value in the Fenwick tree in range [start, end)
- *
- * Algorithm: While `start` < `end`, align `start` UP and `end` DOWN to the next power-of-two
- * searchable tree block. Check the appropriate fenwick tree at the corresponding level for a `true`
- * value. If found, return. Else, move the boundary to its alignment and repeat.
  *
  * @param tree_level_ptrs Pointers to the start of Fenwick tree level data
  * @param page_offsets Pointer to page offsets describing each search range i as [page_offsets[i],
@@ -543,9 +539,9 @@ struct search_fenwick_tree_functor {
   cudf::size_type num_ranges;
 
   /**
-   * @brief Enum class to represent which range boundary to align
+   * @brief Enum class to represent which range boundary we are currently processing
    */
-  enum class alignment : uint8_t {
+  enum class boundary : uint8_t {
     START = 0,
     END   = 1,
   };
@@ -562,11 +558,12 @@ struct search_fenwick_tree_functor {
   }
 
   /**
-   * @brief Finds the smallest power of two in the range [start, end); 0 otherwise
+   * @brief Finds the smallest power of two in the range [start, end). If no power of two is found,
+   * returns a zero.
    *
    * @param start Range start
    * @param end Range end
-   * @return Largest power of two in the range [start, end); 0 otherwise
+   * @return Largest power of two in the range [start, end) or a zero if no power of two is found
    */
   __device__ cudf::size_type inline constexpr smallest_power_of_two_in_range(
     cudf::size_type start, cudf::size_type end) const noexcept
@@ -582,11 +579,12 @@ struct search_fenwick_tree_functor {
   }
 
   /**
-   * @brief Finds the largest power of two in the range (start, end]; 0 otherwise
+   * @brief Finds the largest power of two in the range (start, end]. If no power of two is found,
+   * returns a zero.
    *
    * @param start Range start
    * @param end Range end
-   * @return Largest power of two in the range (start, end]; 0 otherwise
+   * @return Largest power of two in the range (start, end] or a zero if no power of two is found
    */
   __device__ size_type inline constexpr largest_power_of_two_in_range(size_type start,
                                                                       size_type end) const noexcept
@@ -599,19 +597,20 @@ struct search_fenwick_tree_functor {
   /**
    * @brief Aligns a range boundary to the next power-of-two block
    *
-   * @tparam Alignment The boundary (start or end) to align
+   * @tparam Boundary Current boundary type (START or END)
    * @param start Range start
    * @param end Range end
    * @return A pair of the tree level and block size
    */
-  template <alignment Alignment>
-  __device__
-    cuda::std::pair<cudf::size_type, cudf::size_type> inline constexpr align_range_boundary(
-      cudf::size_type start, cudf::size_type end) const noexcept
+  template <boundary Boundary>
+  __device__ auto inline constexpr align_range_boundary(cudf::size_type start,
+                                                        cudf::size_type end) const noexcept
   {
-    if constexpr (Alignment == alignment::START) {
+    if constexpr (Boundary == boundary::START) {
       if (start == 0 or is_power_of_two(start)) {
-        auto const block_size = largest_power_of_two_in_range(start, end);
+        auto const block_size =
+          std::max<size_type>(size_type{1} << cuda::std::countr_zero<uint32_t>(start),
+                              largest_power_of_two_in_range(start, end));
         auto const tree_level = cuda::std::countr_zero<uint32_t>(block_size);
         return cuda::std::pair{tree_level, block_size};
       } else {
@@ -628,7 +627,35 @@ struct search_fenwick_tree_functor {
   }
 
   /**
+   * @brief Queries the Fenwick tree for the given boundary position, tree level and block size
+   *
+   * @tparam Boundary Current boundary type (START or END)
+   * @param boundary_pos Current boundary position
+   * @param tree_level Corresponding tree level to query
+   * @param block_size Alignment block size of the current boundary
+   * @return Boolean indicating if a `true` value is found in the fenwick tree
+   */
+  template <boundary Boundary>
+  __device__ bool inline constexpr query_fenwick_tree(cudf::size_type boundary_pos,
+                                                      cudf::size_type tree_level,
+                                                      cudf::size_type block_size) const noexcept
+  {
+    if constexpr (Boundary == boundary::START) {
+      auto const mask_index = boundary_pos >> tree_level;
+      return tree_level_ptrs[tree_level][mask_index];
+    } else {
+      auto const mask_index = (boundary_pos - block_size) >> tree_level;
+      return tree_level_ptrs[tree_level][mask_index];
+    }
+  }
+
+  /**
    * @brief Searches the Fenwick tree to find a `true` value in range [start, end)
+   *
+   * Algorithm: While `start` < `end`, align `start` UP and `end` DOWN to the next power-of-two
+   * searchable tree block. For the two aligned blocks, query the fenwick tree at corresponding
+   * levels for a `true` value (larger block first). If found, return. Else, move the boundaries to
+   * their alignments.
    *
    * @param range_idx Index of the range to search
    * @return Boolean indicating if a `true` value is found in the range
@@ -646,31 +673,42 @@ struct search_fenwick_tree_functor {
     while (start < end) {
       // Find the largest power-of-two block that begins and `start` and aligns it up
       auto const [start_tree_level, start_block_size] =
-        align_range_boundary<alignment::START>(start, end);
+        align_range_boundary<boundary::START>(start, end);
 
       // Find the largest power-of-two block that aligns `end` down.
-      auto const [end_tree_level, end_block_size] =
-        align_range_boundary<alignment::END>(start, end);
+      auto const [end_tree_level, end_block_size] = align_range_boundary<boundary::END>(start, end);
 
-      // Check the `start` side alignment block: [start, start + start_block_size) and if it's the
-      // larger block
-      if (start + start_block_size <= end and start_block_size >= end_block_size) {
-        auto const tree_level = start_tree_level;
-        auto const mask_index = start >> tree_level;
-        if (tree_level_ptrs[tree_level][mask_index]) { return true; }
-        start += start_block_size;
-      }
-      // Otherwise, check the `end` side alignment block: [end - end_block_size, end)
-      else if (end - end_block_size >= start) {
-        auto const tree_level = end_tree_level;
-        auto const mask_index = (end - end_block_size) >> tree_level;
-        if (tree_level_ptrs[tree_level][mask_index]) { return true; }
-        end -= end_block_size;
-      }
-      // Fallback for small, unaligned ranges. e.g., [11, 13)
-      else {
-        if (tree_level_ptrs[0][start]) { return true; }
-        start++;
+      // Check the larger block first to minimize the number of queries
+      if (start_block_size >= end_block_size) {
+        // Check the `start` side alignment block first
+        if (start + start_block_size <= end) {
+          if (query_fenwick_tree<boundary::START>(start, start_tree_level, start_block_size)) {
+            return true;
+          }
+          start += start_block_size;
+        }
+        // Check the `end` side alignment block if it's still in range
+        if (end - end_block_size >= start) {
+          if (query_fenwick_tree<boundary::END>(end, end_tree_level, end_block_size)) {
+            return true;
+          }
+          end -= end_block_size;
+        }
+      } else {
+        // Check the `end` side alignment block first
+        if (end - end_block_size >= start) {
+          if (query_fenwick_tree<boundary::END>(end, end_tree_level, end_block_size)) {
+            return true;
+          }
+          end -= end_block_size;
+        }
+        // Check the `start` side alignment block if it's still in range
+        if (start + start_block_size <= end) {
+          if (query_fenwick_tree<boundary::START>(start, start_tree_level, start_block_size)) {
+            return true;
+          }
+          start += start_block_size;
+        }
       }
     }
     return false;
@@ -853,12 +891,15 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
       column_schema_indices.begin(), column_schema_indices.end(), [&](auto const schema_idx) {
         auto [col_page_row_offsets, col_max_page_size] =
           compute_page_row_offsets(per_file_metadata, row_group_indices, schema_idx);
-        page_row_offsets.insert(
-          page_row_offsets.end(), col_page_row_offsets.begin(), col_page_row_offsets.end());
+        page_row_offsets.insert(page_row_offsets.end(),
+                                std::make_move_iterator(col_page_row_offsets.begin()),
+                                std::make_move_iterator(col_page_row_offsets.end()));
         max_page_size = std::max<size_type>(max_page_size, col_max_page_size);
         col_page_offsets.emplace_back(page_row_offsets.size());
       });
   } else {
+    // Using a maximum of 2 tasks to compute page row offsets for columns to avoid excessive
+    // task submission overheads
     auto constexpr max_tasks         = 2;
     using task_page_row_offsets_type = std::vector<std::pair<std::vector<size_type>, size_type>>;
     std::vector<std::future<task_page_row_offsets_type>> page_row_offset_tasks{};
@@ -890,8 +931,9 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
     std::for_each(page_row_offset_tasks.begin(), page_row_offset_tasks.end(), [&](auto& task) {
       auto const& task_page_row_offsets = task.get();
       for (auto& [col_page_row_offsets, col_max_page_size] : task_page_row_offsets) {
-        page_row_offsets.insert(
-          page_row_offsets.end(), col_page_row_offsets.begin(), col_page_row_offsets.end());
+        page_row_offsets.insert(page_row_offsets.end(),
+                                std::make_move_iterator(col_page_row_offsets.begin()),
+                                std::make_move_iterator(col_page_row_offsets.end()));
         max_page_size = std::max<size_type>(max_page_size, col_max_page_size);
         col_page_offsets.emplace_back(page_row_offsets.size());
       }
@@ -935,17 +977,19 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
     cudf::detail::make_device_uvector_async(host_tree_level_ptrs, stream, mr);
 
   // Build Fenwick tree levels (zeroth level is just the row mask itself)
-  auto current_level_size = total_rows;
+  auto prev_level_size = total_rows;
   std::for_each(
-    thrust::counting_iterator(0), thrust::counting_iterator(num_levels - 1), [&](auto const level) {
-      auto const next_level_size = cudf::util::div_rounding_up_unsafe(current_level_size, 2);
+    thrust::counting_iterator(0),
+    thrust::counting_iterator(num_levels - 1),
+    [&](auto const prev_level) {
+      auto const current_level_size = cudf::util::div_rounding_up_unsafe(prev_level_size, 2);
       thrust::for_each(
         rmm::exec_policy_nosync(stream),
         thrust::counting_iterator(0),
-        thrust::counting_iterator(next_level_size),
-        build_next_fenwick_tree_level_functor{
-          fenwick_tree_level_ptrs.data(), level, current_level_size, next_level_size});
-      current_level_size = next_level_size;
+        thrust::counting_iterator(current_level_size),
+        build_fenwick_tree_level_functor{
+          fenwick_tree_level_ptrs.data(), prev_level, prev_level_size, current_level_size});
+      prev_level_size = current_level_size;
     });
 
   //  Search the Fenwick tree to see if there's a surviving row in each page's row range
