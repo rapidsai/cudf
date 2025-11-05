@@ -512,24 +512,7 @@ class MemoryResourceConfig:
         return create_mr(self.qualname, process_options(self.options))
 
     def __hash__(self) -> int:
-        if self.options is None:
-            return hash((self.qualname,))
-        else:
-            # For nested memory resource configs, options will contain potentially non-hashable objects.
-            # We'll need to recursively hash the nested options.
-            flattened_options = []
-            options = self.options
-            while isinstance(options, dict):
-                for key, value in options.items():
-                    if isinstance(value, dict):
-                        options = value
-                        break
-                    else:
-                        flattened_options.append((key, value))
-                else:
-                    break
-
-            return hash((self.qualname, *sorted(flattened_options)))
+        return hash((self.qualname, json.dumps(self.options, sort_keys=True)))
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
