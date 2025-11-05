@@ -43,6 +43,7 @@ __all__ = [
     "ConfigOptions",
     "InMemoryExecutor",
     "ParquetOptions",
+    "Runtime",
     "Scheduler",  # Deprecated, kept for backward compatibility
     "ShuffleMethod",
     "StatsPlanningOptions",
@@ -135,6 +136,20 @@ class StreamingFallbackMode(str, enum.Enum):
     WARN = "warn"
     RAISE = "raise"
     SILENT = "silent"
+
+
+class Runtime(str, enum.Enum):
+    """
+    The runtime to use for the streaming executor.
+
+    * ``Runtime.TASKS`` : Use the task-based runtime.
+      This is the default runtime.
+    * ``Runtime.RAPIDSMPF`` : Use the coroutine-based streaming runtime (rapidsmpf).
+      This runtime is experimental.
+    """
+
+    TASKS = "tasks"
+    RAPIDSMPF = "rapidsmpf"
 
 
 class Cluster(str, enum.Enum):
@@ -412,11 +427,14 @@ class StreamingExecutor:
 
     Parameters
     ----------
+    runtime
+        The runtime to use for the streaming executor.
+        ``Runtime.TASKS`` by default.
     cluster
         The cluster configuration for the streaming executor.
         ``Cluster.SINGLE`` by default.
 
-        This setting applies to both task-based and rapidsmpf execution models:
+        This setting applies to both task-based and rapidsmpf execution modes:
 
         * ``Cluster.SINGLE``: Single-GPU execution
         * ``Cluster.DISTRIBUTED``: Multi-GPU distributed execution (requires
@@ -482,6 +500,10 @@ class StreamingExecutor:
     rapidsmpf_spill
         Whether to wrap task arguments and output in objects that are
         spillable by 'rapidsmpf'.
+    client_device_threshold
+        Threshold for spilling data from device memory in rapidsmpf.
+        Default is 50% of device memory on the client process.
+        This argument is only used by the "rapidsmpf" runtime.
     sink_to_directory
         Whether multi-partition sink operations should write to a directory
         rather than a single file. By default, this will be set to True for
@@ -502,6 +524,13 @@ class StreamingExecutor:
     _env_prefix = "CUDF_POLARS__EXECUTOR"
 
     name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
+    runtime: Runtime = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__RUNTIME",
+            Runtime.__call__,
+            default=Runtime.TASKS,
+        )
+    )
     cluster: Cluster | None = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__CLUSTER",
@@ -560,6 +589,11 @@ class StreamingExecutor:
             f"{_env_prefix}__RAPIDSMPF_SPILL", _bool_converter, default=False
         )
     )
+    client_device_threshold: float = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__CLIENT_DEVICE_THRESHOLD", float, default=0.5
+        )
+    )
     sink_to_directory: bool | None = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__SINK_TO_DIRECTORY", _bool_converter, default=None
@@ -570,6 +604,16 @@ class StreamingExecutor:
     )
 
     def __post_init__(self) -> None:  # noqa: D105
+        # Check for rapidsmpf runtime
+        if self.runtime == "rapidsmpf":  # pragma: no cover; requires rapidsmpf runtime
+            if not rapidsmpf_single_available():
+                raise ValueError("The rapidsmpf streaming engine requires rapidsmpf.")
+            if self.shuffle_method == "tasks":
+                raise ValueError(
+                    "The rapidsmpf streaming engine does not support task-based shuffling."
+                )
+            object.__setattr__(self, "shuffle_method", "rapidsmpf")
+
         # Handle backward compatibility for deprecated scheduler parameter
         if self.scheduler is not None:
             if self.cluster is not None:
@@ -629,13 +673,15 @@ class StreamingExecutor:
         )
         if self.target_partition_size == 0:
             object.__setattr__(
-                self, "target_partition_size", default_blocksize(self.cluster)
+                self,
+                "target_partition_size",
+                default_blocksize(self.cluster),
             )
         if self.broadcast_join_limit == 0:
             object.__setattr__(
                 self,
                 "broadcast_join_limit",
-                # Usually better to avoid shuffling for single gpu
+                # Usually better to avoid shuffling for single gpu with UVM
                 2 if self.cluster == "distributed" else 32,
             )
         object.__setattr__(self, "cluster", Cluster(self.cluster))
@@ -673,6 +719,8 @@ class StreamingExecutor:
             raise TypeError("rapidsmpf_spill must be bool")
         if not isinstance(self.sink_to_directory, bool):
             raise TypeError("sink_to_directory must be bool")
+        if not isinstance(self.client_device_threshold, float):
+            raise TypeError("client_device_threshold must be a float")
 
         # RapidsMPF spill is only supported for distributed clusters for now.
         # This is because the spilling API is still within the RMPF-Dask integration.
@@ -708,10 +756,13 @@ class CUDAStreamPolicy(str, enum.Enum):
 
     * ``CUDAStreamPolicy.DEFAULT`` : Use the default CUDA stream.
     * ``CUDAStreamPolicy.NEW`` : Create a new CUDA stream.
+    * ``CUDAStreamPolicy.POOL`` : Use the CUDA stream pool. This is currently
+      only supported by the RapidsMPF runtime.
     """
 
     DEFAULT = "default"
     NEW = "new"
+    POOL = "pool"
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -832,9 +883,28 @@ class ConfigOptions:
             "device": engine.device,
         }
 
-        if engine.config.get("cuda_stream_policy") is not None:
-            kwargs["cuda_stream_policy"] = CUDAStreamPolicy(
-                engine.config["cuda_stream_policy"]
+        # Handle "cuda-stream-policy".
+        # The default will depend on the runtime and executor.
+        user_cuda_stream_policy = engine.config.get(
+            "cuda_stream_policy", None
+        ) or os.environ.get("CUDF_POLARS__CUDA_STREAM_POLICY", None)
+        if user_cuda_stream_policy is None:
+            # TODO: Use pool by default for rapidsmpf runtime
+            # once stream-ordering bugs are fixed.
+            # See: https://github.com/rapidsai/cudf/issues/20484
+            cuda_stream_policy = CUDAStreamPolicy.DEFAULT
+        else:
+            cuda_stream_policy = CUDAStreamPolicy(user_cuda_stream_policy)
+
+        # Pool policy is only supported by the rapidsmpf runtime.
+        if cuda_stream_policy == CUDAStreamPolicy.POOL and (
+            (executor.name != "streaming")
+            or (executor.name == "streaming" and executor.runtime != Runtime.RAPIDSMPF)
+        ):
+            raise ValueError(
+                "CUDAStreamPolicy.POOL is only supported by the rapidsmpf runtime."
             )
+
+        kwargs["cuda_stream_policy"] = cuda_stream_policy
 
         return cls(**kwargs)
