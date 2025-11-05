@@ -778,15 +778,13 @@ std::unique_ptr<cudf::column> create_distinct_rows_column<cudf::struct_view>(
   return std::move(cudf::sample(cudf::table_view({structs_col->view()}), num_rows)->release()[0]);
 }
 
+template <typename T>
 struct clamp_down {
-  cudf::size_type max;
-  bool const* validity;
-  uint32_t* sizes;
-  __device__ uint32_t operator()(cudf::size_type idx) const
-  {
-    return validity[idx] ? cuda::std::min(sizes[idx], static_cast<uint32_t>(max)) : 0;
-  }
+  T max;
+  clamp_down(T max) : max(max) {}
+  __host__ __device__ T operator()(T x) const { return min(x, max); }
 };
+
 /**
  * @brief Creates a list column with random content.
  *
@@ -829,15 +827,12 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
     auto offsets = len_dist(engine, current_num_rows + 1);
     auto valids  = valid_dist(engine, current_num_rows);
     // to ensure these values <= current_child_column->size()
-    thrust::transform(thrust::device,
-                      thrust::counting_iterator<cudf::size_type>(0),
-                      thrust::counting_iterator<cudf::size_type>(current_num_rows),
-                      offsets.begin(),
-                      clamp_down{current_child_column->size(), valids.begin(), offsets.begin()});
-    thrust::exclusive_scan(thrust::device, offsets.begin(), offsets.end(), offsets.begin());
-    // Always include all elements
-    offsets.set_element(
-      offsets.size() - 1, current_child_column->size(), cudf::get_default_stream());
+    auto output_offsets = thrust::make_transform_output_iterator(
+      offsets.begin(), clamp_down{current_child_column->size()});
+
+    thrust::exclusive_scan(thrust::device, offsets.begin(), offsets.end(), output_offsets);
+    thrust::device_pointer_cast(offsets.end())[-1] =
+      current_child_column->size();  // Always include all elements
 
     auto offsets_column = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
                                                          current_num_rows + 1,
