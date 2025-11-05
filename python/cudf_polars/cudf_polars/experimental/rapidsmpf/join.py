@@ -134,36 +134,32 @@ async def broadcast_join_node(
             )
 
             # Perform the join
-            results = [
-                (
-                    await asyncio.to_thread(
-                        ir.do_evaluate,
-                        *ir._non_child_args,
-                        *(
-                            [large_df, small_df]
-                            if broadcast_side == "right"
-                            else [small_df, large_df]
-                        ),
-                        context=ir_context,
+            df = _concat(
+                *[
+                    (
+                        await asyncio.to_thread(
+                            ir.do_evaluate,
+                            *ir._non_child_args,
+                            *(
+                                [large_df, small_df]
+                                if broadcast_side == "right"
+                                else [small_df, large_df]
+                            ),
+                            context=ir_context,
+                        )
                     )
-                )
-                for small_df in small_dfs
-            ]
+                    for small_df in small_dfs
+                ],
+                context=ir_context,
+            )
 
             # Send output chunk
-            build_stream = results[0].stream
             await ch_out.data.send(
                 context,
                 Message(
                     seq_num,
                     TableChunk.from_pylibcudf_table(
-                        (
-                            results[0].table
-                            if len(results) == 1
-                            else _concat(*results, context=ir_context).table
-                        ),
-                        build_stream,
-                        exclusive_view=True,
+                        df.table, df.stream, exclusive_view=True
                     ),
                 ),
             )

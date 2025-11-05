@@ -28,6 +28,8 @@ if TYPE_CHECKING:
 
 def _concat(*dfs: DataFrame, context: IRExecutionContext) -> DataFrame:
     # Concatenate a sequence of DataFrames vertically
+    if len(dfs) == 1:
+        return dfs[0]
     return Union.do_evaluate(None, *dfs, context=context)
 
 
