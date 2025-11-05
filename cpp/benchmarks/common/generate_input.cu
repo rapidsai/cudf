@@ -599,26 +599,13 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
     dtype, num_rows, data.release(), std::move(*result_bitmask.release()), null_count);
 }
 
+// catch-all for all types not handled specifically below
 template <typename T>
 std::unique_ptr<cudf::column> create_distinct_rows_column(data_profile const& profile,
                                                           thrust::minstd_rand& engine,
                                                           cudf::size_type num_rows)
 {
-  using DeviceType = cudf::device_storage_type_t<T>;
-
-  auto init = cudf::make_fixed_width_scalar(T{});
-  auto col  = cudf::sequence(num_rows, *init);
-
-  if (profile.get_null_probability().has_value()) {
-    auto valid_dist =
-      random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_probability().value()});
-    auto null_mask = valid_dist(engine, num_rows);
-    auto [result_bitmask, null_count] =
-      cudf::bools_to_mask(cudf::device_span<bool const>(null_mask), cudf::get_default_stream());
-    col->set_null_mask(std::move(*result_bitmask.release()), null_count);
-  }
-
-  return std::move(cudf::sample(cudf::table_view({col->view()}), num_rows)->release()[0]);
+  return create_random_column<T>(profile, engine, num_rows);
 }
 
 /**
@@ -637,6 +624,26 @@ struct create_rand_col_fn {
     return create_random_column<T>(profile, engine, num_rows);
   }
 };
+
+template <typename T, CUDF_ENABLE_IF(cudf::is_numeric_not_bool<T>())>
+std::unique_ptr<cudf::column> create_random_column<T>(data_profile const& profile,
+                                                      thrust::minstd_rand& engine,
+                                                      cudf::size_type num_rows)
+{
+  auto init = cudf::make_fixed_width_scalar(T{});
+  auto col  = cudf::sequence(num_rows, *init);
+
+  if (profile.get_null_probability().has_value()) {
+    auto valid_dist =
+      random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_probability().value()});
+    auto null_mask = valid_dist(engine, num_rows);
+    auto [result_bitmask, null_count] =
+      cudf::bools_to_mask(cudf::device_span<bool const>(null_mask), cudf::get_default_stream());
+    col->set_null_mask(std::move(*result_bitmask.release()), null_count);
+  }
+
+  return std::move(cudf::sample(cudf::table_view({col->view()}), num_rows)->release()[0]);
+}
 
 /**
  * @brief Creates a string column with random content.
