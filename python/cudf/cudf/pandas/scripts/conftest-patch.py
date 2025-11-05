@@ -11825,6 +11825,7 @@ def pytest_collection_modifyitems(session, config, items):
         | NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS
         | NODEIDS_TO_ALWAYS_SKIP
         | NODEIDS_THAT_ASSERT_PRIVATE_APIS
+        | NODEIDS_THAT_XFAIL_WITH_COPY_ON_WRITE_FALSE
     )
     for item in items:
         if item.nodeid in NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS:
