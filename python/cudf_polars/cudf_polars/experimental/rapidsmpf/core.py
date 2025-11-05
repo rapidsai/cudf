@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.leaf_node import DeferredMessages
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import PartitionInfo
+    from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.dispatch import (
         GenState,
@@ -83,7 +83,7 @@ def evaluate_logical_plan(
         )
 
     # Lower the IR graph on the client process (for now).
-    ir, partition_info = lower_ir_graph(ir, config_options)
+    ir, partition_info, _ = lower_ir_graph(ir, config_options)
 
     # Configure the context.
     # TODO: Multi-GPU version will be different. The rest of this function
@@ -146,7 +146,7 @@ def evaluate_logical_plan(
 def lower_ir_graph(
     ir: IR,
     config_options: ConfigOptions,
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[IR, MutableMapping[IR, PartitionInfo], StatsCollector]:
     """
     Rewrite an IR graph and extract partitioning information.
 
@@ -156,12 +156,15 @@ def lower_ir_graph(
         Root of the graph to rewrite.
     config_options
         GPUEngine configuration options.
+    stats
+        The statistics collector.
 
     Returns
     -------
-    new_ir, partition_info
-        The rewritten graph, and a mapping from unique nodes
-        in the new graph to associated partitioning information.
+    new_ir, partition_info, stats
+        The rewritten graph, a mapping from unique nodes
+        in the new graph to associated partitioning information,
+        and the statistics collector.
 
     Notes
     -----
@@ -179,7 +182,7 @@ def lower_ir_graph(
         "stats": collect_statistics(ir, config_options),
     }
     mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
-    return mapper(ir)
+    return *mapper(ir), state["stats"]
 
 
 def determine_fanout_nodes(
