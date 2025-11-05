@@ -121,7 +121,7 @@ when creating your {class}`~polars.lazyframe.engine_config.GPUEngine`:
 
 ```python
 memory_resource_config = {
-    "name": "rmm.mr.CudaAsyncMemory",
+    "qualname": "rmm.mr.CudaAsyncMemoryResource",
     "options": {
         "initial_pool_size": "100 MiB",
     }
@@ -138,7 +138,7 @@ Finally, for maximum flexibility, you can create your own memory resource object
 import polars as pl
 import rmm
 
-mr = rmm.mr.CudaAsyncMemory()
+mr = rmm.mr.CudaAsyncMemoryResource()
 engine = pl.GPUEngine(memory_resource=mr)
 ```
 

@@ -515,7 +515,21 @@ class MemoryResourceConfig:
         if self.options is None:
             return hash((self.qualname,))
         else:
-            return hash((self.qualname, tuple(sorted(self.options.items()))))
+            # For nested memory resource configs, options will contain potentially non-hashable objects.
+            # We'll need to recursively hash the nested options.
+            flattened_options = []
+            options = self.options
+            while isinstance(options, dict):
+                for key, value in options.items():
+                    if isinstance(value, dict):
+                        options = value
+                        break
+                    else:
+                        flattened_options.append((key, value))
+                else:
+                    break
+
+            return hash((self.qualname, *sorted(flattened_options)))
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -938,6 +952,10 @@ class ConfigOptions:
         ):
             # We'll pick up the qualname / options from the environment.
             user_memory_resource_config = MemoryResourceConfig()
+        elif isinstance(user_memory_resource_config, dict):
+            user_memory_resource_config = MemoryResourceConfig(
+                **user_memory_resource_config
+            )
 
         # Backward compatibility for "cardinality_factor"
         # TODO: Remove this in 25.10

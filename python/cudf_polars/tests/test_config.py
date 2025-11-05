@@ -183,6 +183,8 @@ def test_nested_memory_resource_config():
     assert mr.upstream_mr.pool_size() == 256
     assert isinstance(mr.upstream_mr.upstream_mr, rmm.mr.ManagedMemoryResource)
 
+    assert hash(config.memory_resource_config) == hash(config.memory_resource_config)
+
 
 @pytest.mark.parametrize("executor", ["streaming", "in-memory"])
 def test_parquet_options(executor: str) -> None:
@@ -755,6 +757,22 @@ def test_validate_stats_planning(option: str) -> None:
                 executor_options={"stats_planning": {option: object()}},
             )
         )
+
+
+def test_parse_memory_resource_config() -> None:
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            memory_resource_config={
+                "qualname": "rmm.mr.CudaAsyncMemoryResource",
+                "options": {
+                    "initial_pool_size": 123,
+                    "release_threshold": 456,
+                },
+            }
+        )
+    )
+    assert isinstance(config.memory_resource_config, MemoryResourceConfig)
+    assert config.memory_resource_config.qualname == "rmm.mr.CudaAsyncMemoryResource"
 
 
 def test_memory_resource_config_raises() -> None:
