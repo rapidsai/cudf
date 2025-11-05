@@ -28,7 +28,7 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
     define_py_node,
     shutdown_on_error,
 )
-from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
+from cudf_polars.experimental.rapidsmpf.utils import ChannelManager, Metadata
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -104,7 +104,10 @@ async def dataframescan_node(
         local_count = math.ceil(global_count / context.comm().nranks)
         local_offset = local_count * context.comm().rank
 
-    async with shutdown_on_error(context, ch_out.data):
+    async with shutdown_on_error(context, ch_out.metadata, ch_out.data):
+        # Send basic metadata
+        await ch_out.send_metadata(context, Metadata(local_count))
+
         io_throttle = asyncio.Semaphore(max_io_threads)
 
         # Build list of IR slices to read
@@ -297,7 +300,7 @@ async def scan_node(
     parquet_options
         The Parquet options.
     """
-    async with shutdown_on_error(context, ch_out.data):
+    async with shutdown_on_error(context, ch_out.metadata, ch_out.data):
         # Build a list of local Scan operations
         scans: list[Scan | SplitScan] = []
         if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
@@ -360,6 +363,9 @@ async def scan_node(
                         parquet_options,
                     )
                 )
+
+        # Send basic metadata
+        await ch_out.send_metadata(context, Metadata(len(scans)))
 
         # Read data.
         # Use Lineariser to ensure ordered delivery

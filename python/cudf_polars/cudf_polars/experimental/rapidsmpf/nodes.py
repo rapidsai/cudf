@@ -18,6 +18,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    Metadata,
     process_children,
     shutdown_on_error,
 )
@@ -58,7 +59,14 @@ async def default_node_single(
     -----
     Chunks are processed in the order they are received.
     """
-    async with shutdown_on_error(context, ch_in.data, ch_out.data):
+    async with shutdown_on_error(
+        context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
+    ):
+        # Forward metadata.
+        # TODO: Preserve partitioning information when possible.
+        metadata = await ch_in.recv_metadata(context)
+        await ch_out.send_metadata(context, metadata)
+
         while (msg := await ch_in.data.recv(context)) is not None:
             chunk = TableChunk.from_message(msg)
             seq_num = msg.sequence_number
@@ -101,9 +109,9 @@ async def default_node_multi(
     ir_context
         The execution context for the IR node.
     ch_out
-        The output ChannelPair (metadata already sent).
+        The output ChannelPair.
     chs_in
-        Tuple of input ChannelPairs (metadata already received).
+        Tuple of input ChannelPairs.
 
     Notes
     -----
@@ -111,7 +119,24 @@ async def default_node_multi(
     channel are assumed to arrive in sequence number order, so we only need
     to hold one chunk per channel at a time.
     """
-    async with shutdown_on_error(context, *[ch.data for ch in chs_in], ch_out.data):
+    async with shutdown_on_error(
+        context,
+        *[ch.metadata for ch in chs_in],
+        ch_out.metadata,
+        *[ch.data for ch in chs_in],
+        ch_out.data,
+    ):
+        # Merge and forward basic metadata.
+        # TODO: Preserve partitioning information when possible.
+        metadata = Metadata(1)
+        for ch_in in chs_in:
+            md_child = await ch_in.recv_metadata(context)
+            assert isinstance(md_child, Metadata), (
+                f"Expected Metadata, got {type(md_child)}."
+            )
+            metadata.count = max(md_child.count, metadata.count)
+        await ch_out.send_metadata(context, metadata)
+
         seq_num = 0
         n_children = len(chs_in)
         finished_channels: set[int] = set()
@@ -206,7 +231,17 @@ async def fanout_node_bounded(
     """
     # TODO: Use rapidsmpf fanout node once available.
     # See: https://github.com/rapidsai/rapidsmpf/issues/560
-    async with shutdown_on_error(context, ch_in.data, *[ch.data for ch in chs_out]):
+    async with shutdown_on_error(
+        context,
+        ch_in.metadata,
+        ch_in.data,
+        *[ch.metadata for ch in chs_out],
+        *[ch.data for ch in chs_out],
+    ):
+        # Forward metadata to all outputs.
+        metadata = await ch_in.recv_metadata(context)
+        await asyncio.gather(*(ch.send_metadata(context, metadata) for ch in chs_out))
+
         while (msg := await ch_in.data.recv(context)) is not None:
             table_chunk = TableChunk.from_message(msg)
             seq_num = msg.sequence_number
@@ -256,7 +291,17 @@ async def fanout_node_unbounded(
     """
     # TODO: Use rapidsmpf fanout node once available.
     # See: https://github.com/rapidsai/rapidsmpf/issues/560
-    async with shutdown_on_error(context, ch_in.data, *[ch.data for ch in chs_out]):
+    async with shutdown_on_error(
+        context,
+        ch_in.metadata,
+        ch_in.data,
+        *[ch.metadata for ch in chs_out],
+        *[ch.data for ch in chs_out],
+    ):
+        # Forward metadata to all outputs.
+        metadata = await ch_in.recv_metadata(context)
+        await asyncio.gather(*(ch.send_metadata(context, metadata) for ch in chs_out))
+
         # FIFO buffer for each output channel
         output_buffers: list[list[Message]] = [[] for _ in chs_out]
 
@@ -411,7 +456,10 @@ async def empty_node(
     ch_out
         The output ChannelPair.
     """
-    async with shutdown_on_error(context, ch_out.data):
+    async with shutdown_on_error(context, ch_out.metadata, ch_out.data):
+        # Send metadata indicating a single empty chunk
+        await ch_out.send_metadata(context, Metadata(1))
+
         # Evaluate the IR node to create an empty DataFrame
         df: DataFrame = ir.do_evaluate(*ir._non_child_args, context=ir_context)
 
@@ -434,6 +482,40 @@ def _(ir: Empty, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManag
         empty_node(context, ir, ir_context, channels[ir].reserve_input_slot())
     ]
     return nodes, channels
+
+
+@define_py_node()
+async def metadata_drain_node(
+    context: Context,
+    ch_in: ChannelPair,
+    ch_out: Any,
+) -> None:
+    """
+    Drain metadata and forward data to a single channel.
+
+    This node is needed before pull_from_channel since pull_from_channel
+    only accepts a single data channel, not a ChannelPair.
+
+    Parameters
+    ----------
+    context
+        The rapidsmpf context.
+    ch_in
+        The input ChannelPair (with metadata and data channels).
+    ch_out
+        The output data channel.
+    """
+    async with shutdown_on_error(context, ch_in.metadata, ch_in.data, ch_out):
+        # Drain metadata channel (we don't need it after this point)
+        _ = await ch_in.recv_metadata(context)
+        # TODO: Could use metadata here to drop duplicated data on all
+        # but rank 0 in distributed execution.
+
+        # Forward all data messages
+        while (msg := await ch_in.data.recv(context)) is not None:
+            await ch_out.send(context, msg)
+
+        await ch_out.drain(context)
 
 
 def generate_ir_sub_network_wrapper(

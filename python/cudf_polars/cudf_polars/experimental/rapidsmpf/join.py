@@ -24,6 +24,7 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    Metadata,
     process_children,
 )
 from cudf_polars.experimental.utils import _concat
@@ -104,7 +105,15 @@ async def broadcast_join_node(
     broadcast_side
         The side to broadcast.
     """
-    async with shutdown_on_error(context, ch_left.data, ch_right.data, ch_out.data):
+    async with shutdown_on_error(
+        context,
+        ch_left.metadata,
+        ch_left.data,
+        ch_right.metadata,
+        ch_right.data,
+        ch_out.metadata,
+        ch_out.data,
+    ):
         if broadcast_side == "right":
             # Broadcast right, stream left
             small_ch = ch_right
@@ -117,6 +126,19 @@ async def broadcast_join_node(
             large_ch = ch_right
             small_child = ir.children[0]
             large_child = ir.children[1]
+
+        # Receive metadata from both sides and forward merged metadata.
+        # TODO: Preserve partitioning information when possible.
+        metadata_small = await small_ch.recv_metadata(context)
+        metadata_large = await large_ch.recv_metadata(context)
+        assert isinstance(metadata_small, Metadata), (
+            f"Expected Metadata, got {type(metadata_small)}."
+        )
+        assert isinstance(metadata_large, Metadata), (
+            f"Expected Metadata, got {type(metadata_large)}."
+        )
+        # Output count is determined by the large side (streaming side)
+        await ch_out.send_metadata(context, Metadata(metadata_large.count))
 
         # Collect small-side chunks
         small_dfs = await get_small_table(context, small_child, small_ch)

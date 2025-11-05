@@ -26,7 +26,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
 )
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
-from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
+from cudf_polars.experimental.rapidsmpf.utils import ChannelManager, Metadata
 from cudf_polars.experimental.shuffle import Shuffle
 
 if TYPE_CHECKING:
@@ -211,6 +211,14 @@ async def local_shuffle_node(
     async with shutdown_on_error(
         context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
     ):
+        # Receive and forward metadata (updating count to num_partitions).
+        metadata = await ch_in.recv_metadata(context)
+        assert isinstance(metadata, Metadata), (
+            f"Expected Metadata, got {type(metadata)}."
+        )
+        # TODO: Update partitioning information.
+        await ch_out.send_metadata(context, Metadata(num_partitions))
+
         # Create LocalShuffle context manager to handle shuffler lifecycle
         # TODO: Use ir_context to get the stream (not available yet)
         stream = DEFAULT_STREAM

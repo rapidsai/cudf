@@ -13,6 +13,7 @@ from rapidsmpf.buffer.resource import BufferResource, LimitAvailableMemory
 from rapidsmpf.communicator.single import new_communicator
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
+from rapidsmpf.streaming.core.channel import Channel
 from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.leaf_node import pull_from_channel
 from rapidsmpf.streaming.core.node import (
@@ -32,7 +33,10 @@ from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext, Join, Scan, Union
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo, lower_ir_node
-from cudf_polars.experimental.rapidsmpf.nodes import generate_ir_sub_network_wrapper
+from cudf_polars.experimental.rapidsmpf.nodes import (
+    generate_ir_sub_network_wrapper,
+    metadata_drain_node,
+)
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import CUDAStreamPolicy
@@ -307,14 +311,19 @@ def generate_network(
     nodes, channels = mapper(ir)
     ch_out = channels[ir].reserve_output_slot()
 
-    # TODO: We will need an additional node here to drain
-    # the metadata channel once we start plumbing metadata
-    # through the network. This node could also drop
-    # "duplicated" data on all but rank 0.
+    # Add node to drain metadata channel before pull_from_channel
+    # (since pull_from_channel doesn't accept a ChannelPair)
+    ch_final_data: Channel[TableChunk] = Channel()
+    nodes.append(
+        metadata_drain_node(
+            context,
+            ch_out,
+            ch_final_data,
+        )
+    )
 
     # Add final node to pull from the output data channel
-    # (metadata channel is unused)
-    output_node, output = pull_from_channel(context, ch_in=ch_out.data)
+    output_node, output = pull_from_channel(context, ch_in=ch_final_data)
     nodes.append(output_node)
 
     # Return network and output hook

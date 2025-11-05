@@ -15,7 +15,7 @@ import pylibcudf as plc
 
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
-from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
+from cudf_polars.experimental.rapidsmpf.utils import ChannelManager, Metadata
 from cudf_polars.experimental.repartition import Repartition
 
 if TYPE_CHECKING:
@@ -37,6 +37,7 @@ async def concatenate_node(
     ch_in: ChannelPair,
     *,
     max_chunks: int | None,
+    output_count: int,
 ) -> None:
     """
     Concatenate node for rapidsmpf.
@@ -56,10 +57,18 @@ async def concatenate_node(
     max_chunks
         The maximum number of chunks to concatenate at once.
         If `None`, concatenate all input chunks.
+    output_count
+        The expected number of output chunks.
     """
     # TODO: Use multiple streams
     max_chunks = max(2, max_chunks) if max_chunks else None
-    async with shutdown_on_error(context, ch_in.data, ch_out.data):
+    async with shutdown_on_error(
+        context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
+    ):
+        # Receive and forward metadata (updating count to output_count).
+        _ = await ch_in.recv_metadata(context)
+        await ch_out.send_metadata(context, Metadata(output_count))
+
         seq_num = 0
         build_stream: Stream | None = None
         while True:
@@ -134,6 +143,7 @@ def _(
             channels[ir].reserve_input_slot(),
             channels[ir.children[0]].reserve_output_slot(),
             max_chunks=max_chunks,
+            output_count=partition_info[ir].count,
         )
     )
     return nodes, channels
