@@ -1554,12 +1554,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         if isinstance(by, str):
             by = [by]
-        res = self._get_sorted_inds(
+        return self._get_sorted_inds(
             by=by, ascending=ascending, na_position=na_position
         ).values
-        if cudf.get_option("mode.pandas_compatible"):
-            return res.astype(np.intp)
-        return res
 
     @_performance_tracking
     def _get_sorted_inds(
