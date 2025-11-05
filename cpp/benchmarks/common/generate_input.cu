@@ -599,26 +599,13 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
     dtype, num_rows, data.release(), std::move(*result_bitmask.release()), null_count);
 }
 
+// catch-all for all types not handled specifically below
 template <typename T>
 std::unique_ptr<cudf::column> create_distinct_rows_column(data_profile const& profile,
                                                           thrust::minstd_rand& engine,
                                                           cudf::size_type num_rows)
 {
-  using DeviceType = cudf::device_storage_type_t<T>;
-
-  auto init = cudf::make_fixed_width_scalar(T{});
-  auto col  = cudf::sequence(num_rows, *init);
-
-  if (profile.get_null_probability().has_value()) {
-    auto valid_dist =
-      random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_probability().value()});
-    auto null_mask = valid_dist(engine, num_rows);
-    auto [result_bitmask, null_count] =
-      cudf::bools_to_mask(cudf::device_span<bool const>(null_mask), cudf::get_default_stream());
-    col->set_null_mask(std::move(*result_bitmask.release()), null_count);
-  }
-
-  return std::move(cudf::sample(cudf::table_view({col->view()}), num_rows)->release()[0]);
+  return create_random_column<T>(profile, engine, num_rows);
 }
 
 /**
@@ -637,6 +624,26 @@ struct create_rand_col_fn {
     return create_random_column<T>(profile, engine, num_rows);
   }
 };
+
+template <typename T, CUDF_ENABLE_IF(cudf::is_numeric_not_bool<T>())>
+std::unique_ptr<cudf::column> create_random_column<T>(data_profile const& profile,
+                                                      thrust::minstd_rand& engine,
+                                                      cudf::size_type num_rows)
+{
+  auto init = cudf::make_fixed_width_scalar(T{});
+  auto col  = cudf::sequence(num_rows, *init);
+
+  if (profile.get_null_probability().has_value()) {
+    auto valid_dist =
+      random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_probability().value()});
+    auto null_mask = valid_dist(engine, num_rows);
+    auto [result_bitmask, null_count] =
+      cudf::bools_to_mask(cudf::device_span<bool const>(null_mask), cudf::get_default_stream());
+    col->set_null_mask(std::move(*result_bitmask.release()), null_count);
+  }
+
+  return std::move(cudf::sample(cudf::table_view({col->view()}), num_rows)->release()[0]);
+}
 
 /**
  * @brief Creates a string column with random content.
@@ -778,15 +785,13 @@ std::unique_ptr<cudf::column> create_distinct_rows_column<cudf::struct_view>(
   return std::move(cudf::sample(cudf::table_view({structs_col->view()}), num_rows)->release()[0]);
 }
 
+template <typename T>
 struct clamp_down {
-  cudf::size_type max;
-  bool const* validity;
-  uint32_t* sizes;
-  __device__ uint32_t operator()(cudf::size_type idx) const
-  {
-    return validity[idx] ? cuda::std::min(sizes[idx], static_cast<uint32_t>(max)) : 0;
-  }
+  T max;
+  clamp_down(T max) : max(max) {}
+  __host__ __device__ T operator()(T x) const { return min(x, max); }
 };
+
 /**
  * @brief Creates a list column with random content.
  *
@@ -829,15 +834,12 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
     auto offsets = len_dist(engine, current_num_rows + 1);
     auto valids  = valid_dist(engine, current_num_rows);
     // to ensure these values <= current_child_column->size()
-    thrust::transform(thrust::device,
-                      thrust::counting_iterator<cudf::size_type>(0),
-                      thrust::counting_iterator<cudf::size_type>(current_num_rows),
-                      offsets.begin(),
-                      clamp_down{current_child_column->size(), valids.begin(), offsets.begin()});
-    thrust::exclusive_scan(thrust::device, offsets.begin(), offsets.end(), offsets.begin());
-    // Always include all elements
-    offsets.set_element(
-      offsets.size() - 1, current_child_column->size(), cudf::get_default_stream());
+    auto output_offsets = thrust::make_transform_output_iterator(
+      offsets.begin(), clamp_down{current_child_column->size()});
+
+    thrust::exclusive_scan(thrust::device, offsets.begin(), offsets.end(), output_offsets);
+    thrust::device_pointer_cast(offsets.end())[-1] =
+      current_child_column->size();  // Always include all elements
 
     auto offsets_column = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
                                                          current_num_rows + 1,

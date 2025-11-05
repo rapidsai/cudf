@@ -1403,6 +1403,7 @@ def test_inplace_ops_series(op):
 @pytest.mark.parametrize("data", [pd.NaT, 1234, "nat"])
 def test_timestamp(data):
     xtimestamp = xpd.Timestamp(data)
+    assert isinstance(xtimestamp, datetime.datetime)
     timestamp = pd.Timestamp(data)
     tm.assert_equal(xtimestamp, timestamp)
 
@@ -1410,6 +1411,9 @@ def test_timestamp(data):
 @pytest.mark.parametrize("data", [pd.NaT, 1234, "nat"])
 def test_timedelta(data):
     xtimedelta = xpd.Timedelta(data)
+    if not (data is pd.NaT or data == "nat"):
+        # pandas.NaT subclasses datetime.datetime
+        assert isinstance(xtimedelta, datetime.timedelta)
     timedelta = pd.Timedelta(data)
     tm.assert_equal(xtimedelta, timedelta)
 
