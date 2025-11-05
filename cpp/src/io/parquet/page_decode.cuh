@@ -841,7 +841,7 @@ __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_input_value
           // the validity bit for thread t might actually represent output value t-6. the correct
           // position for thread t's bit is thread_value_count. for cuda 11 we could use
           // __reduce_or_sync(), but until then we have to do a warp reduce.
-          WarpReduceOr32(is_valid << thread_value_count);
+          warp_reduce_or<cudf::detail::warp_size>(is_valid << thread_value_count);
 
       thread_valid_count = __popc(warp_valid_mask & ((1 << thread_value_count) - 1));
       warp_valid_count   = __popc(warp_valid_mask);
