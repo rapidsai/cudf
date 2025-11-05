@@ -1,4 +1,5 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 """Test cases for benchmarks in bench_functions.py."""
 

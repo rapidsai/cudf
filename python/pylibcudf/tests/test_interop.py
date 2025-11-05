@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import decimal
 
@@ -236,7 +237,7 @@ def test_column_from_arrow_stream(data):
 def test_arrow_object_lifetime():
     def f():
         # Store a temporary so it is cached in the frame when the exception is raised
-        t = plc.interop.from_arrow(pa.Table.from_pydict({"a": [1]}))  # noqa: F841
+        t = plc.Table.from_arrow(pa.Table.from_pydict({"a": [1]}))  # noqa: F841
         raise ValueError("test exception")
 
     # Nested try-excepts are necessary for Python to extend the lifetime of the stack
@@ -253,3 +254,15 @@ def test_arrow_object_lifetime():
     except ValueError:
         # Ignore the exception. A failure in this test is a seg fault
         pass
+
+
+def test_deprecate_arrow_interop_apis():
+    with pytest.warns(
+        FutureWarning, match="pylibcudf.interop.from_arrow is deprecated"
+    ):
+        foo = plc.interop.from_arrow(pa.array([1]))
+
+    with pytest.warns(
+        FutureWarning, match="pylibcudf.interop.to_arrow is deprecated"
+    ):
+        plc.interop.to_arrow(foo)

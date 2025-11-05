@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 # libcudf examples build script
 
@@ -58,6 +59,7 @@ build_example() {
 }
 
 build_example basic
+build_example hybrid_scan_io
 build_example strings
 build_example string_transforms
 build_example nested_types

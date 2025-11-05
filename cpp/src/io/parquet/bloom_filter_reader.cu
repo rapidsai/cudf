@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "compact_protocol_reader.hpp"
@@ -170,8 +159,11 @@ class bloom_filter_expression_converter : public equality_literals_collector {
   bloom_filter_expression_converter(
     ast::expression const& expr,
     size_type num_input_columns,
-    cudf::host_span<std::vector<ast::literal*> const> equality_literals)
-    : _equality_literals{equality_literals}
+    cudf::host_span<std::vector<ast::literal*> const> equality_literals,
+    rmm::cuda_stream_view stream)
+    : _equality_literals{equality_literals},
+      _always_true_scalar{std::make_unique<cudf::numeric_scalar<bool>>(true, true, stream)},
+      _always_true{std::make_unique<ast::literal>(*_always_true_scalar)}
   {
     // Set the num columns
     _num_input_columns = num_input_columns;
@@ -206,16 +198,24 @@ class bloom_filter_expression_converter : public equality_literals_collector {
   std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override
   {
     using cudf::ast::ast_operator;
-    auto const operands = expr.get_operands();
-    auto const op       = expr.get_operator();
+    auto const operands       = expr.get_operands();
+    auto const op             = expr.get_operator();
+    auto const operator_arity = cudf::ast::detail::ast_operator_arity(op);
 
     if (auto* v = dynamic_cast<ast::column_reference const*>(&operands[0].get())) {
-      // First operand should be column reference, second should be literal.
-      CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 2,
-                   "Only binary operations are supported on column reference");
-      CUDF_EXPECTS(dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
-                   "Second operand of binary operation with column reference must be a literal");
+      // First operand should be column reference, second (if binary operation) should be literal.
+      CUDF_EXPECTS(operator_arity == 1 or cudf::ast::detail::ast_operator_arity(op) == 2,
+                   "Only unary and binary operations are supported on column reference");
+      CUDF_EXPECTS(
+        operator_arity == 1 or dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
+        "Second operand of binary operation with column reference must be a literal");
       v->accept(*this);
+
+      // Propagate the `_always_true` as expression to its unary operator parent
+      if (operator_arity == 1) {
+        _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
+        return *_always_true;
+      }
 
       if (op == ast_operator::EQUAL) {
         // Search the literal in this input column's equality literals list and add to the offset.
@@ -232,18 +232,23 @@ class bloom_filter_expression_converter : public equality_literals_collector {
         auto const& value = _bloom_filter_expr.push(ast::column_reference{col_literal_offset});
         _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, value});
       }
-      // For all other expressions, push an always true expression
+      // For all other expressions, push the `_always_true` expression
       else {
-        _bloom_filter_expr.push(
-          ast::operation{ast_operator::NOT,
-                         _bloom_filter_expr.push(ast::operation{ast_operator::NOT, _always_true})});
+        _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
       }
     } else {
       auto new_operands = visit_operands(operands);
-      if (cudf::ast::detail::ast_operator_arity(op) == 2) {
+      if (operator_arity == 2) {
         _bloom_filter_expr.push(ast::operation{op, new_operands.front(), new_operands.back()});
-      } else if (cudf::ast::detail::ast_operator_arity(op) == 1) {
-        _bloom_filter_expr.push(ast::operation{op, new_operands.front()});
+      } else if (operator_arity == 1) {
+        // If the new_operands is just a `_always_true` literal, propagate it here
+        if (&new_operands.front().get() == _always_true.get()) {
+          _bloom_filter_expr.push(
+            ast::operation{ast_operator::IDENTITY, _bloom_filter_expr.back()});
+          return *_always_true;
+        } else {
+          _bloom_filter_expr.push(ast::operation{op, new_operands.front()});
+        }
       }
     }
     return _bloom_filter_expr.back();
@@ -263,8 +268,8 @@ class bloom_filter_expression_converter : public equality_literals_collector {
   std::vector<cudf::size_type> _col_literals_offsets;
   cudf::host_span<std::vector<ast::literal*> const> _equality_literals;
   ast::tree _bloom_filter_expr;
-  cudf::numeric_scalar<bool> _always_true_scalar{true};
-  ast::literal const _always_true{_always_true_scalar};
+  std::unique_ptr<cudf::numeric_scalar<bool>> _always_true_scalar;
+  std::unique_ptr<ast::literal> _always_true;
 };
 
 /**
@@ -574,7 +579,8 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
 
   // Convert AST to BloomfilterAST expression with reference to bloom filter membership
   // in above `bloom_filter_membership_table`
-  bloom_filter_expression_converter bloom_filter_expr{filter.get(), num_input_columns, {literals}};
+  bloom_filter_expression_converter bloom_filter_expr{
+    filter.get(), num_input_columns, {literals}, stream};
 
   // Filter bloom filter membership table with the BloomfilterAST expression and collect
   // filtered row group indices
@@ -622,17 +628,23 @@ std::reference_wrapper<ast::expression const> equality_literals_collector::visit
   auto const op       = expr.get_operator();
 
   if (auto* v = dynamic_cast<ast::column_reference const*>(&operands[0].get())) {
-    // First operand should be column reference, second should be literal.
-    CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 2,
-                 "Only binary operations are supported on column reference");
-    auto const literal_ptr = dynamic_cast<ast::literal const*>(&operands[1].get());
-    CUDF_EXPECTS(literal_ptr != nullptr,
-                 "Second operand of binary operation with column reference must be a literal");
+    // First operand should be column reference, second (if binary operation) should be literal.
+    auto const operator_arity = cudf::ast::detail::ast_operator_arity(op);
+    CUDF_EXPECTS(operator_arity == 1 or operator_arity == 2,
+                 "Only unary and binary operations are supported on column reference");
+    CUDF_EXPECTS(
+      operator_arity == 1 or dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
+      "Second operand of binary operation with column reference must be a literal");
+
     v->accept(*this);
+
+    // Return early if this is a unary operation
+    if (operator_arity == 1) { return expr; }
 
     // Push to the corresponding column's literals list iff equality predicate is seen
     if (op == ast_operator::EQUAL) {
-      auto const col_idx = v->get_column_index();
+      auto const literal_ptr = dynamic_cast<ast::literal const*>(&operands[1].get());
+      auto const col_idx     = v->get_column_index();
       _literals[col_idx].emplace_back(const_cast<ast::literal*>(literal_ptr));
     }
   } else {

@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -81,7 +82,7 @@ class CategoricalColumn(column.ColumnBase):
     """
 
     dtype: CategoricalDtype
-    _children: tuple[NumericalColumn]  # type: ignore[assignment]
+    _children: tuple[NumericalColumn]
     _VALID_REDUCTIONS = {
         "max",
         "min",
@@ -98,22 +99,16 @@ class CategoricalColumn(column.ColumnBase):
     def __init__(
         self,
         data: None,
-        size: int | None,
+        size: int,
         dtype: CategoricalDtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple[NumericalColumn] = (),  # type: ignore[assignment]
+        mask: Buffer | None,
+        offset: int,
+        null_count: int,
+        children: tuple[NumericalColumn],
     ):
         if data is not None:
             raise ValueError(f"{data=} must be None")
         validate_categorical_children(children)
-        if size is None:
-            child = children[0]
-            assert child.offset == 0
-            assert child.base_mask is None
-            size = child.size
-            size = size - offset
         if not isinstance(dtype, CategoricalDtype):
             raise ValueError(
                 f"{dtype=} must be cudf.CategoricalDtype instance."
@@ -248,7 +243,7 @@ class CategoricalColumn(column.ColumnBase):
     def _reduce(
         self,
         op: str,
-        skipna: bool | None = None,
+        skipna: bool = True,
         min_count: int = 0,
         *args,
         **kwargs,
@@ -309,7 +304,7 @@ class CategoricalColumn(column.ColumnBase):
         val = self.codes.element_indexing(index)
         if val is self._PANDAS_NA_VALUE:
             return val
-        return self._decode(int(val))
+        return self._decode(int(val))  # type: ignore[arg-type]
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
@@ -331,13 +326,8 @@ class CategoricalColumn(column.ColumnBase):
             raise NotImplementedError(f"{arrow_type=} is not supported.")
 
         if self.categories.dtype.kind == "f":
-            col = type(self)(
-                data=self.data,  # type: ignore[arg-type]
-                size=self.size,
-                dtype=self.dtype,
-                mask=self.notnull().fillna(False).as_mask(),
-                children=self.children,
-            )
+            new_mask = self.notnull().fillna(False).as_mask()
+            col = self.set_mask(new_mask)
         else:
             col = self
 
@@ -413,10 +403,10 @@ class CategoricalColumn(column.ColumnBase):
 
     def find_and_replace(
         self,
-        to_replace: ColumnLike,
-        replacement: ColumnLike,
+        to_replace: ColumnBase | list,
+        replacement: ColumnBase | list,
         all_nan: bool = False,
-    ) -> CategoricalColumn:
+    ) -> Self:
         """
         Return col with *to_replace* replaced with *replacement*.
         """
@@ -449,7 +439,7 @@ class CategoricalColumn(column.ColumnBase):
             # However, it seems that this functionality has been broken for a
             # long time so for now we're just having mypy ignore and we'll come
             # back to this.
-            if fill_value in self.categories:  # type: ignore
+            if fill_value in self.categories:  # type: ignore[operator]
                 replaced = self.fillna(fill_value)
             else:
                 new_categories = self.categories.append(
@@ -714,7 +704,7 @@ class CategoricalColumn(column.ColumnBase):
         elif newsize == 0:
             codes_col = column.column_empty(0, head.codes.dtype)
         else:
-            codes_col = column.concat_columns(codes)  # type: ignore[arg-type]
+            codes_col = column.concat_columns(codes)
 
         return codes_col._with_type_metadata(CategoricalDtype(categories=cats))  # type: ignore[return-value]
 

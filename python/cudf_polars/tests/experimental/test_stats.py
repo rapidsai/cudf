@@ -17,7 +17,11 @@ from cudf_polars.experimental.statistics import (
     collect_statistics,
     find_equivalence_sets,
 )
-from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    DEFAULT_CLUSTER,
+    DEFAULT_RUNTIME,
+    assert_gpu_result_equal,
+)
 from cudf_polars.testing.io import make_lazy_frame, make_partitioned_source
 from cudf_polars.utils.config import ConfigOptions
 
@@ -39,8 +43,9 @@ def engine():
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "scheduler": DEFAULT_SCHEDULER,
-            "shuffle_method": "tasks",
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+            "shuffle_method": DEFAULT_RUNTIME,  # Names coincide
             "target_partition_size": 10_000,
             "max_rows_per_partition": 1_000,
             "stats_planning": {"use_reduction_planning": True},
@@ -72,14 +77,20 @@ def test_base_stats_dataframescan(df, engine):
     # We need to use force=True to sample unique-value statistics,
     # because nothing in the query requires unique-value statistics.
     assert math.isclose(
-        source_info_x.unique_stats(force=True).count.value, row_count, rel_tol=5e-2
+        source_info_x.unique_stats(force=True).count.value,
+        row_count,
+        rel_tol=5e-2,
     )
     assert math.isclose(
-        source_info_x.unique_stats(force=True).fraction.value, 1.0, abs_tol=1e-2
+        source_info_x.unique_stats(force=True).fraction.value,
+        1.0,
+        abs_tol=1e-2,
     )
     assert not source_info_x.unique_stats(force=True).count.exact
     assert math.isclose(
-        source_info_y.unique_stats(force=True).count.value, 3, rel_tol=5e-2
+        source_info_y.unique_stats(force=True).count.value,
+        3,
+        rel_tol=5e-2,
     )
     assert math.isclose(
         source_info_y.unique_stats(force=True).fraction.value,
@@ -88,7 +99,9 @@ def test_base_stats_dataframescan(df, engine):
     )
     assert not source_info_y.unique_stats(force=True).count.exact
     assert math.isclose(
-        source_info_z.unique_stats(force=True).count.value, 5, rel_tol=5e-2
+        source_info_z.unique_stats(force=True).count.value,
+        5,
+        rel_tol=5e-2,
     )
     assert math.isclose(
         source_info_z.unique_stats(force=True).fraction.value,
@@ -124,7 +137,8 @@ def test_base_stats_parquet(
         executor="streaming",
         executor_options={
             "target_partition_size": 10_000,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
         },
         parquet_options={
             "max_footer_samples": max_footer_samples,
@@ -220,7 +234,8 @@ def test_base_stats_parquet_groupby(
         executor="streaming",
         executor_options={
             "target_partition_size": 10_000,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
             "stats_planning": {"use_reduction_planning": True},
         },
         parquet_options={
@@ -441,8 +456,9 @@ def test_stats_planning(
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "scheduler": DEFAULT_SCHEDULER,
-            "shuffle_method": "tasks",
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+            "shuffle_method": DEFAULT_RUNTIME,  # Names coincide
             "target_partition_size": 10_000,
             "max_rows_per_partition": 1_000,
             "stats_planning": {

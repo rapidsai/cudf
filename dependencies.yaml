@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+
 # Dependency list for https://github.com/rapidsai/dependency-file-generator
 files:
   all:
@@ -327,6 +330,14 @@ files:
       key: experimental
     includes:
       - run_cudf_polars_experimental
+  py_run_cudf_polars_rapidsmpf:
+    output: pyproject
+    pyproject_dir: python/cudf_polars
+    extras:
+      table: project.optional-dependencies
+      key: rapidsmpf
+    includes:
+      - depends_on_rapidsmpf
   py_test_cudf_polars:
     output: pyproject
     pyproject_dir: python/cudf_polars
@@ -537,10 +548,6 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
-              cuda: "12.0"
-            packages:
-              - cuda-version=12.0
-          - matrix:
               cuda: "12.2"
             packages:
               - cuda-version=12.2
@@ -727,7 +734,7 @@ dependencies:
           # 'nvidia-ml-py' provides the 'pynvml' module
           - &nvidia_ml_py nvidia-ml-py>=12
           - packaging
-          - polars>=1.28,<1.33
+          - polars>=1.29,<1.34
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -857,21 +864,21 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
+          - aiobotocore>=2.2.0
+          - boto3>=1.21.21
+          - botocore>=1.24.21
           - cramjam
           - *fastavro
           - hypothesis>=6.131.7
           - pytest-benchmark
           - pytest-cases>=3.8.2
+          - s3fs>=2022.3.0
           - scipy
           - zstandard
       - output_types: conda
         packages:
-          - aiobotocore>=2.2.0
-          - boto3>=1.21.21
-          - botocore>=1.24.21
           - msgpack-python
           - moto>=4.0.8
-          - s3fs>=2022.3.0
       - output_types: [pyproject, requirements]
         packages:
           - msgpack
@@ -1144,11 +1151,37 @@ dependencies:
           - matrix:
             packages:
               - *rmm_unsuffixed
+  depends_on_rapidsmpf:
+    common:
+      - output_types: conda
+        packages:
+          - &rapidsmpf_unsuffixed rapidsmpf==25.12.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          - --extra-index-url=https://pypi.nvidia.com
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - rapidsmpf-cu12==25.12.*,>=0.0.0a0
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - rapidsmpf-cu13==25.12.*,>=0.0.0a0
+          - matrix:
+            packages:
+              - *rapidsmpf_unsuffixed
   depends_on_rapids_logger:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - rapids-logger==0.1.*,>=0.0.0a0
+          - rapids-logger==0.2.*,>=0.0.0a0
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file

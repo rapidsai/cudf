@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import sys
 from decimal import Decimal
 
@@ -7,7 +8,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-from numba import cuda
 
 import rmm
 
@@ -98,6 +98,7 @@ def test_column_offset_and_size(pandas_input, offset, size):
         mask=col.base_mask,
         size=size,
         offset=offset,
+        null_count=col.null_count,
         children=col.base_children,
     )
 
@@ -255,7 +256,7 @@ def test_column_zero_length_slice():
     the_column = x[1:]["a"]._column
 
     expect = np.array([], dtype="int8")
-    got = cuda.as_cuda_array(the_column.data).copy_to_host()
+    got = cp.asarray(the_column.data).get()
 
     np.testing.assert_array_equal(expect, got)
 
@@ -519,6 +520,9 @@ def test_string_no_children_properties():
         as_buffer(rmm.DeviceBuffer(size=0)),
         size=0,
         dtype=np.dtype("object"),
+        mask=None,
+        offset=0,
+        null_count=0,
         children=(),
     )
     assert empty_col.base_children == ()

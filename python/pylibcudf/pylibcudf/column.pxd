@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
@@ -25,7 +26,7 @@ cdef class OwnerWithCAI:
     cdef dict cai
 
     @staticmethod
-    cdef create(column_view cv, object owner)
+    cdef create(column_view cv, object owner, Stream stream)
 
 
 cdef class OwnerMaskWithCAI:
@@ -60,14 +61,18 @@ cdef class Column:
     cdef Column from_libcudf(
         unique_ptr[column] libcudf_col,
         Stream stream,
-        DeviceMemoryResource mr=*
+        DeviceMemoryResource mr
     )
 
     @staticmethod
     cdef Column from_column_view(const column_view& cv, Column owner)
 
     @staticmethod
-    cdef Column from_column_view_of_arbitrary(const column_view& cv, object owner)
+    cdef Column from_column_view_of_arbitrary(
+        const column_view& cv,
+        object owner,
+        Stream stream,
+    )
 
     @staticmethod
     cdef Column _wrap_nested_list_column(
