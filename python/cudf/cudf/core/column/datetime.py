@@ -155,6 +155,15 @@ class DatetimeColumn(TemporalBaseColumn):
                 # attr was not called yet, so ignore.
                 pass
 
+    def _scan(self, op: str) -> ColumnBase:
+        if op not in {"cummin", "cummax"}:
+            raise TypeError(
+                f"Accumulation {op} not supported for {self.dtype}"
+            )
+        return self.scan(op.replace("cum", ""), True)._with_type_metadata(
+            self.dtype
+        )
+
     @staticmethod
     def _validate_dtype_instance(dtype: np.dtype) -> np.dtype:
         if (

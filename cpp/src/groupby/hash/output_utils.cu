@@ -71,10 +71,11 @@ struct result_column_creator {
       auto const mask_flag   = nullable ? mask_state::ALL_NULL : mask_state::UNALLOCATED;
       return make_uninitialized_column(target_type, output_size, mask_flag);
     }
-    auto make_children = [&make_uninitialized_column](size_type size) {
+    auto make_children = [&make_uninitialized_column, col_type](size_type size) {
       std::vector<std::unique_ptr<column>> children;
-      children.push_back(
-        make_uninitialized_column(data_type{type_id::INT64}, size, mask_state::UNALLOCATED));
+      // Create sum child column - no null mask needed, struct-level mask handles nullability
+      children.push_back(make_uninitialized_column(col_type, size, mask_state::UNALLOCATED));
+      // Create overflow child column (bool) - no null mask needed, only value matters
       children.push_back(
         make_uninitialized_column(data_type{type_id::BOOL8}, size, mask_state::UNALLOCATED));
       return children;
