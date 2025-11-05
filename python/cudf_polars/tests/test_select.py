@@ -49,6 +49,8 @@ def test_select_decimal_precision_none_result_max_precision():
     query = ldf.select(pl.col("a"))
     cpu_result = query.collect()
     gpu_result = query.collect(engine="gpu")
+    # See github.com/pola-rs/polars/issues/19784
+    # for context on the decimal changes.
     assert cpu_result.schema["a"].precision is None if POLARS_VERSION_LT_134 else 38
     assert gpu_result.schema["a"].precision == 38
 

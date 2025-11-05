@@ -24,13 +24,7 @@ __all__ = ["Agg"]
 
 
 class Agg(Expr):
-    __slots__ = (
-        "context",
-        "name",
-        "op",
-        "options",
-        "request",
-    )
+    __slots__ = ("context", "name", "op", "options", "request")
     _non_child = ("dtype", "name", "options", "context")
 
     def __init__(

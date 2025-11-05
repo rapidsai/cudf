@@ -194,6 +194,7 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/test_predicates.py::test_predicate_pushdown_split_pushable": "Casting that raises not supported on GPU",
     "tests/unit/io/test_scan_row_deletion.py::test_scan_row_deletion_skips_file_with_all_rows_deleted": "The test intentionally corrupts the parquet file, so we cannot read the row count from the header.",
     "tests/unit/io/test_multiscan.py::test_multiscan_row_index[scan_csv-write_csv-csv]": "Debug output on stderr doesn't match",
+    "tests/unit/datatypes/test_decimal.py::test_decimal_aggregations": "https://github.com/rapidsai/cudf/issues/20508",
     "tests/unit/datatypes/test_struct.py::test_struct_agg_all": "Needs nested list[struct] support",
     "tests/unit/constructors/test_structs.py::test_constructor_non_strict_schema_17956": "Needs nested list[struct] support",
     "tests/unit/io/test_delta.py::test_read_delta_arrow_map_type": "Needs nested list[struct] support",
