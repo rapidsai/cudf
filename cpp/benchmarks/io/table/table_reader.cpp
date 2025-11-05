@@ -31,7 +31,6 @@ void table_read_common(cudf::size_type num_rows_to_read,
     cudf::get_default_stream().synchronize();
   }
 
-  auto mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
@@ -50,8 +49,6 @@ void table_read_common(cudf::size_type num_rows_to_read,
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");
-  state.add_buffer_size(
-    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
   state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
 }
 
