@@ -26,10 +26,6 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
 from cudf_polars.experimental.shuffle import Shuffle
-from cudf_polars.utils.cuda_stream import (
-    get_joined_cuda_stream,
-    join_cuda_streams,
-)
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -124,7 +120,7 @@ class LocalShuffle:
         _release_shuffle_id(self.op_id)
         return False
 
-    def insert_chunk(self, chunk: TableChunk, stream: Stream) -> None:
+    def insert_chunk(self, chunk: TableChunk) -> None:
         """
         Insert a chunk into the local shuffle instance.
 
@@ -132,19 +128,15 @@ class LocalShuffle:
         ----------
         chunk: TableChunk
             The table chunk to insert.
-        stream: Stream
-            The stream to use for chunk insertion.
         """
         # Partition and pack using the Python function
-        stream = get_joined_cuda_stream(lambda: stream, upstreams=(chunk.stream,))
         partitioned_chunks = py_partition_and_pack(
             table=chunk.table_view(),
             columns_to_hash=self.columns_to_hash,
             num_partitions=self.num_partitions,
-            stream=stream,
+            stream=chunk.stream,
             br=self.br,
         )
-        join_cuda_streams(downstreams=(chunk.stream,), upstreams=(stream,))
 
         # Insert into shuffler
         self.shuffler.insert_chunks(partitioned_chunks)
@@ -217,9 +209,6 @@ async def local_shuffle_node(
         # Create LocalShuffle context manager to handle shuffler lifecycle
         # TODO: Use ir_context to get the stream (not available yet)
         with LocalShuffle(context, num_partitions, columns_to_hash) as local_shuffle:
-            # Get the CUDA stream from the execution context
-            stream = ir_context.get_cuda_stream()
-
             # Process input chunks
             while True:
                 msg = await ch_in.data.recv(context)
@@ -230,10 +219,11 @@ async def local_shuffle_node(
                 chunk = TableChunk.from_message(msg)
 
                 # Get the table view and insert into shuffler
-                local_shuffle.insert_chunk(chunk, stream)
+                local_shuffle.insert_chunk(chunk)
 
             # Extract shuffled partitions and send them out
             # LocalShuffle.extract_chunk handles insert_finished, wait, extract, and unpack
+            stream = ir_context.get_cuda_stream()
             for partition_id in range(num_partitions):
                 # Create a new TableChunk with the result
                 output_chunk = TableChunk.from_pylibcudf_table(
