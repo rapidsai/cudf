@@ -477,7 +477,7 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
     # Start with simple case only (no predicates, row_index, etc.).
     nodes: list[Any]
     if (
-        partition_info.count > 1
+        partition_info.count > 1  # Ensure count=1 for now
         and ir.typ == "parquet"
         and ir.row_index is None
         and ir.include_file_paths is None
