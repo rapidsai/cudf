@@ -383,7 +383,7 @@ Series = make_final_proxy_type(
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
         "_accessors": set(),
         "dtype": property(_Series_dtype),
-        "argsort": _argsort,
+        # "argsort": _argsort,
         "attrs": _FastSlowAttribute("attrs"),
         "_mgr": _FastSlowAttribute("_mgr", private=True),
         "array": _FastSlowAttribute("array", private=True),
@@ -455,7 +455,7 @@ Index = make_final_proxy_type(
         "array": _FastSlowAttribute("array", private=True),
         # TODO: Handle special cases like mergesort being unsupported
         # and raising for certain types like Categorical and RangeIndex
-        "argsort": _argsort,
+        # "argsort": _argsort,
     },
 )
 

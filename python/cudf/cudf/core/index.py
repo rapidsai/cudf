@@ -3286,12 +3286,13 @@ class RangeIndex(Index):
         ascending=True,
         na_position="last",
     ) -> cupy.ndarray:
+        dtype = np.intp if cudf.get_option("mode.pandas_compatible") else None
         if na_position not in {"first", "last"}:
             raise ValueError(f"invalid na_position: {na_position}")
         if (ascending and self.step < 0) or (not ascending and self.step > 0):
-            return cupy.arange(len(self) - 1, -1, -1)
+            return cupy.arange(len(self) - 1, -1, -1, dtype=dtype)
         else:
-            return cupy.arange(len(self))
+            return cupy.arange(len(self), dtype=dtype)
 
     @_performance_tracking
     def searchsorted(
