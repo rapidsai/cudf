@@ -609,8 +609,7 @@ struct search_fenwick_tree_functor {
     if constexpr (Boundary == boundary::START) {
       if (start == 0 or is_power_of_two(start)) {
         auto const block_size =
-          std::max<size_type>(size_type{1} << cuda::std::countr_zero<uint32_t>(start),
-                              largest_power_of_two_in_range(start, end));
+          std::max<size_type>(start & -start, largest_power_of_two_in_range(start, end));
         auto const tree_level = cuda::std::countr_zero<uint32_t>(block_size);
         return cuda::std::pair{tree_level, block_size};
       } else {
