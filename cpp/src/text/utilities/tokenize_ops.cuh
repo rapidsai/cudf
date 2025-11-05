@@ -100,6 +100,10 @@ struct characters_tokenizer {
         }
         continue;
       }
+      if (chr_width == 0) {
+        current_position++;
+        continue;
+      }
       spaces = !spaces;
       if (spaces) {
         end_position = current_position;
