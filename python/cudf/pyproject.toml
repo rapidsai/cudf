@@ -51,6 +51,9 @@ classifiers = [
 
 [project.optional-dependencies]
 test = [
+    "aiobotocore>=2.2.0",
+    "boto3>=1.21.21",
+    "botocore>=1.24.21",
     "cramjam",
     "fastavro>=0.22.9",
     "hypothesis>=6.131.7",
