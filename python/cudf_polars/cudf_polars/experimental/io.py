@@ -812,7 +812,18 @@ class ParquetSourceInfo(DataSourceInfo):
 
     def storage_size(self, column: str) -> ColumnStat[int]:
         """Return the average column size for a single file."""
-        return self.metadata.mean_size_per_file.get(column, ColumnStat[int]())
+        file_count = len(self.paths)
+        row_count = self.row_count.value
+        partial_mean_size = self.metadata.mean_size_per_file.get(
+            column, ColumnStat[int]()
+        ).value
+        if file_count and row_count and partial_mean_size:
+            # NOTE: We set a lower bound on the estimated size using
+            # the row count, because dictionary encoding can make the
+            # in-memory size much larger.
+            min_value = max(1, row_count // file_count)
+            return ColumnStat[int](max(min_value, partial_mean_size))
+        return ColumnStat[int]()
 
     def add_unique_stats_column(self, column: str) -> None:
         """Add a column needing unique-value information."""
