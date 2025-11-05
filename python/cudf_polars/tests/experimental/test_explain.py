@@ -10,7 +10,11 @@ import pytest
 import polars as pl
 
 from cudf_polars.experimental.explain import _fmt_row_count, explain_query
-from cudf_polars.testing.asserts import DEFAULT_CLUSTER, assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    DEFAULT_CLUSTER,
+    DEFAULT_RUNTIME,
+    assert_gpu_result_equal,
+)
 from cudf_polars.testing.io import make_lazy_frame, make_partitioned_source
 
 
@@ -32,7 +36,8 @@ def engine():
         executor="streaming",
         executor_options={
             "cluster": DEFAULT_CLUSTER,
-            "shuffle_method": "tasks",
+            "runtime": DEFAULT_RUNTIME,
+            "shuffle_method": DEFAULT_RUNTIME,  # Names coincide
             "target_partition_size": 10_000,
             "max_rows_per_partition": 1_000,
             "stats_planning": {
@@ -84,13 +89,16 @@ def test_explain_physical_plan(tmp_path, df):
         executor_options={
             "target_partition_size": 10_000,
             "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
         },
     )
 
     plan = explain_query(q, engine)
 
-    assert "UNION" in plan
-    assert "SPLITSCAN" in plan
+    if DEFAULT_RUNTIME == "tasks":
+        # rapidsmpf runtime does not split Scan nodes at lowering time
+        assert "UNION" in plan
+        assert "SPLITSCAN" in plan
     assert "SELECT ('sum', 'y')" in plan or "PROJECTION ('sum', 'y')" in plan
 
 
@@ -110,6 +118,7 @@ def test_explain_physical_plan_with_groupby(tmp_path, df):
         executor_options={
             "target_partition_size": 10_000,
             "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
         },
     )
 
@@ -126,7 +135,11 @@ def test_explain_logical_plan_with_join(tmp_path, df):
 
     q = left.join(right, on="x", how="inner").select(["y", "z2"])
 
-    engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
+    engine = pl.GPUEngine(
+        executor="streaming",
+        raise_on_fail=True,
+        executor_options={"runtime": DEFAULT_RUNTIME},
+    )
     plan = explain_query(q, engine, physical=False)
 
     assert "JOIN Inner ('x',) ('x',)" in plan
@@ -137,7 +150,11 @@ def test_explain_logical_plan_with_sort(tmp_path, df):
 
     q = pl.scan_parquet(tmp_path).sort("z").select(["x", "z"])
 
-    engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
+    engine = pl.GPUEngine(
+        executor="streaming",
+        raise_on_fail=True,
+        executor_options={"runtime": DEFAULT_RUNTIME},
+    )
     plan = explain_query(q, engine, physical=False)
 
     assert "SORT ('z',)" in plan
@@ -148,7 +165,11 @@ def test_explain_physical_plan_with_union_without_scan(df):
     q2 = df.lazy().select(["x", "z"])
     q = pl.concat([q1, q2])
 
-    engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
+    engine = pl.GPUEngine(
+        executor="streaming",
+        raise_on_fail=True,
+        executor_options={"runtime": DEFAULT_RUNTIME},
+    )
     plan = explain_query(q, engine, physical=False)
 
     assert "UNION" in plan
@@ -160,7 +181,11 @@ def test_explain_logical_plan_wide_table_with_scan(tmp_path):
 
     q = pl.scan_parquet(tmp_path).select(df.columns)
 
-    engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
+    engine = pl.GPUEngine(
+        executor="streaming",
+        raise_on_fail=True,
+        executor_options={"runtime": DEFAULT_RUNTIME},
+    )
     plan = explain_query(q, engine, physical=False)
 
     assert "SCAN PARQUET ('col0', 'col1', 'col2', '...', 'col8', 'col9')" in plan
@@ -170,7 +195,11 @@ def test_explain_logical_plan_wide_table():
     df = pl.DataFrame({f"col{i}": range(10) for i in range(20)})
     q = df.lazy().select(df.columns)
 
-    engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
+    engine = pl.GPUEngine(
+        executor="streaming",
+        raise_on_fail=True,
+        executor_options={"runtime": DEFAULT_RUNTIME},
+    )
     plan = explain_query(q, engine, physical=False)
 
     assert "DATAFRAMESCAN ('col0', 'col1', 'col2', '...', 'col18', 'col19')" in plan
@@ -189,7 +218,7 @@ def test_fmt_row_count():
 @pytest.mark.parametrize("select", [True, False])
 def test_explain_logical_io_then_distinct(engine, tmp_path, kind, n_rows, select):
     # Create simple Distinct or Select(unique) + Sort query
-    df = pl.DataFrame(
+    df0 = pl.DataFrame(
         {
             "order_id": [1, 2, 3, 4, 5, 6],
             "customer_id": [101, 102, 101, 103, 103, 104],
@@ -197,13 +226,14 @@ def test_explain_logical_io_then_distinct(engine, tmp_path, kind, n_rows, select
             "year": [2023, 2023, 2023, 2024, 2024, 2024],
         }
     )
-    df = make_lazy_frame(df, kind, path=tmp_path, n_files=2, n_rows=n_rows)
+    df = make_lazy_frame(df0, kind, path=tmp_path, n_files=2, n_rows=n_rows)
     if select:
         q = df.select(pl.col("customer_id").unique()).sort("customer_id")
     else:
         q = df.unique(subset=["customer_id"]).sort("order_id")
 
     # Verify the query runs correctly
+    # TODO: Is the cpu engine doing the right thing here?
     assert_gpu_result_equal(q, engine=engine)
 
     # Check query plan
