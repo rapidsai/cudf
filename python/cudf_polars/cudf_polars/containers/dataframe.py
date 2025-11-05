@@ -393,7 +393,7 @@ class DataFrame:
             stream=self.stream,
         )
 
-    def select_columns(self, names: Iterable[str]) -> list[Column]:
+    def select_columns(self, names: Set[str]) -> list[Column]:
         """Select columns by name."""
         return [c for c in self.columns if c.name in names]
 

@@ -12,7 +12,6 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/split/split_re.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -21,6 +20,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/functional>
 #include <cuda/std/iterator>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -217,7 +217,7 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
       return static_cast<size_type>(d_offsets[idx + 1] - d_offsets[idx]);
     }),
     0,
-    cudf::detail::maximum<size_type>{});
+    cuda::maximum<size_type>{});
 
   // boundary case: if no columns, return one all-null column (custrings issue #119)
   if (columns_count == 0) {
