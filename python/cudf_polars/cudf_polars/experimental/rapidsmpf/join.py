@@ -10,8 +10,6 @@ from typing import TYPE_CHECKING, Any, Literal
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
-import pylibcudf as plc
-
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Join
 from cudf_polars.experimental.rapidsmpf.dispatch import (
@@ -162,10 +160,7 @@ async def broadcast_join_node(
                         (
                             results[0].table
                             if len(results) == 1
-                            else plc.concatenate.concatenate(
-                                [r.table for r in results],
-                                build_stream,
-                            )
+                            else _concat(*results, context=ir_context).table
                         ),
                         build_stream,
                         exclusive_view=True,
