@@ -620,7 +620,10 @@ struct search_fenwick_tree_functor {
     } else {
       auto block_size = end & -end;
       if (start > 0 and is_power_of_two(end)) {
-        block_size = end - smallest_power_of_two_in_range(start, end);
+        auto const next_alignment =
+          std::max<size_type>(smallest_power_of_two_in_range(start, end),
+                              largest_power_of_two_in_range(0, end - start));
+        block_size = end - next_alignment;
       }
       return cuda::std::pair{cuda::std::countr_zero<uint32_t>(block_size), block_size};
     }
