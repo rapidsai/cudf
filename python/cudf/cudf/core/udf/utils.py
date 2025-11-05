@@ -272,8 +272,14 @@ def _return_arr_from_dtype(dtype, size):
 @functools.cache
 def _make_free_string_kernel():
     with nrt_enabled():
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
+        with warnings.catch_warnings():
+            warnings.simplefilter("default")
+            warnings.filterwarnings(
+                "ignore",
+                message=DEPRECATED_SM_REGEX,
+                category=UserWarning,
+                module=r"^numba\.cuda(\.|$)",
+            )
 
             @cuda.jit(
                 void(CPointer(managed_udf_string), int64),
@@ -285,11 +291,6 @@ def _make_free_string_kernel():
                 if gid < size:
                     NRT_decref(ary[gid])
 
-            for warn in w:
-                msg = str(warn.message)
-                if DEPRECATED_SM_REGEX.search(msg):
-                    continue
-                warnings.warn(warn.message, warn.category)
     return free_managed_udf_string_array
 
 

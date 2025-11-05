@@ -159,18 +159,19 @@ class ApplyKernelBase(ABC):
         _kernel = global_exec_context["_kernel"]
         ctx = nrt_enabled() if nrt else nullcontext()
         with ctx:
-            with warnings.catch_warnings(record=True) as w:
-                warnings.simplefilter("always")
+            with warnings.catch_warnings():
+                warnings.simplefilter("default")
+                warnings.filterwarnings(
+                    "ignore",
+                    message=DEPRECATED_SM_REGEX,
+                    category=UserWarning,
+                    module=r"^numba\.cuda(\.|$)",
+                )
                 kernel = cuda.jit(
                     self.sig,
                     link=[UDF_SHIM_FILE],
                     extensions=[str_view_arg_handler],
                 )(_kernel)
-                for warn in w:
-                    msg = str(warn.message)
-                    if DEPRECATED_SM_REGEX.search(msg):
-                        continue
-                    warnings.warn(warn.message, warn.category)
         return kernel
 
     def get_kernel(self):
