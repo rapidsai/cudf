@@ -318,8 +318,8 @@ def _cast_literal_to_decimal(
     else:
         assert isinstance(side, expr.Col)
         name = side.name
-    if phys_type_map[name].id() in _DECIMAL_IDS:
-        scale = abs(phys_type_map[name].scale())
+    if (type_ := phys_type_map[name]).id() in _DECIMAL_IDS:
+        scale = abs(type_.scale())
         return expr.Cast(side.dtype, expr.Cast(DataType(pl.Decimal(38, scale)), lit))
     return lit
 

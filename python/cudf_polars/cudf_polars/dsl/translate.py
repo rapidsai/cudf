@@ -14,6 +14,10 @@ from typing import TYPE_CHECKING, Any
 from typing_extensions import assert_never
 
 import polars as pl
+
+# polars.polars is not a part of the public API,
+# so we cannot rely on importing it directly
+# See https://github.com/pola-rs/polars/issues/24826
 from polars import polars as plrs
 
 import pylibcudf as plc
@@ -1028,8 +1032,7 @@ def _(
     agg_name = node.name
     args = [translator.translate_expr(n=arg, schema=schema) for arg in node.arguments]
 
-    aggs = ["count", "n_unique", "mean", "median", "quantile"]
-    if agg_name not in aggs:
+    if agg_name not in ("count", "n_unique", "mean", "median", "quantile"):
         args = [
             expr.Cast(dtype, arg)
             if plc.traits.is_fixed_point(arg.dtype.plc_type)

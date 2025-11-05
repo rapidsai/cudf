@@ -9,18 +9,16 @@ from __future__ import annotations
 from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar
 
-import polars as pl
-
 import pylibcudf as plc
 
-from cudf_polars.containers import Column, DataType
+from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 
 if TYPE_CHECKING:
     from rmm.pylibrmm.stream import Stream
 
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["Agg"]
 
@@ -164,44 +162,22 @@ class Agg(Expr):
     def _reduce(
         self, column: Column, *, request: plc.aggregation.Aggregation, stream: Stream
     ) -> Column:
-        is_mean_or_median = self.name in {"mean", "median"}
-        is_quantile = self.name == "quantile"
-
-        out_dtype = self.dtype
-        if plc.traits.is_fixed_point(column.dtype.plc_type) and (
-            is_mean_or_median or is_quantile
+        if (
+            self.name in {"mean", "median"}
+            and plc.traits.is_fixed_point(column.dtype.plc_type)
+            and self.dtype.plc_type.id() in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
         ):
-            cast_to = (
-                self.dtype
-                if is_mean_or_median
-                and plc.traits.is_floating_point(self.dtype.plc_type)
-                else DataType(pl.Float64())
-            )
-            column = column.astype(cast_to, stream=stream)
-            out_dtype = cast_to
-        if column.size == 0 or column.null_count == column.size:
-            res = None
-            if self.name == "n_unique":
-                res = 0 if column.size == 0 else 1
-            return Column(
-                plc.Column.from_scalar(
-                    plc.Scalar.from_py(res, out_dtype.plc_type, stream=stream),
-                    1,
-                    stream=stream,
-                ),
-                name=column.name,
-                dtype=out_dtype,
-            )
+            column = column.astype(self.dtype, stream=stream)
         return Column(
             plc.Column.from_scalar(
                 plc.reduce.reduce(
-                    column.obj, request, out_dtype.plc_type, stream=stream
+                    column.obj, request, self.dtype.plc_type, stream=stream
                 ),
                 1,
                 stream=stream,
             ),
             name=column.name,
-            dtype=out_dtype,
+            dtype=self.dtype,
         )
 
     def _count(self, column: Column, *, include_nulls: bool, stream: Stream) -> Column:
@@ -228,21 +204,6 @@ class Agg(Expr):
                 ),
                 name=column.name,
                 dtype=self.dtype,
-            )
-        if plc.traits.is_fixed_point(column.dtype.plc_type):
-            return Column(
-                plc.Column.from_scalar(
-                    plc.reduce.reduce(
-                        column.obj,
-                        plc.aggregation.sum(),
-                        column.dtype.plc_type,
-                        stream=stream,
-                    ),
-                    1,
-                    stream=stream,
-                ),
-                name=column.name,
-                dtype=column.dtype,
             )
         return self._reduce(column, request=plc.aggregation.sum(), stream=stream)
 
