@@ -381,8 +381,11 @@ struct page_stats_caster : public stats_caster_base {
         });
 
       // Construct a row indices mapping based on page row counts and offsets
-      auto const page_indices =
-        compute_page_indices_async(page_row_counts, page_row_offsets, total_rows, stream);
+      auto const page_indices = compute_page_indices_async(page_row_counts,
+                                                           page_row_offsets,
+                                                           total_rows,
+                                                           stream,
+                                                           cudf::get_current_device_resource_ref());
 
       // For non-strings columns, directly gather the page-level column data and bitmask to the
       // row-level.
@@ -501,7 +504,9 @@ struct build_next_fenwick_tree_level_functor {
 
   /**
    * @brief Builds the next Fenwick tree level from the current level data
-   * by ORing the two children of the current level.
+   * by ORing two elements at the current level.
+   *
+   * elem_next_level[idx] = elem_current_level[idx * 2] OR elem_current_level[idx * 2 + 1];
    *
    * @param next_level_idx Next tree level element index
    */
@@ -522,6 +527,10 @@ struct build_next_fenwick_tree_level_functor {
 
 /**
  * @brief Functor to binary search a `true` value in the Fenwick tree in range [start, end)
+ *
+ * Algorithm: While `start` < `end`, align `start` UP and `end` DOWN to the next power-of-two
+ * searchable tree block. Check the appropriate fenwick tree at the corresponding level for a `true`
+ * value. If found, return. Else, move the boundary to its alignment and repeat.
  *
  * @param tree_level_ptrs Pointers to the start of Fenwick tree level data
  * @param page_offsets Pointer to page offsets describing each search range i as [page_offsets[i],

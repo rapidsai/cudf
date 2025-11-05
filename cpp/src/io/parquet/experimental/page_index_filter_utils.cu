@@ -200,13 +200,14 @@ rmm::device_uvector<size_type> compute_page_indices_async(
   cudf::host_span<cudf::size_type const> page_row_counts,
   cudf::host_span<cudf::size_type const> page_row_offsets,
   cudf::size_type total_rows,
-  rmm::cuda_stream_view stream)
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
-  auto mr = cudf::get_current_device_resource_ref();
-
   // Copy page-level row counts and offsets to device
-  auto row_counts  = cudf::detail::make_device_uvector_async(page_row_counts, stream, mr);
-  auto row_offsets = cudf::detail::make_device_uvector_async(page_row_offsets, stream, mr);
+  auto row_counts = cudf::detail::make_device_uvector_async(
+    page_row_counts, stream, cudf::get_current_device_resource_ref());
+  auto row_offsets = cudf::detail::make_device_uvector_async(
+    page_row_offsets, stream, cudf::get_current_device_resource_ref());
 
   // Make a zeroed device vector to store page indices of each row
   auto page_indices =

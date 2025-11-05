@@ -10,6 +10,7 @@
 #include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -71,13 +72,15 @@ compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_fil
  * @param page_row_offsets Span of page row offsets
  * @param total_rows Total number of rows
  * @param stream CUDA stream
+ * @param mr Device memory resource for the output device vector
  * @return Device vector where each row contains the index of the page it belongs to
  */
 [[nodiscard]] rmm::device_uvector<size_type> compute_page_indices_async(
   cudf::host_span<cudf::size_type const> page_row_counts,
   cudf::host_span<cudf::size_type const> page_row_offsets,
   cudf::size_type total_rows,
-  rmm::cuda_stream_view stream);
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Computes the offsets of the Fenwick tree levels (level 1 and higher) until the tree level
