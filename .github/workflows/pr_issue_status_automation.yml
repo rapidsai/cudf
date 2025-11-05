@@ -43,11 +43,15 @@ jobs:
       outputs:
         branch-name: ${{ steps.process-branch-name.outputs.branch-name }}
       steps:
-        - name: Extract branch name
+        - name: Checkout repository
+          uses: actions/checkout@v4
+          with:
+            ref: ${{ github.event.pull_request.base.ref }}
+        - name: Extract version from VERSION file
           id: process-branch-name
           run: |
-            branch=${{ github.event.pull_request.base.ref }}
-            release=${branch#branch-}
+            version=$(cat VERSION)
+            release=${version%.*}
             echo "branch-name=$release" >> "$GITHUB_OUTPUT"
 
     update-release:
