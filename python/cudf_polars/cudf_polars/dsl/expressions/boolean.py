@@ -374,8 +374,12 @@ class BooleanFunction(Expr):
         elif self.name is BooleanFunction.Name.Not:
             (column,) = columns
             return Column(
-                plc.unary.unary_operation(
-                    column.obj, plc.unary.UnaryOperator.NOT, stream=df.stream
+                plc.unary.cast(
+                    plc.unary.unary_operation(
+                        column.obj, plc.unary.UnaryOperator.NOT, stream=df.stream
+                    ),
+                    self.dtype.plc_type,
+                    stream=df.stream,
                 ),
                 dtype=self.dtype,
             )
