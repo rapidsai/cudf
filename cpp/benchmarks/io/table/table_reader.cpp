@@ -183,65 +183,6 @@ void BM_table_read_wide_tables(nvbench::state& state,
   table_read_common(num_rows_written, n_col, source_sink, state);
 }
 
-// ============================================================================
-// Nested Types Benchmarks
-// ============================================================================
-
-template <data_type DataType>
-void BM_table_read_fixed_width_struct(nvbench::state& state,
-                                      nvbench::type_list<nvbench::enum_type<DataType>> type_list)
-{
-  // Cardinality and run_length don't affect table format read performance
-  std::vector<cudf::type_id> s_types{
-    cudf::type_id::INT32, cudf::type_id::FLOAT32, cudf::type_id::INT64};
-  BM_table_read_data_common<DataType>(
-    state, data_profile_builder().struct_types(s_types), type_list);
-}
-
-// ============================================================================
-// String Variation Benchmarks
-// ============================================================================
-
-void BM_table_read_string_variations(nvbench::state& state)
-{
-  auto const data_size         = static_cast<size_t>(state.get_int64("data_size"));
-  auto const avg_string_length = static_cast<cudf::size_type>(state.get_int64("avg_string_length"));
-  auto const source_type       = retrieve_io_type_enum(state.get_string("io_type"));
-  cuio_source_sink_pair source_sink(source_type);
-
-  auto const d_type = get_type_or_group(static_cast<int32_t>(data_type::STRING));
-
-  // corresponds to 3 sigma (full width 6 sigma: 99.7% of range)
-  auto const half_width =
-    avg_string_length >> 3;  // 32 +/- 4, 128 +/- 16, 1024 +/- 128, 8k +/- 1k, etc.
-  auto const length_min = avg_string_length - half_width;
-  auto const length_max = avg_string_length + half_width;
-
-  data_profile profile = data_profile_builder().avg_run_length(1).distribution(
-    data_type::STRING, distribution_id::NORMAL, length_min, length_max);
-
-  auto const num_rows_written = [&]() {
-    auto const tbl =
-      create_random_table(cycle_dtypes(d_type, num_cols), table_size_bytes{data_size}, profile);
-    auto const view = tbl->view();
-
-    cudf::io::write_table(view, source_sink.make_sink_info());
-    return view.num_rows();
-  }();
-
-  table_read_common(num_rows_written, num_cols, source_sink, state);
-}
-
-// ============================================================================
-// Benchmark Registrations
-// ============================================================================
-
-NVBENCH_BENCH(BM_table_read_io_paths)
-  .set_name("table_read_io_paths")
-  .add_string_axis("io_type", {"FILEPATH", "HOST_BUFFER", "DEVICE_BUFFER"})
-  .set_min_samples(4)
-  .add_int64_axis("data_size", {512LL << 20, 1024LL << 20});
-
 NVBENCH_BENCH(BM_table_read_size_scaling)
   .set_name("table_read_size_scaling")
   .set_min_samples(4)
@@ -255,6 +196,10 @@ NVBENCH_BENCH(BM_table_read_column_complexity)
 
 using d_type_list_reduced = nvbench::enum_type_list<data_type::INTEGRAL,
                                                     data_type::FLOAT,
+                                                    data_type::BOOL8,
+                                                    data_type::DECIMAL,
+                                                    data_type::TIMESTAMP,
+                                                    data_type::DURATION,
                                                     data_type::STRING,
                                                     data_type::LIST,
                                                     data_type::STRUCT>;
@@ -270,20 +215,5 @@ NVBENCH_BENCH_TYPES(BM_table_read_wide_tables,
   .set_name("table_read_wide_tables")
   .set_type_axes_names({"data_type"})
   .set_min_samples(4)
-  .add_int64_axis("data_size", {1024 << 20})
-  .add_int64_axis("num_cols", {256, 512, 1024});
-
-using d_type_list_struct_only = nvbench::enum_type_list<data_type::STRUCT>;
-NVBENCH_BENCH_TYPES(BM_table_read_fixed_width_struct, NVBENCH_TYPE_AXES(d_type_list_struct_only))
-  .set_name("table_read_fixed_width_struct")
-  .set_type_axes_names({"data_type"})
-  .add_string_axis("io_type", {"DEVICE_BUFFER"})
-  .set_min_samples(4)
-  .add_int64_axis("data_size", {512 << 20});
-
-NVBENCH_BENCH(BM_table_read_string_variations)
-  .set_name("table_read_string_variations")
-  .add_string_axis("io_type", {"DEVICE_BUFFER"})
-  .set_min_samples(4)
   .add_int64_axis("data_size", {512 << 20})
-  .add_int64_power_of_two_axis("avg_string_length", nvbench::range(5, 13, 2));
+  .add_int64_axis("num_cols", {256, 512, 1024, 2048});
