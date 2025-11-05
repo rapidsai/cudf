@@ -231,7 +231,7 @@ def _(ir: Join, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
 
     if pwise_join:
         # Partition-wise join (use default_node_multi)
-        preserve_partitioning = 1 if ir.options[0] == "Right" else 0
+        partitioning_index = 1 if ir.options[0] == "Right" else 0
         nodes.append(
             default_node_multi(
                 rec.state["context"],
@@ -242,7 +242,7 @@ def _(ir: Join, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
                     channels[left].reserve_output_slot(),
                     channels[right].reserve_output_slot(),
                 ),
-                preserve_partitioning=preserve_partitioning,
+                partitioning_index=partitioning_index,
             )
         )
         return nodes, channels

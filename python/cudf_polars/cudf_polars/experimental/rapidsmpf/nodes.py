@@ -72,10 +72,10 @@ async def default_node_single(
         assert isinstance(metadata, Metadata), (
             f"Expected Metadata, got {type(metadata)}."
         )
-        await ch_out.send_metadata(
-            context,
-            metadata.copy(preserve_partitioning=preserve_partitioning),
-        )
+        new_metadata = Metadata(metadata.count)
+        if preserve_partitioning:
+            new_metadata.partitioned_on = metadata.partitioned_on
+        await ch_out.send_metadata(context, new_metadata)
 
         while (msg := await ch_in.data.recv(context)) is not None:
             chunk = TableChunk.from_message(msg)
@@ -107,7 +107,7 @@ async def default_node_multi(
     ch_out: ChannelPair,
     chs_in: tuple[ChannelPair, ...],
     *,
-    preserve_partitioning: int | None = None,
+    partitioning_index: int | None = None,
 ) -> None:
     """
     Pointwise node for rapidsmpf.
@@ -124,7 +124,7 @@ async def default_node_multi(
         The output ChannelPair.
     chs_in
         Tuple of input ChannelPairs.
-    preserve_partitioning
+    partitioning_index
         Index of the input channel to preserve the partitioning information for.
         If None, no partitioning information is preserved.
 
@@ -150,7 +150,7 @@ async def default_node_multi(
                 f"Expected Metadata, got {type(md_child)}."
             )
             metadata.count = max(md_child.count, metadata.count)
-            if idx == preserve_partitioning:
+            if idx == partitioning_index:
                 metadata.partitioned_on = md_child.partitioned_on
         await ch_out.send_metadata(context, metadata)
 

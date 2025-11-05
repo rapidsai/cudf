@@ -65,28 +65,6 @@ class Metadata:
         self.count = count
         self.partitioned_on = partitioned_on
 
-    def copy(self, *, preserve_partitioning: bool = False) -> Metadata:
-        """
-        Copy the Metadata object.
-
-        Parameters
-        ----------
-        preserve_partitioning
-            If True, preserve the partitioning information.
-
-        Returns
-        -------
-        A new ChunkMetadata object.
-        """
-        return (
-            Metadata(
-                self.count,
-                partitioned_on=self.partitioned_on,
-            )
-            if preserve_partitioning
-            else Metadata(self.count)
-        )
-
 
 @dataclass
 class ChannelPair:
