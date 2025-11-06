@@ -609,8 +609,10 @@ def test_cuda_stream_policy_from_config():
     [
         "default",
         "new",
+        "pool",
         '{"pool_size": 32, "flags": "SYNC_DEFAULT"}',
         '{"pool_size": 32, "flags": 0}',
+        '{"pool_size": 32}',
     ],
 )
 def test_cuda_stream_policy_from_env(monkeypatch: pytest.MonkeyPatch, env: str) -> None:
@@ -622,11 +624,11 @@ def test_cuda_stream_policy_from_env(monkeypatch: pytest.MonkeyPatch, env: str) 
         assert config.cuda_stream_policy == env
     else:
         assert isinstance(config.cuda_stream_policy, CUDAStreamPoolConfig)
-        assert config.cuda_stream_policy.pool_size == 32
-        assert (
-            config.cuda_stream_policy.flags
-            == rmm.pylibrmm.cuda_stream.CudaStreamFlags.SYNC_DEFAULT
-        )
+        if env == "pool":
+            assert config.cuda_stream_policy.pool_size == 16
+            assert config.cuda_stream_policy.flags == CudaStreamFlags.NON_BLOCKING
+        else:
+            assert config.cuda_stream_policy.pool_size == 32
 
 
 def test_cuda_stream_policy_from_env_invalid(monkeypatch: pytest.MonkeyPatch):

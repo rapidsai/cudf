@@ -100,6 +100,22 @@ This behavior is configured by the `cuda_stream_policy` keyword or
 * `new`: create a new CUDA stream when necessary (e.g. when reading from a file or loading an in-memory `polars.LazyFrame` object,
   or when performing a join where the inputs might be on different streams)
 
+The ``rapidsmpf`` runtime for the streaming executor also supports using a CUDA Stream Pool.
+
+```python
+engine = GPUEngine(
+    executor="streaming",
+    executor_options={
+        "runtime": "rapidsmpf",
+    },
+    cuda_stream_policy="pool",
+)
+```
+
+Or provide a dictionary with configuration options for the pool, like `cuda_stream_pool={"pool_size": 16}`.
+
+This stream pool is shared between cudf-polars and rapidsmpf.
+
 ## Disabling CUDA Managed Memory
 
 By default the `in-memory` executor will use [CUDA managed memory](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#unified-memory-introduction) with RMM's pool allocator. On systems that don't support managed memory, a non-managed asynchronous pool

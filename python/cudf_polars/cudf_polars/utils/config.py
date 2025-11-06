@@ -794,6 +794,8 @@ def _convert_cuda_stream_policy(
     match user_cuda_stream_policy:
         case "default" | "new":
             return CUDAStreamPolicy(user_cuda_stream_policy)
+        case "pool":
+            return CUDAStreamPoolConfig()
         case dict():
             return CUDAStreamPoolConfig(**user_cuda_stream_policy)
         case str():
@@ -815,6 +817,8 @@ def _convert_cuda_stream_policy(
                         pool_size=d["pool_size"],
                         flags=CudaStreamFlags(CudaStreamFlags.__members__[d["flags"]]),
                     )
+                case {"pool_size": int()}:
+                    return CUDAStreamPoolConfig(pool_size=d["pool_size"])
                 case _:
                     raise ValueError(
                         f"Invalid CUDA stream policy: {user_cuda_stream_policy}"
