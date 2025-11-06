@@ -273,7 +273,7 @@ def _(ir: Shuffle, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelMan
     num_partitions = rec.state["partition_info"][ir].count
 
     # Create output ChannelManager
-    channels[ir] = ChannelManager()
+    channels[ir] = ChannelManager(rec.state["context"])
 
     # Complete shuffle pipeline in a single node
     # LocalShuffle context manager handles shuffle ID lifecycle internally

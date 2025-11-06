@@ -141,7 +141,7 @@ def _(
     nodes, channels = rec(ir.children[0])
 
     # Create output ChannelManager
-    channels[ir] = ChannelManager()
+    channels[ir] = ChannelManager(rec.state["context"])
 
     # Add python node
     nodes.append(
