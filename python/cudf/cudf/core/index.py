@@ -2212,10 +2212,14 @@ class Index(SingleColumnFrame):
     notnull = notna
 
     def _is_numeric(self) -> bool:
-        return (
-            is_dtype_obj_numeric(self._column.dtype, include_decimal=False)
-            and self.dtype.kind != "b"
+        numeric = is_dtype_obj_numeric(
+            self._column.dtype, include_decimal=False
         )
+        if not numeric:
+            return False
+        if cudf.get_option("mode.pandas_compatible"):
+            return True
+        return self.dtype.kind != "b"
 
     def _is_boolean(self) -> bool:
         return self.dtype.kind == "b"
