@@ -397,17 +397,31 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
     [&](auto const src_index) {
       // Get all row group indices in the data source
       auto const& rg_indices = row_group_indices[src_index];
+      std::optional<size_type> colchunk_iter_offset{};
       // For all row groups
       std::for_each(rg_indices.cbegin(), rg_indices.cend(), [&](auto const rg_index) {
-        auto const& rg = per_file_metadata[0].row_groups[rg_index];
+        auto const& row_group = per_file_metadata[src_index].row_groups[rg_index];
         // For all column chunks
         std::for_each(
           dictionary_col_schemas.begin(),
           dictionary_col_schemas.end(),
           [&](auto const& schema_col_idx_pair) {
             auto const [input_col_idx, schema_idx] = schema_col_idx_pair;
-            auto& col_meta        = get_column_metadata(rg_index, src_index, schema_idx);
-            auto const& col_chunk = rg.columns[input_col_idx];
+            auto& col_meta = get_column_metadata(rg_index, src_index, schema_idx);
+            if (not colchunk_iter_offset.has_value() or
+                row_group.columns[colchunk_iter_offset.value()].schema_idx != schema_idx) {
+              auto const& colchunk_iter = std::find_if(
+                row_group.columns.begin(), row_group.columns.end(), [schema_idx](auto const& col) {
+                  return col.schema_idx == schema_idx;
+                });
+              CUDF_EXPECTS(colchunk_iter != row_group.columns.end(),
+                           "Column chunk with schema index " + std::to_string(schema_idx) +
+                             " not found in row group",
+                           std::invalid_argument);
+              colchunk_iter_offset = std::distance(row_group.columns.begin(), colchunk_iter);
+            }
+            auto const& colchunk_iter = row_group.columns.begin() + colchunk_iter_offset.value();
+            auto const& col_chunk     = *colchunk_iter;
 
             auto dictionary_offset = int64_t{0};
             auto dictionary_size   = int64_t{0};
@@ -418,7 +432,7 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
               auto const has_page_index =
                 col_chunk.offset_index.has_value() and col_chunk.column_index.has_value();
 
-              if (has_page_index and not col_chunk.meta_data.encoding_stats.has_value()) {
+              if (has_page_index and not col_meta.encoding_stats.has_value()) {
                 CUDF_LOG_WARN(
                   "Skipping the column chunk because it does not have encoding stats "
                   "needed to determine if all pages are dictionary encoded");
