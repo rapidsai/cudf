@@ -4680,7 +4680,7 @@ Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv* env,
     // if jprojection_column_indices is null, output both key columns and value columns;
     // otherwise, only output value columns.
     auto num_grouped_cols =
-      num_value_cols + (jprojection_column_indices == NULL) ? key_indices.size() : 0;
+      num_value_cols + ((jprojection_column_indices == NULL) ? key_indices.size() : 0);
 
     std::vector<cudf::column_view> grouped_cols(num_grouped_cols);
 
