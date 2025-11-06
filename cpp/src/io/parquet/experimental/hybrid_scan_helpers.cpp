@@ -426,8 +426,8 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
               }
 
               return has_page_index and
-                     std::all_of(col_chunk.meta_data.encoding_stats.value().cbegin(),
-                                 col_chunk.meta_data.encoding_stats.value().cend(),
+                     std::all_of(col_meta.encoding_stats.value().cbegin(),
+                                 col_meta.encoding_stats.value().cend(),
                                  [](auto const& page_encoding_stats) {
                                    return page_encoding_stats.encoding ==
                                             Encoding::PLAIN_DICTIONARY or
