@@ -13,7 +13,6 @@ from rapidsmpf.buffer.resource import BufferResource, LimitAvailableMemory
 from rapidsmpf.communicator.single import new_communicator
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
-from rapidsmpf.streaming.core.channel import Channel
 from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.leaf_node import pull_from_channel
 from rapidsmpf.streaming.core.node import (
@@ -44,6 +43,7 @@ from cudf_polars.utils.config import CUDAStreamPolicy
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
+    from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.leaf_node import DeferredMessages
 
     from cudf_polars.dsl.ir import IR
@@ -313,7 +313,7 @@ def generate_network(
 
     # Add node to drain metadata channel before pull_from_channel
     # (since pull_from_channel doesn't accept a ChannelPair)
-    ch_final_data: Channel[TableChunk] = Channel()
+    ch_final_data: Channel[TableChunk] = context.create_channel()
     nodes.append(
         metadata_drain_node(
             context,

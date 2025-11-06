@@ -212,7 +212,7 @@ def _(ir: Join, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
     nodes, channels = process_children(ir, rec)
 
     # Create output ChannelManager
-    channels[ir] = ChannelManager()
+    channels[ir] = ChannelManager(rec.state["context"])
 
     if pwise_join:
         # Partition-wise join (use default_node_multi)

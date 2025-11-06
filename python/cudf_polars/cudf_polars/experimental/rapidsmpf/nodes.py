@@ -407,7 +407,7 @@ def _(ir: IR, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]
     nodes, channels = process_children(ir, rec)
 
     # Create output ChannelManager
-    channels[ir] = ChannelManager()
+    channels[ir] = ChannelManager(rec.state["context"])
 
     if len(ir.children) == 1:
         # Single-channel default node
@@ -477,7 +477,7 @@ def _(ir: Empty, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManag
     """Generate network for Empty node - produces one empty chunk."""
     context = rec.state["context"]
     ir_context = rec.state["ir_context"]
-    channels: dict[IR, ChannelManager] = {ir: ChannelManager()}
+    channels: dict[IR, ChannelManager] = {ir: ChannelManager(rec.state["context"])}
     nodes: list[Any] = [
         empty_node(context, ir, ir_context, channels[ir].reserve_input_slot())
     ]
@@ -544,7 +544,7 @@ def generate_ir_sub_network_wrapper(
     # Check if this node needs fanout
     if (fanout_info := rec.state["fanout_nodes"].get(ir)) is not None:
         count = fanout_info.num_consumers
-        manager = ChannelManager(count=count)
+        manager = ChannelManager(rec.state["context"], count=count)
         if fanout_info.unbounded:
             nodes.append(
                 fanout_node_unbounded(
