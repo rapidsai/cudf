@@ -354,10 +354,16 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
-  auto is_string_col = [&](auto& chunk) {
-    return (chunk.physical_type == Type::BYTE_ARRAY ||
-            chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY) &&
-           (!chunk.logical_type.has_value() || chunk.logical_type->type != LogicalType::DECIMAL);
+  auto preprocess_offsets = [&](auto& chunk) {
+    // Only BYTE_ARRAY strings (not DECIMAL)
+    if (chunk.physical_type != Type::BYTE_ARRAY) { return false; }
+    if (chunk.logical_type.has_value() && (chunk.logical_type->type == LogicalType::DECIMAL)) {
+      return false;
+    }
+
+    // The encoding can be different for different pages in a column.
+    // If there are any data pages (not just dictionary pages), we need to preprocess.
+    return chunk.num_data_pages > 0;
   };
 
   // Compute the number of offsets per page on the GPU using batch_size from nesting info
@@ -390,8 +396,7 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
   for (size_t col_idx = 0; col_idx < pass.chunks.size(); ++col_idx) {
     auto& chunk = pass.chunks[col_idx];
     // Check if this is a string column without dictionary & not a fixed length byte array
-    if (is_string_col(chunk) && (chunk.num_dict_pages == 0) &&
-        (chunk.physical_type != Type::FIXED_LEN_BYTE_ARRAY)) {
+    if (preprocess_offsets(chunk)) {
       chunk.column_string_offset_base = _string_offset_buffer.data();
     }
   }
