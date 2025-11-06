@@ -116,4 +116,5 @@ def test_no_fallback_in_memory_usage_and_sizeof(dataframe, series):
 
     i.memory_usage()
     i.memory_usage(deep=True)
-    i.__sizeof__()
+    with pytest.warns(UserWarning, match="The deep parameter is ignored"):
+        i.__sizeof__()
