@@ -287,17 +287,23 @@ def _(
                 "for multiple partitions; falling back to in-memory evaluation."
             ),
         )
-    if (
-        pi.count == 1
-        and Select._is_len_expr(ir.exprs)
-        and isinstance(child, Union)
-        and len(child.children) == 1
-        and isinstance(child.children[0], Scan)
-        and child.children[0].predicate is None
-    ):
+
+    scan_child: Scan | None = None
+    if pi.count == 1 and Select._is_len_expr(ir.exprs):
+        if (
+            isinstance(child, Union)
+            and len(child.children) == 1
+            and isinstance(child.children[0], Scan)
+        ):
+            # Task engine case
+            scan_child = child.children[0]
+        elif isinstance(child, Scan):  # pragma: no cover; Requires rapidsmpf runtime
+            # RapidsMPF case
+            scan_child = child
+
+    if scan_child and scan_child.predicate is None:
         # Special Case: Fast count.
-        scan = child.children[0]
-        count = scan.fast_count()
+        count = scan_child.fast_count()
         dtype = ir.exprs[0].value.dtype
 
         lit_expr = expr.LiteralColumn(

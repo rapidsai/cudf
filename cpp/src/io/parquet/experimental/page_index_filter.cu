@@ -31,6 +31,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/gather.h>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -231,22 +232,14 @@ namespace {
 };
 
 /**
- * @brief Converts page-level statistics of a column to 2 device columns - min, max values. Each
- * column has number of rows equal to the total rows in all row groups.
+ * @brief Converts page-level statistics of a column to 3 device columns - min, max and is_null
+ * values. Each column has number of rows equal to the total rows in all row groups.
  */
 struct page_stats_caster : public stats_caster_base {
   cudf::size_type total_rows;
   cudf::host_span<metadata_base const> per_file_metadata;
   cudf::host_span<std::vector<size_type> const> row_group_indices;
-
-  page_stats_caster(size_type total_rows,
-                    cudf::host_span<metadata_base const> per_file_metadata,
-                    cudf::host_span<std::vector<size_type> const> row_group_indices)
-    : total_rows{total_rows},
-      per_file_metadata{per_file_metadata},
-      row_group_indices{row_group_indices}
-  {
-  }
+  bool const has_is_null_operator;
 
   /**
    * @brief Transforms a page-level stats column to a row-level stats column for non-string types
@@ -286,23 +279,67 @@ struct page_stats_caster : public stats_caster_base {
                    input_column.template begin<T>(),
                    reinterpret_cast<T*>(output_data.data()));
 
-    // Buffer for output bitmask. Set all bits valid
-    auto output_nullmask = cudf::create_null_mask(total_rows, mask_state::ALL_VALID, stream, mr);
-
-    // For each input page, invalidate the null mask for corresponding rows if needed.
-    std::for_each(thrust::counting_iterator(0),
-                  thrust::counting_iterator(total_pages),
-                  [&](auto const page_idx) {
-                    if (not bit_is_set(page_nullmask, page_idx)) {
-                      cudf::set_null_mask(static_cast<bitmask_type*>(output_nullmask.data()),
-                                          page_row_offsets[page_idx],
-                                          page_row_offsets[page_idx + 1],
-                                          false,
-                                          stream);
-                    }
-                  });
+    // Buffer for output bitmask
+    auto output_nullmask = rmm::device_buffer{};
+    if (input_column.null_count()) {
+      // Set all bits in output nullmask to valid
+      output_nullmask = cudf::create_null_mask(total_rows, mask_state::ALL_VALID, stream, mr);
+      // For each input page, invalidate the null mask for corresponding rows if needed.
+      std::for_each(thrust::counting_iterator(0),
+                    thrust::counting_iterator(total_pages),
+                    [&](auto const page_idx) {
+                      if (not bit_is_set(page_nullmask, page_idx)) {
+                        cudf::set_null_mask(static_cast<bitmask_type*>(output_nullmask.data()),
+                                            page_row_offsets[page_idx],
+                                            page_row_offsets[page_idx + 1],
+                                            false,
+                                            stream);
+                      }
+                    });
+    }
 
     return {std::move(output_data), std::move(output_nullmask)};
+  }
+
+  /**
+   * @brief Builds a device column containing each page's `is_null` statistic at
+   *        respectively of a column at each row index.
+   *
+   * @param is_null Host column storing the page-level is_null statistics
+   * @param page_indices Device vector containing the page index for each row index
+   * @param page_row_offsets Host vector row offsets of each page
+   * @param stream CUDA stream
+   * @param mr Device memory resource
+   *
+   * @return A pair containing the output data buffer and nullmask
+   */
+  [[nodiscard]] std::unique_ptr<column> build_is_null_device_column(
+    host_column<bool> const& is_null,
+    cudf::device_span<size_type const> page_indices,
+    cudf::host_span<size_type const> page_row_offsets,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const
+  {
+    CUDF_EXPECTS(
+      has_is_null_operator,
+      "The filter expression must have an IS_NULL operator to build is_null device column");
+    auto const dtype = cudf::data_type{cudf::type_id::BOOL8};
+    auto is_nullcol  = is_null.to_device(dtype, stream, cudf::get_current_device_resource_ref());
+    auto [is_null_data, is_null_nullmask] =
+      build_data_and_nullmask<bool>(is_nullcol->mutable_view(),
+                                    is_null.null_mask.data(),
+                                    page_indices,
+                                    page_row_offsets,
+                                    dtype,
+                                    stream,
+                                    mr);
+    auto const is_null_nulls =
+      is_nullcol->null_count()
+        ? cudf::detail::null_count(
+            reinterpret_cast<bitmask_type*>(is_null_nullmask.data()), 0, total_rows, stream)
+        : 0;
+    return std::make_unique<column>(
+      dtype, total_rows, std::move(is_null_data), std::move(is_null_nullmask), is_null_nulls);
   }
 
   /**
@@ -311,6 +348,7 @@ struct page_stats_caster : public stats_caster_base {
    * @param host_strings Host span of cudf::string_view values in the input page-level host column
    * @param host_chars Host span of string data of the input page-level host column
    * @param host_nullmask Nullmask of the input page-level host column
+   * @param host_null_count Number of nulls in the input page-level host column
    * @param page_indices Device vector containing the page index for each row index
    * @param page_row_offsets Host vector row offsets of each page
    * @param stream CUDA stream
@@ -323,6 +361,7 @@ struct page_stats_caster : public stats_caster_base {
     build_string_data_and_nullmask(cudf::host_span<cudf::string_view const> host_strings,
                                    cudf::host_span<char const> host_chars,
                                    bitmask_type const* host_page_nullmask,
+                                   size_type host_null_count,
                                    cudf::device_span<size_type const> page_indices,
                                    cudf::host_span<size_type const> page_row_offsets,
                                    rmm::cuda_stream_view stream,
@@ -333,7 +372,8 @@ struct page_stats_caster : public stats_caster_base {
 
     // Construct device vectors containing page-level (input) string data, and offsets and sizes
     auto [page_str_chars, page_str_offsets, page_str_sizes] =
-      host_column<cudf::string_view>::make_strings_children(host_strings, host_chars, stream, mr);
+      host_column<cudf::string_view>::make_strings_children(
+        host_strings, host_chars, stream, cudf::get_current_device_resource_ref());
 
     // Buffer for row-level string sizes (output).
     auto row_str_sizes = rmm::device_uvector<size_t>(total_rows, stream, mr);
@@ -358,21 +398,24 @@ struct page_stats_caster : public stats_caster_base {
     // page-level strings nullmask (input)
     auto const input_nullmask = host_page_nullmask;
 
-    // Buffer for row-level strings nullmask (output). Initialize to all bits set.
-    auto output_nullmask = cudf::create_null_mask(total_rows, mask_state::ALL_VALID, stream, mr);
-
-    // For each input page, invalidate the null mask for corresponding rows if needed.
-    std::for_each(thrust::counting_iterator(0),
-                  thrust::counting_iterator(total_pages),
-                  [&](auto const page_idx) {
-                    if (not bit_is_set(input_nullmask, page_idx)) {
-                      cudf::set_null_mask(static_cast<bitmask_type*>(output_nullmask.data()),
-                                          page_row_offsets[page_idx],
-                                          page_row_offsets[page_idx + 1],
-                                          false,
-                                          stream);
-                    }
-                  });
+    // Buffer for row-level strings nullmask (output)
+    auto output_nullmask = rmm::device_buffer{};
+    if (host_null_count) {
+      // Set all bits in output nullmask to valid
+      output_nullmask = cudf::create_null_mask(total_rows, mask_state::ALL_VALID, stream, mr);
+      // For each input page, invalidate the null mask for corresponding rows if needed.
+      std::for_each(thrust::counting_iterator(0),
+                    thrust::counting_iterator(total_pages),
+                    [&](auto const page_idx) {
+                      if (not bit_is_set(input_nullmask, page_idx)) {
+                        cudf::set_null_mask(static_cast<bitmask_type*>(output_nullmask.data()),
+                                            page_row_offsets[page_idx],
+                                            page_row_offsets[page_idx + 1],
+                                            false,
+                                            stream);
+                      }
+                    });
+    }
 
     // Buffer for row-level string offsets (output).
     auto row_str_offsets =
@@ -420,8 +463,8 @@ struct page_stats_caster : public stats_caster_base {
   }
 
   /**
-   * @brief Builds two device columns storing the corresponding page-level statistics (min, max)
-   *        respectively of a column at each row index.
+   * @brief Builds three device columns storing the corresponding page-level statistics
+   *        (min, max, is_null) respectively of a column at each row index
    *
    * @tparam T underlying type of the column
    * @param schema_idx Column schema index
@@ -429,14 +472,16 @@ struct page_stats_caster : public stats_caster_base {
    * @param stream CUDA stream
    * @param mr Device memory resource
    *
-   * @return A pair of device columns with min and max value from page statistics for each row
+   * @return A tuple of device columns with min, max and optionally is_null value from page
+   * statistics for each row
    */
   template <typename T>
-  std::pair<std::unique_ptr<column>, std::unique_ptr<column>> operator()(
-    cudf::size_type schema_idx,
-    cudf::data_type dtype,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) const
+  std::
+    tuple<std::unique_ptr<column>, std::unique_ptr<column>, std::optional<std::unique_ptr<column>>>
+    operator()(cudf::size_type schema_idx,
+               cudf::data_type dtype,
+               rmm::cuda_stream_view stream,
+               rmm::device_async_resource_ref mr) const
   {
     // List, Struct, Dictionary types are not supported
     if constexpr (cudf::is_compound<T>() and not cuda::std::is_same_v<T, string_view>) {
@@ -452,9 +497,11 @@ struct page_stats_caster : public stats_caster_base {
 
       auto const total_pages = col_chunk_page_offsets.back();
 
-      // Create host columns with page-level min, max values
+      // Create host columns with page-level min, max and optionally is_null statistics
       host_column<T> min(total_pages, stream);
       host_column<T> max(total_pages, stream);
+      std::optional<host_column<bool>> is_null;
+      if (has_is_null_operator) { is_null = host_column<bool>(total_pages, stream); }
 
       // Populate the host columns with page-level min, max statistics from the page index
       auto page_offset_idx = 0;
@@ -480,18 +527,39 @@ struct page_stats_caster : public stats_caster_base {
             auto const page_offset_in_colchunk = col_chunk_page_offsets[page_offset_idx++];
 
             // For all pages in this column chunk
-            std::for_each(
-              thrust::counting_iterator<size_t>(0),
-              thrust::counting_iterator(num_pages_in_colchunk),
-              [&](auto page_idx) {
-                auto const& min_value = column_index.min_values[page_idx];
-                auto const& max_value = column_index.max_values[page_idx];
-                // Translate binary data to Type then to <T>
-                min.set_index(
-                  page_offset_in_colchunk + page_idx, min_value, colchunk.meta_data.type);
-                max.set_index(
-                  page_offset_in_colchunk + page_idx, max_value, colchunk.meta_data.type);
-              });
+            std::for_each(thrust::counting_iterator<size_t>(0),
+                          thrust::counting_iterator(num_pages_in_colchunk),
+                          [&](auto page_idx) {
+                            auto const& min_value      = column_index.min_values[page_idx];
+                            auto const& max_value      = column_index.max_values[page_idx];
+                            auto const column_page_idx = page_offset_in_colchunk + page_idx;
+                            // Translate binary data to Type then to <T>
+                            min.set_index(column_page_idx, min_value, colchunk.meta_data.type);
+                            max.set_index(column_page_idx, max_value, colchunk.meta_data.type);
+                            if (has_is_null_operator) {
+                              // Check if the page is completely null
+                              if (column_index.null_pages[page_idx]) {
+                                is_null->val[column_page_idx] = true;
+                                return;
+                              }
+                              // Check if the page doesn't have a null count
+                              if (not column_index.null_counts.has_value()) {
+                                is_null->set_index(column_page_idx, std::nullopt, {});
+                                return;
+                              }
+                              // Use the null count to determine if the page is completely null
+                              auto const page_row_count = page_row_offsets[column_page_idx + 1] -
+                                                          page_row_offsets[column_page_idx];
+                              auto const& null_count = column_index.null_counts.value()[page_idx];
+                              if (null_count == page_row_count) {
+                                is_null->val[column_page_idx] = false;
+                              } else if (null_count > 0 and null_count < page_row_count) {
+                                is_null->set_index(column_page_idx, std::nullopt, {});
+                              } else {
+                                CUDF_FAIL("Invalid null count");
+                              }
+                            }
+                          });
           });
         });
 
@@ -502,54 +570,83 @@ struct page_stats_caster : public stats_caster_base {
       // For non-strings columns, directly gather the page-level column data and bitmask to the
       // row-level.
       if constexpr (not cuda::std::is_same_v<T, cudf::string_view>) {
-        // Move host columns to device
-        auto mincol = min.to_device(dtype, stream, mr);
-        auto maxcol = max.to_device(dtype, stream, mr);
+        // Move host min/max columns to device
+        auto mincol = min.to_device(dtype, stream, cudf::get_current_device_resource_ref());
+        auto maxcol = max.to_device(dtype, stream, cudf::get_current_device_resource_ref());
 
         // Convert page-level min and max columns to row-level min and max columns by gathering
         // values based on page-level row offsets
-        auto [min_data, min_bitmask] = build_data_and_nullmask<T>(mincol->mutable_view(),
-                                                                  min.null_mask.data(),
-                                                                  page_indices,
-                                                                  page_row_offsets,
-                                                                  dtype,
-                                                                  stream,
-                                                                  mr);
-        auto [max_data, max_bitmask] = build_data_and_nullmask<T>(maxcol->mutable_view(),
-                                                                  max.null_mask.data(),
-                                                                  page_indices,
-                                                                  page_row_offsets,
-                                                                  dtype,
-                                                                  stream,
-                                                                  mr);
+        auto [min_data, min_nullmask] = build_data_and_nullmask<T>(mincol->mutable_view(),
+                                                                   min.null_mask.data(),
+                                                                   page_indices,
+                                                                   page_row_offsets,
+                                                                   dtype,
+                                                                   stream,
+                                                                   mr);
+        auto [max_data, max_nullmask] = build_data_and_nullmask<T>(maxcol->mutable_view(),
+                                                                   max.null_mask.data(),
+                                                                   page_indices,
+                                                                   page_row_offsets,
+                                                                   dtype,
+                                                                   stream,
+                                                                   mr);
 
         // Count nulls in min and max columns
-        auto const min_nulls = cudf::detail::null_count(
-          reinterpret_cast<bitmask_type*>(min_bitmask.data()), 0, total_rows, stream);
-        auto const max_nulls = cudf::detail::null_count(
-          reinterpret_cast<bitmask_type*>(max_bitmask.data()), 0, total_rows, stream);
-
-        // Return min and max device columns
+        auto const min_nulls =
+          mincol->null_count()
+            ? cudf::detail::null_count(
+                reinterpret_cast<bitmask_type*>(min_nullmask.data()), 0, total_rows, stream)
+            : 0;
+        auto const max_nulls =
+          maxcol->null_count()
+            ? cudf::detail::null_count(
+                reinterpret_cast<bitmask_type*>(max_nullmask.data()), 0, total_rows, stream)
+            : 0;
+        // Return min, max and is_null device columns
         return {std::make_unique<column>(
-                  dtype, total_rows, std::move(min_data), std::move(min_bitmask), min_nulls),
+                  dtype, total_rows, std::move(min_data), std::move(min_nullmask), min_nulls),
                 std::make_unique<column>(
-                  dtype, total_rows, std::move(max_data), std::move(max_bitmask), max_nulls)};
+                  dtype, total_rows, std::move(max_data), std::move(max_nullmask), max_nulls),
+                has_is_null_operator
+                  ? std::make_optional(build_is_null_device_column(
+                      is_null.value(), page_indices, page_row_offsets, stream, mr))
+                  : std::nullopt};
       }
       // For strings columns, gather the page-level string offsets and bitmask to row-level
       // directly and gather string chars using a batched memcpy.
       else {
-        auto [min_data, min_offsets, min_nullmask] = build_string_data_and_nullmask(
-          min.val, min.chars, min.null_mask.data(), page_indices, page_row_offsets, stream, mr);
-        auto [max_data, max_offsets, max_nullmask] = build_string_data_and_nullmask(
-          max.val, max.chars, max.null_mask.data(), page_indices, page_row_offsets, stream, mr);
+        auto [min_data, min_offsets, min_nullmask] =
+          build_string_data_and_nullmask(min.val,
+                                         min.chars,
+                                         min.null_mask.data(),
+                                         min.null_count,
+                                         page_indices,
+                                         page_row_offsets,
+                                         stream,
+                                         mr);
+        auto [max_data, max_offsets, max_nullmask] =
+          build_string_data_and_nullmask(max.val,
+                                         max.chars,
+                                         max.null_mask.data(),
+                                         max.null_count,
+                                         page_indices,
+                                         page_row_offsets,
+                                         stream,
+                                         mr);
 
         // Count nulls in min and max columns
-        auto const min_nulls = cudf::detail::null_count(
-          reinterpret_cast<bitmask_type*>(min_nullmask.data()), 0, total_rows, stream);
-        auto const max_nulls = cudf::detail::null_count(
-          reinterpret_cast<bitmask_type*>(max_nullmask.data()), 0, total_rows, stream);
+        auto const min_nulls =
+          min.null_count
+            ? cudf::detail::null_count(
+                reinterpret_cast<bitmask_type*>(min_nullmask.data()), 0, total_rows, stream)
+            : 0;
+        auto const max_nulls =
+          max.null_count
+            ? cudf::detail::null_count(
+                reinterpret_cast<bitmask_type*>(max_nullmask.data()), 0, total_rows, stream)
+            : 0;
 
-        // Return min and max device strings columns
+        // Return min, max and is_null device strings columns
         return {
           cudf::make_strings_column(
             total_rows,
@@ -562,7 +659,10 @@ struct page_stats_caster : public stats_caster_base {
             std::make_unique<column>(std::move(max_offsets), rmm::device_buffer{0, stream, mr}, 0),
             std::move(max_data),
             max_nulls,
-            std::move(max_nullmask))};
+            std::move(max_nullmask)),
+          has_is_null_operator ? std::make_optional(build_is_null_device_column(
+                                   is_null.value(), page_indices, page_row_offsets, stream, mr))
+                               : std::nullopt};
       }
     }
   }
@@ -611,7 +711,7 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
   auto const num_columns = output_dtypes.size();
 
   // Get a boolean mask indicating which columns will participate in stats based filtering
-  auto const stats_columns_mask =
+  auto const [stats_columns_mask, has_is_null_operator] =
     parquet::detail::stats_columns_collector{filter.get(),
                                              static_cast<size_type>(output_dtypes.size())}
       .get_stats_columns_mask();
@@ -623,12 +723,14 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
   }
 
   // Convert page statistics to a table
-  // where min(col[i]) = columns[i*2], max(col[i])=columns[i*2+1]
+  // where min(col[i]) = columns[i*3], max(col[i])=columns[i*3+1], is_null(col[i])=columns[i*3+2]
   // For each column, it contains total number of rows from all row groups.
-  page_stats_caster const stats_col{
-    static_cast<size_type>(total_rows), per_file_metadata, row_group_indices};
+  page_stats_caster const stats_col{.total_rows           = static_cast<size_type>(total_rows),
+                                    .per_file_metadata    = per_file_metadata,
+                                    .row_group_indices    = row_group_indices,
+                                    .has_is_null_operator = has_is_null_operator};
 
-  std::vector<std::unique_ptr<column>> columns;
+  std::vector<std::unique_ptr<column>> page_stats_columns;
   std::for_each(
     thrust::counting_iterator<size_t>(0),
     thrust::counting_iterator(num_columns),
@@ -639,26 +741,50 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
       if (not stats_columns_mask[col_idx] or
           (cudf::is_compound(dtype) && dtype.id() != cudf::type_id::STRING)) {
         // Placeholder for unsupported types and non-participating columns
-        columns.push_back(cudf::make_numeric_column(
-          data_type{cudf::type_id::BOOL8}, total_rows, rmm::device_buffer{}, 0, stream, mr));
-        columns.push_back(cudf::make_numeric_column(
-          data_type{cudf::type_id::BOOL8}, total_rows, rmm::device_buffer{}, 0, stream, mr));
+        page_stats_columns.push_back(
+          cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
+                                    total_rows,
+                                    rmm::device_buffer{},
+                                    0,
+                                    stream,
+                                    cudf::get_current_device_resource_ref()));
+        page_stats_columns.push_back(
+          cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
+                                    total_rows,
+                                    rmm::device_buffer{},
+                                    0,
+                                    stream,
+                                    cudf::get_current_device_resource_ref()));
+        if (has_is_null_operator) {
+          page_stats_columns.push_back(
+            cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
+                                      total_rows,
+                                      rmm::device_buffer{},
+                                      0,
+                                      stream,
+                                      cudf::get_current_device_resource_ref()));
+        }
         return;
       }
-      auto [min_col, max_col] = cudf::type_dispatcher<dispatch_storage_type>(
-        dtype, stats_col, schema_idx, dtype, stream, mr);
-      columns.push_back(std::move(min_col));
-      columns.push_back(std::move(max_col));
+      auto [min_col, max_col, is_null_col] = cudf::type_dispatcher<dispatch_storage_type>(
+        dtype, stats_col, schema_idx, dtype, stream, cudf::get_current_device_resource_ref());
+      page_stats_columns.push_back(std::move(min_col));
+      page_stats_columns.push_back(std::move(max_col));
+      if (has_is_null_operator) {
+        CUDF_EXPECTS(is_null_col.has_value(), "is_null host column must be present");
+        page_stats_columns.push_back(std::move(is_null_col.value()));
+      }
     });
 
-  auto stats_table = cudf::table(std::move(columns));
+  auto page_stats_table = cudf::table(std::move(page_stats_columns));
 
   // Converts AST to StatsAST with reference to min, max columns in above `stats_table`.
   parquet::detail::stats_expression_converter const stats_expr{
-    filter.get(), static_cast<size_type>(output_dtypes.size()), stream};
+    filter.get(), static_cast<size_type>(output_dtypes.size()), has_is_null_operator, stream};
 
   // Filter the input table using AST expression and return the (BOOL8) predicate column.
-  return cudf::detail::compute_column(stats_table, stats_expr.get_stats_expr().get(), stream, mr);
+  return cudf::detail::compute_column(
+    page_stats_table, stats_expr.get_stats_expr().get(), stream, mr);
 }
 
 std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask(

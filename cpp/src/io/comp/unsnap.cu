@@ -328,7 +328,7 @@ __device__ void snappy_decode_symbols(unsnap_state_s* s, uint32_t t)
             b[t].offset = ofs;
             ofs += blen;  // for correct out-of-range detection below
           }
-          blen           = WarpReducePos32(blen, t);
+          blen           = warp_reduce_pos<cudf::detail::warp_size>(blen, t);
           bytes_left     = shuffle(bytes_left);
           dst_pos        = shuffle(dst_pos);
           short_sym_mask = __ffs(ballot(blen > bytes_left || ofs > (int32_t)(dst_pos + blen)));
@@ -374,7 +374,7 @@ __device__ void snappy_decode_symbols(unsnap_state_s* s, uint32_t t)
               b[batch_len + t].offset = ofs;
               ofs += blen;  // for correct out-of-range detection below
             }
-            blen           = WarpReducePos32(blen, t);
+            blen           = warp_reduce_pos<cudf::detail::warp_size>(blen, t);
             bytes_left     = shuffle(bytes_left);
             dst_pos        = shuffle(dst_pos);
             short_sym_mask = __ffs(ballot(blen > bytes_left || ofs > (int32_t)(dst_pos + blen)));
@@ -521,7 +521,7 @@ __device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_s
     if (shuffle(min((uint32_t)dist_t, (uint32_t)shuffle_xor(dist_t, 1))) > 8) {
       uint32_t n;
       do {
-        uint32_t bofs      = WarpReducePos32(blen_t, t);
+        uint32_t bofs      = warp_reduce_pos<cudf::detail::warp_size>(blen_t, t);
         uint32_t stop_mask = ballot((uint32_t)dist_t < bofs);
         uint32_t start_mask =
           cub::WarpReduce<uint32_t>(temp_storage).Sum((bofs < 32 && t < batch_len) ? 1 << bofs : 0);

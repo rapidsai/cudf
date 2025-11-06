@@ -10,14 +10,15 @@ from polars.testing import assert_frame_equal
 
 from cudf_polars import Translator
 from cudf_polars.dsl.expr import Col, NamedExpr
-from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.experimental.parallel import evaluate_streaming, lower_ir_graph
 from cudf_polars.experimental.shuffle import Shuffle
-from cudf_polars.testing.asserts import DEFAULT_CLUSTER
+from cudf_polars.testing.asserts import DEFAULT_CLUSTER, DEFAULT_RUNTIME
 from cudf_polars.utils.config import ConfigOptions
 
+SHUFFLE_METHODS = ["tasks", None] if DEFAULT_RUNTIME == "tasks" else [None]
 
-@pytest.fixture(scope="module", params=["tasks", None])
+
+@pytest.fixture(scope="module", params=SHUFFLE_METHODS)
 def engine(request):
     return pl.GPUEngine(
         raise_on_fail=True,
@@ -25,6 +26,7 @@ def engine(request):
         executor_options={
             "max_rows_per_partition": 4,
             "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
             "shuffle_method": request.param,
         },
     )
@@ -69,7 +71,10 @@ def test_hash_shuffle(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
     assert len([node for node in partition_info if isinstance(node, Shuffle)]) == 2
 
     # Check that streaming evaluation works
-    result = evaluate_streaming(qir3, options, context=IRExecutionContext()).to_polars()
+    result = evaluate_streaming(
+        qir3,
+        options,
+    ).to_polars()
     # ignore is for polars' EngineType, which isn't publicly exported.
     # https://github.com/pola-rs/polars/issues/17420
     expect = df.collect(engine="cpu")
