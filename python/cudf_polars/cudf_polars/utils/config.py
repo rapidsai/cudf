@@ -40,6 +40,8 @@ if TYPE_CHECKING:
 
     import polars.lazyframe.engine_config
 
+    import rmm.mr
+
 
 __all__ = [
     "Cluster",
@@ -418,6 +420,102 @@ class StatsPlanningOptions:
             raise TypeError("use_sampling must be a bool")
         if not isinstance(self.default_selectivity, float):
             raise TypeError("default_selectivity must be a float")
+
+
+@dataclasses.dataclass(frozen=True, eq=True)
+class MemoryResourceConfig:
+    """
+    Configuration for the default memory resource.
+
+    Parameters
+    ----------
+    qualname
+        The fully qualified name of the memory resource class to use.
+    options
+        This can be either a dictionary representing the options to pass
+        to the memory resource class, or, a dictionary representing a
+        nested memory resource configuration. The presence of "qualname"
+        field indicates a nested memory resource configuration.
+
+    Examples
+    --------
+    Create a memory resource config for a single memory resource:
+    >>> MemoryResourceConfig(
+    ...     qualname="rmm.mr.CudaAsyncMemoryResource",
+    ...     options={"initial_pool_size": 100},
+    ... )
+
+    Create a memory resource config for a nested memory resource configuration:
+    >>> MemoryResourceConfig(
+    ...     qualname="rmm.mr.PrefetchResourceAdaptor",
+    ...     options={
+    ...         "upstream_mr": {
+    ...             "qualname": "rmm.mr.PoolMemoryResource",
+    ...             "options": {
+    ...                 "upstream_mr": {
+    ...                     "qualname": "rmm.mr.ManagedMemoryResource",
+    ...                 },
+    ...                 "initial_pool_size": 256,
+    ...             },
+    ...         }
+    ...     },
+    ... )
+    """
+
+    _env_prefix = "CUDF_POLARS__MEMORY_RESOURCE_CONFIG"
+    qualname: str = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__QUALNAME",
+            str,
+            # We shouldn't reach here if qualname isn't set in the environment.
+            default=None,  # type: ignore[assignment]
+        )
+    )
+    options: dict[str, Any] | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__OPTIONS",
+            json.loads,
+            default=None,
+        )
+    )
+
+    def __post_init__(self) -> None:
+        if self.qualname.count(".") < 1:
+            raise ValueError(
+                f"MemoryResourceConfig.qualname '{self.qualname}' must be a fully qualified name to a class, including the module name."
+            )
+
+    def create_memory_resource(self) -> rmm.mr.DeviceMemoryResource:
+        """Create a memory resource from the configuration."""
+
+        def create_mr(
+            qualname: str, options: dict[str, Any] | None
+        ) -> rmm.mr.DeviceMemoryResource:
+            module_name, class_name = qualname.rsplit(".", 1)
+            module = importlib.import_module(module_name)
+            cls = getattr(module, class_name)
+            return cls(**options or {})
+
+        def process_options(opts: dict[str, Any] | None) -> dict[str, Any]:
+            if opts is None:
+                return {}
+
+            processed = {}
+            for key, value in opts.items():
+                if isinstance(value, dict) and "qualname" in value:
+                    # This is a nested memory resource config
+                    nested_qualname = value["qualname"]
+                    nested_options = process_options(value.get("options"))
+                    processed[key] = create_mr(nested_qualname, nested_options)
+                else:
+                    processed[key] = value
+            return processed
+
+        # Create the top-level memory resource
+        return create_mr(self.qualname, process_options(self.options))
+
+    def __hash__(self) -> int:
+        return hash((self.qualname, json.dumps(self.options, sort_keys=True)))
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -854,6 +952,7 @@ class ConfigOptions:
         default_factory=StreamingExecutor
     )
     device: int | None = None
+    memory_resource_config: MemoryResourceConfig | None = None
     cuda_stream_policy: CUDAStreamPolicy | CUDAStreamPoolConfig = dataclasses.field(
         default_factory=_make_default_factory(
             "CUDF_POLARS__CUDA_STREAM_POLICY",
@@ -874,6 +973,7 @@ class ConfigOptions:
             "executor_options",
             "parquet_options",
             "raise_on_fail",
+            "memory_resource_config",
             "cuda_stream_policy",
         }
 
@@ -889,6 +989,16 @@ class ConfigOptions:
         user_parquet_options = engine.config.get("parquet_options", {})
         # This is set in polars, and so can't be overridden by the environment
         user_raise_on_fail = engine.config.get("raise_on_fail", False)
+        user_memory_resource_config = engine.config.get("memory_resource_config", None)
+        if user_memory_resource_config is None and (
+            os.environ.get(f"{MemoryResourceConfig._env_prefix}__QUALNAME", "") != ""
+        ):
+            # We'll pick up the qualname / options from the environment.
+            user_memory_resource_config = MemoryResourceConfig()
+        elif isinstance(user_memory_resource_config, dict):
+            user_memory_resource_config = MemoryResourceConfig(
+                **user_memory_resource_config
+            )
 
         # Backward compatibility for "cardinality_factor"
         # TODO: Remove this in 25.10
@@ -941,6 +1051,7 @@ class ConfigOptions:
             "parquet_options": ParquetOptions(**user_parquet_options),
             "executor": executor,
             "device": engine.device,
+            "memory_resource_config": user_memory_resource_config,
         }
 
         # Handle "cuda-stream-policy".
