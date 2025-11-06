@@ -889,7 +889,12 @@ class ConfigOptions:
             "cuda_stream_policy", None
         ) or os.environ.get("CUDF_POLARS__CUDA_STREAM_POLICY", None)
         if user_cuda_stream_policy is None:
-            cuda_stream_policy = CUDAStreamPolicy.POOL
+            if executor.name == "streaming" and executor.runtime == Runtime.RAPIDSMPF:
+                # the rapidsmpf runtime defaults to using a stream pool
+                cuda_stream_policy = CUDAStreamPolicy.POOL
+            else:
+                # everything else defaults to the default stream
+                cuda_stream_policy = CUDAStreamPolicy.DEFAULT
         else:
             cuda_stream_policy = CUDAStreamPolicy(user_cuda_stream_policy)
 
