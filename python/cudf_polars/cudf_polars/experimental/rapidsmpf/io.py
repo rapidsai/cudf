@@ -124,7 +124,7 @@ async def dataframescan_node(
         # Read data.
         # Use Lineariser to ensure ordered delivery.
         num_producers = min(max_io_threads, len(ir_slices))
-        lineariser = Lineariser(ch_out.data, num_producers)
+        lineariser = Lineariser(context, ch_out.data, num_producers)
         next_task_idx = 0
 
         async def _producer(ch_out: Channel) -> None:
@@ -151,7 +151,7 @@ async def dataframescan_node(
             await ch_out.drain(context)
 
         # Start the lineariser drain task (must run concurrently with producers)
-        tasks = [lineariser.drain(context)]
+        tasks = [lineariser.drain()]
 
         # Start all producer tasks
         tasks.extend(_producer(ch_in) for ch_in in lineariser.get_inputs())
@@ -173,7 +173,7 @@ def _(
 
     context = rec.state["context"]
     ir_context = rec.state["ir_context"]
-    channels: dict[IR, ChannelManager] = {ir: ChannelManager()}
+    channels: dict[IR, ChannelManager] = {ir: ChannelManager(rec.state["context"])}
     nodes: list[Any] = [
         dataframescan_node(
             context,
@@ -365,7 +365,7 @@ async def scan_node(
         # Use Lineariser to ensure ordered delivery
         io_throttle = asyncio.Semaphore(max_io_threads)
         num_producers = min(max_io_threads, len(scans))
-        lineariser = Lineariser(ch_out.data, num_producers)
+        lineariser = Lineariser(context, ch_out.data, num_producers)
         next_task_idx = 0
 
         async def _producer(ch_out: Channel) -> None:
@@ -392,7 +392,7 @@ async def scan_node(
             await ch_out.drain(context)
 
         # Start the lineariser drain task (must run concurrently with producers)
-        tasks = [lineariser.drain(context)]
+        tasks = [lineariser.drain()]
 
         # Start all producer tasks
         tasks.extend(_producer(ch_in) for ch_in in lineariser.get_inputs())
@@ -416,7 +416,7 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
     if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
         parquet_options = dataclasses.replace(parquet_options, chunked=False)
 
-    channels: dict[IR, ChannelManager] = {ir: ChannelManager()}
+    channels: dict[IR, ChannelManager] = {ir: ChannelManager(rec.state["context"])}
     nodes: list[Any] = [
         scan_node(
             rec.state["context"],
