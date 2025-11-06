@@ -720,10 +720,10 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterFewLiteralsTyped)
   auto constexpr is_constant_strings = true;
   auto constexpr is_nullable         = true;
 
-  // Specifying SNAPPY compression to explicitly test decompression of dictionary pages
+  // Specifying ZSTD compression to explicitly test decompression of dictionary pages
   auto const buffer =
     std::get<1>(create_parquet_with_stats<T, num_concat, is_constant_strings, is_nullable>(
-      100, cudf::io::compression_type::SNAPPY));
+      100, cudf::io::compression_type::ZSTD));
 
   // For string tests use `col2` containing constant "0100" and for temporal types use `col1`
   // containing low cardinality descending values. For all other types use `col0`
