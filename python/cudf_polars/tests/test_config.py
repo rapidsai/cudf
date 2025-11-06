@@ -703,7 +703,7 @@ def test_cuda_stream_policy_default(monkeypatch: pytest.MonkeyPatch) -> None:
     assert config.cuda_stream_policy == CUDAStreamPolicy.NEW
 
 
-def test_cuda_stream_policy_from_config():
+def test_cuda_stream_policy_from_config(*, rapidsmpf_single_available: bool) -> None:
     engine = pl.GPUEngine(
         executor="streaming",
         executor_options={"runtime": "rapidsmpf"},
@@ -712,14 +712,18 @@ def test_cuda_stream_policy_from_config():
             "flags": rmm.pylibrmm.cuda_stream.CudaStreamFlags.NON_BLOCKING,
         },
     )
-    config = ConfigOptions.from_polars_engine(engine)
-    assert isinstance(config.cuda_stream_policy, CUDAStreamPoolConfig)
-    assert config.cuda_stream_policy.pool_size == 32
-    assert (
-        config.cuda_stream_policy.flags
-        == rmm.pylibrmm.cuda_stream.CudaStreamFlags.NON_BLOCKING
-    )
-    config.cuda_stream_policy.build().get_stream()  # no exception
+    if rapidsmpf_single_available:
+        config = ConfigOptions.from_polars_engine(engine)
+        assert isinstance(config.cuda_stream_policy, CUDAStreamPoolConfig)
+        assert config.cuda_stream_policy.pool_size == 32
+        assert (
+            config.cuda_stream_policy.flags
+            == rmm.pylibrmm.cuda_stream.CudaStreamFlags.NON_BLOCKING
+        )
+        config.cuda_stream_policy.build().get_stream()  # no exception
+    else:
+        with pytest.raises(ValueError, match="The rapidsmpf streaming engine"):
+            ConfigOptions.from_polars_engine(engine)
 
 
 @pytest.mark.parametrize(
@@ -733,20 +737,26 @@ def test_cuda_stream_policy_from_config():
         '{"pool_size": 32}',
     ],
 )
-def test_cuda_stream_policy_from_env(monkeypatch: pytest.MonkeyPatch, env: str) -> None:
+def test_cuda_stream_policy_from_env(
+    monkeypatch: pytest.MonkeyPatch, env: str, *, rapidsmpf_single_available: bool
+) -> None:
     monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", env)
     runtime = "tasks" if env in {"default", "new"} else "rapidsmpf"
     engine = pl.GPUEngine(executor="streaming", executor_options={"runtime": runtime})
-    config = ConfigOptions.from_polars_engine(engine)
-    if env in {"default", "new"}:
-        assert config.cuda_stream_policy == env
-    else:
+    if runtime == "rapidsmpf" and rapidsmpf_single_available:
+        config = ConfigOptions.from_polars_engine(engine)
         assert isinstance(config.cuda_stream_policy, CUDAStreamPoolConfig)
         if env == "pool":
             assert config.cuda_stream_policy.pool_size == 16
             assert config.cuda_stream_policy.flags == CudaStreamFlags.NON_BLOCKING
         else:
             assert config.cuda_stream_policy.pool_size == 32
+    elif runtime == "rapidsmpf":
+        with pytest.raises(ValueError, match="The rapidsmpf streaming engine"):
+            ConfigOptions.from_polars_engine(engine)
+    else:
+        config = ConfigOptions.from_polars_engine(engine)
+        assert config.cuda_stream_policy == env
 
 
 def test_cuda_stream_policy_from_env_invalid(monkeypatch: pytest.MonkeyPatch):
