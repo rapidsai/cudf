@@ -150,6 +150,7 @@ struct pass_intermediate_data {
 
   rmm::device_buffer decomp_dict_data{0, cudf::get_default_stream()};
   rmm::device_uvector<size_t> decomp_scratch_sizes{0, cudf::get_default_stream()};
+  rmm::device_uvector<size_t> string_offset_sizes{0, cudf::get_default_stream()};
   rmm::device_uvector<string_index_pair> str_dict_index{0, cudf::get_default_stream()};
 
   int level_type_size{0};
