@@ -414,13 +414,21 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
 
             // Make sure that we have page index and the column chunk doesn't have any
             // non-dictionary encoded pages
-            auto const has_page_index_and_only_dict_encoded_pages =
+            auto has_page_index_and_only_dict_encoded_pages =
               col_chunk.offset_index.has_value() and col_chunk.column_index.has_value() and
-              std::all_of(
-                col_meta.encodings.cbegin(), col_meta.encodings.cend(), [](auto const& encoding) {
-                  return encoding == Encoding::PLAIN_DICTIONARY or
-                         encoding == Encoding::RLE_DICTIONARY;
-                });
+              col_chunk.meta_data.encoding_stats.has_value() and
+              std::all_of(col_chunk.meta_data.encoding_stats.value().cbegin(),
+                          col_chunk.meta_data.encoding_stats.value().cend(),
+                          [](auto const& page_encoding_stats) {
+                            return page_encoding_stats.encoding == Encoding::PLAIN_DICTIONARY or
+                                   page_encoding_stats.encoding == Encoding::RLE_DICTIONARY;
+                          });
+
+            if (not col_chunk.meta_data.encoding_stats.has_value()) {
+              CUDF_LOG_WARN(
+                "Skipping the column chunk because it does not have encoding stats "
+                "needed to determine if all pages are dictionary encoded");
+            }
 
             if (has_page_index_and_only_dict_encoded_pages) {
               auto const& offset_index = col_chunk.offset_index.value();
