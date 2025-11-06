@@ -25,12 +25,12 @@ public class Rmm {
   }
 
   private static final ReadWriteLock rmmLock = new ReentrantReadWriteLock();
-  
+
   /*
    * Advanced users that want to make sure they can protect against Rmm
    * shutting down for example, while doing work with memory resources
-   * could use the reader and writer locks provided here (publicy) 
-   * to protect their state. 
+   * could use the reader and writer locks provided here (publicy)
+   * to protect their state.
    *
    * Users can take the writeLock if they need to get or set memory resources
    * and make sure Rmm will not shutdown at the same time. For all other
@@ -316,7 +316,7 @@ public class Rmm {
    * @return true if we were able to setup the default resource, false if there was
    *         a resource already set.
    */
-  public static boolean configureDefaultCudfPinnedPoolSize(long size) { 
+  public static boolean configureDefaultCudfPinnedPoolSize(long size) {
     writeLock.lock();
     try {
       return configureDefaultCudfPinnedPoolSizeImpl(size);
@@ -367,7 +367,7 @@ public class Rmm {
       readLock.unlock();
     }
   }
- 
+
 
   /**
    * Returns the maximum amount of RMM memory (Bytes) outstanding during the
@@ -385,7 +385,7 @@ public class Rmm {
       readLock.unlock();
     }
   }
-   
+
 
   /**
    * Resets a scoped maximum counter of RMM memory used to keep track of usage between
@@ -412,7 +412,7 @@ public class Rmm {
    */
   public static void resetScopedMaximumBytesAllocated() {
     writeLock.lock();
-    try { 
+    try {
       if (tracker != null) {
         tracker.resetScopedMaxTotalBytesAllocated(0L);
       }
@@ -476,7 +476,7 @@ public class Rmm {
       writeLock.unlock();
     }
   }
- 
+
   private static void setEventHandlerUnderLock(RmmEventHandler handler, boolean enableDebug) throws RmmException {
     if (!initialized) {
       throw new RmmException("RMM has not been initialized");
@@ -500,7 +500,7 @@ public class Rmm {
       }
     }
   }
-  
+
 
   /** Clears the active RMM event handler if one is set. */
   public static void clearEventHandler() throws RmmException {
