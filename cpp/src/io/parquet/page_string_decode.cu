@@ -1130,16 +1130,16 @@ inline __device__ bool prefetch_string_data(int t,
   buffer_end = buffer_base + total_bytes_to_copy;
 
   // Nominally, each thread will copy an equal number of bytes; this rounds up.
-  int32_t nominal_thread_bytes_to_copy = (total_bytes_to_copy + block_size - 1) / block_size;
-  int32_t thread_offset                = nominal_thread_bytes_to_copy * t;
+  int32_t const nominal_thread_bytes_to_copy = (total_bytes_to_copy + block_size - 1) / block_size;
+  int32_t const thread_offset                = nominal_thread_bytes_to_copy * t;
 
   if (thread_offset < total_bytes_to_copy) {
     // Guard against the end of the data stream
-    int32_t thread_bytes_to_copy =
+    int32_t const thread_bytes_to_copy =
       cuda::std::min(nominal_thread_bytes_to_copy, total_bytes_to_copy - thread_offset);
 
     if (thread_bytes_to_copy > 0) {
-      int32_t thread_copy_from_index = buffer_base + thread_offset;
+      int32_t const thread_copy_from_index = buffer_base + thread_offset;
       cuda::std::memcpy(reinterpret_cast<void*>(&prefetch_buffer[thread_offset]),
                         reinterpret_cast<const void*>(&cur[thread_copy_from_index]),
                         thread_bytes_to_copy);
