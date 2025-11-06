@@ -362,14 +362,11 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
     dictionary_literals_collector{filter.get(), static_cast<cudf::size_type>(output_dtypes.size())}
       .get_literals();
 
-  auto iter = thrust::make_zip_iterator(thrust::counting_iterator<cudf::size_type>(0),
-                                        output_column_schemas.begin());
-
   // Collect schema indices of columns with equality predicate(s)
-  std::vector<thrust::tuple<cudf::size_type, cudf::size_type>> dictionary_col_schemas;
+  std::vector<cudf::size_type> dictionary_col_schemas;
   thrust::copy_if(thrust::host,
-                  iter,
-                  iter + output_column_schemas.size(),
+                  output_column_schemas.begin(),
+                  output_column_schemas.end(),
                   literals.begin(),
                   std::back_inserter(dictionary_col_schemas),
                   [](auto& dict_literals) { return not dict_literals.empty(); });
@@ -405,9 +402,7 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
         std::for_each(
           dictionary_col_schemas.begin(),
           dictionary_col_schemas.end(),
-          [&](auto const& schema_col_idx_pair) {
-            auto const [input_col_idx, schema_idx] = schema_col_idx_pair;
-
+          [&](auto const& schema_idx) {
             // Get the column chunk iterator
             if (not colchunk_iter_offset.has_value() or
                 row_group.columns[colchunk_iter_offset.value()].schema_idx != schema_idx) {
