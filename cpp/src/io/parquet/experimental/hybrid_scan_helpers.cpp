@@ -407,7 +407,8 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
           dictionary_col_schemas.end(),
           [&](auto const& schema_col_idx_pair) {
             auto const [input_col_idx, schema_idx] = schema_col_idx_pair;
-            auto& col_meta = get_column_metadata(rg_index, src_index, schema_idx);
+
+            // Get the column chunk iterator
             if (not colchunk_iter_offset.has_value() or
                 row_group.columns[colchunk_iter_offset.value()].schema_idx != schema_idx) {
               auto const& colchunk_iter = std::find_if(
@@ -422,9 +423,7 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
             }
             auto const& colchunk_iter = row_group.columns.begin() + colchunk_iter_offset.value();
             auto const& col_chunk     = *colchunk_iter;
-
-            auto dictionary_offset = int64_t{0};
-            auto dictionary_size   = int64_t{0};
+            auto const& col_meta      = col_chunk.meta_data;
 
             // Make sure that we have page index and the column chunk doesn't have any
             // non-dictionary encoded pages
@@ -448,6 +447,9 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
                                           page_encoding_stats.encoding == Encoding::RLE_DICTIONARY;
                                  });
             }();
+
+            auto dictionary_offset = int64_t{0};
+            auto dictionary_size   = int64_t{0};
 
             if (has_page_index_and_only_dict_encoded_pages) {
               auto const& offset_index = col_chunk.offset_index.value();
