@@ -107,7 +107,6 @@ def decompose_select(
     # Concatenate partial selections
     new_ir: Select | HConcat
     selections, partition_info = _fuse_simple_reductions(
-        select_ir,
         selections,
         partition_info,
     )
@@ -127,7 +126,6 @@ def decompose_select(
 
 
 def _fuse_simple_reductions(
-    original_select_ir: Select,
     decomposed_select_irs: Sequence[Select],
     pi: MutableMapping[IR, PartitionInfo],
 ) -> tuple[list[Select], MutableMapping[IR, PartitionInfo]]:
@@ -136,8 +134,6 @@ def _fuse_simple_reductions(
 
     Parameters
     ----------
-    original_select_ir
-        The original Select node that was decomposed.
     decomposed_select_irs
         The decomposed Select nodes.
     pi
@@ -251,8 +247,12 @@ def _fuse_simple_reductions(
     # the results and apply the final (fused) "c" selection,
     # otherwise we may mess up the ordering of the columns.
     if len(new_decomposed_select_irs) < len(decomposed_select_irs):
+        # Compute schema from actual children (intermediate columns)
+        hconcat_schema: Schema = {}
+        for ir in new_decomposed_select_irs:
+            hconcat_schema |= ir.schema
         new_hconcat = HConcat(
-            original_select_ir.schema,
+            hconcat_schema,
             True,  # noqa: FBT003
             *new_decomposed_select_irs,
         )
