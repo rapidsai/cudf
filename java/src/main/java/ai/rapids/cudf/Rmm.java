@@ -32,9 +32,11 @@ public class Rmm {
    * could use the reader and writer locks provided here (publicy)
    * to protect their state.
    *
-   * Users can take the writeLock if they need to get or set memory resources
-   * and make sure Rmm will not shutdown at the same time. For all other
-   * uses, only the readLock should be obtained.
+   * `writeLock`:
+   * 	1. Covers mutation of `tracker` and `initialized`. 
+   *    2. [set/clear]EventHandler (unlikely) race 
+   *
+   * `readLock`: All other APIs.
    */
   public static final Lock readLock = rmmLock.readLock();
   public static final Lock writeLock = rmmLock.writeLock();
@@ -386,7 +388,6 @@ public class Rmm {
     }
   }
 
-
   /**
    * Resets a scoped maximum counter of RMM memory used to keep track of usage between
    * code sections while debugging.
@@ -394,13 +395,13 @@ public class Rmm {
    * @param initialValue an initial value (in Bytes) to use for this scoped counter
    */
   public static void resetScopedMaximumBytesAllocated(long initialValue) {
-    writeLock.lock();
+    readLock.lock();
     try {
       if (tracker != null) {
         tracker.resetScopedMaxTotalBytesAllocated(initialValue);
       }
     } finally {
-      writeLock.unlock();
+      readLock.unlock();
     }
   }
 
@@ -411,13 +412,13 @@ public class Rmm {
    * This resets the counter to 0 Bytes.
    */
   public static void resetScopedMaximumBytesAllocated() {
-    writeLock.lock();
+    readLock.lock();
     try {
       if (tracker != null) {
         tracker.resetScopedMaxTotalBytesAllocated(0L);
       }
     } finally {
-      writeLock.unlock();
+      readLock.unlock();
     }
   }
 
@@ -500,7 +501,6 @@ public class Rmm {
       }
     }
   }
-
 
   /** Clears the active RMM event handler if one is set. */
   public static void clearEventHandler() throws RmmException {
