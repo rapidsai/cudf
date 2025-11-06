@@ -13,7 +13,13 @@ from pandas.api.indexers import BaseIndexer
 
 import pylibcudf as plc
 
-from cudf.api.types import is_integer, is_number, is_scalar
+from cudf.api.types import (
+    is_bool_dtype,
+    is_integer,
+    is_integer_dtype,
+    is_number,
+    is_scalar,
+)
 from cudf.core._internals import aggregation
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
@@ -357,7 +363,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             else agg_kwargs,
         ).plc_obj
         with acquire_spill_lock():
-            return ColumnBase.from_pylibcudf(
+            res = ColumnBase.from_pylibcudf(
                 plc.rolling.rolling_window(
                     source_column.to_pylibcudf(mode="read"),
                     pre,
@@ -366,6 +372,12 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                     rolling_agg,
                 )
             )
+        if get_option("mode.pandas_compatible") and agg_name == "sum":
+            if is_integer_dtype(source_column.dtype) or is_bool_dtype(
+                source_column.dtype
+            ):
+                res = res.astype(np.float64)
+        return res
 
     def _reduce(
         self,
