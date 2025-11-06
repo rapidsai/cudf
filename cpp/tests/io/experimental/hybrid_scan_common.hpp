@@ -157,7 +157,7 @@ auto create_parquet_with_stats(
   // Output table view
   auto output = table_view{{col0, col1, col2}};
 
-  // Do we need to create and add nullmasks to the columns?
+  // Add nullmasks to the columns if specified
   std::vector<std::unique_ptr<cudf::column>> columns;
   if constexpr (IsNullable) {
     std::mt19937 gen(0xc0ffee);
@@ -180,7 +180,7 @@ auto create_parquet_with_stats(
       cudf::test::detail::make_null_mask(valids + 2 * num_rows, valids + 3 * num_rows);
     columns.back()->set_null_mask(std::move(nullmask), nullcount);
 
-    // Purge non-empty nulls from the now-nullable strings column only
+    // Purge non-empty nulls from the strings column only
     cudf::purge_nonempty_nulls(columns.back()->view());
 
     // Update the output table view with the nullable columns
