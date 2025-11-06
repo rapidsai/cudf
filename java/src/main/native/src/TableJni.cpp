@@ -4685,7 +4685,6 @@ Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv* env,
     std::vector<cudf::column_view> grouped_cols(num_grouped_cols);
 
     if (jprojection_column_indices == NULL) {
-      grouped_cols.reserve(key_indices.size() + num_value_cols);
       // When builds the table view from keys and values of 'groups', restores the
       // original order of columns (same order with that in input table).
       // key columns
@@ -4704,7 +4703,6 @@ Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv* env,
       }
     } else {
       // specified value_indices, do not output keys columns by default
-      grouped_cols.reserve(num_value_cols);
       auto value_view    = groups.values->view();
       auto value_view_it = value_view.begin();
       for (size_t i = 0; i < num_value_cols; ++i) {
