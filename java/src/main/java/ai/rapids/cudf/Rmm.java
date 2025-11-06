@@ -33,8 +33,8 @@ public class Rmm {
    * to protect their state.
    *
    * `writeLock`:
-   * 	1. Covers mutation of `tracker` and `initialized`. 
-   *    2. [set/clear]EventHandler (unlikely) race 
+   *    1. Covers mutation of `tracker` and `initialized`.
+   *    2. [set/clear]EventHandler (unlikely) race
    *
    * `readLock`: All other APIs.
    */
