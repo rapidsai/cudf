@@ -673,11 +673,11 @@ struct search_fenwick_tree_functor {
 
     // Binary search decomposition loop
     while (start < end) {
-      // Find the largest power-of-two block that begins and `start` and aligns it up
+      // Find the largest power-of-two block that aligns `start` up
       auto const [start_tree_level, start_block_size] =
         align_range_boundary<boundary::START>(start, end);
 
-      // Find the largest power-of-two block that aligns `end` down.
+      // Find the largest power-of-two block that aligns `end` down
       auto const [end_tree_level, end_block_size] = align_range_boundary<boundary::END>(start, end);
 
       // Check the larger block first to minimize the number of queries
