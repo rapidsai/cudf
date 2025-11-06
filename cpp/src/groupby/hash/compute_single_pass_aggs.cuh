@@ -229,6 +229,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
                              available_shmem_size,
                              num_rows,
                              row_bitmask,
+                             block_stride_ends.data(),
                              local_mapping_indices.data(),
                              global_mapping_indices.data(),
                              block_cardinality.data(),
