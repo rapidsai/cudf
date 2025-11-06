@@ -21,6 +21,15 @@ namespace cudf::io::parquet::experimental::detail {
 using metadata_base = parquet::detail::metadata;
 
 /**
+ * @brief Find the offset of the column chunk with the given schema index in the row group
+ *
+ * @param row_group Row group
+ * @param schema_idx Schema index
+ * @return Offset of the column chunk iterator
+ */
+[[nodiscard]] size_type find_colchunk_iter_offset(RowGroup const& row_group, size_type schema_idx);
+
+/**
  * @brief Compute if the page index is present in all parquet data sources for all columns
  *
  * @param file_metadatas Span of parquet footer metadata

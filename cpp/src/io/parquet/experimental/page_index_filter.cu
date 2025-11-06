@@ -329,17 +329,18 @@ struct page_stats_caster : public stats_caster_base {
         [&](auto src_idx) {
           // For all column chunks in this source
           auto const& rg_indices = row_group_indices[src_idx];
+          std::optional<size_type> colchunk_iter_offset{};
           std::for_each(rg_indices.cbegin(), rg_indices.cend(), [&](auto rg_idx) {
             auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
             // Find colchunk_iter in row_group.columns. Guaranteed to be found as already verified
             // in compute_page_row_counts_and_offsets()
-            auto colchunk_iter = std::find_if(
-              row_group.columns.begin(),
-              row_group.columns.end(),
-              [schema_idx](ColumnChunk const& col) { return col.schema_idx == schema_idx; });
-
-            auto const& colchunk               = *colchunk_iter;
-            auto const& column_index           = colchunk.column_index.value();
+            if (not colchunk_iter_offset.has_value() or
+                row_group.columns[colchunk_iter_offset.value()].schema_idx != schema_idx) {
+              colchunk_iter_offset = find_colchunk_iter_offset(row_group, schema_idx);
+            }
+            auto const& colchunk_iter = row_group.columns.begin() + colchunk_iter_offset.value();
+            auto const& colchunk      = *colchunk_iter;
+            auto const& column_index  = colchunk.column_index.value();
             auto const num_pages_in_colchunk   = column_index.min_values.size();
             auto const page_offset_in_colchunk = col_chunk_page_offsets[page_offset_idx++];
 

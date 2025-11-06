@@ -22,16 +22,7 @@
 
 namespace cudf::io::parquet::experimental::detail {
 
-namespace {
-
-/**
- * @brief Find the offset of the column chunk with the given schema index in the row group
- *
- * @param row_group Row group
- * @param schema_idx Schema index
- * @return Offset of the column chunk iterator
- */
-[[nodiscard]] auto find_colchunk_iter_offset(RowGroup const& row_group, size_type schema_idx)
+size_type find_colchunk_iter_offset(RowGroup const& row_group, size_type schema_idx)
 {
   auto const& colchunk_iter =
     std::find_if(row_group.columns.begin(), row_group.columns.end(), [schema_idx](auto const& col) {
@@ -43,8 +34,6 @@ namespace {
     std::invalid_argument);
   return std::distance(row_group.columns.begin(), colchunk_iter);
 }
-
-}  // namespace
 
 bool compute_has_page_index(cudf::host_span<metadata_base const> file_metadatas,
                             cudf::host_span<std::vector<size_type> const> row_group_indices)
