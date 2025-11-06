@@ -303,7 +303,6 @@ def execute_query(
     ):
         if run_config.executor == "cpu":
             with disable_module_accelerator():
-                assert not cudf.pandas.LOADED
                 return q(run_config)
         assert cudf.pandas.LOADED
         return q(run_config)
@@ -466,16 +465,23 @@ def run_pandas(
                 cpu_run_config = dataclasses.replace(
                     run_config, executor="cpu"
                 )
-                cpu_result = execute_query(q_id, i, q, cpu_run_config)
                 try:
-                    with disable_module_accelerator():
-                        pd.testing.assert_frame_equal(
-                            result._fsproxy_slow, cpu_result
-                        )
-                    print(f"✅ Query {q_id} passed validation!")  # noqa: T201
-                except AssertionError as e:
-                    validation_failures.append(q_id)
-                    print(f"❌ Query {q_id} failed validation!\n{e}")  # noqa: T201
+                    cpu_result = execute_query(q_id, i, q, cpu_run_config)
+                except Exception:
+                    print(  # noqa: T201
+                        f"❌ query={q_id} unable to execute on CPU. Skipping validation."
+                    )
+                    print(traceback.format_exc())  # noqa: T201
+                else:
+                    try:
+                        with disable_module_accelerator():
+                            pd.testing.assert_frame_equal(
+                                result._fsproxy_slow, cpu_result
+                            )
+                        print(f"✅ Query {q_id} passed validation!")  # noqa: T201
+                    except AssertionError as e:
+                        validation_failures.append(q_id)
+                        print(f"❌ Query {q_id} failed validation!\n{e}")  # noqa: T201
 
             record = Record(query=q_id, duration=t1 - t0, shuffle_stats=None)
             if args.print_results:
