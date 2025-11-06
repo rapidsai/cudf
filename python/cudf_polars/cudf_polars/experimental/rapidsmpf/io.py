@@ -128,7 +128,7 @@ async def dataframescan_node(
         # Read data.
         # Use Lineariser to ensure ordered delivery.
         num_producers = min(num_producers, len(ir_slices))
-        lineariser = Lineariser(ch_out.data, num_producers)
+        lineariser = Lineariser(context, ch_out.data, num_producers)
         next_task_idx = 0
 
         async def _producer(ch_out: Channel) -> None:
@@ -154,7 +154,7 @@ async def dataframescan_node(
             await ch_out.drain(context)
 
         # Start the lineariser drain task (must run concurrently with producers)
-        tasks = [lineariser.drain(context)]
+        tasks = [lineariser.drain()]
 
         # Start all producer tasks
         tasks.extend(_producer(ch_in) for ch_in in lineariser.get_inputs())
@@ -176,7 +176,7 @@ def _(
 
     context = rec.state["context"]
     ir_context = rec.state["ir_context"]
-    channels: dict[IR, ChannelManager] = {ir: ChannelManager()}
+    channels: dict[IR, ChannelManager] = {ir: ChannelManager(rec.state["context"])}
     nodes: list[Any] = [
         dataframescan_node(
             context,
@@ -362,7 +362,7 @@ async def scan_node(
         # Read data.
         # Use Lineariser to ensure ordered delivery
         num_producers = min(num_producers, len(scans))
-        lineariser = Lineariser(ch_out.data, num_producers)
+        lineariser = Lineariser(context, ch_out.data, num_producers)
         next_task_idx = 0
 
         async def _producer(ch_out: Channel) -> None:
@@ -388,7 +388,7 @@ async def scan_node(
             await ch_out.drain(context)
 
         # Start the lineariser drain task (must run concurrently with producers)
-        tasks = [lineariser.drain(context)]
+        tasks = [lineariser.drain()]
 
         # Start all producer tasks
         tasks.extend(_producer(ch_in) for ch_in in lineariser.get_inputs())
@@ -471,7 +471,7 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
     parquet_options = config_options.parquet_options
     partition_info = rec.state["partition_info"][ir]
     num_producers = rec.state["max_io_threads"]
-    channels: dict[IR, ChannelManager] = {ir: ChannelManager()}
+    channels: dict[IR, ChannelManager] = {ir: ChannelManager(rec.state["context"])}
 
     # Use rapidsmpf native read_parquet for multi-partition Parquet scans.
     # Start with simple case only (no predicates, row_index, etc.).

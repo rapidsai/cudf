@@ -670,8 +670,8 @@ __device__ int update_validity_and_row_indices_lists(int32_t target_value_count,
       // Not all values visited by this block will represent a value at this nesting level.
       // the validity bit for thread t might actually represent output value t-6.
       // the correct position for thread t's bit is thread_value_count.
-      uint32_t const warp_valid_mask =
-        WarpReduceOr32((uint32_t)is_valid << thread_value_count_within_warp);
+      uint32_t const warp_valid_mask = warp_reduce_or<cudf::detail::warp_size>(
+        static_cast<uint32_t>(is_valid) << thread_value_count_within_warp);
       int thread_valid_count, block_valid_count;
       {
         auto thread_mask = (uint32_t(1) << thread_value_count_within_warp) - 1;
