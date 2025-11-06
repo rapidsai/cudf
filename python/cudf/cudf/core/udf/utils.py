@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import functools
 import os
-import re
 import warnings
 from pickle import dumps
 from typing import TYPE_CHECKING
@@ -78,9 +77,7 @@ UDF_SHIM_FILE = os.path.join(
     os.path.dirname(strings_udf.__file__), "..", "core", "udf", "shim.fatbin"
 )
 
-DEPRECATED_SM_REGEX = re.compile(
-    r"Architectures prior to '<compute/sm>_75' are deprecated"
-)
+DEPRECATED_SM_REGEX = "Architectures prior to '<compute/sm>_75' are deprecated"
 
 
 def _all_dtypes_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
