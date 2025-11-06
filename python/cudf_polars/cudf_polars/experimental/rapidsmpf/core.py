@@ -42,6 +42,8 @@ if TYPE_CHECKING:
 
     from rapidsmpf.streaming.core.leaf_node import DeferredMessages
 
+    import polars as pl
+
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.experimental.parallel import ConfigOptions
@@ -56,7 +58,7 @@ if TYPE_CHECKING:
 def evaluate_logical_plan(
     ir: IR,
     config_options: ConfigOptions,
-) -> DataFrame:
+) -> pl.DataFrame:
     """
     Evaluate a logical plan with the RapidsMPF streaming runtime.
 
@@ -113,6 +115,7 @@ def evaluate_logical_plan(
 
     br = BufferResource(mr, memory_available=memory_available, stream_pool=stream_pool)
     rmpf_context = Context(comm, br, options)
+
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cpse")
 
     # Create the IR execution context.
@@ -150,7 +153,14 @@ def evaluate_logical_plan(
         )
         for chunk in chunks
     ]
-    return _concat(*dfs, context=ir_context)
+    df = _concat(*dfs, context=ir_context)
+    # We need to materialize the polars dataframe before we drop the rapidsmpf
+    # context, which keeps the CUDA streams alive.
+    result = df.to_polars()
+    # is this synchronize necessary?
+    # It avoids some (but not all) segfaults.
+    df.stream.synchronize()
+    return result
 
 
 def lower_ir_graph(

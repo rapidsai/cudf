@@ -577,7 +577,7 @@ def execute_query(
                     return evaluate_streaming(
                         ir,
                         translator.config_options,
-                    ).to_polars()
+                    )
                 assert_never(run_config.executor)
             else:
                 return q.collect(engine=engine)
