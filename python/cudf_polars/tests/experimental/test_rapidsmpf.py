@@ -7,6 +7,7 @@ import pytest
 
 import polars as pl
 
+from cudf_polars import Translator
 from cudf_polars.testing.asserts import (
     DEFAULT_CLUSTER,
     DEFAULT_RUNTIME,
@@ -18,11 +19,43 @@ REQUIRE_TASKS_RUNTIME = pytest.mark.skipif(
     DEFAULT_RUNTIME != "tasks", reason="Requires 'tasks' runtime."
 )
 
+REQUIRE_RAPIDSMFP_RUNTIME = pytest.mark.skipif(
+    DEFAULT_RUNTIME != "rapidsmpf", reason="Requires 'rapidsmpf' runtime."
+)
+
+REQUIRE_SINGLE_CLUSTER = pytest.mark.skipif(
+    DEFAULT_CLUSTER != "single", reason="Requires 'single' cluster."
+)
+
+
+@pytest.fixture(scope="module")
+def left() -> pl.LazyFrame:
+    return pl.LazyFrame(
+        {
+            "x": range(15),
+            "y": [1, 2, 3] * 5,
+            "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 3,
+        }
+    )
+
+
+@pytest.fixture(scope="module")
+def right() -> pl.LazyFrame:
+    return pl.LazyFrame(
+        {
+            "xx": range(6),
+            "y": [2, 4, 3] * 2,
+            "zz": [1, 2] * 3,
+        }
+    )
+
 
 @REQUIRE_TASKS_RUNTIME
 @pytest.mark.parametrize("rapidsmpf_spill", [False, True])
 @pytest.mark.parametrize("max_rows_per_partition", [1, 5])
 def test_join_rapidsmpf(
+    left: pl.LazyFrame,
+    right: pl.LazyFrame,
     max_rows_per_partition: int,
     rapidsmpf_spill: bool,  # noqa: FBT001
 ) -> None:
@@ -61,20 +94,6 @@ def test_join_rapidsmpf(
         },
     )
 
-    left = pl.LazyFrame(
-        {
-            "x": range(15),
-            "y": [1, 2, 3] * 5,
-            "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 3,
-        }
-    )
-    right = pl.LazyFrame(
-        {
-            "xx": range(6),
-            "y": [2, 4, 3] * 2,
-            "zz": [1, 2] * 3,
-        }
-    )
     q = left.join(right, on="y", how="inner")
 
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
@@ -82,7 +101,9 @@ def test_join_rapidsmpf(
 
 @REQUIRE_TASKS_RUNTIME
 @pytest.mark.parametrize("max_rows_per_partition", [1, 5])
-def test_join_rapidsmpf_single(max_rows_per_partition: int) -> None:
+def test_join_rapidsmpf_single(
+    left: pl.LazyFrame, right: pl.LazyFrame, max_rows_per_partition: int
+) -> None:
     # check that we have a rapidsmpf cluster running
     pytest.importorskip("rapidsmpf")
 
@@ -99,20 +120,6 @@ def test_join_rapidsmpf_single(max_rows_per_partition: int) -> None:
         },
     )
 
-    left = pl.LazyFrame(
-        {
-            "x": range(15),
-            "y": [1, 2, 3] * 5,
-            "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 3,
-        }
-    )
-    right = pl.LazyFrame(
-        {
-            "xx": range(6),
-            "y": [2, 4, 3] * 2,
-            "zz": [1, 2] * 3,
-        }
-    )
     q = left.join(right, on="y", how="inner")
 
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
@@ -211,3 +218,43 @@ def test_sort_stable_rapidsmpf_warns():
     q = df.sort(by=["y", "z"], maintain_order=True)
     with pytest.warns(UserWarning, match="Falling back to shuffle_method='tasks'."):
         assert_gpu_result_equal(q, engine=engine, check_row_order=True)
+
+
+@REQUIRE_RAPIDSMFP_RUNTIME
+@REQUIRE_SINGLE_CLUSTER
+@pytest.mark.parametrize("broadcast_join_limit", [2, 10])
+def test_rapidsmpf_join_metadata(
+    left: pl.LazyFrame,
+    right: pl.LazyFrame,
+    broadcast_join_limit: int,
+) -> None:
+    from cudf_polars.experimental.rapidsmpf.core import evaluate_logical_plan
+
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 1,
+            "broadcast_join_limit": broadcast_join_limit,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+        },
+    )
+    config_options = ConfigOptions.from_polars_engine(engine)
+    q = left.join(
+        right,
+        on="y",
+        how="left",
+    ).filter(pl.col("x") > pl.col("zz"))
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    left_count = left.collect().height
+    right_count = right.collect().height
+
+    metadata_list = evaluate_logical_plan(ir, config_options)[1]
+    assert len(metadata_list) == 1
+    metadata = metadata_list[0]
+    assert metadata.count == left_count
+    if right_count > broadcast_join_limit:
+        assert metadata.partitioned_on == ("y",)
+    else:
+        assert metadata.partitioned_on == ()

@@ -55,12 +55,13 @@ if TYPE_CHECKING:
         LowerState,
         SubNetGenerator,
     )
+    from cudf_polars.experimental.rapidsmpf.utils import Metadata
 
 
 def evaluate_logical_plan(
     ir: IR,
     config_options: ConfigOptions,
-) -> DataFrame:
+) -> tuple[DataFrame, list[Metadata]]:
     """
     Evaluate a logical plan with the RapidsMPF streaming runtime.
 
@@ -119,12 +120,14 @@ def evaluate_logical_plan(
         ir_context = IRExecutionContext.from_config_options(config_options)
 
     # Generate network nodes
+    metadata_collector: list[Metadata] = []
     nodes, output = generate_network(
         rmpf_context,
         ir,
         partition_info,
         config_options,
         ir_context=ir_context,
+        metadata_collector=metadata_collector,
     )
 
     # Run the network
@@ -144,7 +147,7 @@ def evaluate_logical_plan(
         )
         for chunk in chunks
     ]
-    return _concat(*dfs, context=ir_context)
+    return _concat(*dfs, context=ir_context), metadata_collector
 
 
 def lower_ir_graph(
@@ -259,6 +262,7 @@ def generate_network(
     config_options: ConfigOptions,
     *,
     ir_context: IRExecutionContext,
+    metadata_collector: list[Metadata] | None = None,
 ) -> tuple[list[Any], DeferredMessages]:
     """
     Translate the IR graph to a RapidsMPF streaming network.
@@ -275,6 +279,8 @@ def generate_network(
         The configuration options.
     ir_context
         The execution context for the IR node.
+    metadata_collector
+        Optional metadata-collector list.
 
     Returns
     -------
@@ -319,6 +325,7 @@ def generate_network(
             context,
             ch_out,
             ch_final_data,
+            metadata_collector,
         )
     )
 

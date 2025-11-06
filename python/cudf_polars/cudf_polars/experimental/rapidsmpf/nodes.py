@@ -12,7 +12,7 @@ from rapidsmpf.streaming.core.node import define_py_node
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.ir import IR, Empty
+from cudf_polars.dsl.ir import IR, Cache, Empty, Filter, Projection
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
 )
@@ -428,6 +428,14 @@ def _(ir: IR, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]
 
     if len(ir.children) == 1:
         # Single-channel default node
+        preserve_partitioning = isinstance(
+            ir,
+            # TODO: Handle node-specific partitioning
+            # logic in a systematic way. For example,
+            # Filter only works if problematic filters
+            # are always collapsed to a single partition.
+            (Cache, Projection, Filter),
+        )
         nodes.append(
             default_node_single(
                 rec.state["context"],
@@ -435,6 +443,7 @@ def _(ir: IR, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]
                 rec.state["ir_context"],
                 channels[ir].reserve_input_slot(),
                 channels[ir.children[0]].reserve_output_slot(),
+                preserve_partitioning=preserve_partitioning,
             )
         )
     else:
@@ -506,6 +515,7 @@ async def metadata_drain_node(
     context: Context,
     ch_in: ChannelPair,
     ch_out: Any,
+    metadata_collector: list[Metadata] | None = None,
 ) -> None:
     """
     Drain metadata and forward data to a single channel.
@@ -521,10 +531,17 @@ async def metadata_drain_node(
         The input ChannelPair (with metadata and data channels).
     ch_out
         The output data channel.
+    metadata_collector
+        Optional metadata-collector list.
     """
     async with shutdown_on_error(context, ch_in.metadata, ch_in.data, ch_out):
         # Drain metadata channel (we don't need it after this point)
-        _ = await ch_in.recv_metadata(context)
+        metadata = await ch_in.recv_metadata(context)
+        if metadata_collector is not None:
+            assert isinstance(metadata, Metadata), (
+                f"Expected Metadata, got {type(metadata)}."
+            )
+            metadata_collector.append(metadata)
         # TODO: Could use metadata here to drop duplicated data on all
         # but rank 0 in distributed execution.
 
