@@ -22,14 +22,7 @@ void table_read_common(cudf::size_type num_rows_to_read,
                        nvbench::state& state)
 {
   auto const data_size = static_cast<size_t>(state.get_int64("data_size"));
-
-  // Create source_info outside the lambda to ensure it stays alive for the entire benchmark
-  // This matches the pattern used in other IO benchmarks (parquet, orc, csv)
-  auto source_info = source_sink.make_source_info();
-  // For DEVICE_BUFFER, make_source_info does async copy, so synchronize to ensure it completes
-  if (source_info.type() == cudf::io::io_type::DEVICE_BUFFER) {
-    cudf::get_default_stream().synchronize();
-  }
+  auto source_info     = source_sink.make_source_info();
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(
@@ -52,10 +45,6 @@ void table_read_common(cudf::size_type num_rows_to_read,
   state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
 }
 
-// ============================================================================
-// IO Path Comparison Benchmarks
-// ============================================================================
-
 void BM_table_read_io_paths(nvbench::state& state)
 {
   auto const d_type      = get_type_or_group(static_cast<int32_t>(data_type::INTEGRAL));
@@ -74,10 +63,6 @@ void BM_table_read_io_paths(nvbench::state& state)
 
   table_read_common(num_rows_written, num_cols, source_sink, state);
 }
-
-// ============================================================================
-// Data Size Scaling Benchmarks
-// ============================================================================
 
 void BM_table_read_size_scaling(nvbench::state& state)
 {
@@ -98,10 +83,6 @@ void BM_table_read_size_scaling(nvbench::state& state)
   table_read_common(num_rows_written, num_cols, source_sink, state);
 }
 
-// ============================================================================
-// Column Complexity Benchmarks
-// ============================================================================
-
 void BM_table_read_column_complexity(nvbench::state& state)
 {
   auto const d_type      = get_type_or_group(static_cast<int32_t>(data_type::INTEGRAL));
@@ -120,10 +101,6 @@ void BM_table_read_column_complexity(nvbench::state& state)
 
   table_read_common(num_rows_written, n_col, source_sink, state);
 }
-
-// ============================================================================
-// Basic Data Type Benchmarks
-// ============================================================================
 
 template <data_type DataType>
 void BM_table_read_data_common(nvbench::state& state,
@@ -154,10 +131,6 @@ void BM_table_read_data(nvbench::state& state,
   // Cardinality and run_length don't affect table format read performance
   BM_table_read_data_common<DataType>(state, data_profile{}, type_list);
 }
-
-// ============================================================================
-// Wide Tables Benchmarks (focusing on metadata parsing overhead)
-// ============================================================================
 
 template <data_type DataType>
 void BM_table_read_wide_tables(nvbench::state& state,
