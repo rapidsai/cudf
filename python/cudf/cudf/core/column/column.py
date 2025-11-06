@@ -809,12 +809,20 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # The skipna argument is only used for numerical columns.
         # If all entries are null the result is True, including when the column
         # is empty.
+        if not isinstance(skipna, bool):
+            raise ValueError(
+                f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
+            )
         if self.null_count == self.size:
             return True
         return bool(self.reduce("all"))
 
     def any(self, skipna: bool = True) -> bool:
         # Early exit for fast cases.
+        if not isinstance(skipna, bool):
+            raise ValueError(
+                f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
+            )
         if not skipna and self.has_nulls():
             return True
         elif skipna and self.null_count == self.size:
@@ -1728,7 +1736,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             result.dtype,
             (cudf.Decimal128Dtype, cudf.Decimal64Dtype, cudf.Decimal32Dtype),
         ):
-            result.dtype.precision = dtype.precision  # type: ignore[union-attr]
+            if cudf.get_option("mode.pandas_compatible") and not isinstance(
+                dtype, DecimalDtype
+            ):
+                result._dtype = dtype
+            else:
+                result.dtype.precision = dtype.precision  # type: ignore[union-attr]
         if cudf.get_option("mode.pandas_compatible") and result.dtype != dtype:
             result._dtype = dtype
         return result
@@ -2048,7 +2061,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def _reduce(
         self,
         op: str,
-        skipna: bool | None = None,
+        skipna: bool = True,
         min_count: int = 0,
         *args,
         **kwargs,
@@ -2072,9 +2085,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return not skipna and self.has_nulls(include_nan=False)
 
     def _process_for_reduction(
-        self, skipna: bool | None = None, min_count: int = 0
+        self, skipna: bool = True, min_count: int = 0
     ) -> ColumnBase | ScalarLike:
-        skipna = True if skipna is None else skipna
+        if not isinstance(skipna, bool):
+            raise ValueError(
+                f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
+            )
 
         if self._can_return_nan(skipna=skipna):
             return _get_nan_for_dtype(self.dtype)
@@ -2248,9 +2264,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # check empty case
         if len(self) <= self.null_count:
             if reduction_op == "sum" or reduction_op == "sum_of_squares":
-                return self.dtype.type(0)
+                return col_dtype.type(0)
             if reduction_op == "product":
-                return self.dtype.type(1)
+                return col_dtype.type(1)
             if reduction_op == "any":
                 return False
 
