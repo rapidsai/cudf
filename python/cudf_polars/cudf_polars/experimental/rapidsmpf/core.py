@@ -21,8 +21,6 @@ from rapidsmpf.streaming.core.node import (
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import rmm
-from rmm.pylibrmm.cuda_stream import CudaStreamFlags
-from rmm.pylibrmm.cuda_stream_pool import CudaStreamPool
 
 import cudf_polars.experimental.rapidsmpf.io
 import cudf_polars.experimental.rapidsmpf.join
@@ -37,7 +35,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo, lower_ir_nod
 from cudf_polars.experimental.rapidsmpf.nodes import generate_ir_sub_network_wrapper
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
-from cudf_polars.utils.config import CUDAStreamPolicy
+from cudf_polars.utils.config import CUDAStreamPoolConfig
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -105,14 +103,21 @@ def evaluate_logical_plan(
             )
         }
 
-    # Temporarily testing with a stream pool of size 1
-    stream_pool = CudaStreamPool(pool_size=1, flags=CudaStreamFlags.NON_BLOCKING)
+    # We have a couple of cases to consider here:
+    # 1: we want to use the same stream pool for cudf-polars and rapidsmpf
+    # 2: rapidsmpf uses its own pool and cudf-polars uses the default stream
+    if isinstance(config_options.cuda_stream_policy, CUDAStreamPoolConfig):
+        stream_pool = config_options.cuda_stream_policy.build()
+    else:
+        stream_pool = None
+
     br = BufferResource(mr, memory_available=memory_available, stream_pool=stream_pool)
     rmpf_context = Context(comm, br, options)
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cpse")
 
     # Create the IR execution context.
-    if config_options.cuda_stream_policy == CUDAStreamPolicy.POOL:
+    if stream_pool is not None:
+        # both cudf-polars and rapidsmpf are using the same stream pool
         ir_context = IRExecutionContext(
             get_cuda_stream=rmpf_context.get_stream_from_pool
         )
