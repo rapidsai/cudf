@@ -1579,3 +1579,9 @@ def test_as_column_types():
     gds = cudf.Series(cudf.Index(["1", "18", "9"]), dtype="int")
 
     assert_eq(pds, gds)
+
+
+def test_series_type_invalid_error():
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(ValueError):
+            cudf.Series(["a", "b", "c"], dtype="Int64")

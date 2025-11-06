@@ -7,11 +7,11 @@
 
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
@@ -74,7 +74,7 @@ std::unique_ptr<column> get_list_child_to_list_row_mapping(cudf::column_view con
                          per_row_mapping_begin,
                          per_row_mapping_begin + num_child_rows,
                          per_row_mapping_begin,
-                         cudf::detail::maximum{});
+                         cuda::maximum{});
   return per_row_mapping;
 }
 
