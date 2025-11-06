@@ -4606,7 +4606,7 @@ Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv* env,
                                                 jclass,
                                                 jlong jinput_table,
                                                 jintArray jkey_indices,
-                                                jintArray jvalue_indices,
+                                                jintArray jprojection_column_indices,
                                                 jboolean jignore_null_keys,
                                                 jboolean jkey_sorted,
                                                 jbooleanArray jkeys_sort_desc,
@@ -4644,11 +4644,12 @@ Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv* env,
 
     // 1) Gets the groups(keys, offsets, values) from groupby.
     //
-    // If the `jvalue_indices` is null, uses all_columns - key_columns as value columns;
-    // If the `jvalue_indices` is not null, use the `jvalue_indices` columns as value columns.
+    // If the `jprojection_column_indices` is null, uses all_columns - key_columns as value columns;
+    // If the `jprojection_column_indices` is not null, use the `jprojection_column_indices` columns
+    // as value columns.
     std::vector<cudf::size_type> value_indices;
     auto num_value_cols = [&]() -> size_t {
-      if (jvalue_indices == NULL) {
+      if (jprojection_column_indices == NULL) {
         // if a column is not in key columns, then it's a value column
         auto num_v_cols = static_cast<size_t>(input_table->num_columns()) - key_indices.size();
         value_indices.reserve(num_v_cols);
@@ -4663,12 +4664,12 @@ Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv* env,
         return num_v_cols;
       } else {
         // use the specified columns as value columns
-        cudf::jni::native_jintArray n_value_indices(env, jvalue_indices);
-        value_indices.reserve(n_value_indices.size());
-        for (auto i = 0; i < n_value_indices.size(); i++) {
-          value_indices.emplace_back(n_value_indices[i]);
+        cudf::jni::native_jintArray n_project_indices(env, jprojection_column_indices);
+        value_indices.reserve(n_project_indices.size());
+        for (auto i = 0; i < n_project_indices.size(); i++) {
+          value_indices.emplace_back(n_project_indices[i]);
         }
-        return static_cast<size_t>(n_value_indices.size());
+        return static_cast<size_t>(n_project_indices.size());
       }
     }();
 
@@ -4676,47 +4677,41 @@ Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv* env,
     // execute grouping
     cudf::groupby::groupby::groups groups = grouper.get_groups(values_view);
 
-    auto num_grouped_cols = [&]() -> size_t {
-      if (jvalue_indices == NULL) {
-        // output both key columns and value columns
-        return key_indices.size() + num_value_cols;
-      } else {
-        // only output value columns
-        return num_value_cols;
-      }
-    }();
+    // if jprojection_column_indices is null, output both key columns and value columns;
+    // otherwise, only output value columns.
+    auto num_grouped_cols =
+      num_value_cols + (jprojection_column_indices == NULL) ? key_indices.size() : 0;
 
     std::vector<cudf::column_view> grouped_cols(num_grouped_cols);
-    [&]() -> void {
-      if (jvalue_indices == NULL) {
-        grouped_cols.reserve(key_indices.size() + num_value_cols);
-        // When builds the table view from keys and values of 'groups', restores the
-        // original order of columns (same order with that in input table).
-        // key columns
-        auto key_view    = groups.keys->view();
-        auto key_view_it = key_view.begin();
-        for (auto key_id : key_indices) {
-          grouped_cols.at(key_id) = std::move(*key_view_it);
-          key_view_it++;
-        }
-        // value columns
-        auto value_view    = groups.values->view();
-        auto value_view_it = value_view.begin();
-        for (auto value_id : value_indices) {
-          grouped_cols.at(value_id) = std::move(*value_view_it);
-          value_view_it++;
-        }
-      } else {
-        // specified value_indices, do not output keys columns by default
-        grouped_cols.reserve(num_value_cols);
-        auto value_view    = groups.values->view();
-        auto value_view_it = value_view.begin();
-        for (size_t i = 0; i < num_value_cols; ++i) {
-          grouped_cols.at(i) = std::move(*value_view_it);
-          value_view_it++;
-        }
+
+    if (jprojection_column_indices == NULL) {
+      grouped_cols.reserve(key_indices.size() + num_value_cols);
+      // When builds the table view from keys and values of 'groups', restores the
+      // original order of columns (same order with that in input table).
+      // key columns
+      auto key_view    = groups.keys->view();
+      auto key_view_it = key_view.begin();
+      for (auto key_id : key_indices) {
+        grouped_cols[key_id] = *key_view_it;
+        key_view_it++;
       }
-    }();
+      // value columns
+      auto value_view    = groups.values->view();
+      auto value_view_it = value_view.begin();
+      for (auto value_id : value_indices) {
+        grouped_cols[value_id] = *value_view_it;
+        value_view_it++;
+      }
+    } else {
+      // specified value_indices, do not output keys columns by default
+      grouped_cols.reserve(num_value_cols);
+      auto value_view    = groups.values->view();
+      auto value_view_it = value_view.begin();
+      for (size_t i = 0; i < num_value_cols; ++i) {
+        grouped_cols[i] = *value_view_it;
+        value_view_it++;
+      }
+    }
 
     cudf::table_view grouped_table(grouped_cols);
     // When no key columns, uses the input table instead, because the output
