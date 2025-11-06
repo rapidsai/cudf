@@ -45,7 +45,7 @@ void table_read_common(cudf::size_type num_rows_to_read,
 void BM_table_read_data_sizes(nvbench::state& state)
 {
   auto const d_type      = get_type_or_group(static_cast<int32_t>(data_type::INTEGRAL));
-  auto const source_type = io_type::DEVICE_BUFFER;
+  auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
   auto const data_size   = static_cast<size_t>(state.get_int64("data_size"));
   cuio_source_sink_pair source_sink(source_type);
 
@@ -98,7 +98,7 @@ void BM_table_read_wide_tables(nvbench::state& state,
 
   auto const n_col           = static_cast<cudf::size_type>(state.get_int64("num_cols"));
   auto const data_size_bytes = static_cast<size_t>(state.get_int64("data_size"));
-  auto const source_type     = io_type::DEVICE_BUFFER;
+  auto const source_type     = retrieve_io_type_enum(state.get_string("io_type"));
   cuio_source_sink_pair source_sink(source_type);
 
   auto const num_rows_written = [&]() {
@@ -125,19 +125,21 @@ using d_type_list_reduced = nvbench::enum_type_list<data_type::INTEGRAL,
 NVBENCH_BENCH_TYPES(BM_table_read_data_types, NVBENCH_TYPE_AXES(d_type_list_reduced))
   .set_name("table_read_data_types")
   .set_type_axes_names({"data_type"})
-  .add_string_axis("io_type", {"DEVICE_BUFFER"})
+  .add_string_axis("io_type", {"FILEPATH", "HOST_BUFFER", "DEVICE_BUFFER"})
   .set_min_samples(4)
   .add_int64_axis("data_size", {512 << 20});
 
 NVBENCH_BENCH(BM_table_read_data_sizes)
   .set_name("table_read_data_sizes")
   .set_min_samples(4)
+  .add_string_axis("io_type", {"FILEPATH", "HOST_BUFFER", "DEVICE_BUFFER"})
   .add_int64_power_of_two_axis("data_size", nvbench::range(24, 31, 1));  // 16MB to 2GB
 
 NVBENCH_BENCH_TYPES(BM_table_read_wide_tables,
                     NVBENCH_TYPE_AXES(nvbench::enum_type_list<data_type::STRING>))
   .set_name("table_read_wide_tables")
   .set_type_axes_names({"data_type"})
+  .add_string_axis("io_type", {"FILEPATH", "HOST_BUFFER", "DEVICE_BUFFER"})
   .set_min_samples(4)
   .add_int64_axis("data_size", {512 << 20})
   .add_int64_axis("num_cols", {128, 256, 512, 1024, 2048});
