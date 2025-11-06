@@ -140,11 +140,10 @@ packed_table read_table(source_info const& source_info,
     source->device_read(
       data_offset, header.data_length, static_cast<uint8_t*>(gpu_data->data()), stream);
   } else {
-    // Read to host first, then copy to device
-    auto host_buffer = cudf::detail::make_host_vector<uint8_t>(header.data_length, stream);
-    source->host_read(data_offset, header.data_length, host_buffer.data());
+    // For host buffers, use the non-owning buffer interface to avoid intermediate copy
+    auto host_buffer = source->host_read(data_offset, header.data_length);
     CUDF_CUDA_TRY(cudaMemcpyAsync(gpu_data->data(),
-                                  host_buffer.data(),
+                                  host_buffer->data(),
                                   header.data_length,
                                   cudaMemcpyHostToDevice,
                                   stream.value()));
