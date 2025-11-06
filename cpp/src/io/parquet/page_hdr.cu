@@ -567,7 +567,7 @@ struct decode_page_headers_with_pgidx_fn {
   ColumnChunkDesc* colchunks;
   PageInfo* pages;
   uint8_t** page_locations;
-  size_t* chunk_page_offsets;
+  size_type* chunk_page_offsets;
   cudf::size_type num_chunks;
   kernel_error::pointer error_code;
 
@@ -755,7 +755,7 @@ void decode_page_headers(ColumnChunkDesc* chunks,
 void decode_page_headers_with_pgidx(ColumnChunkDesc* chunks,
                                     PageInfo* pages,
                                     uint8_t** page_locations,
-                                    size_t* chunk_page_offsets,
+                                    size_type* chunk_page_offsets,
                                     cudf::size_type num_chunks,
                                     cudf::size_type num_pages,
                                     kernel_error::pointer error_code,

@@ -9,7 +9,6 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -420,19 +419,19 @@ void decode_page_headers(pass_intermediate_data& pass,
   CUDF_FUNC_RANGE();
 
   auto iter = thrust::counting_iterator<size_t>(0);
-  rmm::device_uvector<size_t> chunk_page_offsets(pass.chunks.size() + 1, stream);
+  rmm::device_uvector<size_type> chunk_page_offsets(pass.chunks.size() + 1, stream);
   thrust::transform_exclusive_scan(
     rmm::exec_policy_nosync(stream),
     iter,
     iter + pass.chunks.size() + 1,
     chunk_page_offsets.begin(),
-    cuda::proclaim_return_type<size_t>(
+    cuda::proclaim_return_type<size_type>(
       [chunks = pass.chunks.d_begin(), num_chunks = pass.chunks.size()] __device__(size_t i) {
-        return static_cast<size_t>(
+        return static_cast<size_type>(
           i >= num_chunks ? 0 : chunks[i].num_data_pages + chunks[i].num_dict_pages);
       }),
-    size_t{0},
-    cuda::std::plus<size_t>{});
+    size_type{0},
+    cuda::std::plus<size_type>{});
   rmm::device_uvector<chunk_page_info> d_chunk_page_info(pass.chunks.size(), stream);
   thrust::for_each(rmm::exec_policy_nosync(stream),
                    iter,
