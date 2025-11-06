@@ -21,6 +21,8 @@ from rapidsmpf.streaming.core.node import (
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import rmm
+from rmm.pylibrmm.cuda_stream import CudaStreamFlags
+from rmm.pylibrmm.cuda_stream_pool import CudaStreamPool
 
 import cudf_polars.experimental.rapidsmpf.io
 import cudf_polars.experimental.rapidsmpf.join
@@ -102,7 +104,10 @@ def evaluate_logical_plan(
                 mr, limit=int(total_memory * single_spill_device)
             )
         }
-    br = BufferResource(mr, memory_available=memory_available)
+
+    # Temporarily testing with a stream pool of size 1
+    stream_pool = CudaStreamPool(pool_size=1, flags=CudaStreamFlags.NON_BLOCKING)
+    br = BufferResource(mr, memory_available=memory_available, stream_pool=stream_pool)
     rmpf_context = Context(comm, br, options)
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cpse")
 

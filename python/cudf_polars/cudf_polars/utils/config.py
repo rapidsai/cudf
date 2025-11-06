@@ -889,10 +889,7 @@ class ConfigOptions:
             "cuda_stream_policy", None
         ) or os.environ.get("CUDF_POLARS__CUDA_STREAM_POLICY", None)
         if user_cuda_stream_policy is None:
-            # TODO: Use pool by default for rapidsmpf runtime
-            # once stream-ordering bugs are fixed.
-            # See: https://github.com/rapidsai/cudf/issues/20484
-            cuda_stream_policy = CUDAStreamPolicy.DEFAULT
+            cuda_stream_policy = CUDAStreamPolicy.POOL
         else:
             cuda_stream_policy = CUDAStreamPolicy(user_cuda_stream_policy)
 
