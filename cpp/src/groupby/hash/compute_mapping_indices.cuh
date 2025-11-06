@@ -32,29 +32,24 @@ __device__ void find_local_mapping(cooperative_groups::thread_block const& block
                                    size_type* shared_set_indices)
 {
   auto const is_valid_input =
-    idx < num_input_rows and (not row_bitmask or cudf::bit_is_set(row_bitmask, idx));
-  auto const [result_idx, inserted] = [&]() {
-    if (is_valid_input) {
-      auto const result      = shared_set.insert_and_find(idx);
-      auto const matched_idx = *result.first;
-      auto const inserted    = result.second;
-      if (inserted) {  // inserted a new element
-        auto const ref_cardinality =
-          cuda::atomic_ref<size_type, cuda::thread_scope_block>{*cardinality};
-        auto const shared_set_index = ref_cardinality.fetch_add(1, cuda::std::memory_order_relaxed);
-        shared_set_indices[shared_set_index] = idx;
-        local_mapping_indices[idx]           = shared_set_index;
-      }
-      return cuda::std::pair{matched_idx, inserted};
+    idx < num_input_rows && (!row_bitmask || cudf::bit_is_set(row_bitmask, idx));
+
+  auto const [result_idx, inserted] = [&] {
+    auto const [matched_it, inserted] = shared_set.insert_and_find(idx);
+    if (inserted) {
+      auto const ref_cardinality =
+        cuda::atomic_ref<size_type, cuda::thread_scope_block>{*cardinality};
+      auto const shared_set_index = ref_cardinality.fetch_add(1, cuda::std::memory_order_relaxed);
+      shared_set_indices[shared_set_index] = idx;
+      local_mapping_indices[idx]           = shared_set_index;
     }
-    return cuda::std::pair{0, false};  // dummy values
+    return cuda::std::pair{*matched_it, inserted};
   }();
   // Syncing the thread block is needed so that updates in `local_mapping_indices` are visible to
   // all threads in the thread block.
   block.sync();
-  if (is_valid_input) {
-    // element was already in set
-    if (!inserted) { local_mapping_indices[idx] = local_mapping_indices[result_idx]; }
+  if (is_valid_input && !inserted) {  // element was already in set
+    local_mapping_indices[idx] = local_mapping_indices[result_idx];
   }
 }
 
@@ -70,7 +65,6 @@ __device__ void find_global_mapping(cooperative_groups::thread_block const& bloc
   for (auto idx = block.thread_rank(); idx < cardinality; idx += block.num_threads()) {
     auto const input_idx = shared_set_indices[idx];
     auto const key_idx   = *global_set.insert_and_find(input_idx).first;
-
     global_mapping_indices[block.group_index().x * GROUPBY_SHM_MAX_ELEMENTS + idx] = key_idx;
   }
 }
@@ -78,21 +72,21 @@ __device__ void find_global_mapping(cooperative_groups::thread_block const& bloc
 /*
  * @brief Inserts keys into the shared memory hash set, and stores the block-wise rank for a given
  * row index in `local_mapping_indices`. If the number of unique keys found in a threadblock exceeds
- * `GROUPBY_CARDINALITY_THRESHOLD`, the threads in that block will exit without updating
- * `global_set` or setting `global_mapping_indices`. Else, we insert the unique keys found to the
- * global hash set, and save the row index of the global sparse table in `global_mapping_indices`.
+ * `GROUPBY_CARDINALITY_THRESHOLD`, we insert the unique keys found to the global hash set, and
+ * reset the shared memory for the block to start a new iteration.
  */
 template <class SetRef>
 CUDF_KERNEL void mapping_indices_kernel(size_type num_input_rows,
                                         SetRef global_set,
                                         bitmask_type const* row_bitmask,
+                                        size_type* block_stride_ends,
                                         size_type* local_mapping_indices,
                                         size_type* global_mapping_indices,
                                         size_type* block_cardinality)
 {
   __shared__ size_type shared_set_indices[GROUPBY_SHM_MAX_ELEMENTS];
 
-  // Shared set initialization
+  // Data buffer for the shared memory hash set.
   __shared__ size_type slots[valid_extent.value()];
 
   auto raw_set = cuco::static_set_ref{
@@ -102,8 +96,7 @@ CUDF_KERNEL void mapping_indices_kernel(size_type num_input_rows,
     cuco::thread_scope_block,
     cuco::bucket_storage_ref<size_type, GROUPBY_BUCKET_SIZE, decltype(valid_extent)>{valid_extent,
                                                                                      slots}};
-  auto shared_set = raw_set.rebind_operators(cuco::insert_and_find);
-
+  auto shared_set  = raw_set.rebind_operators(cuco::insert_and_find);
   auto const block = cooperative_groups::this_thread_block();
   shared_set.initialize(block);
 
@@ -111,8 +104,14 @@ CUDF_KERNEL void mapping_indices_kernel(size_type num_input_rows,
   if (block.thread_rank() == 0) { cardinality = 0; }
   block.sync();
 
-  // All threads in the block will participate in the loop, and sync.
   auto const stride = cudf::detail::grid_1d::grid_stride();
+  auto const num_total_strides =
+    util::div_rounding_up_safe(num_input_rows, static_cast<size_type>(stride));
+
+  size_type n_resets  = 0;  // number of times the block resets
+  size_type n_strides = 0;  // number of steps the block jumped
+
+  // All threads in the block will participate in the loop, and sync.
   for (auto idx = cudf::detail::grid_1d::global_thread_id();
        idx - block.thread_rank() < num_input_rows;
        idx += stride) {
@@ -124,18 +123,26 @@ CUDF_KERNEL void mapping_indices_kernel(size_type num_input_rows,
                        &cardinality,
                        local_mapping_indices,
                        shared_set_indices);
-
+    ++n_strides;
     block.sync();
-    if (cardinality >= GROUPBY_CARDINALITY_THRESHOLD) { break; }
-  }
 
-  // Insert unique keys from shared to global hash set if block-cardinality
-  // doesn't exceed the threshold upper-limit
-  if (cardinality < GROUPBY_CARDINALITY_THRESHOLD) {
-    find_global_mapping(block, cardinality, global_set, shared_set_indices, global_mapping_indices);
-  }
+    // The iteration ends here. Flush data and reset the block.
+    auto const is_last_iteration = idx + stride - block.thread_rank() >= num_input_rows;
+    if (cardinality >= GROUPBY_CARDINALITY_THRESHOLD || is_last_iteration) {
+      find_global_mapping(
+        block, cardinality, global_set, shared_set_indices, global_mapping_indices);
+      if (!is_last_iteration) { shared_set.initialize(block); }
 
-  if (block.thread_rank() == 0) { block_cardinality[block.group_index().x] = cardinality; }
+      if (block.thread_rank() == 0) {
+        auto const block_data_idx         = block.group_index().x * num_total_strides + n_resets;
+        block_cardinality[block_data_idx] = cardinality;
+        block_stride_ends[block_data_idx] = n_strides;
+        cardinality                       = 0;
+      }
+      ++n_resets;
+      block.sync();
+    }
+  }
 }
 
 template <class SetRef>
@@ -152,6 +159,7 @@ void compute_mapping_indices(size_type grid_size,
                              size_type num_rows,
                              SetRef global_set,
                              bitmask_type const* row_bitmask,
+                             size_type* block_stride_ends,
                              size_type* local_mapping_indices,
                              size_type* global_mapping_indices,
                              size_type* block_cardinality,
@@ -160,6 +168,7 @@ void compute_mapping_indices(size_type grid_size,
   mapping_indices_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, 0, stream>>>(num_rows,
                                                                        global_set,
                                                                        row_bitmask,
+                                                                       block_stride_ends,
                                                                        local_mapping_indices,
                                                                        global_mapping_indices,
                                                                        block_cardinality);

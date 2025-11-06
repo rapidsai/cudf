@@ -76,6 +76,15 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
 
   if (!can_use_shared_mem_kernel) { return run_aggs_by_global_mem_kernel(); }
 
+  // `full_stride` is the number of rows that all blocks process together at one step.
+  // Each block will move at max `num_strides` steps.
+  auto const full_stride = GROUPBY_BLOCK_SIZE * grid_size;
+  auto const num_strides = util::div_rounding_up_safe(num_rows, full_stride);
+
+  // The end offsets for each block to stop processing each iteration, in which the blocks move at
+  // least one step to at max `num_strides` steps.
+  rmm::device_uvector<size_type> block_stride_ends(num_strides * grid_size, stream);
+
   // Maps from the global row index of the input table to its block-wise rank.
   rmm::device_uvector<size_type> local_mapping_indices(num_rows, stream);
   // Maps from the block-wise rank to the row index of result table.
@@ -87,25 +96,29 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
                              global_mapping_indices.begin(),
                              global_mapping_indices.end(),
                              cudf::detail::CUDF_SIZE_TYPE_SENTINEL);
-  // Compute the cardinality (the number of unique keys) encounter by each thread block.
-  rmm::device_uvector<size_type> block_cardinality(grid_size, stream);
+  // Compute the cardinality (the number of unique keys) encounter by each thread block in each
+  // iteration. The cardinality is reset for the next iteration, and the maximum number of
+  // iterations is `num_strides`.
+  rmm::device_uvector<size_type> block_cardinality(num_strides * grid_size, stream);
 
   auto set_ref_insert = global_set.ref(cuco::op::insert_and_find);
   compute_mapping_indices(grid_size,
                           num_rows,
                           set_ref_insert,
                           row_bitmask,
+                          block_stride_ends.data(),
                           local_mapping_indices.data(),
                           global_mapping_indices.data(),
                           block_cardinality.data(),
                           stream);
 
-  // For the thread blocks that need fallback to the code path using global memory aggregation,
-  // we need to collect these block ids.
+  // For the thread blocks that need fallback to the code path using
+  // global memory aggregation, we need to collect these block ids.
   auto const [num_fallback_blocks, fallback_blocks] =
     find_fallback_blocks(grid_size, block_cardinality.data(), stream);
 
-  // If all blocks fallback, just run everything using the global memory aggregation code path.
+  // If all blocks fallback, just run everything using the global memory
+  // aggregation code path.
   if (num_fallback_blocks == grid_size) { return run_aggs_by_global_mem_kernel(); }
 
   // Maps from each row of the values table to the row index of its corresponding key in the input
@@ -121,8 +134,6 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   }();
 
   if (num_fallback_blocks > 0) {
-    auto const full_stride       = GROUPBY_BLOCK_SIZE * grid_size;
-    auto const num_strides       = util::div_rounding_up_safe(num_rows, full_stride);
     auto const fallback_stride   = GROUPBY_BLOCK_SIZE * num_fallback_blocks;
     auto const num_fallback_rows = fallback_stride * num_strides;
 
@@ -143,8 +154,8 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
     // [0, num_fallback_rows) to the (non-contiguous) ranges of rows processed exactly by these
     // fallback blocks. In order to do so, we also divide such thread index range into the same
     // number of segments but with shorter length (computed by `fallback_stride`), referred to as
-    // the "short" segments. It is guaranteed that "short" segments are always mapped one-to-one to
-    // the "full" segments.
+    // the "short" segments. It is guaranteed that "short" segments are always mapped one-to-one
+    // to the "full" segments.
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
                        thrust::make_counting_iterator(0),
                        num_fallback_rows,
@@ -227,9 +238,9 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
                              stream);
 
   // The shared memory groupby is designed so that each thread block can handle up to 128 unique
-  // keys. When a block reaches this cardinality limit, shared memory becomes insufficient to store
-  // the temporary aggregation results. In these situations, we must fallback to a global memory
-  // aggregator to process the remaining aggregation requests.
+  // keys. When a block reaches this cardinality limit, shared memory becomes insufficient to
+  // store the temporary aggregation results. In these situations, we must fallback to a global
+  // memory aggregator to process the remaining aggregation requests.
   if (num_fallback_blocks > 0) {
     // We only execute this kernel for the fallback blocks.
     auto const fallback_stride   = GROUPBY_BLOCK_SIZE * num_fallback_blocks;

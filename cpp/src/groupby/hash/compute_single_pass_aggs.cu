@@ -34,7 +34,7 @@ std::pair<bool, size_type> is_shared_memory_compatible(host_span<aggregation::Ki
       // Ensure there is enough buffer space to store local aggregations up to the max
       // cardinality for shared memory aggregations
       auto const size = type_dispatcher<dispatch_storage_type>(col.type(), size_of_functor{});
-      return data_buffer_size >= size * GROUPBY_CARDINALITY_THRESHOLD;
+      return data_buffer_size >= size * GROUPBY_SHM_MAX_ELEMENTS;
     });
   return {can_run_by_shared_mem_kernel, available_shmem_size};
 }
