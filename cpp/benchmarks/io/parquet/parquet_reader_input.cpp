@@ -448,7 +448,7 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_wide_tables, NVBENCH_TYPE_AXES(d_type_list_w
   .set_name("parquet_read_wide_tables")
   .set_min_samples(4)
   .set_type_axes_names({"data_type"})
-  .add_int64_axis("data_size", {1024 << 20, 2048 << 20})
+  .add_int64_axis("data_size", {1024L << 20, 2048L << 20})
   .add_int64_axis("num_cols", {256, 512, 1024})
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});
@@ -456,7 +456,7 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_wide_tables, NVBENCH_TYPE_AXES(d_type_list_w
 NVBENCH_BENCH(BM_parquet_read_wide_tables_mixed)
   .set_name("parquet_read_wide_tables_mixed")
   .set_min_samples(4)
-  .add_int64_axis("data_size", {1024 << 20, 2048 << 20})
+  .add_int64_axis("data_size", {1024L << 20, 2048L << 20})
   .add_int64_axis("num_cols", {256, 512, 1024})
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});
