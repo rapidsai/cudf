@@ -26,9 +26,9 @@ from cudf.utils import ioutils
 from cudf.utils.dtypes import cudf_dtype_from_pa_type, dtype_to_pylibcudf_type
 
 try:
-    import ujson as json  # type: ignore[import-untyped]
+    import ujson as json
 except ImportError:
-    import json
+    import json  # type: ignore[no-redef]
 
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
