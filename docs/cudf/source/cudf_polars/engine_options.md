@@ -99,6 +99,7 @@ This behavior is configured by the `cuda_stream_policy` keyword or
 * `default`: use the default CUDA stream for all kernel launches and memory operations
 * `new`: create a new CUDA stream when necessary (e.g. when reading from a file or loading an in-memory `polars.LazyFrame` object,
   or when performing a join where the inputs might be on different streams)
+* `pool`: use an RMM stream pool (only supported with the rapidsmpf runtime)
 
 The ``rapidsmpf`` runtime for the streaming executor also supports using a CUDA Stream Pool.
 
@@ -113,6 +114,7 @@ engine = GPUEngine(
 ```
 
 Or provide a dictionary with configuration options for the pool, like `cuda_stream_pool={"pool_size": 16}`.
+You can also set the `CUDF_POLARS__CUDA_STREAM_POLICY` environment variable the JSON encoded configuration dictionary.
 
 This stream pool is shared between cudf-polars and rapidsmpf.
 
