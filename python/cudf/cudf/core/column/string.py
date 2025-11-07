@@ -196,7 +196,7 @@ class StringColumn(ColumnBase, Scannable):
         if len(self.base_children) == 1:
             child0_size = (self.size + 1) * self.base_children[
                 0
-            ].dtype.itemsize
+            ].dtype.itemsize  # type: ignore[union-attr]
 
             n += child0_size
         return n
@@ -217,9 +217,9 @@ class StringColumn(ColumnBase, Scannable):
                 and len(self.base_children) > 0
                 and self.size == self.base_children[0].size - 1
             ):
-                self._data = self.base_data  # type: ignore[assignment]
+                self._data = self.base_data
             else:
-                self._data = self.base_data[  # type: ignore[assignment]
+                self._data = self.base_data[
                     self.start_offset : self.end_offset
                 ]
         return self._data
@@ -304,7 +304,7 @@ class StringColumn(ColumnBase, Scannable):
         other = [item] if is_scalar(item) else item
         return self.contains(as_column(other, dtype=self.dtype)).any()
 
-    def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
+    def _with_type_metadata(self: Self, dtype: DtypeObj | None) -> Self:
         """
         Copies type metadata from self onto other, returning a new column.
         """
@@ -466,15 +466,16 @@ class StringColumn(ColumnBase, Scannable):
         if (
             cudf.get_option("mode.pandas_compatible")
             and isinstance(self.dtype, pd.StringDtype)
-            and self.dtype.storage in ["pyarrow", "python"]
+            and self.dtype.storage in ["pyarrow", "python"]  # type: ignore[attr-defined]
         ):
-            if self.dtype.storage == "pyarrow":
-                pandas_array = self.dtype.__from_arrow__(
+            if self.dtype.storage == "pyarrow":  # type: ignore[attr-defined]
+                pandas_array = self.dtype.__from_arrow__(  # type: ignore[attr-defined]
                     self.to_arrow().cast(pa.large_string())
                 )
             elif self.dtype.na_value is np.nan:
                 pandas_array = pd.array(
-                    self.to_arrow().to_pandas(), dtype=self.dtype
+                    self.to_arrow().to_pandas(),  # type: ignore[arg-type]
+                    dtype=self.dtype,
                 )
             else:
                 return super().to_pandas(

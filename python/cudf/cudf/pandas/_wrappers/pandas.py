@@ -17,8 +17,15 @@ import pandas as pd
 # I suspect it relates to pyarrow's pandas-shim that gets imported
 # with this module https://github.com/rapidsai/cudf/issues/14521#issue-2015198786
 import pyarrow.dataset as ds  # noqa: F401
-from pandas._testing import at, getitem, iat, iloc, loc, setitem
-from pandas.tseries.holiday import (
+from pandas._testing import (  # type: ignore[attr-defined]
+    at,
+    getitem,
+    iat,
+    iloc,
+    loc,
+    setitem,
+)
+from pandas.tseries.holiday import (  # type: ignore[attr-defined]
     AbstractHolidayCalendar as pd_AbstractHolidayCalendar,
     EasterMonday as pd_EasterMonday,
     GoodFriday as pd_GoodFriday,
@@ -108,7 +115,7 @@ def _pandas_util_dir():
     return res
 
 
-pd.util.__dir__ = _pandas_util_dir
+pd.util.__dir__ = _pandas_util_dir  # type: ignore[method-assign]
 
 
 def make_final_proxy_type(
@@ -609,7 +616,9 @@ TimedeltaIndex = make_final_proxy_type(
 )
 
 try:
-    from pandas.arrays import NumpyExtensionArray as pd_NumpyExtensionArray
+    from pandas.arrays import (  # type: ignore[attr-defined]
+        NumpyExtensionArray as pd_NumpyExtensionArray,
+    )
 
     NumpyExtensionArray = make_final_proxy_type(
         "NumpyExtensionArray",
@@ -760,7 +769,7 @@ if cudf.core._compat.PANDAS_GE_210:
     ArrowStringArrayNumpySemantics = make_final_proxy_type(
         "ArrowStringArrayNumpySemantics",
         _Unusable,
-        pd.core.arrays.string_arrow.ArrowStringArrayNumpySemantics,
+        pd.core.arrays.string_arrow.ArrowStringArrayNumpySemantics,  # type: ignore[attr-defined]
         fast_to_slow=_Unusable(),
         slow_to_fast=_Unusable(),
         additional_attributes={
@@ -773,7 +782,7 @@ if cudf.core._compat.PANDAS_GE_230:
     StringArrayNumpySemantics = make_final_proxy_type(
         "StringArrayNumpySemantics",
         _Unusable,
-        pd.core.arrays.string_.StringArrayNumpySemantics,
+        pd.core.arrays.string_.StringArrayNumpySemantics,  # type: ignore[attr-defined]
         bases=(StringArray,),
         fast_to_slow=_Unusable(),
         slow_to_fast=_Unusable(),
@@ -783,7 +792,7 @@ if cudf.core._compat.PANDAS_GE_230:
 ArrowStringArray = make_final_proxy_type(
     "ArrowStringArray",
     _Unusable,
-    pd.core.arrays.string_arrow.ArrowStringArray,
+    pd.core.arrays.string_arrow.ArrowStringArray,  # type: ignore[attr-defined]
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
@@ -998,7 +1007,7 @@ Interval = make_final_proxy_type(
 FloatingArray = make_final_proxy_type(
     "FloatingArray",
     _Unusable,
-    pd.arrays.FloatingArray,
+    pd.arrays.FloatingArray,  # type: ignore[attr-defined]
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
@@ -1136,7 +1145,7 @@ ExponentialMovingWindowGroupby = make_intermediate_proxy_type(
 EWMMeanState = make_intermediate_proxy_type(
     "EWMMeanState",
     _Unusable,
-    pd.core.window.online.EWMMeanState,
+    pd.core.window.online.EWMMeanState,  # type: ignore[attr-defined]
 )
 
 Expanding = make_intermediate_proxy_type(
@@ -1207,7 +1216,9 @@ ExcelWriter = make_final_proxy_type(
 
 try:
     from pandas.io.formats.style import Styler as pd_Styler  # isort: skip
-    from pandas.io.formats.style import StylerRenderer as pd_StylerRenderer
+    from pandas.io.formats.style import (  # type: ignore[attr-defined]
+        StylerRenderer as pd_StylerRenderer,
+    )
 
     StylerRenderer = make_final_proxy_type(
         "StylerRenderer",
@@ -1271,7 +1282,7 @@ register_proxy_func(pd.read_pickle)(
     _FunctionProxy(_Unusable(), pd.read_pickle)
 )
 
-register_proxy_func(pd.to_pickle)(_FunctionProxy(_Unusable(), pd.to_pickle))
+register_proxy_func(pd.to_pickle)(_FunctionProxy(_Unusable(), pd.to_pickle))  # type: ignore[attr-defined]
 register_proxy_func(pd.api.types.is_list_like)(  # noqa: TID251
     _FunctionProxy(_Unusable(), pd.api.types.is_list_like)  # noqa: TID251
 )
@@ -2004,7 +2015,7 @@ YearEnd = make_final_proxy_type(
 Flags = make_final_proxy_type(
     "Flags",
     _Unusable,
-    pd.Flags,
+    pd.Flags,  # type: ignore[attr-defined]
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
@@ -2026,7 +2037,7 @@ NamedAgg = make_final_proxy_type(
 ArrowExtensionArray = make_final_proxy_type(
     "ArrowExtensionArray",
     _Unusable,
-    pd.arrays.ArrowExtensionArray,
+    pd.arrays.ArrowExtensionArray,  # type: ignore[attr-defined]
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
@@ -2097,7 +2108,7 @@ DatetimeIndexOpsMixin = make_final_proxy_type(
 NDArrayBackedExtensionIndex = make_final_proxy_type(
     "NDArrayBackedExtensionIndex",
     _Unusable,
-    pd.core.indexes.extension.NDArrayBackedExtensionIndex,
+    pd.core.indexes.extension.NDArrayBackedExtensionIndex,  # type: ignore[attr-defined]
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
@@ -2110,10 +2121,10 @@ _PANDAS_OBJ_FINAL_TYPES = [
     pd.core.indexes.accessors.PeriodProperties,
     pd.core.indexes.accessors.Properties,
     pd.plotting._core.PlotAccessor,
-    pd.io.sql.SQLiteTable,
+    pd.io.sql.SQLiteTable,  # type: ignore[attr-defined]
     pd.io.sql.SQLTable,
-    pd.io.sql.SQLDatabase,
-    pd.io.sql.SQLiteDatabase,
+    pd.io.sql.SQLDatabase,  # type: ignore[attr-defined]
+    pd.io.sql.SQLiteDatabase,  # type: ignore[attr-defined]
     pd.io.sql.PandasSQL,
 ]
 

@@ -35,7 +35,6 @@ if TYPE_CHECKING:
     from cudf._typing import (
         ColumnBinaryOperand,
         ColumnLike,
-        Dtype,
         DtypeObj,
         ScalarLike,
     )
@@ -141,7 +140,7 @@ class CategoricalColumn(column.ColumnBase):
     @property
     def base_size(self) -> int:
         return int(
-            (self.base_children[0].size) / self.base_children[0].dtype.itemsize
+            (self.base_children[0].size) / self.base_children[0].dtype.itemsize  # type: ignore[union-attr]
         )
 
     def __contains__(self, item: ScalarLike) -> bool:
@@ -247,7 +246,7 @@ class CategoricalColumn(column.ColumnBase):
     def _reduce(
         self,
         op: str,
-        skipna: bool = True,
+        skipna: bool = True,  # type: ignore[override]
         min_count: int = 0,
         *args,
         **kwargs,
@@ -349,7 +348,9 @@ class CategoricalColumn(column.ColumnBase):
             # TODO: work on interval index dropna
             cats = cats.dropna()
         data = pd.Categorical.from_codes(
-            codes, categories=cats.to_pandas(), ordered=col.ordered
+            codes,  # type: ignore[arg-type]
+            categories=cats.to_pandas(),
+            ordered=col.ordered,
         )
         return pd.Index(data)
 
@@ -712,7 +713,7 @@ class CategoricalColumn(column.ColumnBase):
 
         return codes_col._with_type_metadata(CategoricalDtype(categories=cats))  # type: ignore[return-value]
 
-    def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
+    def _with_type_metadata(self: Self, dtype: DtypeObj | None) -> Self:
         if isinstance(dtype, CategoricalDtype):
             return type(self)(
                 plc_column=self.plc_column,
@@ -879,7 +880,7 @@ class CategoricalColumn(column.ColumnBase):
         )
 
         new_categories = new_categories.astype(common_dtype)
-        old_categories = old_categories.astype(common_dtype)
+        old_categories = old_categories.astype(common_dtype)  # type: ignore[arg-type]
 
         if old_categories.isin(new_categories).any():
             raise ValueError("new categories must not include old categories")

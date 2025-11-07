@@ -2145,10 +2145,10 @@ class Index(SingleColumnFrame):
                 )
                 pd_preprocess = pd.CategoricalIndex(pd_cats)
                 data_repr = repr(pd_preprocess).split("\n")
-                pd_preprocess.dtype._categories = (
+                pd_preprocess.dtype._categories = (  # type: ignore[union-attr]
                     preprocess.categories.to_pandas()
                 )
-                pd_preprocess.dtype._ordered = preprocess.dtype.ordered
+                pd_preprocess.dtype._ordered = preprocess.dtype.ordered  # type: ignore[union-attr]
                 cats_repr = repr(pd_preprocess).split("\n")
                 output = "\n".join(data_repr[:-1] + cats_repr[-1:])
 
@@ -2914,7 +2914,7 @@ class RangeIndex(Index):
         via `default_integer_bitwidth` as 32 bit in `cudf.options`
         """
         dtype: np.dtype = np.dtype(np.int64)
-        return _maybe_convert_to_default_type(dtype)
+        return cast(np.dtype, _maybe_convert_to_default_type(dtype))
 
     @property
     def _dtypes(self) -> Generator[tuple[Hashable, np.dtype], None, None]:
@@ -4238,10 +4238,10 @@ class DatetimeIndex(Index):
     @_performance_tracking
     def to_pandas(
         self, *, nullable: bool = False, arrow_type: bool = False
-    ) -> pd.DatetimeIndex:
+    ) -> pd.Index:
         result = super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         if not arrow_type and self._freq is not None:
-            result.freq = self._freq._maybe_as_fast_pandas_offset()
+            result.freq = self._freq._maybe_as_fast_pandas_offset()  # type: ignore[attr-defined]
         return result
 
     def _is_boolean(self) -> bool:
@@ -4623,7 +4623,7 @@ class TimedeltaIndex(Index):
         numpy.ndarray
             An ndarray of ``datetime.timedelta`` objects.
         """
-        return self.to_pandas().to_pytimedelta()
+        return self.to_pandas().to_pytimedelta()  # type: ignore[attr-defined]
 
     @cached_property
     def asi8(self) -> cupy.ndarray:
@@ -5147,7 +5147,11 @@ def interval_range(
             )
         )
     return IntervalIndex.from_breaks(
-        bin_edges.astype(common_dtype), closed=closed, name=name
+        bin_edges.astype(common_dtype)
+        if common_dtype is not None
+        else bin_edges,
+        closed=closed,
+        name=name,
     )
 
 
@@ -5211,13 +5215,13 @@ class IntervalIndex(Index):
             elif hasattr(data, "dtype") and isinstance(
                 data.dtype, (pd.IntervalDtype, IntervalDtype)
             ):
-                closed = data.dtype.closed
+                closed = data.dtype.closed  # type: ignore[union-attr]
 
         closed = closed or "right"
 
         if len(data) == 0:
             if not hasattr(data, "dtype"):
-                child_type: Dtype = np.dtype(np.int64)
+                child_type: Dtype | None = np.dtype(np.int64)
             elif isinstance(data.dtype, (pd.IntervalDtype, IntervalDtype)):
                 child_type = data.dtype.subtype
             else:
@@ -5499,7 +5503,7 @@ class IntervalIndex(Index):
             If ``True``, return ``NA`` as a tuple ``(nan, nan)``. If ``False``,
             just return ``NA`` as ``nan``.
         """
-        return self.to_pandas().to_tuples(na_tuple=na_tuple)
+        return self.to_pandas().to_tuples(na_tuple=na_tuple)  # type: ignore[attr-defined]
 
 
 @_performance_tracking

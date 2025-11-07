@@ -259,7 +259,7 @@ class NumericalColumn(NumericalBaseColumn):
         if op in {"__truediv__", "__rtruediv__"}:
             # Division with integer types results in a suitable float.
             if truediv_type := int_float_dtype_mapping.get(
-                self.dtype.numpy_dtype.type
+                self.dtype.numpy_dtype.type  # type: ignore[attr-defined]
                 if is_pandas_nullable_extension_dtype(self.dtype)
                 else self.dtype.type
             ):
@@ -302,6 +302,10 @@ class NumericalColumn(NumericalBaseColumn):
 
         if out_dtype is None:
             out_dtype = find_common_type((self.dtype, other_cudf_dtype))
+            # For numerical types, find_common_type should always return a dtype
+            assert out_dtype is not None, (
+                f"Could not find common type between {self.dtype} and {other_cudf_dtype}"
+            )
             if op in {"__mod__", "__floordiv__"}:
                 tmp = self if reflect else other
                 tmp_dtype = self.dtype if reflect else other_cudf_dtype
@@ -449,7 +453,7 @@ class NumericalColumn(NumericalBaseColumn):
                 else:
                     common_dtype = get_dtype_of_same_kind(
                         self.dtype,
-                        np.result_type(self.dtype.numpy_dtype, other),  # noqa: TID251
+                        np.result_type(self.dtype.numpy_dtype, other),  # type: ignore[attr-defined]  # noqa: TID251
                     )
             else:
                 common_dtype = np.result_type(self.dtype, other)  # noqa: TID251
@@ -550,6 +554,9 @@ class NumericalColumn(NumericalBaseColumn):
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
+        # Normalize dtype from Dtype (which may include strings) to DtypeObj
+        dtype = cudf.dtype(dtype)
+
         if dtype == self.dtype:
             return self
 
@@ -590,7 +597,7 @@ class NumericalColumn(NumericalBaseColumn):
                 else:
                     self._dtype = dtype
                     return self
-            if self.dtype.kind == "f" and dtype.kind in "iu":  # type: ignore[union-attr]
+            if self.dtype.kind == "f" and dtype.kind in "iu":
                 if (
                     not is_pandas_nullable_extension_dtype(dtype)
                     and self.nan_count > 0
@@ -649,7 +656,7 @@ class NumericalColumn(NumericalBaseColumn):
         Return the smallest dtype which can represent all elements of self.
         """
         if self.null_count == len(self):
-            return self.dtype
+            return cast(np.dtype, self.dtype)
 
         min_value, max_value = self.min(), self.max()
         either_is_inf = np.isinf(min_value) or np.isinf(max_value)
@@ -670,7 +677,7 @@ class NumericalColumn(NumericalBaseColumn):
                 ),
             )
         else:
-            return self.dtype
+            return cast(np.dtype, self.dtype)
 
     def find_and_replace(
         self,
@@ -742,11 +749,17 @@ class NumericalColumn(NumericalBaseColumn):
             replacement_col = replacement_col.repeat(len(to_replace_col))
         elif len(replacement_col) == 1 and len(to_replace_col) == 0:
             return self.copy()
-        replaced = cast(Self, self.astype(common_type))
+        replaced = cast(
+            Self, self.astype(common_type) if common_type is not None else self
+        )
         df = cudf.DataFrame._from_data(
             {
-                "old": to_replace_col.astype(common_type),
-                "new": replacement_col.astype(common_type),
+                "old": to_replace_col.astype(common_type)
+                if common_type is not None
+                else to_replace_col,
+                "new": replacement_col.astype(common_type)
+                if common_type is not None
+                else replacement_col,
             }
         )
         df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
@@ -793,15 +806,17 @@ class NumericalColumn(NumericalBaseColumn):
         """
         # Convert potential pandas extension dtypes to numpy dtypes
         # For example, convert Int32Dtype to np.dtype('int32')
-        self_dtype_numpy = (
+        self_dtype_numpy = cast(
+            np.dtype,
             np.dtype(self.dtype.numpy_dtype)
             if hasattr(self.dtype, "numpy_dtype")
-            else self.dtype
+            else self.dtype,
         )
-        to_dtype_numpy = (
+        to_dtype_numpy = cast(
+            np.dtype,
             np.dtype(to_dtype.numpy_dtype)
             if hasattr(to_dtype, "numpy_dtype")
-            else to_dtype
+            else to_dtype,
         )
 
         if self_dtype_numpy.kind == to_dtype_numpy.kind:
@@ -902,8 +917,10 @@ class NumericalColumn(NumericalBaseColumn):
 
     def _with_type_metadata(
         self: Self,
-        dtype: DtypeObj,
+        dtype: DtypeObj | None,
     ) -> ColumnBase:
+        if dtype is None:
+            return self
         if isinstance(dtype, CategoricalDtype):
             codes_dtype = min_unsigned_type(len(dtype.categories))
             codes = cast(NumericalColumn, self.astype(codes_dtype))
@@ -915,7 +932,7 @@ class NumericalColumn(NumericalBaseColumn):
                 null_count=codes.null_count,
                 exposed=False,
             )
-        if cudf.get_option("mode.pandas_compatible"):
+        if cudf.get_option("mode.pandas_compatible") and dtype is not None:
             res_dtype = get_dtype_of_same_type(dtype, self.dtype)
             if (
                 is_pandas_nullable_extension_dtype(res_dtype)
@@ -931,7 +948,7 @@ class NumericalColumn(NumericalBaseColumn):
 
         return self
 
-    def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
+    def _reduction_result_dtype(self, reduction_op: str) -> DtypeObj:
         if reduction_op in {"sum", "product"}:
             if self.dtype.kind == "f":
                 return self.dtype
@@ -939,7 +956,12 @@ class NumericalColumn(NumericalBaseColumn):
                 return np.dtype("uint64")
             return np.dtype("int64")
         elif reduction_op == "sum_of_squares":
-            return find_common_type((self.dtype, np.dtype(np.uint64)))
+            result = find_common_type((self.dtype, np.dtype(np.uint64)))
+            if result is None:
+                raise ValueError(
+                    f"Cannot determine common type for {self.dtype} and uint64"
+                )
+            return result
         elif reduction_op in {"var", "std", "mean"}:
             if self.dtype.kind == "f":
                 return self.dtype
@@ -1027,7 +1049,7 @@ def _normalize_find_and_replace_input(
     if (
         col_to_normalize_dtype.kind == "f"
         and input_column_dtype.kind in {"i", "u"}
-    ) or (col_to_normalize_dtype.num > input_column_dtype.num):
+    ) or (col_to_normalize_dtype.num > input_column_dtype.num):  # type: ignore[union-attr]
         raise TypeError(
             f"Potentially unsafe cast for non-equivalent "
             f"{col_to_normalize_dtype.name} "

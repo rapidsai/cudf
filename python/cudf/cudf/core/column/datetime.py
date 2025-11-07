@@ -127,6 +127,22 @@ class DatetimeColumn(TemporalBaseColumn):
             exposed=exposed,
         )
 
+    @staticmethod
+    def _validate_dtype_instance(
+        dtype: np.dtype | pd.DatetimeTZDtype,
+    ) -> np.dtype | pd.DatetimeTZDtype:
+        # Skip validation for DatetimeTZDtype as it's handled by DatetimeTZColumn subclass
+        if isinstance(dtype, pd.DatetimeTZDtype):
+            return dtype
+        if (
+            cudf.get_option("mode.pandas_compatible") and not dtype.kind == "M"
+        ) or (
+            not cudf.get_option("mode.pandas_compatible")
+            and not (isinstance(dtype, np.dtype) and dtype.kind == "M")
+        ):
+            raise ValueError(f"dtype must be a datetime, got {dtype}")
+        return dtype
+
     def _clear_cache(self) -> None:
         super()._clear_cache()
         attrs = (
@@ -159,29 +175,9 @@ class DatetimeColumn(TemporalBaseColumn):
                 # attr was not called yet, so ignore.
                 pass
 
-    def _scan(self, op: str) -> ColumnBase:
-        if op not in {"cummin", "cummax"}:
-            raise TypeError(
-                f"Accumulation {op} not supported for {self.dtype}"
-            )
-        return self.scan(op.replace("cum", ""), True)._with_type_metadata(
-            self.dtype
-        )
-
-    @staticmethod
-    def _validate_dtype_instance(dtype: np.dtype) -> np.dtype:
-        if (
-            cudf.get_option("mode.pandas_compatible") and not dtype.kind == "M"
-        ) or (
-            not cudf.get_option("mode.pandas_compatible")
-            and not (isinstance(dtype, np.dtype) and dtype.kind == "M")
-        ):
-            raise ValueError(f"dtype must be a datetime, got {dtype}")
-        return dtype
-
     def __contains__(self, item: ScalarLike) -> bool:
         try:
-            ts = self._PD_SCALAR(item).as_unit(self.time_unit)
+            ts = self._PD_SCALAR(item).as_unit(self.time_unit)  # type: ignore[arg-type]
         except Exception:
             # pandas can raise a variety of errors
             # item cannot exist in self.
@@ -688,7 +684,7 @@ class DatetimeColumn(TemporalBaseColumn):
         else:
             return result_col
 
-    def _with_type_metadata(self, dtype: DtypeObj) -> DatetimeColumn:
+    def _with_type_metadata(self, dtype: DtypeObj | None) -> DatetimeColumn:
         if isinstance(dtype, pd.DatetimeTZDtype):
             return DatetimeTZColumn(
                 plc_column=self.plc_column,
@@ -698,7 +694,7 @@ class DatetimeColumn(TemporalBaseColumn):
                 null_count=self.null_count,
                 exposed=False,
             )
-        if cudf.get_option("mode.pandas_compatible"):
+        if cudf.get_option("mode.pandas_compatible") and dtype is not None:
             self._dtype = get_dtype_of_same_type(dtype, self.dtype)
 
         return self
@@ -778,8 +774,8 @@ class DatetimeColumn(TemporalBaseColumn):
         ambiguous, nonexistent = check_ambiguous_and_nonexistent(
             ambiguous, nonexistent
         )
-        dtype = get_compatible_timezone(pd.DatetimeTZDtype(self.time_unit, tz))
-        tzname = dtype.tz.key
+        dtype = get_compatible_timezone(pd.DatetimeTZDtype(self.time_unit, tz))  # type: ignore[arg-type]
+        tzname = dtype.tz.key  # type: ignore[attr-defined]
         ambiguous_col, nonexistent_col = self._find_ambiguous_and_nonexistent(
             tzname
         )
@@ -808,20 +804,20 @@ class DatetimeColumn(TemporalBaseColumn):
 
 
 class DatetimeTZColumn(DatetimeColumn):
+    @staticmethod
+    def _validate_dtype_instance(
+        dtype: np.dtype | pd.DatetimeTZDtype,
+    ) -> pd.DatetimeTZDtype:
+        if not isinstance(dtype, pd.DatetimeTZDtype):
+            raise ValueError("dtype must be a pandas.DatetimeTZDtype")
+        return get_compatible_timezone(dtype)
+
     def _clear_cache(self) -> None:
         super()._clear_cache()
         try:
             del self._local_time
         except AttributeError:
             pass
-
-    @staticmethod
-    def _validate_dtype_instance(
-        dtype: pd.DatetimeTZDtype,
-    ) -> pd.DatetimeTZDtype:
-        if not isinstance(dtype, pd.DatetimeTZDtype):
-            raise ValueError("dtype must be a pandas.DatetimeTZDtype")
-        return get_compatible_timezone(dtype)
 
     def to_pandas(
         self,
@@ -839,7 +835,7 @@ class DatetimeTZColumn(DatetimeColumn):
         ):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         else:
-            return self._local_time.to_pandas().tz_localize(
+            return self._local_time.to_pandas().tz_localize(  # type: ignore[attr-defined]
                 self.dtype.tz,  # type: ignore[union-attr]
                 ambiguous="NaT",
                 nonexistent="NaT",
@@ -860,7 +856,7 @@ class DatetimeTZColumn(DatetimeColumn):
         return DatetimeColumn(
             plc_column=self.plc_column,
             size=self.size,
-            dtype=_get_base_dtype(self.dtype),
+            dtype=_get_base_dtype(cast(pd.DatetimeTZDtype, self.dtype)),
             offset=self.offset,
             null_count=self.null_count,
             exposed=False,
@@ -870,7 +866,7 @@ class DatetimeTZColumn(DatetimeColumn):
     def _local_time(self) -> DatetimeColumn:
         """Return the local time as naive timestamps."""
         transition_times, offsets = get_tz_data(str(self.dtype.tz))  # type: ignore[union-attr]
-        base_dtype = _get_base_dtype(self.dtype)
+        base_dtype = _get_base_dtype(cast(pd.DatetimeTZDtype, self.dtype))
         indices = (
             transition_times.astype(base_dtype).searchsorted(
                 self.astype(base_dtype), side="right"
@@ -893,7 +889,7 @@ class DatetimeTZColumn(DatetimeColumn):
             else:
                 casted = self
             return casted.tz_convert(str(dtype.tz))
-        return super().as_datetime_column(dtype)
+        return super().as_datetime_column(cast(np.dtype, dtype))
 
     @acquire_spill_lock()
     def _get_dt_field(
@@ -939,5 +935,5 @@ class DatetimeTZColumn(DatetimeColumn):
             return self.copy()
         utc_time = self._utc_time
         return utc_time._with_type_metadata(
-            pd.DatetimeTZDtype(self.time_unit, tz)
+            pd.DatetimeTZDtype(self.time_unit, tz)  # type: ignore[arg-type]
         )

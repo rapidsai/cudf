@@ -41,9 +41,9 @@ from cudf.utils import ioutils
 from cudf.utils.performance_tracking import _performance_tracking
 
 try:
-    import ujson as json  # type: ignore[import-untyped]
+    import ujson as json
 except ImportError:
-    import json
+    import json  # type: ignore[no-redef]
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Sequence
@@ -1458,7 +1458,7 @@ def _read_parquet(
             filepaths_or_buffers = filepaths_or_buffers[0]
 
         return DataFrame(
-            pd.read_parquet(
+            pd.read_parquet(  # type: ignore[misc]
                 filepaths_or_buffers,
                 columns=columns,
                 engine=engine,

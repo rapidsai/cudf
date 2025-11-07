@@ -110,7 +110,7 @@ class StructMethods(BaseAccessor):
         data = {
             name: col.copy(deep=True)
             for name, col in zip(
-                self._column.dtype.fields,  # type: ignore[arg-type]
+                self._column.dtype.fields,  # type: ignore[arg-type, union-attr]
                 self._column.children,
                 strict=True,
             )

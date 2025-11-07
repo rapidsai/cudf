@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
@@ -108,14 +108,14 @@ def _match_join_keys(
         and not (ltype.kind == "m" or rtype.kind == "m")
     ):
         common_type = (
-            max(ltype, rtype)
+            max(cast(np.dtype, ltype), cast(np.dtype, rtype))
             if ltype.kind == rtype.kind
             else find_common_type((ltype, rtype))
         )
     elif (ltype.kind == "M" and rtype.kind == "M") or (
         ltype.kind == "m" and rtype.kind == "m"
     ):
-        common_type = max(ltype, rtype)
+        common_type = max(cast(np.dtype, ltype), cast(np.dtype, rtype))
     elif ltype.kind in "mM" and not rcol.fillna(0).can_cast_safely(ltype):
         raise TypeError(
             f"Cannot join between {ltype} and {rtype}, please type-cast both "

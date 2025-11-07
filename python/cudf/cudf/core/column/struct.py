@@ -88,16 +88,6 @@ class StructColumn(ColumnBase):
             )
         )
 
-    def _prep_pandas_compat_repr(self) -> StringColumn | Self:
-        """
-        Preprocess Column to be compatible with pandas repr, namely handling nulls.
-
-        * null (datetime/timedelta) = str(pd.NaT)
-        * null (other types)= str(pd.NA)
-        """
-        # TODO: handle if self.has_nulls(): case
-        return self
-
     @staticmethod
     def _validate_dtype_instance(dtype: StructDtype) -> StructDtype:
         # IntervalDtype is a subclass of StructDtype, so compare types exactly
@@ -112,6 +102,16 @@ class StructColumn(ColumnBase):
                 f"{type(dtype).__name__} must be a StructDtype exactly."
             )
         return dtype
+
+    def _prep_pandas_compat_repr(self) -> StringColumn | Self:
+        """
+        Preprocess Column to be compatible with pandas repr, namely handling nulls.
+
+        * null (datetime/timedelta) = str(pd.NaT)
+        * null (other types)= str(pd.NA)
+        """
+        # TODO: handle if self.has_nulls(): case
+        return self
 
     @property
     def base_size(self) -> int:
@@ -209,15 +209,16 @@ class StructColumn(ColumnBase):
         )
 
     def _with_type_metadata(
-        self: StructColumn, dtype: DtypeObj
+        self: StructColumn, dtype: DtypeObj | None
     ) -> StructColumn:
         from cudf.core.column import IntervalColumn
         from cudf.core.dtypes import IntervalDtype
 
         # Check IntervalDtype first because it's a subclass of StructDtype
         if isinstance(dtype, IntervalDtype):
+            # IntervalDtype.subtype can be None in type stubs but is guaranteed at runtime
             new_children = [
-                child.astype(dtype.subtype).to_pylibcudf(mode="read")
+                child.astype(dtype.subtype).to_pylibcudf(mode="read")  # type: ignore[arg-type]
                 for child in self.base_children
             ]
             new_plc_column = plc.Column(

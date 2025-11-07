@@ -118,7 +118,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         interpolation: str,
         exact: bool,
         return_scalar: bool,
-    ) -> NumericalBaseColumn:
+    ) -> ColumnBase | ScalarLike:
         if np.logical_or(q < 0, q > 1).any():
             raise ValueError(
                 "percentiles should all be in the interval [0, 1]"
@@ -160,7 +160,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                 except (TypeError, ValueError):
                     pass
             return (
-                _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
+                _get_nan_for_dtype(self.dtype)
                 if scalar_result is NA
                 else scalar_result
             )
@@ -217,7 +217,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         )
         if self.dtype.kind == "f":
             result = self.dtype.type(result)
-        return result
+        return result  # type: ignore[return-value]
 
     def cov(self, other: NumericalBaseColumn) -> float:
         if (

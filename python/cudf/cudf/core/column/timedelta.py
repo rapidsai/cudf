@@ -114,7 +114,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
             except AttributeError:
                 pass
 
-    def __contains__(self, item: DatetimeLikeScalar) -> bool:
+    def __contains__(self, item: DatetimeLikeScalar) -> bool:  # type: ignore[override]
         try:
             # call-overload must be ignored because numpy stubs only accept literal
             # time unit strings, but we're passing self.time_unit which is valid at runtime
@@ -124,7 +124,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
             # np.timedelta64 raises ValueError, hence `item`
             # cannot exist in `self`.
             return False
-        return super().__contains__(item.to_numpy())
+        return super().__contains__(item.to_numpy())  # type: ignore[attr-defined]
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
@@ -163,7 +163,11 @@ class TimeDeltaColumn(TemporalBaseColumn):
                     if op == "__truediv__"
                     else self._UNDERLYING_DTYPE
                 )
-                this = self.astype(common_dtype).astype(out_dtype)
+                this = (
+                    self.astype(common_dtype).astype(out_dtype)
+                    if common_dtype is not None and out_dtype is not None
+                    else self
+                )
                 if isinstance(other, pa.Scalar):
                     if other.is_valid:
                         # pyarrow.cast doesn't support casting duration to float
@@ -180,7 +184,11 @@ class TimeDeltaColumn(TemporalBaseColumn):
                             None, type=cudf_dtype_to_pa_type(out_dtype)
                         )
                 else:
-                    other = other.astype(common_dtype).astype(out_dtype)
+                    other = (
+                        other.astype(common_dtype).astype(out_dtype)
+                        if common_dtype is not None and out_dtype is not None
+                        else other
+                    )
             elif op in {"__add__", "__sub__"}:
                 out_dtype = find_common_type((self.dtype, other_cudf_dtype))
         elif other_cudf_dtype.kind in {"f", "i", "u"}:
@@ -272,8 +280,8 @@ class TimeDeltaColumn(TemporalBaseColumn):
             self.astype(self._UNDERLYING_DTYPE).sum(  # type: ignore[call-arg]
                 skipna=skipna, min_count=min_count
             ),
-            unit=self.time_unit,
-        ).as_unit(self.time_unit)
+            unit=self.time_unit,  # type: ignore[arg-type]
+        ).as_unit(self.time_unit)  # type: ignore[arg-type]
 
     @functools.cached_property
     def components(self) -> dict[str, NumericalColumn]:

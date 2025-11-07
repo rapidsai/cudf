@@ -1995,7 +1995,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             index = self.index.to_pandas()
         else:
             index = None  # type: ignore[assignment]
-        res = pd.Series(
+        res = pd.Series(  # type: ignore[call-overload]
             self._column.to_pandas(nullable=nullable, arrow_type=arrow_type),
             index=index,
             name=self.name,
@@ -2057,7 +2057,7 @@ class Series(SingleColumnFrame, IndexedFrame):
                     "Only the Series name can be used for the key in Series "
                     "dtype mappings."
                 )
-            dtype = {self.name: cudf.dtype(dtype[self.name])}
+            dtype = {self.name: cudf.dtype(dtype[self.name])}  # type: ignore[index]
         else:
             dtype = {self.name: cudf.dtype(dtype)}
         return super().astype(dtype, copy, errors)

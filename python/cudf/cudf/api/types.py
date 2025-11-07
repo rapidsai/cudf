@@ -503,8 +503,8 @@ is_datetime64_ns_dtype = _wrap_pandas_is_dtype_api(
     pd_types.is_datetime64_ns_dtype
 )
 is_extension_array_dtype = pd_types.is_extension_array_dtype
-is_int64_dtype = pd_types.is_int64_dtype
-is_period_dtype = pd_types.is_period_dtype
+is_int64_dtype = pd_types.is_int64_dtype  # type: ignore[attr-defined]
+is_period_dtype = pd_types.is_period_dtype  # type: ignore[attr-defined]
 is_signed_integer_dtype = pd_types.is_signed_integer_dtype
 is_timedelta_dtype = _wrap_pandas_is_dtype_api(pd_types.is_timedelta64_dtype)
 is_timedelta64_dtype = _wrap_pandas_is_dtype_api(pd_types.is_timedelta64_dtype)
@@ -512,7 +512,7 @@ is_timedelta64_ns_dtype = _wrap_pandas_is_dtype_api(
     pd_types.is_timedelta64_ns_dtype
 )
 is_unsigned_integer_dtype = pd_types.is_unsigned_integer_dtype
-is_sparse = pd_types.is_sparse
+is_sparse = pd_types.is_sparse  # type: ignore[attr-defined]
 # is_list_like = pd_types.is_list_like
 is_dict_like = pd_types.is_dict_like
 is_file_like = pd_types.is_file_like
@@ -522,7 +522,7 @@ is_bool = pd_types.is_bool
 is_complex = pd_types.is_complex
 is_float = pd_types.is_float
 is_hashable = pd_types.is_hashable
-is_interval = pd_types.is_interval
+is_interval = pd_types.is_interval  # type: ignore[attr-defined]
 is_number = pd_types.is_number
 is_re = pd_types.is_re
 is_re_compilable = pd_types.is_re_compilable

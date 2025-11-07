@@ -161,9 +161,9 @@ class PDSHQueries:
         sel = agg.loc[
             :, ["o_orderkey", "revenue", "o_orderdate", "o_shippriority"]
         ]
-        sel = sel.rename(columns={"o_orderkey": "l_orderkey"})
+        sel = sel.rename(columns={"o_orderkey": "l_orderkey"})  # type: ignore[call-overload]
 
-        sorted_df = sel.sort_values(
+        sorted_df = sel.sort_values(  # type: ignore[call-overload]
             by=["revenue", "o_orderdate"], ascending=[False, True]
         )
         return sorted_df.head(10)
@@ -230,7 +230,7 @@ class PDSHQueries:
         jn5["revenue"] = jn5.l_extendedprice * (1.0 - jn5.l_discount)
 
         gb = jn5.groupby("n_name", as_index=False)["revenue"].sum()
-        return gb.sort_values("revenue", ascending=False)
+        return gb.sort_values("revenue", ascending=False)  # type: ignore[call-overload]
 
     @staticmethod
     def q6(run_config: RunConfig) -> pd.DataFrame:
@@ -359,13 +359,13 @@ class PDSHQueries:
         jn7 = jn7.rename(columns={"n_name": "nation"})
 
         def udf(df: pd.DataFrame) -> float:
-            demonimator: float = df["volume"].sum()
+            demonimator: float = df["volume"].sum()  # type: ignore[assignment]
             df = df[df["nation"] == var1]
-            numerator: float = df["volume"].sum()
+            numerator: float = df["volume"].sum()  # type: ignore[assignment]
             return round(numerator / demonimator, 2)
 
         gb = jn7.groupby("o_year", as_index=False)
-        agg = gb.apply(udf, include_groups=False)
+        agg = gb.apply(udf, include_groups=False)  # type: ignore[call-overload]
         agg.columns = ["o_year", "mkt_share"]
         return agg.sort_values("o_year")
 

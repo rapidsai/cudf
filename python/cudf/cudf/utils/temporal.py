@@ -11,9 +11,9 @@ import cudf
 from cudf.core._compat import PANDAS_GE_220
 
 if PANDAS_GE_220:
-    _guess_datetime_format = pd.tseries.api.guess_datetime_format
+    _guess_datetime_format = pd.tseries.api.guess_datetime_format  # type: ignore[attr-defined]
 else:
-    _guess_datetime_format = pd.core.tools.datetimes.guess_datetime_format
+    _guess_datetime_format = pd.core.tools.datetimes.guess_datetime_format  # type: ignore[attr-defined]
 
 
 unit_to_nanoseconds_conversion = {

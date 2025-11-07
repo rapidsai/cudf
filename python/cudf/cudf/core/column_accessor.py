@@ -210,7 +210,7 @@ class ColumnAccessor(MutableMapping):
     @property
     def level_names(self) -> tuple[Hashable, ...]:
         if self.is_cached("to_pandas_index"):
-            return self.to_pandas_index.names
+            return tuple(self.to_pandas_index.names)
         if self._level_names is None or len(self._level_names) == 0:
             return tuple((None,) * max(1, self.nlevels))
         else:
@@ -291,11 +291,11 @@ class ColumnAccessor(MutableMapping):
                 pass
 
     @cached_property
-    def to_pandas_index(self) -> pd.Index:
+    def to_pandas_index(self) -> pd.Index | pd.MultiIndex:
         """Convert the keys of the ColumnAccessor to a Pandas Index object."""
         if self.multiindex and len(self.level_names) > 0:
-            result = pd.MultiIndex.from_tuples(
-                self.names,
+            result: pd.Index | pd.MultiIndex = pd.MultiIndex.from_tuples(
+                self.names,  # type: ignore[arg-type]
                 names=self.level_names,
             )
         else:
@@ -324,7 +324,7 @@ class ColumnAccessor(MutableMapping):
                 self.names,
                 name=self.name,
                 tupleize_cols=False,
-                dtype=self.label_dtype,
+                dtype=self.label_dtype,  # type: ignore[arg-type]
             )
         return result
 
@@ -365,7 +365,8 @@ class ColumnAccessor(MutableMapping):
         if cudf.get_option("mode.pandas_compatible"):
             try:
                 pd_idx1 = pd.Index(
-                    [*list(self.names), name], dtype=self.label_dtype
+                    [*list(self.names), name],
+                    dtype=self.label_dtype,  # type: ignore[arg-type]
                 )
                 pd_idx2 = pd.Index([*list(self.names), name])
                 if (

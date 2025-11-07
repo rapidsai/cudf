@@ -6,7 +6,7 @@ import os
 import warnings
 from collections.abc import Collection, Mapping
 from io import BytesIO, StringIO
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 import numpy as np
 import pandas as pd
@@ -265,7 +265,7 @@ def read_json(
             filepath_or_buffer,
             lines=lines,
             dtype=dtype,
-            compression=compression,
+            compression=compression,  # type: ignore[arg-type]
             storage_options=storage_options,
             orient=orient,
             *args,
@@ -300,6 +300,14 @@ def read_json(
         df = df.astype(default_dtypes)
 
     return df
+
+
+@overload
+def _maybe_return_nullable_pd_obj(cudf_obj: DataFrame) -> pd.DataFrame: ...
+
+
+@overload
+def _maybe_return_nullable_pd_obj(cudf_obj: Series) -> pd.Series: ...
 
 
 def _maybe_return_nullable_pd_obj(
@@ -427,6 +435,7 @@ def to_json(
             return path_or_buf.read()
     elif engine == "pandas":
         warnings.warn("Using CPU via Pandas to write JSON dataset")
+        pd_value: pd.DataFrame | pd.Series
         if isinstance(cudf_val, DataFrame):
             pd_data = {
                 col: _maybe_return_nullable_pd_obj(series)
@@ -435,7 +444,9 @@ def to_json(
             pd_value = pd.DataFrame(pd_data)
         else:
             pd_value = _maybe_return_nullable_pd_obj(cudf_val)
-        return pd_value.to_json(
+        # pandas-stubs has strict overload definitions that don't accommodate
+        # the *args, **kwargs pattern, but this call is safe at runtime
+        return pd_value.to_json(  # type: ignore[call-overload]
             path_or_buf,
             orient=orient,
             storage_options=storage_options,

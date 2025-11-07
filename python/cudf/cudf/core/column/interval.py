@@ -36,6 +36,7 @@ class IntervalColumn(StructColumn):
             raise ValueError(
                 "plc_column must have two children (left edges, right edges)."
             )
+        dtype = self._validate_dtype_instance(dtype)
         super().__init__(
             plc_column=plc_column,
             size=size,
@@ -46,7 +47,7 @@ class IntervalColumn(StructColumn):
         )
 
     @staticmethod
-    def _validate_dtype_instance(dtype: IntervalDtype) -> IntervalDtype:
+    def _validate_dtype_instance(dtype: IntervalDtype) -> IntervalDtype:  # type: ignore[override]
         if (
             not cudf.get_option("mode.pandas_compatible")
             and not isinstance(dtype, IntervalDtype)
@@ -157,7 +158,7 @@ class IntervalColumn(StructColumn):
         pd_type = self.dtype.to_pandas()  # type: ignore[union-attr]
         return pd.Index(pd_type.__from_arrow__(self.to_arrow()), dtype=pd_type)
 
-    def element_indexing(
+    def element_indexing(  # type: ignore[override]
         self, index: int
     ) -> pd.Interval | dict[Any, Any] | None:
         result = super().element_indexing(index)

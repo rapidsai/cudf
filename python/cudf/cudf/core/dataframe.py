@@ -32,7 +32,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from nvtx import annotate
-from pandas.io.formats import console
+from pandas.io.formats import console  # type: ignore[attr-defined]
 from pandas.io.formats.printing import pprint_thing
 from typing_extensions import Self, assert_never
 
@@ -239,7 +239,8 @@ class _DataFrameIndexer(_FrameIndexer):
                 normalized_dtype = find_common_type(
                     [dtype for _, dtype in df._dtypes]
                 )
-                df = df.astype(normalized_dtype)
+                if normalized_dtype is not None:
+                    df = df.astype(normalized_dtype)
             sr = df.T
             return sr[sr._column_names[0]]
 
@@ -2137,11 +2138,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         max_rows = pd.options.display.max_rows
         if max_rows in {0, None}:
             max_rows = len(self)
+        # Type narrow: max_rows is now guaranteed to be int after the check above
+        assert max_rows is not None
         nrows = max(max_rows, 1)
-        ncols = (
-            pd.options.display.max_columns
-            if pd.options.display.max_columns
-            else pd.options.display.width / 2
+        ncols_option = pd.options.display.max_columns
+        ncols: int | float = (
+            ncols_option if ncols_option else pd.options.display.width / 2
         )
 
         if len(self) <= nrows and self._num_columns <= ncols:
@@ -2460,7 +2462,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 return result
             else:
                 return cls(
-                    pd.DataFrame.from_dict(
+                    pd.DataFrame.from_dict(  # type: ignore[call-overload]
                         data=data,
                         orient=orient,
                         dtype=dtype,
@@ -6639,7 +6641,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     # TODO: Columns should probably signal the result type of their scalar
                     # Especially for this case where NaT could be datetime or timedelta
                     unit = np.datetime_data(common_dtype)[0]
-                    axis_0_results = pd.Index(
+                    axis_0_results = pd.Index(  # type: ignore[assignment]
                         axis_0_results, dtype=f"m8[{unit}]"
                     )
                 res = as_column(
@@ -6671,6 +6673,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                                 else:
                                     res_dtype = np.dtype("int64")
                             elif op == "sum_of_squares":
+                                # common_dtype is not None here due to is_numeric_dtype check above
+                                assert common_dtype is not None
                                 res_dtype = find_common_type(
                                     (common_dtype, np.dtype(np.uint64))
                                 )
@@ -6699,8 +6703,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                         if op in {"any", "all"}:
                             res_dtype = np.dtype(np.bool_)
                     res = res.nans_to_nulls()
-                    new_dtype = get_dtype_of_same_kind(common_dtype, res_dtype)
-                    res = res.astype(new_dtype)
+                    # common_dtype can be None if all dtypes are incompatible
+                    if common_dtype is not None:
+                        new_dtype = get_dtype_of_same_kind(
+                            common_dtype, res_dtype
+                        )
+                        res = res.astype(new_dtype)
 
                 return Series._from_column(res, index=idx, attrs=self.attrs)
 
@@ -7539,11 +7547,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         )
 
         if has_unnamed_levels:
-            unnamed_level_values = pd.MultiIndex.from_arrays(
-                list(
-                    map(
-                        column_name_idx.get_level_values,
-                        unnamed_levels_indices,
+            unnamed_level_values: pd.Index | pd.MultiIndex = (
+                pd.MultiIndex.from_arrays(
+                    list(
+                        map(
+                            column_name_idx.get_level_values,
+                            unnamed_levels_indices,
+                        )
                     )
                 )
             )
@@ -7591,13 +7601,19 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 [col.dtype for col in columns if col is not None]
             )
 
+            # Use object dtype as fallback if no common type found
+            dtype_for_empty = (
+                common_type if common_type is not None else np.dtype("object")
+            )
             all_nulls = functools.cache(
-                functools.partial(column_empty, self.shape[0], common_type)
+                functools.partial(column_empty, self.shape[0], dtype_for_empty)
             )
 
             # homogenize the dtypes of the columns
             homogenized = (
-                col.astype(common_type) if col is not None else all_nulls()
+                col.astype(common_type)
+                if col is not None and common_type is not None
+                else (all_nulls() if col is None else col)
                 for col in columns
             )
             if (

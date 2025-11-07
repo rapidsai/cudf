@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from typing_extensions import Self
 
 import pylibcudf as plc
 import rmm
@@ -40,8 +41,6 @@ from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-
-    from typing_extensions import Self
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -240,8 +239,11 @@ class DecimalBaseColumn(NumericalBaseColumn):
                     "integer numerical columns."
                 )
             elif other.dtype.kind in {"i", "u"}:
+                dtype_typed = cast(DecimalDtype, self.dtype)
                 other = other.astype(
-                    type(self.dtype)(self.dtype.MAX_PRECISION, 0)  # type: ignore[call-overload, union-attr]
+                    cast(type[DecimalDtype], type(dtype_typed))(
+                        dtype_typed.MAX_PRECISION, 0
+                    )
                 )
             elif not isinstance(self.dtype, other.dtype.__class__):
                 # This branch occurs if we have a DecimalBaseColumn of a
@@ -438,10 +440,10 @@ class Decimal32Column(DecimalBaseColumn):
             buffers=[mask_buf, data_buf],  # type: ignore[list-item]
         )
 
-    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
+    def _with_type_metadata(self: Self, dtype: DtypeObj | None) -> Self:
         if isinstance(dtype, Decimal32Dtype):
             self.dtype.precision = dtype.precision  # type: ignore[union-attr]
-        if cudf.get_option("mode.pandas_compatible"):
+        if cudf.get_option("mode.pandas_compatible") and dtype is not None:
             self._dtype = get_dtype_of_same_type(dtype, self.dtype)
         return self
 
@@ -477,8 +479,8 @@ class Decimal128Column(DecimalBaseColumn):
 
     @classmethod
     def from_arrow(cls, data: pa.Array | pa.ChunkedArray) -> Self:
-        result = cast(Decimal128Dtype, super().from_arrow(data))
-        result.dtype.precision = data.type.precision
+        result = cast(Self, super().from_arrow(data))
+        result.dtype.precision = data.type.precision  # type: ignore[union-attr]
         return result
 
     def to_arrow(self) -> pa.Array:
@@ -490,10 +492,10 @@ class Decimal128Column(DecimalBaseColumn):
 
         return super().to_arrow().cast(dtype.to_arrow())
 
-    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
+    def _with_type_metadata(self: Self, dtype: DtypeObj | None) -> Self:
         if isinstance(dtype, Decimal128Dtype):
             self.dtype.precision = dtype.precision  # type: ignore[union-attr]
-        if cudf.get_option("mode.pandas_compatible"):
+        if cudf.get_option("mode.pandas_compatible") and dtype is not None:
             self._dtype = get_dtype_of_same_type(dtype, self.dtype)
         return self
 
@@ -554,10 +556,10 @@ class Decimal64Column(DecimalBaseColumn):
             buffers=[mask_buf, data_buf],  # type: ignore[list-item]
         )
 
-    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
+    def _with_type_metadata(self: Self, dtype: DtypeObj | None) -> Self:
         if isinstance(dtype, Decimal64Dtype):
             self.dtype.precision = dtype.precision  # type: ignore[union-attr]
-        if cudf.get_option("mode.pandas_compatible"):
+        if cudf.get_option("mode.pandas_compatible") and dtype is not None:
             self._dtype = get_dtype_of_same_type(dtype, self.dtype)
         return self
 

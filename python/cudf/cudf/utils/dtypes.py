@@ -18,7 +18,7 @@ import cudf
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from cudf._typing import DtypeObj
+    from cudf._typing import Dtype, DtypeObj
     from cudf.core.dtypes import DecimalDtype
 
 np_dtypes_to_pandas_dtypes: dict[
@@ -105,10 +105,12 @@ def _find_common_type_decimal(dtypes: Iterable[DecimalDtype]) -> DecimalDtype:
         )
 
 
-def cudf_dtype_to_pa_type(dtype: DtypeObj) -> pa.DataType:
+def cudf_dtype_to_pa_type(dtype: DtypeObj | None) -> pa.DataType:
     """Given a cudf pandas dtype, converts it into the equivalent cuDF
     Python dtype.
     """
+    if dtype is None:
+        return pa.from_numpy_dtype(np.dtype("float64"))
     dtype = getattr(dtype, "numpy_dtype", dtype)
     if isinstance(dtype, cudf.CategoricalDtype):
         raise NotImplementedError(
@@ -124,7 +126,7 @@ def cudf_dtype_to_pa_type(dtype: DtypeObj) -> pa.DataType:
     elif dtype == CUDF_STRING_DTYPE or isinstance(dtype, pd.StringDtype):
         return pa.string()
     else:
-        return pa.from_numpy_dtype(dtype)
+        return pa.from_numpy_dtype(dtype)  # type: ignore[arg-type]
 
 
 def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:
@@ -258,14 +260,14 @@ def _get_nan_for_dtype(dtype: DtypeObj) -> np.generic:
         return dtype.type("nat", time_unit)
     elif dtype.kind == "f":
         if is_pandas_nullable_extension_dtype(dtype):
-            return dtype.na_value
+            return dtype.na_value  # type: ignore[return-value]
         return dtype.type("nan")
     else:
         if (
             is_pandas_nullable_extension_dtype(dtype)
             and getattr(dtype, "kind", "c") in "biu"
         ):
-            return dtype.na_value
+            return dtype.na_value  # type: ignore[return-value]
         return np.float64("nan")
 
 
@@ -432,7 +434,7 @@ def pyarrow_dtype_to_cudf_dtype(dtype: pd.ArrowDtype) -> DtypeObj:
     elif pyarrow_dtype is pa.date32():
         raise TypeError("Unsupported type")
     elif isinstance(pyarrow_dtype, pa.DataType):
-        return pyarrow_dtype.to_pandas_dtype()
+        return pyarrow_dtype.to_pandas_dtype()  # type: ignore[return-value]
     else:
         raise TypeError(f"Unsupported Arrow type: {pyarrow_dtype}")
 
@@ -536,7 +538,7 @@ def dtype_to_pandas_nullable_extension_type(dtype) -> DtypeObj:
         return np_dtypes_to_pandas_dtypes.get(dtype, dtype)
 
 
-def get_dtype_of_same_kind(source_dtype: DtypeObj, target_dtype: DtypeObj):
+def get_dtype_of_same_kind(source_dtype: Dtype, target_dtype: Dtype):
     """
     Given a dtype, return a dtype of the same kind.
     If no such dtype exists, return the default dtype.
@@ -554,7 +556,7 @@ def get_dtype_of_same_kind(source_dtype: DtypeObj, target_dtype: DtypeObj):
         return target_dtype
 
 
-def get_dtype_of_same_type(lhs_dtype: DtypeObj, rhs_dtype: DtypeObj):
+def get_dtype_of_same_type(lhs_dtype: Dtype, rhs_dtype: Dtype):
     """
     Given two dtypes, checks if `lhs_dtype` translates to same libcudf
     type as `rhs_dtype`, if yes, returns `lhs_dtype`.

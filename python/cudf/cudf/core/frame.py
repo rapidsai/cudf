@@ -633,7 +633,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         if dtype is None:
             if ncol == 1:
-                to_dtype = next(self._dtypes)[1]
+                to_dtype: DtypeObj | None = next(self._dtypes)[1]
             else:
                 to_dtype = find_common_type(
                     [dtype for _, dtype in self._dtypes]
@@ -1435,16 +1435,19 @@ class Frame(BinaryOperand, Scannable, Serializable):
             for col, val in zip(self._columns, values, strict=True)
         ]
         sources = [
-            col
-            if is_dtype_equal(col.dtype, common_dtype)
-            else col.astype(common_dtype)
+            (
+                col
+                if common_dtype is None
+                or is_dtype_equal(col.dtype, common_dtype)
+                else col.astype(common_dtype)
+            )
             for col, common_dtype in zip(
                 self._columns, common_dtype_list, strict=True
             )
         ]
         values = [
             val
-            if is_dtype_equal(val.dtype, common_dtype)
+            if common_dtype is None or is_dtype_equal(val.dtype, common_dtype)
             else val.astype(common_dtype)
             for val, common_dtype in zip(
                 values, common_dtype_list, strict=True
