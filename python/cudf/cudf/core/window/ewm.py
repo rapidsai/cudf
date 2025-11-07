@@ -7,11 +7,44 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 
+import pylibcudf as plc
+
 from cudf.core.window.rolling import _RollingBase
 from cudf.utils.dtypes import is_dtype_obj_numeric
 
 if TYPE_CHECKING:
     from cudf.core.column.column import ColumnBase
+
+
+def _leading_nulls_count(plc_col: plc.Column, size: int) -> int:
+    if size == 0 or plc_col.null_count() == 0:
+        return 0
+
+    bitmask = plc_col.null_mask()
+    if bitmask is None:
+        return 0
+
+    offset = plc_col.offset()
+
+    total = plc.null_mask.null_count(bitmask, offset, offset + size)
+    if total == 0:
+        return 0
+
+    # binary search for the first first occurrence
+    # where null count == index
+    low = 0
+    high = size
+    while low + 1 < high:
+        midpoint = low + ((high - low) // 2)
+        null_count = plc.null_mask.null_count(
+            bitmask, offset, offset + midpoint
+        )
+        if null_count == midpoint:
+            low = midpoint
+        else:
+            high = midpoint
+
+    return low
 
 
 class ExponentialMovingWindow(_RollingBase):
@@ -193,12 +226,32 @@ class ExponentialMovingWindow(_RollingBase):
         # pandas does nans in the same positions mathematically.
         # as such we need to convert the nans to nulls before
         # passing them in.
-        to_libcudf_column = source_column.astype(
-            np.dtype(np.float64)
-        ).nans_to_nulls()
-        return to_libcudf_column.scan(
-            agg_name, True, com=self.com, adjust=self.adjust
+        to_libcudf_column = source_column.astype(np.float64).nans_to_nulls()
+        size = len(to_libcudf_column)
+        # pandas excludes leading nulls from the exponential weighting window,
+        # so we skip the initial null run entirely and only compute the EWM
+        # starting from the first valid value.
+        # TODO: Use libcudf to match pandas' semantics instead of
+        # removing the leading nulls, computing ewm, and stitching
+        # the columns back together
+        plc_col = to_libcudf_column.to_pylibcudf(mode="read")
+        leading_nulls = _leading_nulls_count(plc_col, size)
+
+        if leading_nulls == 0:
+            return to_libcudf_column.scan(
+                agg_name, True, com=self.com, adjust=self.adjust
+            )
+
+        head_plc_col, tail_plc_col = plc.copying.split(
+            plc_col, [int(leading_nulls)]
         )
+        head = type(to_libcudf_column).from_pylibcudf(head_plc_col)
+        tail = (
+            type(to_libcudf_column)
+            .from_pylibcudf(tail_plc_col)
+            .scan(agg_name, True, com=self.com, adjust=self.adjust)
+        )
+        return head.append(tail)
 
 
 def get_center_of_mass(
