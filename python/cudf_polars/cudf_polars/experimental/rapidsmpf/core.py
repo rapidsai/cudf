@@ -161,7 +161,7 @@ def evaluate_logical_plan(
     stream.synchronize()
 
     # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
-    # before the Context, which ultimately contains the rmm RM, goes out of scope.
+    # before the Context, which ultimately contains the rmm MR, goes out of scope.
     del nodes, output, messages, chunks, dfs, df
 
     return result
