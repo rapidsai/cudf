@@ -76,40 +76,46 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
 
   if (!can_use_shared_mem_kernel) { return run_aggs_by_global_mem_kernel(); }
 
-  // `grid_stride` is the number of rows that all blocks process together at one step.
-  // Each block will move at max `num_strides` steps.
+  // `grid_stride` is the number of rows processed by all blocks at one step.
+  // Each block will move at max `num_strides` steps, each step consists of `grid_stride` rows
+  // (except the last step, which may have fewer rows).
+  // Blocks will process by iterations, each iteration contains at least one step and at most
+  // `num_strides` steps. This iterative approach is necessary to guarantee that the block will
+  // not encounter too many unique keys such that the shared memory hash set cannot fit.
   auto const grid_stride = GROUPBY_BLOCK_SIZE * grid_size;
   auto const num_strides = util::div_rounding_up_safe(num_rows, grid_stride);
 
-  // The end row index for each block to stop processing each iteration, in which the blocks move at
-  // least one step to at max `num_strides` steps, each step consists of `grid_stride` rows.
-  rmm::device_uvector<size_type> block_row_ends(num_strides * grid_size, stream);
-
-  // Maps from the global row index of the input table to its block-wise rank.
+  // Maps from the global row index of the input table to its block-wise thread rank.
   rmm::device_uvector<size_type> local_mapping_indices(num_rows, stream);
-  // Maps from the block-wise rank to the row index of result table.
-  rmm::device_uvector<size_type> global_mapping_indices(grid_size * GROUPBY_SHM_MAX_ELEMENTS,
-                                                        stream);
-  // Initialize it with a sentinel value, so later we can identify which ones are unused and which
-  // ones need to be updated.
+  // Maps from the block-wise thread rank to the row index of the output keys table,
+  // reset at each iteration.
+  rmm::device_uvector<size_type> global_mapping_indices(
+    num_strides * grid_size * GROUPBY_SHM_MAX_ELEMENTS, stream);
+  // Some positions in `global_mapping_indices` will be unused.
+  // We just initialize them with a sentinel value.
   thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
                              global_mapping_indices.begin(),
                              global_mapping_indices.end(),
                              cudf::detail::CUDF_SIZE_TYPE_SENTINEL);
-  // Compute the cardinality (the number of unique keys) encounter by each thread block in each
-  // iteration. The cardinality is reset for the next iteration, and the maximum number of
-  // iterations is `num_strides`.
+
+  // The upper-bound row index for each block to stop processing each iteration.
+  rmm::device_uvector<size_type> block_row_ends(num_strides * grid_size, stream);
+
+  // Compute the cardinality (the number of unique keys) encounter by each thread block.
+  // The cardinality is not allowed to exceed `GROUPBY_SHM_MAX_ELEMENTS`.
+  // Whenever the cardinality exceeds `GROUPBY_CARDINALITY_THRESHOLD` (it is still less than
+  // `GROUPBY_SHM_MAX_ELEMENTS`), we store the last processed row index in `block_row_ends` and
+  // reset the block's data (including cardinality) to start a new iteration.
   rmm::device_uvector<size_type> block_cardinality(num_strides * grid_size, stream);
 
-  auto set_ref_insert = global_set.ref(cuco::op::insert_and_find);
   compute_mapping_indices(grid_size,
                           num_rows,
-                          set_ref_insert,
+                          global_set.ref(cuco::op::insert_and_find),
                           row_bitmask,
-                          block_row_ends.data(),
                           local_mapping_indices.data(),
                           global_mapping_indices.data(),
                           block_cardinality.data(),
+                          block_row_ends.data(),
                           stream);
 
   auto unique_keys       = extract_populated_keys(global_set, num_rows, stream, mr);
@@ -141,7 +147,6 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   compute_shared_memory_aggs(grid_size,
                              available_shmem_size,
                              num_rows,
-                             row_bitmask,
                              block_row_ends.data(),
                              local_mapping_indices.data(),
                              global_mapping_indices.data(),

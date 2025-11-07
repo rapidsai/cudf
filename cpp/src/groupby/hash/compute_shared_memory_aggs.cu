@@ -93,7 +93,6 @@ __device__ void aggregate_to_shmem(cooperative_groups::thread_block const& block
                                    size_type row_end,
                                    size_type col_start,
                                    size_type col_end,
-                                   bitmask_type const* row_bitmask,
                                    table_device_view source,
                                    size_type num_input_rows,
                                    size_type const* local_mapping_index,
@@ -106,9 +105,9 @@ __device__ void aggregate_to_shmem(cooperative_groups::thread_block const& block
   // Aggregates global memory sources to shared memory targets
   for (auto source_idx = block.thread_rank() + row_start; source_idx < row_end;
        source_idx += cudf::detail::grid_1d::grid_stride()) {
-    if (row_bitmask && !bit_is_set(row_bitmask, source_idx)) { continue; }
-
     auto const target_idx = local_mapping_index[source_idx] + agg_location_offset;
+    if (target_idx == cudf::detail::CUDF_SIZE_TYPE_SENTINEL) { continue; }
+
     for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
       auto const source_col = source.column(col_idx);
       auto const target     = shmem_agg_storage + shmem_agg_res_offsets[col_idx];
@@ -165,7 +164,6 @@ __device__ void update_aggs_shmem_to_gmem(cooperative_groups::thread_block const
 /* Takes the local_mapping_index and global_mapping_index to compute
  * pre (shared) and final (global) aggregates*/
 CUDF_KERNEL void single_pass_shmem_aggs_kernel(size_type num_rows,
-                                               bitmask_type const* row_bitmask,
                                                size_type const* block_row_ends,
                                                size_type const* local_mapping_index,
                                                size_type const* global_mapping_index,
@@ -239,7 +237,6 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(size_type num_rows,
                          row_end,
                          col_start,
                          col_end,
-                         row_bitmask,
                          input_values,
                          num_rows,
                          local_mapping_index,
@@ -293,7 +290,6 @@ int32_t max_active_blocks_shmem_aggs_kernel()
 void compute_shared_memory_aggs(size_type grid_size,
                                 size_type available_shmem_size,
                                 size_type num_input_rows,
-                                bitmask_type const* row_bitmask,
                                 size_type const* block_row_ends,
                                 size_type const* local_mapping_index,
                                 size_type const* global_mapping_index,
@@ -312,7 +308,6 @@ void compute_shared_memory_aggs(size_type grid_size,
   auto const shmem_agg_size = available_shmem_size - offsets_size * 2;
   single_pass_shmem_aggs_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, available_shmem_size, stream>>>(
     num_input_rows,
-    row_bitmask,
     block_row_ends,
     local_mapping_index,
     global_mapping_index,

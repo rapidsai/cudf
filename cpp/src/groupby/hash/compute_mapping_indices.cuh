@@ -46,24 +46,31 @@ __device__ void find_local_mapping(cooperative_groups::thread_block const& block
   // Syncing the thread block is needed so that updates in `local_mapping_indices` are visible to
   // all threads in the thread block.
   block.sync();
-  if (is_valid_input && !inserted) {  // element was already in set
-    local_mapping_indices[idx] = local_mapping_indices[result_idx];
+  if (is_valid_input) {
+    if (!inserted) { local_mapping_indices[idx] = local_mapping_indices[result_idx]; }
+  } else {
+    // Mark the row as invalid, so later on we can use it to identify which rows are invalid instead
+    // of using the validity bitmask.
+    local_mapping_indices[idx] = cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
   }
 }
 
 template <typename SetRef>
 __device__ void find_global_mapping(cooperative_groups::thread_block const& block,
+                                    size_type iter,
                                     size_type cardinality,
                                     SetRef global_set,
                                     size_type* shared_set_indices,
                                     size_type* global_mapping_indices)
 {
-  // for all unique keys in shared memory hash set, stores their matches in
-  // global hash set to `global_mapping_indices`
+  auto const block_data_offset = GROUPBY_SHM_MAX_ELEMENTS * (gridDim.x * iter + blockIdx.x);
+
+  // For all unique keys in shared memory hash set, stores their matches in global hash set to
+  // `global_mapping_indices`.
   for (auto idx = block.thread_rank(); idx < cardinality; idx += block.num_threads()) {
-    auto const input_idx = shared_set_indices[idx];
-    auto const key_idx   = *global_set.insert_and_find(input_idx).first;
-    global_mapping_indices[block.group_index().x * GROUPBY_SHM_MAX_ELEMENTS + idx] = key_idx;
+    auto const input_idx                            = shared_set_indices[idx];
+    auto const key_idx                              = *global_set.insert_and_find(input_idx).first;
+    global_mapping_indices[block_data_offset + idx] = key_idx;
   }
 }
 
@@ -77,10 +84,10 @@ template <class SetRef>
 CUDF_KERNEL void mapping_indices_kernel(size_type num_input_rows,
                                         SetRef global_set,
                                         bitmask_type const* row_bitmask,
-                                        size_type* block_row_ends,
                                         size_type* local_mapping_indices,
                                         size_type* global_mapping_indices,
-                                        size_type* block_cardinality)
+                                        size_type* block_cardinality,
+                                        size_type* block_row_ends)
 {
   __shared__ size_type shared_set_indices[GROUPBY_SHM_MAX_ELEMENTS];
 
@@ -102,17 +109,13 @@ CUDF_KERNEL void mapping_indices_kernel(size_type num_input_rows,
   if (block.thread_rank() == 0) { cardinality = 0; }
   block.sync();
 
-  auto const stride = cudf::detail::grid_1d::grid_stride();
-  auto const num_total_strides =
-    util::div_rounding_up_safe(num_input_rows, static_cast<size_type>(stride));
-
-  size_type n_resets  = 0;  // number of times the block resets
-  size_type n_strides = 0;  // number of steps the block jumped
+  auto const grid_stride = cudf::detail::grid_1d::grid_stride();
+  size_type iter         = 0;  // number of times the block resets
 
   // All threads in the block will participate in the loop, and sync.
   for (auto idx = cudf::detail::grid_1d::global_thread_id();
        idx - block.thread_rank() < num_input_rows;
-       idx += stride) {
+       idx += grid_stride) {
     find_local_mapping(block,
                        idx,
                        num_input_rows,
@@ -121,23 +124,22 @@ CUDF_KERNEL void mapping_indices_kernel(size_type num_input_rows,
                        &cardinality,
                        local_mapping_indices,
                        shared_set_indices);
-    ++n_strides;
     block.sync();
 
     // The iteration ends here. Flush data and reset the block.
-    auto const is_last_iteration = idx + stride - block.thread_rank() >= num_input_rows;
+    auto const is_last_iteration = idx + grid_stride - block.thread_rank() >= num_input_rows;
     if (cardinality >= GROUPBY_CARDINALITY_THRESHOLD || is_last_iteration) {
       find_global_mapping(
-        block, cardinality, global_set, shared_set_indices, global_mapping_indices);
+        block, iter, cardinality, global_set, shared_set_indices, global_mapping_indices);
       if (!is_last_iteration) { shared_set.initialize(block); }
 
       if (block.thread_rank() == 0) {
-        auto const block_data_idx         = block.group_index().x * num_total_strides + n_resets;
+        auto const block_data_idx         = gridDim.x * iter + blockIdx.x;
         block_cardinality[block_data_idx] = cardinality;
-        block_row_ends[block_data_idx]    = n_strides * stride;
+        block_row_ends[block_data_idx]    = idx + grid_stride;
         cardinality                       = 0;
       }
-      ++n_resets;
+      ++iter;
       block.sync();
     }
   }
@@ -157,18 +159,18 @@ void compute_mapping_indices(size_type grid_size,
                              size_type num_rows,
                              SetRef global_set,
                              bitmask_type const* row_bitmask,
-                             size_type* block_row_ends,
                              size_type* local_mapping_indices,
                              size_type* global_mapping_indices,
                              size_type* block_cardinality,
+                             size_type* block_row_ends,
                              rmm::cuda_stream_view stream)
 {
   mapping_indices_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, 0, stream>>>(num_rows,
                                                                        global_set,
                                                                        row_bitmask,
-                                                                       block_row_ends,
                                                                        local_mapping_indices,
                                                                        global_mapping_indices,
-                                                                       block_cardinality);
+                                                                       block_cardinality,
+                                                                       block_row_ends);
 }
 }  // namespace cudf::groupby::detail::hash
