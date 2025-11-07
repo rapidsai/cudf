@@ -430,18 +430,21 @@ def make_rapidsmpf_read_parquet_node(
     from rapidsmpf.streaming.cudf.parquet import read_parquet
 
     # Build ParquetReaderOptions
-    parquet_reader_options = plc.io.parquet.ParquetReaderOptions.builder(
-        plc.io.SourceInfo(ir.paths)
-    ).build()
+    try:
+        parquet_reader_options = plc.io.parquet.ParquetReaderOptions.builder(
+            plc.io.SourceInfo(ir.paths)
+        ).build()
 
-    if ir.with_columns is not None:
-        parquet_reader_options.set_columns(ir.with_columns)
+        if ir.with_columns is not None:
+            parquet_reader_options.set_columns(ir.with_columns)
+    except Exception as e:
+        raise ValueError(f"Failed to build ParquetReaderOptions: {e}") from e
 
     # Calculate num_rows_per_chunk from statistics
     # Default to a reasonable chunk size if statistics are unavailable
     estimated_row_count: ColumnStat[int] | None = stats.row_count.get(ir)
     if estimated_row_count is None:
-        for cs in stats.column_stats[ir].values():
+        for cs in stats.column_stats.get(ir, {}).values():
             if cs.source_info.row_count.value is not None:
                 estimated_row_count = cs.source_info.row_count
                 break
@@ -453,13 +456,28 @@ def make_rapidsmpf_read_parquet_node(
         # Fallback: use a default chunk size if statistics are not available
         num_rows_per_chunk = 1_000_000  # 1 million rows as default
 
-    return read_parquet(
-        context,
-        ch_out.data,
-        num_producers,
-        parquet_reader_options,
-        num_rows_per_chunk,
-    )
+    # Validate inputs
+    if num_rows_per_chunk <= 0:
+        raise ValueError(f"Invalid num_rows_per_chunk: {num_rows_per_chunk}")
+    if num_producers <= 0:
+        raise ValueError(f"Invalid num_producers: {num_producers}")
+
+    try:
+        return read_parquet(
+            context,
+            ch_out.data,
+            num_producers,
+            parquet_reader_options,
+            num_rows_per_chunk,
+        )
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to create read_parquet node: {e}\n"
+            f"  paths: {ir.paths}\n"
+            f"  num_producers: {num_producers}\n"
+            f"  num_rows_per_chunk: {num_rows_per_chunk}\n"
+            f"  partition_count: {partition_info.count}"
+        ) from e
 
 
 @generate_ir_sub_network.register(Scan)
@@ -477,7 +495,7 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
     # Start with simple case only (no predicates, row_index, etc.).
     nodes: list[Any]
     if (
-        partition_info.count > 1  # Ensure count=1 for now
+        partition_info.count > 1
         and ir.typ == "parquet"
         and ir.row_index is None
         and ir.include_file_paths is None

@@ -335,6 +335,20 @@ def generate_network(
         generate_ir_sub_network_wrapper, state=state
     )
     nodes, channels = mapper(ir)
+
+    # Deduplicate nodes: CachingVisitor can cause the same node object to appear
+    # multiple times when an IR node is referenced from multiple paths (e.g.,
+    # pl.concat with shared sources). This is problematic for CppNode objects
+    # which use C++ move semantics.
+    seen: set[int] = set()
+    unique_nodes: list[Any] = []
+    for node in nodes:
+        node_id = id(node)
+        if node_id not in seen:
+            seen.add(node_id)
+            unique_nodes.append(node)
+    nodes = unique_nodes
+
     ch_out = channels[ir].reserve_output_slot()
 
     # TODO: We will need an additional node here to drain
