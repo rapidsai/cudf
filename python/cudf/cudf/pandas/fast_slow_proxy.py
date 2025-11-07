@@ -573,7 +573,7 @@ class _FastSlowProxy:
 
         if (
             instance_block is _State.FAST
-            and self._fsproxy_state is _State.FAST
+            and self._fsproxy_state is _State.FAST  # type: ignore[attr-defined]
         ):
             raise RuntimeError("Fast-to-slow transfer is blocked")
 
