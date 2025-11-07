@@ -304,6 +304,7 @@ def _DataFrame__dtypes(self):
     return result
 
 
+@functools.wraps(pd.DataFrame.columns)
 def _DataFrame_columns(self):
     result = _fast_slow_function_call(
         lambda self: self.columns,

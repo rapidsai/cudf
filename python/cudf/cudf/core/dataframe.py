@@ -1518,6 +1518,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     @_performance_tracking
     def __setitem__(self, arg, value):
         """Add/set column by *arg or DataFrame*"""
+        # import pdb;pdb.set_trace()
         if isinstance(arg, DataFrame):
             # not handling set_item where arg = df & value = df
             if isinstance(value, DataFrame):
@@ -3551,7 +3552,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 self._index = RangeIndex(length)
 
         elif isinstance(value, (pd.Series, Series)):
-            value = Series(value, nan_as_null=nan_as_null)
+            value = Series(
+                value, nan_as_null=nan_as_null, copy=isinstance(value, Series)
+            )
             if not ignore_index:
                 value = value._align_to_index(
                     self.index, how="right", sort=False
