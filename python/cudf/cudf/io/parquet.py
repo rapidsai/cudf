@@ -1458,7 +1458,7 @@ def _read_parquet(
             filepaths_or_buffers = filepaths_or_buffers[0]
 
         return DataFrame(
-            pd.read_parquet(
+            pd.read_parquet(  # type: ignore[misc]
                 filepaths_or_buffers,
                 columns=columns,
                 engine=engine,

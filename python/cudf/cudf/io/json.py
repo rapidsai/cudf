@@ -265,7 +265,7 @@ def read_json(
             filepath_or_buffer,
             lines=lines,
             dtype=dtype,
-            compression=compression,
+            compression=compression,  # type: ignore[arg-type]
             storage_options=storage_options,
             orient=orient,
             *args,

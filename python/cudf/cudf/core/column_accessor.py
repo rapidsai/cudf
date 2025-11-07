@@ -294,7 +294,7 @@ class ColumnAccessor(MutableMapping):
     def to_pandas_index(self) -> pd.Index | pd.MultiIndex:
         """Convert the keys of the ColumnAccessor to a Pandas Index object."""
         if self.multiindex and len(self.level_names) > 0:
-            result = pd.MultiIndex.from_tuples(
+            result: pd.Index | pd.MultiIndex = pd.MultiIndex.from_tuples(
                 self.names,  # type: ignore[arg-type]
                 names=self.level_names,
             )

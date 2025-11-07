@@ -128,7 +128,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
             except AttributeError:
                 pass
 
-    def __contains__(self, item: DatetimeLikeScalar) -> bool:
+    def __contains__(self, item: DatetimeLikeScalar) -> bool:  # type: ignore[override]
         try:
             # call-overload must be ignored because numpy stubs only accept literal
             # time unit strings, but we're passing self.time_unit which is valid at runtime

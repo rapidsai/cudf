@@ -3,7 +3,7 @@
 
 import warnings
 
-from pandas.core.accessor import CachedAccessor
+from pandas.core.accessor import CachedAccessor  # type: ignore[attr-defined]
 
 from cudf.core.dataframe import DataFrame
 from cudf.core.index import Index

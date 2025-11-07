@@ -470,7 +470,8 @@ def run_pandas(
                 try:
                     with disable_module_accelerator():
                         pd.testing.assert_frame_equal(
-                            result._fsproxy_slow, cpu_result
+                            result._fsproxy_slow,  # type: ignore[arg-type]
+                            cpu_result,
                         )
                     print(f"✅ Query {q_id} passed validation!")  # noqa: T201
                 except AssertionError as e:

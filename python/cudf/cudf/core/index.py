@@ -4238,7 +4238,7 @@ class DatetimeIndex(Index):
     @_performance_tracking
     def to_pandas(
         self, *, nullable: bool = False, arrow_type: bool = False
-    ) -> pd.DatetimeIndex:
+    ) -> pd.Index:
         result = super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         if not arrow_type and self._freq is not None:
             result.freq = self._freq._maybe_as_fast_pandas_offset()  # type: ignore[attr-defined]

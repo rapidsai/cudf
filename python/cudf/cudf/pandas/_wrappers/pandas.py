@@ -616,8 +616,8 @@ TimedeltaIndex = make_final_proxy_type(
 )
 
 try:
-    from pandas.arrays import (
-        NumpyExtensionArray as pd_NumpyExtensionArray,  # type: ignore[attr-defined]
+    from pandas.arrays import (  # type: ignore[attr-defined]
+        NumpyExtensionArray as pd_NumpyExtensionArray,
     )
 
     NumpyExtensionArray = make_final_proxy_type(
@@ -1216,8 +1216,8 @@ ExcelWriter = make_final_proxy_type(
 
 try:
     from pandas.io.formats.style import Styler as pd_Styler  # isort: skip
-    from pandas.io.formats.style import (
-        StylerRenderer as pd_StylerRenderer,  # type: ignore[attr-defined]
+    from pandas.io.formats.style import (  # type: ignore[attr-defined]
+        StylerRenderer as pd_StylerRenderer,
     )
 
     StylerRenderer = make_final_proxy_type(

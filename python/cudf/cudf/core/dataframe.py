@@ -2462,7 +2462,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 return result
             else:
                 return cls(
-                    pd.DataFrame.from_dict(
+                    pd.DataFrame.from_dict(  # type: ignore[call-overload]
                         data=data,
                         orient=orient,
                         dtype=dtype,
