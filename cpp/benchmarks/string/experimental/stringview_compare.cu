@@ -258,7 +258,7 @@ std::pair<rmm::device_uvector<ArrowBinaryView>, rmm::device_buffer> create_sv_ar
 
   // Make sure only one buffer is needed.
   // Using a single data buffer makes the two formats more similar focusing on the layout.
-  constexpr int64_t max_size = std::numeric_limits<int32_t>::max() / 2;
+  constexpr int64_t max_size = std::numeric_limits<cudf::size_type>::max() / 2;
   auto const num_buffers     = cudf::util::div_rounding_up_safe(longer_chars_size, max_size);
   CUDF_EXPECTS(num_buffers <= 1, "num_buffers must be <= 1");
 
@@ -288,7 +288,8 @@ std::pair<rmm::device_uvector<ArrowBinaryView>, rmm::device_buffer> gather_sv_ar
 {
   auto output   = rmm::device_uvector<ArrowBinaryView>(map_size, stream);
   auto d_output = output.data();
-  thrust::gather(rmm::exec_policy(stream), begin, begin + map_size, d_items.data(), d_output);
+  thrust::gather(
+    rmm::exec_policy_nosync(stream), begin, begin + map_size, d_items.data(), d_output);
   // Although the above should be enough, in reality it is impractical to share a data buffer
   // between two columns in libcudf. Sharing data in column_views is expected but a libcudf
   // gather (all other libcudf APIs) would return a new column with newly owned (non-shared)
@@ -507,7 +508,7 @@ static void BM_sv_gather(nvbench::state& state)
   if (std::getenv(BM_ARROWSTRINGVIEW)) {
     auto [d_items, data_buffer] = create_sv_array(col_view, stream);
 
-    auto const begin  = map_view.begin<int32_t>();
+    auto const begin  = map_view.begin<cudf::size_type>();
     auto const result = gather_sv_array(d_items, data_buffer, begin, map_rows, stream);
     auto gather_size  = result.first.size() * sizeof(ArrowBinaryView) + result.second.size();
     state.add_global_memory_reads(gather_size);
