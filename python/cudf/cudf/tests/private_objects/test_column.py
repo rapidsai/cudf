@@ -1,6 +1,5 @@
 # SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
-import sys
 from decimal import Decimal
 
 import cupy as cp
@@ -9,14 +8,11 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
-import rmm
-
 import cudf
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
     PANDAS_VERSION,
 )
-from cudf.core.buffer import as_buffer
 from cudf.core.column.column import _can_values_be_equal, as_column
 from cudf.core.column.decimal import Decimal32Column, Decimal64Column
 from cudf.testing import assert_eq
@@ -93,13 +89,12 @@ def test_column_set_equal_length_object_by_mask():
 def test_column_offset_and_size(pandas_input, offset, size):
     col = as_column(pandas_input)
     col = cudf.core.column.build_column(
-        data=col.base_data,
-        dtype=col.dtype,
-        mask=col.base_mask,
+        plc_column=col.to_pylibcudf(mode="read"),
         size=size,
+        dtype=col.dtype,
         offset=offset,
         null_count=col.null_count,
-        children=col.base_children,
+        exposed=False,
     )
 
     if isinstance(col.dtype, cudf.CategoricalDtype):
@@ -513,25 +508,6 @@ def test_build_series_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
 def test__can_values_be_equal(left, right, expected):
     assert _can_values_be_equal(left, right) is expected
     assert _can_values_be_equal(right, left) is expected
-
-
-def test_string_no_children_properties():
-    empty_col = cudf.core.column.StringColumn(
-        as_buffer(rmm.DeviceBuffer(size=0)),
-        size=0,
-        dtype=np.dtype("object"),
-        mask=None,
-        offset=0,
-        null_count=0,
-        children=(),
-    )
-    assert empty_col.base_children == ()
-    assert empty_col.base_size == 0
-
-    assert empty_col.children == ()
-    assert empty_col.size == 0
-
-    assert sys.getsizeof(empty_col) >= 0  # Accounts for Python GC overhead
 
 
 def test_string_int_to_ipv4():
