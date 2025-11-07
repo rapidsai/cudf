@@ -1,0 +1,51 @@
+name: Compute Sanitizer
+
+on:
+  workflow_dispatch:
+
+jobs:
+  discover-tests:
+    runs-on: linux-amd64-cpu4
+    container:
+      image: rapidsai/ci-conda:25.12-latest
+    outputs:
+      tests: ${{ steps.find-tests.outputs.tests }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Discover test executables
+        id: find-tests
+        shell: bash
+        run: |
+          ./ci/discover_libcudf_tests.sh
+
+  run-sanitizer:
+    needs: discover-tests
+    name: Run compute-sanitizer on ${{ matrix.test }}
+    runs-on: linux-amd64-gpu-l4-latest-1
+    container:
+      image: rapidsai/ci-conda:25.12-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        test: ${{ fromJson(needs.discover-tests.outputs.tests) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Run compute-sanitizer on ${{ matrix.test }}
+        shell: bash
+        run: |
+          ./ci/run_single_memcheck.sh "${{ matrix.test }}"
+
+      - name: Upload sanitizer logs
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: sanitizer-logs-${{ matrix.test }}
+          path: |
+            compute-sanitizer-*.log
+            *.log
+          if-no-files-found: ignore
