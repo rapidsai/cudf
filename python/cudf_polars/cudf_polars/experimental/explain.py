@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
@@ -6,17 +6,23 @@
 
 from __future__ import annotations
 
+import dataclasses
 import functools
+from collections.abc import Mapping, Sequence
 from itertools import groupby
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self, TypeAlias
 
 from cudf_polars.dsl.ir import (
+    Filter,
     GroupBy,
+    HStack,
     Join,
     Scan,
+    Select,
     Sort,
 )
 from cudf_polars.dsl.translate import Translator
+from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.base import ColumnStat
 from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.experimental.statistics import (
@@ -31,6 +37,17 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
+
+
+Serializable: TypeAlias = (
+    str
+    | int
+    | float
+    | bool
+    | Sequence["Serializable"]
+    | Mapping[str, "Serializable"]
+    | None
+)
 
 
 def explain_query(
@@ -79,6 +96,44 @@ def explain_query(
             return _repr_ir_tree(ir, stats=collect_statistics(ir, config))
         else:
             return _repr_ir_tree(ir)
+
+
+def serialize_query(
+    q: pl.LazyFrame,
+    engine: pl.GPUEngine,
+    *,
+    physical: bool = True,
+) -> DAG:
+    """
+    Return a structured, serializable representation of the IR plan.
+
+    Parameters
+    ----------
+    q : pl.LazyFrame
+        The LazyFrame to serialize.
+    engine : pl.GPUEngine
+        The configured GPU engine to use.
+    physical : bool, default True
+        If True, serialize the physical (lowered) plan with partition info.
+        If False, serialize the logical (pre-lowering) plan.
+
+    Returns
+    -------
+    DAG
+        A structured DAG representation of the query plan that can be
+        serialized to JSON.
+
+    Examples
+    --------
+    >>> import polars as pl
+    >>> import json
+    >>> q = pl.LazyFrame({"a": [1, 2, 3]}).select("a")
+    >>> engine = pl.GPUEngine(executor="streaming")
+    >>> dag = serialize_query(q, engine, physical=False)
+    >>> json.dumps(dag.to_dict())  # doctest: +SKIP
+    '{"roots": [...], "nodes": {...}, "partition_info": null}'
+    """
+    return DAG.from_query(q, engine, lowered=physical)
 
 
 def _fmt_row_count(value: int | None) -> str:
@@ -168,3 +223,204 @@ def _(ir: Sort, *, offset: str = "") -> str:
 def _(ir: Scan, *, offset: str = "") -> str:
     label = f"SCAN {ir.typ.upper()}"
     return _repr_header(offset, label, ir.schema)
+
+
+# --------------------------------------------------------------------------
+# Property serialization for structured query plan export
+# --------------------------------------------------------------------------
+
+
+@functools.singledispatch
+def _serialize_properties(ir: IR) -> dict[str, Serializable]:
+    """Extract serializable properties from an IR node."""
+    return {}
+
+
+@_serialize_properties.register
+def _(ir: Scan) -> dict[str, Serializable]:
+    return {
+        "typ": ir.typ,
+        "paths": ir.paths,
+    }
+
+
+@_serialize_properties.register
+def _(ir: Join) -> dict[str, Serializable]:
+    return {
+        "how": ir.options[0],
+        "left_on": [ne.name for ne in ir.left_on],
+        "right_on": [ne.name for ne in ir.right_on],
+    }
+
+
+@_serialize_properties.register
+def _(ir: GroupBy) -> dict[str, Serializable]:
+    return {
+        "keys": [ne.name for ne in ir.keys],
+    }
+
+
+@_serialize_properties.register
+def _(ir: Sort) -> dict[str, Serializable]:
+    return {
+        "by": [ne.name for ne in ir.by],
+        "order": [str(o) for o in ir.order],
+    }
+
+
+@_serialize_properties.register
+def _(ir: Filter) -> dict[str, Serializable]:
+    return {
+        "predicate": ir.mask.name,
+    }
+
+
+@_serialize_properties.register
+def _(ir: Select) -> dict[str, Serializable]:
+    return {
+        "columns": [ne.name for ne in ir.exprs],
+    }
+
+
+@_serialize_properties.register
+def _(ir: HStack) -> dict[str, Serializable]:
+    return {
+        "columns": [ne.name for ne in ir.columns],
+    }
+
+
+@dataclasses.dataclass
+class SerializableIRNode:
+    """
+    A node in the DAG.
+
+    This node is *serializable* and cannot be executed like a
+    cudf_polars.dsl.ir.IR node.
+    """
+
+    id: int
+    children: list[int]
+    schema: dict[str, Serializable]
+    properties: dict[str, Serializable]
+    type: str
+
+    @classmethod
+    def from_ir(cls, ir: IR) -> Self:
+        """Build a Node from an IR Node."""
+        return cls(
+            id=ir.get_stable_id(),
+            children=[child.get_stable_id() for child in ir.children],
+            schema={k: v.id().name for k, v in ir.schema.items()},
+            properties=_serialize_properties(ir),
+            type=type(ir).__name__,
+        )
+
+    def to_dict(self) -> dict[str, Serializable]:
+        """Convert to a JSON-serializable dictionary."""
+        return {
+            "id": self.id,
+            "children": self.children,
+            "schema": self.schema,
+            "properties": self.properties,
+            "type": self.type,
+        }
+
+
+@dataclasses.dataclass
+class SerializablePartitionInfo:
+    """Serializable information about a partition."""
+
+    count: int
+    partitioned_on: tuple[Serializable, ...]
+
+    def to_dict(self) -> dict[str, Serializable]:
+        """Convert to a JSON-serializable dictionary."""
+        return {
+            "count": self.count,
+            "partitioned_on": list(self.partitioned_on),
+        }
+
+
+@dataclasses.dataclass
+class DAG:
+    """A DAG of nodes."""
+
+    roots: list[int]
+    nodes: dict[int, SerializableIRNode]
+    partition_info: dict[int, SerializablePartitionInfo] | None = None
+
+    @classmethod
+    def from_query(
+        cls,
+        q: pl.LazyFrame,
+        engine: pl.GPUEngine,
+        *,
+        lowered: bool = False,
+    ) -> Self:
+        """
+        Build a DAG from a LazyFrame query.
+
+        Parameters
+        ----------
+        q
+            The LazyFrame to serialize.
+        engine
+            The GPU engine to use. If None, uses default streaming executor.
+        lowered
+            If True, lower the IR to the physical plan and include partition info.
+
+        Returns
+        -------
+        DAG
+            A serializable DAG representation of the query plan.
+        """
+        config = ConfigOptions.from_polars_engine(engine)
+        ir = Translator(q._ldf.visit(), engine).translate_ir()
+
+        partition_info_dict: dict[int, SerializablePartitionInfo] | None = None
+        if lowered:
+            if (
+                config.executor.name == "streaming"
+                and config.executor.runtime == "rapidsmpf"
+            ):
+                from cudf_polars.experimental.rapidsmpf.core import (
+                    lower_ir_graph as rapidsmpf_lower_ir_graph,
+                )
+
+                ir, partition_info_d, _ = rapidsmpf_lower_ir_graph(ir, config)
+            else:
+                ir, partition_info_d, _ = lower_ir_graph(ir, config)
+            partition_info_dict = {}
+
+        nodes: dict[int, SerializableIRNode] = {}
+        for ir_node in traversal([ir]):
+            stable_id = ir_node.get_stable_id()
+            nodes[stable_id] = SerializableIRNode.from_ir(ir_node)
+            if lowered and partition_info_dict is not None:
+                partition_info_dict[stable_id] = SerializablePartitionInfo(
+                    count=partition_info_d[ir_node].count,
+                    partitioned_on=tuple(
+                        expr.name for expr in partition_info_d[ir_node].partitioned_on
+                    ),
+                )
+
+        return cls(
+            roots=[ir.get_stable_id()], nodes=nodes, partition_info=partition_info_dict
+        )
+
+    def to_dict(self) -> dict[str, Serializable]:
+        """Convert to a JSON-serializable dictionary."""
+        return {
+            "roots": self.roots,
+            "nodes": {
+                str(node_id): node.to_dict() for node_id, node in self.nodes.items()
+            },
+            "partition_info": (
+                {
+                    str(node_id): info.to_dict()
+                    for node_id, info in self.partition_info.items()
+                }
+                if self.partition_info is not None
+                else None
+            ),
+        }

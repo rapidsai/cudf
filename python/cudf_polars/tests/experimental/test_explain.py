@@ -1,15 +1,20 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
+import json
 import re
 
 import pytest
 
 import polars as pl
 
-from cudf_polars.experimental.explain import _fmt_row_count, explain_query
+from cudf_polars.experimental.explain import (
+    _fmt_row_count,
+    explain_query,
+    serialize_query,
+)
 from cudf_polars.testing.asserts import (
     DEFAULT_CLUSTER,
     DEFAULT_RUNTIME,
@@ -495,3 +500,61 @@ def test_explain_logical_io_then_concat_then_groupby(engine, tmp_path, kind):
         assert re.search(
             rf"^\s*SORT.*row_count=\'~{final_count_2}\'\s*$", repr, re.MULTILINE
         )
+
+
+def test_serialize_query():
+    left = pl.LazyFrame({"a": ["a", "b", "a"], "b": [1, 2, 3]})
+    right = pl.LazyFrame({"a": ["a", "b", "c"], "c": [4, 5, 6]})
+
+    q = (
+        left.join(right, on="a", how="inner")
+        .group_by("a")
+        .agg(pl.col("b").sum(), pl.col("c").max())
+    )
+    engine = pl.GPUEngine(executor="streaming")
+    dag = serialize_query(q, engine)
+
+    # We don't know the exact node IDs, but we can check the structure.
+    assert len(dag.roots) == 1
+    assert len(dag.nodes) == 5
+    assert len(dag.partition_info) == 5
+    node_ids = set(dag.nodes)
+
+    for node_id, node in dag.nodes.items():
+        assert node_id in node_ids
+        assert node.id in node_ids
+        assert set(node.children) <= node_ids
+
+        match node.type:
+            case "DataFrameScan":
+                assert node.children == []
+                assert node.schema == {"a": "STRING", "b": "INT64"} or node.schema == {
+                    "a": "STRING",
+                    "c": "INT64",
+                }
+                assert node_id not in dag.roots
+
+            case "GroupBy":
+                assert len(node.children) == 1
+                assert node.schema == {"a": "STRING", "b": "INT64", "c": "INT64"}
+                assert node.properties == {"keys": ["a"]}
+                assert node_id not in dag.roots
+
+            case "Select":
+                assert len(node.children) == 1
+                assert node.schema == {"a": "STRING", "b": "INT64", "c": "INT64"}
+                assert node.properties == {"columns": ["a", "b", "c"]}
+                assert node_id in dag.roots
+
+            case "Join":
+                assert len(node.children) == 2
+                assert node.schema == {"a": "STRING", "b": "INT64", "c": "INT64"}
+                assert node.properties == {
+                    "how": "Inner",
+                    "left_on": ["a"],
+                    "right_on": ["a"],
+                }
+                assert node_id not in dag.roots
+
+    # smoke test to ensure that the output is JSON serializable
+    json.dumps(dag.to_dict())

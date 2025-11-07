@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from typing import TYPE_CHECKING, Any, ClassVar, Generic, TypeVar
 
 if TYPE_CHECKING:
@@ -80,6 +81,26 @@ class Node(Generic[T]):
         :meth:`__hash__`.
         """
         return (type(self), self._ctor_arguments(self.children))
+
+    def get_stable_id(self) -> int:
+        """
+        Compute a stable identifier for Node.
+
+        Uses MD5 hash of the node's hashable representation for determinism
+        across process boundaries (Python's hash() uses PYTHONHASHSEED).
+
+        Parameters
+        ----------
+        ir_node
+            The IR node.
+
+        Returns
+        -------
+        int
+            A stable 32-bit identifier for this node.
+        """
+        content = repr(self.get_hashable()).encode("utf-8")
+        return int(hashlib.md5(content).hexdigest()[:8], 16)
 
     def __hash__(self) -> int:
         """
