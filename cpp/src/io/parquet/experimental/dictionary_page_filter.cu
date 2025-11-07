@@ -314,7 +314,8 @@ __device__ __forceinline__ T unaligned_load(uint8_t const* page_data,
                                             int32_t value_idx,
                                             int32_t page_size)
 {
-  return (value_idx * sizeof(T) + sizeof(uint32_t) <= page_size)
+  auto const offset = value_idx * sizeof(T);
+  return (offset + sizeof(T) + sizeof(uint32_t) <= page_size)
            ? cudf::io::unaligned_load_unsafe<T>(page_data + (value_idx * sizeof(T)))
            : cudf::io::unaligned_load<T>(page_data + (value_idx * sizeof(T)));
 }
@@ -567,7 +568,7 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
       // Handle durations and other int64 encoded values including decimal64
       else {
         decoded_value = static_cast<T>(
-          cudf::io::unaligned_load<uint64_t>(page_data + (value_idx * sizeof(uint64_t))));
+          unaligned_load<uint64_t>(page_data, value_idx, page.uncompressed_page_size));
       }
       break;
     }
