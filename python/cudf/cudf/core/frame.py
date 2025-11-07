@@ -408,6 +408,11 @@ class Frame(BinaryOperand, Scannable, Serializable):
         """
         raise NotImplementedError
 
+    def __sizeof__(self):
+        if cudf.get_option("mode.pandas_compatible"):
+            return self.memory_usage(deep=True, index=True)
+        return object.__sizeof__(self)
+
     @_performance_tracking
     def __len__(self) -> int:
         return self._num_rows
@@ -1808,9 +1813,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @_performance_tracking
     def min(
         self,
-        axis=0,
-        skipna=True,
-        numeric_only=False,
+        axis: Axis = 0,
+        skipna: bool = True,
+        numeric_only: bool = False,
         **kwargs,
     ):
         """
@@ -1859,9 +1864,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @_performance_tracking
     def max(
         self,
-        axis=0,
-        skipna=True,
-        numeric_only=False,
+        axis: Axis = 0,
+        skipna: bool = True,
+        numeric_only: bool = False,
         **kwargs,
     ):
         """
@@ -1905,7 +1910,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         )
 
     @_performance_tracking
-    def all(self, axis=0, skipna=True, **kwargs):
+    def all(self, axis: Axis = 0, skipna: bool = True, **kwargs):
         """
         Return whether all elements are True in DataFrame.
 
@@ -1958,7 +1963,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         )
 
     @_performance_tracking
-    def any(self, axis=0, skipna=True, **kwargs):
+    def any(self, axis: Axis = 0, skipna: bool = True, **kwargs):
         """
         Return whether any elements is True in DataFrame.
 

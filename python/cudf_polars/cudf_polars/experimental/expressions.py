@@ -46,7 +46,6 @@ from cudf_polars.dsl.ir import IR, Distinct, Empty, HConcat, Select
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
 )
-from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import _get_unique_fractions, _leaf_column_names
@@ -546,6 +545,7 @@ def decompose_expr_graph(
     config_options: ConfigOptions,
     row_count_estimate: ColumnStat[int],
     column_stats: dict[str, ColumnStats],
+    unique_names: Generator[str, None, None],
 ) -> tuple[NamedExpr, IR, MutableMapping[IR, PartitionInfo]]:
     """
     Decompose a NamedExpr into stages.
@@ -566,6 +566,8 @@ def decompose_expr_graph(
         Row-count estimate for the input IR.
     column_stats
         Column statistics for the input IR.
+    unique_names
+        Generator of unique names for temporaries.
 
     Returns
     -------
@@ -590,7 +592,7 @@ def decompose_expr_graph(
             "input_ir": input_ir,
             "input_partition_info": partition_info[input_ir],
             "config_options": config_options,
-            "unique_names": unique_names((named_expr.name, *input_ir.schema.keys())),
+            "unique_names": unique_names,
             "row_count_estimate": row_count_estimate,
             "column_stats": column_stats,
         },
