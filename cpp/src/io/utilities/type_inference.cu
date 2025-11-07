@@ -1,11 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "io/utilities/column_type_histogram.hpp"
-#include "io/utilities/string_parsing.hpp"
-#include "io/utilities/trie.cuh"
+#include "column_type_histogram.hpp"
+#include "parsing_utils.cuh"
+#include "trie.cuh"
 
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
