@@ -156,6 +156,7 @@ jobs:
   wheel-tests-cudf-polars-with-rapidsmpf:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
+    continue-on-error: true
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA" to minimize CI usage.
       # (rapidsmpf compatibility already validated in rapidsmpf CI)
@@ -165,7 +166,6 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       script: "ci/test_cudf_polars_with_rapidsmpf.sh"
-      continue-on-error: true
   cudf-polars-polars-tests:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
