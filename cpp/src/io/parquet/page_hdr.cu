@@ -504,7 +504,11 @@ void __launch_bounds__(decode_page_headers_block_size)
         bs->page.num_nulls                         = 0;
         bs->page.lvl_bytes[level_type::DEFINITION] = 0;
         bs->page.lvl_bytes[level_type::REPETITION] = 0;
-        if (parse_page_header_fn{}(bs) && bs->page.compressed_page_size >= 0) {
+        if (not parse_page_header_fn{}(bs)) {
+          error[warp_id] |= static_cast<int32_t>(decode_error::INVALID_PAGE_HEADER);
+          break;
+        }
+        if (bs->page.compressed_page_size >= 0) {
           if (not is_supported_encoding(bs->page.encoding)) {
             error[warp_id] |= static_cast<int32_t>(decode_error::UNSUPPORTED_ENCODING);
           }
@@ -632,7 +636,12 @@ struct decode_page_headers_with_pgidx_fn {
     bs.page.lvl_bytes[level_type::DEFINITION] = 0;
     bs.page.lvl_bytes[level_type::REPETITION] = 0;
 
-    if (parse_page_header_fn{}(&bs) and bs.page.compressed_page_size >= 0) {
+    if (not parse_page_header_fn{}(&bs)) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::UNSUPPORTED_ENCODING),
+                error_code);
+      return;
+    }
+    if (bs.page.compressed_page_size >= 0) {
       if (not is_supported_encoding(bs.page.encoding)) {
         set_error(static_cast<kernel_error::value_type>(decode_error::UNSUPPORTED_ENCODING),
                   error_code);

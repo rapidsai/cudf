@@ -112,6 +112,7 @@ enum class decode_error : kernel_error::value_type {
   DELTA_PARAM_MISMATCH     = 0x80,
   DELTA_PARAMS_UNSUPPORTED = 0x100,
   INVALID_PAGE_TYPE        = 0x200,
+  INVALID_PAGE_HEADER      = 0x400,
 };
 
 /**
