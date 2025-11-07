@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from cython.operator cimport dereference
 
 from libc.stdint cimport int64_t, uint8_t
@@ -27,6 +28,7 @@ from pylibcudf.libcudf.io.parquet cimport (
     parquet_reader_options,
     read_parquet as cpp_read_parquet,
     write_parquet as cpp_write_parquet,
+    is_supported_read_parquet as cpp_is_supported_read_parquet,
     is_supported_write_parquet as cpp_is_supported_write_parquet,
     parquet_writer_options,
     chunked_parquet_writer as cpp_chunked_parquet_writer,
@@ -53,6 +55,7 @@ __all__ = [
     "ParquetReaderOptionsBuilder",
     "ParquetWriterOptions",
     "ParquetWriterOptionsBuilder",
+    "is_supported_read_parquet",
     "is_supported_write_parquet",
     "merge_row_group_metadata",
     "read_parquet",
@@ -111,14 +114,20 @@ cdef class ParquetReaderOptions:
 
         self.c_obj.set_row_groups(outer)
 
-    cpdef void set_num_rows(self, size_type nrows):
+    cpdef void set_num_rows(self, int64_t nrows):
         """
         Sets number of rows to read.
 
         Parameters
         ----------
-        nrows : size_type
+        nrows : int64_t
             Number of rows to read after skip
+
+        Notes
+        -----
+        Although this allows one to request more than `size_type::max()`
+        rows, if any single read would produce a table larger than this row
+        limit, an error is thrown.
 
         Returns
         -------
@@ -173,6 +182,21 @@ cdef class ParquetReaderOptions:
         None
         """
         self.c_obj.set_filter(<expression &>dereference(filter.c_obj))
+
+    cpdef void set_source(self, SourceInfo src):
+        """
+        Set a new source info location.
+
+        Parameters
+        ----------
+        src : SourceInfo
+            New source information, replacing existing information.
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_source(src.c_obj)
 
 
 cdef class ParquetReaderOptionsBuilder:
@@ -529,7 +553,7 @@ cdef class ChunkedParquetWriterOptionsBuilder:
         self.c_obj.metadata(metadata.c_obj)
         return self
 
-    cpdef ChunkedParquetWriterOptionsBuilder key_value_metadata(self, list metadata):
+    cpdef ChunkedParquetWriterOptionsBuilder key_value_metadata(self, metadata):
         """
         Sets Key-Value footer metadata.
 
@@ -740,7 +764,7 @@ cdef class ParquetWriterOptions:
 
         self.c_obj.set_partitions(c_partions)
 
-    cpdef void set_column_chunks_file_paths(self, list file_paths):
+    cpdef void set_column_chunks_file_paths(self, file_paths):
         """
         Sets column chunks file path to be set in the raw output metadata.
 
@@ -849,7 +873,7 @@ cdef class ParquetWriterOptionsBuilder:
         self.c_obj.metadata(metadata.c_obj)
         return self
 
-    cpdef ParquetWriterOptionsBuilder key_value_metadata(self, list metadata):
+    cpdef ParquetWriterOptionsBuilder key_value_metadata(self, metadata):
         """
         Sets Key-Value footer metadata.
 
@@ -1058,10 +1082,38 @@ cpdef memoryview write_parquet(ParquetWriterOptions options, Stream stream = Non
     return memoryview(HostBuffer.from_unique_ptr(move(c_result)))
 
 
+cpdef bool is_supported_read_parquet(compression_type compression):
+    """Check if the compression type is supported for reading Parquet files.
+
+    For details, see :cpp:func:`is_supported_read_parquet`.
+
+    Parameters
+    ----------
+    compression : CompressionType
+        The compression type to check
+
+    Returns
+    -------
+    bool
+        True if the compression type is supported for reading Parquet files
+    """
+    return cpp_is_supported_read_parquet(compression)
+
+
 cpdef bool is_supported_write_parquet(compression_type compression):
     """Check if the compression type is supported for writing Parquet files.
 
     For details, see :cpp:func:`is_supported_write_parquet`.
+
+    Parameters
+    ----------
+    compression : CompressionType
+        The compression type to check
+
+    Returns
+    -------
+    bool
+        True if the compression type is supported for writing Parquet files
     """
     return cpp_is_supported_write_parquet(compression)
 

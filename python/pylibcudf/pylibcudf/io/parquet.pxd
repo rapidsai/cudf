@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libc.stdint cimport int64_t, uint8_t
 
 from libcpp cimport bool
@@ -42,10 +43,12 @@ cdef class ParquetReaderOptions:
     cdef parquet_reader_options c_obj
     cdef SourceInfo source
     cpdef void set_row_groups(self, list row_groups)
-    cpdef void set_num_rows(self, size_type nrows)
+    cpdef void set_num_rows(self, int64_t nrows)
     cpdef void set_skip_rows(self, int64_t skip_rows)
     cpdef void set_columns(self, list col_names)
     cpdef void set_filter(self, Expression filter)
+    cpdef void set_source(self, SourceInfo src)
+
 
 cdef class ParquetReaderOptionsBuilder:
     cdef parquet_reader_options_builder c_obj
@@ -93,7 +96,7 @@ cdef class ChunkedParquetWriterOptionsBuilder:
 
     cpdef ChunkedParquetWriterOptionsBuilder metadata(self, TableInputMetadata metadata)
 
-    cpdef ChunkedParquetWriterOptionsBuilder key_value_metadata(self, list metadata)
+    cpdef ChunkedParquetWriterOptionsBuilder key_value_metadata(self, metadata)
 
     cpdef ChunkedParquetWriterOptionsBuilder compression(
         self,
@@ -124,7 +127,7 @@ cdef class ParquetWriterOptions:
 
     cpdef void set_partitions(self, list partitions)
 
-    cpdef void set_column_chunks_file_paths(self, list file_paths)
+    cpdef void set_column_chunks_file_paths(self, file_paths)
 
     cpdef void set_row_group_size_bytes(self, size_t size_bytes)
 
@@ -143,7 +146,7 @@ cdef class ParquetWriterOptionsBuilder:
 
     cpdef ParquetWriterOptionsBuilder metadata(self, TableInputMetadata metadata)
 
-    cpdef ParquetWriterOptionsBuilder key_value_metadata(self, list metadata)
+    cpdef ParquetWriterOptionsBuilder key_value_metadata(self, metadata)
 
     cpdef ParquetWriterOptionsBuilder compression(self, compression_type compression)
 
@@ -166,6 +169,8 @@ cdef class ParquetWriterOptionsBuilder:
     cpdef ParquetWriterOptions build(self)
 
 cpdef memoryview write_parquet(ParquetWriterOptions options, Stream stream = *)
+
+cpdef bool is_supported_read_parquet(compression_type compression)
 
 cpdef bool is_supported_write_parquet(compression_type compression)
 

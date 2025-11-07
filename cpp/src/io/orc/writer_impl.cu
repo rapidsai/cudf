@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -2166,8 +2155,7 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
 
   // Create a single bulk storage to use for all sub-dictionaries
   auto map_storage = std::make_unique<storage_type>(
-    total_map_storage_size,
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream});
+    total_map_storage_size, rmm::mr::polymorphic_allocator<char>{}, stream.value());
 
   // Initialize stripe dictionaries
   for (auto col_idx : orc_table.string_column_indices) {
@@ -2239,11 +2227,13 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
       }
     }
   }
-  // Synchronize to ensure the copy is complete before we clear `map_slots`
-  stripe_dicts.host_to_device(stream);
+  stripe_dicts.host_to_device_async(stream);
 
   collect_map_entries(stripe_dicts, stream);
   get_dictionary_indices(stripe_dicts, orc_table.d_columns, stream);
+
+  // synchronize to ensure the copy is complete before we clear `map_slots`
+  stream.synchronize();
 
   // deallocate hash map storage, unused after this point
   map_storage.reset();

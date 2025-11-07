@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -69,6 +70,21 @@ cdef class AvroReaderOptions:
         for name in col_names:
             vec.push_back(str(name).encode())
         self.c_obj.set_columns(vec)
+
+    cpdef void set_source(self, SourceInfo src):
+        """
+        Set a new source info location.
+
+        Parameters
+        ----------
+        src : SourceInfo
+            New source information, replacing existing information.
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_source(src.c_obj)
 
 
 cdef class AvroReaderOptionsBuilder:

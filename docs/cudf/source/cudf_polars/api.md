@@ -7,9 +7,10 @@ For the most part, the public API of `cudf-polars` is the polars API.
 .. automodule:: cudf_polars.utils.config
    :members:
       ConfigOptions,
+      CUDAStreamPolicy,
       InMemoryExecutor,
       ParquetOptions,
-      Scheduler,
+      Cluster,
       ShuffleMethod,
       StatsPlanningOptions,
       StreamingExecutor,

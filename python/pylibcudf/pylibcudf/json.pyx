@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
 from libcpp cimport bool
@@ -18,7 +19,7 @@ from .utils cimport _get_stream, _get_memory_resource
 __all__ = ["GetJsonObjectOptions", "get_json_object"]
 
 cdef class GetJsonObjectOptions:
-    """Settings for ``get_json_object()``"""
+    """Settings for `get_json_object()`"""
     def __init__(
         self,
         *,
@@ -125,7 +126,7 @@ cpdef Column get_json_object(
     """
     Apply a JSONPath string to all rows in an input strings column.
 
-    For details, see :cpp:func:`cudf::get_json_object`
+    For details, see :cpp:func:`get_json_object`
 
     Parameters
     ----------

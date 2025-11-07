@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -29,6 +30,7 @@ if TYPE_CHECKING:
     from cudf._typing import (
         ColumnBinaryOperand,
         DatetimeLikeScalar,
+        DtypeObj,
     )
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.string import StringColumn
@@ -89,11 +91,11 @@ class TimeDeltaColumn(TemporalBaseColumn):
     def __init__(
         self,
         data: Buffer,
-        size: int | None,
+        size: int,
         dtype: np.dtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
+        mask: Buffer | None,
+        offset: int,
+        null_count: int,
         children: tuple = (),
     ):
         if cudf.get_option("mode.pandas_compatible"):
@@ -128,7 +130,9 @@ class TimeDeltaColumn(TemporalBaseColumn):
 
     def __contains__(self, item: DatetimeLikeScalar) -> bool:
         try:
-            item = self._NP_SCALAR(item, self.time_unit)
+            # call-overload must be ignored because numpy stubs only accept literal
+            # time unit strings, but we're passing self.time_unit which is valid at runtime
+            item = self._NP_SCALAR(item, self.time_unit)  # type: ignore[call-overload]
         except ValueError:
             # If item cannot be converted to duration type
             # np.timedelta64 raises ValueError, hence `item`
@@ -221,6 +225,13 @@ class TimeDeltaColumn(TemporalBaseColumn):
             result = result.fillna(op == "__ne__")
         return result
 
+    def _scan(self, op: str) -> ColumnBase:
+        if op == "cumprod":
+            raise TypeError("cumprod not supported for Timedelta.")
+        return self.scan(op.replace("cum", ""), True)._with_type_metadata(
+            self.dtype
+        )
+
     def total_seconds(self) -> ColumnBase:
         conversion = unit_to_nanoseconds_conversion[self.time_unit] / 1e9
         # Typecast to decimal128 to avoid floating point precision issues
@@ -250,7 +261,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
                     )
                 )
 
-    def as_string_column(self, dtype) -> StringColumn:
+    def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         if cudf.get_option("mode.pandas_compatible"):
             if isinstance(dtype, np.dtype) and dtype.kind == "O":
                 raise TypeError(
@@ -265,14 +276,14 @@ class TimeDeltaColumn(TemporalBaseColumn):
 
     def sum(
         self,
-        skipna: bool | None = None,
+        skipna: bool = True,
         min_count: int = 0,
     ) -> pd.Timedelta:
         return self._PD_SCALAR(
             # Since sum isn't overridden in Numerical[Base]Column, mypy only
             # sees the signature from Reducible (which doesn't have the extra
             # parameters from ColumnBase._reduce) so we have to ignore this.
-            self.astype(self._UNDERLYING_DTYPE).sum(  # type: ignore
+            self.astype(self._UNDERLYING_DTYPE).sum(  # type: ignore[call-arg]
                 skipna=skipna, min_count=min_count
             ),
             unit=self.time_unit,

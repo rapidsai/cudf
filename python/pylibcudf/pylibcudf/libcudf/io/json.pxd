@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 cimport pylibcudf.libcudf.io.types as cudf_io_types
 cimport pylibcudf.libcudf.table.table_view as cudf_table_view
 from libc.stdint cimport int32_t, uint8_t
@@ -52,6 +53,7 @@ cdef extern from "cudf/io/json.hpp" namespace "cudf::io" nogil:
         vector[string] get_na_values() except +libcudf_exception_handler
 
         # setter
+        void set_source(cudf_io_types.source_info src) except +libcudf_exception_handler
         void set_dtypes(vector[data_type] types) except +libcudf_exception_handler
         void set_dtypes(map[string, data_type] types) except +libcudf_exception_handler
         void set_dtypes(map[string, schema_element] types)\

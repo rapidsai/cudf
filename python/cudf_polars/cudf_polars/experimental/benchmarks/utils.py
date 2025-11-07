@@ -18,8 +18,10 @@ import sys
 import textwrap
 import time
 import traceback
+import warnings
 from collections import defaultdict
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, assert_never
 
 import nvtx
@@ -29,11 +31,20 @@ import polars as pl
 import rmm.statistics
 
 try:
+    import duckdb
+
+    duckdb_err = None
+except ImportError as e:
+    duckdb = None
+    duckdb_err = e
+
+try:
     import pynvml
 except ImportError:
     pynvml = None
 
 try:
+    from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.dsl.translate import Translator
     from cudf_polars.experimental.explain import explain_query
     from cudf_polars.experimental.parallel import evaluate_streaming
@@ -46,7 +57,6 @@ except ImportError:
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
-    from pathlib import Path
 
 
 try:
@@ -217,7 +227,10 @@ class RunConfig:
     queries: list[int]
     suffix: str
     executor: ExecutorType
-    scheduler: str
+    runtime: str
+    stream_policy: str
+    cluster: str
+    scheduler: str  # Deprecated, kept for backward compatibility
     n_workers: int
     versions: PackageVersions = dataclasses.field(
         default_factory=PackageVersions.collect
@@ -254,10 +267,41 @@ class RunConfig:
     def from_args(cls, args: argparse.Namespace) -> RunConfig:
         """Create a RunConfig from command line arguments."""
         executor: ExecutorType = args.executor
+        cluster = args.cluster
         scheduler = args.scheduler
+        runtime = args.runtime
+        stream_policy = args.stream_policy
 
+        # Handle "auto" stream policy
+        if stream_policy == "auto":
+            # TODO: Use pool by default for rapidsmpf runtime
+            # once stream-ordering bugs are fixed.
+            # See: https://github.com/rapidsai/cudf/issues/20484
+            stream_policy = "default"
+
+        # Deal with deprecated scheduler argument
+        # and non-streaming executors
         if executor == "in-memory" or executor == "cpu":
+            cluster = None
             scheduler = None
+        elif scheduler is not None:
+            if cluster is not None:
+                raise ValueError(
+                    "Cannot specify both -s/--scheduler and -c/--cluster. "
+                    "Please use -c/--cluster only."
+                )
+            else:
+                warnings.warn(
+                    "The -s/--scheduler argument is deprecated. Use -c/--cluster instead.",
+                    FutureWarning,
+                    stacklevel=2,
+                )
+            cluster = "single" if scheduler == "synchronous" else "distributed"
+        elif cluster is not None:
+            scheduler = "synchronous" if cluster == "single" else "distributed"
+        else:
+            cluster = "single"
+            scheduler = "synchronous"
 
         path = args.path
         name = args.query_set
@@ -300,7 +344,10 @@ class RunConfig:
         return cls(
             queries=args.query,
             executor=executor,
+            cluster=cluster,
             scheduler=scheduler,
+            runtime=runtime,
+            stream_policy=stream_policy,
             n_workers=args.n_workers,
             shuffle=args.shuffle,
             gather_shuffle_stats=args.rapidsmpf_dask_statistics,
@@ -340,13 +387,15 @@ class RunConfig:
             print(f"path: {self.dataset_path}")
             print(f"scale_factor: {self.scale_factor}")
             print(f"executor: {self.executor}")
+            print(f"stream_policy: {self.stream_policy}")
             if self.executor == "streaming":
-                print(f"scheduler: {self.scheduler}")
+                print(f"runtime: {self.runtime}")
+                print(f"cluster: {self.cluster}")
                 print(f"blocksize: {self.blocksize}")
                 print(f"shuffle_method: {self.shuffle}")
                 print(f"broadcast_join_limit: {self.broadcast_join_limit}")
                 print(f"stats_planning: {self.stats_planning}")
-                if self.scheduler == "distributed":
+                if self.cluster == "distributed":
                     print(f"n_workers: {self.n_workers}")
                     print(f"threads: {self.threads}")
                     print(f"rmm_async: {self.rmm_async}")
@@ -381,20 +430,25 @@ def get_executor_options(
     """Generate executor_options for GPUEngine."""
     executor_options: dict[str, Any] = {}
 
-    if run_config.blocksize:
-        executor_options["target_partition_size"] = run_config.blocksize
-    if run_config.max_rows_per_partition:
-        executor_options["max_rows_per_partition"] = run_config.max_rows_per_partition
-    if run_config.shuffle:
-        executor_options["shuffle_method"] = run_config.shuffle
-    if run_config.broadcast_join_limit:
-        executor_options["broadcast_join_limit"] = run_config.broadcast_join_limit
-    if run_config.rapidsmpf_spill:
-        executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
-    if run_config.scheduler == "distributed":
-        executor_options["scheduler"] = "distributed"
-    if run_config.stats_planning:
-        executor_options["stats_planning"] = {"use_reduction_planning": True}
+    if run_config.executor == "streaming":
+        if run_config.blocksize:
+            executor_options["target_partition_size"] = run_config.blocksize
+        if run_config.max_rows_per_partition:
+            executor_options["max_rows_per_partition"] = (
+                run_config.max_rows_per_partition
+            )
+        if run_config.shuffle:
+            executor_options["shuffle_method"] = run_config.shuffle
+        if run_config.broadcast_join_limit:
+            executor_options["broadcast_join_limit"] = run_config.broadcast_join_limit
+        if run_config.rapidsmpf_spill:
+            executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
+        if run_config.cluster == "distributed":
+            executor_options["cluster"] = "distributed"
+        if run_config.stats_planning:
+            executor_options["stats_planning"] = {"use_reduction_planning": True}
+        executor_options["client_device_threshold"] = run_config.spill_device
+        executor_options["runtime"] = run_config.runtime
 
     if (
         benchmark
@@ -433,7 +487,7 @@ def print_query_plan(
         if args.explain_logical:
             print(f"\nQuery {q_id} - Logical plan\n")
             print(explain_query(q, engine, physical=False))
-        if args.explain:
+        if args.explain and run_config.executor == "streaming":
             print(f"\nQuery {q_id} - Physical plan\n")
             print(explain_query(q, engine))
     else:
@@ -442,9 +496,9 @@ def print_query_plan(
         )
 
 
-def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  # type: ignore
+def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  # type: ignore[no-untyped-def]
     """Initialize a Dask distributed cluster."""
-    if run_config.scheduler != "distributed":
+    if run_config.cluster != "distributed":
         return None
 
     from dask_cuda import LocalCUDACluster
@@ -515,10 +569,18 @@ def execute_query(
             if args.debug:
                 translator = Translator(q._ldf.visit(), engine)
                 ir = translator.translate_ir()
+                context = IRExecutionContext.from_config_options(
+                    translator.config_options
+                )
                 if run_config.executor == "in-memory":
-                    return ir.evaluate(cache={}, timer=None).to_polars()
+                    return ir.evaluate(
+                        cache={}, timer=None, context=context
+                    ).to_polars()
                 elif run_config.executor == "streaming":
-                    return evaluate_streaming(ir, translator.config_options).to_polars()
+                    return evaluate_streaming(
+                        ir,
+                        translator.config_options,
+                    ).to_polars()
                 assert_never(run_config.executor)
             else:
                 return q.collect(engine=engine)
@@ -606,21 +668,50 @@ def parse_args(
                 - cpu       : Use Polars CPU engine"""),
     )
     parser.add_argument(
+        "-c",
+        "--cluster",
+        default=None,
+        type=str,
+        choices=["single", "distributed"],
+        help=textwrap.dedent("""\
+            Cluster type to use with the 'streaming' executor.
+                - single      : Run locally in a single process
+                - distributed : Use Dask for multi-GPU execution"""),
+    )
+    parser.add_argument(
         "-s",
         "--scheduler",
-        default="synchronous",
+        default=None,
         type=str,
         choices=["synchronous", "distributed"],
         help=textwrap.dedent("""\
+            *Deprecated*: Use --cluster instead.
+
             Scheduler type to use with the 'streaming' executor.
                 - synchronous : Run locally in a single process
                 - distributed : Use Dask for multi-GPU execution"""),
     )
     parser.add_argument(
+        "--runtime",
+        type=str,
+        choices=["tasks", "rapidsmpf"],
+        default="tasks",
+        help="Runtime to use for the streaming executor (tasks or rapidsmpf).",
+    )
+    parser.add_argument(
+        "--stream-policy",
+        type=str,
+        choices=["auto", "default", "new", "pool"],
+        default="auto",
+        help=textwrap.dedent("""\
+            CUDA stream policy (auto, default, new, pool).
+            Default: auto (use the default policy for the runtime)"""),
+    )
+    parser.add_argument(
         "--n-workers",
         default=1,
         type=int,
-        help="Number of Dask-CUDA workers (requires 'distributed' scheduler).",
+        help="Number of Dask-CUDA workers (requires 'distributed' cluster).",
     )
     parser.add_argument(
         "--blocksize",
@@ -694,7 +785,7 @@ def parse_args(
         "--rmm-async",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Use RMM async memory resource. Note: only affects distributed scheduler!",
+        help="Use RMM async memory resource. Note: only affects distributed cluster!",
     )
     parser.add_argument(
         "--rapidsmpf-oom-protection",
@@ -805,7 +896,7 @@ def run_polars(
     validation_failures: list[int] = []
     query_failures: list[tuple[int, int]] = []
 
-    client = initialize_dask_cluster(run_config, args)  # type: ignore
+    client = initialize_dask_cluster(run_config, args)
 
     records: defaultdict[int, list[Record]] = defaultdict(list)
     engine: pl.GPUEngine | None = None
@@ -814,6 +905,10 @@ def run_polars(
         executor_options = get_executor_options(run_config, benchmark=benchmark)
         engine = pl.GPUEngine(
             raise_on_fail=True,
+            memory_resource=rmm.mr.CudaAsyncMemoryResource()
+            if run_config.rmm_async
+            else None,
+            cuda_stream_policy=run_config.stream_policy,
             executor=run_config.executor,
             executor_options=executor_options,
         )
@@ -848,8 +943,8 @@ def run_polars(
                     gather_shuffle_statistics,
                 )
 
-                shuffle_stats = gather_shuffle_statistics(client)  # type: ignore[arg-type]
-                clear_shuffle_statistics(client)  # type: ignore[arg-type]
+                shuffle_stats = gather_shuffle_statistics(client)
+                clear_shuffle_statistics(client)
             else:
                 shuffle_stats = None
 
@@ -873,7 +968,10 @@ def run_polars(
             if args.print_results:
                 print(result)
 
-            print(f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s")
+            print(
+                f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s",
+                flush=True,
+            )
             records[q_id].append(record)
 
     run_config = dataclasses.replace(run_config, records=dict(records))
@@ -959,7 +1057,7 @@ def setup_logging(query_id: int, iteration: int) -> None:  # noqa: D103
     if _HAS_STRUCTLOG:
         # structlog uses contextvars to propagate context down to where log records
         # are emitted. Ideally, we'd just set the contextvars here using
-        # structlog.bind_contextvars; for the distributed scheduler we would need
+        # structlog.bind_contextvars; for the distributed cluster we would need
         # to use something like client.run to set the contextvars on the worker.
         # However, there's an unfortunate conflict between structlog's use of
         # context vars and how Dask Workers actually execute tasks, such that
@@ -1019,3 +1117,187 @@ def setup_logging(query_id: int, iteration: int) -> None:  # noqa: D103
             wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
             cache_logger_on_first_use=True,
         )
+
+
+PDSDS_TABLE_NAMES: list[str] = [
+    "call_center",
+    "catalog_page",
+    "catalog_returns",
+    "catalog_sales",
+    "customer",
+    "customer_address",
+    "customer_demographics",
+    "date_dim",
+    "household_demographics",
+    "income_band",
+    "inventory",
+    "item",
+    "promotion",
+    "reason",
+    "ship_mode",
+    "store",
+    "store_returns",
+    "store_sales",
+    "time_dim",
+    "warehouse",
+    "web_page",
+    "web_returns",
+    "web_sales",
+    "web_site",
+]
+
+PDSH_TABLE_NAMES: list[str] = [
+    "customer",
+    "lineitem",
+    "nation",
+    "orders",
+    "part",
+    "partsupp",
+    "region",
+    "supplier",
+]
+
+
+def execute_duckdb_query(
+    query: str,
+    dataset_path: Path,
+    *,
+    suffix: str = ".parquet",
+    query_set: str = "pdsh",
+) -> pl.DataFrame:
+    """Execute a query with DuckDB."""
+    if duckdb is None:
+        raise ImportError(duckdb_err)
+    if query_set == "pdsds":
+        tbl_names = PDSDS_TABLE_NAMES
+    else:
+        tbl_names = PDSH_TABLE_NAMES
+    with duckdb.connect() as conn:
+        for name in tbl_names:
+            pattern = (Path(dataset_path) / name).as_posix() + suffix
+            conn.execute(
+                f"CREATE OR REPLACE VIEW {name} AS "
+                f"SELECT * FROM parquet_scan('{pattern}');"
+            )
+        return conn.execute(query).pl()
+
+
+def run_duckdb(
+    duckdb_queries_cls: Any, options: Sequence[str] | None = None, *, num_queries: int
+) -> None:
+    """Run the benchmark with DuckDB."""
+    args = parse_args(options, num_queries=num_queries)
+    vars(args).update({"query_set": duckdb_queries_cls.name})
+    run_config = RunConfig.from_args(args)
+    records: defaultdict[int, list[Record]] = defaultdict(list)
+
+    for q_id in run_config.queries:
+        try:
+            get_q = getattr(duckdb_queries_cls, f"q{q_id}")
+        except AttributeError as err:
+            raise NotImplementedError(f"Query {q_id} not implemented.") from err
+
+        sql = get_q(run_config)
+        print(f"DuckDB Executing: {q_id}")
+        records[q_id] = []
+
+        for i in range(args.iterations):
+            t0 = time.time()
+            result = execute_duckdb_query(
+                sql,
+                run_config.dataset_path,
+                suffix=run_config.suffix,
+                query_set=duckdb_queries_cls.name,
+            )
+            t1 = time.time()
+            record = Record(query=q_id, iteration=i, duration=t1 - t0)
+            if args.print_results:
+                print(result)
+            print(f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s")
+            records[q_id].append(record)
+
+    run_config = dataclasses.replace(run_config, records=dict(records))
+    if args.summarize:
+        run_config.summarize()
+
+
+def run_validate(
+    polars_queries_cls: Any,
+    duckdb_queries_cls: Any,
+    options: Sequence[str] | None = None,
+    *,
+    num_queries: int,
+    check_dtypes: bool,
+    check_column_order: bool,
+) -> None:
+    """Validate Polars CPU/GPU vs DuckDB."""
+    from polars.testing import assert_frame_equal
+
+    args = parse_args(options, num_queries=num_queries)
+    vars(args).update({"query_set": polars_queries_cls.name})
+    run_config = RunConfig.from_args(args)
+
+    baseline = args.baseline
+    if baseline not in {"duckdb", "cpu"}:
+        raise ValueError("Baseline must be one of: 'duckdb', 'cpu'")
+
+    failures: list[int] = []
+
+    engine: pl.GPUEngine | None = None
+    if run_config.executor != "cpu":
+        engine = pl.GPUEngine(
+            raise_on_fail=True,
+            executor=run_config.executor,
+            executor_options=get_executor_options(run_config, polars_queries_cls),
+        )
+
+    for q_id in run_config.queries:
+        print(f"\nValidating Query {q_id}")
+        try:
+            get_pl = getattr(polars_queries_cls, f"q{q_id}")
+            get_ddb = getattr(duckdb_queries_cls, f"q{q_id}")
+        except AttributeError as err:
+            raise NotImplementedError(f"Query {q_id} not implemented.") from err
+
+        polars_query = get_pl(run_config)
+        if baseline == "duckdb":
+            base_sql = get_ddb(run_config)
+            base_result = execute_duckdb_query(
+                base_sql,
+                run_config.dataset_path,
+                query_set=duckdb_queries_cls.name,
+            )
+        else:
+            base_result = polars_query.collect(engine="streaming")
+
+        if run_config.executor == "cpu":
+            test_result = polars_query.collect(engine="streaming")
+        else:
+            try:
+                test_result = polars_query.collect(engine=engine)
+            except Exception as e:
+                failures.append(q_id)
+                print(f"❌ Query {q_id} failed validation: GPU execution failed.\n{e}")
+                continue
+
+        try:
+            assert_frame_equal(
+                base_result,
+                test_result,
+                check_dtypes=check_dtypes,
+                check_column_order=check_column_order,
+            )
+            print(f"✅ Query {q_id} passed validation.")
+        except AssertionError as e:
+            failures.append(q_id)
+            print(f"❌ Query {q_id} failed validation:\n{e}")
+            if args.print_results:
+                print("Baseline Result:\n", base_result)
+                print("Test Result:\n", test_result)
+
+    if failures:
+        print("\nValidation Summary:")
+        print("===================")
+        print(f"{len(failures)} query(s) failed: {failures}")
+    else:
+        print("\nAll queries passed validation.")
