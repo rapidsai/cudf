@@ -217,7 +217,7 @@ class StructColumn(ColumnBase):
         # Check IntervalDtype first because it's a subclass of StructDtype
         if isinstance(dtype, IntervalDtype):
             new_children = [
-                child.astype(dtype.subtype).to_pylibcudf(mode="read")
+                child.astype(dtype.subtype).plc_column
                 for child in self.base_children
             ]
             new_plc_column = plc.Column(
@@ -241,7 +241,7 @@ class StructColumn(ColumnBase):
             new_children = [
                 self.base_children[i]
                 ._with_type_metadata(dtype.fields[f])
-                .to_pylibcudf(mode="read")
+                .plc_column
                 for i, f in enumerate(dtype.fields.keys())
             ]
             new_plc_column = plc.Column(
