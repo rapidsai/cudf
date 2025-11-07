@@ -3598,7 +3598,7 @@ class IndexedFrame(Frame):
         else:
             col = as_column(ans_col, retty)
 
-        col.set_base_mask(ans_mask.as_mask())
+        col = col.set_mask(ans_mask.as_mask())
         result = cudf.Series._from_column(
             col, index=self.index, attrs=self.attrs
         )

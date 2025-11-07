@@ -6,7 +6,6 @@
 #include "io/fst/logical_stack.cuh"
 #include "io/fst/lookup_tables.cuh"
 #include "io/utilities/parsing_utils.cuh"
-#include "io/utilities/string_parsing.hpp"
 #include "nested_json.hpp"
 
 #include <cudf/column/column_factories.hpp>
