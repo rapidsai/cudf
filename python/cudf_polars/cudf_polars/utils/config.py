@@ -915,12 +915,13 @@ def _convert_cuda_stream_policy(
                         pool_size=d["pool_size"],
                         flags=CudaStreamFlags(CudaStreamFlags.__members__[d["flags"]]),
                     )
-                case {"pool_size": int()}:
-                    return CUDAStreamPoolConfig(pool_size=d["pool_size"])
                 case _:
-                    raise ValueError(
-                        f"Invalid CUDA stream policy: {user_cuda_stream_policy}"
-                    )
+                    try:
+                        return CUDAStreamPoolConfig(**d)
+                    except TypeError:
+                        raise ValueError(
+                            f"Invalid CUDA stream policy: {user_cuda_stream_policy}"
+                        ) from None
 
 
 @dataclasses.dataclass(frozen=True, eq=True)

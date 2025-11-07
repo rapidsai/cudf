@@ -760,7 +760,7 @@ def test_cuda_stream_policy_from_env(
 
 
 def test_cuda_stream_policy_from_env_invalid(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "{}")
+    monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", '{"foo": "bar"}')
     with pytest.raises(ValueError, match="Invalid CUDA stream policy"):
         ConfigOptions.from_polars_engine(pl.GPUEngine())
 
