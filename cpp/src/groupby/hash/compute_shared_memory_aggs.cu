@@ -30,14 +30,14 @@ CUDF_HOST_DEVICE size_type constexpr ALIGNMENT = 8;
 
 // Allocates shared memory required for output columns. Exits if there is insufficient memory to
 // perform shared memory aggregation for the current output column.
-__device__ void calculate_columns_to_aggregate(size_type& col_start,
-                                               size_type& col_end,
-                                               mutable_table_device_view output_values,
-                                               size_type output_size,
-                                               size_type* shmem_agg_res_offsets,
-                                               size_type* shmem_agg_mask_offsets,
-                                               size_type cardinality,
-                                               size_type total_agg_size)
+__device__ void setup_shmem_buffers(size_type& col_start,
+                                    size_type& col_end,
+                                    mutable_table_device_view output_values,
+                                    size_type output_size,
+                                    size_type* shmem_agg_res_offsets,
+                                    size_type* shmem_agg_mask_offsets,
+                                    size_type cardinality,
+                                    size_type total_agg_size)
 {
   col_start                 = col_end;
   size_type bytes_allocated = 0;
@@ -88,53 +88,56 @@ __device__ void initialize_shmem_aggregations(cooperative_groups::thread_block c
   }
 }
 
-__device__ void compute_pre_aggregations(size_type col_start,
-                                         size_type col_end,
-                                         bitmask_type const* row_bitmask,
-                                         table_device_view source,
-                                         size_type num_input_rows,
-                                         size_type const* local_mapping_index,
-                                         cuda::std::byte* shmem_agg_storage,
-                                         size_type const* shmem_agg_res_offsets,
-                                         size_type const* shmem_agg_mask_offsets,
-                                         aggregation::Kind const* d_agg_kinds,
-                                         size_type agg_location_offset)
+__device__ void aggregate_to_shmem(cooperative_groups::thread_block const& block,
+                                   size_type row_start,
+                                   size_type row_end,
+                                   size_type col_start,
+                                   size_type col_end,
+                                   bitmask_type const* row_bitmask,
+                                   table_device_view source,
+                                   size_type num_input_rows,
+                                   size_type const* local_mapping_index,
+                                   cuda::std::byte* shmem_agg_storage,
+                                   size_type const* shmem_agg_res_offsets,
+                                   size_type const* shmem_agg_mask_offsets,
+                                   aggregation::Kind const* d_agg_kinds,
+                                   size_type agg_location_offset)
 {
   // Aggregates global memory sources to shared memory targets
-  for (auto source_idx = cudf::detail::grid_1d::global_thread_id(); source_idx < num_input_rows;
+  for (auto source_idx = block.thread_rank() + row_start; source_idx < row_end;
        source_idx += cudf::detail::grid_1d::grid_stride()) {
-    if (!row_bitmask || bit_is_set(row_bitmask, source_idx)) {
-      auto const target_idx = local_mapping_index[source_idx] + agg_location_offset;
-      for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
-        auto const source_col = source.column(col_idx);
-        auto const target     = shmem_agg_storage + shmem_agg_res_offsets[col_idx];
-        auto const target_mask =
-          reinterpret_cast<bool*>(shmem_agg_storage + shmem_agg_mask_offsets[col_idx]);
-        cudf::detail::dispatch_type_and_aggregation(source_col.type(),
-                                                    d_agg_kinds[col_idx],
-                                                    shmem_element_aggregator{},
-                                                    target,
-                                                    target_mask,
-                                                    target_idx,
-                                                    source_col,
-                                                    source_idx);
-      }
+    if (row_bitmask && !bit_is_set(row_bitmask, source_idx)) { continue; }
+
+    auto const target_idx = local_mapping_index[source_idx] + agg_location_offset;
+    for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
+      auto const source_col = source.column(col_idx);
+      auto const target     = shmem_agg_storage + shmem_agg_res_offsets[col_idx];
+      auto const target_mask =
+        reinterpret_cast<bool*>(shmem_agg_storage + shmem_agg_mask_offsets[col_idx]);
+      cudf::detail::dispatch_type_and_aggregation(source_col.type(),
+                                                  d_agg_kinds[col_idx],
+                                                  shmem_element_aggregator{},
+                                                  target,
+                                                  target_mask,
+                                                  target_idx,
+                                                  source_col,
+                                                  source_idx);
     }
   }
 }
 
-__device__ void compute_final_aggregations(cooperative_groups::thread_block const& block,
-                                           size_type col_start,
-                                           size_type col_end,
-                                           table_device_view input_values,
-                                           mutable_table_device_view target,
-                                           size_type cardinality,
-                                           size_type num_agg_locations,
-                                           size_type const* global_mapping_index,
-                                           cuda::std::byte* shmem_agg_storage,
-                                           size_type const* agg_res_offsets,
-                                           size_type const* agg_mask_offsets,
-                                           aggregation::Kind const* d_agg_kinds)
+__device__ void update_aggs_shmem_to_gmem(cooperative_groups::thread_block const& block,
+                                          size_type col_start,
+                                          size_type col_end,
+                                          table_device_view input_values,
+                                          mutable_table_device_view target,
+                                          size_type cardinality,
+                                          size_type num_agg_locations,
+                                          size_type const* global_mapping_index,
+                                          cuda::std::byte* shmem_agg_storage,
+                                          size_type const* agg_res_offsets,
+                                          size_type const* agg_mask_offsets,
+                                          aggregation::Kind const* d_agg_kinds)
 {
   // Aggregates shared memory sources to global memory targets
   for (auto idx = block.thread_rank(); idx < num_agg_locations; idx += block.num_threads()) {
@@ -163,7 +166,7 @@ __device__ void compute_final_aggregations(cooperative_groups::thread_block cons
  * pre (shared) and final (global) aggregates*/
 CUDF_KERNEL void single_pass_shmem_aggs_kernel(size_type num_rows,
                                                bitmask_type const* row_bitmask,
-                                               size_type const* block_stride_ends,
+                                               size_type const* block_row_ends,
                                                size_type const* local_mapping_index,
                                                size_type const* global_mapping_index,
                                                size_type const* block_cardinality,
@@ -173,18 +176,6 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(size_type num_rows,
                                                size_type total_agg_size,
                                                size_type offsets_size)
 {
-  auto const block       = cooperative_groups::this_thread_block();
-  auto const cardinality = block_cardinality[block.group_index().x];
-  if (cardinality >= GROUPBY_CARDINALITY_THRESHOLD or cardinality == 0) { return; }
-
-  auto constexpr min_shmem_agg_locations = 32;
-  auto const multiplication_factor       = min_shmem_agg_locations / cardinality;
-  auto const num_agg_locations           = cuda::std::max(multiplication_factor, 1) * cardinality;
-  auto const agg_location_offset =
-    multiplication_factor > 1 ? (block.thread_rank() % multiplication_factor) * cardinality : 0;
-
-  auto const num_cols = output_values.num_columns();
-
   __shared__ size_type col_start;
   __shared__ size_type col_end;
   extern __shared__ cuda::std::byte shmem_agg_storage[];
@@ -194,64 +185,90 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(size_type num_rows,
   auto const shmem_agg_mask_offsets =
     reinterpret_cast<size_type*>(shmem_agg_storage + total_agg_size + offsets_size);
 
-  if (block.thread_rank() == 0) {
-    col_start = 0;
-    col_end   = 0;
-  }
-  block.sync();
+  auto const stride = cudf::detail::grid_1d::grid_stride();
+  auto const num_total_strides =
+    util::div_rounding_up_safe(num_rows, static_cast<size_type>(stride));
+  auto const block = cooperative_groups::this_thread_block();
 
-  while (col_end < num_cols) {
-    block.sync();
+  auto iter      = 0;
+  auto row_start = 0;
+  auto row_end   = block_row_ends[iter];
+
+  while (row_end <= num_rows) {
+    auto const block_data_idx              = block.group_index().x * num_total_strides + iter;
+    auto const cardinality                 = block_cardinality[block_data_idx];
+    auto constexpr min_shmem_agg_locations = 32;
+    auto const multiplication_factor       = min_shmem_agg_locations / cardinality;
+    auto const num_agg_locations           = cuda::std::max(multiplication_factor, 1) * cardinality;
+    auto const agg_location_offset =
+      multiplication_factor > 1 ? (block.thread_rank() % multiplication_factor) * cardinality : 0;
+
     if (block.thread_rank() == 0) {
-      calculate_columns_to_aggregate(col_start,
-                                     col_end,
-                                     output_values,
-                                     num_cols,
-                                     shmem_agg_res_offsets,
-                                     shmem_agg_mask_offsets,
-                                     num_agg_locations,
-                                     total_agg_size);
+      col_start = 0;
+      col_end   = 0;
     }
     block.sync();
 
-    initialize_shmem_aggregations(block,
-                                  col_start,
-                                  col_end,
-                                  output_values,
-                                  shmem_agg_storage,
-                                  shmem_agg_res_offsets,
-                                  shmem_agg_mask_offsets,
-                                  num_agg_locations,
-                                  d_agg_kinds);
-    block.sync();
+    auto const num_cols = output_values.num_columns();
+    while (col_end < num_cols) {
+      if (block.thread_rank() == 0) {
+        setup_shmem_buffers(col_start,
+                            col_end,
+                            output_values,
+                            num_cols,
+                            shmem_agg_res_offsets,
+                            shmem_agg_mask_offsets,
+                            num_agg_locations,
+                            total_agg_size);
+      }
+      block.sync();
 
-    compute_pre_aggregations(col_start,
-                             col_end,
-                             row_bitmask,
-                             input_values,
-                             num_rows,
-                             local_mapping_index,
-                             shmem_agg_storage,
-                             shmem_agg_res_offsets,
-                             shmem_agg_mask_offsets,
-                             d_agg_kinds,
-                             agg_location_offset);
-    block.sync();
+      initialize_shmem_aggregations(block,
+                                    col_start,
+                                    col_end,
+                                    output_values,
+                                    shmem_agg_storage,
+                                    shmem_agg_res_offsets,
+                                    shmem_agg_mask_offsets,
+                                    num_agg_locations,
+                                    d_agg_kinds);
+      block.sync();
 
-    compute_final_aggregations(block,
-                               col_start,
-                               col_end,
-                               input_values,
-                               output_values,
-                               cardinality,
-                               num_agg_locations,
-                               global_mapping_index,
-                               shmem_agg_storage,
-                               shmem_agg_res_offsets,
-                               shmem_agg_mask_offsets,
-                               d_agg_kinds);
-  }
+      aggregate_to_shmem(block,
+                         row_start,
+                         row_end,
+                         col_start,
+                         col_end,
+                         row_bitmask,
+                         input_values,
+                         num_rows,
+                         local_mapping_index,
+                         shmem_agg_storage,
+                         shmem_agg_res_offsets,
+                         shmem_agg_mask_offsets,
+                         d_agg_kinds,
+                         agg_location_offset);
+      block.sync();
+
+      update_aggs_shmem_to_gmem(block,
+                                col_start,
+                                col_end,
+                                input_values,
+                                output_values,
+                                cardinality,
+                                num_agg_locations,
+                                global_mapping_index,
+                                shmem_agg_storage,
+                                shmem_agg_res_offsets,
+                                shmem_agg_mask_offsets,
+                                d_agg_kinds);
+      block.sync();
+    }  // while (col_end < num_cols)
+    row_start = row_end;
+    row_end   = block_row_ends[++iter];
+  }  // while (row_end <= num_rows)
 }
+
 }  // namespace
 
 size_type get_available_shared_memory_size(size_type grid_size)
@@ -277,7 +294,7 @@ void compute_shared_memory_aggs(size_type grid_size,
                                 size_type available_shmem_size,
                                 size_type num_input_rows,
                                 bitmask_type const* row_bitmask,
-                                size_type const* block_stride_ends,
+                                size_type const* block_row_ends,
                                 size_type const* local_mapping_index,
                                 size_type const* global_mapping_index,
                                 size_type const* block_cardinality,
@@ -296,7 +313,7 @@ void compute_shared_memory_aggs(size_type grid_size,
   single_pass_shmem_aggs_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, available_shmem_size, stream>>>(
     num_input_rows,
     row_bitmask,
-    block_stride_ends,
+    block_row_ends,
     local_mapping_index,
     global_mapping_index,
     block_cardinality,

@@ -18,8 +18,6 @@
 #include <cuco/static_set_ref.cuh>
 #include <cuda/std/atomic>
 
-#include <algorithm>
-
 namespace cudf::groupby::detail::hash {
 template <typename SetType>
 __device__ void find_local_mapping(cooperative_groups::thread_block const& block,
@@ -79,7 +77,7 @@ template <class SetRef>
 CUDF_KERNEL void mapping_indices_kernel(size_type num_input_rows,
                                         SetRef global_set,
                                         bitmask_type const* row_bitmask,
-                                        size_type* block_stride_ends,
+                                        size_type* block_row_ends,
                                         size_type* local_mapping_indices,
                                         size_type* global_mapping_indices,
                                         size_type* block_cardinality)
@@ -136,7 +134,7 @@ CUDF_KERNEL void mapping_indices_kernel(size_type num_input_rows,
       if (block.thread_rank() == 0) {
         auto const block_data_idx         = block.group_index().x * num_total_strides + n_resets;
         block_cardinality[block_data_idx] = cardinality;
-        block_stride_ends[block_data_idx] = n_strides;
+        block_row_ends[block_data_idx]    = n_strides * stride;
         cardinality                       = 0;
       }
       ++n_resets;
@@ -159,7 +157,7 @@ void compute_mapping_indices(size_type grid_size,
                              size_type num_rows,
                              SetRef global_set,
                              bitmask_type const* row_bitmask,
-                             size_type* block_stride_ends,
+                             size_type* block_row_ends,
                              size_type* local_mapping_indices,
                              size_type* global_mapping_indices,
                              size_type* block_cardinality,
@@ -168,7 +166,7 @@ void compute_mapping_indices(size_type grid_size,
   mapping_indices_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, 0, stream>>>(num_rows,
                                                                        global_set,
                                                                        row_bitmask,
-                                                                       block_stride_ends,
+                                                                       block_row_ends,
                                                                        local_mapping_indices,
                                                                        global_mapping_indices,
                                                                        block_cardinality);
