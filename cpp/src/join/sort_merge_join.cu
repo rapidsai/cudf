@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "cudf/detail/utilities/vector_factories.hpp"
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
@@ -17,6 +18,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/iterator>
@@ -30,6 +32,7 @@
 #include <thrust/uninitialized_fill.h>
 #include <thrust/unique.h>
 
+#include <memory>
 #include <utility>
 
 namespace cudf {
@@ -245,6 +248,25 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
                   match_counts->begin(),
                   nonzero_matches.begin(),
                   cuda::std::identity{});
+  std::cout << "count_matches = " << count_matches << std::endl;
+
+#if 0
+  {
+  std::cout << "count_matches = " << count_matches << std::endl;
+  auto h_nonzero_matches = cudf::detail::make_std_vector(nonzero_matches, stream);
+  std::cout << "h_nonzero_matches = ";
+  for(auto e : h_nonzero_matches) {
+    std::cout << e << " ";
+  }
+  std::cout << std::endl;
+  auto h_match_counts = cudf::detail::make_std_vector(*match_counts, stream);
+  std::cout << "h_match_counts = ";
+  for(auto e : h_match_counts) {
+    std::cout << e << " ";
+  }
+  std::cout << std::endl;
+  }
+#endif
 
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          match_counts->begin(),
@@ -252,9 +274,21 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
                          match_counts->begin());
   auto const total_matches = match_counts->back_element(stream);
 
+#if 0
+  {
+  std::cout << "total_matches = " << total_matches << std::endl;
+  auto h_match_counts = cudf::detail::make_std_vector(*match_counts, stream);
+  std::cout << "h_match_counts = ";
+  for(auto e : h_match_counts) {
+    std::cout << e << " ";
+  }
+  std::cout << std::endl;
+  }
+#endif
+
   // populate larger indices
   auto larger_indices =
-    cudf::detail::make_zeroed_device_uvector_async<size_type>(total_matches, stream, mr);
+    cudf::detail::make_zeroed_device_uvector<size_type>(total_matches, stream, mr);
   thrust::scatter(rmm::exec_policy_nosync(stream),
                   nonzero_matches.begin(),
                   nonzero_matches.end(),
