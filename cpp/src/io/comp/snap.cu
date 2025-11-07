@@ -158,8 +158,12 @@ static __device__ uint32_t FindFourByteMatch(snap_state_s* s,
   uint32_t match_mask, literal_cnt;
   if (t == 0) { s->copy_length = 0; }
   do {
-    bool valid4               = (pos + t + 4 <= len);
-    uint32_t data32           = (valid4) ? cudf::io::unaligned_load<uint32_t>(src + pos + t) : 0;
+    bool const valid4         = (pos + t + sizeof(uint32_t) <= len);
+    bool const valid4plus1    = (pos + t + 2 * sizeof(uint32_t) <= len);
+    uint32_t data32           = (valid4) ? (valid4plus1)
+                                             ? cudf::io::unaligned_load_unsafe<uint32_t>(src + pos + t)
+                                             : cudf::io::unaligned_load<uint32_t>(src + pos + t)
+                                         : 0;
     uint32_t hash             = (valid4) ? snap_hash(data32) : 0;
     uint32_t local_match      = HashMatchAny(hash, t);
     uint32_t local_match_lane = 31 - __clz(local_match & ((1 << t) - 1));

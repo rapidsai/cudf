@@ -182,7 +182,8 @@ avro_decode_row(schemadesc_s const* schema,
         if (dataptr != nullptr && dst_row >= 0) {
           uint32_t v;
           if (cur + 3 < end) {
-            v = unaligned_load<uint32_t>(cur);
+            v = (cur + 7 < end) ? cudf::io::unaligned_load_unsafe<uint32_t>(cur)
+                                : cudf::io::unaligned_load<uint32_t>(cur);
             cur += 4;
           } else {
             v = 0;
@@ -198,7 +199,8 @@ avro_decode_row(schemadesc_s const* schema,
         if (dataptr != nullptr && dst_row >= 0) {
           uint64_t v;
           if (cur + 7 < end) {
-            v = unaligned_load<uint64_t>(cur);
+            v = (cur + 11 < end) ? cudf::io::unaligned_load_unsafe<uint64_t>(cur)
+                                 : cudf::io::unaligned_load<uint64_t>(cur);
             cur += 8;
           } else {
             v = 0;

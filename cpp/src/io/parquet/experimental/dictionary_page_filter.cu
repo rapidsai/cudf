@@ -83,9 +83,9 @@ using hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<T>;
 
 /// cuco::static_set_ref storage type
 using storage_type     = cuco::bucket_storage<slot_type,
-                                              BUCKET_SIZE,
-                                              cuco::extent<std::size_t>,
-                                              rmm::mr::polymorphic_allocator<char>>;
+                                          BUCKET_SIZE,
+                                          cuco::extent<std::size_t>,
+                                          rmm::mr::polymorphic_allocator<char>>;
 using storage_ref_type = typename storage_type::ref_type;
 
 /**
@@ -302,6 +302,24 @@ __device__ __forceinline__ int64_t convert_to_timestamp64(int64_t const value,
 }
 
 /**
+ * @brief Helper function to unalign load a value from a page data buffer
+ *
+ * @param page_data Pointer to the page data buffer
+ * @param value_idx Index of the value to load
+ * @param page_size Size of the page data buffer
+ * @return Loaded value
+ */
+template <typename T>
+__device__ __forceinline__ T unaligned_load(uint8_t const* page_data,
+                                            int32_t value_idx,
+                                            int32_t page_size)
+{
+  return (value_idx * sizeof(T) + sizeof(uint32_t)) <= page_size
+           ? cudf::io::unaligned_load_unsafe<T>(page_data + (value_idx * sizeof(T)))
+           : cudf::io::unaligned_load<T>(page_data + (value_idx * sizeof(T)));
+}
+
+/**
  * @brief Query `cuco::static_set`s to evaluate (many) input (in)equality predicates
  *
  * @tparam Supported underlying data type of the cudf column
@@ -489,7 +507,7 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
       // Handle timestamps
       if constexpr (cudf::is_timestamp<T>()) {
         auto const timestamp =
-          cudf::io::unaligned_load<uint32_t>(page_data + (value_idx * sizeof(uint32_t)));
+          unaligned_load<uint32_t>(page_data, value_idx, page.uncompressed_page_size);
         if (timestamp_scale != 0) {
           decoded_value = T{typename T::duration(static_cast<typename T::rep>(timestamp))};
         } else {
@@ -513,7 +531,7 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
         }
 
         auto const duration =
-          cudf::io::unaligned_load<uint32_t>(page_data + (value_idx * sizeof(uint32_t)));
+          unaligned_load<uint32_t>(page_data, value_idx, page.uncompressed_page_size);
         decoded_value = T{static_cast<typename T::rep>(duration)};
       }
       // Handle other int32 encoded values including smaller bitwidths and decimal32
@@ -524,7 +542,7 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
           return {};
         }
         decoded_value = static_cast<T>(
-          cudf::io::unaligned_load<uint32_t>(page_data + (value_idx * sizeof(uint32_t))));
+          unaligned_load<uint32_t>(page_data, value_idx, page.uncompressed_page_size));
       }
       break;
     }
@@ -538,7 +556,7 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
       // Handle timestamps
       if constexpr (cudf::is_timestamp<T>()) {
         int64_t const timestamp =
-          cudf::io::unaligned_load<uint64_t>(page_data + (value_idx * sizeof(int64_t)));
+          unaligned_load<uint64_t>(page_data, value_idx, page.uncompressed_page_size);
         if (timestamp_scale != 0) {
           decoded_value = T{typename T::duration(
             static_cast<typename T::rep>(convert_to_timestamp64(timestamp, timestamp_scale)))};

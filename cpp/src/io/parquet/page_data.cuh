@@ -64,8 +64,10 @@ inline __device__ void gpuStoreOutput(uint32_t* dst,
                                       uint32_t dict_pos,
                                       uint32_t dict_size)
 {
-  if (dict_pos < dict_size) {
-    *dst = cudf::io::unaligned_load<uint32_t>(src8 + dict_pos);
+  if (dict_pos + sizeof(uint32_t) <= dict_size) {
+    *dst = (dict_pos + 2 * sizeof(uint32_t) <= dict_size)
+             ? cudf::io::unaligned_load_unsafe<uint32_t>(src8 + dict_pos)
+             : cudf::io::unaligned_load<uint32_t>(src8 + dict_pos);
   } else {
     *dst = 0;
   }
@@ -84,22 +86,15 @@ inline __device__ void gpuStoreOutput(uint2* dst,
                                       uint32_t dict_pos,
                                       uint32_t dict_size)
 {
-  uint2 v;
-  unsigned int ofs = 3 & reinterpret_cast<size_t>(src8);
-  src8 -= ofs;  // align to 32-bit boundary
-  ofs <<= 3;    // bytes -> bits
-  if (dict_pos < dict_size) {
-    v.x = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 0);
-    v.y = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 4);
-    if (ofs) {
-      uint32_t next = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 8);
-      v.x           = __funnelshift_r(v.x, v.y, ofs);
-      v.y           = __funnelshift_r(v.y, next, ofs);
-    }
-  } else {
-    v.x = v.y = 0;
+  uint2 value{.x = 0, .y = 0};
+  if (dict_pos + sizeof(uint64_t) <= dict_size) {
+    auto const bytebuf = (dict_pos + sizeof(uint64_t) + sizeof(uint32_t) <= dict_size)
+                           ? cudf::io::unaligned_load_unsafe<uint64_t>(src8 + dict_pos)
+                           : cudf::io::unaligned_load<uint64_t>(src8 + dict_pos);
+    value.x            = reinterpret_cast<uint32_t const*>(&bytebuf)[0];
+    value.y            = reinterpret_cast<uint32_t const*>(&bytebuf)[1];
   }
-  *dst = v;
+  *dst = value;
 }
 
 /**
@@ -119,7 +114,7 @@ inline __device__ void read_int96_timestamp(page_state_s* s,
   using cuda::std::chrono::duration_cast;
 
   uint8_t const* src8;
-  uint32_t dict_pos, dict_size = s->dict_size, ofs;
+  uint32_t dict_pos, dict_size = s->dict_size;
 
   if (s->dict_base) {
     // Dictionary
@@ -132,31 +127,20 @@ inline __device__ void read_int96_timestamp(page_state_s* s,
     src8     = s->data_start;
   }
   dict_pos *= (uint32_t)s->dtype_len_in;
-  ofs = 3 & reinterpret_cast<size_t>(src8);
-  src8 -= ofs;  // align to 32-bit boundary
-  ofs <<= 3;    // bytes -> bits
 
   if (dict_pos + 4 >= dict_size) {
     *dst = 0;
     return;
   }
 
-  uint3 v;
-  int64_t nanos, days;
-  v.x = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 0);
-  v.y = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 4);
-  v.z = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 8);
-  if (ofs) {
-    uint32_t next = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 12);
-    v.x           = __funnelshift_r(v.x, v.y, ofs);
-    v.y           = __funnelshift_r(v.y, v.z, ofs);
-    v.z           = __funnelshift_r(v.z, next, ofs);
-  }
-  nanos = v.y;
-  nanos <<= 32;
+  uint3 const v = (dict_pos + sizeof(uint3) + sizeof(uint32_t) <= dict_size)
+                    ? cudf::io::unaligned_load_unsafe<uint3>(src8 + dict_pos)
+                    : cudf::io::unaligned_load<uint3>(src8 + dict_pos);
+  int64_t nanos = v.y;
+  nanos <<= cudf::detail::size_in_bits<int32_t>();
   nanos |= v.x;
   // Convert from Julian day at noon to UTC seconds
-  days = static_cast<int32_t>(v.z);
+  int64_t const days = static_cast<int32_t>(v.z);
   cudf::duration_D d_d{
     days - 2440588};  // TBD: Should be noon instead of midnight, but this matches pyarrow
 
@@ -192,7 +176,7 @@ inline __device__ void read_int64_timestamp(page_state_s* s,
                                             int64_t* dst)
 {
   uint8_t const* src8;
-  uint32_t dict_pos, dict_size = s->dict_size, ofs;
+  uint32_t dict_pos, dict_size = s->dict_size;
   int64_t ts;
 
   if (s->dict_base) {
@@ -206,25 +190,13 @@ inline __device__ void read_int64_timestamp(page_state_s* s,
     src8     = s->data_start;
   }
   dict_pos *= (uint32_t)s->dtype_len_in;
-  ofs = 3 & reinterpret_cast<size_t>(src8);
-  src8 -= ofs;  // align to 32-bit boundary
-  ofs <<= 3;    // bytes -> bits
-  if (dict_pos + 4 < dict_size) {
-    uint2 v;
-    int64_t val;
-    int32_t ts_scale;
-    v.x = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 0);
-    v.y = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 4);
-    if (ofs) {
-      uint32_t next = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 8);
-      v.x           = __funnelshift_r(v.x, v.y, ofs);
-      v.y           = __funnelshift_r(v.y, next, ofs);
-    }
-    val = v.y;
-    val <<= 32;
-    val |= v.x;
+
+  if (dict_pos + sizeof(int64_t) <= dict_size) {
+    int64_t const val = (dict_pos + sizeof(int64_t) + sizeof(uint32_t) <= dict_size)
+                          ? cudf::io::unaligned_load_unsafe<uint64_t>(src8 + dict_pos)
+                          : cudf::io::unaligned_load<uint64_t>(src8 + dict_pos);
     // Output to desired clock rate
-    ts_scale = s->ts_scale;
+    int32_t ts_scale = s->ts_scale;
     if (ts_scale < 0) {
       // round towards negative infinity
       int sign = (val < 0);

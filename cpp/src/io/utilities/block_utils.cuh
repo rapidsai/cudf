@@ -58,7 +58,42 @@ inline __device__ T warp_reduce_pos(T pos, uint32_t t)
 }
 
 template <typename T>
-  requires(cuda::std::is_integral_v<T>)
+  requires(cuda::std::is_same_v<T, uint32_t> or cuda::std::is_same_v<T, uint64_t> or
+           cuda::std::is_same_v<T, uint3>)
+inline __device__ T unaligned_load_unsafe(uint8_t const* p)
+{
+  uint32_t const offset     = 3 & reinterpret_cast<uintptr_t>(p);
+  uint32_t const shift_bits = offset << 3;
+  auto const* p32           = reinterpret_cast<uint32_t const*>(p - offset);
+  if constexpr (cuda::std::is_same_v<T, uint32_t>) {
+    auto const v0 = p32[0];
+    return (offset) ? __funnelshift_r(v0, p32[1], shift_bits) : v0;
+  } else if constexpr (cuda::std::is_same_v<T, uint64_t>) {
+    auto v0 = p32[0];
+    auto v1 = p32[1];
+    if (offset) {
+      auto const next = p32[2];
+      v0              = __funnelshift_r(v0, v1, shift_bits);
+      v1              = __funnelshift_r(v1, next, shift_bits);
+    }
+    return (((uint64_t)v1) << 32) | v0;
+  } else if constexpr (cuda::std::is_same_v<T, uint3>) {
+    uint3 value{.x = 0, .y = 0, .z = 0};
+    value.x = p32[0];
+    value.y = p32[1];
+    value.z = p32[2];
+    if (offset) {
+      auto const next = p32[3];
+      value.x         = __funnelshift_r(value.x, value.y, shift_bits);
+      value.y         = __funnelshift_r(value.y, value.z, shift_bits);
+      value.z         = __funnelshift_r(value.z, next, shift_bits);
+    }
+    return value;
+  }
+}
+
+template <typename T>
+  requires(cuda::std::is_integral_v<T> or cuda::std::is_same_v<T, uint3>)
 inline __device__ T unaligned_load(uint8_t const* p)
 {
   T value;
