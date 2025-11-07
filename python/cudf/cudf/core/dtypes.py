@@ -105,7 +105,7 @@ def dtype(arbitrary: Any) -> DtypeObj:
         else:
             return dtype(pd_dtype.numpy_dtype)  # type: ignore[attr-defined]
     elif isinstance(pd_dtype, PANDAS_NUMPY_DTYPE):
-        return dtype(pd_dtype.numpy_dtype)  # type: ignore[attr-defined]
+        return dtype(pd_dtype.numpy_dtype)
     elif isinstance(pd_dtype, pd.CategoricalDtype):
         return CategoricalDtype(pd_dtype.categories, pd_dtype.ordered)
     elif isinstance(pd_dtype, pd.IntervalDtype):
@@ -758,7 +758,7 @@ class StructDtype(_BaseDtype):
                 raise TypeError(
                     f"Expected StructType, got {type(obj.pyarrow_dtype).__name__}"
                 )
-            return cls.from_arrow(obj.pyarrow_dtype)  # type: ignore[arg-type]
+            return cls.from_arrow(obj.pyarrow_dtype)
         else:
             raise TypeError(f"Cannot convert {type(obj)} to StructDtype")
 
@@ -902,10 +902,10 @@ class DecimalDtype(_BaseDtype):
 
     @classmethod
     def _validate(cls, precision: int, scale: int) -> None:
-        if precision > cls.MAX_PRECISION:  # type: ignore[attr-defined]
+        if precision > cls.MAX_PRECISION:
             raise ValueError(
                 f"Cannot construct a {cls.__name__}"
-                f" with precision > {cls.MAX_PRECISION}"  # type: ignore[attr-defined]
+                f" with precision > {cls.MAX_PRECISION}"
             )
         if abs(scale) > precision:
             raise ValueError(f"{scale=} cannot exceed {precision=}")

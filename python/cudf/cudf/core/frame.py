@@ -650,7 +650,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                             )
                         else:
                             to_dtype = np.dtype("object")
-                    elif to_dtype.kind in "ui":  # type: ignore[union-attr]
+                    elif to_dtype.kind in "ui":
                         to_dtype = np.dtype("float64")
 
             if cudf.get_option(

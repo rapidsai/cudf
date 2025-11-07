@@ -243,7 +243,7 @@ class CategoricalColumn(column.ColumnBase):
     def _reduce(
         self,
         op: str,
-        skipna: bool = True,
+        skipna: bool = True,  # type: ignore[override]
         min_count: int = 0,
         *args,
         **kwargs,
@@ -347,7 +347,7 @@ class CategoricalColumn(column.ColumnBase):
         data = pd.Categorical.from_codes(
             codes,  # type: ignore[arg-type]
             categories=cats.to_pandas(),
-            ordered=col.ordered,  # type: ignore[arg-type]
+            ordered=col.ordered,
         )
         return pd.Index(data)
 
@@ -877,7 +877,7 @@ class CategoricalColumn(column.ColumnBase):
             [old_categories.dtype, new_categories.dtype]
         )
 
-        new_categories = new_categories.astype(common_dtype)  # type: ignore[arg-type]
+        new_categories = new_categories.astype(common_dtype)
         old_categories = old_categories.astype(common_dtype)  # type: ignore[arg-type]
 
         if old_categories.isin(new_categories).any():

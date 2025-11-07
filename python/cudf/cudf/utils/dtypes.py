@@ -249,7 +249,7 @@ def is_mixed_with_object_dtype(lhs, rhs):
     )
 
 
-def _get_nan_for_dtype(dtype: DtypeObj) -> np.generic:  # type: ignore[return]
+def _get_nan_for_dtype(dtype: DtypeObj) -> np.generic:
     """Return the appropriate NaN/NaT value for the given dtype.
 
     Returns a numpy scalar (np.generic subclass) representing the
@@ -318,7 +318,7 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
                 else x
                 for x in dtypes
             ]
-            return find_common_type(non_cat_dtypes)  # type: ignore[arg-type]
+            return find_common_type(non_cat_dtypes)
 
     # Aggregate same types
     dtypes = set(dtypes)
@@ -582,7 +582,7 @@ def dtype_from_pylibcudf_column(col: plc.Column) -> DtypeObj:
             str(i): dtype_from_pylibcudf_column(col.child(i))
             for i in range(col.num_children())
         }
-        return cudf.StructDtype(fields)  # type: ignore[arg-type]
+        return cudf.StructDtype(fields)
     elif tid == plc.TypeId.DECIMAL64:
         return cudf.Decimal64Dtype(
             precision=cudf.Decimal64Dtype.MAX_PRECISION, scale=-type_.scale()
