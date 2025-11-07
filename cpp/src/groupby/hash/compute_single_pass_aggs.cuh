@@ -12,7 +12,6 @@
 #include "extract_single_pass_aggs.hpp"
 #include "helpers.cuh"
 #include "output_utils.hpp"
-#include "single_pass_functors.cuh"
 
 #include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>

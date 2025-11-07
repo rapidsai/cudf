@@ -5,8 +5,8 @@
 
 #include "compute_single_pass_aggs.cuh"
 #include "compute_single_pass_aggs.hpp"
+#include "single_pass_functors.cuh"
 
-#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 
 namespace cudf::groupby::detail::hash {
