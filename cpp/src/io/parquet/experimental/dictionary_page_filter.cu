@@ -314,7 +314,7 @@ __device__ __forceinline__ T unaligned_load(uint8_t const* page_data,
                                             int32_t value_idx,
                                             int32_t page_size)
 {
-  return (value_idx * sizeof(T) + sizeof(uint32_t)) <= page_size
+  return (value_idx * sizeof(T) + sizeof(uint32_t) <= page_size)
            ? cudf::io::unaligned_load_unsafe<T>(page_data + (value_idx * sizeof(T)))
            : cudf::io::unaligned_load<T>(page_data + (value_idx * sizeof(T)));
 }
