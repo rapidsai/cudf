@@ -318,6 +318,8 @@ class StringFunction(Expr):
                 ).astype(self.dtype, stream=df.stream)
                 for child in self.children
             ]
+            if len(columns) == 1:
+                return columns[0]
 
             non_unit_sizes = [c.size for c in columns if c.size != 1]
             broadcasted = broadcast(

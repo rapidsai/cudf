@@ -35,25 +35,22 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     from cudf._typing import ColumnBinaryOperand, ColumnLike, DtypeObj
-    from cudf.core.buffer import Buffer
     from cudf.core.column.string import StringColumn
 
 
 class ListColumn(ColumnBase):
     _VALID_BINARY_OPERATIONS = {"__add__", "__radd__"}
+    _VALID_PLC_TYPES = {plc.TypeId.LIST}
 
     def __init__(
         self,
-        data: None,
+        plc_column: plc.Column,
         size: int,
         dtype: ListDtype,
-        mask: Buffer | None,
         offset: int,
         null_count: int,
-        children: tuple[NumericalColumn, ColumnBase],
-    ):
-        if data is not None:
-            raise ValueError("data must be None")
+        exposed: bool,
+    ) -> None:
         if (
             not cudf.get_option("mode.pandas_compatible")
             and not isinstance(dtype, ListDtype)
@@ -62,24 +59,27 @@ class ListColumn(ColumnBase):
             and not is_dtype_obj_list(dtype)
         ):
             raise ValueError("dtype must be a cudf.ListDtype")
-        if not (
-            len(children) == 2
-            and isinstance(children[0], NumericalColumn)
-            # TODO: Enforce int32_t (size_type) used in libcudf?
-            and children[0].dtype.kind == "i"
-            and isinstance(children[1], ColumnBase)
-        ):
-            raise ValueError(
-                "children must a tuple of 2 columns of (signed integer offsets, list values)"
-            )
         super().__init__(
-            data=data,
+            plc_column=plc_column,
             size=size,
             dtype=dtype,
-            mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
+            exposed=exposed,
+        )
+
+    def _get_children_from_pylibcudf_column(
+        self,
+        plc_column: plc.Column,
+        dtype: ListDtype,  # type: ignore[override]
+        exposed: bool,
+    ) -> tuple[ColumnBase, ColumnBase]:
+        children = super()._get_children_from_pylibcudf_column(
+            plc_column, dtype, exposed
+        )
+        return (
+            children[0],
+            children[1]._with_type_metadata(dtype.element_type),
         )
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
@@ -203,15 +203,6 @@ class ListColumn(ColumnBase):
             children=[elements],
         )
 
-    def set_base_data(self, value: None | Buffer) -> None:
-        if value is not None:
-            raise RuntimeError(
-                "ListColumn's do not use data attribute of Column, use "
-                "`set_base_children` instead"
-            )
-        else:
-            super().set_base_data(value)
-
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
         raise NotImplementedError(
@@ -223,14 +214,26 @@ class ListColumn(ColumnBase):
             elements = self.base_children[1]._with_type_metadata(
                 dtype.element_type
             )
+            new_children = [
+                self.plc_column.children()[0],
+                elements.to_pylibcudf(mode="read"),
+            ]
+            new_plc_column = plc.Column(
+                plc.DataType(plc.TypeId.LIST),
+                self.plc_column.size(),
+                self.plc_column.data(),
+                self.plc_column.null_mask(),
+                self.plc_column.null_count(),
+                self.plc_column.offset(),
+                new_children,
+            )
             return type(self)(
-                data=None,
-                dtype=dtype,
-                mask=self.base_mask,
+                plc_column=new_plc_column,
                 size=self.size,
+                dtype=dtype,
                 offset=self.offset,
                 null_count=self.null_count,
-                children=(self.base_children[0], elements),  # type: ignore[arg-type]
+                exposed=False,
             )
         # For pandas dtypes, store them directly in the column's dtype property
         elif isinstance(dtype, pd.ArrowDtype) and isinstance(
