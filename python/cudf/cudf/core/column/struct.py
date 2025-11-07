@@ -63,7 +63,20 @@ class StructColumn(ColumnBase):
     ):
         if data is not None:
             raise ValueError("data must be None.")
-        # Inline validation - IntervalDtype is a subclass of StructDtype, so compare types exactly
+        dtype = self._validate_dtype_instance(dtype)
+        super().__init__(
+            data=data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
+            offset=offset,
+            null_count=null_count,
+            children=children,
+        )
+
+    @staticmethod
+    def _validate_dtype_instance(dtype: StructDtype) -> StructDtype:
+        # IntervalDtype is a subclass of StructDtype, so compare types exactly
         if (
             not cudf.get_option("mode.pandas_compatible")
             and type(dtype) is not StructDtype
@@ -74,15 +87,7 @@ class StructColumn(ColumnBase):
             raise ValueError(
                 f"{type(dtype).__name__} must be a StructDtype exactly."
             )
-        super().__init__(
-            data=data,
-            size=size,
-            dtype=dtype,
-            mask=mask,
-            offset=offset,
-            null_count=null_count,
-            children=children,
-        )
+        return dtype
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """

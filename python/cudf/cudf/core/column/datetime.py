@@ -112,14 +112,7 @@ class DatetimeColumn(TemporalBaseColumn):
         null_count: int,
         children: tuple,
     ):
-        # Inline validation
-        if (
-            cudf.get_option("mode.pandas_compatible") and not dtype.kind == "M"
-        ) or (
-            not cudf.get_option("mode.pandas_compatible")
-            and not (isinstance(dtype, np.dtype) and dtype.kind == "M")
-        ):
-            raise ValueError(f"dtype must be a datetime, got {dtype}")
+        dtype = self._validate_dtype_instance(dtype)
         super().__init__(
             data=data,
             size=size,
@@ -129,6 +122,22 @@ class DatetimeColumn(TemporalBaseColumn):
             null_count=null_count,
             children=children,
         )
+
+    @staticmethod
+    def _validate_dtype_instance(
+        dtype: np.dtype | pd.DatetimeTZDtype,
+    ) -> np.dtype | pd.DatetimeTZDtype:
+        # Skip validation for DatetimeTZDtype as it's handled by DatetimeTZColumn subclass
+        if isinstance(dtype, pd.DatetimeTZDtype):
+            return dtype
+        if (
+            cudf.get_option("mode.pandas_compatible") and not dtype.kind == "M"
+        ) or (
+            not cudf.get_option("mode.pandas_compatible")
+            and not (isinstance(dtype, np.dtype) and dtype.kind == "M")
+        ):
+            raise ValueError(f"dtype must be a datetime, got {dtype}")
+        return dtype
 
     def _clear_cache(self) -> None:
         super()._clear_cache()
@@ -792,6 +801,14 @@ class DatetimeColumn(TemporalBaseColumn):
 
 
 class DatetimeTZColumn(DatetimeColumn):
+    @staticmethod
+    def _validate_dtype_instance(
+        dtype: np.dtype | pd.DatetimeTZDtype,
+    ) -> pd.DatetimeTZDtype:
+        if not isinstance(dtype, pd.DatetimeTZDtype):
+            raise ValueError("dtype must be a pandas.DatetimeTZDtype")
+        return get_compatible_timezone(dtype)
+
     def _clear_cache(self) -> None:
         super()._clear_cache()
         try:

@@ -36,15 +36,7 @@ class IntervalColumn(StructColumn):
             raise ValueError(
                 "children must be a tuple of two columns (left edges, right edges)."
             )
-        # Inline validation
-        if (
-            not cudf.get_option("mode.pandas_compatible")
-            and not isinstance(dtype, IntervalDtype)
-        ) or (
-            cudf.get_option("mode.pandas_compatible")
-            and not is_dtype_obj_interval(dtype)
-        ):
-            raise ValueError("dtype must be a IntervalDtype.")
+        dtype = self._validate_dtype_instance(dtype)
         super().__init__(
             data=data,
             size=size,
@@ -54,6 +46,18 @@ class IntervalColumn(StructColumn):
             null_count=null_count,
             children=children,
         )
+
+    @staticmethod
+    def _validate_dtype_instance(dtype: IntervalDtype) -> IntervalDtype:  # type: ignore[override]
+        if (
+            not cudf.get_option("mode.pandas_compatible")
+            and not isinstance(dtype, IntervalDtype)
+        ) or (
+            cudf.get_option("mode.pandas_compatible")
+            and not is_dtype_obj_interval(dtype)
+        ):
+            raise ValueError("dtype must be a IntervalDtype.")
+        return dtype
 
     @classmethod
     def from_arrow(cls, array: pa.Array | pa.ChunkedArray) -> Self:
