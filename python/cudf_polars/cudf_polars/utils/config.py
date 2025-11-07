@@ -1064,7 +1064,9 @@ class ConfigOptions:
         cuda_stream_policy: CUDAStreamPolicy | CUDAStreamPoolConfig
 
         if user_cuda_stream_policy is None:
-            if executor.name == "streaming" and executor.runtime == Runtime.RAPIDSMPF:
+            if (
+                executor.name == "streaming" and executor.runtime == Runtime.RAPIDSMPF
+            ):  # pragma: no cover; requires rapidsmpf runtime
                 # the rapidsmpf runtime defaults to using a stream pool
                 cuda_stream_policy = CUDAStreamPoolConfig()
             else:
