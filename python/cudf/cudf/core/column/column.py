@@ -177,6 +177,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         "min",
     }
 
+    _mask: Buffer | None
+    _base_mask: Buffer | None
+    _data: Buffer | None
+    _children: tuple[ColumnBase, ...] | None
+
     def __init__(
         self,
         data: None | Buffer,
@@ -196,7 +201,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if null_count < 0:
             raise ValueError("null_count must be >=0")
         self._null_count = null_count
-        # Let the set_base_* methods handle initialization and cache management
+        self._mask = None
+        self._base_mask = None
+        self._data = None
+        self._children = None
         self.set_base_children(children)
         self.set_base_data(data)
         self.set_base_mask(mask)
@@ -235,13 +243,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def base_data(self) -> None | Buffer:
-        return self._base_data  # type: ignore[has-type]
+        return self._base_data
 
     @property
     def data(self) -> None | Buffer:
         if self.base_data is None:
             return None
-        if self._data is None:  # type: ignore[has-type]
+        if self._data is None:
             start = self.offset * self.dtype.itemsize  # type: ignore[union-attr]
             end = start + self.size * self.dtype.itemsize  # type: ignore[union-attr]
             self._data = self.base_data[start:end]
@@ -274,7 +282,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 f"got {type(value).__name__}"
             )
 
-        self._data = None  # type: ignore[assignment]
+        self._data = None
         self._base_data = value
 
     @property
@@ -286,11 +294,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def base_mask(self) -> None | Buffer:
-        return self._base_mask  # type: ignore[has-type]
+        return self._base_mask
 
     @property
     def mask(self) -> None | Buffer:
-        if self._mask is None:  # type: ignore[has-type]
+        if self._mask is None:
             if self.base_mask is None or self.offset == 0:
                 self._mask = self.base_mask
             else:
@@ -422,15 +430,15 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def base_children(self) -> tuple[ColumnBase, ...]:
-        return self._base_children  # type: ignore[has-type]
+        return self._base_children
 
     @property
     def children(self) -> tuple[ColumnBase, ...]:
         if self.offset == 0 and self.size == self.base_size:
-            self._children = self.base_children  # type: ignore[assignment]
+            self._children = self.base_children
         if self._children is None:
             if not self.base_children:
-                self._children = ()  # type: ignore[assignment]
+                self._children = ()
             else:
                 # Compute children from the column view (children factoring self.size)
                 children = ColumnBase.from_pylibcudf(
@@ -439,11 +447,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 dtypes = (
                     base_child.dtype for base_child in self.base_children
                 )
-                self._children = tuple(  # type: ignore[assignment]
+                self._children = tuple(
                     child._with_type_metadata(dtype)
                     for child, dtype in zip(children, dtypes, strict=True)
                 )
-        return self._children  # type: ignore[return-value]
+        return self._children
 
     def set_base_children(self, value: tuple[ColumnBase, ...]) -> None:
         if not isinstance(value, tuple):
