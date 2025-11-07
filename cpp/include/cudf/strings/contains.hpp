@@ -136,6 +136,9 @@ std::unique_ptr<column> count_re(
  *
  * Any null string entries return corresponding null output column entries.
  *
+ * The `pattern` and `escape_character` parameter must be valid until a
+ * synchronize is performed on the given `stream` parameter.
+ *
  * @throw std::invalid_argument if `escape_character` contains more than on byte
  *
  * @param input Strings instance for this operation
