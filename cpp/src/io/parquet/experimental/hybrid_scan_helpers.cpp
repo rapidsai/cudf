@@ -416,9 +416,9 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
                            std::invalid_argument);
               colchunk_iter_offset = std::distance(row_group.columns.begin(), colchunk_iter);
             }
-            auto const& colchunk_iter = row_group.columns.begin() + colchunk_iter_offset.value();
-            auto const& col_chunk     = *colchunk_iter;
-            auto const& col_meta      = col_chunk.meta_data;
+            auto const colchunk_iter = row_group.columns.begin() + colchunk_iter_offset.value();
+            auto const& col_chunk    = *colchunk_iter;
+            auto const& col_meta     = col_chunk.meta_data;
 
             // Make sure that we have page index and the column chunk doesn't have any
             // non-dictionary encoded pages
