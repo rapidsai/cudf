@@ -5,8 +5,6 @@
 
 #pragma once
 
-#include "cudf/detail/nvtx/ranges.hpp"
-#include "cudf/utilities/memory_resource.hpp"
 #include <benchmarks/common/generate_input.hpp>
 
 #include <cudf/column/column_factories.hpp>
@@ -141,7 +139,6 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_i
   int multiplicity,
   double selectivity)
 {
-  CUDF_FUNC_RANGE();
   // Construct build and probe tables
   // Unique table has build_table_numrows / multiplicity numrows
   auto unique_rows_build_table_numrows =
@@ -153,17 +150,6 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_i
                                       .cardinality(2*unique_rows_build_table_numrows)};
   auto unique_rows_build_table =
     create_random_table(key_types, row_count{unique_rows_build_table_numrows + 1}, profile, 1);
-
-#if 0
-  cudf::column unique_col(unique_rows_build_table->get_column(0), cudf::get_default_stream(), cudf::get_current_device_resource_ref());  
-  unique_col.set_null_mask(rmm::device_buffer{0, cudf::get_default_stream(), cudf::get_current_device_resource_ref()}, 0);
-  cudf::device_span<cudf::size_type const> unique_col_span = unique_col.view();
-  auto h_unique_col = cudf::detail::make_std_vector(unique_col_span, cudf::get_default_stream());
-  std::cout << "h_unique_col of size " << h_unique_col.size() << " = ";
-  for(auto e : h_unique_col)
-    std::cout << e << " ";
-  std::cout << std::endl;
-#endif
 
   constexpr int block_size = 128;
 
@@ -216,26 +202,6 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_i
 
   CUDF_CHECK_CUDA(0);
   cudf::get_default_stream().synchronize();
-
-#if 0
-  cudf::device_span<cudf::size_type const> build_table_gather_map_span = build_table_gather_map->view();
-  auto h_build_table_gather_map = cudf::detail::make_std_vector(build_table_gather_map_span, cudf::get_default_stream());
-  std::cout << "h_build_table_gather_map of size " << h_build_table_gather_map.size() << " = ";
-  for(auto e : h_build_table_gather_map)
-    std::cout << e << " ";
-  std::cout << std::endl;
-  auto h_curand_doubles = cudf::detail::make_std_vector(curand_doubles, cudf::get_default_stream());
-  std::cout << "probe h_curand_doubles = ";
-  for(auto e : h_curand_doubles)
-    std::cout << e << " ";
-  std::cout << std::endl;
-  cudf::device_span<cudf::size_type const> probe_table_gather_map_span = probe_table_gather_map->view();
-  auto h_probe_table_gather_map = cudf::detail::make_std_vector(probe_table_gather_map_span, cudf::get_default_stream());
-  std::cout << "h_probe_table_gather_map of size " << h_probe_table_gather_map.size() << " = ";
-  for(auto e : h_probe_table_gather_map)
-    std::cout << e << " ";
-  std::cout << std::endl;
-#endif
 
   auto build_table = cudf::gather(unique_rows_build_table->view(),
                                   build_table_gather_map->view(),
