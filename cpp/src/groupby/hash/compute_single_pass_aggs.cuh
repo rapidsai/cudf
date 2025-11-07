@@ -76,13 +76,13 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
 
   if (!can_use_shared_mem_kernel) { return run_aggs_by_global_mem_kernel(); }
 
-  // `full_stride` is the number of rows that all blocks process together at one step.
+  // `grid_stride` is the number of rows that all blocks process together at one step.
   // Each block will move at max `num_strides` steps.
-  auto const full_stride = GROUPBY_BLOCK_SIZE * grid_size;
-  auto const num_strides = util::div_rounding_up_safe(num_rows, full_stride);
+  auto const grid_stride = GROUPBY_BLOCK_SIZE * grid_size;
+  auto const num_strides = util::div_rounding_up_safe(num_rows, grid_stride);
 
   // The end row index for each block to stop processing each iteration, in which the blocks move at
-  // least one step to at max `num_strides` steps, each step consists of `full_stride` rows.
+  // least one step to at max `num_strides` steps, each step consists of `grid_stride` rows.
   rmm::device_uvector<size_type> block_row_ends(num_strides * grid_size, stream);
 
   // Maps from the global row index of the input table to its block-wise rank.
