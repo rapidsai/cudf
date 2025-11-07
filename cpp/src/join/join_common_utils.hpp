@@ -9,6 +9,8 @@
 #include <cudf/hashing.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <rmm/mr/device/polymorphic_allocator.hpp>
+
 #include <cuco/static_multimap.cuh>
 #include <cuco/static_multiset.cuh>
 #include <cuda/atomic>

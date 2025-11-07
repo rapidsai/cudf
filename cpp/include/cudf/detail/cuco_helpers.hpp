@@ -8,7 +8,6 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/polymorphic_allocator.hpp>
 
 namespace cudf::detail {
 
