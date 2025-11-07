@@ -39,9 +39,9 @@ void nvbench_hm_inner_join(nvbench::state& state,
     return smj.inner_join(left_input, cudf::sorted::NO);
   };
   if constexpr (Algorithm == join_t::HASH) {
-    BM_join<Nullable, Algorithm, NullEquality>(state, dtypes, hash_join, multiplicity, 0.1);
+    BM_join<Nullable, Algorithm, NullEquality>(state, dtypes, hash_join, multiplicity);
   } else if constexpr (Algorithm == join_t::SORT_MERGE) {
-    BM_join<Nullable, Algorithm, NullEquality>(state, dtypes, sort_merge_join, multiplicity, 0.1);
+    BM_join<Nullable, Algorithm, NullEquality>(state, dtypes, sort_merge_join, multiplicity);
   }
 }
 
@@ -99,9 +99,9 @@ NVBENCH_BENCH_TYPES(nvbench_hm_inner_join,
   .set_name("high_multiplicity_inner_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType", "Algorithm"})
   .add_int64_axis("num_keys", nvbench::range(1, 5, 1))
-  .add_int64_axis("left_size", {1000, 100'000, 1'000'000})
-  .add_int64_axis("right_size", {1000, 100'000, 500'000})
-  .add_int64_axis("multiplicity", {10, 20, 50, 100, 1000});
+  .add_int64_axis("left_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("right_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("multiplicity", {10, 20, 50, 100, 1'000, 10'000, 50'000});
 
 NVBENCH_BENCH_TYPES(nvbench_hm_left_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
@@ -113,7 +113,7 @@ NVBENCH_BENCH_TYPES(nvbench_hm_left_join,
   .add_int64_axis("num_keys", nvbench::range(1, 5, 1))
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("multiplicity", {10, 20, 50, 100, 1'000});
+  .add_int64_axis("multiplicity", {10, 20, 50, 100, 1'000, 10'000, 50'000});
 
 NVBENCH_BENCH_TYPES(nvbench_hm_full_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
@@ -125,4 +125,4 @@ NVBENCH_BENCH_TYPES(nvbench_hm_full_join,
   .add_int64_axis("num_keys", nvbench::range(1, 5, 1))
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("multiplicity", {10, 20, 50, 100, 1'000});
+  .add_int64_axis("multiplicity", {10, 20, 50, 100, 1'000, 10'000, 50'000});
