@@ -15,13 +15,17 @@ import pylibcudf as plc
 import rmm
 
 import cudf_polars.utils.config
-from cudf_polars.callback import default_memory_resource
+from cudf_polars.callback import default_memory_resource, set_memory_resource
 from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.config import CUDAStreamPolicy, ConfigOptions
+from cudf_polars.utils.config import (
+    CUDAStreamPolicy,
+    ConfigOptions,
+    MemoryResourceConfig,
+)
 from cudf_polars.utils.cuda_stream import get_cuda_stream, get_new_cuda_stream
 from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
@@ -112,7 +116,11 @@ def test_cudf_polars_enable_disable_managed_memory(monkeypatch, enable_managed_m
             "POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", enable_managed_memory
         )
         result = q.collect(engine=pl.GPUEngine())
-        mr = default_memory_resource(0, bool(enable_managed_memory == "1"))
+        mr = default_memory_resource(
+            0,
+            cuda_managed_memory=bool(enable_managed_memory == "1"),
+            memory_resource_config=None,
+        )
         if enable_managed_memory == "1":
             assert isinstance(mr, rmm.mr.PrefetchResourceAdaptor)
             assert isinstance(mr.upstream_mr, rmm.mr.PoolMemoryResource)
@@ -144,6 +152,38 @@ def test_explicit_memory_resource():
     result = q.collect(engine=pl.GPUEngine(memory_resource=mr))
     assert_frame_equal(q.collect(), result)
     assert n_allocations > 0
+
+
+def test_nested_memory_resource_config():
+    spec = {
+        "qualname": "rmm.mr.PrefetchResourceAdaptor",
+        "options": {
+            "upstream_mr": {
+                "qualname": "rmm.mr.PoolMemoryResource",
+                "options": {
+                    "upstream_mr": {
+                        "qualname": "rmm.mr.ManagedMemoryResource",
+                    },
+                    "initial_pool_size": 256,
+                },
+            }
+        },
+    }
+
+    engine = pl.GPUEngine(
+        executor="streaming",
+        memory_resource_config=MemoryResourceConfig(
+            **spec,
+        ),
+    )
+    config = ConfigOptions.from_polars_engine(engine)
+    mr = config.memory_resource_config.create_memory_resource()
+    assert isinstance(mr, rmm.mr.PrefetchResourceAdaptor)
+    assert isinstance(mr.upstream_mr, rmm.mr.PoolMemoryResource)
+    assert mr.upstream_mr.pool_size() == 256
+    assert isinstance(mr.upstream_mr.upstream_mr, rmm.mr.ManagedMemoryResource)
+
+    assert hash(config.memory_resource_config) == hash(config.memory_resource_config)
 
 
 @pytest.mark.parametrize("executor", ["streaming", "in-memory"])
@@ -516,6 +556,87 @@ def test_default_runtime() -> None:
 
 
 @pytest.mark.parametrize(
+    "memory_resource, memory_resource_config",
+    [
+        (None, None),
+        (
+            None,
+            MemoryResourceConfig(
+                qualname="rmm.mr.CudaAsyncMemoryResource",
+                options={"initial_pool_size": 123, "release_threshold": 456},
+            ),
+        ),
+        (rmm.mr.CudaAsyncMemoryResource(initial_pool_size=100), None),
+        # prioritize the concrete MR
+        (
+            rmm.mr.CudaAsyncMemoryResource(initial_pool_size=100),
+            MemoryResourceConfig(qualname="rmm.mr.CudaMemoryResource"),
+        ),
+    ],
+)
+def test_memory_resource(memory_resource, memory_resource_config) -> None:
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            memory_resource=memory_resource,
+            memory_resource_config=memory_resource_config,
+        )
+    )
+
+    with set_memory_resource(memory_resource, memory_resource_config) as result:
+        if memory_resource is None and memory_resource_config is None:
+            # The default case: We make a new RMM MR, whose type depends on the GPU's features.
+
+            if plc.utils._is_concurrent_managed_access_supported():
+                assert isinstance(result, rmm.mr.PrefetchResourceAdaptor)
+            else:
+                assert isinstance(result, rmm.mr.CudaAsyncMemoryResource)
+
+        elif memory_resource is None:
+            # Configured through memory_resource_config
+            assert isinstance(result, rmm.mr.CudaAsyncMemoryResource)
+            assert config.memory_resource_config is not None
+            assert (
+                config.memory_resource_config.qualname
+                == "rmm.mr.CudaAsyncMemoryResource"
+            )
+            assert config.memory_resource_config.options == {
+                "initial_pool_size": 123,
+                "release_threshold": 456,
+            }
+            assert isinstance(
+                config.memory_resource_config.create_memory_resource(),
+                rmm.mr.CudaAsyncMemoryResource,
+            )
+
+        elif memory_resource is not None:
+            assert result is memory_resource
+        else:  # pragma: no cover; Unreachable
+            raise ValueError("Unreachable")
+
+
+def test_memory_resource_config_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    with monkeypatch.context() as m:
+        m.setenv(
+            "CUDF_POLARS__MEMORY_RESOURCE_CONFIG__QUALNAME",
+            "rmm.mr.CudaAsyncMemoryResource",
+        )
+        m.setenv(
+            "CUDF_POLARS__MEMORY_RESOURCE_CONFIG__OPTIONS",
+            '{"initial_pool_size": 123, "release_threshold": 456}',
+        )
+        engine = pl.GPUEngine()
+        config = ConfigOptions.from_polars_engine(engine)
+        assert config.memory_resource_config is not None
+        assert (
+            config.memory_resource_config.qualname == "rmm.mr.CudaAsyncMemoryResource"
+        )
+        assert config.memory_resource_config.options == {
+            "initial_pool_size": 123,
+            "release_threshold": 456,
+        }
+
+
+@pytest.mark.parametrize(
     "cuda_stream_policy, expected",
     [
         (CUDAStreamPolicy.DEFAULT, get_cuda_stream),
@@ -636,3 +757,33 @@ def test_validate_stats_planning(option: str) -> None:
                 executor_options={"stats_planning": {option: object()}},
             )
         )
+
+
+def test_parse_memory_resource_config() -> None:
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            memory_resource_config={
+                "qualname": "rmm.mr.CudaAsyncMemoryResource",
+                "options": {
+                    "initial_pool_size": 123,
+                    "release_threshold": 456,
+                },
+            }
+        )
+    )
+    assert isinstance(config.memory_resource_config, MemoryResourceConfig)
+    assert config.memory_resource_config.qualname == "rmm.mr.CudaAsyncMemoryResource"
+
+
+def test_memory_resource_config_raises() -> None:
+    with pytest.raises(
+        ValueError,
+        match="MemoryResourceConfig.qualname 'foo' must be a fully qualified name to a class",
+    ):
+        MemoryResourceConfig(qualname="foo")
+
+
+@pytest.mark.parametrize("options", [None, {}])
+def test_memory_resource_config_hash(options) -> None:
+    config = MemoryResourceConfig(qualname="rmm.mr.CudaMemoryResource", options=options)
+    assert hash(config) == hash(config)
