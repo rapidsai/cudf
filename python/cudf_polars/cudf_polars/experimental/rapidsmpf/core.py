@@ -156,10 +156,14 @@ def evaluate_logical_plan(
     df = _concat(*dfs, context=ir_context)
     # We need to materialize the polars dataframe before we drop the rapidsmpf
     # context, which keeps the CUDA streams alive.
+    stream = df.stream
     result = df.to_polars()
-    # is this synchronize necessary?
-    # It avoids some (but not all) segfaults.
-    df.stream.synchronize()
+    stream.synchronize()
+
+    # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
+    # before the Context, which ultimately contains the rmm RM, goes out of scope.
+    del nodes, output, messages, chunks, dfs, df
+
     return result
 
 
