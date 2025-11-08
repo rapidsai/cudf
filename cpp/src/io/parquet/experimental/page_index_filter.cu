@@ -296,7 +296,7 @@ struct page_stats_caster : public stats_caster_base {
   {
     // Compute column chunk level page count offsets, and page level row counts and row offsets.
     auto const [page_row_counts, page_row_offsets, col_chunk_page_offsets] =
-      make_page_row_counts_and_offsets(per_file_metadata, row_group_indices, schema_idx, stream);
+      compute_page_row_counts_and_offsets(per_file_metadata, row_group_indices, schema_idx, stream);
 
     CUDF_EXPECTS(page_row_offsets.back() == total_rows,
                  "The number of rows must be equal across row groups and pages within row groups");
@@ -572,8 +572,8 @@ struct page_stats_to_row_mask_converter : public page_stats_caster {
                                     stream)
                                 : cudf::detail::make_empty_host_vector<bitmask_type>(0, stream);
 
-      auto page_indices =
-        make_page_indices_async(page_row_counts, page_row_offsets, total_rows, stream);
+      auto const page_indices =
+        compute_page_indices_async(page_row_counts, page_row_offsets, total_rows, stream, mr);
 
       auto [row_mask_data, row_mask_bitmask] =
         build_data_and_nullmask<bool>(page_mask->mutable_view(),
@@ -594,7 +594,9 @@ struct page_stats_to_row_mask_converter : public page_stats_caster {
                                       row_mask_nullcount);
     }
   }
- /*
+};
+
+/*
  * @brief Functor to build a Fenwick tree level from the previous level data
  *
  * @param tree_level_ptrs Pointers to the start of Fenwick tree level data
@@ -664,8 +666,8 @@ struct search_fenwick_tree_functor {
   }
 
   /**
-   * @brief Finds the smallest power of two in the range [start, end). If no power of two is found,
-   * returns a zero.
+   * @brief Finds the smallest power of two in the range [start, end). If no power of two is
+   * found, returns a zero.
    *
    * @param start Range start
    * @param end Range end
@@ -762,8 +764,8 @@ struct search_fenwick_tree_functor {
    *
    * Algorithm: While `start` < `end`, align `start` UP and `end` DOWN to the next power-of-two
    * searchable tree block. For the two aligned blocks, query the fenwick tree at corresponding
-   * levels for a `true` value (larger block first). If found, return. Else, move the boundaries to
-   * their alignments.
+   * levels for a `true` value (larger block first). If found, return. Else, move the boundaries
+   * to their alignments.
    *
    * @param range_idx Index of the range to search
    * @return Boolean indicating if a `true` value is found in the range
