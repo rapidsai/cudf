@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from functools import cache
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 from typing_extensions import assert_never
 
@@ -83,9 +83,14 @@ def _dtype_from_header(header: DataTypeHeader) -> pl.DataType:
     if header["kind"] == "decimal":
         return pl.Decimal(header["precision"], header["scale"])
     if header["kind"] == "datetime":
-        return pl.Datetime(time_unit=header["time_unit"], time_zone=header["time_zone"])
+        return pl.Datetime(
+            time_unit=cast(Literal["ns", "us", "ms"], header["time_unit"]),
+            time_zone=header["time_zone"],
+        )
     if header["kind"] == "duration":
-        return pl.Duration(time_unit=header["time_unit"])
+        return pl.Duration(
+            time_unit=cast(Literal["ns", "us", "ms"], header["time_unit"])
+        )
     if header["kind"] == "list":
         return pl.List(_dtype_from_header(header["inner"]))
     if header["kind"] == "struct":
