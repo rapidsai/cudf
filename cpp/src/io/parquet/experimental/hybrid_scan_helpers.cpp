@@ -434,13 +434,14 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
               }
 
               return has_page_index and
-                     std::all_of(col_meta.encoding_stats.value().cbegin(),
-                                 col_meta.encoding_stats.value().cend(),
-                                 [](auto const& page_encoding_stats) {
-                                   return page_encoding_stats.encoding ==
-                                            Encoding::PLAIN_DICTIONARY or
-                                          page_encoding_stats.encoding == Encoding::RLE_DICTIONARY;
-                                 });
+                     std::all_of(
+                       col_meta.encoding_stats.value().cbegin(),
+                       col_meta.encoding_stats.value().cend(),
+                       [](auto const& page_encoding_stats) {
+                         return page_encoding_stats.page_type == PageType::DICTIONARY_PAGE or
+                                page_encoding_stats.encoding == Encoding::PLAIN_DICTIONARY or
+                                page_encoding_stats.encoding == Encoding::RLE_DICTIONARY;
+                       });
             }();
 
             auto dictionary_offset = int64_t{0};
