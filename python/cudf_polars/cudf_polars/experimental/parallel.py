@@ -244,7 +244,7 @@ def evaluate_rapidsmpf(
     """
     from cudf_polars.experimental.rapidsmpf.core import evaluate_logical_plan
 
-    return evaluate_logical_plan(ir, config_options)
+    return evaluate_logical_plan(ir, config_options)[0]
 
 
 def evaluate_streaming(

@@ -32,7 +32,10 @@ from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext, Join, Scan, Union
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo, lower_ir_node
-from cudf_polars.experimental.rapidsmpf.nodes import generate_ir_sub_network_wrapper
+from cudf_polars.experimental.rapidsmpf.nodes import (
+    generate_ir_sub_network_wrapper,
+    metadata_drain_node,
+)
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import CUDAStreamPolicy
@@ -40,6 +43,7 @@ from cudf_polars.utils.config import CUDAStreamPolicy
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
+    from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.leaf_node import DeferredMessages
 
     from cudf_polars.dsl.ir import IR
@@ -51,12 +55,13 @@ if TYPE_CHECKING:
         LowerState,
         SubNetGenerator,
     )
+    from cudf_polars.experimental.rapidsmpf.utils import Metadata
 
 
 def evaluate_logical_plan(
     ir: IR,
     config_options: ConfigOptions,
-) -> DataFrame:
+) -> tuple[DataFrame, list[Metadata]]:
     """
     Evaluate a logical plan with the RapidsMPF streaming runtime.
 
@@ -115,12 +120,14 @@ def evaluate_logical_plan(
         ir_context = IRExecutionContext.from_config_options(config_options)
 
     # Generate network nodes
+    metadata_collector: list[Metadata] = []
     nodes, output = generate_network(
         rmpf_context,
         ir,
         partition_info,
         config_options,
         ir_context=ir_context,
+        metadata_collector=metadata_collector,
     )
 
     # Run the network
@@ -140,7 +147,7 @@ def evaluate_logical_plan(
         )
         for chunk in chunks
     ]
-    return _concat(*dfs, context=ir_context)
+    return _concat(*dfs, context=ir_context), metadata_collector
 
 
 def lower_ir_graph(
@@ -255,6 +262,7 @@ def generate_network(
     config_options: ConfigOptions,
     *,
     ir_context: IRExecutionContext,
+    metadata_collector: list[Metadata] | None = None,
 ) -> tuple[list[Any], DeferredMessages]:
     """
     Translate the IR graph to a RapidsMPF streaming network.
@@ -271,6 +279,8 @@ def generate_network(
         The configuration options.
     ir_context
         The execution context for the IR node.
+    metadata_collector
+        Optional metadata-collector list.
 
     Returns
     -------
@@ -307,14 +317,20 @@ def generate_network(
     nodes, channels = mapper(ir)
     ch_out = channels[ir].reserve_output_slot()
 
-    # TODO: We will need an additional node here to drain
-    # the metadata channel once we start plumbing metadata
-    # through the network. This node could also drop
-    # "duplicated" data on all but rank 0.
+    # Add node to drain metadata channel before pull_from_channel
+    # (since pull_from_channel doesn't accept a ChannelPair)
+    ch_final_data: Channel[TableChunk] = context.create_channel()
+    nodes.append(
+        metadata_drain_node(
+            context,
+            ch_out,
+            ch_final_data,
+            metadata_collector,
+        )
+    )
 
     # Add final node to pull from the output data channel
-    # (metadata channel is unused)
-    output_node, output = pull_from_channel(context, ch_in=ch_out.data)
+    output_node, output = pull_from_channel(context, ch_in=ch_final_data)
     nodes.append(output_node)
 
     # Return network and output hook
