@@ -14,6 +14,8 @@ import polars as pl
 
 import pylibcudf as plc
 
+from cudf_polars.utils.versions import POLARS_VERSION_LT_136
+
 if TYPE_CHECKING:
     from cudf_polars.typing import (
         DataTypeHeader,
@@ -46,7 +48,18 @@ def _dtype_to_header(dtype: pl.DataType) -> DataTypeHeader:
     if name in SCALAR_NAME_TO_POLARS_TYPE_MAP:
         return {"kind": "scalar", "name": name}
     if isinstance(dtype, pl.Decimal):
-        return {"kind": "decimal", "precision": dtype.precision, "scale": dtype.scale}
+        # Workaround for incorrect polars stubs where precision is typed as int | None
+        # Fixed upstream: https://github.com/pola-rs/polars/pull/25227
+        # TODO: Remove this workaround when polars >= 1.36
+        if POLARS_VERSION_LT_136:
+            assert (
+                dtype.precision is not None
+            )  # Decimal always has precision at runtime
+        return {
+            "kind": "decimal",
+            "precision": cast(int, dtype.precision),
+            "scale": dtype.scale,
+        }
     if isinstance(dtype, pl.Datetime):
         return {
             "kind": "datetime",
