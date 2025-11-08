@@ -98,10 +98,14 @@ def find_sort_splits(
         stream=stream,
     )
     # And convert to list for final processing
-    split_first_list = pl.Series(split_first_col).to_list()
-    split_last_list = pl.Series(split_last_col).to_list()
-    split_part_id_list = pl.Series(split_part_id).to_list()
-    split_local_row_list = pl.Series(split_local_row).to_list()
+    # The type ignores are for cross-library boundaries: plc.Column -> pl.Series
+    # These work at runtime via the Arrow C Data Interface protocol
+    # TODO: Find a way for pylibcudf types to show they export the Arrow protocol
+    #       (mypy wasn't happy with a custom protocol)
+    split_first_list = pl.Series(split_first_col).to_list()  # type: ignore[arg-type]
+    split_last_list = pl.Series(split_last_col).to_list()  # type: ignore[arg-type]
+    split_part_id_list = pl.Series(split_part_id).to_list()  # type: ignore[arg-type]
+    split_local_row_list = pl.Series(split_local_row).to_list()  # type: ignore[arg-type]
 
     # Find the final split points.  This is slightly tricky because of the possibility
     # of equal values, which is why we need the part_id and local_row.
