@@ -520,11 +520,12 @@ def _decompose(
     elif len(unique_input_irs) == 1:
         input_ir = unique_input_irs[0]
     else:
-        # All child IRs were Empty. Reuse the
-        # parent input_ir so the node still has valid
-        # input to attach to within the expression tree.
-        # See https://github.com/rapidsai/cudf/pull/20409
-        input_ir = rec.state["input_ir"]  # pragma: no cover; no test yet
+        # All child IRs were Empty. Use an Empty({}) with
+        # count=1 to ensure that scalar expressions still
+        # produce one output partition with a single row
+        # See: https://github.com/rapidsai/cudf/pull/20409
+        input_ir = Empty({})
+        partition_info[input_ir] = PartitionInfo(count=1)
 
     # Call into class-specific logic to decompose ``expr``
     return _decompose_expr_node(
