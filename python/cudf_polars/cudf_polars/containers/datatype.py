@@ -19,6 +19,7 @@ from cudf_polars.utils.versions import POLARS_VERSION_LT_136
 if TYPE_CHECKING:
     from cudf_polars.typing import (
         DataTypeHeader,
+        PolarsDataType,
     )
 
 __all__ = ["DataType"]
@@ -205,9 +206,14 @@ class DataType:
     polars_type: pl.datatypes.DataType
     plc_type: plc.DataType
 
-    def __init__(self, polars_dtype: pl.DataType) -> None:
-        self.polars_type = polars_dtype
-        self.plc_type = _from_polars(polars_dtype)
+    def __init__(self, polars_dtype: PolarsDataType) -> None:
+        # Convert DataTypeClass to DataType instance if needed
+        # polars allows both pl.Int64 (class) and pl.Int64() (instance)
+        if isinstance(polars_dtype, type):
+            polars_dtype = polars_dtype()
+        # After conversion, it's guaranteed to be a DataType instance
+        self.polars_type = cast(pl.DataType, polars_dtype)
+        self.plc_type = _from_polars(self.polars_type)
 
     def id(self) -> plc.TypeId:
         """The pylibcudf.TypeId of this DataType."""
