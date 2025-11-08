@@ -226,7 +226,7 @@ class ExponentialMovingWindow(_RollingBase):
         # pandas does nans in the same positions mathematically.
         # as such we need to convert the nans to nulls before
         # passing them in.
-        to_libcudf_column = source_column.astype(np.float64).nans_to_nulls()
+        to_libcudf_column = source_column.astype(np.dtype("float64")).nans_to_nulls()
         size = len(to_libcudf_column)
         # pandas excludes leading nulls from the exponential weighting window,
         # so we skip the initial null run entirely and only compute the EWM
