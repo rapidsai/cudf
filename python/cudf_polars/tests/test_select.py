@@ -68,6 +68,18 @@ def test_select_reduce():
     assert_gpu_result_equal(query)
 
 
+@pytest.mark.xfail(
+    reason=(
+        "Probably won't be fixed until 1.35.1 "
+        "https://github.com/pola-rs/polars/issues/24964"
+    )
+)
+def test_select_reduce_unary_not():
+    ldf = pl.LazyFrame({"c0": [1]})
+    query = ldf.select((~(pl.lit(1))).min().alias("literal"))
+    assert_gpu_result_equal(query)
+
+
 def test_select_with_cse_no_agg():
     df = pl.LazyFrame({"a": [1, 2, 3]})
     expr = pl.col("a") + pl.col("a")
