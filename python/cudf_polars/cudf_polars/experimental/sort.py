@@ -23,7 +23,7 @@ from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import _simple_shuffle_graph
 from cudf_polars.experimental.utils import _concat, _fallback_inform, _lower_ir_fallback
 from cudf_polars.utils.config import ShuffleMethod
-from cudf_polars.utils.cuda_stream import get_joined_cuda_stream
+from cudf_polars.utils.cuda_stream import get_dask_cuda_stream, get_joined_cuda_stream
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping, Sequence
@@ -317,7 +317,9 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
 
         by = options["by"]
 
-        stream = get_joined_cuda_stream(upstreams=(df.stream, sort_boundaries.stream))
+        stream = get_joined_cuda_stream(
+            get_dask_cuda_stream, upstreams=(df.stream, sort_boundaries.stream)
+        )
 
         splits = find_sort_splits(
             df.select(by).table,
@@ -411,7 +413,9 @@ def _sort_partition_dataframe(
         # Fast path for empty DataFrame
         return dict.fromkeys(range(partition_count), df)
 
-    stream = get_joined_cuda_stream(upstreams=(df.stream, sort_boundaries.stream))
+    stream = get_joined_cuda_stream(
+        get_dask_cuda_stream, upstreams=(df.stream, sort_boundaries.stream)
+    )
 
     splits = find_sort_splits(
         df.select(options["by"]).table,
