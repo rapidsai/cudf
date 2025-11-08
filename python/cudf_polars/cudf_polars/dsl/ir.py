@@ -594,14 +594,11 @@ class Scan(IR):
 
         Each path is repeated according to the number of rows read from it.
         """
-        # Workaround for incorrect polars stubs that don't accept iterators
-        # Fixed upstream: https://github.com/pola-rs/polars/pull/25228
-        # TODO: Remove this workaround when polars >= 1.36
         (filepaths,) = plc.filling.repeat(
             plc.Table(
                 [
                     plc.Column.from_arrow(
-                        pl.Series(values=map(str, paths)),  # type: ignore[arg-type]
+                        pl.Series(values=map(str, paths)),
                         stream=df.stream,
                     )
                 ]
