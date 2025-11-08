@@ -20,7 +20,7 @@ class TokenizeVocabulary:
 
     def __init__(self, vocabulary: Series) -> None:
         self.vocabulary = plc.nvtext.tokenize.TokenizeVocabulary(
-            vocabulary._column.to_pylibcudf(mode="read")
+            vocabulary._column.plc_column
         )
 
     def tokenize(
