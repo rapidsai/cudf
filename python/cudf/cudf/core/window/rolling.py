@@ -356,6 +356,15 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         self, source_column: ColumnBase, agg_name: str, **agg_kwargs
     ) -> ColumnBase:
         pre, fwd = self._plc_windows
+        if (
+            get_option("mode.pandas_compatible")
+            and agg_name == "sum"
+            and (
+                is_integer_dtype(source_column.dtype)
+                or is_bool_dtype(source_column.dtype)
+            )
+        ):
+            agg_kwargs["dtype"] = np.dtype("float64")
         rolling_agg = aggregation.make_aggregation(
             agg_name,
             {"dtype": source_column.dtype}
@@ -363,7 +372,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             else agg_kwargs,
         ).plc_obj
         with acquire_spill_lock():
-            res = ColumnBase.from_pylibcudf(
+            return ColumnBase.from_pylibcudf(
                 plc.rolling.rolling_window(
                     source_column.to_pylibcudf(mode="read"),
                     pre,
@@ -372,12 +381,6 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                     rolling_agg,
                 )
             )
-        if get_option("mode.pandas_compatible") and agg_name == "sum":
-            if is_integer_dtype(source_column.dtype) or is_bool_dtype(
-                source_column.dtype
-            ):
-                res = res.astype(np.float64)
-        return res
 
     def _reduce(
         self,
