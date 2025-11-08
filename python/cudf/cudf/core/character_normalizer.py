@@ -31,7 +31,7 @@ class CharacterNormalizer:
         if special_tokens is None:
             special_tokens = Series([], dtype="object")
         self.normalizer = plc.nvtext.normalize.CharacterNormalizer(
-            do_lower, special_tokens._column.to_pylibcudf(mode="read")
+            do_lower, special_tokens._column.plc_column
         )
 
     def normalize(self, text: Series) -> Series:

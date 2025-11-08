@@ -664,7 +664,7 @@ class DateOffset:
                     with acquire_spill_lock():
                         datetime_col = type(datetime_col).from_pylibcudf(
                             plc.datetime.add_calendrical_months(
-                                datetime_col.to_pylibcudf(mode="read"),
+                                datetime_col.plc_column,
                                 pa_scalar_to_plc_scalar(pa.scalar(value)),
                             )
                         )
