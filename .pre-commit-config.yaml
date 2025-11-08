@@ -34,7 +34,7 @@ repos:
     rev: 'v1.13.0'
     hooks:
       - id: mypy
-        additional_dependencies: [types-cachetools, pyarrow-stubs, numpy, types-ujson, pytest]
+        additional_dependencies: [types-cachetools, pyarrow-stubs, numpy, pytest]
         args: ["--config-file=pyproject.toml",
                "python/cudf/cudf",
                "python/pylibcudf/pylibcudf",
