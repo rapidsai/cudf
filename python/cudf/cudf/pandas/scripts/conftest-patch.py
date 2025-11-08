@@ -3249,7 +3249,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/frame/methods/test_shift.py::TestDataFrameShift::test_shift_dt64values_axis1_invalid_fill[datetime64[ns]-False]",
     "tests/frame/methods/test_shift.py::TestDataFrameShift::test_shift_dt64values_axis1_invalid_fill[timedelta64[ns]-False]",
     "tests/frame/methods/test_shift.py::TestDataFrameShift::test_shift_dt64values_int_fill_deprecated",
-    "tests/frame/methods/test_sort_index.py::TestDataFrameSortIndex::test_sort_index",
     "tests/frame/methods/test_sort_index.py::TestDataFrameSortIndex::test_sort_index_intervalindex",
     "tests/frame/methods/test_sort_index.py::TestDataFrameSortIndex::test_sort_index_nan",
     "tests/frame/methods/test_sort_index.py::TestDataFrameSortIndex::test_sort_index_reorder_on_ops",
