@@ -98,7 +98,8 @@ __forceinline__ __device__ uint4 load_uint4(char const* ptr)
 
   // Is the 4B load valid
   if (chunk_start >= head && chunk_end <= tail) {
-      cuda::memcpy_async(thread, out_chunk, reinterpret_cast<uint32_t const*>(chunk_start), sizeof(uint32_t), pipeline);
+    cuda::memcpy_async(thread, out_chunk, reinterpret_cast<uint32_t const*>(chunk_start), sizeof(uint32_t), pipeline);
+    return;
   }
 
   // If the 4B load is not valid, we need to load the chunk byte by byte
@@ -467,7 +468,8 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
 
         // read the character from the input string and write it to the output buffer
         auto const char_scratch = reinterpret_cast<char*>(chunk_scratch);
-        out_chars[out_ibyte]    = *(char_scratch + stage*tile_size_char + (load_offset % tile_size_char));
+        auto const first_char = load_offset % (tile_size_char * stages_count);
+        out_chars[out_ibyte]    = *(char_scratch + first_char);
         }
 
         // In case that last_ibyte_threadblock is uninitialized due to a pipleine not having read any data we want the subsequent loop
