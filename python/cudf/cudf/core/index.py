@@ -2199,6 +2199,7 @@ class Index(SingleColumnFrame):
 
     @_performance_tracking
     def __getitem__(self, index):
+        # import pdb;pdb.set_trace()
         res = self._get_elements_from_column(index)
         if isinstance(res, ColumnBase):
             res = Index._from_column(res, name=self.name)

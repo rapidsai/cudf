@@ -1099,11 +1099,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return py_element
 
     def slice(self, start: int, stop: int, stride: int | None = None) -> Self:
+        # import pdb;pdb.set_trace()
         stride = 1 if stride is None else stride
+        if stop < 0 and not (stride < 0 and stop == -1 and start >= 0):
+            stop = stop + len(self)
         if start < 0:
             start = start + len(self)
-        if stop < 0 and not (stride < 0 and stop == -1):
-            stop = stop + len(self)
+
         if (stride > 0 and start >= stop) or (stride < 0 and start <= stop):
             return cast(Self, column_empty(0, self.dtype))
         # compute mask slice
