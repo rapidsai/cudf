@@ -81,12 +81,12 @@ __forceinline__ __device__ uint4 load_uint4(char const* ptr)
  * @param out_chunk   Pointer to the output where the loaded 4-byte chunk will be stored.
  * @return            Number of bytes successfully read (up to 4).
  */
- __device__ inline uint32_t load_uint32_masked(
+ __device__ inline void load_uint32_masked(
   char const* const ptr,
   char const* const head,
   char const* const tail,
   uint32_t* out_chunk,
-  cuda::pipeline& pipeline) {
+  cuda::pipeline<cuda::thread_scope_thread>& pipeline) {
   
   auto thread = cg::this_thread();
   uint32_t result = 0;
@@ -99,7 +99,6 @@ __forceinline__ __device__ uint4 load_uint4(char const* ptr)
   // Is the 4B load valid
   if (chunk_start >= head && chunk_end <= tail) {
       cuda::memcpy_async(thread, out_chunk, reinterpret_cast<uint32_t const*>(chunk_start), sizeof(uint32_t), pipeline);
-      return 4;
   }
 
   // If the 4B load is not valid, we need to load the chunk byte by byte
@@ -115,7 +114,6 @@ __forceinline__ __device__ uint4 load_uint4(char const* ptr)
 
   // When we cannot use async 4B memcpy we do regular LDG inst
   *out_chunk = result;
-  return end_ptr - start_ptr;
 }
 
 /**
@@ -241,7 +239,7 @@ struct BlockPrefixCallbackOp
  */
 
 template <int tile_size, int strings_per_threadblock, typename MapIterator, typename StringIterator>
-__device__ uint32_t load_tile_block(
+__device__ int64_t load_tile_block(
     uint32_t* tile,
     cuda::std::span<int32_t, strings_per_threadblock> const in_offsets,
     cuda::std::span<int64_t, strings_per_threadblock + 1> const out_offsets,
@@ -253,49 +251,45 @@ __device__ uint32_t load_tile_block(
     MapIterator const string_indices,
     cudf::strings_column_view::chars_iterator const d_chars_begin,
     cudf::strings_column_view::chars_iterator const d_chars_end,
-    cuda::pipeline& pipeline) {
+    cuda::pipeline<cuda::thread_scope_thread>& pipeline) {
     
     cg::thread_block tb = cg::this_thread_block();
     auto constexpr chunk_size = sizeof(uint32_t);
     // if chunk is within bounds, load data for this chunk
     if (chunk_offset < num_chunks) {
+      auto const string_idx_iter =
+          thrust::upper_bound(thrust::seq,
+                              in_offsets.begin(),
+                              in_offsets.begin() + strings_current_threadblock,
+                              chunk_offset);
+      
+      // each entry in in_offsets is the chunk number following a string end
+      size_type string_idx = cuda::std::distance(in_offsets.begin(), string_idx_iter);
 
-    auto const string_idx_iter =
-        thrust::upper_bound(thrust::seq,
-                            in_offsets.begin(),
-                            in_offsets.begin() + strings_current_threadblock,
-                            chunk_offset);
-    
-    // each entry in in_offsets is the chunk number following a string end
-    size_type string_idx = cuda::std::distance(in_offsets.begin(), string_idx_iter);
+      // string_idx is local to threadblock, so add begin_out_string_idx to it
+      // when we then use that as index to string_indices, we get the string index to read
+      size_type in_string_idx = string_indices[begin_out_string_idx + string_idx];
+      auto const& curr_string = strings_begin[in_string_idx];
+      int32_t const curr_string_alignment_offset = reinterpret_cast<std::uintptr_t>(curr_string.data()) % chunk_size;
 
-    // string_idx is local to threadblock, so add begin_out_string_idx to it
-    // when we then use that as index to string_indices, we get the string index to read
-    size_type in_string_idx = string_indices[begin_out_string_idx + string_idx];
-    
+      // offset to in the first chunk for string_idx in the shared scratch space
+      int64_t const curr_string_first_chunk = string_idx == 0 ? 0 : (in_offsets[string_idx - 1]);
 
-    auto const& curr_string = strings_begin[in_string_idx];
-    auto const& curr_string_alignment_offset = reinterpret_cast<std::uintptr_t>(curr_string.data()) % chunk_size;
+      int64_t const load_char = (chunk_offset - curr_string_first_chunk) * chunk_size;  // first character in current chunk
+      
+      int64_t const first_char = max(static_cast<int64_t>(0), load_char - curr_string_alignment_offset);
 
-    // offset to in the first chunk for string_idx in the shared scratch space
-    auto const& curr_string_first_chunk = string_idx == 0 ? 0 : (in_offsets[string_idx - 1]);
-
-    auto const& load_offset = 
-        chunk_offset * chunk_size  // first character in current chunk
-        - curr_string_first_chunk * chunk_size     // first chararacter in first chunk
-        - curr_string_alignment_offset;
-    
-
-    assert(load_offset < curr_string.size_bytes() && load_offset > -(static_cast<int64_t>(chunk_size)));
-
-    // calculate which character to load within the string
-    auto const& i_character = max(int64_t{0}, load_offset);
-    
-    // we dont need to align the curr_string pointer with load_offset here. Using just for easier understanding. 
-    auto num_chars = load_uint32_masked(curr_string.data() + load_offset, d_chars_begin, d_chars_end, tile + tb.thread_rank(), pipeline);
-    return out_offsets[string_idx] + i_character + num_chars;
+      // load_offset - curr_string_alignment_offset gives the first byte position to be loaded relative to first char
+      // subtract 1
+      int64_t const last_char = max(static_cast<int64_t>(0), min(
+        static_cast<int64_t>(curr_string.size_bytes()) - 1, 
+        load_char - curr_string_alignment_offset + sizeof(uint32_t) - 1));
+      
+      // we dont need to align the curr_string pointer with load_offset here. Using just for easier understanding. 
+      load_uint32_masked(curr_string.data() + first_char, d_chars_begin, d_chars_end, tile + tb.thread_rank(), pipeline);
+      return out_offsets[string_idx] + last_char + 1;
     }
-    return std::numeric_limits<uint32_t>::max(); // failover case
+    return std::numeric_limits<int64_t>::min(); // failover case
 }
 
 /**
@@ -350,8 +344,8 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
 
   // Collectively load offsets of strings processed by the current thread block.
   for (size_type idx = tb.thread_rank(); idx <= strings_current_threadblock; idx += block_size) {
-  auto const& curr_string_idx = idx + begin_out_string_idx;
-  out_offsets_threadblock[idx] = out_offsets[curr_string_idx];
+    auto const& curr_string_idx = idx + begin_out_string_idx;
+    out_offsets_threadblock[idx] = out_offsets[curr_string_idx];
   }
 
   //FIXME: This sync can be removed, wwe only need out_offsets and not out_offsets_threadblock
@@ -398,7 +392,6 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
   // Data reuse: Chars from SHMEM are used by more then 1 thread.
   // Keep more 4B chunks in flight at the same time, i.e. keep more bytes in flight
   for (int in_ichunk = tb.thread_rank(), tile = 0; tile < ntiles; in_ichunk += tile_size_chunk * stages_count, tile += stages_count) {
-
     for (int stage = 0; stage < stages_count; stage++) {
       auto fetched_chunk = in_ichunk + stage*tile_size_chunk;
       uint32_t* tile_scratch = chunk_scratch + tile_size_chunk*stage;
@@ -479,11 +472,13 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
 
         // In case that last_ibyte_threadblock is uninitialized due to a pipleine not having read any data we want the subsequent loop
         // condition to fail. The max() operator guarantees that if pipeline N, is the last pipleine then pipeline N+1 does not load any data from SHMEM
-        first_ibyte_threadblock = max(first_ibyte_threadblock, last_ibyte_threadblock[stage] + 1);
+        first_ibyte_threadblock = max(first_ibyte_threadblock, last_ibyte_threadblock[stage]);
         
-        // Ensure scratch buffer is flushed before we overwrite with new data
         pipeline.consumer_release();
     }
+
+    // Ensure scratch buffer is flushed before we overwrite with new data
+    tb.sync();
   }
 }
 
@@ -540,7 +535,7 @@ rmm::device_uvector<char> gather_chars(StringIterator strings_begin,
       0,
       stream.value()>>>(strings_begin, d_chars, offsets, map_begin, output_count);
   } else {
-    constexpr int strings_per_threadblock = 32;
+    constexpr int strings_per_threadblock = 128;
     const int block_size = warps_per_threadblock * cudf::detail::warp_size;
     gather_chars_fn_char_parallel<block_size, strings_per_threadblock>
       <<<(output_count + strings_per_threadblock - 1) / strings_per_threadblock,
