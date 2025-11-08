@@ -93,7 +93,6 @@ __device__ void aggregate_to_shmem(cooperative_groups::thread_block const& block
                                    size_type col_start,
                                    size_type col_end,
                                    table_device_view source,
-                                   size_type num_input_rows,
                                    size_type const* local_mapping_index,
                                    cuda::std::byte* shmem_agg_storage,
                                    size_type const* shmem_agg_res_offsets,
@@ -181,19 +180,16 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(size_type num_rows,
     reinterpret_cast<size_type*>(shmem_agg_storage + total_agg_size);
   auto const shmem_agg_mask_offsets =
     reinterpret_cast<size_type*>(shmem_agg_storage + total_agg_size + offsets_size);
-
-  auto const stride = cudf::detail::grid_1d::grid_stride();
-  auto const num_total_strides =
-    util::div_rounding_up_safe(num_rows, static_cast<size_type>(stride));
   auto const block = cooperative_groups::this_thread_block();
 
   auto iter      = 0;
   auto row_start = 0;
-  auto row_end   = block_row_ends[iter];
 
-  while (row_end <= num_rows) {
-    auto const block_data_idx              = block.group_index().x * num_total_strides + iter;
-    auto const cardinality                 = block_cardinality[block_data_idx];
+  while (true) {
+    auto const block_data_idx = gridDim.x * iter + blockIdx.x;
+    auto const cardinality    = block_cardinality[block_data_idx];
+    auto const row_end        = block_row_ends[block_data_idx];
+
     auto constexpr min_shmem_agg_locations = 32;
     auto const multiplication_factor       = min_shmem_agg_locations / cardinality;
     auto const num_agg_locations           = cuda::std::max(multiplication_factor, 1) * cardinality;
@@ -237,7 +233,6 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(size_type num_rows,
                          col_start,
                          col_end,
                          input_values,
-                         num_rows,
                          local_mapping_index,
                          shmem_agg_storage,
                          shmem_agg_res_offsets,
@@ -260,9 +255,11 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(size_type num_rows,
                                 d_agg_kinds);
       block.sync();
     }  // while (col_end < num_cols)
+
+    if (row_end >= num_rows) { break; }
+    ++iter;
     row_start = row_end;
-    row_end   = block_row_ends[++iter];
-  }  // while (row_end <= num_rows)
+  }  // while (true)
 }
 
 }  // namespace
@@ -299,12 +296,11 @@ void compute_shared_memory_aggs(size_type grid_size,
                                 rmm::cuda_stream_view stream)
 {
   // For each aggregation, need one offset determining where the aggregation is
-  // performed, another indicating the validity of the aggregation
-  auto const offsets_size = compute_shmem_offsets_size(output_values.num_columns());
-  // The rest of shmem is utilized for the actual arrays in shmem
-  CUDF_EXPECTS(available_shmem_size > offsets_size * 2,
-               "No enough space for shared memory aggregations");
+  // performed, another indicating the validity of the aggregation.
+  // The rest of shmem is utilized for the actual arrays in shmem.
+  auto const offsets_size   = compute_shmem_offsets_size(output_values.num_columns());
   auto const shmem_agg_size = available_shmem_size - offsets_size * 2;
+
   single_pass_shmem_aggs_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, available_shmem_size, stream>>>(
     num_input_rows,
     local_mapping_index,

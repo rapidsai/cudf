@@ -32,7 +32,8 @@ __device__ void find_local_mapping(cooperative_groups::thread_block const& block
   auto const is_valid_input =
     idx < num_input_rows && (!row_bitmask || cudf::bit_is_set(row_bitmask, idx));
 
-  auto const [result_idx, inserted] = [&] {
+  auto const [inserted_idx, inserted] = [&] {
+    if (!is_valid_input) { return cuda::std::pair{0, false}; }
     auto const [matched_it, inserted] = shared_set.insert_and_find(idx);
     if (inserted) {
       auto const ref_cardinality =
@@ -47,7 +48,7 @@ __device__ void find_local_mapping(cooperative_groups::thread_block const& block
   // all threads in the thread block.
   block.sync();
   if (is_valid_input) {
-    if (!inserted) { local_mapping_indices[idx] = local_mapping_indices[result_idx]; }
+    if (!inserted) { local_mapping_indices[idx] = local_mapping_indices[inserted_idx]; }
   } else {
     // Mark the row as invalid, so later on we can use it to identify which rows are invalid instead
     // of using the validity bitmask.
@@ -63,11 +64,13 @@ __device__ void find_global_mapping(cooperative_groups::thread_block const& bloc
                                     size_type* shared_set_indices,
                                     size_type* global_mapping_indices)
 {
-  auto const block_data_offset = GROUPBY_SHM_MAX_ELEMENTS * (gridDim.x * iter + blockIdx.x);
+  auto const block_data_offset =
+    static_cast<int64_t>(GROUPBY_SHM_MAX_ELEMENTS) * (gridDim.x * iter + blockIdx.x);
 
   // For all unique keys in shared memory hash set, stores their matches in global hash set to
   // `global_mapping_indices`.
-  for (auto idx = block.thread_rank(); idx < cardinality; idx += block.num_threads()) {
+  for (auto idx = block.thread_rank(); idx < static_cast<unsigned int>(cardinality);
+       idx += block.num_threads()) {
     auto const input_idx                            = shared_set_indices[idx];
     auto const key_idx                              = *global_set.insert_and_find(input_idx).first;
     global_mapping_indices[block_data_offset + idx] = key_idx;
@@ -92,7 +95,7 @@ CUDF_KERNEL void mapping_indices_kernel(size_type num_input_rows,
   __shared__ size_type shared_set_indices[GROUPBY_SHM_MAX_ELEMENTS];
 
   // Data buffer for the shared memory hash set.
-  __shared__ size_type slots[valid_extent.value()];
+  __shared__ size_type tmp_storage[valid_extent.value()];
 
   auto raw_set = cuco::static_set_ref{
     cuco::empty_key<size_type>{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
@@ -100,7 +103,7 @@ CUDF_KERNEL void mapping_indices_kernel(size_type num_input_rows,
     probing_scheme_t{global_set.hash_function()},
     cuco::thread_scope_block,
     cuco::bucket_storage_ref<size_type, GROUPBY_BUCKET_SIZE, decltype(valid_extent)>{valid_extent,
-                                                                                     slots}};
+                                                                                     tmp_storage}};
   auto shared_set  = raw_set.rebind_operators(cuco::insert_and_find);
   auto const block = cooperative_groups::this_thread_block();
   shared_set.initialize(block);

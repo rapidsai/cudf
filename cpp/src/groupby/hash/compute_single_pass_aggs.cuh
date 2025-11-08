@@ -75,12 +75,11 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
 
   if (!can_use_shared_mem_kernel) { return run_aggs_by_global_mem_kernel(); }
 
-  // `grid_stride` is the number of rows processed by all blocks at one step.
-  // Each block will move at max `num_strides` steps, each step consists of `grid_stride` rows
-  // (except the last step, which may have fewer rows).
-  // Blocks will process by iterations, each iteration contains at least one step and at most
-  // `num_strides` steps. This iterative approach is necessary to guarantee that the block will
-  // not encounter too many unique keys such that the shared memory hash set cannot hold.
+  // `grid_stride` is the number of rows processed by all blocks at one step (except the last step,
+  // which may have fewer rows). Blocks will process by iterations, each iteration contains at least
+  // one step and at most `num_strides` steps. This iterative approach is necessary to guarantee
+  // that the block will not encounter too many unique keys such that the shared memory hash set
+  // cannot hold.
   auto const grid_stride = GROUPBY_BLOCK_SIZE * grid_size;
   auto const num_strides = util::div_rounding_up_safe(num_rows, grid_stride);
 
