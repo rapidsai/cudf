@@ -435,10 +435,10 @@ class reader_impl {
   // _output_buffers associated schema indices
   std::vector<int> _output_column_schemas;
 
-  // Page mask for filtering out pass data pages
-  cudf::detail::host_vector<bool> _pass_page_mask;
+  // Page mask for filtering out pass data pages (Not copied to the device)
+  thrust::host_vector<bool> _pass_page_mask;
 
-  // Page mask for filtering out subpass data pages
+  // Page mask for filtering out subpass data pages (Copied to the device)
   cudf::detail::hostdevice_vector<bool> _subpass_page_mask;
 
   // _output_buffers associated metadata
