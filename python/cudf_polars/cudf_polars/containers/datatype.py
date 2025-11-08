@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from functools import cache
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from typing_extensions import assert_never
 
@@ -56,12 +56,17 @@ def _dtype_to_header(dtype: pl.DataType) -> DataTypeHeader:
     if isinstance(dtype, pl.Duration):
         return {"kind": "duration", "time_unit": dtype.time_unit}
     if isinstance(dtype, pl.List):
-        return {"kind": "list", "inner": _dtype_to_header(dtype.inner)}
+        # isinstance narrows dtype to pl.List, but .inner returns DataTypeClass | DataType
+        return {
+            "kind": "list",
+            "inner": _dtype_to_header(cast(pl.DataType, dtype.inner)),
+        }
     if isinstance(dtype, pl.Struct):
+        # isinstance narrows dtype to pl.Struct, but field.dtype returns DataTypeClass | DataType
         return {
             "kind": "struct",
             "fields": [
-                {"name": f.name, "dtype": _dtype_to_header(f.dtype)}
+                {"name": f.name, "dtype": _dtype_to_header(cast(pl.DataType, f.dtype))}
                 for f in dtype.fields
             ],
         }
@@ -193,12 +198,16 @@ class DataType:
     @property
     def children(self) -> list[DataType]:
         """The children types of this DataType."""
-        # these type ignores are needed because the type checker doesn't
-        # see that these equality checks passing imply a specific type for each child field.
+        # Type checker doesn't narrow polars_type through plc_type.id() checks
         if self.plc_type.id() == plc.TypeId.STRUCT:
-            return [DataType(field.dtype) for field in self.polars_type.fields]
+            # field.dtype returns DataTypeClass | DataType, need to cast to DataType
+            return [
+                DataType(cast(pl.DataType, field.dtype))
+                for field in cast(pl.Struct, self.polars_type).fields
+            ]
         elif self.plc_type.id() == plc.TypeId.LIST:
-            return [DataType(self.polars_type.inner)]
+            # .inner returns DataTypeClass | DataType, need to cast to DataType
+            return [DataType(cast(pl.DataType, cast(pl.List, self.polars_type).inner))]
         return []
 
     def scale(self) -> int:
