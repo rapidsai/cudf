@@ -14,9 +14,7 @@ from pandas.api.indexers import BaseIndexer
 import pylibcudf as plc
 
 from cudf.api.types import (
-    is_bool_dtype,
     is_integer,
-    is_integer_dtype,
     is_number,
     is_scalar,
 )
@@ -356,23 +354,11 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         self, source_column: ColumnBase, agg_name: str, **agg_kwargs
     ) -> ColumnBase:
         pre, fwd = self._plc_windows
-        if (
-            get_option("mode.pandas_compatible")
-            and agg_name == "sum"
-            and (
-                is_integer_dtype(source_column.dtype)
-                or is_bool_dtype(source_column.dtype)
-            )
-        ):
-            agg_kwargs["dtype"] = np.dtype("float64")
         rolling_agg = aggregation.make_aggregation(
-            agg_name,
-            {"dtype": source_column.dtype}
-            if callable(agg_name)
-            else agg_kwargs,
+            agg_name, agg_kwargs
         ).plc_obj
         with acquire_spill_lock():
-            return ColumnBase.from_pylibcudf(
+            col = ColumnBase.from_pylibcudf(
                 plc.rolling.rolling_window(
                     source_column.to_pylibcudf(mode="read"),
                     pre,
@@ -381,6 +367,9 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                     rolling_agg,
                 )
             )
+        if get_option("mode.pandas_compatible"):
+            return col.astype(np.dtype("float64"))
+        return col
 
     def _reduce(
         self,
