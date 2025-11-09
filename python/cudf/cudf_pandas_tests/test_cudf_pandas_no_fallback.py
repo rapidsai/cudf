@@ -72,9 +72,42 @@ def test_no_fallback_in_binops(dataframe):
     df <= df
 
 
-def test_no_fallback_in_groupby_rolling_sum(dataframe):
+@pytest.mark.parametrize(
+    "agg_name",
+    [
+        "sum",
+        "mean",
+        "min",
+        "max",
+        "count",
+        "std",
+        "var",
+        "median",
+    ],
+)
+def test_no_fallback_in_groupby_rolling_aggs(request, dataframe, agg_name):
+    if agg_name == "median":
+        request.applymarker(
+            pytest.mark.xfail(
+                reason="groupby().rolling().median() not yet implemented"
+            )
+        )
     df = dataframe
-    df.groupby("a").rolling(2).sum()
+    getattr(df.groupby("a").rolling(2), agg_name)()
+
+
+def test_no_fallback_in_rolling_apply(series, dataframe):
+    def sum_minus_min(a):
+        m = a[0]
+        s = 0.0
+        for v in a:
+            s += v
+            if v < m:
+                m = v
+        return s - m
+
+    series.rolling(2, min_periods=1).apply(sum_minus_min, raw=True)
+    dataframe.rolling(2, min_periods=1).apply(sum_minus_min, raw=True)
 
 
 def test_no_fallback_in_concat(dataframe):
