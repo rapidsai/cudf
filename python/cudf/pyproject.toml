@@ -126,7 +126,7 @@ dependencies-file = "../../dependencies.yaml"
 matrix-entry = "cuda_suffixed=true"
 requires = [
     "cmake>=3.30.4",
-    "cython>=3.0.3",
+    "cython>=3.0.0,<3.2.0",
     "libcudf==25.12.*,>=0.0.0a0",
     "librmm==25.12.*,>=0.0.0a0",
     "ninja",
