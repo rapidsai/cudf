@@ -257,7 +257,8 @@ cdef class ParquetReaderOptionsBuilder:
         Parameters
         ----------
         val : bool
-            Boolean indicating whether to ignore non-existent projected columns while reading.
+            Boolean indicating whether to ignore non-existent projected columns
+            while reading.
 
         Returns
         -------
