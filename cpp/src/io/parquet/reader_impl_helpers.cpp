@@ -1853,10 +1853,8 @@ aggregate_reader_metadata::select_columns(
         // Ensure that selected path matches a path in all_paths
         if (found_path != all_paths.end()) {
           valid_selected_paths.push_back({selected_path, found_path->schema_idx});
-        } else {
-          CUDF_EXPECTS(ignore_missing_columns,
-                       "Encountered non-existent column in selected path",
-                       std::invalid_argument);
+        } else if (not ignore_missing_columns) {
+          CUDF_FAIL("Unable to select a non-existent column", std::invalid_argument);
         }
       }
     }
