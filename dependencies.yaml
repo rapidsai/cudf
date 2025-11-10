@@ -523,7 +523,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - cython>=3.0.3
+          - cython>=3.0.3,<3.2.0a0
   numpy_run:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -792,7 +792,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - pytest
+          - pytest<9.0.0a0
           - pytest-cov
           - pytest-xdist
   test_python_cudf_common:
