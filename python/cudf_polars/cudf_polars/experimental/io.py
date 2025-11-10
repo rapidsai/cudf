@@ -831,11 +831,11 @@ class ParquetSourceInfo(DataSourceInfo):
             if partial_mean_size < min_value and column not in self._real_rg_size:
                 # If the metadata is suspiciously small,
                 # sample "real" data to get a better estimate.
-                self.add_read_column(column)
                 self._sample_row_groups()
             if column in self._real_rg_size:
-                partial_mean_size = self._real_rg_size[column] * max(
-                    self.metadata.num_row_groups_per_file
+                partial_mean_size = int(
+                    self._real_rg_size[column]
+                    * statistics.mean(self.metadata.num_row_groups_per_file)
                 )
             return ColumnStat[int](max(min_value, partial_mean_size))
         return ColumnStat[int]()
@@ -887,8 +887,9 @@ def _extract_scan_stats(
         }
         # Mark all columns that we are reading in case
         # we need to sample real data later.
-        for name, cs in cstats.items():
-            cs.source_info.add_read_column(name)
+        if config_options.executor.stats_planning.use_sampling:
+            for name, cs in cstats.items():
+                cs.source_info.add_read_column(name)
         return cstats
     else:
         return {name: ColumnStats(name=name) for name in ir.schema}
