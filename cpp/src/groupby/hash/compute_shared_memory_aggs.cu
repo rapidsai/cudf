@@ -103,8 +103,13 @@ __device__ void aggregate_to_shmem(cooperative_groups::thread_block const& block
   // Aggregates global memory sources to shared memory targets
   for (auto source_idx = block.thread_rank() + row_start; source_idx < row_end;
        source_idx += cudf::detail::grid_1d::grid_stride()) {
-    auto const target_idx = local_mapping_index[source_idx] + agg_location_offset;
+    auto target_idx = local_mapping_index[source_idx];
+    // printf("source idx: %d, local mapping: %d\n", source_idx, local_mapping_index[source_idx]);
+
     if (target_idx == cudf::detail::CUDF_SIZE_TYPE_SENTINEL) { continue; }
+    target_idx += agg_location_offset;
+    // printf(
+    //   "aggregate_to_shmem: source_idx: %d, target_idx: %d\n", (int)source_idx, (int)target_idx);
 
     for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
       auto const source_col = source.column(col_idx);
@@ -141,6 +146,11 @@ __device__ void update_aggs_shmem_to_gmem(cooperative_groups::thread_block const
     auto const target_idx =
       global_mapping_index[(block.group_index().x * GROUPBY_SHM_MAX_ELEMENTS) +
                            (idx % cardinality)];
+
+    // printf("update_aggs_shmem_to_gmem: idx: %d, target_idx: %d\n", (int)idx, (int)target_idx);
+
+    // if (idx > 256) { break; }
+
     for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
       auto const target_col = target.column(col_idx);
       auto const source     = shmem_agg_storage + agg_res_offsets[col_idx];
@@ -174,6 +184,10 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(size_type num_rows,
 {
   __shared__ size_type col_start;
   __shared__ size_type col_end;
+  __shared__ size_type row_start;
+  __shared__ size_type row_end;
+  __shared__ size_type cardinality;
+
   extern __shared__ cuda::std::byte shmem_agg_storage[];
 
   auto const shmem_agg_res_offsets =
@@ -182,13 +196,28 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(size_type num_rows,
     reinterpret_cast<size_type*>(shmem_agg_storage + total_agg_size + offsets_size);
   auto const block = cooperative_groups::this_thread_block();
 
-  auto iter      = 0;
-  auto row_start = 0;
+  auto iter = 0;
+  if (block.thread_rank() == 0) {
+    row_start = blockIdx.x * GROUPBY_BLOCK_SIZE;
+    // printf("block idx: %d, row_start: %d\n", (int)blockIdx.x, (int)row_start);
+  }
+  block.sync();
 
   while (true) {
-    auto const block_data_idx = gridDim.x * iter + blockIdx.x;
-    auto const cardinality    = block_cardinality[block_data_idx];
-    auto const row_end        = block_row_ends[block_data_idx];
+    if (block.thread_rank() == 0) {
+      auto const block_data_idx = gridDim.x * iter + blockIdx.x;
+      cardinality               = block_cardinality[block_data_idx];
+      row_end                   = block_row_ends[block_data_idx];
+
+      col_start = 0;
+      col_end   = 0;
+
+      // printf(
+      //   "iter: %d, block id: %d, block_data_idx: %d, cardinality: %d, row start: %d, row_end:
+      //   %d\n", (int)iter, (int)blockIdx.x, (int)block_data_idx, (int)cardinality, (int)row_start,
+      //   (int)row_end);
+    }
+    block.sync();
 
     auto constexpr min_shmem_agg_locations = 32;
     auto const multiplication_factor       = min_shmem_agg_locations / cardinality;
@@ -196,11 +225,13 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(size_type num_rows,
     auto const agg_location_offset =
       multiplication_factor > 1 ? (block.thread_rank() % multiplication_factor) * cardinality : 0;
 
-    if (block.thread_rank() == 0) {
-      col_start = 0;
-      col_end   = 0;
-    }
-    block.sync();
+    // if (block.thread_rank() == 0) {
+    //   printf("multiplication_factor: %d,  num_agg_locations: %d, agg_location_offset: %d\n",
+    //          (int)multiplication_factor,
+    //          (int)num_agg_locations,
+    //          (int)agg_location_offset);
+    // }
+    // block.sync();
 
     auto const num_cols = output_values.num_columns();
     while (col_end < num_cols) {
@@ -256,9 +287,23 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(size_type num_rows,
       block.sync();
     }  // while (col_end < num_cols)
 
-    if (row_end >= num_rows) { break; }
+    if (row_end + cudf::detail::grid_1d::grid_stride() >= num_rows) { break; }
     ++iter;
-    row_start = row_end;
+
+    // if (iter > 2) {
+    //   if (block.thread_rank() == 0) {
+    //     printf("block id = %d, break at line %d, row_end = %d, num_rows = %d, \n",
+    //            (int)blockIdx.x,
+    //            __LINE__,
+    //            row_end,
+    //            num_rows);
+    //   }
+
+    //   break;
+    // }
+
+    if (block.thread_rank() == 0) { row_start = row_end; }
+    block.sync();
   }  // while (true)
 }
 

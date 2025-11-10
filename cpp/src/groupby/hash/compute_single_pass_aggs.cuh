@@ -48,6 +48,8 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   // shared memory for shared memory aggregations, or when SUM_WITH_OVERFLOW aggregations are
   // present.
   auto const run_aggs_by_global_mem_kernel = [&] {
+    printf("Run agg by global mem\n");
+    fflush(stdout);
     auto [agg_results, unique_key_indices] = compute_global_memory_aggs(
       row_bitmask, values, global_set, agg_kinds, d_agg_kinds, stream, mr);
     finalize_output(values, aggs, agg_results, cache, stream);
@@ -89,6 +91,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   // need to store a separate map for each iteration.
   rmm::device_uvector<size_type> global_mapping_indices(
     num_strides * grid_size * GROUPBY_SHM_MAX_ELEMENTS, stream);
+
   // Some positions in `global_mapping_indices` will be unused.
   // We just initialize them with a sentinel value so later on we know to ignore them.
   thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
