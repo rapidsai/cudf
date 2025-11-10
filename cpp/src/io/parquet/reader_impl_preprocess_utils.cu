@@ -235,7 +235,7 @@ void generate_depth_remappings(
 
   kernel_error error_code(stream);
   chunks.host_to_device_async(stream);
-  decode_page_headers(chunks.device_ptr(), nullptr, chunks.size(), error_code.data(), stream);
+  count_page_headers(chunks.device_ptr(), chunks.size(), error_code.data(), stream);
   chunks.device_to_host(stream);
 
   // It's required to ignore unsupported encodings in this function

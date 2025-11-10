@@ -20,14 +20,18 @@
 
 namespace cudf::io::parquet::detail {
 
+namespace {
+
 auto constexpr decode_page_headers_block_size     = 128;
 auto constexpr build_string_dict_index_block_size = 128;
 
 namespace cg = cooperative_groups;
 
-// Minimal thrift implementation for parsing page headers
-// https://github.com/apache/thrift/blob/master/doc/specs/thrift-compact-protocol.md
-
+/**
+ * @brief Minimal thrift implementation for parsing page headers
+ *
+ * See: https://github.com/apache/thrift/blob/master/doc/specs/thrift-compact-protocol.md
+ */
 struct byte_stream_s {
   uint8_t const* cur{};
   uint8_t const* end{};
@@ -41,7 +45,7 @@ struct byte_stream_s {
 /**
  * @brief Get current byte from the byte stream
  *
- * @param[in] bs Byte stream
+ * @param bs Byte stream
  *
  * @return Current byte pointed to by the byte stream
  */
@@ -63,7 +67,7 @@ inline __device__ void skip_bytes(byte_stream_s* bs, size_t bytecnt)
  * integer. Most significant bit of each byte indicates if more bytes
  * are to be used to form the number.
  *
- * @param[in] bs Byte stream
+ * @param bs Byte stream
  *
  * @return Decoded 32 bit integer
  */
@@ -85,7 +89,7 @@ __device__ uint32_t get_u32(byte_stream_s* bs)
  * -1^(n%2) * ceil(n/2), with the exception of 0 which remains the same.
  * i.e. 0, 1, 2, 3, 4, 5 etc convert to 0, -1, 1, -2, 2 respectively.
  *
- * @param[in] bs Byte stream
+ * @param bs Byte stream
  *
  * @return Decoded 32 bit integer
  */
@@ -95,6 +99,12 @@ inline __device__ int32_t get_i32(byte_stream_s* bs)
   return (int32_t)((u >> 1u) ^ -(int32_t)(u & 1));
 }
 
+/**
+ * @brief Skip a struct field in the byte stream
+ *
+ * @param bs Byte stream
+ * @param field_type Field type
+ */
 __device__ void skip_struct_field(byte_stream_s* bs, int field_type)
 {
   int struct_depth = 0;
@@ -139,21 +149,49 @@ __device__ void skip_struct_field(byte_stream_s* bs, int field_type)
   } while (rep_cnt || struct_depth);
 }
 
+/**
+ * @brief Check if the column chunk has nesting
+ *
+ * @param chunk Column chunk
+ *
+ * @return True if the column chunk has nesting
+ */
 __device__ inline bool is_nested(ColumnChunkDesc const& chunk)
 {
   return chunk.max_nesting_depth > 1;
 }
 
+/**
+ * @brief Check if the column chunk is a list type
+ *
+ * @param chunk Column chunk
+ *
+ * @return True if the column chunk is a list type
+ */
 __device__ inline bool is_list(ColumnChunkDesc const& chunk)
 {
   return chunk.max_level[level_type::REPETITION] > 0;
 }
 
+/**
+ * @brief Check if the column chunk is a byte array type
+ *
+ * @param chunk Column chunk
+ *
+ * @return True if the column chunk is a byte array type
+ */
 __device__ inline bool is_byte_array(ColumnChunkDesc const& chunk)
 {
   return chunk.physical_type == Type::BYTE_ARRAY;
 }
 
+/**
+ * @brief Check if the column chunk is a boolean type
+ *
+ * @param chunk Column chunk
+ *
+ * @return True if the column chunk is a boolean type
+ */
 __device__ inline bool is_boolean(ColumnChunkDesc const& chunk)
 {
   return chunk.physical_type == Type::BOOLEAN;
@@ -374,6 +412,13 @@ inline __device__ bool parse_header(thrust::tuple<Operator...>& op, byte_stream_
   return true;
 }
 
+/**
+ * @brief Functor to parse v1 data page header
+ *
+ * @param bs Byte stream
+ *
+ * @return True if the data page header is parsed successfully
+ */
 struct parse_data_page_header_fn {
   __device__ bool operator()(byte_stream_s* bs)
   {
@@ -385,6 +430,13 @@ struct parse_data_page_header_fn {
   }
 };
 
+/**
+ * @brief Functor to parse dictionary page header
+ *
+ * @param bs Byte stream
+ *
+ * @return True if the dictionary page header is parsed successfully
+ */
 struct parse_dictionary_page_header_fn {
   __device__ bool operator()(byte_stream_s* bs)
   {
@@ -394,6 +446,13 @@ struct parse_dictionary_page_header_fn {
   }
 };
 
+/**
+ * @brief Functor to parse V2 data page header
+ *
+ * @param bs Byte stream
+ *
+ * @return True if the data page header V2 is parsed successfully
+ */
 struct parse_data_page_header_v2_fn {
   __device__ bool operator()(byte_stream_s* bs)
   {
@@ -408,6 +467,13 @@ struct parse_data_page_header_v2_fn {
   }
 };
 
+/**
+ * @brief Functor to parse page header from byte stream
+ *
+ * @param bs Byte stream
+ *
+ * @return True if the page header is parsed successfully
+ */
 struct parse_page_header_fn {
   __device__ bool operator()(byte_stream_s* bs)
   {
@@ -420,6 +486,39 @@ struct parse_page_header_fn {
     return parse_header(op, bs);
   }
 };
+
+/**
+ * @brief Zero out page header info
+ *
+ * @param bs Byte stream
+ */
+void __forceinline__ __device__ zero_out_page_header_info(byte_stream_s* bs)
+{
+  // this computation is only valid for flat schemas. for nested schemas,
+  // they will be recomputed in the preprocess step by examining repetition and
+  // definition levels
+  bs->page.chunk_row            = 0;
+  bs->page.num_rows             = 0;
+  bs->page.is_num_rows_adjusted = false;
+  bs->page.skipped_values       = -1;
+  bs->page.skipped_leaf_values  = 0;
+  bs->page.str_bytes            = 0;
+  bs->page.str_bytes_from_index = 0;
+  bs->page.num_valids           = 0;
+  bs->page.start_val            = 0;
+  bs->page.end_val              = 0;
+  bs->page.has_page_index       = false;
+  bs->page.temp_string_size     = 0;
+  bs->page.temp_string_buf      = nullptr;
+  bs->page.kernel_mask          = decode_kernel_mask::NONE;
+  bs->page.is_compressed        = true;
+  bs->page.flags                = 0;
+  bs->page.str_bytes_all        = 0;
+  // zero out V2 info
+  bs->page.num_nulls                         = 0;
+  bs->page.lvl_bytes[level_type::DEFINITION] = 0;
+  bs->page.lvl_bytes[level_type::REPETITION] = 0;
+}
 
 /**
  * @brief Kernel for outputting page headers from the specified column chunks
@@ -464,24 +563,9 @@ void __launch_bounds__(decode_page_headers_block_size)
       bs->end                 = bs->base + bs->ck.compressed_size;
       bs->page.chunk_idx      = chunk;
       bs->page.src_col_schema = bs->ck.src_col_schema;
-      // this computation is only valid for flat schemas. for nested schemas,
-      // they will be recomputed in the preprocess step by examining repetition and
-      // definition levels
-      bs->page.chunk_row            = 0;
-      bs->page.num_rows             = 0;
-      bs->page.is_num_rows_adjusted = false;
-      bs->page.skipped_values       = -1;
-      bs->page.skipped_leaf_values  = 0;
-      bs->page.str_bytes            = 0;
-      bs->page.str_bytes_from_index = 0;
-      bs->page.num_valids           = 0;
-      bs->page.start_val            = 0;
-      bs->page.end_val              = 0;
-      bs->page.has_page_index       = false;
-      bs->page.temp_string_size     = 0;
-      bs->page.temp_string_buf      = nullptr;
-      bs->page.kernel_mask          = decode_kernel_mask::NONE;
-      bs->page.is_compressed        = true;
+
+      // Zero out the rest of the page header info
+      zero_out_page_header_info(bs);
     }
     num_values    = bs->ck.num_values;
     page_info     = chunk_pages ? chunk_pages[chunk].pages : nullptr;
@@ -504,50 +588,47 @@ void __launch_bounds__(decode_page_headers_block_size)
         bs->page.num_nulls                         = 0;
         bs->page.lvl_bytes[level_type::DEFINITION] = 0;
         bs->page.lvl_bytes[level_type::REPETITION] = 0;
-        if (not parse_page_header_fn{}(bs)) {
+        if (not parse_page_header_fn{}(bs) or bs->page.compressed_page_size < 0) {
           error[warp_id] |= static_cast<int32_t>(decode_error::INVALID_PAGE_HEADER);
           break;
         }
-        if (bs->page.compressed_page_size >= 0) {
-          if (not is_supported_encoding(bs->page.encoding)) {
-            error[warp_id] |= static_cast<int32_t>(decode_error::UNSUPPORTED_ENCODING);
-          }
-          switch (bs->page_type) {
-            case PageType::DATA_PAGE:
-              index_out = num_dict_pages + data_page_count;
-              data_page_count++;
-              // this computation is only valid for flat schemas. for nested schemas,
-              // they will be recomputed in the preprocess step by examining repetition and
-              // definition levels
-              bs->page.num_rows = bs->page.num_input_values;
-              values_found += bs->page.num_input_values;
-              break;
-            case PageType::DATA_PAGE_V2:
-              index_out = num_dict_pages + data_page_count;
-              data_page_count++;
-              bs->page.flags |= PAGEINFO_FLAGS_V2;
-              values_found += bs->page.num_input_values;
-              // V2 only uses RLE, so it was removed from the header
-              bs->page.definition_level_encoding = Encoding::RLE;
-              bs->page.repetition_level_encoding = Encoding::RLE;
-              break;
-            case PageType::DICTIONARY_PAGE:
-              index_out = dictionary_page_count;
-              dictionary_page_count++;
-              bs->page.flags |= PAGEINFO_FLAGS_DICTIONARY;
-              break;
-            default: index_out = -1; break;
-          }
-          bs->page.page_data = const_cast<uint8_t*>(bs->cur);
-          bs->cur += bs->page.compressed_page_size;
-          if (bs->cur > bs->end) {
-            error[warp_id] |=
-              static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN);
-          }
-          bs->page.kernel_mask = kernel_mask_for_page(bs->page, bs->ck);
-        } else {
-          bs->cur = bs->end;
+        if (not is_supported_encoding(bs->page.encoding)) {
+          error[warp_id] |= static_cast<int32_t>(decode_error::UNSUPPORTED_ENCODING);
+          break;
         }
+        switch (bs->page_type) {
+          case PageType::DATA_PAGE:
+            index_out = num_dict_pages + data_page_count;
+            data_page_count++;
+            // this computation is only valid for flat schemas. for nested schemas,
+            // they will be recomputed in the preprocess step by examining repetition and
+            // definition levels
+            bs->page.num_rows = bs->page.num_input_values;
+            values_found += bs->page.num_input_values;
+            break;
+          case PageType::DATA_PAGE_V2:
+            index_out = num_dict_pages + data_page_count;
+            data_page_count++;
+            bs->page.flags |= PAGEINFO_FLAGS_V2;
+            values_found += bs->page.num_input_values;
+            // V2 only uses RLE, so it was removed from the header
+            bs->page.definition_level_encoding = Encoding::RLE;
+            bs->page.repetition_level_encoding = Encoding::RLE;
+            break;
+          case PageType::DICTIONARY_PAGE:
+            index_out = dictionary_page_count;
+            dictionary_page_count++;
+            bs->page.flags |= PAGEINFO_FLAGS_DICTIONARY;
+            break;
+          default: index_out = -1; break;
+        }
+        bs->page.page_data = const_cast<uint8_t*>(bs->cur);
+        bs->cur += bs->page.compressed_page_size;
+        if (bs->cur > bs->end) {
+          error[warp_id] |=
+            static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN);
+        }
+        bs->page.kernel_mask = kernel_mask_for_page(bs->page, bs->ck);
       }
       index_out = shuffle(index_out);
       if (index_out >= 0 && index_out < max_num_pages && lane_id == 0) {
@@ -563,6 +644,67 @@ void __launch_bounds__(decode_page_headers_block_size)
     }
   }
 }
+
+/**
+ * @brief Functor to count page headers from column chunk data buffers
+ */
+struct count_page_headers_fn {
+  ColumnChunkDesc* colchunks;
+  cudf::size_type num_chunks;
+  kernel_error::pointer error_code;
+  __device__ void operator()(size_type chunk_idx) const noexcept
+  {
+    byte_stream_s bs{};
+    bs.ck   = colchunks[chunk_idx];
+    bs.base = bs.cur = bs.ck.compressed_data;
+    bs.end           = bs.base + bs.ck.compressed_size;
+    // Check if byte stream pointers are valid.
+    if (bs.end < bs.cur) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN),
+                error_code);
+      return;
+    }
+    auto const max_num_values  = bs.ck.num_values;
+    auto values_found          = 0;
+    auto data_page_count       = 0;
+    auto dictionary_page_count = 0;
+    while (values_found < max_num_values and bs.cur < bs.end) {
+      if (not parse_page_header_fn{}(&bs) or bs.page.compressed_page_size < 0) {
+        set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_HEADER),
+                  error_code);
+        return;
+      }
+      if (not is_supported_encoding(bs.page.encoding)) {
+        set_error(static_cast<kernel_error::value_type>(decode_error::UNSUPPORTED_ENCODING),
+                  error_code);
+        return;
+      }
+      switch (bs.page_type) {
+        case PageType::DATA_PAGE:
+          data_page_count++;
+          values_found += bs.page.num_input_values;
+          break;
+        case PageType::DATA_PAGE_V2:
+          data_page_count++;
+          values_found += bs.page.num_input_values;
+          break;
+        case PageType::DICTIONARY_PAGE: dictionary_page_count++; break;
+        default:
+          set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_TYPE),
+                    error_code);
+          break;
+      }
+      bs.cur += bs.page.compressed_page_size;
+      if (bs.cur > bs.end) {
+        set_error(static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN),
+                  error_code);
+      }
+    }
+
+    colchunks[chunk_idx].num_data_pages = data_page_count;
+    colchunks[chunk_idx].num_dict_pages = dictionary_page_count;
+  }
+};
 
 /**
  * @brief Functor to decode page headers from specified page locations
@@ -604,75 +746,45 @@ struct decode_page_headers_with_pgidx_fn {
     }
     bs.page.chunk_idx      = chunk_idx;
     bs.page.src_col_schema = bs.ck.src_col_schema;
-    // this computation is only valid for flat schemas. for nested schemas,
-    // they will be recomputed in the preprocess step by examining repetition and
-    // definition levels
-    bs.page.chunk_row            = 0;
-    bs.page.num_rows             = 0;
-    bs.page.is_num_rows_adjusted = false;
-    bs.page.skipped_values       = -1;
-    bs.page.skipped_leaf_values  = 0;
-    bs.page.str_bytes            = 0;
-    bs.page.str_bytes_from_index = 0;
-    bs.page.num_valids           = 0;
-    bs.page.start_val            = 0;
-    bs.page.end_val              = 0;
-    bs.page.has_page_index       = false;
-    bs.page.temp_string_size     = 0;
-    bs.page.temp_string_buf      = nullptr;
-    bs.page.kernel_mask          = decode_kernel_mask::NONE;
-    bs.page.is_compressed        = true;
 
-    // this computation is only valid for flat schemas. for nested schemas,
-    // they will be recomputed in the preprocess step by examining repetition and
-    // definition levels
-    bs.page.chunk_row += bs.page.num_rows;
-    bs.page.num_rows      = 0;
-    bs.page.flags         = 0;
-    bs.page.str_bytes     = 0;
-    bs.page.str_bytes_all = 0;
-    // zero out V2 info
-    bs.page.num_nulls                         = 0;
-    bs.page.lvl_bytes[level_type::DEFINITION] = 0;
-    bs.page.lvl_bytes[level_type::REPETITION] = 0;
+    // Zero out the rest of the page header info
+    zero_out_page_header_info(&bs);
 
-    if (not parse_page_header_fn{}(&bs)) {
+    // bs.page.chunk_row not computed here and will be filled in later by
+    // `fill_in_page_info()`.
+
+    if (not parse_page_header_fn{}(&bs) or bs.page.compressed_page_size < 0) {
       set_error(static_cast<kernel_error::value_type>(decode_error::UNSUPPORTED_ENCODING),
                 error_code);
       return;
     }
-    if (bs.page.compressed_page_size >= 0) {
-      if (not is_supported_encoding(bs.page.encoding)) {
-        set_error(static_cast<kernel_error::value_type>(decode_error::UNSUPPORTED_ENCODING),
-                  error_code);
-        return;
-      }
-      switch (bs.page_type) {
-        case PageType::DATA_PAGE:
-          // this computation is only valid for flat schemas. for nested schemas,
-          // they will be recomputed in the preprocess step by examining repetition and
-          // definition levels
-          bs.page.num_rows = bs.page.num_input_values;
-          break;
-        case PageType::DATA_PAGE_V2:
-          bs.page.flags |= PAGEINFO_FLAGS_V2;
-          // V2 only uses RLE, so it was removed from the header
-          bs.page.definition_level_encoding = Encoding::RLE;
-          bs.page.repetition_level_encoding = Encoding::RLE;
-          break;
-        case PageType::DICTIONARY_PAGE: bs.page.flags |= PAGEINFO_FLAGS_DICTIONARY; break;
-        default:
-          set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_TYPE),
-                    error_code);
-          return;
-      }
-
-      bs.page.page_data   = const_cast<uint8_t*>(bs.cur);
-      bs.page.kernel_mask = kernel_mask_for_page(bs.page, bs.ck);
-    } else {
-      set_error(static_cast<kernel_error::value_type>(decode_error::EMPTY_PAGE), error_code);
+    if (not is_supported_encoding(bs.page.encoding)) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::UNSUPPORTED_ENCODING),
+                error_code);
       return;
     }
+    switch (bs.page_type) {
+      case PageType::DATA_PAGE:
+        // this computation is only valid for flat schemas. for nested schemas,
+        // they will be recomputed in the preprocess step by examining repetition and
+        // definition levels
+        bs.page.num_rows = bs.page.num_input_values;
+        break;
+      case PageType::DATA_PAGE_V2:
+        bs.page.flags |= PAGEINFO_FLAGS_V2;
+        // V2 only uses RLE, so it was removed from the header
+        bs.page.definition_level_encoding = Encoding::RLE;
+        bs.page.repetition_level_encoding = Encoding::RLE;
+        break;
+      case PageType::DICTIONARY_PAGE: bs.page.flags |= PAGEINFO_FLAGS_DICTIONARY; break;
+      default:
+        set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_TYPE),
+                  error_code);
+        return;
+    }
+
+    bs.page.page_data   = const_cast<uint8_t*>(bs.cur);
+    bs.page.kernel_mask = kernel_mask_for_page(bs.page, bs.ck);
 
     // Copy over the page info from byte stream
     pages[page_idx] = bs.page;
@@ -739,6 +851,20 @@ CUDF_KERNEL void __launch_bounds__(build_string_dict_index_block_size)
       dict_index[i].second = len;
     }
   }
+}
+
+}  // namespace
+
+void count_page_headers(ColumnChunkDesc* chunks,
+                        cudf::size_type num_chunks,
+                        kernel_error::pointer error_code,
+                        rmm::cuda_stream_view stream)
+{
+  thrust::for_each(
+    rmm::exec_policy_nosync(stream),
+    thrust::counting_iterator(0),
+    thrust::counting_iterator(num_chunks),
+    count_page_headers_fn{.colchunks = chunks, .num_chunks = num_chunks, .error_code = error_code});
 }
 
 void decode_page_headers(ColumnChunkDesc* chunks,

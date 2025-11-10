@@ -684,6 +684,18 @@ __device__ inline bool is_literal_run(int const run_header) { return (run_header
 __device__ inline bool is_repeated_run(int const run_header) { return !is_literal_run(run_header); }
 
 /**
+ * @brief Launches kernel for counting page headers from column chunk data buffers
+ *
+ * @param[in] chunks List of column chunks
+ * @param[in] num_chunks Number of column chunks
+ * @param[out] error_code Error code for kernel failures
+ * @param[in] stream CUDA stream to use
+ */
+void count_page_headers(ColumnChunkDesc* chunks,
+                        cudf::size_type num_chunks,
+                        kernel_error::pointer error_code,
+                        rmm::cuda_stream_view stream);
+/**
  * @brief Launches kernel for parsing the page headers in the column chunks
  *
  * @param[in] chunks List of column chunks
