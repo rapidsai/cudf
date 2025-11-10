@@ -79,7 +79,7 @@ def _(ir: Union, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManag
     nodes, channels = process_children(ir, rec)
 
     # Create output ChannelManager
-    channels[ir] = ChannelManager()
+    channels[ir] = ChannelManager(rec.state["context"])
 
     # Add simple python node
     nodes.append(
