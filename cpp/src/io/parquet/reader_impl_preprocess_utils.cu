@@ -494,21 +494,15 @@ void decode_page_headers(pass_intermediate_data& pass,
       host_page_locations, stream, cudf::get_current_device_resource_ref());
 
     // Accelerated decode page headers, one thread per page
-    decode_page_headers_with_pgidx(pass.chunks.d_begin(),
-                                   unsorted_pages.begin(),
+    decode_page_headers_with_pgidx(pass.chunks,
+                                   unsorted_pages,
                                    page_locations.begin(),
                                    chunk_page_offsets.begin(),
-                                   pass.chunks.size(),
-                                   unsorted_pages.size(),
                                    error_code.data(),
                                    stream);
   } else {
     // (Slow) decode page headers, one warp (lane) per pages of a chunk
-    decode_page_headers(pass.chunks.d_begin(),
-                        d_chunk_page_info.begin(),
-                        pass.chunks.size(),
-                        error_code.data(),
-                        stream);
+    decode_page_headers(pass.chunks, d_chunk_page_info.begin(), error_code.data(), stream);
   }
 
   if (auto const error = error_code.value_sync(stream); error != 0) {

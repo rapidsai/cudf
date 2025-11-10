@@ -696,36 +696,30 @@ void count_page_headers(cudf::detail::hostdevice_span<ColumnChunkDesc> chunks,
 /**
  * @brief Launches kernel for parsing the page headers in the column chunks
  *
- * @param[in] chunks List of column chunks
+ * @param[in] chunks Device span of column chunks
  * @param[in] chunk_pages List of pages associated with the chunks, in chunk-sorted order
- * @param[in] num_chunks Number of column chunks
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
-void decode_page_headers(ColumnChunkDesc* chunks,
+void decode_page_headers(cudf::device_span<ColumnChunkDesc> chunks,
                          chunk_page_info* chunk_pages,
-                         int32_t num_chunks,
                          kernel_error::pointer error_code,
                          rmm::cuda_stream_view stream);
 
 /**
  * @brief Decode page headers from specified page locations from the page index
  *
- * @param[in] chunks List of column chunks
- * @param[out] pages List of pages
+ * @param[in] chunks Device span of column chunks
+ * @param[out] pages Device span of pages
  * @param[in] page_locations List of page locations
  * @param[in] chunk_page_offsets List of running count of page locations per column chunk
- * @param[in] num_chunks Number of column chunks
- * @param[in] num_pages Number of pages
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
-void decode_page_headers_with_pgidx(ColumnChunkDesc* chunks,
-                                    PageInfo* pages,
+void decode_page_headers_with_pgidx(cudf::device_span<ColumnChunkDesc> chunks,
+                                    cudf::device_span<PageInfo> pages,
                                     uint8_t** page_locations,
                                     size_type* chunk_page_offsets,
-                                    cudf::size_type num_chunks,
-                                    cudf::size_type num_pages,
                                     kernel_error::pointer error_code,
                                     rmm::cuda_stream_view stream);
 

@@ -62,8 +62,7 @@ void decode_dictionary_page_headers(cudf::detail::hostdevice_span<ColumnChunkDes
 
   parquet::kernel_error error_code(stream);
 
-  parquet::detail::decode_page_headers(
-    chunks.device_begin(), chunk_page_info.begin(), chunks.size(), error_code.data(), stream);
+  parquet::detail::decode_page_headers(chunks, chunk_page_info.begin(), error_code.data(), stream);
 
   if (auto const error = error_code.value_sync(stream); error != 0) {
     CUDF_FAIL("Parquet header parsing failed with code(s) " +
