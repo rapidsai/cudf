@@ -566,7 +566,7 @@ void __launch_bounds__(decode_page_headers_block_size)
     zero_out_page_header_info(bs);
   }
 
-  size_t num_values              = bs->ck.num_values;
+  size_t const num_values        = bs->ck.num_values;
   size_t values_found            = 0;
   uint32_t data_page_count       = 0;
   uint32_t dictionary_page_count = 0;
@@ -636,7 +636,6 @@ void __launch_bounds__(decode_page_headers_block_size)
     if (index_out >= 0 && index_out < max_num_pages && lane_id == 0) {
       page_info[index_out] = bs->page;
     }
-    num_values = shuffle(num_values);
     warp.sync();
   }
   if (lane_id == 0) {
@@ -695,8 +694,8 @@ CUDF_KERNEL void __launch_bounds__(count_page_headers_block_size)
   auto data_page_count       = 0;
   auto dictionary_page_count = 0;
 
-  if (lane_id == 0) {
-    while (values_found < max_num_values and bs->cur < bs->end) {
+  while (values_found < max_num_values and bs->cur < bs->end) {
+    if (lane_id == 0) {
       if (not parse_page_header_fn{}(bs) or bs->page.compressed_page_size < 0) {
         error[warp_id] |= static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_HEADER);
         break;
@@ -726,6 +725,7 @@ CUDF_KERNEL void __launch_bounds__(count_page_headers_block_size)
                   error_code);
       }
     }
+    warp.sync();
   }
 
   if (lane_id == 0) {
