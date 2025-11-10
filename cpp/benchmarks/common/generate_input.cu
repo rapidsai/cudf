@@ -606,20 +606,7 @@ std::unique_ptr<cudf::column> create_distinct_rows_column(data_profile const& pr
                                                           thrust::minstd_rand& engine,
                                                           cudf::size_type num_rows)
 {
-  //return create_random_column<T>(profile, engine, num_rows);
-  auto init = cudf::make_fixed_width_scalar(T{});
-  auto col  = cudf::sequence(num_rows, *init);
-
-  if (profile.get_null_probability().has_value()) {
-    auto valid_dist =
-      random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_probability().value()});
-    auto null_mask = valid_dist(engine, num_rows);
-    auto [result_bitmask, null_count] =
-      cudf::bools_to_mask(cudf::device_span<bool const>(null_mask), cudf::get_default_stream());
-    col->set_null_mask(std::move(*result_bitmask.release()), null_count);
-  }
-
-  return std::move(cudf::sample(cudf::table_view({col->view()}), num_rows)->release()[0]);
+  return create_random_column<T>(profile, engine, num_rows);
 }
 
 /**
