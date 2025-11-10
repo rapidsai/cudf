@@ -228,14 +228,14 @@ void generate_depth_remappings(
   return std::async(std::launch::deferred, sync_fn, std::move(read_tasks));
 }
 
-[[nodiscard]] size_t count_page_headers(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks,
+[[nodiscard]] size_t count_page_headers(cudf::detail::hostdevice_span<ColumnChunkDesc> chunks,
                                         rmm::cuda_stream_view stream)
 {
   size_t total_pages = 0;
 
   kernel_error error_code(stream);
   chunks.host_to_device_async(stream);
-  count_page_headers(chunks.device_ptr(), chunks.size(), error_code.data(), stream);
+  count_page_headers(chunks, error_code.data(), stream);
   chunks.device_to_host(stream);
 
   // It's required to ignore unsupported encodings in this function
@@ -248,23 +248,23 @@ void generate_depth_remappings(
               kernel_error::to_string(error));
   }
 
-  for (auto& chunk : chunks) {
-    total_pages += chunk.num_data_pages + chunk.num_dict_pages;
+  for (auto chunk = chunks.host_begin(); chunk != chunks.host_end(); std::advance(chunk, 1)) {
+    total_pages += chunk->num_data_pages + chunk->num_dict_pages;
   }
 
   return total_pages;
 }
 
 [[nodiscard]] size_t count_page_headers_with_pgidx(
-  cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks, rmm::cuda_stream_view stream)
+  cudf::detail::hostdevice_span<ColumnChunkDesc> chunks, rmm::cuda_stream_view stream)
 {
   size_t total_pages = 0;
-  for (auto& chunk : chunks) {
-    CUDF_EXPECTS(chunk.h_chunk_info != nullptr, "Expected non-null column info struct");
-    auto const& chunk_info = *chunk.h_chunk_info;
-    chunk.num_dict_pages   = chunk_info.has_dictionary() ? 1 : 0;
-    chunk.num_data_pages   = chunk_info.pages.size();
-    total_pages += chunk.num_data_pages + chunk.num_dict_pages;
+  for (auto chunk = chunks.host_begin(); chunk != chunks.host_end(); std::advance(chunk, 1)) {
+    CUDF_EXPECTS(chunk->h_chunk_info != nullptr, "Expected non-null column info struct");
+    auto const& chunk_info = *(chunk->h_chunk_info);
+    chunk->num_dict_pages  = static_cast<int32_t>(chunk_info.has_dictionary());
+    chunk->num_data_pages  = chunk_info.pages.size();
+    total_pages += chunk->num_data_pages + chunk->num_dict_pages;
   }
 
   // count_page_headers() also pushes chunks to device, so not using thrust here

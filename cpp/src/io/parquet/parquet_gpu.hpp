@@ -686,13 +686,11 @@ __device__ inline bool is_repeated_run(int const run_header) { return !is_litera
 /**
  * @brief Launches kernel for counting page headers from column chunk data buffers
  *
- * @param[in] chunks List of column chunks
- * @param[in] num_chunks Number of column chunks
+ * @param[in] chunks Device span of column chunks
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
-void count_page_headers(ColumnChunkDesc* chunks,
-                        cudf::size_type num_chunks,
+void count_page_headers(cudf::detail::hostdevice_span<ColumnChunkDesc> chunks,
                         kernel_error::pointer error_code,
                         rmm::cuda_stream_view stream);
 /**

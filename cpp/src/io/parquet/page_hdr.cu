@@ -649,13 +649,12 @@ void __launch_bounds__(decode_page_headers_block_size)
  * @brief Functor to count page headers from column chunk data buffers
  */
 struct count_page_headers_fn {
-  ColumnChunkDesc* colchunks;
-  cudf::size_type num_chunks;
+  ColumnChunkDesc* chunks;
   kernel_error::pointer error_code;
   __device__ void operator()(size_type chunk_idx) const noexcept
   {
     byte_stream_s bs{};
-    bs.ck   = colchunks[chunk_idx];
+    bs.ck   = chunks[chunk_idx];
     bs.base = bs.cur = bs.ck.compressed_data;
     bs.end           = bs.base + bs.ck.compressed_size;
     // Check if byte stream pointers are valid.
@@ -701,8 +700,8 @@ struct count_page_headers_fn {
       }
     }
 
-    colchunks[chunk_idx].num_data_pages = data_page_count;
-    colchunks[chunk_idx].num_dict_pages = dictionary_page_count;
+    chunks[chunk_idx].num_data_pages = data_page_count;
+    chunks[chunk_idx].num_dict_pages = dictionary_page_count;
   }
 };
 
@@ -855,16 +854,15 @@ CUDF_KERNEL void __launch_bounds__(build_string_dict_index_block_size)
 
 }  // namespace
 
-void count_page_headers(ColumnChunkDesc* chunks,
-                        cudf::size_type num_chunks,
+void count_page_headers(cudf::detail::hostdevice_span<ColumnChunkDesc> chunks,
                         kernel_error::pointer error_code,
                         rmm::cuda_stream_view stream)
 {
   thrust::for_each(
     rmm::exec_policy_nosync(stream),
-    thrust::counting_iterator(0),
-    thrust::counting_iterator(num_chunks),
-    count_page_headers_fn{.colchunks = chunks, .num_chunks = num_chunks, .error_code = error_code});
+    thrust::counting_iterator<size_t>(0),
+    thrust::counting_iterator(chunks.size()),
+    count_page_headers_fn{.chunks = chunks.device_begin(), .error_code = error_code});
 }
 
 void decode_page_headers(ColumnChunkDesc* chunks,
