@@ -552,9 +552,9 @@ def test_cudf_dtypes_from_pandas(tmpdir, data):
     # Use `split_row_groups=True` to avoid "fast path" where
     # schema is not is passed through in older Dask versions
 
-    # Allow reading mismatched projected columns
+    # Ignore missing projected column
     ddf2 = dask_cudf.read_parquet(
-        fn, split_row_groups=True, read={"allow_missing_columns": True}
+        fn, split_row_groups=True, read={"ignore_missing_columns": True}
     )
     dd.assert_eq(cudf.from_pandas(dfp), ddf2)
 

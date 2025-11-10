@@ -140,9 +140,9 @@ def test_groupby_agg_empty_partition(tmpdir, split_out):
 
     # Read back our two partitions as a single
     # dask_cudf DataFrame (one partition is now empty)
-    # Enable allow_missing_columns flag to fill in dropped 'y' column
+    # Enable ignore_missing_columns flag to ignore the dropped 'y' column
     ddf = dask_cudf.read_parquet(
-        str(tmpdir), read={"allow_missing_columns": True}
+        str(tmpdir), read={"ignore_missing_columns": True}
     )
     gb = ddf.groupby(["id"]).agg({"x": ["sum"]}, split_out=split_out)
 

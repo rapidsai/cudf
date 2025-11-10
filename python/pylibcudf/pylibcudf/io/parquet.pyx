@@ -250,20 +250,20 @@ cdef class ParquetReaderOptionsBuilder:
         self.c_obj.allow_mismatched_pq_schemas(val)
         return self
 
-    cpdef ParquetReaderOptionsBuilder allow_missing_columns(self, bool val):
+    cpdef ParquetReaderOptionsBuilder ignore_missing_columns(self, bool val):
         """
-        Sets to enable/disable reading of non-existent projected columns.
+        Sets to enable/disable ignoring of non-existent projected columns while reading.
 
         Parameters
         ----------
         val : bool
-            Boolean indicating whether to allow reading non-existent projected columns.
+            Boolean indicating whether to ignore non-existent projected columns while reading.
 
         Returns
         -------
         ParquetReaderOptionsBuilder
         """
-        self.c_obj.allow_missing_columns(val)
+        self.c_obj.ignore_missing_columns(val)
         return self
 
     cpdef ParquetReaderOptionsBuilder use_arrow_schema(self, bool val):

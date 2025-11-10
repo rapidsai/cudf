@@ -162,14 +162,14 @@ def test_read_parquet_filesystem(s3_base, s3so, pdf, filesystem):
                 filesystem=pa_fs.S3FileSystem(
                     endpoint_override=s3so["client_kwargs"]["endpoint_url"],
                 ),
-                read={"allow_missing_columns": True},
+                read={"ignore_missing_columns": True},
             )
         else:
             df = dask_cudf.read_parquet(
                 path,
                 storage_options=s3so,
                 filesystem=filesystem,
-                read={"allow_missing_columns": True},
+                read={"ignore_missing_columns": True},
             )
         assert df.b.sum().compute() == 9
         assert isinstance(df._meta, cudf.DataFrame)
@@ -188,7 +188,7 @@ def test_read_parquet_filesystem_explicit(s3_base, s3so, pdf):
             path, mode="rb", storage_options=s3so
         )[0]
         df = dask_cudf.read_parquet(
-            path, filesystem=fs, read={"allow_missing_columns": True}
+            path, filesystem=fs, read={"ignore_missing_columns": True}
         )
         assert df.b.sum().compute() == 9
 

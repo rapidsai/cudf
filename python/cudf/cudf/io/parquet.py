@@ -926,7 +926,7 @@ def read_parquet(
     nrows=None,
     skip_rows=None,
     allow_mismatched_pq_schemas=False,
-    allow_missing_columns=False,
+    ignore_missing_columns=False,
     *args,
     **kwargs,
 ):
@@ -1089,7 +1089,7 @@ def read_parquet(
         nrows=nrows,
         skip_rows=skip_rows,
         allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
-        allow_missing_columns=allow_missing_columns,
+        ignore_missing_columns=ignore_missing_columns,
         filters=ast_filter,
         **kwargs,
     )
@@ -1322,7 +1322,7 @@ def _read_parquet(
     nrows: int | None = None,
     skip_rows: int | None = None,
     allow_mismatched_pq_schemas: bool = False,
-    allow_missing_columns: bool = False,
+    ignore_missing_columns: bool = False,
     filters: plc_expr.Expression | None = None,
     *args,
     **kwargs,
@@ -1359,7 +1359,7 @@ def _read_parquet(
                 )
                 .use_pandas_metadata(use_pandas_metadata)
                 .allow_mismatched_pq_schemas(allow_mismatched_pq_schemas)
-                .allow_missing_columns(allow_missing_columns)
+                .ignore_missing_columns(ignore_missing_columns)
                 .build()
             )
             if row_groups is not None:
@@ -1427,7 +1427,7 @@ def _read_parquet(
                 )
                 .use_pandas_metadata(use_pandas_metadata)
                 .allow_mismatched_pq_schemas(allow_mismatched_pq_schemas)
-                .allow_missing_columns(allow_missing_columns)
+                .ignore_missing_columns(ignore_missing_columns)
                 .build()
             )
             if row_groups is not None:

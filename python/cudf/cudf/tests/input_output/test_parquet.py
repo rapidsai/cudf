@@ -664,7 +664,7 @@ def test_parquet_reader_allow_select_nonexistent_column():
         }
     )
     got = cudf.read_parquet(
-        buf, columns=["a", "d"], allow_missing_columns=True
+        buf, columns=["a", "d"], ignore_missing_columns=True
     )
     assert_eq(expect, got)
 

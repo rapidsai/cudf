@@ -209,14 +209,14 @@ aggregate_reader_metadata::select_payload_columns(
   std::optional<std::vector<std::string>> const& filter_column_names,
   bool include_index,
   bool strings_to_categorical,
-  bool allow_missing_columns,
+  bool ignore_missing_columns,
   type_id timestamp_type_id)
 {
   // If neither payload nor filter columns are specified, select all columns
   if (not payload_column_names.has_value() and not filter_column_names.has_value()) {
     // Call the base `select_columns()` method without specifying any columns
     return select_columns(
-      {}, {}, include_index, strings_to_categorical, allow_missing_columns, timestamp_type_id);
+      {}, {}, include_index, strings_to_categorical, ignore_missing_columns, timestamp_type_id);
   }
 
   std::vector<std::string> valid_payload_columns;
@@ -243,7 +243,7 @@ aggregate_reader_metadata::select_payload_columns(
                           {},
                           include_index,
                           strings_to_categorical,
-                          allow_missing_columns,
+                          ignore_missing_columns,
                           timestamp_type_id);
   }
 
@@ -275,7 +275,7 @@ aggregate_reader_metadata::select_payload_columns(
                         {},
                         include_index,
                         strings_to_categorical,
-                        allow_missing_columns,
+                        ignore_missing_columns,
                         timestamp_type_id);
 }
 
