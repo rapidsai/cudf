@@ -4644,48 +4644,49 @@ Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv* env,
 
     // 1) Gets the groups(keys, offsets, values) from groupby.
     //
-    // If the `jprojection_column_indices` is null, uses all_columns - key_columns as value columns;
+    // If the `jprojection_column_indices` is null, uses all_columns as projection columns;
     // If the `jprojection_column_indices` is not null, use the `jprojection_column_indices` columns
-    // as value columns.
-    std::vector<cudf::size_type> value_indices;
-    auto num_value_cols = [&]() -> size_t {
+    // as projection columns.
+    std::vector<cudf::size_type> projection_indices;
+    auto num_project_cols = [&]() -> size_t {
       if (jprojection_column_indices == NULL) {
-        // if a column is not in key columns, then it's a value column
-        auto num_v_cols = static_cast<size_t>(input_table->num_columns()) - key_indices.size();
-        value_indices.reserve(num_v_cols);
+        // if a column is not in key columns, then it's a projection column
+        auto num_non_key_cols =
+          static_cast<size_t>(input_table->num_columns()) - key_indices.size();
+        projection_indices.reserve(num_non_key_cols);
         cudf::size_type index = 0;
-        while (value_indices.size() < num_v_cols) {
+        while (projection_indices.size() < num_non_key_cols) {
           if (std::find(key_indices.begin(), key_indices.end(), index) == key_indices.end()) {
-            // not key column, so adds it as value column.
-            value_indices.emplace_back(index);
+            // not key column, so adds it as projection column.
+            projection_indices.emplace_back(index);
           }
           index++;
         }
-        return num_v_cols;
+        return num_non_key_cols;
       } else {
-        // use the specified columns as value columns
+        // use the specified projection columns as output columns
         cudf::jni::native_jintArray n_project_indices(env, jprojection_column_indices);
-        value_indices.reserve(n_project_indices.size());
+        projection_indices.reserve(n_project_indices.size());
         for (auto i = 0; i < n_project_indices.size(); i++) {
-          value_indices.emplace_back(n_project_indices[i]);
+          projection_indices.emplace_back(n_project_indices[i]);
         }
         return static_cast<size_t>(n_project_indices.size());
       }
     }();
 
-    cudf::table_view values_view = input_table->select(value_indices);
+    cudf::table_view projection_view = input_table->select(projection_indices);
     // execute grouping
-    cudf::groupby::groupby::groups groups = grouper.get_groups(values_view);
+    cudf::groupby::groupby::groups groups = grouper.get_groups(projection_view);
 
-    // if jprojection_column_indices is null, output both key columns and value columns;
-    // otherwise, only output value columns.
+    // if jprojection_column_indices is null, output both key columns and projection columns;
+    // otherwise, only output projection columns.
     auto num_grouped_cols =
-      num_value_cols + ((jprojection_column_indices == NULL) ? key_indices.size() : 0);
+      num_project_cols + ((jprojection_column_indices == NULL) ? key_indices.size() : 0);
 
     std::vector<cudf::column_view> grouped_cols(num_grouped_cols);
 
     if (jprojection_column_indices == NULL) {
-      // When builds the table view from keys and values of 'groups', restores the
+      // When builds the table view from keys and non-keys of 'groups', restores the
       // original order of columns (same order with that in input table).
       // key columns
       auto key_view    = groups.keys->view();
@@ -4694,20 +4695,20 @@ Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv* env,
         grouped_cols[key_id] = *key_view_it;
         key_view_it++;
       }
-      // value columns
-      auto value_view    = groups.values->view();
-      auto value_view_it = value_view.begin();
-      for (auto value_id : value_indices) {
-        grouped_cols[value_id] = *value_view_it;
-        value_view_it++;
+      // non-key columns
+      auto projection_view = groups.values->view();
+      auto project_view_it = projection_view.begin();
+      for (auto value_id : projection_indices) {
+        grouped_cols[value_id] = *project_view_it;
+        project_view_it++;
       }
     } else {
-      // specified value_indices, do not output keys columns by default
-      auto value_view    = groups.values->view();
-      auto value_view_it = value_view.begin();
-      for (size_t i = 0; i < num_value_cols; ++i) {
-        grouped_cols[i] = *value_view_it;
-        value_view_it++;
+      // specified projection_indices, do not output keys columns by default
+      auto projection_view = groups.values->view();
+      auto project_view_it = projection_view.begin();
+      for (size_t i = 0; i < num_project_cols; ++i) {
+        grouped_cols[i] = *project_view_it;
+        project_view_it++;
       }
     }
 
