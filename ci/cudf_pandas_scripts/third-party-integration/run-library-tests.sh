@@ -13,13 +13,13 @@ runtest() {
     local mode=$2
 
     echo "Running tests for $lib in $mode mode"
-    local plugin=""
+    local plugin=()
     if [ "$mode" = "cudf" ]; then
-        plugin="-p cudf.pandas"
+        plugin=("-p cudf.pandas")
     fi
 
     pytest \
-    "$plugin" \
+    "${plugin[@]}" \
     -v \
     --continue-on-collection-errors \
     --cache-clear \
