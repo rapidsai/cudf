@@ -272,3 +272,11 @@ def test_empty_df_astype(all_supported_types_as_str):
     result = df.astype(dtype=all_supported_types_as_str)
     assert_eq(df, result)
     assert_eq(df.to_pandas().astype(dtype=all_supported_types_as_str), result)
+
+
+@pytest.mark.parametrize("copy", [True, False])
+def test_dataframe_astype_no_copy(copy):
+    gdf = cudf.DataFrame({"a": [1, 2], "b": [3, 4]})
+    result = gdf.astype("int64", copy=copy)
+    assert_eq(result, gdf)
+    assert (result is gdf) is (not copy)
