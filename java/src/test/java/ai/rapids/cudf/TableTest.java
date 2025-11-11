@@ -8234,6 +8234,72 @@ public class TableTest extends CudfTestBase {
         assertEquals(0, splits2[0].getTable().getRowCount());
         assertEquals(0, uniqKeys.getRowCount());
       }
+
+      // table has 4 columns, but input keys has 5 columns, should throw exception
+      assertThrows(IllegalArgumentException.class,
+          () -> table.groupBy(0, 1, 1, 2, 3).contiguousSplitGroupsAndGenUniqKeys());
+    }
+  }
+
+  @Test
+  void testGroupByContiguousSplitGroupsSpecifyProjectionIndices() throws Exception {
+    try (Table table = new Table.TestBuilder()
+        .column(1, 1, 1, 1, 1, 1)
+        .column(1, 3, 3, 5, 5, 5)
+        .column(12, 14, 13, 17, 16, 18)
+        .column("s1", "s2", "s3", "s4", "s5", "s6")
+        .build()) {
+      // Normal case with primitive types.
+      try (Table expected1 = new Table.TestBuilder()
+          .column(12)
+          .column("s1").build();
+           Table expected2 = new Table.TestBuilder()
+               .column(14, 13)
+               .column("s2", "s3").build();
+           Table expected3 = new Table.TestBuilder()
+               .column(17, 16, 18)
+               .column("s4", "s5", "s6").build();
+           Table expectedUniqKeys = new Table.TestBuilder()
+               .column(1, 1, 1)
+               .column(1, 3, 5).build();
+           ContigSplitGroupByResult r =
+               table.groupBy(0, 1).contiguousSplitGroupsAndGenUniqKeys(new int[]{2, 3})) {
+        ContiguousTable[] splits = r.getGroups();
+        Table uniqKeys = r.getUniqKeyTable();
+
+        for (ContiguousTable ct : splits) {
+          if (ct.getRowCount() == 1) {
+            assertTablesAreEqual(expected1, ct.getTable());
+          } else if (ct.getRowCount() == 2) {
+            assertTablesAreEqual(expected2, ct.getTable());
+          } else if (ct.getRowCount() == 3) {
+            assertTablesAreEqual(expected3, ct.getTable());
+          } else {
+            throw new RuntimeException("unexpected behavior: contiguousSplitGroups");
+          }
+        }
+
+        // verify uniq keys table
+        assertTablesAreEqual(expectedUniqKeys, uniqKeys);
+      }
+
+      // Row count is 0
+      try (
+          Table emptyTable = new Table.TestBuilder()
+              .column(new Integer[0])
+              .column(new Integer[0])
+              .column(new Integer[0])
+              .column(new String[0]).build();
+          ContigSplitGroupByResult r =
+              emptyTable.groupBy(0, 1).contiguousSplitGroupsAndGenUniqKeys(new int[]{2, 3})) {
+        ContiguousTable[] splits = r.getGroups();
+        Table uniqKeys = r.getUniqKeyTable();
+
+        assertEquals(0, emptyTable.getRowCount());
+        assertEquals(1, splits.length);
+        assertEquals(0, splits[0].getTable().getRowCount());
+        assertEquals(0, uniqKeys.getRowCount());
+      }
     }
   }
 
