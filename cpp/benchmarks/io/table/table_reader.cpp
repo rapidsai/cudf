@@ -91,7 +91,7 @@ void BM_table_read_data_types(nvbench::state& state,
 }
 
 template <data_type DataType>
-void BM_table_read_wide_tables(nvbench::state& state,
+void BM_table_read_num_columns(nvbench::state& state,
                                nvbench::type_list<nvbench::enum_type<DataType>> type_list)
 {
   auto const d_type = get_type_or_group(static_cast<int32_t>(DataType));
@@ -127,7 +127,7 @@ NVBENCH_BENCH_TYPES(BM_table_read_data_types, NVBENCH_TYPE_AXES(d_type_list_redu
   .set_type_axes_names({"data_type"})
   .add_string_axis("io_type", {"FILEPATH", "HOST_BUFFER", "DEVICE_BUFFER"})
   .set_min_samples(4)
-  .add_int64_axis("data_size", {512 << 20});
+  .add_int64_axis("data_size", {128 << 20});
 
 NVBENCH_BENCH(BM_table_read_data_sizes)
   .set_name("table_read_data_sizes")
@@ -135,11 +135,11 @@ NVBENCH_BENCH(BM_table_read_data_sizes)
   .add_string_axis("io_type", {"FILEPATH", "HOST_BUFFER", "DEVICE_BUFFER"})
   .add_int64_power_of_two_axis("data_size", nvbench::range(24, 31, 1));  // 16MB to 2GB
 
-NVBENCH_BENCH_TYPES(BM_table_read_wide_tables,
+NVBENCH_BENCH_TYPES(BM_table_read_num_columns,
                     NVBENCH_TYPE_AXES(nvbench::enum_type_list<data_type::STRING>))
-  .set_name("table_read_wide_tables")
+  .set_name("table_read_num_columns")
   .set_type_axes_names({"data_type"})
-  .add_string_axis("io_type", {"FILEPATH", "HOST_BUFFER", "DEVICE_BUFFER"})
+  .add_string_axis("io_type", {"DEVICE_BUFFER"})
   .set_min_samples(4)
-  .add_int64_axis("data_size", {512 << 20})
-  .add_int64_axis("num_cols", {128, 256, 512, 1024, 2048});
+  .add_int64_axis("data_size", {128 << 20})
+  .add_int64_power_of_two_axis("num_cols", nvbench::range(0, 12, 2));  // 1 to 4096
