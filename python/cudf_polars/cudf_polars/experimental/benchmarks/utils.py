@@ -228,7 +228,7 @@ class RunConfig:
     suffix: str
     executor: ExecutorType
     runtime: str
-    stream_policy: str
+    stream_policy: str | None
     cluster: str
     scheduler: str  # Deprecated, kept for backward compatibility
     n_workers: int
@@ -274,10 +274,7 @@ class RunConfig:
 
         # Handle "auto" stream policy
         if stream_policy == "auto":
-            # TODO: Use pool by default for rapidsmpf runtime
-            # once stream-ordering bugs are fixed.
-            # See: https://github.com/rapidsai/cudf/issues/20484
-            stream_policy = "default"
+            stream_policy = None
 
         # Deal with deprecated scheduler argument
         # and non-streaming executors
@@ -580,7 +577,7 @@ def execute_query(
                     return evaluate_streaming(
                         ir,
                         translator.config_options,
-                    ).to_polars()
+                    )
                 assert_never(run_config.executor)
             else:
                 return q.collect(engine=engine)
