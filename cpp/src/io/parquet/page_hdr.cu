@@ -557,19 +557,16 @@ void __launch_bounds__(decode_page_headers_block_size)
   warp.sync();
 
   if (lane_id == 0) {
-    bs->base = bs->cur = bs->ck.compressed_data;
-    bs->end            = bs->base + bs->ck.compressed_size;
-    if (bs->end <= bs->cur) {
-      error[warp_id] |= static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN);
-    }
+    bs->base = bs->cur      = bs->ck.compressed_data;
+    bs->end                 = bs->base + bs->ck.compressed_size;
     bs->page.chunk_idx      = chunk;
     bs->page.src_col_schema = bs->ck.src_col_schema;
-
     // Zero out the rest of the page header info
     zero_out_page_header_info(bs);
   }
   warp.sync();
-  if (error[warp_id] != 0) {
+  // Check if byte stream pointers are valid.
+  if (bs->end <= bs->cur) {
     if (lane_id == 0) { set_error(error[warp_id], error_code); }
     return;
   }
@@ -683,13 +680,10 @@ CUDF_KERNEL void __launch_bounds__(count_page_headers_block_size)
     error[warp_id] = 0;
     bs->base = bs->cur = bs->ck.compressed_data;
     bs->end            = bs->base + bs->ck.compressed_size;
-    // Check if byte stream pointers are valid.
-    if (bs->end <= bs->cur) {
-      error[warp_id] |= static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN);
-    }
   }
   warp.sync();
-  if (error[warp_id] != 0) {
+  // Check if byte stream pointers are valid.
+  if (bs->end <= bs->cur) {
     if (lane_id == 0) { set_error(error[warp_id], error_code); }
     return;
   }
