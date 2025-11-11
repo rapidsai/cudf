@@ -541,9 +541,9 @@ void __launch_bounds__(decode_page_headers_block_size)
 
   auto const lane_id    = warp.thread_rank();
   auto const warp_id    = warp.meta_group_rank();
-  int const chunk       = (cg::this_grid().block_rank() * num_warps_per_block) + warp_id;
+  int const chunk_idx   = (cg::this_grid().block_rank() * num_warps_per_block) + warp_id;
   auto const num_chunks = static_cast<cudf::size_type>(chunks.size());
-  if (chunk >= num_chunks) { return; }
+  if (chunk_idx >= num_chunks) { return; }
 
   __shared__ byte_stream_s bs_g[num_warps_per_block];
   __shared__ kernel_error::value_type error[num_warps_per_block];
@@ -551,7 +551,7 @@ void __launch_bounds__(decode_page_headers_block_size)
   auto const bs = &bs_g[warp_id];
 
   if (lane_id == 0) {
-    bs->ck         = chunks[chunk];
+    bs->ck         = chunks[chunk_idx];
     error[warp_id] = 0;
   }
   warp.sync();
@@ -559,7 +559,7 @@ void __launch_bounds__(decode_page_headers_block_size)
   if (lane_id == 0) {
     bs->base = bs->cur      = bs->ck.compressed_data;
     bs->end                 = bs->base + bs->ck.compressed_size;
-    bs->page.chunk_idx      = chunk;
+    bs->page.chunk_idx      = chunk_idx;
     bs->page.src_col_schema = bs->ck.src_col_schema;
     // Zero out the rest of the page header info
     zero_out_page_header_info(bs);
@@ -575,7 +575,7 @@ void __launch_bounds__(decode_page_headers_block_size)
   size_t values_found            = 0;
   uint32_t data_page_count       = 0;
   uint32_t dictionary_page_count = 0;
-  PageInfo* page_info            = chunk_pages[chunk].pages;
+  PageInfo* page_info            = chunk_pages[chunk_idx].pages;
   int32_t const num_dict_pages   = bs->ck.num_dict_pages;
   int32_t const max_num_pages    = bs->ck.num_data_pages + bs->ck.num_dict_pages;
   warp.sync();
@@ -584,6 +584,7 @@ void __launch_bounds__(decode_page_headers_block_size)
     int index_out = -1;
 
     if (lane_id == 0) {
+      kernel_error::value_type local_error = 0;
       // this computation is only valid for flat schemas. for nested schemas,
       // they will be recomputed in the preprocess step by examining repetition and
       // definition levels
@@ -597,50 +598,51 @@ void __launch_bounds__(decode_page_headers_block_size)
       bs->page.lvl_bytes[level_type::DEFINITION] = 0;
       bs->page.lvl_bytes[level_type::REPETITION] = 0;
       if (not parse_page_header_fn{}(bs) or bs->page.compressed_page_size < 0) {
-        error[warp_id] |= static_cast<int32_t>(decode_error::INVALID_PAGE_HEADER);
-        break;
+        local_error |= static_cast<int32_t>(decode_error::INVALID_PAGE_HEADER);
       }
       if (not is_supported_encoding(bs->page.encoding)) {
-        error[warp_id] |= static_cast<int32_t>(decode_error::UNSUPPORTED_ENCODING);
-        break;
+        local_error |= static_cast<int32_t>(decode_error::UNSUPPORTED_ENCODING);
       }
-      switch (bs->page_type) {
-        case PageType::DATA_PAGE:
-          index_out = num_dict_pages + data_page_count;
-          data_page_count++;
-          // this computation is only valid for flat schemas. for nested schemas,
-          // they will be recomputed in the preprocess step by examining repetition and
-          // definition levels
-          bs->page.num_rows = bs->page.num_input_values;
-          values_found += bs->page.num_input_values;
-          break;
-        case PageType::DATA_PAGE_V2:
-          index_out = num_dict_pages + data_page_count;
-          data_page_count++;
-          bs->page.flags |= PAGEINFO_FLAGS_V2;
-          values_found += bs->page.num_input_values;
-          // V2 only uses RLE, so it was removed from the header
-          bs->page.definition_level_encoding = Encoding::RLE;
-          bs->page.repetition_level_encoding = Encoding::RLE;
-          break;
-        case PageType::DICTIONARY_PAGE:
-          index_out = dictionary_page_count;
-          dictionary_page_count++;
-          bs->page.flags |= PAGEINFO_FLAGS_DICTIONARY;
-          break;
-        default: index_out = -1; break;
+      if (local_error == 0) {
+        switch (bs->page_type) {
+          case PageType::DATA_PAGE:
+            index_out = num_dict_pages + data_page_count;
+            data_page_count++;
+            // this computation is only valid for flat schemas. for nested schemas,
+            // they will be recomputed in the preprocess step by examining repetition and
+            // definition levels
+            bs->page.num_rows = bs->page.num_input_values;
+            values_found += bs->page.num_input_values;
+            break;
+          case PageType::DATA_PAGE_V2:
+            index_out = num_dict_pages + data_page_count;
+            data_page_count++;
+            bs->page.flags |= PAGEINFO_FLAGS_V2;
+            values_found += bs->page.num_input_values;
+            // V2 only uses RLE, so it was removed from the header
+            bs->page.definition_level_encoding = Encoding::RLE;
+            bs->page.repetition_level_encoding = Encoding::RLE;
+            break;
+          case PageType::DICTIONARY_PAGE:
+            index_out = dictionary_page_count;
+            dictionary_page_count++;
+            bs->page.flags |= PAGEINFO_FLAGS_DICTIONARY;
+            break;
+          default: index_out = -1; break;
+        }
+        bs->page.page_data = const_cast<uint8_t*>(bs->cur);
+        bs->cur += bs->page.compressed_page_size;
+        if (bs->cur > bs->end) {
+          local_error |= static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN);
+        }
+        bs->page.kernel_mask = kernel_mask_for_page(bs->page, bs->ck);
+        if (index_out >= 0 and index_out < max_num_pages) {
+          page_info[index_out] = bs->page;
+        } else {
+          local_error |= static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_TYPE);
+        }
       }
-      bs->page.page_data = const_cast<uint8_t*>(bs->cur);
-      bs->cur += bs->page.compressed_page_size;
-      if (bs->cur > bs->end) {
-        error[warp_id] |= static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN);
-      }
-      bs->page.kernel_mask = kernel_mask_for_page(bs->page, bs->ck);
-      if (index_out >= 0 and index_out < max_num_pages) {
-        page_info[index_out] = bs->page;
-      } else {
-        error[warp_id] |= static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_TYPE);
-      }
+      if (local_error != 0) { error[warp_id] |= local_error; }
     }
     warp.sync();
     if (error[warp_id] != 0) { break; }
@@ -695,32 +697,34 @@ CUDF_KERNEL void __launch_bounds__(count_page_headers_block_size)
 
   while (values_found < max_num_values and bs->cur < bs->end) {
     if (lane_id == 0) {
+      kernel_error::value_type local_error = 0;
       if (not parse_page_header_fn{}(bs) or bs->page.compressed_page_size < 0) {
-        error[warp_id] |= static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_HEADER);
-        break;
+        local_error |= static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_HEADER);
       }
       if (not is_supported_encoding(bs->page.encoding)) {
-        error[warp_id] |= static_cast<kernel_error::value_type>(decode_error::UNSUPPORTED_ENCODING);
-        break;
+        local_error |= static_cast<kernel_error::value_type>(decode_error::UNSUPPORTED_ENCODING);
       }
-      switch (bs->page_type) {
-        case PageType::DATA_PAGE:
-          data_page_count++;
-          values_found += bs->page.num_input_values;
-          break;
-        case PageType::DATA_PAGE_V2:
-          data_page_count++;
-          values_found += bs->page.num_input_values;
-          break;
-        case PageType::DICTIONARY_PAGE: dictionary_page_count++; break;
-        default:
-          error[warp_id] |= static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_TYPE);
-          break;
+      if (local_error == 0) {
+        switch (bs->page_type) {
+          case PageType::DATA_PAGE:
+            data_page_count++;
+            values_found += bs->page.num_input_values;
+            break;
+          case PageType::DATA_PAGE_V2:
+            data_page_count++;
+            values_found += bs->page.num_input_values;
+            break;
+          case PageType::DICTIONARY_PAGE: dictionary_page_count++; break;
+          default:
+            local_error |= static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_TYPE);
+            break;
+        }
+        bs->cur += bs->page.compressed_page_size;
+        if (bs->cur > bs->end) {
+          local_error |= static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN);
+        }
       }
-      bs->cur += bs->page.compressed_page_size;
-      if (bs->cur > bs->end) {
-        error[warp_id] |= static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN);
-      }
+      if (local_error != 0) { error[warp_id] |= local_error; }
     }
     warp.sync();
     if (error[warp_id] != 0) { break; }
