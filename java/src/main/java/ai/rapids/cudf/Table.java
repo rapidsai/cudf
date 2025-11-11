@@ -4475,11 +4475,11 @@ public final class Table implements AutoCloseable {
      * for the memory to be released.
      */
     public ContiguousTable[] contiguousSplitGroups() {
-      int[] defaultValueIndices= null;
+      int[] defaultProjectColumnsIndices = null;
       try (ContigSplitGroupByResult ret = Table.contiguousSplitGroups(
           operation.table.nativeHandle,
-          operation.indices,
-          defaultValueIndices,
+          operation.indices, // keyIndices
+          defaultProjectColumnsIndices,
           groupByOptions.getIgnoreNullKeys(),
           groupByOptions.getKeySorted(),
           groupByOptions.getKeysDescending(),
@@ -4507,11 +4507,11 @@ public final class Table implements AutoCloseable {
      * @return The split groups and uniq key table.
      */
     public ContigSplitGroupByResult contiguousSplitGroupsAndGenUniqKeys() {
-      int[] defaultValueIndices = null;
+      int[] defaultProjectColumnsIndices = null;
       return Table.contiguousSplitGroups(
               operation.table.nativeHandle,
-              operation.indices,
-              defaultValueIndices,
+              operation.indices, // keyIndices
+              defaultProjectColumnsIndices,
               groupByOptions.getIgnoreNullKeys(),
               groupByOptions.getKeySorted(),
               groupByOptions.getKeysDescending(),

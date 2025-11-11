@@ -8234,11 +8234,15 @@ public class TableTest extends CudfTestBase {
         assertEquals(0, splits2[0].getTable().getRowCount());
         assertEquals(0, uniqKeys.getRowCount());
       }
+
+      // table has 4 columns, but input keys has 5 columns, should throw exception
+      assertThrows(CudfException.class,
+          () -> table.groupBy(0, 1, 1, 2, 3).contiguousSplitGroupsAndGenUniqKeys());
     }
   }
 
   @Test
-  void testGroupByContiguousSplitGroupsSpecifyValueIndices() throws Exception {
+  void testGroupByContiguousSplitGroupsSpecifyProjectionIndices() throws Exception {
     try (Table table = new Table.TestBuilder()
         .column(1, 1, 1, 1, 1, 1)
         .column(1, 3, 3, 5, 5, 5)

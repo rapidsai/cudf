@@ -4628,8 +4628,7 @@ Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv* env,
 
     // Prepares arguments for the groupby:
     //   (keys, null_handling, keys_are_sorted, column_order, null_precedence)
-    std::vector<cudf::size_type> key_indices(n_key_indices.data(),
-                                             n_key_indices.data() + n_key_indices.size());
+    std::vector<cudf::size_type> key_indices = n_key_indices.to_vector();
     auto keys = input_table->select(key_indices);
     auto null_handling =
       jignore_null_keys ? cudf::null_policy::EXCLUDE : cudf::null_policy::INCLUDE;
@@ -4653,6 +4652,11 @@ Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv* env,
         // if a column is not in key columns, then it's a projection column
         auto num_non_key_cols =
           static_cast<size_t>(input_table->num_columns()) - key_indices.size();
+        if (num_non_key_cols < 0) {
+          JNI_THROW_NEW(
+            env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, 
+            "The number of key columns is greater than the number of columns in the input table", 0);
+        }
         projection_indices.reserve(num_non_key_cols);
         cudf::size_type index = 0;
         while (projection_indices.size() < num_non_key_cols) {
@@ -4666,10 +4670,7 @@ Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv* env,
       } else {
         // use the specified projection columns as output columns
         cudf::jni::native_jintArray n_project_indices(env, jprojection_column_indices);
-        projection_indices.reserve(n_project_indices.size());
-        for (auto i = 0; i < n_project_indices.size(); i++) {
-          projection_indices.emplace_back(n_project_indices[i]);
-        }
+        projection_indices = n_project_indices.to_vector();
         return static_cast<size_t>(n_project_indices.size());
       }
     }();
