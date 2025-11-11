@@ -8236,7 +8236,7 @@ public class TableTest extends CudfTestBase {
       }
 
       // table has 4 columns, but input keys has 5 columns, should throw exception
-      assertThrows(CudfException.class,
+      assertThrows(IllegalArgumentException.class,
           () -> table.groupBy(0, 1, 1, 2, 3).contiguousSplitGroupsAndGenUniqKeys());
     }
   }

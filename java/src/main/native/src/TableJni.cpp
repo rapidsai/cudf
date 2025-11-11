@@ -4629,7 +4629,18 @@ Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv* env,
     // Prepares arguments for the groupby:
     //   (keys, null_handling, keys_are_sorted, column_order, null_precedence)
     std::vector<cudf::size_type> key_indices = n_key_indices.to_vector();
-    auto keys                                = input_table->select(key_indices);
+
+    // check number of key columns vs number of input columns
+    size_t num_cols_input = static_cast<size_t>(input_table->num_columns());
+    if (key_indices.size() > num_cols_input) {
+      JNI_THROW_NEW(
+        env,
+        cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
+        "The number of key columns is greater than the number of columns in the input table",
+        0);
+    }
+
+    auto keys = input_table->select(key_indices);
     auto null_handling =
       jignore_null_keys ? cudf::null_policy::EXCLUDE : cudf::null_policy::INCLUDE;
     auto keys_are_sorted = jkey_sorted ? cudf::sorted::YES : cudf::sorted::NO;
@@ -4650,15 +4661,7 @@ Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv* env,
     auto num_project_cols = [&]() -> size_t {
       if (jprojection_column_indices == NULL) {
         // if a column is not in key columns, then it's a projection column
-        auto num_non_key_cols =
-          static_cast<size_t>(input_table->num_columns()) - key_indices.size();
-        if (num_non_key_cols < 0) {
-          JNI_THROW_NEW(
-            env,
-            cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
-            "The number of key columns is greater than the number of columns in the input table",
-            0);
-        }
+        auto num_non_key_cols = num_cols_input - key_indices.size();
         projection_indices.reserve(num_non_key_cols);
         cudf::size_type index = 0;
         while (projection_indices.size() < num_non_key_cols) {
