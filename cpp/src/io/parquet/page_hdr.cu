@@ -22,9 +22,9 @@ namespace cudf::io::parquet::detail {
 
 namespace {
 
-auto constexpr decode_page_headers_block_size     = 128;
-auto constexpr count_page_headers_block_size      = decode_page_headers_block_size;
-auto constexpr build_string_dict_index_block_size = 128;
+auto constexpr decode_page_headers_block_size     = 4 * cudf::detail::warp_size;
+auto constexpr count_page_headers_block_size      = 4 * cudf::detail::warp_size;
+auto constexpr build_string_dict_index_block_size = 4 * cudf::detail::warp_size;
 
 namespace cg = cooperative_groups;
 
