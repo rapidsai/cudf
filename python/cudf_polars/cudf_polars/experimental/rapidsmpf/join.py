@@ -59,19 +59,17 @@ async def get_small_table(
     """
     small_chunks = []
     while (msg := await ch_small.data.recv(context)) is not None:
-        small_chunks.append(TableChunk.from_message(msg))
+        small_chunks.append(make_available(TableChunk.from_message(msg), context))
     assert small_chunks, "Empty small side"
 
-    # Make chunks available and keep them alive
-    available_chunks = [make_available(chunk, context) for chunk in small_chunks]
     return [
         DataFrame.from_table(
-            chunk.table_view(),
+            small_chunk.table_view(),
             list(small_child.schema.keys()),
             list(small_child.schema.values()),
-            chunk.stream,
+            small_chunk.stream,
         )
-        for chunk in available_chunks
+        for small_chunk in small_chunks
     ]
 
 
@@ -127,15 +125,13 @@ async def broadcast_join_node(
 
         # Stream through large side, joining with the small-side
         while (msg := await large_ch.data.recv(context)) is not None:
-            large_chunk = TableChunk.from_message(msg)
+            large_chunk = make_available(TableChunk.from_message(msg), context)
             seq_num = msg.sequence_number
-            # Make chunk available and keep it alive
-            available_large_chunk = make_available(large_chunk, context)
             large_df = DataFrame.from_table(
-                available_large_chunk.table_view(),
+                large_chunk.table_view(),
                 list(large_child.schema.keys()),
                 list(large_child.schema.values()),
-                available_large_chunk.stream,
+                large_chunk.stream,
             )
 
             # Perform the join

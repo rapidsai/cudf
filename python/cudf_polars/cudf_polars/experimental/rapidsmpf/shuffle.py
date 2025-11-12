@@ -129,7 +129,7 @@ class LocalShuffle:
         chunk: TableChunk
             The table chunk to insert.
         """
-        # Make chunk available and keep it alive
+        # Make chunk available
         available_chunk = make_available(chunk, self.context)
         # Partition and pack using the Python function
         partitioned_chunks = py_partition_and_pack(

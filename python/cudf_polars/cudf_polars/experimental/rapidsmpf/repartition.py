@@ -68,21 +68,19 @@ async def concatenate_node(
                 msg = await ch_in.data.recv(context)
                 if msg is None:
                     break
-                chunk = TableChunk.from_message(msg)
+                chunk = make_available(TableChunk.from_message(msg), context)
                 chunks.append(chunk)
 
             # Process collected chunks
             if chunks:
-                # Make chunks available and keep them alive
-                available_chunks = [make_available(chunk, context) for chunk in chunks]
                 df = (
                     DataFrame.from_table(
-                        available_chunks[0].table_view(),
+                        chunks[0].table_view(),
                         list(ir.schema.keys()),
                         list(ir.schema.values()),
-                        available_chunks[0].stream,
+                        chunks[0].stream,
                     )
-                    if len(available_chunks) == 1
+                    if len(chunks) == 1
                     else _concat(
                         *(
                             DataFrame.from_table(
@@ -91,7 +89,7 @@ async def concatenate_node(
                                 list(ir.schema.values()),
                                 chunk.stream,
                             )
-                            for chunk in available_chunks
+                            for chunk in chunks
                         ),
                         context=ir_context,
                     )

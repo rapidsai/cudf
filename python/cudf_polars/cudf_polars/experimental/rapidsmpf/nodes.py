@@ -137,7 +137,9 @@ async def default_node_multi(
                     finished_channels.add(ch_idx)
                 else:
                     # Store the new chunk (replacing previous if any)
-                    ready_chunks[ch_idx] = TableChunk.from_message(msg)
+                    ready_chunks[ch_idx] = make_available(
+                        TableChunk.from_message(msg), context
+                    )
                     chunk_count[ch_idx] += 1
                 assert ready_chunks[ch_idx] is not None, (
                     f"Channel {ch_idx} has no data after receive loop."
@@ -152,18 +154,14 @@ async def default_node_multi(
             assert all(chunk is not None for chunk in ready_chunks), (
                 "All chunks must be non-None"
             )
-            # Make chunks available and keep them alive
-            available_chunks = [
-                make_available(chunk, context) for chunk in ready_chunks
-            ]
             dfs = [
                 DataFrame.from_table(
-                    chunk.table_view(),
+                    chunk.table_view(),  # type: ignore[union-attr]
                     list(child.schema.keys()),
                     list(child.schema.values()),
-                    chunk.stream,
+                    chunk.stream,  # type: ignore[union-attr]
                 )
-                for chunk, child in zip(available_chunks, ir.children, strict=True)
+                for chunk, child in zip(ready_chunks, ir.children, strict=True)
             ]
 
             # Evaluate the IR node with current chunks
@@ -215,18 +213,16 @@ async def fanout_node_bounded(
     # See: https://github.com/rapidsai/rapidsmpf/issues/560
     async with shutdown_on_error(context, ch_in.data, *[ch.data for ch in chs_out]):
         while (msg := await ch_in.data.recv(context)) is not None:
-            table_chunk = TableChunk.from_message(msg)
+            table_chunk = make_available(TableChunk.from_message(msg), context)
             seq_num = msg.sequence_number
-            # Make chunk available and keep it alive
-            available_chunk = make_available(table_chunk, context)
             for ch_out in chs_out:
                 await ch_out.data.send(
                     context,
                     Message(
                         seq_num,
                         TableChunk.from_pylibcudf_table(
-                            available_chunk.table_view(),
-                            available_chunk.stream,
+                            table_chunk.table_view(),
+                            table_chunk.stream,
                             exclusive_view=False,
                         ),
                     ),
@@ -336,16 +332,14 @@ async def fanout_node_unbounded(
                         needs_drain.update(range(len(chs_out)))
                     else:
                         # Add message to all output buffers
-                        chunk = TableChunk.from_message(msg)
+                        chunk = make_available(TableChunk.from_message(msg), context)
                         seq_num = msg.sequence_number
-                        # Make chunk available and keep it alive
-                        available_chunk = make_available(chunk, context)
                         for buffer in output_buffers:
                             message = Message(
                                 seq_num,
                                 TableChunk.from_pylibcudf_table(
-                                    available_chunk.table_view(),
-                                    available_chunk.stream,
+                                    chunk.table_view(),
+                                    chunk.stream,
                                     exclusive_view=False,
                                 ),
                             )
