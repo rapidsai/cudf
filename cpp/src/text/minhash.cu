@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
@@ -24,7 +13,6 @@
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/sequence.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/hashing/detail/murmurhash3_x64_128.cuh>
@@ -43,6 +31,7 @@
 
 #include <cooperative_groups.h>
 #include <cuda/atomic>
+#include <cuda/functional>
 #include <cuda/std/iterator>
 #include <cuda/std/limits>
 #include <thrust/binary_search.h>
@@ -371,7 +360,7 @@ CUDF_KERNEL void minhash_kernel(offsets_type offsets_itr,
       auto const values = block_values + (lane_idx * block_size);
       // cooperative groups does not have a min function and cub::BlockReduce was slower
       auto const minv =
-        thrust::reduce(thrust::seq, values, values + block_size, init, cudf::detail::minimum{});
+        thrust::reduce(thrust::seq, values, values + block_size, init, cuda::minimum{});
       if constexpr (blocks_per_row > 1) {
         // accumulates mins for each block into d_output
         cuda::atomic_ref<hash_value_type, cuda::thread_scope_block> ref{d_output[lane_idx + i]};

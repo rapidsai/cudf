@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libcpp cimport bool
 from libcpp.functional cimport reference_wrapper
 from libcpp.memory cimport unique_ptr
@@ -53,25 +54,6 @@ cdef extern from "cudf/groupby.hpp" \
         unique_ptr[table] values
 
     cdef cppclass groupby:
-        groupby(const table_view& keys) except +libcudf_exception_handler
-        groupby(
-            const table_view& keys,
-            null_policy include_null_keys
-        ) except +libcudf_exception_handler
-
-        groupby(
-            const table_view& keys,
-            null_policy include_null_keys,
-            sorted keys_are_sorted,
-        ) except +libcudf_exception_handler
-
-        groupby(
-            const table_view& keys,
-            null_policy include_null_keys,
-            sorted keys_are_sorted,
-            const vector[order]& column_order,
-        ) except +libcudf_exception_handler
-
         groupby(
             const table_view& keys,
             null_policy include_null_keys,

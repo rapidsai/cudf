@@ -1,22 +1,11 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
-#include "reductions/nested_type_minmax_util.cuh"
+#include "reductions/nested_types_extrema_utils.cuh"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -204,7 +193,7 @@ struct group_scan_functor<K,
     auto gather_map = rmm::device_uvector<size_type>(values.size(), stream);
 
     auto const binop_generator =
-      cudf::reduction::detail::comparison_binop_generator::create<K>(values, stream);
+      cudf::reduction::detail::arg_minmax_binop_generator::create<K>(values, stream);
     thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                   group_labels.begin(),
                                   group_labels.end(),

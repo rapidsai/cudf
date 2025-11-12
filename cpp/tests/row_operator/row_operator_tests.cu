@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "row_operator_tests_utilities.hpp"
@@ -21,7 +10,9 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/detail/row_operator/row_operators.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
+#include <cudf/detail/row_operator/lexicographic.cuh>
+#include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -287,4 +278,57 @@ TYPED_TEST(NaNTableViewTest, TestEqualityComparatorTwoTableNaNCase)
   auto const nan_equal_got      = two_table_equality(
     lhs, rhs, column_order, cudf::detail::row::equality::nan_equal_physical_equality_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(nan_equal_expected, nan_equal_got->view());
+}
+
+struct RowOperatorTest : public cudf::test::BaseFixture {};
+
+TEST_F(RowOperatorTest, TestTwoTableComparatorColumnCountCheck)
+{
+  rmm::cuda_stream_view stream{cudf::get_default_stream()};
+
+  auto left_col1         = cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2}};
+  auto left_col2         = cudf::test::fixed_width_column_wrapper<int32_t>{{3, 4}};
+  auto const left_table  = cudf::table_view{{left_col1, left_col2}};
+  auto right_col         = cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2}};
+  auto const right_table = cudf::table_view{{right_col}};
+
+  auto left_preprocessed =
+    cudf::detail::row::equality::preprocessed_table::create(left_table, stream);
+  auto right_preprocessed =
+    cudf::detail::row::equality::preprocessed_table::create(right_table, stream);
+
+  EXPECT_THROW(
+    cudf::detail::row::equality::two_table_comparator(left_preprocessed, right_preprocessed),
+    std::invalid_argument);
+}
+
+TEST_F(RowOperatorTest, TestCheckShapeCompatibility)
+{
+  rmm::cuda_stream_view stream{cudf::get_default_stream()};
+
+  auto left_col1_2       = cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2}};
+  auto left_col2_2       = cudf::test::fixed_width_column_wrapper<int32_t>{{3, 4}};
+  auto const left_table  = cudf::table_view{{left_col1_2, left_col2_2}};
+  auto right_col_2       = cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2}};
+  auto const right_table = cudf::table_view{{right_col_2}};
+
+  EXPECT_THROW(cudf::detail::row::equality::two_table_comparator(left_table, right_table, stream),
+               std::invalid_argument);
+
+  auto int_col           = cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2}};
+  auto const int_table   = cudf::table_view{{int_col}};
+  auto float_col         = cudf::test::fixed_width_column_wrapper<float>{{1.0f, 2.0f}};
+  auto const float_table = cudf::table_view{{float_col}};
+
+  EXPECT_THROW(cudf::detail::row::equality::two_table_comparator(int_table, float_table, stream),
+               std::invalid_argument);
+
+  auto str_col             = cudf::test::strings_column_wrapper({"hello", "world"});
+  auto const string_table  = cudf::table_view{{str_col}};
+  auto num_col             = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2});
+  auto const numeric_table = cudf::table_view{{num_col}};
+
+  EXPECT_THROW(
+    cudf::detail::row::equality::two_table_comparator(string_table, numeric_table, stream),
+    std::invalid_argument);
 }

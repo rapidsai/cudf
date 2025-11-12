@@ -4,12 +4,19 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
 
+if TYPE_CHECKING:
+    from rmm.pylibrmm.stream import Stream
 
-def broadcast(*columns: Column, target_length: int | None = None) -> list[Column]:
+
+def broadcast(
+    *columns: Column, target_length: int | None = None, stream: Stream
+) -> list[Column]:
     """
     Broadcast a sequence of columns to a common length.
 
@@ -20,6 +27,9 @@ def broadcast(*columns: Column, target_length: int | None = None) -> list[Column
     target_length
         Optional length to broadcast to. If not provided, uses the
         non-unit length of existing columns.
+    stream
+        CUDA stream used for device memory operations and kernel launches
+        on this dataframe.
 
     Returns
     -------
@@ -63,7 +73,9 @@ def broadcast(*columns: Column, target_length: int | None = None) -> list[Column
         column
         if column.size != 1
         else Column(
-            plc.Column.from_scalar(column.obj_scalar, nrows),
+            plc.Column.from_scalar(
+                column.obj_scalar(stream=stream), nrows, stream=stream
+            ),
             is_sorted=plc.types.Sorted.YES,
             order=plc.types.Order.ASCENDING,
             null_order=plc.types.NullOrder.BEFORE,

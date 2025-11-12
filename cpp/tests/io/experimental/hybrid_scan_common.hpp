@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -20,6 +9,7 @@
 
 #include <cudf_test/column_wrapper.hpp>
 
+#include <cudf/io/experimental/hybrid_scan.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/table/table.hpp>
@@ -28,6 +18,10 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
+
+#include <rmm/mr/device/aligned_resource_adaptor.hpp>
+
+auto constexpr bloom_filter_alignment = rmm::CUDA_ALLOCATION_ALIGNMENT;
 
 /**
  * @brief Fetches a host span of Parquet footer bytes from the input buffer span
@@ -179,3 +173,82 @@ auto create_parquet_with_stats(
 
   return std::pair{std::move(table), std::move(buffer)};
 }
+
+/**
+ * @brief Concatenate a vector of tables and return the resultant table
+ *
+ * @param tables Vector of tables to concatenate
+ * @param stream CUDA stream to use
+ *
+ * @return Unique pointer to the resultant concatenated table.
+ */
+std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf::table>> tables,
+                                                rmm::cuda_stream_view stream);
+
+/**
+ * @brief Apply parquet filters to the file buffer
+ *
+ * @param file_buffer_span Input file buffer span
+ * @param options Reader options
+ * @param stream CUDA stream
+ * @param mr Device memory resource
+ *
+ * @return A tuple of the reader, filtered row group indices, and row mask and data page mask from
+ * data page pruning
+ */
+auto apply_parquet_filters(cudf::host_span<uint8_t const> file_buffer_span,
+                           cudf::io::parquet_reader_options const& options,
+                           rmm::cuda_stream_view stream,
+                           rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Read parquet file with the hybrid scan reader
+ *
+ * @param buffer Buffer containing the parquet file
+ * @param filter_expression Filter expression
+ * @param num_filter_columns Number of filter columns
+ * @param payload_column_names List of paths of select payload column names, if any
+ * @param stream CUDA stream for hybrid scan reader
+ * @param mr Device memory resource
+ *
+ * @return Tuple of filter table, payload table, filter metadata, payload metadata, and the final
+ *         row validity column
+ */
+std::tuple<std::unique_ptr<cudf::table>,
+           std::unique_ptr<cudf::table>,
+           cudf::io::table_metadata,
+           cudf::io::table_metadata,
+           std::unique_ptr<cudf::column>>
+hybrid_scan(std::vector<char>& buffer,
+            cudf::ast::operation const& filter_expression,
+            cudf::size_type num_filter_columns,
+            std::optional<std::vector<std::string>> const& payload_column_names,
+            rmm::cuda_stream_view stream,
+            rmm::device_async_resource_ref mr,
+            rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr);
+
+/**
+ * @brief Read parquet file with the hybrid scan reader
+ *
+ * @param buffer Buffer containing the parquet file
+ * @param filter_expression Filter expression
+ * @param num_filter_columns Number of filter columns
+ * @param payload_column_names List of paths of select payload column names, if any
+ * @param stream CUDA stream for hybrid scan reader
+ * @param mr Device memory resource
+ *
+ * @return Tuple of filter table, payload table, filter metadata, payload metadata, and the final
+ *         row validity column
+ */
+std::tuple<std::unique_ptr<cudf::table>,
+           std::unique_ptr<cudf::table>,
+           cudf::io::table_metadata,
+           cudf::io::table_metadata,
+           std::unique_ptr<cudf::column>>
+chunked_hybrid_scan(std::vector<char> const& buffer,
+                    cudf::ast::operation const& filter_expression,
+                    cudf::size_type num_filter_columns,
+                    std::optional<std::vector<std::string>> const& payload_column_names,
+                    rmm::cuda_stream_view stream,
+                    rmm::device_async_resource_ref mr,
+                    rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr);

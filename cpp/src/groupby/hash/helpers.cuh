@@ -1,22 +1,12 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
 #include <cudf/detail/cuco_helpers.hpp>
-#include <cudf/detail/row_operator/row_operators.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
+#include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/types.hpp>
 
@@ -35,6 +25,11 @@ CUDF_HOST_DEVICE auto constexpr GROUPBY_BLOCK_SIZE = 128;
 /// Threshold cardinality to switch between shared memory aggregations and global memory
 /// aggregations
 CUDF_HOST_DEVICE auto constexpr GROUPBY_CARDINALITY_THRESHOLD = 128;
+
+/// Threshold to switch between two strategies: one is to output the aggregation results directly to
+/// the final dense output columns, the other is to output the results to sparse intermediate
+/// buffers then gather to the final dense output columns.
+auto constexpr GROUPBY_DENSE_OUTPUT_THRESHOLD = 2;
 
 // We add additional `block_size`, because after the number of elements in the local hash set
 // exceeds the threshold, all threads in the thread block can still insert one more element.
@@ -92,7 +87,7 @@ using global_set_t = cuco::static_set<cudf::size_type,
                                       cuda::thread_scope_device,
                                       row_comparator_t,
                                       probing_scheme_t,
-                                      cudf::detail::cuco_allocator<char>,
+                                      rmm::mr::polymorphic_allocator<char>,
                                       cuco::storage<GROUPBY_BUCKET_SIZE>>;
 
 using nullable_global_set_t = cuco::static_set<cudf::size_type,
@@ -100,7 +95,7 @@ using nullable_global_set_t = cuco::static_set<cudf::size_type,
                                                cuda::thread_scope_device,
                                                nullable_row_comparator_t,
                                                probing_scheme_t,
-                                               cudf::detail::cuco_allocator<char>,
+                                               rmm::mr::polymorphic_allocator<char>,
                                                cuco::storage<GROUPBY_BUCKET_SIZE>>;
 
 template <typename Op>

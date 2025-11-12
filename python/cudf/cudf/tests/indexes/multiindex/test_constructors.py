@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 
 import cupy as cp
@@ -101,6 +102,11 @@ def test_multiindex_from_dataframe():
     pmi = pd.MultiIndex.from_frame(pdf, names=["alpha", "location"])
     gmi = cudf.MultiIndex.from_frame(gdf, names=["alpha", "location"])
     assert_eq(pmi, gmi)
+
+
+def test_multindex_from_frame_invalid():
+    with pytest.raises(TypeError):
+        cudf.MultiIndex.from_frame("invalid_input")
 
 
 @pytest.mark.parametrize(

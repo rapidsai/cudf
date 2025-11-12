@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libcpp cimport bool
 from libcpp.string cimport string
 from libcpp.vector cimport vector
@@ -45,6 +46,7 @@ cdef class CsvReaderOptions:
     cpdef void set_true_values(self, list true_values)
     cpdef void set_false_values(self, list false_values)
     cpdef void set_na_values(self, list na_values)
+    cpdef void set_source(self, SourceInfo src)
 
 
 cdef class CsvReaderOptionsBuilder:

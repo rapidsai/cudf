@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import pandas as pd
 import pytest
@@ -37,3 +38,23 @@ def test_index_ordered(ordered):
     pd_ci = pd.CategoricalIndex([1, 2, 3], ordered=ordered)
     cudf_ci = cudf.from_pandas(pd_ci)
     assert pd_ci.ordered == cudf_ci.ordered
+
+
+def test_categoricalindex_constructor():
+    gidx = cudf.CategoricalIndex(["a", "b", "c"])
+
+    assert gidx._constructor is cudf.CategoricalIndex
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["a", "b", "c"],
+        [1, 2, 3],
+        pd.Categorical(["a", "b", "c"]),
+    ],
+)
+def test_categoricalindex_inferred_type(data):
+    gidx = cudf.CategoricalIndex(data)
+    pidx = pd.CategoricalIndex(data)
+    assert_eq(gidx.inferred_type, pidx.inferred_type)

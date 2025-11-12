@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import datetime
@@ -121,7 +122,7 @@ def _read_tzfile_as_columns(
         from cudf.core.column.column import as_column
 
         # this happens for UTC-like zones
-        min_date = np.int64(np.iinfo("int64").min + 1).astype(
+        min_date: np.datetime64 = np.int64(np.iinfo("int64").min + 1).astype(
             np.dtype("M8[s]")
         )
         return (as_column([min_date]), as_column([np.timedelta64(0, "s")]))  # type: ignore[return-value]

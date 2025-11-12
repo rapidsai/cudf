@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import warnings
@@ -130,7 +131,7 @@ def to_numeric(
     if dtype.kind in "mM":
         col = col.astype(np.dtype(np.int64))
     elif isinstance(dtype, CategoricalDtype):
-        cat_dtype = col.dtype.categories.dtype
+        cat_dtype = col.dtype.categories.dtype  # type: ignore[union-attr]
         if cat_dtype.kind in "iufb":
             col = col.astype(cat_dtype)
         else:
@@ -172,12 +173,12 @@ def to_numeric(
                 np.dtype(np.float64).char,
             ]
         elif downcast in ("integer", "signed"):
-            type_set = list(np.typecodes["Integer"])
+            type_set = list(np.typecodes["Integer"])  # type: ignore[arg-type]
         elif downcast == "unsigned":
-            type_set = list(np.typecodes["UnsignedInteger"])
+            type_set = list(np.typecodes["UnsignedInteger"])  # type: ignore[arg-type]
 
         for t in type_set:
-            downcast_dtype = np.dtype(t)
+            downcast_dtype: np.dtype = np.dtype(t)
             if downcast_dtype.itemsize <= col.dtype.itemsize:
                 if col.can_cast_safely(downcast_dtype):
                     col = col.cast(downcast_dtype)

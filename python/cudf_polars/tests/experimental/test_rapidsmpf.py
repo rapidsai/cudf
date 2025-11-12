@@ -7,10 +7,19 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    DEFAULT_CLUSTER,
+    DEFAULT_RUNTIME,
+    assert_gpu_result_equal,
+)
 from cudf_polars.utils.config import ConfigOptions
 
+REQUIRE_TASKS_RUNTIME = pytest.mark.skipif(
+    DEFAULT_RUNTIME != "tasks", reason="Requires 'tasks' runtime."
+)
 
+
+@REQUIRE_TASKS_RUNTIME
 @pytest.mark.parametrize("rapidsmpf_spill", [False, True])
 @pytest.mark.parametrize("max_rows_per_partition", [1, 5])
 def test_join_rapidsmpf(
@@ -18,7 +27,7 @@ def test_join_rapidsmpf(
     rapidsmpf_spill: bool,  # noqa: FBT001
 ) -> None:
     # Check that we have a distributed cluster running.
-    # This tests must be run with: --scheduler='distributed'
+    # This tests must be run with: --cluster='distributed'
     distributed = pytest.importorskip("distributed")
     try:
         client = distributed.get_client()
@@ -29,7 +38,7 @@ def test_join_rapidsmpf(
     pytest.importorskip("rapidsmpf")
     try:
         # This will result in a ValueError if the
-        # scheduler isn't compatible with rapidsmpf.
+        # cluster isn't compatible with rapidsmpf.
         # Otherwise, it's a no-op if the cluster
         # was already bootstrapped.
         from rapidsmpf.integrations.dask import bootstrap_dask_cluster
@@ -46,7 +55,8 @@ def test_join_rapidsmpf(
             "max_rows_per_partition": max_rows_per_partition,
             "broadcast_join_limit": 2,
             "shuffle_method": "rapidsmpf",
-            "scheduler": "distributed",
+            "cluster": "distributed",
+            "runtime": DEFAULT_RUNTIME,
             "rapidsmpf_spill": rapidsmpf_spill,
         },
     )
@@ -70,6 +80,7 @@ def test_join_rapidsmpf(
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
+@REQUIRE_TASKS_RUNTIME
 @pytest.mark.parametrize("max_rows_per_partition", [1, 5])
 def test_join_rapidsmpf_single(max_rows_per_partition: int) -> None:
     # check that we have a rapidsmpf cluster running
@@ -83,7 +94,8 @@ def test_join_rapidsmpf_single(max_rows_per_partition: int) -> None:
             "max_rows_per_partition": max_rows_per_partition,
             "broadcast_join_limit": 2,
             "shuffle_method": "rapidsmpf",
-            "scheduler": "synchronous",
+            "cluster": "single",
+            "runtime": DEFAULT_RUNTIME,
         },
     )
 
@@ -106,6 +118,7 @@ def test_join_rapidsmpf_single(max_rows_per_partition: int) -> None:
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
+@REQUIRE_TASKS_RUNTIME
 def test_join_rapidsmpf_single_private_config() -> None:
     # The user may not specify "rapidsmpf-single" directly
     engine = pl.GPUEngine(
@@ -113,31 +126,34 @@ def test_join_rapidsmpf_single_private_config() -> None:
         executor="streaming",
         executor_options={
             "shuffle_method": "rapidsmpf-single",
-            "scheduler": "synchronous",
+            "cluster": "single",
+            "runtime": DEFAULT_RUNTIME,
         },
     )
     with pytest.raises(ValueError, match="not a supported shuffle method"):
         ConfigOptions.from_polars_engine(engine)
 
 
-def test_rapidsmpf_spill_synchronous_unsupported() -> None:
+def test_rapidsmpf_spill_single_unsupported() -> None:
     # check that we have a rapidsmpf cluster running
     pytest.importorskip("rapidsmpf")
 
-    # rapidsmpf_spill=True is not yet supported with synchronous scheduler.
+    # rapidsmpf_spill=True is not yet supported with single-GPU cluster.
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
         executor_options={
             "shuffle_method": "rapidsmpf",
-            "scheduler": "synchronous",
+            "cluster": "single",
+            "runtime": DEFAULT_RUNTIME,
             "rapidsmpf_spill": True,
         },
     )
-    with pytest.raises(ValueError, match="rapidsmpf_spill.*not supported.*synchronous"):
+    with pytest.raises(ValueError, match="rapidsmpf_spill.*not supported.*single"):
         ConfigOptions.from_polars_engine(engine)
 
 
+@REQUIRE_TASKS_RUNTIME
 @pytest.mark.parametrize("max_rows_per_partition", [1, 5])
 def test_sort_rapidsmpf(max_rows_per_partition: int) -> None:
     # Require rapidsmpf, but don't require a distributed cluster,
@@ -151,7 +167,8 @@ def test_sort_rapidsmpf(max_rows_per_partition: int) -> None:
         executor_options={
             "max_rows_per_partition": max_rows_per_partition,
             "shuffle_method": "rapidsmpf",
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
         },
     )
 
@@ -167,6 +184,7 @@ def test_sort_rapidsmpf(max_rows_per_partition: int) -> None:
     assert_gpu_result_equal(q, engine=engine, check_row_order=True)
 
 
+@REQUIRE_TASKS_RUNTIME
 def test_sort_stable_rapidsmpf_warns():
     pytest.importorskip("rapidsmpf")
 
@@ -175,7 +193,8 @@ def test_sort_stable_rapidsmpf_warns():
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 3,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
             "shuffle_method": "rapidsmpf",
             "fallback_mode": "warn",
         },

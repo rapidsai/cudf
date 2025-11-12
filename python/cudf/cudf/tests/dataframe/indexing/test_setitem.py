@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import operator
 from contextlib import contextmanager
 
@@ -146,7 +147,8 @@ def test_dataframe_assign_scalar_to_empty_series():
 
 def test_dataframe_assign_cp_np_array():
     m, n = 5, 3
-    cp_ndarray = cp.random.randn(m, n)
+    rng = cp.random.default_rng(0)
+    cp_ndarray = rng.standard_normal(size=(m, n))
     pdf = pd.DataFrame({f"f_{i}": range(m) for i in range(n)})
     gdf = cudf.DataFrame({f"f_{i}": range(m) for i in range(n)})
     pdf[[f"f_{i}" for i in range(n)]] = cp.asnumpy(cp_ndarray)

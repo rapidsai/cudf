@@ -1,33 +1,23 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
 #include "hostdevice_span.hpp"
 
+#include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/config_utils.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/mr/host/host_memory_resource.hpp>
 
 namespace cudf::detail {
 
@@ -39,6 +29,12 @@ namespace cudf::detail {
  * initialized upfront, or gradually initialized as required.
  * The host-side memory can be used to manipulate data on the CPU before and
  * after operating on the same data on the GPU.
+ *
+ * On systems with integrated memory, this class uses only pinned buffer memory
+ * that is accessible by both host and device, eliminating the need for separate
+ * device memory allocation and data transfers. This optimization can be controlled
+ * via the LIBCUDF_INTEGRATED_MEMORY_OPTIMIZATION environment variable (AUTO by default,
+ * which uses hardware detection).
  */
 template <typename T>
 class hostdevice_vector {
@@ -48,27 +44,13 @@ class hostdevice_vector {
   hostdevice_vector() : hostdevice_vector(0, cudf::get_default_stream()) {}
 
   explicit hostdevice_vector(size_t size, rmm::cuda_stream_view stream)
-    : hostdevice_vector(size, size, stream)
+    : keep_single_copy{cudf::io::integrated_memory_optimization::is_enabled()},
+      h_data{make_pinned_vector_async<T>(size, stream)},
+      d_data{keep_single_copy ? 0 : size, stream},
+      _device_ptr{keep_single_copy ? h_data.data() : d_data.data()}
   {
   }
 
-  explicit hostdevice_vector(size_t initial_size, size_t max_size, rmm::cuda_stream_view stream)
-    : h_data{make_pinned_vector_async<T>(0, stream)}, d_data(max_size, stream)
-  {
-    CUDF_EXPECTS(initial_size <= max_size, "initial_size cannot be larger than max_size");
-
-    h_data.reserve(max_size);
-    h_data.resize(initial_size);
-  }
-
-  void push_back(T const& data)
-  {
-    CUDF_EXPECTS(size() < capacity(),
-                 "Cannot insert data into hostdevice_vector because capacity has been exceeded.");
-    h_data.push_back(data);
-  }
-
-  [[nodiscard]] size_t capacity() const noexcept { return d_data.size(); }
   [[nodiscard]] size_t size() const noexcept { return h_data.size(); }
   [[nodiscard]] size_t size_bytes() const noexcept { return sizeof(T) * size(); }
   [[nodiscard]] bool empty() const noexcept { return size() == 0; }
@@ -91,8 +73,8 @@ class hostdevice_vector {
   [[nodiscard]] T& back() { return h_data.back(); }
   [[nodiscard]] T const& back() const { return back(); }
 
-  [[nodiscard]] T* device_ptr(size_t offset = 0) { return d_data.data() + offset; }
-  [[nodiscard]] T const* device_ptr(size_t offset = 0) const { return d_data.data() + offset; }
+  [[nodiscard]] T* device_ptr(size_t offset = 0) { return _device_ptr + offset; }
+  [[nodiscard]] T const* device_ptr(size_t offset = 0) const { return _device_ptr + offset; }
 
   [[nodiscard]] T* d_begin() { return device_ptr(); }
   [[nodiscard]] T const* d_begin() const { return device_ptr(); }
@@ -111,17 +93,25 @@ class hostdevice_vector {
 
   void host_to_device_async(rmm::cuda_stream_view stream)
   {
-    cuda_memcpy_async<T>(d_data, h_data, stream);
+    if (not keep_single_copy) { cuda_memcpy_async<T>(d_data, h_data, stream); }
   }
 
-  void host_to_device(rmm::cuda_stream_view stream) { cuda_memcpy<T>(d_data, h_data, stream); }
-
+  [[deprecated("Use host_to_device_async instead")]] void host_to_device(
+    rmm::cuda_stream_view stream)
+  {
+    host_to_device_async(stream);
+    stream.synchronize();
+  }
   void device_to_host_async(rmm::cuda_stream_view stream)
   {
-    cuda_memcpy_async<T>(h_data, d_data, stream);
+    if (not keep_single_copy) { cuda_memcpy_async<T>(h_data, d_data, stream); }
   }
 
-  void device_to_host(rmm::cuda_stream_view stream) { cuda_memcpy<T>(h_data, d_data, stream); }
+  void device_to_host(rmm::cuda_stream_view stream)
+  {
+    device_to_host_async(stream);
+    stream.synchronize();
+  }
 
   /**
    * @brief Converts a hostdevice_vector into a hostdevice_span.
@@ -136,8 +126,10 @@ class hostdevice_vector {
   }
 
  private:
+  bool keep_single_copy;
   cudf::detail::host_vector<T> h_data;
   rmm::device_uvector<T> d_data;
+  T* _device_ptr{};  // Device pointer for integrated memory systems
 };
 
 /**
@@ -200,7 +192,11 @@ class hostdevice_2dvector {
   [[nodiscard]] size_t size_bytes() const noexcept { return _data.size_bytes(); }
 
   void host_to_device_async(rmm::cuda_stream_view stream) { _data.host_to_device_async(stream); }
-  void host_to_device(rmm::cuda_stream_view stream) { _data.host_to_device(stream); }
+  [[deprecated("Use host_to_device_async instead")]] void host_to_device(
+    rmm::cuda_stream_view stream)
+  {
+    _data.host_to_device(stream);
+  }
 
   void device_to_host_async(rmm::cuda_stream_view stream) { _data.device_to_host_async(stream); }
   void device_to_host(rmm::cuda_stream_view stream) { _data.device_to_host(stream); }

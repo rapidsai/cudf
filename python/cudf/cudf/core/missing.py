@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 
 # Pandas NAType enforces a single instance exists at a time

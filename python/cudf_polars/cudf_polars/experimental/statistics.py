@@ -37,6 +37,7 @@ from cudf_polars.experimental.dispatch import (
 from cudf_polars.experimental.expressions import _SUPPORTED_AGGS
 from cudf_polars.experimental.utils import _leaf_column_names
 from cudf_polars.utils import conversion
+from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -47,7 +48,10 @@ if TYPE_CHECKING:
     from cudf_polars.utils.config import ConfigOptions, StatsPlanningOptions
 
 
-def collect_statistics(root: IR, config_options: ConfigOptions) -> StatsCollector:
+def collect_statistics(
+    root: IR,
+    config_options: ConfigOptions,
+) -> StatsCollector:
     """
     Collect column statistics for a query.
 
@@ -607,7 +611,12 @@ def _(ir: IR, stats: StatsCollector, config_options: ConfigOptions) -> None:
 
 
 @update_column_stats.register(DataFrameScan)
-def _(ir: DataFrameScan, stats: StatsCollector, config_options: ConfigOptions) -> None:
+def _(
+    ir: DataFrameScan,
+    stats: StatsCollector,
+    config_options: ConfigOptions,
+) -> None:
+    stream = get_cuda_stream()
     # Use datasource row-count estimate.
     if stats.column_stats[ir]:
         stats.row_count[ir] = next(
@@ -620,15 +629,23 @@ def _(ir: DataFrameScan, stats: StatsCollector, config_options: ConfigOptions) -
     for column_stats in stats.column_stats[ir].values():
         if column_stats.source_info.implied_unique_count.value is None:
             # We don't have a unique-count estimate, so we need to sample the data.
-            source_unique_stats = column_stats.source_info.unique_stats(force=False)
+            source_unique_stats = column_stats.source_info.unique_stats(
+                force=False,
+            )
             if source_unique_stats.count.value is not None:
                 column_stats.unique_count = source_unique_stats.count
         else:
             column_stats.unique_count = column_stats.source_info.implied_unique_count
 
+    stream.synchronize()
+
 
 @update_column_stats.register(Scan)
-def _(ir: Scan, stats: StatsCollector, config_options: ConfigOptions) -> None:
+def _(
+    ir: Scan,
+    stats: StatsCollector,
+    config_options: ConfigOptions,
+) -> None:
     # Use datasource row-count estimate.
     if stats.column_stats[ir]:
         stats.row_count[ir] = next(
@@ -649,7 +666,9 @@ def _(ir: Scan, stats: StatsCollector, config_options: ConfigOptions) -> None:
     for column_stats in stats.column_stats[ir].values():
         if column_stats.source_info.implied_unique_count.value is None:
             # We don't have a unique-count estimate, so we need to sample the data.
-            source_unique_stats = column_stats.source_info.unique_stats(force=False)
+            source_unique_stats = column_stats.source_info.unique_stats(
+                force=False,
+            )
             if source_unique_stats.count.value is not None:
                 column_stats.unique_count = source_unique_stats.count
             elif (

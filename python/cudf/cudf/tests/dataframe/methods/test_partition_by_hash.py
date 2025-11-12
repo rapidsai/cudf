@@ -1,11 +1,11 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
 import pytest
 
 import cudf
 from cudf.testing import assert_eq
-from cudf.testing._utils import expand_bits_to_bytes, random_bitmask
 
 
 @pytest.mark.parametrize("nparts", [1, 2])
@@ -46,20 +46,26 @@ def test_dataframe_hash_partition_masked_value():
             "val": np.arange(nrows) + 100,
         }
     )
-    bitmask = random_bitmask(nrows)
-    bytemask = expand_bits_to_bytes(bitmask)
-    gdf["val"] = gdf["val"]._column.set_mask(bitmask)
+    rng = np.random.default_rng(seed=0)
+    boolmask = rng.choice([True, False], size=nrows)
+    gdf.loc[boolmask, "val"] = None
     parted = gdf.partition_by_hash(["key"], nparts=3)
-    # Verify that the valid mask is correct
-    for p in parted:
-        df = p.to_pandas()
-        for row in df.itertuples():
-            valid = bool(bytemask[row.key])
-            expected_value = row.key + 100 if valid else np.nan
-            got_value = row.val
-            assert (expected_value == got_value) or (
-                np.isnan(expected_value) and np.isnan(got_value)
-            )
+    assert len(parted) == 3
+    assert_eq(
+        parted[0],
+        cudf.DataFrame({"key": [0, 8], "val": [100, None]}, index=[0, 8]),
+    )
+    assert_eq(
+        parted[1],
+        cudf.DataFrame(
+            {"key": range(2, 8), "val": [102] + [None] * 5},
+            index=list(range(2, 8)),
+        ),
+    )
+    assert_eq(
+        parted[2],
+        cudf.DataFrame({"key": [1, 9], "val": [101, 109]}, index=[1, 9]),
+    )
 
 
 def test_dataframe_hash_partition_masked_keys():
@@ -70,21 +76,20 @@ def test_dataframe_hash_partition_masked_keys():
             "val": np.arange(nrows) + 100,
         }
     )
-    bitmask = random_bitmask(nrows)
-    bytemask = expand_bits_to_bytes(bitmask)
-    gdf["key"] = gdf["key"]._column.set_mask(bitmask)
+    rng = np.random.default_rng(seed=0)
+    boolmask = rng.choice([True, False], size=nrows)
+    gdf.loc[boolmask, "key"] = None
     parted = gdf.partition_by_hash(["key"], nparts=3, keep_index=False)
-    # Verify that the valid mask is correct
-    for p in parted:
-        df = p.to_pandas()
-        for row in df.itertuples():
-            valid = bool(bytemask[row.val - 100])
-            # val is key + 100
-            expected_value = row.val - 100 if valid else np.nan
-            got_value = row.key
-            assert (expected_value == got_value) or (
-                np.isnan(expected_value) and np.isnan(got_value)
-            )
+    assert len(parted) == 3
+    assert_eq(parted[0], cudf.DataFrame({"key": [0], "val": [100]}, index=[0]))
+    assert_eq(parted[1], cudf.DataFrame({"key": [2], "val": [102]}, index=[0]))
+    assert_eq(
+        parted[2],
+        cudf.DataFrame(
+            {"key": [1, None, None], "val": [101, 103, 104]},
+            index=list(range(3)),
+        ),
+    )
 
 
 @pytest.mark.parametrize("keep_index", [True, False])

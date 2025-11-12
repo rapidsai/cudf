@@ -1,4 +1,9 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+
+from typing import Any
+
+import numpy as np
 
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
@@ -22,7 +27,7 @@ def generate_character_ngrams(
 def hash_character_ngrams(
     input: Column,
     ngrams: int,
-    seed: int,
+    seed: int | np.unsignedinteger[Any],
     stream: Stream | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> Column: ...

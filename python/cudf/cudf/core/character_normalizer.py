@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -18,6 +19,8 @@ class CharacterNormalizer:
         while normalizing.
     special_tokens : cudf.Series
         Series of special tokens.
+        These are expected to be all upper case and
+        include the bracket ``[]`` characters.
     """
 
     def __init__(

@@ -1,5 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
@@ -98,3 +97,24 @@ def test_no_fallback_in_merge(dataframe):
     pd.merge(df * df, df + df, how="outer")
     pd.merge(df * df, df + df, how="left")
     pd.merge(df * df, df + df, how="right")
+
+
+def test_no_fallback_in_memory_usage_and_sizeof(dataframe, series):
+    df = dataframe
+    s = series
+    i = df.index
+
+    df.memory_usage()
+    df.memory_usage(index=False)
+    df.memory_usage(index=True, deep=True)
+    df.__sizeof__()
+
+    s.memory_usage()
+    s.memory_usage(index=False)
+    s.memory_usage(index=True, deep=True)
+    s.__sizeof__()
+
+    i.memory_usage()
+    with pytest.warns(UserWarning, match="The deep parameter is ignored"):
+        i.memory_usage(deep=True)
+        i.__sizeof__()

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "delta_binary.cuh"
@@ -869,7 +858,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   // finally, copy the string data into place
   auto const dst = nesting_info_base[leaf_level_index].string_out;
   auto const src = page_string_data + string_offset;
-  memcpy_block<decode_block_size, true>(dst, src, s->page.str_bytes, block.thread_rank());
+  memcpy_block<decode_block_size, true>(dst, src, s->page.str_bytes, block);
 
   if (block.thread_rank() == 0 and s->error != 0) { set_error(s->error, error_code); }
 }

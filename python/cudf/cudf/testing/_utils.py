@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import string
@@ -11,10 +12,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import pylibcudf as plc
-
 import cudf
-from cudf.core.column.column import as_column
 from cudf.utils import dtypes as dtypeutils
 from cudf.utils.temporal import unit_to_nanoseconds_conversion
 
@@ -78,37 +76,6 @@ def set_random_null_mask_inplace(series, null_probability=0.5, seed=None):
     rng = np.random.default_rng(seed=seed)
     mask = rng.choice([False, True], size=len(series), p=probs)
     series.iloc[mask] = None
-
-
-# TODO: This function should be removed. Anywhere that it is being used should
-# instead be generating a random boolean array (bytemask) and use the public
-# APIs to set those elements to None.
-def random_bitmask(size):
-    """
-    Parameters
-    ----------
-    size : int
-        number of bits
-    """
-    sz = plc.null_mask.bitmask_allocation_size_bytes(size)
-    rng = np.random.default_rng(seed=0)
-    data = rng.integers(0, 255, dtype="u1", size=sz)
-    return data.view("i1")
-
-
-def expand_bits_to_bytes(arr):
-    def fix_binary(bstr):
-        bstr = bstr[2:]
-        diff = 8 - len(bstr)
-        return ("0" * diff + bstr)[::-1]
-
-    ba = bytearray(arr.data)
-    return list(map(int, "".join(map(fix_binary, map(bin, ba)))))
-
-
-def count_zero(arr):
-    arr = np.asarray(arr)
-    return np.count_nonzero(arr == 0)
 
 
 def assert_exceptions_equal(
@@ -262,12 +229,12 @@ def gen_rand(dtype, size, **kwargs):
 
 def gen_rand_series(dtype, size, **kwargs):
     values = gen_rand(dtype, size, **kwargs)
+    ser = cudf.Series(values)
     if kwargs.get("has_nulls", False):
-        return cudf.Series._from_column(
-            as_column(values).set_mask(random_bitmask(size))
-        )
-
-    return cudf.Series(values)
+        rng = np.random.default_rng(0)
+        boolmask = rng.choice([True, False], size=size)
+        ser.loc[boolmask] = None
+    return ser
 
 
 def _decimal_series(input, dtype):

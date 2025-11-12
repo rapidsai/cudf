@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <tests/groupby/groupby_test_util.hpp>
@@ -25,6 +14,9 @@
 #include <cudf/dictionary/update_keys.hpp>
 
 #include <limits>
+#include <numeric>
+#include <unordered_set>
+#include <vector>
 
 using namespace cudf::test::iterators;
 
@@ -553,4 +545,50 @@ TYPED_TEST(groupby_max_floating_point_test, values_with_nan)
   auto const result = gb_obj.aggregate(requests);
 
   EXPECT_EQ(result.first->num_rows(), 1);
+}
+
+// Test the fallback global memory kernel in hash-based groupby aggregations.
+struct groupby_max_hash_based_gmem_fallback_kernel_test : cudf::test::BaseFixture {};
+
+TEST_F(groupby_max_hash_based_gmem_fallback_kernel_test, all_block_fallback)
+{
+  // A thread block (of 128 threads) will fallback when it encounters at least 128 distinct keys.
+  // Thus, a series of all distinct keys input will make the block fallback.
+  std::vector<int> h_keys(128 * 2);
+  std::iota(h_keys.begin(), h_keys.end(), 0);
+
+  cudf::test::fixed_width_column_wrapper<int> keys(h_keys.begin(), h_keys.end());
+  cudf::test::fixed_width_column_wrapper<int> expect_keys(h_keys.begin(), h_keys.end());
+
+  auto agg = cudf::make_max_aggregation<cudf::groupby_aggregation>();
+  // Keys are the same as values.
+  test_single_agg(keys, keys, expect_keys, expect_keys, std::move(agg));
+}
+
+TEST_F(groupby_max_hash_based_gmem_fallback_kernel_test, partial_fallback)
+{
+  // A thread block (of 128 threads) will fallback when it encounters at least 128 distinct keys.
+  // We create just a few blocks and duplicate keys in some of them to have these blocks fallback.
+  std::vector<int> h_keys(128 * 4);
+  std::iota(h_keys.begin(), h_keys.end(), 0);
+
+  // Duplicate elements in the 1st and 3rd blocks.
+  std::iota(h_keys.begin() + 50, h_keys.begin() + 100, 0);
+  std::iota(h_keys.begin() + 256 + 50, h_keys.begin() + 256 + 100, 256);
+
+  cudf::test::fixed_width_column_wrapper<int> keys(h_keys.begin(), h_keys.end());
+
+  // Use a set to remove duplcate rows.
+  // We can't use the set directly to construct a column wrapper thus have to convert it back
+  // to a vector for doing so.
+  std::vector<int> h_expected_keys = [&] {
+    auto tmp = std::unordered_set<int>(h_keys.begin(), h_keys.end());
+    return std::vector<int>{tmp.begin(), tmp.end()};
+  }();
+  cudf::test::fixed_width_column_wrapper<int> expect_keys(h_expected_keys.begin(),
+                                                          h_expected_keys.end());
+
+  auto agg = cudf::make_max_aggregation<cudf::groupby_aggregation>();
+  // Keys are the same as values.
+  test_single_agg(keys, keys, expect_keys, expect_keys, std::move(agg));
 }

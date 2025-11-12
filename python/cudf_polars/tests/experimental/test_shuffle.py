@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from typing import Literal, cast
+
 import pytest
 
 import polars as pl
@@ -12,18 +14,21 @@ from cudf_polars import Translator
 from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.experimental.parallel import evaluate_streaming, lower_ir_graph
 from cudf_polars.experimental.shuffle import Shuffle
-from cudf_polars.testing.asserts import DEFAULT_SCHEDULER
+from cudf_polars.testing.asserts import DEFAULT_CLUSTER, DEFAULT_RUNTIME
 from cudf_polars.utils.config import ConfigOptions
 
+SHUFFLE_METHODS = ["tasks", None] if DEFAULT_RUNTIME == "tasks" else [None]
 
-@pytest.fixture(scope="module", params=["tasks", None])
+
+@pytest.fixture(scope="module", params=SHUFFLE_METHODS)
 def engine(request):
     return pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 4,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
             "shuffle_method": request.param,
         },
     )
@@ -68,8 +73,13 @@ def test_hash_shuffle(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
     assert len([node for node in partition_info if isinstance(node, Shuffle)]) == 2
 
     # Check that streaming evaluation works
-    result = evaluate_streaming(qir3, options).to_polars()
-    # ignore is for polars' EngineType, which isn't publicly exported.
+    result = evaluate_streaming(
+        qir3,
+        options,
+    )
+    # Cast needed because polars' EngineType "cpu" isn't publicly exported.
     # https://github.com/pola-rs/polars/issues/17420
-    expect = df.collect(engine="cpu")  # type: ignore[call-overload]
+    expect = df.collect(
+        engine=cast(Literal["auto", "in-memory", "streaming", "gpu"], "cpu")
+    )
     assert_frame_equal(result, expect, check_row_order=False)

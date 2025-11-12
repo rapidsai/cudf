@@ -1,25 +1,14 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #include "nvcomp_adapter.cuh"
 
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
@@ -136,11 +125,8 @@ void skip_unsupported_inputs(device_span<size_t> input_sizes,
 std::pair<size_t, size_t> max_chunk_and_total_input_size(device_span<size_t const> input_sizes,
                                                          rmm::cuda_stream_view stream)
 {
-  auto const max = thrust::reduce(rmm::exec_policy(stream),
-                                  input_sizes.begin(),
-                                  input_sizes.end(),
-                                  0ul,
-                                  cudf::detail::maximum<size_t>());
+  auto const max = thrust::reduce(
+    rmm::exec_policy(stream), input_sizes.begin(), input_sizes.end(), 0ul, cuda::maximum<size_t>());
   auto const sum = thrust::reduce(rmm::exec_policy(stream), input_sizes.begin(), input_sizes.end());
   return {max, sum};
 }

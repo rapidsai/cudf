@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -71,8 +60,11 @@ std::unique_ptr<column> xxhash_64(table_view const& input,
                                   rmm::cuda_stream_view,
                                   rmm::device_async_resource_ref mr);
 
-/* Copyright 2005-2014 Daniel James.
+/* SPDX-SnippetBegin
+ * SPDX-SnippetCopyrightText: Copyright 2005-2014 Daniel James.
+ * SPDX-License-Identifier: BSL-1.0
  *
+ * Copyright 2005-2014 Daniel James.
  * Use, modification and distribution is subject to the Boost Software
  * License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
  * http://www.boost.org/LICENSE_1_0.txt)
@@ -91,9 +83,13 @@ CUDF_HOST_DEVICE constexpr uint32_t hash_combine(uint32_t lhs, uint32_t rhs)
 {
   return lhs ^ (rhs + 0x9e37'79b9 + (lhs << 6) + (lhs >> 2));
 }
+// SPDX-SnippetEnd
 
-/* Copyright 2005-2014 Daniel James.
+/* SPDX-SnippetBegin
+ * SPDX-SnippetCopyrightText: Copyright 2005-2014 Daniel James.
+ * SPDX-License-Identifier: BSL-1.0
  *
+ * Copyright 2005-2014 Daniel James.
  * Use, modification and distribution is subject to the Boost Software
  * License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
  * http://www.boost.org/LICENSE_1_0.txt)
@@ -112,6 +108,7 @@ constexpr std::size_t hash_combine(std::size_t lhs, std::size_t rhs)
 {
   return lhs ^ (rhs + 0x9e37'79b9'7f4a'7c15 + (lhs << 6) + (lhs >> 2));
 }
+// SPDX-SnippetEnd
 
 }  // namespace hashing::detail
 }  // namespace CUDF_EXPORT cudf

@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 
 import polars as pl
@@ -249,3 +251,64 @@ def test_join_maintain_order_with_slice(left, right, maintain_order, how, zlice)
         if POLARS_VERSION_LT_130
         else {"optimizations": pl.QueryOptFlags(slice_pushdown=False)},
     )
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("foo") > pl.col("bar"),
+        pl.col("foo") >= pl.col("bar"),
+        pl.col("foo") < pl.col("bar"),
+        pl.col("foo") <= pl.col("bar"),
+        pl.col("foo") == pl.col("bar"),
+        pytest.param(
+            pl.col("foo") != pl.col("bar"),
+            marks=pytest.mark.xfail(reason="nested loop join"),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "left_dtype,right_dtype",
+    [
+        (pl.Decimal(15, 2), pl.Decimal(15, 2)),
+        (pl.Decimal(15, 4), pl.Decimal(15, 2)),
+        (pl.Decimal(15, 2), pl.Decimal(15, 4)),
+        (pl.Decimal(15, 2), pl.Float32),
+        (pl.Decimal(15, 2), pl.Float64),
+    ],
+)
+def test_cross_join_filter_with_decimals(request, expr, left_dtype, right_dtype):
+    request.applymarker(
+        pytest.mark.xfail(
+            POLARS_VERSION_LT_132
+            and isinstance(left_dtype, pl.Decimal)
+            and isinstance(right_dtype, pl.Decimal)
+            and "==" in repr(expr),
+            reason="Hash Inner Join between i128 and i128",
+        )
+    )
+    left = pl.LazyFrame(
+        {
+            "foo": [Decimal("1.00"), Decimal("2.50"), Decimal("3.00")],
+            "foo1": [10, 20, 30],
+        },
+        schema={"foo": left_dtype, "foo1": pl.Int64},
+    )
+
+    if isinstance(right_dtype, pl.Decimal):
+        right = pl.LazyFrame(
+            {
+                "bar": [Decimal("2").scaleb(-right_dtype.scale)],
+                "foo1": ["x"],
+            },
+            schema={"bar": right_dtype, "foo1": pl.String},
+        )
+    else:
+        right = pl.LazyFrame(
+            {"bar": [2.0], "foo1": ["x"]},
+            schema={"bar": right_dtype, "foo1": pl.String},
+        )
+
+    q = left.join(right, how="cross").filter(expr)
+
+    assert_gpu_result_equal(q, check_row_order=False)

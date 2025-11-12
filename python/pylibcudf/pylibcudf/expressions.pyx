@@ -1,6 +1,8 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import ast
 import functools
+from decimal import Decimal
 
 from pylibcudf.libcudf.expressions import \
     ast_operator as ASTOperator  # no-cython-lint
@@ -28,6 +30,7 @@ from pylibcudf.libcudf.scalar.scalar cimport (
     numeric_scalar,
     string_scalar,
     timestamp_scalar,
+    fixed_point_scalar,
 )
 from pylibcudf.libcudf.types cimport size_type, type_id
 from pylibcudf.libcudf.wrappers.durations cimport (
@@ -44,9 +47,10 @@ from pylibcudf.libcudf.wrappers.timestamps cimport (
     timestamp_s,
     timestamp_us,
 )
+from pylibcudf.libcudf.fixed_point.fixed_point cimport decimal128, decimal64, decimal32
 
 from .scalar cimport Scalar
-from .traits cimport is_chrono, is_numeric
+from .traits cimport is_chrono, is_numeric, is_fixed_point
 from .types cimport DataType
 
 
@@ -91,9 +95,15 @@ cdef class Literal(Expression):
         self.scalar = value
         cdef DataType typ = value.type()
         cdef type_id tid = value.type().id()
-        if not (is_numeric(typ) or is_chrono(typ) or tid == type_id.STRING):
+        if not (
+            is_numeric(typ)
+            or is_chrono(typ)
+            or is_fixed_point(typ)
+            or tid == type_id.STRING
+        ):
             raise ValueError(
-                "Only numeric, string, or timestamp/duration scalars are accepted"
+                "Only numeric, string, decimal or timestamp/duration \
+                scalars are accepted"
             )
         # TODO: Accept type-erased scalar in AST C++ code
         # Then a lot of this code can be deleted
@@ -144,6 +154,18 @@ cdef class Literal(Expression):
         elif tid == type_id.STRING:
             self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
                 <string_scalar &>dereference(self.scalar.c_obj)
+            ))
+        elif tid == type_id.DECIMAL32:
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <fixed_point_scalar[decimal32] &>dereference(self.scalar.c_obj)
+            ))
+        elif tid == type_id.DECIMAL64:
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <fixed_point_scalar[decimal64] &>dereference(self.scalar.c_obj)
+            ))
+        elif tid == type_id.DECIMAL128:
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <fixed_point_scalar[decimal128] &>dereference(self.scalar.c_obj)
             ))
         elif tid == type_id.TIMESTAMP_NANOSECONDS:
             self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
@@ -380,7 +402,7 @@ class ExpressionTransformer(ast.NodeVisitor):
             raise ValueError(f"Unknown column name {node.id}")
 
     def visit_Constant(self, node):
-        if not isinstance(node.value, (float, int, str, complex)):
+        if not isinstance(node.value, (float, int, str, complex, Decimal)):
             raise ValueError(
                 f"Unsupported literal {repr(node.value)} of type "
                 "{type(node.value).__name__}"

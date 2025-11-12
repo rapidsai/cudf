@@ -46,3 +46,11 @@ def test_repr():
 )
 def test_children(dtype, expected):
     assert DataType(dtype).children == expected
+
+
+def test_common_decimal_type_raises():
+    with pytest.raises(ValueError, match="Both inputs required to be decimal types."):
+        DataType.common_decimal_dtype(
+            DataType(pl.Float64()),
+            DataType(pl.Float64()),
+        )

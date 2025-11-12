@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, cast
 
 import pytest
 
@@ -388,7 +388,11 @@ def test_fill_over(
     group_key: str,
     expr: pl.Expr,
 ) -> None:
-    q = df.select(expr.fill_null(strategy=strategy).over(group_key, order_by=order_by))
+    q = df.select(
+        expr.fill_null(strategy=cast(Literal["forward", "backward"], strategy)).over(
+            group_key, order_by=order_by
+        )
+    )
     if POLARS_VERSION_LT_132:
         assert_ir_translation_raises(q, NotImplementedError)
     else:
@@ -398,3 +402,60 @@ def test_fill_over(
 def test_fill_null_with_mean_over_unsupported(df: pl.LazyFrame) -> None:
     q = df.select(pl.col("x").fill_null(strategy="mean").over("g"))
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.parametrize(
+    "expr,group_key",
+    [
+        (pl.col("x"), "g"),
+        (pl.when((pl.col("x") % 4) == 1).then(None).otherwise(pl.col("x")), "g"),
+        (pl.col("x"), "g_null"),
+    ],
+)
+@pytest.mark.parametrize(
+    "order_by",
+    [
+        None,
+        ["g2", pl.col("x2") * 2],
+    ],
+)
+def test_cum_sum_over(
+    df: pl.LazyFrame,
+    *,
+    expr: pl.Expr,
+    group_key: str,
+    order_by: None | list[str | pl.Expr],
+) -> None:
+    q = df.select(expr.cum_sum().over(group_key, order_by=order_by))
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col(["x", "x2"]).first(),
+        pl.col(["x", "x2"]).last(),
+    ],
+)
+@pytest.mark.parametrize("descending", [False, True])
+@pytest.mark.parametrize("nulls_last", [False, True])
+@pytest.mark.parametrize(
+    "order_by",
+    [
+        "g_null",
+        ["g_null", "g2"],
+    ],
+)
+def test_order_sensitive_over_scalar_aggs(df, expr, descending, nulls_last, order_by):
+    q = df.select(
+        expr.over(
+            "g",
+            order_by=order_by,
+            descending=descending,
+            nulls_last=nulls_last,
+        )
+    )
+    if isinstance(order_by, list):
+        assert_ir_translation_raises(q, NotImplementedError)
+    else:
+        assert_gpu_result_equal(q)

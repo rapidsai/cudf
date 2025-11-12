@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <tests/groupby/groupby_test_util.hpp>
@@ -45,7 +34,7 @@ TYPED_TEST(groupby_count_scan_test, basic)
   value_wrapper vals{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
   key_wrapper expect_keys   {1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
-  result_wrapper expect_vals{0, 1, 2, 0, 1, 2, 3, 0, 1, 2};
+  result_wrapper expect_vals{1, 2, 3, 1, 2, 3, 4, 1, 2, 3};
   // clang-format on
 
   // Count groupby aggregation is only supported with cudf::null_policy::EXCLUDE
@@ -99,7 +88,7 @@ TYPED_TEST(groupby_count_scan_test, zero_valid_values)
   key_wrapper keys{1, 1, 1};
   value_wrapper vals({3, 4, 5}, cudf::test::iterators::all_nulls());
   key_wrapper expect_keys{1, 1, 1};
-  result_wrapper expect_vals{0, 1, 2};
+  result_wrapper expect_vals{1, 2, 3};
 
   auto agg2 =
     cudf::make_count_aggregation<cudf::groupby_scan_aggregation>(cudf::null_policy::INCLUDE);
@@ -118,7 +107,7 @@ TYPED_TEST(groupby_count_scan_test, null_keys_and_values)
   //                        {1, 1, 1, 2, 2, 2, 2, 3, _, 3, 4}
   key_wrapper expect_keys(  {1, 1, 1, 2, 2, 2, 2, 3,    3, 4}, cudf::test::iterators::no_nulls());
   //                        {0, 3, 6, 1, 4, _, 9, 2, 7, 8, -}
-  result_wrapper expect_vals{0, 1, 2, 0, 1,    2, 3, 0, 1, 0};
+  result_wrapper expect_vals{1, 2, 3, 1, 2,    3, 4, 1, 2, 1};
   // clang-format on
 
   auto agg2 =
@@ -138,7 +127,7 @@ TEST_F(groupby_count_scan_string_test, basic)
   key_wrapper keys                      {  1,   3,   3,   5,   5,   0};
   cudf::test::strings_column_wrapper vals{"1", "1", "1", "1", "1", "1"};
   key_wrapper expect_keys   {0, 1, 3, 3, 5, 5};
-  result_wrapper expect_vals{0, 0, 0, 1, 0, 1};
+  result_wrapper expect_vals{1, 1, 1, 2, 1, 2};
   // clang-format on
 
   auto agg2 =
@@ -166,7 +155,7 @@ TYPED_TEST(GroupByCountScanFixedPointTest, GroupByCountScan)
   auto const keys        = key_wrapper{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
   auto const vals        = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, scale};
   auto const expect_keys = key_wrapper{1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
-  auto const expect_vals = result_wrapper{0, 1, 2, 0, 1, 2, 3, 0, 1, 2};
+  auto const expect_vals = result_wrapper{1, 2, 3, 1, 2, 3, 4, 1, 2, 3};
 
   // Count groupby aggregation is only supported with cudf::null_policy::EXCLUDE
   EXPECT_THROW(test_single_scan(keys,
@@ -193,7 +182,7 @@ TEST_F(groupby_dictionary_count_scan_test, basic)
   cudf::test::strings_column_wrapper keys{"1", "3", "3", "5", "5", "0"};
   cudf::test::dictionary_column_wrapper<K> vals{1, 1, 1, 1, 1, 1};
   cudf::test::strings_column_wrapper expect_keys{"0", "1", "3", "3", "5", "5"};
-  result_wrapper expect_vals{0, 0, 0, 1, 0, 1};
+  result_wrapper expect_vals{1, 1, 1, 2, 1, 2};
 
   // Count groupby aggregation is only supported with cudf::null_policy::EXCLUDE
   auto agg1 = cudf::make_count_aggregation<cudf::groupby_scan_aggregation>();

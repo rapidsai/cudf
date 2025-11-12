@@ -1,5 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -405,6 +404,15 @@ class ModuleAccelerator(ModuleAcceleratorBase):
         # sys.meta_path.
         for mod in sys.modules.copy():
             if mod.startswith(self.slow_lib):
+                if mod == "pandas._config.config":
+                    # Since it is possible for state to diverge between the proxy and real
+                    # module, we skip wrapping this one entirely.
+                    # For example, running tests in pandas/tests/config/test_config.py
+                    # mutates internal globals like _registered_options on the proxy,
+                    # while register_option() reads them from the real module.
+                    # Therefore the two get out of sync and raise duplicate registration errors.
+                    # Keeping the real module here avoids that split state.
+                    continue
                 sys.modules[self._module_cache_prefix + mod] = sys.modules[mod]
                 del sys.modules[mod]
         self._denylist = (*slow_module.__path__, *fast_module.__path__)
@@ -548,7 +556,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
             # disabled when the child was launched. That is a fairly rare pattern though
             # and we can document the limitations.
             # The main thread is always started, so the ident is always an int
-            or loader._disable_count[threading.main_thread().ident] > 0  # type: ignore
+            or loader._disable_count[threading.main_thread().ident] > 0  # type: ignore[index]
         )
         if not use_real:
             # Only need to check the denylist if we're not turned off.

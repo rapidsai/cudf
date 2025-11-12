@@ -1,31 +1,17 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/utilities/parsing_utils.cuh"
-#include "io/utilities/string_parsing.hpp"
 #include "nested_json.hpp"
 
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/algorithm.cuh>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
-#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -216,7 +202,7 @@ void propagate_first_sibling_to_other(cudf::device_span<TreeDepthT const> node_l
     thrust::make_permutation_iterator(parent_node_ids.begin(), sorted_order.begin()),
     thrust::make_permutation_iterator(parent_node_ids.begin(), sorted_order.begin()),
     cuda::std::equal_to<TreeDepthT>{},
-    cudf::detail::maximum<NodeIndexT>{});
+    cuda::maximum<NodeIndexT>{});
 }
 
 // Generates a tree representation of the given tokens, token_indices.
@@ -553,16 +539,16 @@ std::pair<size_t, rmm::device_uvector<size_type>> remapped_field_nodes_after_uni
 
   using hasher_type                             = decltype(d_hasher);
   constexpr size_type empty_node_index_sentinel = -1;
-  auto key_set                                  = cuco::static_set{
-    cuco::extent{compute_hash_table_size(num_keys)},
-    cuco::empty_key{empty_node_index_sentinel},
-    d_equal,
-    cuco::linear_probing<1, hasher_type>{d_hasher},
-                                     {},
-                                     {},
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-    stream.value()};
-  auto const counting_iter = thrust::make_counting_iterator<size_type>(0);
+  auto key_set                                  = cuco::static_set{cuco::extent{num_keys},
+                                  cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
+                                  cuco::empty_key{empty_node_index_sentinel},
+                                  d_equal,
+                                  cuco::linear_probing<1, hasher_type>{d_hasher},
+                                                                   {},
+                                                                   {},
+                                  rmm::mr::polymorphic_allocator<char>{},
+                                  stream.value()};
+  auto const counting_iter                      = thrust::make_counting_iterator<size_type>(0);
   rmm::device_uvector<size_type> found_keys(num_keys, stream);
   key_set.insert_and_find_async(counting_iter,
                                 counting_iter + num_keys,
@@ -629,15 +615,15 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
 
   using hasher_type                             = decltype(d_hasher);
   constexpr size_type empty_node_index_sentinel = -1;
-  auto key_set                                  = cuco::static_set{
-    cuco::extent{compute_hash_table_size(num_fields, 40)},  // 40% occupancy
-    cuco::empty_key{empty_node_index_sentinel},
-    d_equal,
-    cuco::linear_probing<1, hasher_type>{d_hasher},
-                                     {},
-                                     {},
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-    stream.value()};
+  auto key_set                                  = cuco::static_set{cuco::extent{num_fields},
+                                  0.4,  // 40% load factor
+                                  cuco::empty_key{empty_node_index_sentinel},
+                                  d_equal,
+                                  cuco::linear_probing<1, hasher_type>{d_hasher},
+                                                                   {},
+                                                                   {},
+                                  rmm::mr::polymorphic_allocator<char>{},
+                                  stream.value()};
   key_set.insert_if_async(counting_iter,
                           counting_iter + num_nodes,
                           thrust::counting_iterator<size_type>(0),  // stencil
@@ -651,28 +637,28 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
   auto get_utf8_matched_field_nodes = [&]() {
     auto make_map = [&stream](auto num_keys) {
       using hasher_type3 = cudf::hashing::detail::default_hash<size_type>;
-      return cuco::static_map{
-        cuco::extent{compute_hash_table_size(num_keys, 100)},  // 100% occupancy
-        cuco::empty_key{empty_node_index_sentinel},
-        cuco::empty_value{empty_node_index_sentinel},
-        {},
-        cuco::linear_probing<1, hasher_type3>{hasher_type3{}},
-        {},
-        {},
-        cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-        stream.value()};
+      return cuco::static_map{cuco::extent{num_keys},
+                              1.0,  // 100% load factor
+                              cuco::empty_key{empty_node_index_sentinel},
+                              cuco::empty_value{empty_node_index_sentinel},
+                              {},
+                              cuco::linear_probing<1, hasher_type3>{hasher_type3{}},
+                              {},
+                              {},
+                              rmm::mr::polymorphic_allocator<char>{},
+                              stream.value()};
     };
-    if (!is_enabled_experimental) { return std::pair{false, make_map(0)}; }
+    if (!is_enabled_experimental) { return std::pair{false, make_map(size_type{0})}; }
     // get all unique field node ids for utf8 decoding
-    auto num_keys = key_set.size(stream);
+    auto num_keys = static_cast<size_type>(key_set.size(stream));
     rmm::device_uvector<size_type> keys(num_keys, stream);
     key_set.retrieve_all(keys.data(), stream.value());
 
     auto [num_unique_fields, found_keys] =
       remapped_field_nodes_after_unicode_decode(d_input, d_tree, keys, stream);
 
-    auto is_need_remap = num_unique_fields != num_keys;
-    if (!is_need_remap) { return std::pair{false, make_map(0)}; }
+    auto is_need_remap = num_unique_fields != static_cast<std::size_t>(num_keys);
+    if (!is_need_remap) { return std::pair{false, make_map(size_type{0})}; }
 
     // store to static_map with keys as field keys[index], and values as keys[found_keys[index]]
     auto reverse_map        = make_map(num_keys);
@@ -864,15 +850,15 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
   constexpr size_type empty_node_index_sentinel = -1;
   using hasher_type                             = decltype(d_hashed_cache);
 
-  auto key_set = cuco::static_set{
-    cuco::extent{compute_hash_table_size(num_nodes)},
-    cuco::empty_key<cudf::size_type>{empty_node_index_sentinel},
-    d_equal,
-    cuco::linear_probing<1, hasher_type>{d_hashed_cache},
-    {},
-    {},
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-    stream.value()};
+  auto key_set = cuco::static_set{cuco::extent{num_nodes},
+                                  cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
+                                  cuco::empty_key<cudf::size_type>{empty_node_index_sentinel},
+                                  d_equal,
+                                  cuco::linear_probing<1, hasher_type>{d_hashed_cache},
+                                  {},
+                                  {},
+                                  rmm::mr::polymorphic_allocator<char>{},
+                                  stream.value()};
 
   // insert and convert node ids to unique set ids
   auto nodes_itr         = thrust::make_counting_iterator<size_type>(0);

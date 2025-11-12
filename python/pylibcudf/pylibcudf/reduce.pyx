@@ -1,12 +1,22 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
+from libcpp.functional cimport reference_wrapper
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
+from libcpp.optional cimport optional, nullopt
 from libcpp.utility cimport move, pair
-from pylibcudf.libcudf cimport reduce as cpp_reduce
 from pylibcudf.libcudf.aggregation cimport reduce_aggregation, scan_aggregation
 from pylibcudf.libcudf.column.column cimport column
-from pylibcudf.libcudf.reduce cimport scan_type
+from pylibcudf.libcudf.reduce cimport (
+    reduce as cpp_reduce,
+    scan as cpp_scan,
+    minmax as cpp_minmax,
+    scan_type,
+    constscalar,
+    is_valid_aggregation as cpp_is_valid_aggregation,
+)
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.types cimport null_policy
 from rmm.pylibrmm.stream cimport Stream
@@ -20,7 +30,7 @@ from .utils cimport _get_stream, _get_memory_resource
 
 from pylibcudf.libcudf.reduce import scan_type as ScanType  # no-cython-lint
 
-__all__ = ["ScanType", "minmax", "reduce", "scan"]
+__all__ = ["ScanType", "minmax", "reduce", "scan", "is_valid_reduce_aggregation"]
 
 cpdef Scalar reduce(
     Column col,
@@ -42,6 +52,8 @@ cpdef Scalar reduce(
         The aggregation to perform.
     data_type : DataType
         The data type of the result.
+    init : Scalar | None
+        The initial value for the reduction.
     stream : Stream | None
         CUDA stream on which to perform the operation.
     mr : DeviceMemoryResource | None
@@ -54,28 +66,29 @@ cpdef Scalar reduce(
     """
     cdef unique_ptr[scalar] result
     cdef const reduce_aggregation *c_agg = agg.view_underlying_as_reduce()
+    cdef optional[reference_wrapper[constscalar]] c_init
+    cdef const scalar* c_init_ptr
 
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
+    if init is not None:
+        c_init_ptr = init.get()
+        c_init = optional[reference_wrapper[constscalar]](
+            reference_wrapper[constscalar](dereference(c_init_ptr))
+        )
+    else:
+        c_init = nullopt
+
     with nogil:
-        if init is not None:
-            result = cpp_reduce.cpp_reduce_with_init(
-                col.view(),
-                dereference(c_agg),
-                data_type.c_obj,
-                dereference(init.get()),
-                stream.view(),
-                mr.get_mr()
-            )
-        else:
-            result = cpp_reduce.cpp_reduce(
-                col.view(),
-                dereference(c_agg),
-                data_type.c_obj,
-                stream.view(),
-                mr.get_mr()
-            )
+        result = cpp_reduce(
+            col.view(),
+            dereference(c_agg),
+            data_type.c_obj,
+            c_init,
+            stream.view(),
+            mr.get_mr()
+        )
     return Scalar.from_libcudf(move(result))
 
 
@@ -115,7 +128,7 @@ cpdef Column scan(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_reduce.cpp_scan(
+        result = cpp_scan(
             col.view(),
             dereference(c_agg),
             inclusive,
@@ -147,16 +160,36 @@ cpdef tuple minmax(Column col, Stream stream=None, DeviceMemoryResource mr=None)
         being the maximum.
     """
     cdef pair[unique_ptr[scalar], unique_ptr[scalar]] result
+    cdef Scalar min_scalar
+    cdef Scalar max_scalar
 
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_reduce.cpp_minmax(col.view(), stream.view(), mr.get_mr())
+        result = cpp_minmax(col.view(), stream.view(), mr.get_mr())
 
-    return (
-        Scalar.from_libcudf(move(result.first)),
-        Scalar.from_libcudf(move(result.second)),
-    )
+    min_scalar = Scalar.from_libcudf(move(result.first))
+    max_scalar = Scalar.from_libcudf(move(result.second))
+    return (min_scalar, max_scalar)
+
+
+cpdef bool is_valid_reduce_aggregation(DataType source, Aggregation agg):
+    """
+    Return if an aggregation is supported for a given datatype.
+
+    Parameters
+    ----------
+    source
+        The type of the column the aggregation is being performed on.
+    agg
+        The aggregation.
+
+    Returns
+    -------
+    True if the aggregation is supported.
+    """
+    return cpp_is_valid_aggregation(source.c_obj, agg.kind())
+
 
 ScanType.__str__ = ScanType.__repr__

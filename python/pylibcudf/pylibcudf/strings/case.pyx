@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -14,7 +15,7 @@ __all__ = ["swapcase", "to_lower", "to_upper"]
 cpdef Column to_lower(Column input, Stream stream=None, DeviceMemoryResource mr=None):
     """Returns a column of lowercased strings.
 
-    For details, see :cpp:func:`cudf::strings::to_lower`.
+    For details, see :cpp:func:`to_lower`.
 
     Parameters
     ----------
@@ -41,7 +42,7 @@ cpdef Column to_lower(Column input, Stream stream=None, DeviceMemoryResource mr=
 cpdef Column to_upper(Column input, Stream stream=None, DeviceMemoryResource mr=None):
     """Returns a column of uppercased strings.
 
-    For details, see :cpp:func:`cudf::strings::to_upper`.
+    For details, see :cpp:func:`to_upper`.
 
     Parameters
     ----------
@@ -70,7 +71,7 @@ cpdef Column swapcase(Column input, Stream stream=None, DeviceMemoryResource mr=
     are converted to uppercase and the uppercase characters
     are converted to lowercase.
 
-    For details, see :cpp:func:`cudf::strings::swapcase`.
+    For details, see :cpp:func:`swapcase`.
 
     Parameters
     ----------

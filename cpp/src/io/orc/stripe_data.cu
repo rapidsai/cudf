@@ -1,29 +1,18 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/utilities/block_utils.cuh"
 #include "io/utilities/column_buffer.hpp"
 #include "orc_gpu.hpp"
 
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/io/orc_types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cub/cub.cuh>
+#include <cuda/functional>
 
 namespace cudf::io::orc::detail {
 
@@ -1521,7 +1510,7 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
       // TBD: Brute-forcing this, there might be a more efficient way to find the thread with the
       // last row
       last_row = (nz_count == s->u.rowdec.nz_count) ? row_plus1 : 0;
-      last_row = block_reduce(temp_storage).Reduce(last_row, cudf::detail::maximum{});
+      last_row = block_reduce(temp_storage).Reduce(last_row, cuda::maximum{});
       nz_pos   = (valid) ? nz_count : 0;
       if (t == 0) { s->top.data.nrows = last_row; }
       if (valid && nz_pos - 1 < s->u.rowdec.nz_count) { s->u.rowdec.row[nz_pos - 1] = row_plus1; }

@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -34,7 +35,7 @@ cpdef Column replace_re(
     For each string, replaces any character sequence matching the given patterns
     with the provided replacement.
 
-    For details, see :cpp:func:`cudf::strings::replace_re`
+    For details, see :cpp:func:`replace_re`
 
     Parameters
     ----------
@@ -117,7 +118,7 @@ cpdef Column replace_with_backrefs(
     For each string, replaces any character sequence matching the given regex
     using the replacement template for back-references.
 
-    For details, see :cpp:func:`cudf::strings::replace_with_backrefs`
+    For details, see :cpp:func:`replace_with_backrefs`
 
     Parameters
     ----------

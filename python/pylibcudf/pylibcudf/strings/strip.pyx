@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
@@ -28,7 +29,7 @@ cpdef Column strip(
     """Removes the specified characters from the beginning
     or end (or both) of each string.
 
-    For details, see :cpp:func:`cudf::strings::strip`.
+    For details, see :cpp:func:`strip`.
 
     Parameters
     ----------

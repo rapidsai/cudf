@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import itertools
@@ -554,7 +555,13 @@ class Merge:
         suffixes,
     ):
         # Error for various invalid combinations of merge input parameters
+        from cudf.core.dataframe import DataFrame
+        from cudf.core.series import Series
 
+        if not isinstance(lhs, (Series, DataFrame)):
+            raise TypeError("left must be a Series or DataFrame")
+        if not isinstance(rhs, (Series, DataFrame)):
+            raise TypeError("right must be a Series or DataFrame")
         # We must actually support the requested merge type
         if how not in {
             "left",
@@ -617,8 +624,6 @@ class Merge:
                         "column label, which is ambiguous."
                     )
 
-        from cudf.core.series import Series
-
         # Can't merge on unnamed Series
         if (isinstance(lhs, Series) and not lhs.name) or (
             isinstance(rhs, Series) and not rhs.name
@@ -649,8 +654,6 @@ class Merge:
                         "there are overlapping columns but "
                         "lsuffix and rsuffix are not defined"
                     )
-
-        from cudf.core.dataframe import DataFrame
 
         if (
             isinstance(lhs, DataFrame)

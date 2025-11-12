@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 # Run Pandas unit tests with cudf.pandas.
@@ -153,6 +152,8 @@ IGNORE_TESTS_THAT_CRASH_PYTEST_COLLECTION=("--ignore=tests/io/parser/common/test
 
 IGNORE_TESTS_THAT_TEST_PRIVATE_FUNTIONALITY=("--ignore=tests/test_nanops.py"
                                              "--ignore=tests/test_optional_dependency.py"
+                                             "--ignore=tests/util/test_assert_produces_warning.py"
+                                             "--ignore=tests/util/test_shares_memory.py"
                                              "--ignore=tests/util/test_validate_args.py"
                                              "--ignore=tests/util/test_validate_args_and_kwargs.py"
                                              "--ignore=tests/util/test_validate_inclusive.py"
@@ -163,11 +164,14 @@ IGNORE_TESTS_THAT_TEST_PRIVATE_FUNTIONALITY=("--ignore=tests/test_nanops.py"
                                              "--ignore=tests/util/test_deprecate_kwarg.py"
                                              "--ignore=tests/util/test_deprecate.py"
                                              "--ignore=tests/util/test_doc.py"
+                                             "--ignore=tests/frame/methods/test_to_dict_of_blocks.py"
                                              "--ignore=tests/tslibs/"
                                              "--ignore=tests/libs/"
                                              "--ignore=tests/internals/"
                                              "--ignore=tests/groupby/test_libgroupby.py"
                                              "--ignore=tests/frame/test_block_internals.py"
+                                             "--ignore=tests/arrays/sparse/test_libsparse.py"
+                                             "--ignore=tests/copy_view/test_internals.py"
 )
 
 

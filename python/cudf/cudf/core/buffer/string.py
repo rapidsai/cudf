@@ -1,4 +1,5 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 
 def format_bytes(nbytes: int) -> str:

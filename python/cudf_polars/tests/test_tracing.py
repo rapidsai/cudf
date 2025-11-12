@@ -57,6 +57,7 @@ def test_trace_basic(
     assert b"rmm_total_bytes_output" in result
     assert b"rmm_total_bytes_input" in result
     assert b"rmm_current_bytes_output" in result
+    assert b"overhead_duration" in result
 
 
 def test_import_without_structlog(monkeypatch: pytest.MonkeyPatch) -> None:

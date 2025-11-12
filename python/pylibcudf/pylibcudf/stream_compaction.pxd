@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from pylibcudf.libcudf.stream_compaction cimport duplicate_keep_option
 from pylibcudf.libcudf.types cimport (

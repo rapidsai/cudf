@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from cython.operator import dereference
@@ -27,7 +28,7 @@ cpdef Column contains_re(
     """Returns a boolean column identifying rows which match the given
     regex_program object.
 
-    For details, see :cpp:func:`cudf::strings::contains_re`.
+    For details, see :cpp:func:`contains_re`.
 
     Parameters
     ----------
@@ -66,7 +67,7 @@ cpdef Column count_re(
     """Returns the number of times the given regex_program's pattern
     matches in each string.
 
-    For details, see :cpp:func:`cudf::strings::count_re`.
+    For details, see :cpp:func:`count_re`.
 
     Parameters
     ----------
@@ -106,7 +107,7 @@ cpdef Column matches_re(
     matching the given regex_program object but only at
     the beginning the string.
 
-    For details, see :cpp:func:`cudf::strings::matches_re`.
+    For details, see :cpp:func:`matches_re`.
 
     Parameters
     ----------
@@ -147,7 +148,7 @@ cpdef Column like(
     Returns a boolean column identifying rows which
     match the given like pattern.
 
-    For details, see :cpp:func:`cudf::strings::like`.
+    For details, see :cpp:func:`like`.
 
     Parameters
     ----------

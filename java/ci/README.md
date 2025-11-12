@@ -15,7 +15,7 @@ docker build -f java/ci/Dockerfile.rocky --build-arg CUDA_VERSION=12.9.1 -t cudf
 ```
 
 The following CUDA versions are supported w/ CUDA Enhanced Compatibility:
-* CUDA 12.0+
+* CUDA 12.2+
 
 Change the --build-arg CUDA_VERSION to what you need.
 You can replace the tag "cudf-build:12.9.1-devel-rocky8" with another name you like.

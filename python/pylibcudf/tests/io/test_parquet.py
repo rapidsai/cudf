@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import io
 
 import pyarrow as pa
@@ -25,8 +26,14 @@ _COMMON_PARQUET_SOURCE_KWARGS = {"format": "parquet"}
 
 @pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("columns", [None, ["col_int64", "col_bool"]])
+@pytest.mark.parametrize("source_strategy", ["inline", "set_source"])
 def test_read_parquet_basic(
-    table_data, binary_source_or_sink, nrows_skiprows, columns, stream
+    table_data,
+    binary_source_or_sink,
+    nrows_skiprows,
+    columns,
+    stream,
+    source_strategy,
 ):
     _, pa_table = table_data
     nrows, skiprows = nrows_skiprows
@@ -35,9 +42,14 @@ def test_read_parquet_basic(
         binary_source_or_sink, pa_table, **_COMMON_PARQUET_SOURCE_KWARGS
     )
 
+    source_info = plc.io.SourceInfo([source])
     options = plc.io.parquet.ParquetReaderOptions.builder(
-        plc.io.SourceInfo([source])
+        source_info if source_strategy == "inline" else plc.io.SourceInfo([])
     ).build()
+
+    if source_strategy == "set_source":
+        options.set_source(source_info)
+
     if nrows > -1:
         options.set_num_rows(nrows)
     if skiprows != 0:

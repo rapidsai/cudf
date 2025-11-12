@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.libcudf.column.column cimport column
@@ -54,7 +55,7 @@ cpdef Column extract_datetime_component(
     """
     Extract a datetime component from a datetime column.
 
-    For details, see :cpp:func:`cudf::extract_datetime_component`.
+    For details, see :cpp:func:`extract_datetime_component`.
 
     Parameters
     ----------

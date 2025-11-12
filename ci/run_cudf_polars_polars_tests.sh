@@ -1,5 +1,6 @@
 #!/bin/bash
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
 
@@ -43,6 +44,7 @@ DESELECTED_TESTS_STR=$(printf -- " --deselect %s" "${DESELECTED_TESTS[@]}")
 # Don't quote the `DESELECTED_...` variable because `pytest` can't handle
 # multiple quoted arguments inline
 # shellcheck disable=SC2086
+rapids-logger "Run polars tests with the streaming executor"
 CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE=805306368 \
 CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
     python -m pytest \
@@ -56,4 +58,20 @@ CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
        --tb=native \
        $DESELECTED_TESTS_STR \
        "$@" \
-       py-polars/tests
+       py-polars/tests \
+       --executor streaming
+
+rapids-logger "Run polars tests with the in-memory executor"
+python -m pytest \
+       --import-mode=importlib \
+       --cache-clear \
+       -m "" \
+       -p cudf_polars.testing.plugin \
+       -n 8 \
+       --dist=worksteal \
+       -vv \
+       --tb=native \
+       $DESELECTED_TESTS_STR \
+       "$@" \
+       py-polars/tests \
+       --executor in-memory

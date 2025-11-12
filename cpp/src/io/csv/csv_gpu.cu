@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "csv_common.hpp"
@@ -811,13 +800,13 @@ cudf::detail::host_vector<column_type_histogram> detect_column_types(
   int const block_size = csvparse_block_dim;
   int const grid_size  = (row_starts.size() + block_size - 1) / block_size;
 
-  auto d_stats = detail::make_zeroed_device_uvector_async<column_type_histogram>(
+  auto d_stats = cudf::detail::make_zeroed_device_uvector_async<column_type_histogram>(
     num_active_columns, stream, cudf::get_current_device_resource_ref());
 
   data_type_detection<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, column_flags, row_starts, d_stats);
 
-  return detail::make_host_vector(d_stats, stream);
+  return cudf::detail::make_host_vector(d_stats, stream);
 }
 
 void decode_row_column_data(cudf::io::parse_options_view const& options,

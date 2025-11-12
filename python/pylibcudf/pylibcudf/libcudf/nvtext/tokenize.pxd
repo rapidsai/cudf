@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
@@ -53,7 +54,7 @@ cdef extern from "nvtext/tokenize.hpp" namespace "nvtext" nogil:
         device_memory_resource* mr
     ) except +libcudf_exception_handler
 
-    cdef struct tokenize_vocabulary "nvtext::tokenize_vocabulary":
+    cdef struct tokenize_vocabulary:
         pass
 
     cdef unique_ptr[tokenize_vocabulary] load_vocabulary(

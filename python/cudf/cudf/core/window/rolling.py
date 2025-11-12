@@ -1,10 +1,11 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import functools
 import itertools
 import warnings
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -28,6 +29,9 @@ if TYPE_CHECKING:
     from cudf.core.dataframe import DataFrame
     from cudf.core.index import Index
     from cudf.core.series import Series
+
+WindowType = TypeVar("WindowType", int, plc.Column)
+WindowTypePair = tuple[WindowType, WindowType]
 
 
 class _RollingBase:
@@ -251,7 +255,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
 
         if get_option("mode.pandas_compatible"):
             obj = obj.nans_to_nulls()
-        self.obj = obj  # type: ignore[assignment]
+        self.obj = obj
 
         self.window, self.min_periods = self._normalize_window_and_min_periods(
             window, min_periods
@@ -267,7 +271,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         )
 
     @functools.cached_property
-    def _plc_windows(self) -> tuple[plc.Column, plc.Column] | tuple[int, int]:
+    def _plc_windows(self) -> WindowTypePair:
         """
         Return the preceding and following windows to pass into
         pylibcudf.rolling.rolling_window

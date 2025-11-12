@@ -8,14 +8,14 @@ Polars `DataFrame`s or CSV files.
 ## Single GPU streaming
 
 The simplest case, requiring no additional dependencies, is the
-`synchronous` scheduler. An appropriate engine is:
+`single` cluster option. An appropriate engine is:
 
 ```python
 engine = pl.GPUEngine()
 ```
 
-This uses the default synchronous *scheduler* and is equivalent to
-`pl.GPUEngine(executor="streaming", executor_options={"scheduler": "synchronous"})`,
+This uses the default single-GPU *cluster* and is equivalent to
+`pl.GPUEngine(executor="streaming", executor_options={"cluster": "single"})`,
 or simply passing `engine="gpu"` to `.collect()`.
 
 When executed with this engine, any parquet inputs are split into
@@ -61,15 +61,15 @@ this fallback occurs or silence the warning instead:
 ## Multi GPU streaming
 
 ```{note}
-The distributed scheduler is considered experimental and might change without warning.
+The distributed cluster is considered experimental and might change without warning.
 ```
 
 Streaming utilising multiple GPUs simultaneously is supported by
-setting the `"scheduler"` to `"distributed"`:
+setting the `"cluster"` to `"distributed"`:
 ```python
 engine = pl.GPUEngine(
     executor="streaming",
-    executor_options={"scheduler": "distributed"},
+    executor_options={"cluster": "distributed"},
 )
 ```
 
@@ -112,23 +112,23 @@ client = LocalCUDACluster(...).get_client()
 q = ...
 engine = pl.GPUEngine(
     executor="streaming",
-    executor_options={"scheduler": "distributed"},
+    executor_options={"cluster": "distributed"},
 )
 result = q.collect(engine=engine)
 ```
 
 ````{warning}
-If you request a `"distributed"` scheduler but do not have a cluster
+If you request a `"distributed"` cluster but do not have a cluster
 deployed, `collect`ing the query will fail.
 ````
 
 ### Streaming sink operations
 
-When the `"distributed"` scheduler is active, sink operations like
+When the `"distributed"` cluster option is active, sink operations like
 `df.sink_parquet("my_path")` will always produce a directory containing
 one or more files. It is not currently possible to disable this behavior.
 
-When the `"sycnhronous"` scheduler is active, sink operations will
+When the `"single"` cluster option is active, sink operations will
 generate a single file by default. However, you may opt into the
 distributed sink behavior by adding `{"sink_to_directory": True}`
 to your `executor_options` dictionary.

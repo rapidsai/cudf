@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -19,8 +8,6 @@
 
 #include <cudf/detail/aggregation/device_aggregators.cuh>
 #include <cudf/detail/utilities/assert.cuh>
-#include <cudf/detail/utilities/device_atomics.cuh>
-#include <cudf/utilities/traits.cuh>
 
 #include <cuda/std/cstddef>
 
@@ -115,178 +102,186 @@ struct initialize_shmem {
   }
 };
 
-template <typename Target, cudf::aggregation::Kind k, typename Enable = void>
-struct initialize_target_element_gmem {
-  __device__ void operator()(cudf::mutable_column_device_view, cudf::size_type) const noexcept
-  {
-    CUDF_UNREACHABLE("Invalid source type and aggregation combination.");
-  }
-};
-
-template <typename Target, cudf::aggregation::Kind k>
-struct initialize_target_element_gmem<
-  Target,
-  k,
-  std::enable_if_t<is_supported<Target, k>() && cudf::is_fixed_width<Target>() &&
-                   !cudf::is_fixed_point<Target>()>> {
-  __device__ void operator()(cudf::mutable_column_device_view target,
-                             cudf::size_type target_index) const noexcept
-  {
-    using DeviceType                     = cudf::device_storage_type_t<Target>;
-    target.element<Target>(target_index) = get_identity<DeviceType, k>();
-  }
-};
-
-template <typename Target, cudf::aggregation::Kind k>
-struct initialize_target_element_gmem<
-  Target,
-  k,
-  std::enable_if_t<is_supported<Target, k>() && cudf::is_fixed_point<Target>()>> {
-  __device__ void operator()(cudf::mutable_column_device_view target,
-                             cudf::size_type target_index) const noexcept
-  {
-    using DeviceType                         = cudf::device_storage_type_t<Target>;
-    target.element<DeviceType>(target_index) = get_identity<DeviceType, k>();
-  }
-};
-
-struct initialize_gmem {
-  template <typename Target, cudf::aggregation::Kind k>
-  __device__ void operator()(cudf::mutable_column_device_view target,
-                             cudf::size_type target_index) const noexcept
-  {
-    initialize_target_element_gmem<Target, k>{}(target, target_index);
-  }
-};
-
-struct initialize_sparse_table {
-  cudf::size_type const* row_indices;
-  cudf::mutable_table_device_view sparse_table;
-  cudf::aggregation::Kind const* __restrict__ aggs;
-  initialize_sparse_table(cudf::size_type const* row_indices,
-                          cudf::mutable_table_device_view sparse_table,
-                          cudf::aggregation::Kind const* aggs)
-    : row_indices(row_indices), sparse_table(sparse_table), aggs(aggs)
-  {
-  }
-  __device__ void operator()(cudf::size_type i)
-  {
-    auto key_idx = row_indices[i];
-    for (auto col_idx = 0; col_idx < sparse_table.num_columns(); col_idx++) {
-      cudf::detail::dispatch_type_and_aggregation(sparse_table.column(col_idx).type(),
-                                                  aggs[col_idx],
-                                                  initialize_gmem{},
-                                                  sparse_table.column(col_idx),
-                                                  key_idx);
-    }
-  }
-};
-
-template <typename SetType>
+/**
+ * @brief Functor to compute single-pass aggregations and store the results into an output table,
+ * executing only for rows processed by some given specific thread blocks.
+ *
+ * This functor is used for computing aggregations for some (non-contiguous) ranges of rows
+ * processed by a list of threads blocks that could not execute using the shared memory code path.
+ * We want to map from the range [0, num_fallback_rows) to the (non-contiguous) ranges of rows
+ * processed exactly by the fallback blocks.
+ */
 struct global_memory_fallback_fn {
-  SetType set;
-  cudf::table_device_view input_values;
-  cudf::mutable_table_device_view output_values;
-  cudf::aggregation::Kind const* __restrict__ aggs;
-  cudf::size_type* block_cardinality;
-  cudf::size_type stride;
-  bitmask_type const* __restrict__ row_bitmask;
+  size_type const* target_indices;
+  aggregation::Kind const* aggs;
+  table_device_view input_values;
+  mutable_table_device_view output_values;
+  size_type const* fallback_blocks;
+  size_type fallback_stride;
+  size_type full_stride;
+  size_type num_strides;
+  size_type num_fallback_rows;
+  size_type num_total_rows;
 
-  global_memory_fallback_fn(SetType set,
-                            cudf::table_device_view input_values,
-                            cudf::mutable_table_device_view output_values,
-                            cudf::aggregation::Kind const* aggs,
-                            cudf::size_type* block_cardinality,
-                            cudf::size_type stride,
-                            bitmask_type const* row_bitmask)
-    : set(set),
+  global_memory_fallback_fn(size_type const* target_indices,
+                            aggregation::Kind const* aggs,
+                            table_device_view const& input_values,
+                            mutable_table_device_view const& output_values,
+                            size_type const* fallback_blocks,
+                            size_type fallback_stride,
+                            size_type full_stride,
+                            size_type num_strides,
+                            size_type num_fallback_rows,
+                            size_type num_total_rows)
+    : target_indices(target_indices),
+      aggs(aggs),
       input_values(input_values),
       output_values(output_values),
-      aggs(aggs),
-      block_cardinality(block_cardinality),
-      stride(stride),
-      row_bitmask(row_bitmask)
+      fallback_blocks(fallback_blocks),
+      fallback_stride(fallback_stride),
+      full_stride(full_stride),
+      num_strides(num_strides),
+      num_fallback_rows(num_fallback_rows),
+      num_total_rows(num_total_rows)
   {
   }
 
-  __device__ void operator()(cudf::size_type i)
+  __device__ void operator()(int64_t idx) const
   {
-    auto const block_id = (i % stride) / GROUPBY_BLOCK_SIZE;
-    if (block_cardinality[block_id] >= GROUPBY_CARDINALITY_THRESHOLD and
-        (not row_bitmask or cudf::bit_is_set(row_bitmask, i))) {
-      auto const result = set.insert_and_find(i);
-      cudf::detail::aggregate_row(output_values, *result.first, input_values, i, aggs);
+    // Local index in [0, num_fallback_rows) within the same output column/aggregation.
+    auto const local_agg_idx = static_cast<size_type>(idx % num_fallback_rows);
+
+    // Local index within the corresponding "full" segment.
+    auto const idx_in_stride = local_agg_idx % fallback_stride;
+
+    // Rank of the thread within the corresponding fallback block.
+    auto const thread_rank = idx_in_stride % GROUPBY_BLOCK_SIZE;
+
+    // The index of the fallback block that the current thread is processing.
+    auto const block_idx = fallback_blocks[idx_in_stride / GROUPBY_BLOCK_SIZE];
+
+    // Compute the row index processed by the corresponding fallback block.
+    // Here, `full_stride * (local_agg_idx / fallback_stride)` is the start offset of the
+    // current "full" segment, `GROUPBY_BLOCK_SIZE * block_idx` is the start
+    // offset of the corresponding fallback block within the "full" segment.
+    auto const source_row_idx = full_stride * (local_agg_idx / fallback_stride) +
+                                GROUPBY_BLOCK_SIZE * block_idx + thread_rank;
+    if (source_row_idx >= num_total_rows) { return; }
+
+    if (auto const target_row_idx = target_indices[source_row_idx];
+        target_row_idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
+      auto const col_idx     = static_cast<size_type>(idx / num_fallback_rows);
+      auto const& source_col = input_values.column(col_idx);
+      auto const& target_col = output_values.column(col_idx);
+      dispatch_type_and_aggregation(source_col.type(),
+                                    aggs[col_idx],
+                                    cudf::detail::element_aggregator{},
+                                    target_col,
+                                    target_row_idx,
+                                    source_col,
+                                    source_row_idx);
     }
   }
 };
 
 /**
- * @brief Computes single-pass aggregations and store results into a sparse `output_values` table,
- * and populate `set` with indices of unique keys
- *
- * The hash set is built by inserting every row index `i` from the `keys` and `values` tables. If
- * the index was not present in the set, insert they index and then copy it to the output. If the
- * key was already present in the set, then the inserted index is aggregated with the existing row.
- * This aggregation is done for every element `j` in the row by applying aggregation operation `j`
- * between the new and existing element.
- *
- * Instead of storing the entire rows from `input_keys` and `input_values` in
- * the hashset, we instead store the row indices. For example, when inserting
- * row at index `i` from `input_keys` into the hash set, the value `i` is what
- * gets stored for the hash set's "key". It is assumed the `set` was constructed
- * with a custom comparator that uses these row indices to check for equality
- * between key rows. For example, comparing two keys `k0` and `k1` will compare
- * the two rows `input_keys[k0] ?= input_keys[k1]`
- *
- * The exact size of the result is not known a priori, but can be upper bounded
- * by the number of rows in `input_keys` & `input_values`. Therefore, it is
- * assumed `output_values` has sufficient storage for an equivalent number of
- * rows. In this way, after all rows are aggregated, `output_values` will likely
- * be "sparse", meaning that not all rows contain the result of an aggregation.
- *
- * @tparam SetType The type of the hash set device ref
+ * @brief Base struct to compute single-pass aggregations and store the results into an output
+ * table, executing for all input rows.
  */
-template <typename SetType>
-struct compute_single_pass_aggs_fn {
-  SetType set;
+struct compute_single_pass_aggs_base_fn {
+  aggregation::Kind const* aggs;
   table_device_view input_values;
   mutable_table_device_view output_values;
-  aggregation::Kind const* __restrict__ aggs;
-  bitmask_type const* __restrict__ row_bitmask;
 
-  /**
-   * @brief Construct a new compute_single_pass_aggs_fn functor object
-   *
-   * @param set_ref Hash set object to insert key,value pairs into.
-   * @param input_values The table whose rows will be aggregated in the values
-   * of the hash set
-   * @param output_values Table that stores the results of aggregating rows of
-   * `input_values`.
-   * @param aggs The set of aggregation operations to perform across the
-   * columns of the `input_values` rows
-   * @param row_bitmask Bitmask where bit `i` indicates the presence of a null
-   * value in row `i` of input keys. Only used if `skip_rows_with_nulls` is `true`
-   */
-  compute_single_pass_aggs_fn(SetType set,
-                              table_device_view input_values,
-                              mutable_table_device_view output_values,
-                              aggregation::Kind const* aggs,
-                              bitmask_type const* row_bitmask)
-    : set(set),
-      input_values(input_values),
-      output_values(output_values),
-      aggs(aggs),
-      row_bitmask(row_bitmask)
+  compute_single_pass_aggs_base_fn(aggregation::Kind const* aggs,
+                                   table_device_view const& input_values,
+                                   mutable_table_device_view const& output_values)
+    : aggs(aggs), input_values(input_values), output_values(output_values)
+  {
+  }
+};
+
+/**
+ * @brief Functor to compute single-pass aggregations and store the results into an output table,
+ * executing for all input rows.
+ *
+ * This functor writes output to the sparse intermediate output table, using the target indices
+ * computed on-the-fly. In addition, aggregations are computed in serial order for each row.
+ *
+ * @tparam SetType Type of the key hash set
+ */
+template <typename SetRef>
+struct compute_single_pass_aggs_sparse_output_fn : compute_single_pass_aggs_base_fn {
+  SetRef set_ref;
+  bitmask_type const* row_bitmask;
+
+  compute_single_pass_aggs_sparse_output_fn(SetRef set_ref,
+                                            bitmask_type const* row_bitmask,
+                                            aggregation::Kind const* aggs,
+                                            table_device_view const& input_values,
+                                            mutable_table_device_view const& output_values)
+    : compute_single_pass_aggs_base_fn(aggs, input_values, output_values),
+      set_ref{set_ref},
+      row_bitmask{row_bitmask}
   {
   }
 
-  __device__ void operator()(size_type i)
+  __device__ void operator()(size_type idx)
   {
-    if (not row_bitmask or cudf::bit_is_set(row_bitmask, i)) {
-      auto const result = set.insert_and_find(i);
+    if (row_bitmask && !cudf::bit_is_set(row_bitmask, idx)) { return; }
+    auto const target_row_idx = *set_ref.insert_and_find(idx).first;
 
-      cudf::detail::aggregate_row(output_values, *result.first, input_values, i, aggs);
+    for (size_type col_idx = 0; col_idx < input_values.num_columns(); ++col_idx) {
+      auto const& source_col = input_values.column(col_idx);
+      auto const& target_col = output_values.column(col_idx);
+      dispatch_type_and_aggregation(source_col.type(),
+                                    aggs[col_idx],
+                                    cudf::detail::element_aggregator{},
+                                    target_col,
+                                    target_row_idx,
+                                    source_col,
+                                    idx);
     }
   }
 };
+
+/**
+ * @brief Functor to compute single-pass aggregations and store the results into an output table,
+ * executing for all input rows.
+ *
+ * This functor writes output to the final dense output table, using the given pre-computed target
+ * indices. In addition, all aggregations for all rows are computed concurrently without any order.
+ */
+struct compute_single_pass_aggs_dense_output_fn : compute_single_pass_aggs_base_fn {
+  size_type const* target_indices;
+
+  compute_single_pass_aggs_dense_output_fn(size_type const* target_indices,
+                                           aggregation::Kind const* aggs,
+                                           table_device_view const& input_values,
+                                           mutable_table_device_view const& output_values)
+    : compute_single_pass_aggs_base_fn(aggs, input_values, output_values),
+      target_indices(target_indices)
+  {
+  }
+
+  __device__ void operator()(int64_t idx) const
+  {
+    auto const num_rows       = input_values.num_rows();
+    auto const source_row_idx = static_cast<size_type>(idx % num_rows);
+    if (auto const target_row_idx = target_indices[source_row_idx];
+        target_row_idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
+      auto const col_idx     = static_cast<size_type>(idx / num_rows);
+      auto const& source_col = input_values.column(col_idx);
+      auto const& target_col = output_values.column(col_idx);
+      dispatch_type_and_aggregation(source_col.type(),
+                                    aggs[col_idx],
+                                    cudf::detail::element_aggregator{},
+                                    target_col,
+                                    target_row_idx,
+                                    source_col,
+                                    source_row_idx);
+    }
+  }
+};
+
 }  // namespace cudf::groupby::detail::hash
