@@ -5,6 +5,7 @@ from __future__ import annotations
 import itertools
 import random
 from datetime import date
+from decimal import Decimal
 
 import pytest
 
@@ -421,14 +422,10 @@ def test_groupby_rank_raises(df: pl.LazyFrame) -> None:
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_groupby_sum_decimal_null_group(request, df: pl.LazyFrame) -> None:
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_132, reason="decimals unsupported"
-        )
+def test_groupby_sum_decimal_null_group() -> None:
+    df = pl.LazyFrame(
+        {"key1": [1, 1, 2, 3], "foo": [None, None, Decimal("1.00"), Decimal("2.00")]},
+        schema={"key1": pl.Int32, "foo": pl.Decimal(9, 2)},
     )
-    df = df.with_columns(
-        foo=pl.when(pl.col("key1") == 2).then(None).otherwise(pl.col("decimal"))
-    )
-    q = df.group_by("key1").agg(pl.col("foo").sum()).sort("key1")
-    assert_gpu_result_equal(q)
+    q = df.group_by("key1").agg(pl.col("foo").sum())
+    assert_gpu_result_equal(q, check_row_order=False)
