@@ -1502,9 +1502,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def isnull(self) -> ColumnBase:
         """Identify missing values in a Column."""
         if not self.has_nulls(include_nan=self.dtype.kind == "f"):
-            return as_column(False, length=len(self))  # ._with_type_metadata(
-            # get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
-            # )
+            return as_column(False, length=len(self))
 
         with acquire_spill_lock():
             result = type(self).from_pylibcudf(
@@ -1516,9 +1514,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             # of a float column
             result = result | self.isnan()
 
-        return result  # ._with_type_metadata(
-        # get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
-        # )
+        return result
 
     def notnull(self) -> ColumnBase:
         """Identify non-missing values in a Column."""

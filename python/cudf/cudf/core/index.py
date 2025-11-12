@@ -928,6 +928,7 @@ class Index(SingleColumnFrame):
                     (1, 'Blue')],
                 )
         """
+
         if not isinstance(other, Index):
             other = Index(
                 other,
