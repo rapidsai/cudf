@@ -130,7 +130,8 @@ void scan_result_functor::operator()<aggregation::COUNT_VALID>(aggregation const
   cache.add_result(
     values,
     agg,
-    detail::count_scan(values, null_policy::EXCLUDE, helper.group_labels(stream), stream, mr));
+    detail::count_scan(
+      get_grouped_values(), null_policy::EXCLUDE, helper.group_labels(stream), stream, mr));
 }
 
 template <>
