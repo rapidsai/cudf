@@ -83,6 +83,7 @@ std::unique_ptr<column> max_scan(column_view const& values,
  * @brief Internal API to calculate cumulative number of values in each group
  *
  * @param values Grouped values to get valid rows from
+ * @param nulls Indicates whether nulls should be included in the count or not
  * @param group_labels ID of group that the corresponding value belongs to
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
