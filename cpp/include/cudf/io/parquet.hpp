@@ -93,7 +93,7 @@ class parquet_reader_options {
   // Whether to allow reading matching select columns from mismatched Parquet files.
   bool _allow_mismatched_pq_schemas = false;
   // Whether to ignore non-existent projected columns
-  bool _ignore_missing_columns = false;
+  bool _ignore_missing_columns = true;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
   // Whether to use JIT compilation for filtering
