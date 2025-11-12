@@ -1347,8 +1347,8 @@ class StringColumn(ColumnBase, Scannable):
     def like(self, pattern: str, escape: str) -> Self:
         plc_column = plc.strings.contains.like(
             self.to_pylibcudf(mode="read"),
-            pa_scalar_to_plc_scalar(pa.scalar(pattern)),
-            pa_scalar_to_plc_scalar(pa.scalar(escape)),
+            pattern,
+            escape,
         )
         return (
             type(self)
