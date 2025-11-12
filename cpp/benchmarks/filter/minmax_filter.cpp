@@ -61,7 +61,9 @@ bool boolean_from_string(std::string_view str)
 template <typename key_type>
 void BM_filter_min_max(nvbench::state& state)
 {
-  auto const num_rows    = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const num_filter_columns =
+    static_cast<cudf::size_type>(state.get_int64("num_filter_columns"));
   auto const engine_name = state.get_string("engine");
   auto const nullable    = boolean_from_string(state.get_string("nullable"));
   auto const engine      = engine_from_string(engine_name);
@@ -77,8 +79,20 @@ void BM_filter_min_max(nvbench::state& state)
     cudf::type_to_id<key_type>(), distribution_id::UNIFORM, input_min, input_max);
   profile.set_null_probability(nullable ? std::optional{0.3} : std::nullopt);
 
-  auto const column =
-    create_random_column(cudf::type_to_id<key_type>(), row_count{num_rows}, profile);
+  std::vector<std::unique_ptr<cudf::column>> filter_columns;
+  std::transform(thrust::make_counting_iterator(0),
+                 thrust::make_counting_iterator(num_filter_columns),
+                 std::back_inserter(filter_columns),
+                 [&](auto) {
+                   return create_random_column(
+                     cudf::type_to_id<key_type>(), row_count{num_rows}, profile);
+                 });
+
+  std::vector<cudf::column_view> filter_column_views;
+  std::transform(filter_columns.begin(),
+                 filter_columns.end(),
+                 std::back_inserter(filter_column_views),
+                 [](auto const& col) { return col->view(); });
 
   std::string type_name = cudf::type_to_name(cudf::data_type{cudf::type_to_id<key_type>()});
 
@@ -107,10 +121,8 @@ void BM_filter_min_max(nvbench::state& state)
     tree.push(cudf::ast::operation{cudf::ast::ast_operator::LOGICAL_AND, filter_min, filter_max});
   }
 
-  std::vector<cudf::column_view> predicate_columns;
-  predicate_columns.push_back(column->view());
-  predicate_columns.push_back(min_scalar_column->view());
-  predicate_columns.push_back(max_scalar_column->view());
+  auto const predicate_column =
+    create_random_column(cudf::type_to_id<key_type>(), row_count{num_rows}, profile);
 
   // Use the number of bytes read from global memory
   state.add_global_memory_reads<key_type>(static_cast<size_t>(num_rows));
@@ -122,20 +134,22 @@ void BM_filter_min_max(nvbench::state& state)
 
     switch (engine) {
       case engine_type::AST: {
-        auto input_table          = cudf::table_view{{column->view()}};
-        auto const filter_boolean = cudf::compute_column(input_table, tree.back(), stream, mr);
+        auto predicate_table      = cudf::table_view{{predicate_column->view()}};
+        auto filter_table         = cudf::table_view{filter_column_views};
+        auto const filter_boolean = cudf::compute_column(predicate_table, tree.back(), stream, mr);
         auto const result =
-          cudf::apply_boolean_mask(input_table, filter_boolean->view(), stream, mr);
+          cudf::apply_boolean_mask(filter_table, filter_boolean->view(), stream, mr);
       } break;
       case engine_type::JIT: {
-        auto result = cudf::filter(predicate_columns,
-                                   udf,
-                                   std::vector{predicate_columns[0]},
-                                   false,
-                                   std::nullopt,
-                                   cudf::null_aware::NO,
-                                   stream,
-                                   mr);
+        auto result = cudf::filter(
+          {predicate_column->view(), min_scalar_column->view(), max_scalar_column->view()},
+          udf,
+          filter_column_views,
+          false,
+          std::nullopt,
+          cudf::null_aware::NO,
+          stream,
+          mr);
       } break;
       default: CUDF_UNREACHABLE("Unrecognised engine type requested");
     }
@@ -147,7 +161,8 @@ void BM_filter_min_max(nvbench::state& state)
   NVBENCH_BENCH(name)                                                           \
     .set_name(#name)                                                            \
     .add_string_axis("engine", {"ast", "jit"})                                  \
-    .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000, 100'000'000})  \
+    .add_int64_axis("num_rows", {1'000'000, 10'000'000, 100'000'000})           \
+    .add_int64_axis("num_filter_columns", {1, 32})                              \
     .add_string_axis("nullable", {"true", "false"})
 }  // namespace
 
