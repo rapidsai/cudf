@@ -178,6 +178,6 @@ cpdef Column like(
             stream.view(),
             mr.get_mr()
         )
-   stream.synchronize()
+    stream.synchronize()
 
     return Column.from_libcudf(move(result), stream, mr)
