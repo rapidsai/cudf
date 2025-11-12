@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 import io
 import itertools
+import json
 import math
 import operator
 import shutil
@@ -39,11 +40,6 @@ from cudf.core.reshape import concat
 from cudf.options import get_option
 from cudf.utils import ioutils
 from cudf.utils.performance_tracking import _performance_tracking
-
-try:
-    import ujson as json  # type: ignore[import-untyped]
-except ImportError:
-    import json
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Sequence
