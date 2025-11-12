@@ -180,9 +180,7 @@ def make_available(table_chunk: TableChunk, context: Context) -> TableChunk:
     TableChunk
         The table chunk, now available on device.
     """
-    # TODO: Remove the hasattr check once
-    # https://github.com/rapidsai/rapidsmpf/pull/651 is merged.
-    if hasattr(table_chunk, "is_available") and not table_chunk.is_available():
+    if not table_chunk.is_available():
         table_chunk = table_chunk.make_available_and_spill(
             context.br(), allow_overbooking=True
         )
