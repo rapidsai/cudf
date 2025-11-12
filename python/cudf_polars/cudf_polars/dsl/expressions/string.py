@@ -10,8 +10,9 @@ import functools
 import re
 from datetime import datetime
 from enum import IntEnum, auto
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
+import polars as pl
 from polars.exceptions import InvalidOperationError
 from polars.polars import dtype_str_repr
 
@@ -37,12 +38,12 @@ JsonDecodeType = list[tuple[str, plc.DataType, "JsonDecodeType"]]
 
 def _dtypes_for_json_decode(dtype: DataType) -> JsonDecodeType:
     """Get the dtypes for json decode."""
-    # the type checker doesn't know that this equality check implies a struct dtype.
+    # Type checker doesn't narrow polars_type through dtype.id() check
     if dtype.id() == plc.TypeId.STRUCT:
         return [
             (field.name, child.plc_type, _dtypes_for_json_decode(child))
             for field, child in zip(
-                dtype.polars_type.fields,
+                cast(pl.Struct, dtype.polars_type).fields,
                 dtype.children,
                 strict=True,
             )
