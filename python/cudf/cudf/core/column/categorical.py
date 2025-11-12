@@ -35,7 +35,6 @@ if TYPE_CHECKING:
     from cudf._typing import (
         ColumnBinaryOperand,
         ColumnLike,
-        Dtype,
         DtypeObj,
         ScalarLike,
     )
