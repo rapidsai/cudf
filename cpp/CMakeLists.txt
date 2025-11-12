@@ -336,6 +336,16 @@ endif()
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
+
+# Sorted in descending order by compile time, so the *longest* targets are compiled first. Use
+# https://github.com/nico/ninjatracing to extract the flamegraph from .ninja_log and sort by compile
+# time:
+# ~~~
+# $ ninjatracing cpp/build/.ninja_log \
+# | jq -r --arg dir 'CMakeFiles/cudf.dir' \
+#   'sort_by(.dur) | map(.name | scan("^" + $dir + "/(.*)\\.o$")[])[]' \
+# | tac
+# ~~~
 add_library(
   cudf
   src/aggregation/aggregation.cpp
