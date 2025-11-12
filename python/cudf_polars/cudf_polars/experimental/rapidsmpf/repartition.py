@@ -14,7 +14,7 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 from cudf_polars.containers import DataFrame
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
-from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
+from cudf_polars.experimental.rapidsmpf.utils import ChannelManager, make_available
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import _concat
 
@@ -73,14 +73,16 @@ async def concatenate_node(
 
             # Process collected chunks
             if chunks:
+                # Make chunks available and keep them alive
+                available_chunks = [make_available(chunk, context) for chunk in chunks]
                 df = (
                     DataFrame.from_table(
-                        chunks[0].table_view(),
+                        available_chunks[0].table_view(),
                         list(ir.schema.keys()),
                         list(ir.schema.values()),
-                        chunks[0].stream,
+                        available_chunks[0].stream,
                     )
-                    if len(chunks) == 1
+                    if len(available_chunks) == 1
                     else _concat(
                         *(
                             DataFrame.from_table(
@@ -89,7 +91,7 @@ async def concatenate_node(
                                 list(ir.schema.values()),
                                 chunk.stream,
                             )
-                            for chunk in chunks
+                            for chunk in available_chunks
                         ),
                         context=ir_context,
                     )

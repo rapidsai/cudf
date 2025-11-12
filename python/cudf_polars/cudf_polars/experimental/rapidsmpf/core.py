@@ -33,6 +33,7 @@ from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext, Join, Scan, Un
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo, lower_ir_node
 from cudf_polars.experimental.rapidsmpf.nodes import generate_ir_sub_network_wrapper
+from cudf_polars.experimental.rapidsmpf.utils import make_available
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import CUDAStreamPoolConfig
@@ -143,7 +144,9 @@ def evaluate_logical_plan(
     # Keep chunks alive until after concatenation to prevent
     # use-after-free with stream-ordered allocations
     messages = output.release()
-    chunks = [TableChunk.from_message(msg) for msg in messages]
+    chunks = [
+        make_available(TableChunk.from_message(msg), rmpf_context) for msg in messages
+    ]
     dfs = [
         DataFrame.from_table(
             chunk.table_view(),

@@ -24,7 +24,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
 )
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
-from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
+from cudf_polars.experimental.rapidsmpf.utils import ChannelManager, make_available
 from cudf_polars.experimental.shuffle import Shuffle
 
 if TYPE_CHECKING:
@@ -129,12 +129,14 @@ class LocalShuffle:
         chunk: TableChunk
             The table chunk to insert.
         """
+        # Make chunk available and keep it alive
+        available_chunk = make_available(chunk, self.context)
         # Partition and pack using the Python function
         partitioned_chunks = py_partition_and_pack(
-            table=chunk.table_view(),
+            table=available_chunk.table_view(),
             columns_to_hash=self.columns_to_hash,
             num_partitions=self.num_partitions,
-            stream=chunk.stream,
+            stream=available_chunk.stream,
             br=self.br,
         )
 

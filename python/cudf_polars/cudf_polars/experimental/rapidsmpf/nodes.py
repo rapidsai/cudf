@@ -18,6 +18,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    make_available,
     process_children,
     shutdown_on_error,
 )
@@ -62,19 +63,21 @@ async def default_node_single(
         while (msg := await ch_in.data.recv(context)) is not None:
             chunk = TableChunk.from_message(msg)
             seq_num = msg.sequence_number
+            # Make chunk available and keep it alive
+            available_chunk = make_available(chunk, context)
             df = await asyncio.to_thread(
                 ir.do_evaluate,
                 *ir._non_child_args,
                 DataFrame.from_table(
-                    chunk.table_view(),
+                    available_chunk.table_view(),
                     list(ir.children[0].schema.keys()),
                     list(ir.children[0].schema.values()),
-                    chunk.stream,
+                    available_chunk.stream,
                 ),
                 context=ir_context,
             )
             chunk = TableChunk.from_pylibcudf_table(
-                df.table, chunk.stream, exclusive_view=True
+                df.table, df.stream, exclusive_view=True
             )
             await ch_out.data.send(context, Message(seq_num, chunk))
 
@@ -149,14 +152,18 @@ async def default_node_multi(
             assert all(chunk is not None for chunk in ready_chunks), (
                 "All chunks must be non-None"
             )
+            # Make chunks available and keep them alive
+            available_chunks = [
+                make_available(chunk, context) for chunk in ready_chunks
+            ]
             dfs = [
                 DataFrame.from_table(
-                    chunk.table_view(),  # type: ignore[union-attr]
+                    chunk.table_view(),
                     list(child.schema.keys()),
                     list(child.schema.values()),
-                    chunk.stream,  # type: ignore[union-attr]
+                    chunk.stream,
                 )
-                for chunk, child in zip(ready_chunks, ir.children, strict=True)
+                for chunk, child in zip(available_chunks, ir.children, strict=True)
             ]
 
             # Evaluate the IR node with current chunks
@@ -210,14 +217,16 @@ async def fanout_node_bounded(
         while (msg := await ch_in.data.recv(context)) is not None:
             table_chunk = TableChunk.from_message(msg)
             seq_num = msg.sequence_number
+            # Make chunk available and keep it alive
+            available_chunk = make_available(table_chunk, context)
             for ch_out in chs_out:
                 await ch_out.data.send(
                     context,
                     Message(
                         seq_num,
                         TableChunk.from_pylibcudf_table(
-                            table_chunk.table_view(),
-                            table_chunk.stream,
+                            available_chunk.table_view(),
+                            available_chunk.stream,
                             exclusive_view=False,
                         ),
                     ),
@@ -329,12 +338,14 @@ async def fanout_node_unbounded(
                         # Add message to all output buffers
                         chunk = TableChunk.from_message(msg)
                         seq_num = msg.sequence_number
+                        # Make chunk available and keep it alive
+                        available_chunk = make_available(chunk, context)
                         for buffer in output_buffers:
                             message = Message(
                                 seq_num,
                                 TableChunk.from_pylibcudf_table(
-                                    chunk.table_view(),
-                                    chunk.stream,
+                                    available_chunk.table_view(),
+                                    available_chunk.stream,
                                     exclusive_view=False,
                                 ),
                             )

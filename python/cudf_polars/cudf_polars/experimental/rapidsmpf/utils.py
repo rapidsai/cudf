@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from functools import reduce
 from typing import TYPE_CHECKING, Any, TypeAlias
 
+from rapidsmpf.streaming.cudf.table_chunk import TableChunk
+
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
@@ -160,3 +162,28 @@ def process_children(
     nodes: list[Any] = list(reduce(operator.add, _nodes_list, []))
     channels: dict[IR, ChannelManager] = reduce(operator.or_, _channels_list)
     return nodes, channels
+
+
+def make_available(table_chunk: TableChunk, context: Context) -> TableChunk:
+    """
+    Make a table chunk available.
+
+    Parameters
+    ----------
+    table_chunk
+        The table chunk to make available.
+    context
+        The context.
+
+    Returns
+    -------
+    TableChunk
+        The table chunk, now available on device.
+    """
+    # TODO: Remove the hasattr check once
+    # https://github.com/rapidsai/rapidsmpf/pull/651 is merged.
+    if hasattr(table_chunk, "is_available") and not table_chunk.is_available():
+        table_chunk = table_chunk.make_available_and_spill(
+            context.br(), allow_overbooking=True
+        )
+    return table_chunk

@@ -22,6 +22,7 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    make_available,
     process_children,
 )
 from cudf_polars.experimental.utils import _concat
@@ -61,14 +62,16 @@ async def get_small_table(
         small_chunks.append(TableChunk.from_message(msg))
     assert small_chunks, "Empty small side"
 
+    # Make chunks available and keep them alive
+    available_chunks = [make_available(chunk, context) for chunk in small_chunks]
     return [
         DataFrame.from_table(
-            small_chunk.table_view(),
+            chunk.table_view(),
             list(small_child.schema.keys()),
             list(small_child.schema.values()),
-            small_chunk.stream,
+            chunk.stream,
         )
-        for small_chunk in small_chunks
+        for chunk in available_chunks
     ]
 
 
@@ -126,11 +129,13 @@ async def broadcast_join_node(
         while (msg := await large_ch.data.recv(context)) is not None:
             large_chunk = TableChunk.from_message(msg)
             seq_num = msg.sequence_number
+            # Make chunk available and keep it alive
+            available_large_chunk = make_available(large_chunk, context)
             large_df = DataFrame.from_table(
-                large_chunk.table_view(),
+                available_large_chunk.table_view(),
                 list(large_child.schema.keys()),
                 list(large_child.schema.values()),
-                large_chunk.stream,
+                available_large_chunk.stream,
             )
 
             # Perform the join
