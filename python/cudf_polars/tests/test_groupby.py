@@ -421,7 +421,12 @@ def test_groupby_rank_raises(df: pl.LazyFrame) -> None:
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_groupby_sum_decimal_null_group(df: pl.LazyFrame):
+def test_groupby_sum_decimal_null_group(request, df: pl.LazyFrame) -> None:
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=POLARS_VERSION_LT_132, reason="decimals unsupported"
+        )
+    )
     df = df.with_columns(
         foo=pl.when(pl.col("key1") == 2).then(None).otherwise(pl.col("decimal"))
     )
