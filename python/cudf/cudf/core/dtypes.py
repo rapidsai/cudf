@@ -310,7 +310,6 @@ class CategoricalDtype(_BaseDtype):
             return column
 
     def __eq__(self, other: Dtype) -> bool:
-        # import pdb;pdb.set_trace()
         if isinstance(other, str):
             return other == self.name
         elif other is self:

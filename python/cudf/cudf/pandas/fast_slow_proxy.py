@@ -1168,7 +1168,6 @@ def _fast_slow_function_call(
     except Exception as err:
         if type(err) is cudf.errors.MixedTypeError:
             # print("MixedTypeError encountered, forcing SLOW path.")
-            # import pdb;pdb.set_trace()
             is_mixed_type_error = True
         with nvtx.annotate(
             "EXECUTE_SLOW",
