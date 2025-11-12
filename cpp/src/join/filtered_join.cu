@@ -78,15 +78,15 @@ struct gather_mask {
 
 auto filtered_join::compute_bucket_storage_size(cudf::table_view tbl, double load_factor)
 {
-  auto const size_with_primitive_probe =
-    static_cast<std::size_t>(cuco::make_valid_extent<primitive_probing_scheme, storage_type, std::size_t>(
-      tbl.num_rows(), load_factor));
-  auto const size_with_nested_probe =
-    static_cast<std::size_t>(cuco::make_valid_extent<nested_probing_scheme, storage_type, std::size_t>(
-      tbl.num_rows(), load_factor));
-  auto const size_with_simple_probe =
-    static_cast<std::size_t>(cuco::make_valid_extent<simple_probing_scheme, storage_type, std::size_t>(
-      tbl.num_rows(), load_factor));
+  auto const size_with_primitive_probe = static_cast<std::size_t>(
+    cuco::make_valid_extent<primitive_probing_scheme, storage_type, std::size_t>(tbl.num_rows(),
+                                                                                 load_factor));
+  auto const size_with_nested_probe = static_cast<std::size_t>(
+    cuco::make_valid_extent<nested_probing_scheme, storage_type, std::size_t>(tbl.num_rows(),
+                                                                              load_factor));
+  auto const size_with_simple_probe = static_cast<std::size_t>(
+    cuco::make_valid_extent<simple_probing_scheme, storage_type, std::size_t>(tbl.num_rows(),
+                                                                              load_factor));
   return std::max({size_with_primitive_probe, size_with_nested_probe, size_with_simple_probe});
 }
 
