@@ -419,3 +419,11 @@ def test_groupby_rank_raises(df: pl.LazyFrame) -> None:
     q = df.group_by("key1").agg(pl.col("int").rank())
 
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_groupby_sum_decimal_null_group(df: pl.LazyFrame):
+    df = df.with_columns(
+        foo=pl.when(pl.col("key1") == 2).then(None).otherwise(pl.col("decimal"))
+    )
+    q = df.group_by("key1").agg(pl.col("foo").sum()).sort("key1")
+    assert_gpu_result_equal(q)
