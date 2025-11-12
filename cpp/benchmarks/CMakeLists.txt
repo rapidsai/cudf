@@ -351,6 +351,11 @@ ConfigureNVBench(PARQUET_MULTITHREAD_READER_NVBENCH io/parquet/parquet_reader_mu
 ConfigureNVBench(TABLE_READER_NVBENCH io/table/table_reader.cpp)
 
 # ##################################################################################################
+# * table writer benchmark
+# --------------------------------------------------------------------------
+ConfigureNVBench(TABLE_WRITER_NVBENCH io/table/table_writer.cpp)
+
+# ##################################################################################################
 # * orc reader benchmark --------------------------------------------------------------------------
 ConfigureNVBench(ORC_READER_NVBENCH io/orc/orc_reader_input.cpp io/orc/orc_reader_options.cpp)
 
