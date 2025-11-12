@@ -161,6 +161,8 @@ cdef gpumemoryview _copy_array_to_device(object buf, Stream stream=None):
     ----------
     buf : array.array
         Array of bytes.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -899,6 +901,7 @@ cdef class Column:
         """
         ndim = len(shape)
         flat_size = functools.reduce(operator.mul, shape)
+        stream = _get_stream(stream)
 
         if base is None:
             base = Column(
@@ -999,6 +1002,8 @@ cdef class Column:
         ----------
         obj : Any
             Must implement the ``__cuda_array_interface__`` protocol.
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
 
         Returns
         -------
@@ -1037,6 +1042,8 @@ cdef class Column:
         ----------
         obj : object
             The input array to be converted into a `pylibcudf.Column`.
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
 
         Returns
         -------
