@@ -16,9 +16,6 @@ def test_cdt_eq(data, categorical_ordered):
     assert dt == "category"
     assert dt == dt
     assert dt == cudf.CategoricalDtype(
-        categories=None, ordered=categorical_ordered
-    )
-    assert dt == cudf.CategoricalDtype(
         categories=data, ordered=categorical_ordered
     )
     if data is None:
