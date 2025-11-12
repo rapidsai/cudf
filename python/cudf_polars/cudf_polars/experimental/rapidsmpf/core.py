@@ -143,7 +143,12 @@ def evaluate_logical_plan(
     # Keep chunks alive until after concatenation to prevent
     # use-after-free with stream-ordered allocations
     messages = output.release()
-    chunks = [TableChunk.from_message(msg) for msg in messages]
+    chunks = [
+        TableChunk.from_message(msg).make_available_and_spill(
+            br, allow_overbooking=True
+        )
+        for msg in messages
+    ]
     dfs = [
         DataFrame.from_table(
             chunk.table_view(),

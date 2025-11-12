@@ -216,7 +216,9 @@ async def local_shuffle_node(
                     break
 
                 # Extract TableChunk from message
-                chunk = TableChunk.from_message(msg)
+                chunk = TableChunk.from_message(msg).make_available_and_spill(
+                    context.br(), allow_overbooking=True
+                )
 
                 # Get the table view and insert into shuffler
                 local_shuffle.insert_chunk(chunk)
