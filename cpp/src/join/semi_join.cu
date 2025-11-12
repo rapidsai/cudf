@@ -11,7 +11,6 @@
 #include <cudf/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/join/filtered_join.hpp>
-#include <cudf/join/join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
