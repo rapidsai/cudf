@@ -135,9 +135,7 @@ async def default_node_multi(
                     finished_channels.add(ch_idx)
                 else:
                     # Store the new chunk (replacing previous if any)
-                    ready_chunks[ch_idx] = make_available(
-                        TableChunk.from_message(msg), context
-                    )
+                    ready_chunks[ch_idx] = TableChunk.from_message(msg)
                     chunk_count[ch_idx] += 1
                 assert ready_chunks[ch_idx] is not None, (
                     f"Channel {ch_idx} has no data after receive loop."
@@ -154,7 +152,7 @@ async def default_node_multi(
             )
             dfs = [
                 DataFrame.from_table(
-                    chunk.table_view(),  # type: ignore[union-attr]
+                    make_available(chunk, context).table_view(),
                     list(child.schema.keys()),
                     list(child.schema.values()),
                     chunk.stream,  # type: ignore[union-attr]
