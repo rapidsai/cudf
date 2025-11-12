@@ -17,7 +17,9 @@ Attributes
 .. autosummary::
    :toctree: api/
 
+   Series.at
    Series.axes
+   Series.iat
    Series.index
    Series.values
    Series.data

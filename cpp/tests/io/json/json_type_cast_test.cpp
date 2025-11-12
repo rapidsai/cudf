@@ -4,6 +4,7 @@
  */
 
 #include "io/utilities/string_parsing.hpp"
+#include "json_utils.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -13,9 +14,6 @@
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/detail/iterator.cuh>
-#include <cudf/detail/offsets_iterator_factory.cuh>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -24,8 +22,6 @@
 
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/adjacent_difference.h>
-
 #include <algorithm>
 #include <iterator>
 #include <type_traits>
@@ -33,20 +29,6 @@
 using namespace cudf::test::iterators;
 
 struct JSONTypeCastTest : public cudf::test::BaseFixture {};
-
-namespace {
-
-/// Returns length of each string in the column
-auto string_offset_to_length(cudf::strings_column_view const& column, rmm::cuda_stream_view stream)
-{
-  rmm::device_uvector<cudf::size_type> svs_length(column.size(), stream);
-  auto itr =
-    cudf::detail::offsetalator_factory::make_input_iterator(column.offsets(), column.offset());
-  thrust::adjacent_difference(
-    rmm::exec_policy(stream), itr + 1, itr + column.size() + 1, svs_length.begin());
-  return svs_length;
-}
-}  // namespace
 
 auto default_json_options()
 {
@@ -236,5 +218,3 @@ TEST_F(JSONTypeCastTest, ErrorNulls)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(str_col->view(), expected);
   }
 }
-
-CUDF_TEST_PROGRAM_MAIN()

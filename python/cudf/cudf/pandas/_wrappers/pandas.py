@@ -9,6 +9,7 @@ import inspect
 import os
 import pickle
 
+import numpy as np
 import pandas as pd
 
 # cuGraph third party integration test, test_cugraph_from_pandas_adjacency,
@@ -355,6 +356,26 @@ def _Series_dtype(self):
     return _maybe_wrap_result(self._fsproxy_wrapped.dtype, None)
 
 
+_SeriesAtIndexer = make_intermediate_proxy_type(
+    "_SeriesAtIndexer",
+    cudf.core.series._SeriesAtIndexer,
+    pd.core.indexing._AtIndexer,
+)
+
+
+_SeriesiAtIndexer = make_intermediate_proxy_type(
+    "_SeriesiAtIndexer",
+    cudf.core.series._SeriesiAtIndexer,
+    pd.core.indexing._iAtIndexer,
+)
+
+
+def _argsort(self, *args, **kwargs):
+    return _maybe_wrap_result(
+        self._fsproxy_wrapped.argsort(*args, **kwargs).astype(np.intp), self
+    )
+
+
 Series = make_final_proxy_type(
     "Series",
     cudf.Series,
@@ -371,6 +392,8 @@ Series = make_final_proxy_type(
         "memory_usage": _FastSlowAttribute("memory_usage"),
         "__sizeof__": _FastSlowAttribute("__sizeof__"),
         "dt": _AccessorAttr(CombinedDatetimelikeProperties),
+        "at": _FastSlowAttribute("at"),
+        "iat": _FastSlowAttribute("iat"),
         "str": _AccessorAttr(StringMethods),
         "list": _AccessorAttr(ListMethods),
         "struct": _AccessorAttr(StructAccessor),
@@ -379,6 +402,7 @@ Series = make_final_proxy_type(
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
         "_accessors": set(),
         "dtype": property(_Series_dtype),
+        "argsort": _argsort,
         "attrs": _FastSlowAttribute("attrs"),
         "_mgr": _FastSlowAttribute("_mgr", private=True),
         "array": _FastSlowAttribute("array", private=True),
@@ -448,6 +472,9 @@ Index = make_final_proxy_type(
         "name": _FastSlowAttribute("name"),
         "nbytes": _FastSlowAttribute("nbytes", private=True),
         "array": _FastSlowAttribute("array", private=True),
+        # TODO: Handle special cases like mergesort being unsupported
+        # and raising for certain types like Categorical and RangeIndex
+        "argsort": _argsort,
     },
 )
 
