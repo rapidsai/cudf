@@ -15,6 +15,9 @@ import rmm.statistics
 from cudf.options import get_option
 
 _NVTX_COLORS = ["green", "blue", "purple", "rapids"]
+dummy_annotate = nvtx.annotate(
+    "cudf_utils_performance_tracking", category="cudf_dummy"
+)
 
 
 def _get_color_for_nvtx(name):
@@ -27,6 +30,9 @@ def _get_color_for_nvtx(name):
 
 def _performance_tracking(func, domain="cudf_python"):
     """Decorator for applying performance tracking (if enabled)."""
+    global dummy_annotate
+    if dummy_annotate.domain is nvtx.nvtx.dummy_domain:
+        return func
 
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
