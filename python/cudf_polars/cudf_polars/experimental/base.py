@@ -121,7 +121,10 @@ class DataSourceInfo:
         """Data source row-count estimate."""
         raise NotImplementedError("Sub-class must implement row_count.")
 
-    def unique_stats(self, column: str) -> UniqueStats:  # pragma: no cover
+    def unique_stats(
+        self,
+        column: str,
+    ) -> UniqueStats:  # pragma: no cover
         """Return unique-value statistics for a column."""
         raise NotImplementedError("Sub-class must implement unique_stats.")
 
@@ -399,6 +402,7 @@ class IOPartitionFlavor(IntEnum):
     SINGLE_FILE = enum.auto()  # 1:1 mapping between files and partitions
     SPLIT_FILES = enum.auto()  # Split each file into >1 partition
     FUSED_FILES = enum.auto()  # Fuse multiple files into each partition
+    SINGLE_READ = enum.auto()  # One worker/task reads everything
 
 
 class IOPartitionPlan:
@@ -411,6 +415,7 @@ class IOPartitionPlan:
       - SINGLE_FILE: `factor` must be `1`.
       - SPLIT_FILES: `factor` is the number of partitions per file.
       - FUSED_FILES: `factor` is the number of files per partition.
+      - SINGLE_READ: `factor` is the total number of files.
     """
 
     __slots__ = ("factor", "flavor")

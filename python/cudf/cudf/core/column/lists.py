@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -34,25 +35,22 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     from cudf._typing import ColumnBinaryOperand, ColumnLike, DtypeObj
-    from cudf.core.buffer import Buffer
     from cudf.core.column.string import StringColumn
 
 
 class ListColumn(ColumnBase):
     _VALID_BINARY_OPERATIONS = {"__add__", "__radd__"}
+    _VALID_PLC_TYPES = {plc.TypeId.LIST}
 
     def __init__(
         self,
-        data: None,
+        plc_column: plc.Column,
         size: int,
         dtype: ListDtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple[NumericalColumn, ColumnBase] = (),  # type: ignore[assignment]
-    ):
-        if data is not None:
-            raise ValueError("data must be None")
+        offset: int,
+        null_count: int,
+        exposed: bool,
+    ) -> None:
         if (
             not cudf.get_option("mode.pandas_compatible")
             and not isinstance(dtype, ListDtype)
@@ -61,24 +59,27 @@ class ListColumn(ColumnBase):
             and not is_dtype_obj_list(dtype)
         ):
             raise ValueError("dtype must be a cudf.ListDtype")
-        if not (
-            len(children) == 2
-            and isinstance(children[0], NumericalColumn)
-            # TODO: Enforce int32_t (size_type) used in libcudf?
-            and children[0].dtype.kind == "i"
-            and isinstance(children[1], ColumnBase)
-        ):
-            raise ValueError(
-                "children must a tuple of 2 columns of (signed integer offsets, list values)"
-            )
         super().__init__(
-            data=data,
+            plc_column=plc_column,
             size=size,
             dtype=dtype,
-            mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
+            exposed=exposed,
+        )
+
+    def _get_children_from_pylibcudf_column(
+        self,
+        plc_column: plc.Column,
+        dtype: ListDtype,  # type: ignore[override]
+        exposed: bool,
+    ) -> tuple[ColumnBase, ColumnBase]:
+        children = super()._get_children_from_pylibcudf_column(
+            plc_column, dtype, exposed
+        )
+        return (
+            children[0],
+            children[1]._with_type_metadata(dtype.element_type),
         )
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
@@ -127,17 +128,17 @@ class ListColumn(ColumnBase):
         result = super().element_indexing(index)
         if isinstance(result, pa.Scalar):
             py_element = maybe_nested_pa_scalar_to_py(result)
-            return self.dtype._recursively_replace_fields(py_element)
+            return self.dtype._recursively_replace_fields(py_element)  # type: ignore[union-attr]
         return result
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar:
         if isinstance(value, list) or value is None:
             return pa_scalar_to_plc_scalar(
-                pa.scalar(value, type=self.dtype.to_arrow())
+                pa.scalar(value, type=self.dtype.to_arrow())  # type: ignore[union-attr]
             )
         elif value is NA or value is None:
             return pa_scalar_to_plc_scalar(
-                pa.scalar(None, type=self.dtype.to_arrow())
+                pa.scalar(None, type=self.dtype.to_arrow())  # type: ignore[union-attr]
             )
         else:
             raise ValueError(f"Can not set {value} into ListColumn")
@@ -156,7 +157,7 @@ class ListColumn(ColumnBase):
             return NotImplemented
         if isinstance(other.dtype, ListDtype):
             if op == "__add__":
-                return self.concatenate_rows([other])  # type: ignore[list-item]
+                return self.concatenate_rows([other])
             else:
                 raise NotImplementedError(
                     "Lists concatenation for this operation is not yet"
@@ -202,15 +203,6 @@ class ListColumn(ColumnBase):
             children=[elements],
         )
 
-    def set_base_data(self, value: None | Buffer) -> None:
-        if value is not None:
-            raise RuntimeError(
-                "ListColumn's do not use data attribute of Column, use "
-                "`set_base_children` instead"
-            )
-        else:
-            super().set_base_data(value)
-
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
         raise NotImplementedError(
@@ -222,14 +214,26 @@ class ListColumn(ColumnBase):
             elements = self.base_children[1]._with_type_metadata(
                 dtype.element_type
             )
+            new_children = [
+                self.plc_column.children()[0],
+                elements.to_pylibcudf(mode="read"),
+            ]
+            new_plc_column = plc.Column(
+                plc.DataType(plc.TypeId.LIST),
+                self.plc_column.size(),
+                self.plc_column.data(),
+                self.plc_column.null_mask(),
+                self.plc_column.null_count(),
+                self.plc_column.offset(),
+                new_children,
+            )
             return type(self)(
-                data=None,
-                dtype=dtype,
-                mask=self.base_mask,
+                plc_column=new_plc_column,
                 size=self.size,
+                dtype=dtype,
                 offset=self.offset,
                 null_count=self.null_count,
-                children=(self.base_children[0], elements),  # type: ignore[arg-type]
+                exposed=False,
             )
         # For pandas dtypes, store them directly in the column's dtype property
         elif isinstance(dtype, pd.ArrowDtype) and isinstance(
@@ -287,7 +291,7 @@ class ListColumn(ColumnBase):
             0,
             [offset_col, data_plc_col],
         )
-        return cls.from_pylibcudf(plc_column)  # type: ignore[return-value]
+        return cls.from_pylibcudf(plc_column)
 
     @cached_property
     def _string_separators(self) -> plc.Column:
@@ -357,7 +361,7 @@ class ListColumn(ColumnBase):
         else:
             return get_dtype_of_same_kind(
                 self.dtype,
-                self.dtype.pyarrow_dtype.value_type.to_pandas_dtype(),
+                self.dtype.pyarrow_dtype.value_type.to_pandas_dtype(),  # type: ignore[union-attr]
             )
 
     def to_pandas(
@@ -537,7 +541,7 @@ class ListColumn(ColumnBase):
                     f"seed must be in range [0, {np.iinfo(np.uint32).max}]"
                 )
             seed = np.uint32(seed)
-        return type(self).from_pylibcudf(  # type: ignore[return-value]
+        return type(self).from_pylibcudf(
             plc.nvtext.minhash.minhash_ngrams(
                 self.to_pylibcudf(mode="read"),
                 width,
@@ -562,7 +566,7 @@ class ListColumn(ColumnBase):
                     f"seed must be in range [0, {np.iinfo(np.uint64).max}]"
                 )
             seed = np.uint64(seed)
-        return type(self).from_pylibcudf(  # type: ignore[return-value]
+        return type(self).from_pylibcudf(
             plc.nvtext.minhash.minhash64_ngrams(
                 self.to_pylibcudf(mode="read"),
                 width,

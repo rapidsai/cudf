@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core._internals import binaryop
-from cudf.core.buffer import Buffer, acquire_spill_lock
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.temporal_base import TemporalBaseColumn
 from cudf.utils.dtypes import (
@@ -46,24 +47,6 @@ def get_np_td_unit_conversion(
 
 
 class TimeDeltaColumn(TemporalBaseColumn):
-    """
-    Parameters
-    ----------
-    data : Buffer
-        The Timedelta values
-    dtype : np.dtype
-        The data type
-    size : int
-        Size of memory allocation.
-    mask : Buffer; optional
-        The validity mask
-    offset : int
-        Data offset
-    null_count : int, optional
-        The number of null values.
-        If None, it is calculated automatically.
-    """
-
     _NP_SCALAR = np.timedelta64
     _PD_SCALAR = pd.Timedelta
     _VALID_BINARY_OPERATIONS = {
@@ -86,30 +69,34 @@ class TimeDeltaColumn(TemporalBaseColumn):
         "__rtruediv__",
         "__rfloordiv__",
     }
+    _VALID_PLC_TYPES = {
+        plc.TypeId.DURATION_SECONDS,
+        plc.TypeId.DURATION_MILLISECONDS,
+        plc.TypeId.DURATION_MICROSECONDS,
+        plc.TypeId.DURATION_NANOSECONDS,
+    }
 
     def __init__(
         self,
-        data: Buffer,
-        size: int | None,
+        plc_column: plc.Column,
+        size: int,
         dtype: np.dtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple = (),
-    ):
+        offset: int,
+        null_count: int,
+        exposed: bool,
+    ) -> None:
         if cudf.get_option("mode.pandas_compatible"):
             if not dtype.kind == "m":
                 raise ValueError("dtype must be a timedelta numpy dtype.")
         elif not (isinstance(dtype, np.dtype) and dtype.kind == "m"):
             raise ValueError("dtype must be a timedelta numpy dtype.")
         super().__init__(
-            data=data,
+            plc_column=plc_column,
             size=size,
             dtype=dtype,
-            mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
+            exposed=exposed,
         )
 
     def _clear_cache(self) -> None:
@@ -224,6 +211,13 @@ class TimeDeltaColumn(TemporalBaseColumn):
             result = result.fillna(op == "__ne__")
         return result
 
+    def _scan(self, op: str) -> ColumnBase:
+        if op == "cumprod":
+            raise TypeError("cumprod not supported for Timedelta.")
+        return self.scan(op.replace("cum", ""), True)._with_type_metadata(
+            self.dtype
+        )
+
     def total_seconds(self) -> ColumnBase:
         conversion = unit_to_nanoseconds_conversion[self.time_unit] / 1e9
         # Typecast to decimal128 to avoid floating point precision issues
@@ -268,14 +262,14 @@ class TimeDeltaColumn(TemporalBaseColumn):
 
     def sum(
         self,
-        skipna: bool | None = None,
+        skipna: bool = True,
         min_count: int = 0,
     ) -> pd.Timedelta:
         return self._PD_SCALAR(
             # Since sum isn't overridden in Numerical[Base]Column, mypy only
             # sees the signature from Reducible (which doesn't have the extra
             # parameters from ColumnBase._reduce) so we have to ignore this.
-            self.astype(self._UNDERLYING_DTYPE).sum(  # type: ignore
+            self.astype(self._UNDERLYING_DTYPE).sum(  # type: ignore[call-arg]
                 skipna=skipna, min_count=min_count
             ),
             unit=self.time_unit,

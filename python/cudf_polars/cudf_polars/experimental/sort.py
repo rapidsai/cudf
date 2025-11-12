@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 import polars as pl
@@ -22,11 +23,15 @@ from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import _simple_shuffle_graph
 from cudf_polars.experimental.utils import _concat, _fallback_inform, _lower_ir_fallback
 from cudf_polars.utils.config import ShuffleMethod
+from cudf_polars.utils.cuda_stream import get_dask_cuda_stream, get_joined_cuda_stream
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping, Sequence
 
+    from rmm.pylibrmm.stream import Stream
+
     from cudf_polars.dsl.expr import NamedExpr
+    from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
 
@@ -37,6 +42,7 @@ def find_sort_splits(
     my_part_id: int,
     column_order: Sequence[plc.types.Order],
     null_order: Sequence[plc.types.NullOrder],
+    stream: Stream,
 ) -> list[int]:
     """
     Find local sort splits given all (global) split candidates.
@@ -59,6 +65,10 @@ def find_sort_splits(
         The order in which tbl is sorted.
     null_order
         The null order in which tbl is sorted.
+    stream
+        CUDA stream used for device memory operations and kernel launches.
+        The values in both ``tbl`` and ``sort_boundaries`` must be valid on
+        ``stream``.
 
     Returns
     -------
@@ -74,12 +84,24 @@ def find_sort_splits(
     # Now we find the first and last row in the local table corresponding to the split value
     # (first and last, because there may be multiple rows with the same split value)
     split_first_col = plc.search.lower_bound(
-        tbl, sort_boundaries, column_order, null_order
+        tbl,
+        sort_boundaries,
+        column_order,
+        null_order,
+        stream=stream,
     )
     split_last_col = plc.search.upper_bound(
-        tbl, sort_boundaries, column_order, null_order
+        tbl,
+        sort_boundaries,
+        column_order,
+        null_order,
+        stream=stream,
     )
     # And convert to list for final processing
+    # The type ignores are for cross-library boundaries: plc.Column -> pl.Series
+    # These work at runtime via the Arrow C Data Interface protocol
+    # TODO: Find a way for pylibcudf types to show they export the Arrow protocol
+    # (mypy wasn't happy with a custom protocol)
     split_first_list = pl.Series(split_first_col).to_list()
     split_last_list = pl.Series(split_last_col).to_list()
     split_part_id_list = pl.Series(split_part_id).to_list()
@@ -130,12 +152,16 @@ def _select_local_split_candidates(
             [
                 *df.columns,
                 Column(
-                    plc.column_factories.make_empty_column(part_id_dtype.plc_type),
+                    plc.column_factories.make_empty_column(
+                        part_id_dtype.plc_type, stream=df.stream
+                    ),
                     dtype=part_id_dtype,
                     name=next(name_gen),
                 ),
                 Column(
-                    plc.column_factories.make_empty_column(part_id_dtype.plc_type),
+                    plc.column_factories.make_empty_column(
+                        part_id_dtype.plc_type, stream=df.stream
+                    ),
                     dtype=part_id_dtype,
                     name=next(name_gen),
                 ),
@@ -144,12 +170,17 @@ def _select_local_split_candidates(
         )
 
     candidates = [i * df.num_rows // num_partitions for i in range(num_partitions)]
-    row_id = plc.Column.from_iterable_of_py(candidates, part_id_dtype.plc_type)
+    row_id = plc.Column.from_iterable_of_py(
+        candidates, part_id_dtype.plc_type, stream=df.stream
+    )
 
-    res = plc.copying.gather(df.table, row_id, plc.copying.OutOfBoundsPolicy.DONT_CHECK)
+    res = plc.copying.gather(
+        df.table, row_id, plc.copying.OutOfBoundsPolicy.DONT_CHECK, stream=df.stream
+    )
     part_id = plc.Column.from_scalar(
-        plc.Scalar.from_py(my_part_id, part_id_dtype.plc_type),
+        plc.Scalar.from_py(my_part_id, part_id_dtype.plc_type, stream=df.stream),
         len(candidates),
+        stream=df.stream,
     )
 
     return DataFrame.from_table(
@@ -192,16 +223,21 @@ def _get_final_sort_boundaries(
         # split candidates has the additional partition_id and row_number columns
         column_order + [plc.types.Order.ASCENDING] * 2,
         null_order + [plc.types.NullOrder.AFTER] * 2,
+        stream=sort_boundaries_candidates.stream,
     )
     selected_candidates = plc.Column.from_iterable_of_py(
         [
             i * sorted_candidates.num_rows() // num_partitions
             for i in range(1, num_partitions)
-        ]
+        ],
+        stream=sort_boundaries_candidates.stream,
     )
     # Get the actual values at which we will split the data
     sort_boundaries = plc.copying.gather(
-        sorted_candidates, selected_candidates, plc.copying.OutOfBoundsPolicy.DONT_CHECK
+        sorted_candidates,
+        selected_candidates,
+        plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+        stream=sort_boundaries_candidates.stream,
     )
 
     return DataFrame.from_table(
@@ -218,6 +254,7 @@ def _sort_boundaries_graph(
     column_order: Sequence[plc.types.Order],
     null_order: Sequence[plc.types.NullOrder],
     count: int,
+    context: IRExecutionContext,
 ) -> tuple[str, MutableMapping[Any, Any]]:
     """Graph to get the boundaries from all partitions."""
     local_boundaries_name = f"sort-boundaries_local-{name_in}"
@@ -236,7 +273,7 @@ def _sort_boundaries_graph(
         )
         _concat_list.append((local_boundaries_name, part_id))
 
-    graph[concat_boundaries_name] = (_concat, *_concat_list)
+    graph[concat_boundaries_name] = (partial(_concat, context=context), *_concat_list)
     graph[global_boundaries_name] = (
         _get_final_sort_boundaries,
         concat_boundaries_name,
@@ -284,19 +321,26 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
 
         by = options["by"]
 
+        stream = get_joined_cuda_stream(
+            get_dask_cuda_stream, upstreams=(df.stream, sort_boundaries.stream)
+        )
+
         splits = find_sort_splits(
             df.select(by).table,
             sort_boundaries.table,
             partition_id,
             options["order"],
             options["null_order"],
+            stream=stream,
         )
         packed_inputs = split_and_pack(
             df.table,
             splits=splits,
             br=context.br,
-            stream=DEFAULT_STREAM,
+            stream=stream,
         )
+        # TODO: figure out handoff with rapidsmpf
+        # https://github.com/rapidsai/cudf/issues/20337
         shuffler.insert_chunks(packed_inputs)
 
     @staticmethod
@@ -327,6 +371,8 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
 
         # TODO: When sorting, this step should finalize with a merge (unless we
         # require stability, as cudf merge is not stable).
+        # TODO: figure out handoff with rapidsmpf
+        # https://github.com/rapidsai/cudf/issues/20337
         return DataFrame.from_table(
             unpack_and_concat(
                 unspill_partitions(
@@ -371,12 +417,17 @@ def _sort_partition_dataframe(
         # Fast path for empty DataFrame
         return dict.fromkeys(range(partition_count), df)
 
+    stream = get_joined_cuda_stream(
+        get_dask_cuda_stream, upstreams=(df.stream, sort_boundaries.stream)
+    )
+
     splits = find_sort_splits(
         df.select(options["by"]).table,
         sort_boundaries.table,
         partition_id,
         options["order"],
         options["null_order"],
+        stream=stream,
     )
 
     # Split and return the partitioned result
@@ -387,7 +438,7 @@ def _sort_partition_dataframe(
             df.dtypes,
             stream=df.stream,
         )
-        for i, split in enumerate(plc.copying.split(df.table, splits))
+        for i, split in enumerate(plc.copying.split(df.table, splits, stream=stream))
     }
 
 
@@ -439,6 +490,8 @@ class ShuffleSorted(IR):
         null_order: tuple[plc.types.NullOrder, ...],
         shuffle_method: ShuffleMethod,
         df: DataFrame,
+        *,
+        context: IRExecutionContext,
     ) -> DataFrame:  # pragma: no cover
         """Evaluate and return a dataframe."""
         # Single-partition ShuffleSorted evaluation is a no-op
@@ -543,7 +596,9 @@ def _(
 
 @generate_ir_tasks.register(ShuffleSorted)
 def _(
-    ir: ShuffleSorted, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: ShuffleSorted,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     by = [ne.value.name for ne in ir.by if isinstance(ne.value, Col)]
     if len(by) != len(ir.by):  # pragma: no cover
@@ -558,6 +613,7 @@ def _(
         ir.order,
         ir.null_order,
         partition_info[child].count,
+        context,
     )
 
     options = {
@@ -607,7 +663,7 @@ def _(
 
     # Simple task-based fall-back
     graph.update(
-        _simple_shuffle_graph(
+        partial(_simple_shuffle_graph, context=context)(
             get_key_name(child),
             get_key_name(ir),
             partition_info[child].count,

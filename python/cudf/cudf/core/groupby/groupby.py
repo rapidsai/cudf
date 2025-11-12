@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import copy
@@ -809,6 +810,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         included_aggregations = []
         column_included = []
         requests = []
+        # For any post-processing needed after pylibcudf aggregations
+        adjustments = []
         result_columns: list[list[ColumnBase]] = []
 
         for i, (col, aggs) in enumerate(
@@ -817,6 +820,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             valid_aggregations = get_valid_aggregation(col.dtype)
             included_aggregations_i = []
             col_aggregations = []
+            adjustments_i = []
             for agg in aggs:
                 str_agg = str(agg)
                 if _is_unsupported_agg_for_type(col.dtype, str_agg):
@@ -830,6 +834,12 @@ class GroupBy(Serializable, Reducible, Scannable):
                 ):
                     included_aggregations_i.append((agg, agg_obj.kind))
                     col_aggregations.append(agg_obj.plc_obj)
+                    if str_agg == "cumcount":
+                        # pandas 0-indexes cumulative count, see
+                        # https://github.com/rapidsai/cudf/issues/10237
+                        adjustments_i.append(lambda col: (col - 1))
+                    else:
+                        adjustments_i.append(lambda col: col)
             included_aggregations.append(included_aggregations_i)
             result_columns.append([])
             if col_aggregations:
@@ -839,6 +849,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     )
                 )
                 column_included.append(i)
+                adjustments.append(adjustments_i)
 
         if not requests and any(len(v) > 0 for v in aggregations):
             raise pd.errors.DataError(
@@ -851,9 +862,14 @@ class GroupBy(Serializable, Reducible, Scannable):
             else self._groupby.plc_groupby.aggregate(requests)
         )
 
-        for i, result in zip(column_included, results, strict=True):
+        for i, result, adjustments_i in zip(
+            column_included, results, adjustments, strict=True
+        ):
             result_columns[i] = [
-                ColumnBase.from_pylibcudf(col) for col in result.columns()
+                adj(ColumnBase.from_pylibcudf(col))
+                for col, adj in zip(
+                    result.columns(), adjustments_i, strict=True
+                )
             ]
 
         return (
@@ -1365,7 +1381,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         if dropna is not None:
             raise NotImplementedError("dropna is not currently supported.")
-        self.obj["__groupbynth_order__"] = range(0, len(self.obj))  # type: ignore[index]
+        self.obj["__groupbynth_order__"] = range(0, len(self.obj))
         # We perform another groupby here to have the grouping columns
         # be a part of dataframe columns.
         result = self.obj.groupby(self.grouping.keys).agg(lambda x: x.nth(n))
@@ -1734,7 +1750,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         # seems because unlike the builtin narrowings it only performs
         # narrowing in the positive case.
         normalized_aggs = [
-            list(agg) if is_list_like(agg) else [agg]  # type: ignore
+            list(agg) if is_list_like(agg) else [agg]  # type: ignore[arg-type]
             for agg in aggs_per_column
         ]
         return column_names, columns, normalized_aggs

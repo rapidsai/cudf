@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -109,7 +110,9 @@ class StructMethods(BaseAccessor):
         data = {
             name: col.copy(deep=True)
             for name, col in zip(
-                self._column.dtype.fields, self._column.children, strict=True
+                self._column.dtype.fields,  # type: ignore[arg-type]
+                self._column.children,
+                strict=True,
             )
         }
         rangeindex = len(data) == 0

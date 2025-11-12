@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #include "page_data.cuh"
 #include "page_decode.cuh"
@@ -681,8 +670,8 @@ __device__ int update_validity_and_row_indices_lists(int32_t target_value_count,
       // Not all values visited by this block will represent a value at this nesting level.
       // the validity bit for thread t might actually represent output value t-6.
       // the correct position for thread t's bit is thread_value_count.
-      uint32_t const warp_valid_mask =
-        WarpReduceOr32((uint32_t)is_valid << thread_value_count_within_warp);
+      uint32_t const warp_valid_mask = warp_reduce_or<cudf::detail::warp_size>(
+        static_cast<uint32_t>(is_valid) << thread_value_count_within_warp);
       int thread_valid_count, block_valid_count;
       {
         auto thread_mask = (uint32_t(1) << thread_value_count_within_warp) - 1;

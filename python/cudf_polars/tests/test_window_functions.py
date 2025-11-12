@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from typing import Literal, cast
 
 import pytest
 
@@ -106,7 +107,16 @@ def test_over_mapping_strategy(df: pl.LazyFrame, mapping_strategy: str):
     # ignore is for polars' WindowMappingStrategy, which isn't publicly exported.
     # https://github.com/pola-rs/polars/issues/17420
     q = df.with_columns(
-        [pl.col("b").rank().over(pl.col("a"), mapping_strategy=mapping_strategy)]  # type: ignore[arg-type]
+        [
+            pl.col("b")
+            .rank()
+            .over(
+                pl.col("a"),
+                mapping_strategy=cast(
+                    Literal["group_to_rows", "join", "explode"], mapping_strategy
+                ),
+            )
+        ]
     )
     if not POLARS_VERSION_LT_132 and mapping_strategy == "group_to_rows":
         assert_gpu_result_equal(q)
@@ -143,6 +153,14 @@ def test_rolling_closed(df: pl.LazyFrame, closed: str):
     # ignore is for polars' ClosedInterval, which isn't publicly exported.
     # https://github.com/pola-rs/polars/issues/17420
     query = df.with_columns(
-        [pl.col("b").sum().rolling(period="2d", index_column="date", closed=closed)]  # type: ignore[arg-type]
+        [
+            pl.col("b")
+            .sum()
+            .rolling(
+                period="2d",
+                index_column="date",
+                closed=cast(Literal["left", "right", "both", "none"], closed),
+            )
+        ]
     )
     assert_gpu_result_equal(query)

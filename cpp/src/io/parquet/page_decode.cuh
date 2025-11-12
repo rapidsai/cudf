@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -852,7 +841,7 @@ __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_input_value
           // the validity bit for thread t might actually represent output value t-6. the correct
           // position for thread t's bit is thread_value_count. for cuda 11 we could use
           // __reduce_or_sync(), but until then we have to do a warp reduce.
-          WarpReduceOr32(is_valid << thread_value_count);
+          warp_reduce_or<cudf::detail::warp_size>(is_valid << thread_value_count);
 
       thread_valid_count = __popc(warp_valid_mask & ((1 << thread_value_count) - 1));
       warp_valid_count   = __popc(warp_valid_mask);

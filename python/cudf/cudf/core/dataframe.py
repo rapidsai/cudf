@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -1577,7 +1578,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 else:
                     # disc. with pandas here
                     # pandas raises key error here
-                    self.insert(self._num_columns, arg, value)
+                    self._insert(
+                        loc=self._num_columns,
+                        name=arg,
+                        value=value,
+                        ignore_index=False,
+                    )
 
         elif can_convert_to_column(arg):
             mask = arg
@@ -1633,7 +1639,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         self._drop_column(name)
 
     @_performance_tracking
-    def memory_usage(self, index: bool = True, deep: bool = False) -> Series:  # type: ignore[override]
+    def memory_usage(self, index: bool = True, deep: bool = False) -> Series:
         """
         Return the memory usage of the DataFrame.
 
@@ -2600,7 +2606,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             # Special case needed to avoid converting
             # Series objects into pd.Series
             if not inspect.isclass(into):
-                cons = type(into)  # type: ignore[assignment]
+                cons = type(into)
                 if isinstance(into, defaultdict):
                     cons = functools.partial(cons, into.default_factory)
             elif issubclass(into, Mapping):
@@ -2846,7 +2852,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         """
         return _DataFrameAtIndexer(self)
 
-    @property  # type: ignore
+    @property
     @_external_only_api(
         "Use _column_names instead, or _data.to_pandas_index if a pandas "
         "index is absolutely necessary. For checking if the columns are a "
@@ -2857,7 +2863,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         """Returns a tuple of columns"""
         return self._data.to_pandas_index
 
-    @columns.setter  # type: ignore
+    @columns.setter
     @_performance_tracking
     def columns(self, columns):
         multiindex = False
@@ -3437,6 +3443,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             inplace=inplace,
         )
 
+    @_external_only_api(
+        "Use ._insert with ignore_index=True to avoid expensive index "
+        "equality checking and reindexing when the data is already aligned."
+    )
     @_performance_tracking
     def insert(
         self,
@@ -3550,7 +3560,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         value = as_column(value, nan_as_null=nan_as_null)
         self._data.insert(name, value, loc=loc)
 
-    @property  # type:ignore
+    @property
     @_performance_tracking
     def axes(self):
         """
@@ -3875,7 +3885,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             else:
                 to_replace = list(index.keys())
                 vals = list(index.values())
-                is_all_na = vals.count(None) == len(vals)
+                is_all_na = all(val is None for val in vals)
 
                 try:
                     out_index = _index_from_data(
@@ -5903,7 +5913,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
         if nrows is not None:
             raise NotImplementedError("nrows is currently not supported.")
-
+        if not isinstance(data, (np.ndarray, cupy.ndarray)):
+            raise TypeError("data must be a numpy ndarray or cupy ndarray")
         if data.ndim != 1 and data.ndim != 2:
             raise ValueError(
                 f"records dimension expected 1 or 2 but found {data.ndim}"
@@ -6322,7 +6333,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         # https://github.com/rapidsai/cudf/issues/7556
 
         def make_false_column_like_self():
-            return as_column(False, length=len(self), dtype="bool")
+            return as_column(False, length=len(self), dtype=np.dtype("bool"))
 
         # Preprocess different input types into a mapping from column names to
         # a list of values to check.
@@ -6620,6 +6631,17 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     )
                 pd_index = source._data.to_pandas_index
                 idx = from_pandas(pd_index)
+                if (
+                    op == "std"
+                    and common_dtype is not None
+                    and common_dtype.kind == "M"
+                ):
+                    # TODO: Columns should probably signal the result type of their scalar
+                    # Especially for this case where NaT could be datetime or timedelta
+                    unit = np.datetime_data(common_dtype)[0]
+                    axis_0_results = pd.Index(
+                        axis_0_results, dtype=f"m8[{unit}]"
+                    )
                 res = as_column(
                     axis_0_results,
                     nan_as_null=not cudf.get_option("mode.pandas_compatible"),
@@ -6810,22 +6832,34 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         return df
 
     @_performance_tracking
-    def all(self, axis=0, bool_only=None, skipna=True, **kwargs):
+    def all(
+        self,
+        axis: Axis = 0,
+        bool_only: bool = False,
+        skipna: bool = True,
+        **kwargs,
+    ):
         obj = (
             self.select_dtypes(include=np.dtype(np.bool_))
             if bool_only
             else self
         )
-        return super(DataFrame, obj).all(axis, skipna, **kwargs)
+        return super(DataFrame, obj).all(axis, skipna, **kwargs)  # type: ignore[misc]
 
     @_performance_tracking
-    def any(self, axis=0, bool_only=None, skipna=True, **kwargs):
+    def any(
+        self,
+        axis: Axis = 0,
+        bool_only: bool = False,
+        skipna: bool = True,
+        **kwargs,
+    ):
         obj = (
             self.select_dtypes(include=np.dtype(np.bool_))
             if bool_only
             else self
         )
-        return super(DataFrame, obj).any(axis, skipna, **kwargs)
+        return super(DataFrame, obj).any(axis, skipna, **kwargs)  # type: ignore[misc]
 
     @_performance_tracking
     def _apply_cupy_method_axis_1(self, method: str, *args, **kwargs):

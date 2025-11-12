@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import datetime
 import re
 
@@ -219,3 +220,26 @@ def test_index_contains_float_int(data, numeric_types_as_str, needle):
     expected = needle in pidx
 
     assert_eq(actual, expected)
+
+
+def test_index_constructor():
+    gidx = cudf.Index([1, 2, 3])
+
+    assert gidx._constructor is cudf.Index
+
+
+@pytest.mark.parametrize(
+    "data,expected_type",
+    [
+        ([], "empty"),
+        ([1, 2, 3], "int64"),
+        ([1.0, 2.0, 3.0], "float64"),
+        (["a", "b", "c"], "string"),
+        ([True, False, True], "boolean"),
+    ],
+)
+def test_index_inferred_type(data, expected_type):
+    gidx = cudf.Index(data)
+    pidx = pd.Index(data)
+
+    assert_eq(gidx.inferred_type, pidx.inferred_type)

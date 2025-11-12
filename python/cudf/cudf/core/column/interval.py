@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import functools
@@ -16,33 +17,32 @@ from cudf.utils.dtypes import is_dtype_obj_interval
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-    from cudf.core.buffer import Buffer
+    import pylibcudf as plc
+
     from cudf.core.column import ColumnBase
 
 
 class IntervalColumn(StructColumn):
     def __init__(
         self,
-        data: None,
+        plc_column: plc.Column,
         size: int,
         dtype: IntervalDtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple[ColumnBase, ColumnBase] = (),  # type: ignore[assignment]
-    ):
-        if len(children) != 2:
+        offset: int,
+        null_count: int,
+        exposed: bool,
+    ) -> None:
+        if plc_column.num_children() != 2:
             raise ValueError(
-                "children must be a tuple of two columns (left edges, right edges)."
+                "plc_column must have two children (left edges, right edges)."
             )
         super().__init__(
-            data=data,
+            plc_column=plc_column,
             size=size,
             dtype=dtype,
-            mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
+            exposed=exposed,
         )
 
     @staticmethod
@@ -67,7 +67,7 @@ class IntervalColumn(StructColumn):
         )  # type: ignore[return-value]
 
     def to_arrow(self) -> pa.Array:
-        typ = self.dtype.to_arrow()
+        typ = self.dtype.to_arrow()  # type: ignore[union-attr]
         struct_arrow = super().to_arrow()
         if len(struct_arrow) == 0:
             # struct arrow is pa.struct array with null children types
@@ -82,7 +82,8 @@ class IntervalColumn(StructColumn):
     def is_empty(self) -> ColumnBase:
         left_equals_right = (self.right == self.left).fillna(False)
         not_closed_both = as_column(
-            self.dtype.closed != "both", length=len(self)
+            self.dtype.closed != "both",  # type: ignore[union-attr]
+            length=len(self),
         )
         return left_equals_right & not_closed_both
 
@@ -125,10 +126,10 @@ class IntervalColumn(StructColumn):
         self, closed: Literal["left", "right", "both", "neither"]
     ) -> Self:
         return self._with_type_metadata(  # type: ignore[return-value]
-            IntervalDtype(self.dtype.subtype, closed)
+            IntervalDtype(self.dtype.subtype, closed)  # type: ignore[union-attr]
         )
 
-    def as_interval_column(self, dtype: IntervalDtype) -> Self:  # type: ignore[override]
+    def as_interval_column(self, dtype: IntervalDtype) -> Self:
         if isinstance(dtype, IntervalDtype):
             return self._with_type_metadata(dtype)  # type: ignore[return-value]
         else:
@@ -153,15 +154,15 @@ class IntervalColumn(StructColumn):
         elif arrow_type:
             raise NotImplementedError(f"{arrow_type=} is not implemented.")
 
-        pd_type = self.dtype.to_pandas()
+        pd_type = self.dtype.to_pandas()  # type: ignore[union-attr]
         return pd.Index(pd_type.__from_arrow__(self.to_arrow()), dtype=pd_type)
 
     def element_indexing(
         self, index: int
-    ) -> pd.Interval | dict[Any, Any] | None:  # type: ignore[override]
+    ) -> pd.Interval | dict[Any, Any] | None:
         result = super().element_indexing(index)
         if isinstance(result, dict) and cudf.get_option(
             "mode.pandas_compatible"
         ):
-            return pd.Interval(**result, closed=self.dtype.closed)
+            return pd.Interval(**result, closed=self.dtype.closed)  # type: ignore[union-attr]
         return result

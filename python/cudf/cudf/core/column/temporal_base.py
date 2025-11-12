@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -16,8 +17,8 @@ import pylibcudf as plc
 
 import cudf
 from cudf.api.types import is_scalar
-from cudf.core.buffer.buffer import Buffer
 from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.core.mixins import Scannable
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
@@ -38,7 +39,7 @@ if TYPE_CHECKING:
     from cudf.core.column.string import StringColumn
 
 
-class TemporalBaseColumn(ColumnBase):
+class TemporalBaseColumn(ColumnBase, Scannable):
     """
     Base class for TimeDeltaColumn and DatetimeColumn.
     """
@@ -47,35 +48,12 @@ class TemporalBaseColumn(ColumnBase):
     _UNDERLYING_DTYPE: np.dtype[np.int64] = np.dtype(np.int64)
     _NP_SCALAR: ClassVar[type[np.datetime64] | type[np.timedelta64]]
     _PD_SCALAR: pd.Timestamp | pd.Timedelta
-
-    def __init__(
-        self,
-        data: Buffer,
-        size: int | None,
-        dtype: np.dtype | pd.DatetimeTZDtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple = (),
-    ):
-        if not isinstance(data, Buffer):
-            raise ValueError("data must be a Buffer.")
-        if data.size % dtype.itemsize:
-            raise ValueError("Buffer size must be divisible by element size")
-        if size is None:
-            size = data.size // dtype.itemsize
-            size = size - offset
-        if len(children) != 0:
-            raise ValueError(f"{type(self).__name__} must have no children.")
-        super().__init__(
-            data=data,
-            size=size,
-            dtype=dtype,
-            mask=mask,
-            offset=offset,
-            null_count=null_count,
-            children=children,
-        )
+    _VALID_SCANS = {
+        "cumsum",
+        "cumprod",
+        "cummin",
+        "cummax",
+    }
 
     def __contains__(self, item: np.datetime64 | np.timedelta64) -> bool:
         """
@@ -288,8 +266,8 @@ class TemporalBaseColumn(ColumnBase):
 
     def find_and_replace(
         self,
-        to_replace: ColumnBase,
-        replacement: ColumnBase,
+        to_replace: ColumnBase | list,
+        replacement: ColumnBase | list,
         all_nan: bool = False,
     ) -> Self:
         if not isinstance(to_replace, type(self)):
@@ -314,18 +292,26 @@ class TemporalBaseColumn(ColumnBase):
             return self.copy(deep=True)
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
-        if to_dtype.kind == self.dtype.kind:  # type: ignore[union-attr]
+        if to_dtype.kind == self.dtype.kind:
             to_res, _ = np.datetime_data(to_dtype)
+            max_val = self.max()
+            if isinstance(max_val, (pd.Timedelta, pd.Timestamp)):
+                max_val = max_val.to_numpy()
+            max_val = max_val.astype(self._UNDERLYING_DTYPE, copy=False)
+            min_val = self.min()
+            if isinstance(min_val, (pd.Timedelta, pd.Timestamp)):
+                min_val = min_val.to_numpy()
+            min_val = min_val.astype(self._UNDERLYING_DTYPE, copy=False)
             # call-overload must be ignored because numpy stubs only accept literal strings
             # for time units (e.g., "ns", "us") to allow compile-time validation,
             # but we're passing variables (self.time_unit) with time units that
             # we know are valid at runtime
             max_dist = np.timedelta64(
-                self.max().astype(self._UNDERLYING_DTYPE, copy=False),
+                max_val,
                 self.time_unit,  # type: ignore[call-overload]
             )
             min_dist = np.timedelta64(
-                self.min().astype(self._UNDERLYING_DTYPE, copy=False),
+                min_val,
                 self.time_unit,  # type: ignore[call-overload]
             )
             max_to_res = np.timedelta64(
@@ -342,7 +328,7 @@ class TemporalBaseColumn(ColumnBase):
             return False
 
     def mean(
-        self, skipna: bool | None = None, min_count: int = 0
+        self, skipna: bool = True, min_count: int = 0
     ) -> pd.Timestamp | pd.Timedelta:
         return self._PD_SCALAR(
             self.astype(self._UNDERLYING_DTYPE).mean(  # type:ignore[call-arg]
@@ -352,7 +338,7 @@ class TemporalBaseColumn(ColumnBase):
         ).as_unit(self.time_unit)
 
     def std(
-        self, skipna: bool | None = None, min_count: int = 0, ddof: int = 1
+        self, skipna: bool = True, min_count: int = 0, ddof: int = 1
     ) -> pd.Timedelta:
         return pd.Timedelta(
             self.astype(self._UNDERLYING_DTYPE).std(  # type:ignore[call-arg]
@@ -361,9 +347,7 @@ class TemporalBaseColumn(ColumnBase):
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
-    def median(
-        self, skipna: bool | None = None
-    ) -> pd.Timestamp | pd.Timedelta:
+    def median(self, skipna: bool = True) -> pd.Timestamp | pd.Timedelta:
         return self._PD_SCALAR(
             self.astype(self._UNDERLYING_DTYPE).median(skipna=skipna),  # type:ignore[call-arg]
             unit=self.time_unit,

@@ -10,6 +10,7 @@ import itertools
 import math
 import statistics
 from collections import defaultdict
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -17,7 +18,14 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars.dsl.ir import IR, DataFrameScan, Empty, Scan, Sink, Union
+from cudf_polars.dsl.ir import (
+    IR,
+    DataFrameScan,
+    Empty,
+    Scan,
+    Sink,
+    Union,
+)
 from cudf_polars.experimental.base import (
     ColumnSourceInfo,
     ColumnStat,
@@ -31,12 +39,14 @@ from cudf_polars.experimental.base import (
     get_key_name,
 )
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
+from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, MutableMapping
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import NamedExpr
+    from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.base import StatsCollector
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
@@ -189,6 +199,8 @@ class SplitScan(IR):
         include_file_paths: str | None,
         predicate: NamedExpr | None,
         parquet_options: ParquetOptions,
+        *,
+        context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         if typ not in ("parquet",):  # pragma: no cover
@@ -249,6 +261,7 @@ class SplitScan(IR):
             include_file_paths,
             predicate,
             parquet_options,
+            context=context,
         )
 
 
@@ -402,9 +415,12 @@ def _sink_to_directory(
     options: dict[str, Any],
     df: DataFrame,
     ready: None,
+    context: IRExecutionContext,
 ) -> DataFrame:
     """Sink a partition to a new file."""
-    return Sink.do_evaluate(schema, kind, path, parquet_options, options, df)
+    return Sink.do_evaluate(
+        schema, kind, path, parquet_options, options, df, context=context
+    )
 
 
 def _sink_to_parquet_file(
@@ -423,7 +439,9 @@ def _sink_to_parquet_file(
             plc.io.parquet.ChunkedParquetWriterOptions.builder(sink), options
         )
         writer_options = builder.metadata(metadata).build()
-        writer = plc.io.parquet.ChunkedParquetWriter.from_options(writer_options)
+        writer = plc.io.parquet.ChunkedParquetWriter.from_options(
+            writer_options, stream=df.stream
+        )
 
     # Append to the open Parquet file.
     assert isinstance(writer, plc.io.parquet.ChunkedParquetWriter), (
@@ -485,7 +503,9 @@ def _sink_to_file(
 
 
 def _file_sink_graph(
-    ir: StreamingSink, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: StreamingSink,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     """Sink to a single file."""
     name = get_key_name(ir)
@@ -495,7 +515,7 @@ def _file_sink_graph(
     if count == 1:
         return {
             (name, 0): (
-                sink.do_evaluate,
+                partial(sink.do_evaluate, context=context),
                 *sink._non_child_args,
                 (child_name, 0),
             )
@@ -521,7 +541,9 @@ def _file_sink_graph(
 
 
 def _directory_sink_graph(
-    ir: StreamingSink, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: StreamingSink,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     """Sink to a directory of files."""
     name = get_key_name(ir)
@@ -542,6 +564,7 @@ def _directory_sink_graph(
             sink.options,
             (child_name, i),
             setup_name,
+            context,
         )
         for i in range(count)
     }
@@ -551,12 +574,14 @@ def _directory_sink_graph(
 
 @generate_ir_tasks.register(StreamingSink)
 def _(
-    ir: StreamingSink, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: StreamingSink,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     if ir.executor_options.sink_to_directory:
-        return _directory_sink_graph(ir, partition_info)
+        return _directory_sink_graph(ir, partition_info, context=context)
     else:
-        return _file_sink_graph(ir, partition_info)
+        return _file_sink_graph(ir, partition_info, context=context)
 
 
 class ParquetMetadata:
@@ -740,7 +765,8 @@ class ParquetSourceInfo(DataSourceInfo):
         ).build()
         options.set_columns(key_columns)
         options.set_row_groups(list(samples.values()))
-        tbl_w_meta = plc.io.parquet.read_parquet(options)
+        stream = get_cuda_stream()
+        tbl_w_meta = plc.io.parquet.read_parquet(options, stream=stream)
         row_group_num_rows = tbl_w_meta.tbl.num_rows()
         for name, column in zip(
             tbl_w_meta.column_names(include_children=False),
@@ -751,6 +777,7 @@ class ParquetSourceInfo(DataSourceInfo):
                 column,
                 plc.types.NullPolicy.INCLUDE,
                 plc.types.NanPolicy.NAN_IS_NULL,
+                stream=stream,
             )
             fraction = row_group_unique_count / row_group_num_rows
             # Assume that if every row is unique then this is a
@@ -770,6 +797,7 @@ class ParquetSourceInfo(DataSourceInfo):
                 ColumnStat[int](value=count, exact=exact),
                 ColumnStat[float](value=fraction, exact=exact),
             )
+        stream.synchronize()
 
     def _update_unique_stats(self, column: str) -> None:
         if column not in self._unique_stats and column in self.metadata.column_names:
@@ -784,7 +812,18 @@ class ParquetSourceInfo(DataSourceInfo):
 
     def storage_size(self, column: str) -> ColumnStat[int]:
         """Return the average column size for a single file."""
-        return self.metadata.mean_size_per_file.get(column, ColumnStat[int]())
+        file_count = len(self.paths)
+        row_count = self.row_count.value
+        partial_mean_size = self.metadata.mean_size_per_file.get(
+            column, ColumnStat[int]()
+        ).value
+        if file_count and row_count and partial_mean_size:
+            # NOTE: We set a lower bound on the estimated size using
+            # the row count, because dictionary encoding can make the
+            # in-memory size much larger.
+            min_value = max(1, row_count // file_count)
+            return ColumnStat[int](max(min_value, partial_mean_size))
+        return ColumnStat[int]()
 
     def add_unique_stats_column(self, column: str) -> None:
         """Add a column needing unique-value information."""

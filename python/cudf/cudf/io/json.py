@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import os
@@ -221,7 +222,7 @@ def read_json(
             }
             df = DataFrame._from_data(data)
             # TODO: _add_df_col_struct_names expects dict but receives Mapping
-            ioutils._add_df_col_struct_names(df, res_child_names)  # type: ignore[arg-type]
+            ioutils._add_df_col_struct_names(df, res_child_names)
             return df
         else:
             table_w_meta = plc.io.json.read_json(

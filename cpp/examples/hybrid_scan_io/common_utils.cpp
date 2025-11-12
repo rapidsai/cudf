@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "common_utils.hpp"
@@ -81,13 +70,24 @@ void check_tables_equal(cudf::table_view const& lhs_table,
     cudf::filtered_join join_obj(
       lhs_table, cudf::null_equality::EQUAL, cudf::set_as_build_table::RIGHT, stream);
     auto const indices = join_obj.anti_join(rhs_table, stream);
-
     // No exception thrown, check indices
-    auto const valid = indices->size() == 0;
-    std::cout << "Tables identical: " << std::boolalpha << valid << "\n\n";
+    auto const tables_equal = indices->size() == 0;
+    if (tables_equal) {
+      std::cout << "Tables identical: " << std::boolalpha << tables_equal << "\n\n";
+    } else {
+      // Helper to write parquet data for inspection
+      auto const write_parquet =
+        [](cudf::table_view table, std::string filepath, rmm::cuda_stream_view stream) {
+          auto sink_info = cudf::io::sink_info(filepath);
+          auto opts      = cudf::io::parquet_writer_options::builder(sink_info, table).build();
+          cudf::io::write_parquet(opts, stream);
+        };
+      write_parquet(lhs_table, "lhs_table.parquet", stream);
+      write_parquet(rhs_table, "rhs_table.parquet", stream);
+      throw std::logic_error("Tables identical: false\n\n");
+    }
   } catch (std::exception& e) {
-    std::cerr << e.what() << std::endl << std::endl;
-    throw std::runtime_error("Tables identical: false\n\n");
+    std::cout << e.what() << std::endl;
   }
 }
 
