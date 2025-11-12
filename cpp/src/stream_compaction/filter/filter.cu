@@ -53,9 +53,9 @@ void launch_filter_kernel(jitify2::ConfiguredKernel& kernel,
   auto [input_handles, inputs] =
     cudf::jit::column_views_to_device<column_device_view, column_view>(input_columns, stream, mr);
 
-  cudf::jit::device_optional_span<bool> const* outputs_ptr = outputs.data();
-  column_device_view const* inputs_ptr                     = inputs.data();
-  void* p_user_data                                        = user_data.value_or(nullptr);
+  cudf::jit::device_optional_span<bool> const* p_outputs = outputs.data();
+  column_device_view const* p_inputs                     = inputs.data();
+  void* p_user_data                                      = user_data.value_or(nullptr);
 
   std::array<void*, 3> args{&p_outputs, &p_inputs, &p_user_data};
 

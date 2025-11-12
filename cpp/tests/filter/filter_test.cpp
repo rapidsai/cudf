@@ -338,8 +338,9 @@ TYPED_TEST(FilterExpressionTest, NullEqual)
   auto& ref_1 = tree.push(cudf::ast::column_reference(1));
   auto& null_equal_expr =
     tree.push(cudf::ast::operation(cudf::ast::ast_operator::NULL_EQUAL, ref_0, ref_1));
-  auto result   = Executor::filter(null_equal_expr, this->table);
-  auto expected = cudf::test::fixed_width_column_wrapper<int32_t>{1, 3, 4, 5, 6, 7, 8};
+  auto result = Executor::filter(null_equal_expr, this->table);
+  auto expected =
+    cudf::test::fixed_width_column_wrapper<int32_t>{{1, 3, 4, 5, 6, 7, 8}, {1, 1, 1, 1, 1, 1, 0}};
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->get_column(0).view());
 }
 
