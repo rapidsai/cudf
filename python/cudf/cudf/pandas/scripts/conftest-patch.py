@@ -1549,22 +1549,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/copy_view/test_indexing.py::test_getitem_midx_slice",
     "tests/copy_view/test_indexing.py::test_loc_enlarging_with_dataframe",
     "tests/copy_view/test_indexing.py::test_midx_read_only_bool_indexer",
-    "tests/copy_view/test_indexing.py::test_null_slice[nullable-getitem]",
-    "tests/copy_view/test_indexing.py::test_null_slice[nullable-iloc-rows]",
-    "tests/copy_view/test_indexing.py::test_null_slice[nullable-iloc]",
-    "tests/copy_view/test_indexing.py::test_null_slice[nullable-loc-rows]",
-    "tests/copy_view/test_indexing.py::test_null_slice[nullable-loc]",
-    "tests/copy_view/test_indexing.py::test_null_slice[numpy-getitem]",
-    "tests/copy_view/test_indexing.py::test_null_slice[numpy-iloc-rows]",
-    "tests/copy_view/test_indexing.py::test_null_slice[numpy-iloc]",
-    "tests/copy_view/test_indexing.py::test_null_slice[numpy-loc-rows]",
-    "tests/copy_view/test_indexing.py::test_null_slice[numpy-loc]",
-    "tests/copy_view/test_indexing.py::test_null_slice_series[nullable-getitem]",
-    "tests/copy_view/test_indexing.py::test_null_slice_series[nullable-iloc]",
-    "tests/copy_view/test_indexing.py::test_null_slice_series[nullable-loc]",
-    "tests/copy_view/test_indexing.py::test_null_slice_series[numpy-getitem]",
-    "tests/copy_view/test_indexing.py::test_null_slice_series[numpy-iloc]",
-    "tests/copy_view/test_indexing.py::test_null_slice_series[numpy-loc]",
     "tests/copy_view/test_indexing.py::test_series_getitem_ellipsis",
     "tests/copy_view/test_indexing.py::test_series_getitem_slice[nullable]",
     "tests/copy_view/test_indexing.py::test_series_getitem_slice[numpy]",
@@ -10881,6 +10865,27 @@ NODEIDS_TO_ALWAYS_SKIP = {
     "tests/extension/test_arrow.py::TestArrowArray::test_series_constructor[uint8]",
 }
 
+# TODO: We should fix these too, but not high priority since
+# pandas 3.0 will enable copy-on-write by default
+NODEIDS_THAT_XFAIL_WITH_COPY_ON_WRITE_FALSE = {
+    "tests/copy_view/test_indexing.py::test_null_slice[nullable-getitem]",
+    "tests/copy_view/test_indexing.py::test_null_slice[nullable-iloc-rows]",
+    "tests/copy_view/test_indexing.py::test_null_slice[nullable-iloc]",
+    "tests/copy_view/test_indexing.py::test_null_slice[nullable-loc-rows]",
+    "tests/copy_view/test_indexing.py::test_null_slice[nullable-loc]",
+    "tests/copy_view/test_indexing.py::test_null_slice[numpy-getitem]",
+    "tests/copy_view/test_indexing.py::test_null_slice[numpy-iloc-rows]",
+    "tests/copy_view/test_indexing.py::test_null_slice[numpy-iloc]",
+    "tests/copy_view/test_indexing.py::test_null_slice[numpy-loc-rows]",
+    "tests/copy_view/test_indexing.py::test_null_slice[numpy-loc]",
+    "tests/copy_view/test_indexing.py::test_null_slice_series[nullable-getitem]",
+    "tests/copy_view/test_indexing.py::test_null_slice_series[nullable-iloc]",
+    "tests/copy_view/test_indexing.py::test_null_slice_series[nullable-loc]",
+    "tests/copy_view/test_indexing.py::test_null_slice_series[numpy-getitem]",
+    "tests/copy_view/test_indexing.py::test_null_slice_series[numpy-iloc]",
+    "tests/copy_view/test_indexing.py::test_null_slice_series[numpy-loc]",
+}
+
 
 def pytest_collection_modifyitems(session, config, items):
     TO_SKIP = (
@@ -10888,6 +10893,7 @@ def pytest_collection_modifyitems(session, config, items):
         | NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS
         | NODEIDS_TO_ALWAYS_SKIP
         | NODEIDS_THAT_ASSERT_PRIVATE_APIS
+        | NODEIDS_THAT_XFAIL_WITH_COPY_ON_WRITE_FALSE
     )
     for item in items:
         if item.nodeid in NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS:
