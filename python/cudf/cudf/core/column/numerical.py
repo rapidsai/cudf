@@ -590,7 +590,7 @@ class NumericalColumn(NumericalBaseColumn):
                 else:
                     self._dtype = dtype
                     return self
-            if self.dtype.kind == "f" and dtype.kind in "iu":  # type: ignore[union-attr]
+            if self.dtype.kind == "f" and dtype.kind in "iu":
                 if (
                     not is_pandas_nullable_extension_dtype(dtype)
                     and self.nan_count > 0
