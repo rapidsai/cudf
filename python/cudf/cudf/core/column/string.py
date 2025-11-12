@@ -20,10 +20,10 @@ from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
-    SIZE_TYPE_DTYPE,
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     get_dtype_of_same_kind,
@@ -77,7 +77,7 @@ def plc_flags_from_re_flags(
     return plc_flags
 
 
-class StringColumn(ColumnBase):
+class StringColumn(ColumnBase, Scannable):
     """
     Implements operations for Columns of String type
 
@@ -115,19 +115,21 @@ class StringColumn(ColumnBase):
         "__truediv__",
         "__floordiv__",
     }
+    _VALID_PLC_TYPES = {plc.TypeId.STRING}
+    _VALID_SCANS = {
+        "cummin",
+        "cummax",
+    }
 
     def __init__(
         self,
-        data: Buffer,
+        plc_column: plc.Column,
         size: int,
         dtype: np.dtype,
-        mask: Buffer | None,
         offset: int,
         null_count: int,
-        children: tuple[ColumnBase],
-    ):
-        if not isinstance(data, Buffer):
-            raise ValueError("data must be a Buffer")
+        exposed: bool,
+    ) -> None:
         if (
             not cudf.get_option("mode.pandas_compatible")
             and dtype != CUDF_STRING_DTYPE
@@ -143,32 +145,18 @@ class StringColumn(ColumnBase):
             and dtype.kind == "U"
         ):
             dtype = CUDF_STRING_DTYPE
-        if len(children) > 1:
-            raise ValueError("StringColumn must have at most 1 offset column.")
-
-        if len(children) == 0 and size != 0:
-            # all nulls-column:
-            offsets = as_column(0, length=size + 1, dtype=SIZE_TYPE_DTYPE)
-
-            children = (offsets,)
 
         super().__init__(
-            data=data,
+            plc_column=plc_column,
             size=size,
             dtype=dtype,
-            mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
+            exposed=exposed,
         )
 
         self._start_offset = None
         self._end_offset = None
-
-    def copy(self, deep: bool = True) -> Self:
-        # Since string columns are immutable, both deep
-        # and shallow copies share the underlying device data and mask.
-        return super().copy(deep=False)
 
     @property
     def start_offset(self) -> int:
@@ -301,8 +289,7 @@ class StringColumn(ColumnBase):
 
     def sum(
         self,
-        skipna: bool | None = None,
-        dtype: Dtype | None = None,
+        skipna: bool = True,
         min_count: int = 0,
     ) -> ScalarLike:
         result_col = self._process_for_reduction(
@@ -327,6 +314,11 @@ class StringColumn(ColumnBase):
         ) or isinstance(dtype, pd.StringDtype):
             self._dtype = dtype
         return self
+
+    def _scan(self, op: str):
+        return self.scan(op.replace("cum", ""), True)._with_type_metadata(
+            self.dtype
+        )
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         if dtype.kind == "b":
@@ -474,11 +466,20 @@ class StringColumn(ColumnBase):
         if (
             cudf.get_option("mode.pandas_compatible")
             and isinstance(self.dtype, pd.StringDtype)
-            and "pyarrow" in self.dtype.storage
+            and self.dtype.storage in ["pyarrow", "python"]
         ):
-            pandas_array = self.dtype.__from_arrow__(
-                self.to_arrow().cast(pa.large_string())
-            )
+            if self.dtype.storage == "pyarrow":
+                pandas_array = self.dtype.__from_arrow__(
+                    self.to_arrow().cast(pa.large_string())
+                )
+            elif self.dtype.na_value is np.nan:
+                pandas_array = pd.array(
+                    self.to_arrow().to_pandas(), dtype=self.dtype
+                )
+            else:
+                return super().to_pandas(
+                    nullable=nullable, arrow_type=arrow_type
+                )
             return pd.Index(pandas_array, copy=False)
         return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 

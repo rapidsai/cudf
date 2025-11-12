@@ -12,7 +12,6 @@
 #include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/row_operator/primitive_row_operators.cuh>
 #include <cudf/detail/structs/utilities.hpp>
-#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/join/hash_join.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -505,16 +504,16 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
   : _has_nulls(has_nulls),
     _is_empty{build.num_rows() == 0},
     _nulls_equal{compare_nulls},
-    _hash_table{cuco::extent{static_cast<size_t>(build.num_rows())},
-                load_factor,
-                cuco::empty_key{cuco::pair{std::numeric_limits<hash_value_type>::max(),
-                                           cudf::detail::JoinNoneValue}},
-                {},
-                {},
-                {},
-                {},
-                rmm::mr::polymorphic_allocator<char>{},
-                stream.value()},
+    _hash_table{
+      cuco::extent{static_cast<size_t>(build.num_rows())},
+      load_factor,
+      cuco::empty_key{cuco::pair{std::numeric_limits<hash_value_type>::max(), cudf::JoinNoMatch}},
+      {},
+      {},
+      {},
+      {},
+      rmm::mr::polymorphic_allocator<char>{},
+      stream.value()},
     _build{build},
     _preprocessed_build{cudf::detail::row::equality::preprocessed_table::create(_build, stream)}
 {

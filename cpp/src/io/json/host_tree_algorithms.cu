@@ -4,12 +4,10 @@
  */
 
 #include "io/utilities/parsing_utils.cuh"
-#include "io/utilities/string_parsing.hpp"
 #include "nested_json.hpp"
 
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -194,7 +192,8 @@ NodeIndexT get_row_array_parent_col_id(device_span<NodeIndexT const> col_ids,
   if (col_ids.empty()) { return parent_node_sentinel; }
 
   auto const list_node_index = is_enabled_lines ? 0 : 1;
-  auto const value           = cudf::detail::make_host_vector(
+  if (std::cmp_greater_equal(list_node_index, col_ids.size())) { return parent_node_sentinel; }
+  auto const value = cudf::detail::make_host_vector(
     device_span<NodeIndexT const>{col_ids.data() + list_node_index, 1}, stream);
 
   return value[0];
@@ -994,13 +993,13 @@ void scatter_offsets(tree_meta_t const& tree,
                              col.string_offsets.begin(),
                              col.string_offsets.end(),
                              col.string_offsets.begin(),
-                             cudf::detail::maximum<json_column::row_offset_t>{});
+                             cuda::maximum<json_column::row_offset_t>{});
     } else if (col.type == json_col_t::ListColumn) {
       thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
                              col.child_offsets.begin(),
                              col.child_offsets.end(),
                              col.child_offsets.begin(),
-                             cudf::detail::maximum<json_column::row_offset_t>{});
+                             cuda::maximum<json_column::row_offset_t>{});
     }
   }
   stream.synchronize();

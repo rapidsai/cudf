@@ -85,17 +85,15 @@ struct identity_initializer {
     requires(is_supported<T, k>())
   {
     if constexpr (k == aggregation::SUM_WITH_OVERFLOW) {
-      // SUM_WITH_OVERFLOW uses a struct with sum (int64_t) and overflow (bool) children
-      // Initialize sum child to 0 and overflow child to false
+      // SUM_WITH_OVERFLOW uses a struct with sum and overflow children
       auto sum_col      = col.child(0);
       auto overflow_col = col.child(1);
 
-      auto zip_begin = thrust::make_zip_iterator(
-        thrust::make_tuple(sum_col.begin<int64_t>(), overflow_col.begin<bool>()));
-      thrust::fill(rmm::exec_policy_nosync(stream),
-                   zip_begin,
-                   zip_begin + col.size(),
-                   thrust::make_tuple(int64_t{0}, false));
+      // Initialize sum column using standard SUM aggregation dispatch
+      dispatch_type_and_aggregation(
+        sum_col.type(), aggregation::SUM, identity_initializer{}, sum_col, stream);
+      thrust::uninitialized_fill_n(
+        rmm::exec_policy_nosync(stream), overflow_col.begin<bool>(), col.size(), false);
     } else if constexpr (std::is_same_v<T, cudf::struct_view>) {
       // This should only happen for SUM_WITH_OVERFLOW, but handle it just in case
       CUDF_FAIL("Struct columns are only supported for SUM_WITH_OVERFLOW aggregation");
