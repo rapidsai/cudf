@@ -549,7 +549,7 @@ class NumericalColumn(NumericalBaseColumn):
     def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
-    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
+    def as_numerical_column(self, dtype: DtypeObj) -> NumericalColumn:
         if dtype == self.dtype:
             return self
 

@@ -712,7 +712,7 @@ class CategoricalColumn(column.ColumnBase):
 
         return codes_col._with_type_metadata(CategoricalDtype(categories=cats))  # type: ignore[return-value]
 
-    def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
+    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, CategoricalDtype):
             return type(self)(
                 plc_column=self.plc_column,
