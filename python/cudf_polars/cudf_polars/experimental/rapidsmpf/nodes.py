@@ -61,18 +61,16 @@ async def default_node_single(
     """
     async with shutdown_on_error(context, ch_in.data, ch_out.data):
         while (msg := await ch_in.data.recv(context)) is not None:
-            chunk = TableChunk.from_message(msg)
+            chunk = make_available(TableChunk.from_message(msg), context)
             seq_num = msg.sequence_number
-            # Make chunk available and keep it alive
-            available_chunk = make_available(chunk, context)
             df = await asyncio.to_thread(
                 ir.do_evaluate,
                 *ir._non_child_args,
                 DataFrame.from_table(
-                    available_chunk.table_view(),
+                    chunk.table_view(),
                     list(ir.children[0].schema.keys()),
                     list(ir.children[0].schema.values()),
-                    available_chunk.stream,
+                    chunk.stream,
                 ),
                 context=ir_context,
             )
