@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, cast
 
 import pytest
 
@@ -388,7 +388,11 @@ def test_fill_over(
     group_key: str,
     expr: pl.Expr,
 ) -> None:
-    q = df.select(expr.fill_null(strategy=strategy).over(group_key, order_by=order_by))
+    q = df.select(
+        expr.fill_null(strategy=cast(Literal["forward", "backward"], strategy)).over(
+            group_key, order_by=order_by
+        )
+    )
     if POLARS_VERSION_LT_132:
         assert_ir_translation_raises(q, NotImplementedError)
     else:
