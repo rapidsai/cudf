@@ -309,7 +309,7 @@ class CategoricalDtype(_BaseDtype):
         else:
             return column
 
-    def _internal_eq(self, other: Dtype, strict=True) -> bool:
+    def _internal_eq(self, other: object, strict=True) -> bool:
         if isinstance(other, str):
             return other == self.name
         elif other is self:
@@ -948,7 +948,7 @@ class DecimalDtype(_BaseDtype):
         _check_type(cls, header, frames, is_valid_class=issubclass)
         return cls(header["precision"], header["scale"])
 
-    def __eq__(self, other: Dtype) -> bool:
+    def __eq__(self, other: object) -> bool:
         if other is self:
             return True
         elif not isinstance(other, self.__class__):
