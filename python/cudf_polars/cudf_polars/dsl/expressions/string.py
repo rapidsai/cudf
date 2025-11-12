@@ -10,9 +10,9 @@ import functools
 import re
 from datetime import datetime
 from enum import IntEnum, auto
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
-from polars import polars
+from polars import Struct as pl_Struct, polars  # type: ignore[attr-defined]
 from polars.exceptions import InvalidOperationError
 
 import pylibcudf as plc
@@ -35,12 +35,12 @@ JsonDecodeType = list[tuple[str, plc.DataType, "JsonDecodeType"]]
 
 def _dtypes_for_json_decode(dtype: DataType) -> JsonDecodeType:
     """Get the dtypes for json decode."""
-    # the type checker doesn't know that this equality check implies a struct dtype.
+    # Type checker doesn't narrow polars_type through dtype.id() check
     if dtype.id() == plc.TypeId.STRUCT:
         return [
             (field.name, child.plc_type, _dtypes_for_json_decode(child))
             for field, child in zip(
-                dtype.polars_type.fields,
+                cast(pl_Struct, dtype.polars_type).fields,
                 dtype.children,
                 strict=True,
             )
@@ -316,6 +316,8 @@ class StringFunction(Expr):
                 ).astype(self.dtype, stream=df.stream)
                 for child in self.children
             ]
+            if len(columns) == 1:
+                return columns[0]
 
             non_unit_sizes = [c.size for c in columns if c.size != 1]
             broadcasted = broadcast(

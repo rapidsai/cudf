@@ -19,8 +19,6 @@ from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.node import define_py_node
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
-from rmm.pylibrmm.stream import DEFAULT_STREAM
-
 from cudf_polars.dsl.expr import Col
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
@@ -81,8 +79,6 @@ class LocalShuffle:
         The number of partitions to shuffle into.
     columns_to_hash: tuple[int, ...]
         The columns to hash.
-    stream: Stream
-        The stream to use for the shuffle.
     """
 
     def __init__(
@@ -90,13 +86,11 @@ class LocalShuffle:
         context: Context,
         num_partitions: int,
         columns_to_hash: tuple[int, ...],
-        stream: Stream,
     ):
         self.context = context
         self.br = context.br()
         self.num_partitions = num_partitions
         self.columns_to_hash = columns_to_hash
-        self.stream = stream
         self._insertion_finished = False
 
     def __enter__(self) -> LocalShuffle:
@@ -126,28 +120,28 @@ class LocalShuffle:
         _release_shuffle_id(self.op_id)
         return False
 
-    def insert_chunk(self, table: plc.Table) -> None:
+    def insert_chunk(self, chunk: TableChunk) -> None:
         """
         Insert a chunk into the local shuffle instance.
 
         Parameters
         ----------
-        table: plc.Table
-            The table to insert.
+        chunk: TableChunk
+            The table chunk to insert.
         """
         # Partition and pack using the Python function
         partitioned_chunks = py_partition_and_pack(
-            table=table,
+            table=chunk.table_view(),
             columns_to_hash=self.columns_to_hash,
             num_partitions=self.num_partitions,
-            stream=self.stream,
+            stream=chunk.stream,
             br=self.br,
         )
 
         # Insert into shuffler
         self.shuffler.insert_chunks(partitioned_chunks)
 
-    def extract_chunk(self, sequence_number: int) -> plc.Table:
+    def extract_chunk(self, sequence_number: int, stream: Stream) -> plc.Table:
         """
         Extract a chunk from the local shuffle instance.
 
@@ -155,11 +149,12 @@ class LocalShuffle:
         ----------
         sequence_number: int
             The sequence number of the chunk to extract.
+        stream: Stream
+            The stream to use for chunk extraction.
 
         Returns
         -------
-        plc.Table
-            The extracted table.
+        The extracted table.
         """
         if not self._insertion_finished:
             self.shuffler.insert_finished(list(range(self.num_partitions)))
@@ -169,7 +164,7 @@ class LocalShuffle:
         partition_chunks = self.shuffler.extract(sequence_number)
         return py_unpack_and_concat(
             partitions=partition_chunks,
-            stream=self.stream,
+            stream=stream,
             br=self.br,
         )
 
@@ -213,10 +208,7 @@ async def local_shuffle_node(
     ):
         # Create LocalShuffle context manager to handle shuffler lifecycle
         # TODO: Use ir_context to get the stream (not available yet)
-        stream = DEFAULT_STREAM
-        with LocalShuffle(
-            context, num_partitions, columns_to_hash, stream
-        ) as local_shuffle:
+        with LocalShuffle(context, num_partitions, columns_to_hash) as local_shuffle:
             # Process input chunks
             while True:
                 msg = await ch_in.data.recv(context)
@@ -224,21 +216,21 @@ async def local_shuffle_node(
                     break
 
                 # Extract TableChunk from message
-                chunk = TableChunk.from_message(msg)
+                chunk = TableChunk.from_message(msg).make_available_and_spill(
+                    context.br(), allow_overbooking=True
+                )
 
                 # Get the table view and insert into shuffler
-                table = chunk.table_view()
-                local_shuffle.insert_chunk(table)
+                local_shuffle.insert_chunk(chunk)
 
             # Extract shuffled partitions and send them out
             # LocalShuffle.extract_chunk handles insert_finished, wait, extract, and unpack
+            stream = ir_context.get_cuda_stream()
             for partition_id in range(num_partitions):
-                result_table = local_shuffle.extract_chunk(partition_id)
-
                 # Create a new TableChunk with the result
                 output_chunk = TableChunk.from_pylibcudf_table(
-                    table=result_table,
-                    stream=local_shuffle.stream,
+                    table=local_shuffle.extract_chunk(partition_id, stream),
+                    stream=stream,
                     exclusive_view=True,
                 )
 
@@ -266,7 +258,7 @@ def _(ir: Shuffle, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelMan
     num_partitions = rec.state["partition_info"][ir].count
 
     # Create output ChannelManager
-    channels[ir] = ChannelManager()
+    channels[ir] = ChannelManager(rec.state["context"])
 
     # Complete shuffle pipeline in a single node
     # LocalShuffle context manager handles shuffle ID lifecycle internally

@@ -10,8 +10,6 @@ from typing import TYPE_CHECKING, Any, Literal
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
-import pylibcudf as plc
-
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Join
 from cudf_polars.experimental.rapidsmpf.dispatch import (
@@ -60,7 +58,11 @@ async def get_small_table(
     """
     small_chunks = []
     while (msg := await ch_small.data.recv(context)) is not None:
-        small_chunks.append(TableChunk.from_message(msg))
+        small_chunks.append(
+            TableChunk.from_message(msg).make_available_and_spill(
+                context.br(), allow_overbooking=True
+            )
+        )
     assert small_chunks, "Empty small side"
 
     return [
@@ -126,7 +128,9 @@ async def broadcast_join_node(
 
         # Stream through large side, joining with the small-side
         while (msg := await large_ch.data.recv(context)) is not None:
-            large_chunk = TableChunk.from_message(msg)
+            large_chunk = TableChunk.from_message(msg).make_available_and_spill(
+                context.br(), allow_overbooking=True
+            )
             seq_num = msg.sequence_number
             large_df = DataFrame.from_table(
                 large_chunk.table_view(),
@@ -136,39 +140,32 @@ async def broadcast_join_node(
             )
 
             # Perform the join
-            results = [
-                (
-                    await asyncio.to_thread(
-                        ir.do_evaluate,
-                        *ir._non_child_args,
-                        *(
-                            [large_df, small_df]
-                            if broadcast_side == "right"
-                            else [small_df, large_df]
-                        ),
-                        context=ir_context,
+            df = _concat(
+                *[
+                    (
+                        await asyncio.to_thread(
+                            ir.do_evaluate,
+                            *ir._non_child_args,
+                            *(
+                                [large_df, small_df]
+                                if broadcast_side == "right"
+                                else [small_df, large_df]
+                            ),
+                            context=ir_context,
+                        )
                     )
-                )
-                for small_df in small_dfs
-            ]
+                    for small_df in small_dfs
+                ],
+                context=ir_context,
+            )
 
             # Send output chunk
-            build_stream = results[0].stream
             await ch_out.data.send(
                 context,
                 Message(
                     seq_num,
                     TableChunk.from_pylibcudf_table(
-                        (
-                            results[0].table
-                            if len(results) == 1
-                            else plc.concatenate.concatenate(
-                                [r.table for r in results],
-                                build_stream,
-                            )
-                        ),
-                        build_stream,
-                        exclusive_view=True,
+                        df.table, df.stream, exclusive_view=True
                     ),
                 ),
             )
@@ -199,7 +196,7 @@ def _(ir: Join, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
     nodes, channels = process_children(ir, rec)
 
     # Create output ChannelManager
-    channels[ir] = ChannelManager()
+    channels[ir] = ChannelManager(rec.state["context"])
 
     if pwise_join:
         # Partition-wise join (use default_node_multi)

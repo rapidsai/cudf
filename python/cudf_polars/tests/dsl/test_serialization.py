@@ -7,7 +7,7 @@ import pickle
 
 import pytest
 
-from polars import polars
+from polars import polars  # type: ignore[attr-defined]
 
 from cudf_polars.dsl.expressions.boolean import BooleanFunction
 from cudf_polars.dsl.expressions.datetime import TemporalFunction

@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from enum import IntEnum, auto
 from functools import partial, reduce
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
+
+import polars as pl
 
 import pylibcudf as plc
 
@@ -22,7 +24,7 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     import polars.type_aliases as pl_types
-    from polars import polars
+    from polars import polars  # type: ignore[attr-defined]
 
     from rmm.pylibrmm.stream import Stream
 
@@ -350,9 +352,14 @@ class BooleanFunction(Expr):
             needles, haystack = columns
             if haystack.obj.type().id() == plc.TypeId.LIST:
                 # Unwrap values from the list column
+                # .inner returns DataTypeClass | DataType, need to cast to DataType
                 haystack = Column(
                     haystack.obj.children()[1],
-                    dtype=DataType(haystack.dtype.polars_type.inner),
+                    dtype=DataType(
+                        cast(
+                            pl.DataType, cast(pl.List, haystack.dtype.polars_type).inner
+                        )
+                    ),
                 ).astype(needles.dtype, stream=df.stream)
             if haystack.size:
                 return Column(

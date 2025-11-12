@@ -19,7 +19,7 @@ from typing import (
 
 import polars as pl
 import polars.datatypes
-from polars import polars as plrs
+from polars import polars as plrs  # type: ignore[attr-defined]
 
 if TYPE_CHECKING:
     from collections.abc import Callable

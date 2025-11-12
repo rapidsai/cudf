@@ -58,7 +58,7 @@ if TYPE_CHECKING:
 
     from typing_extensions import Self
 
-    from polars import polars
+    from polars import polars  # type: ignore[attr-defined]
 
     from rmm.pylibrmm.stream import Stream
 
@@ -596,7 +596,8 @@ class Scan(IR):
             plc.Table(
                 [
                     plc.Column.from_arrow(
-                        pl.Series(values=map(str, paths)), stream=df.stream
+                        pl.Series(values=map(str, paths)),
+                        stream=df.stream,
                     )
                 ]
             ),

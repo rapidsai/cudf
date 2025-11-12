@@ -18,7 +18,7 @@ import polars as pl
 # polars.polars is not a part of the public API,
 # so we cannot rely on importing it directly
 # See https://github.com/pola-rs/polars/issues/24826
-from polars import polars as plrs
+from polars import polars as plrs  # type: ignore[attr-defined]
 
 import pylibcudf as plc
 
@@ -277,6 +277,9 @@ def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.I
         skip_rows = 0
     else:
         skip_rows, n_rows = pre_slice
+        if (n_rows == 2**32 - 1) or (n_rows == 2**64 - 1):
+            # Polars translates slice(10, None) -> (10, u32/64max)
+            n_rows = -1
 
     return ir.Scan(
         schema,

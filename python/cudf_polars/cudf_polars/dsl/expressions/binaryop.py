@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from polars import polars
+from polars import polars  # type: ignore[attr-defined]
 
 import pylibcudf as plc
 
