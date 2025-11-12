@@ -168,7 +168,9 @@ async def broadcast_join_node(
 
 
 @generate_ir_sub_network.register(Join)
-def _(ir: Join, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]]:
+def _(
+    ir: Join, rec: SubNetGenerator
+) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     # Join operation.
     left, right = ir.children
     partition_info = rec.state["partition_info"]
@@ -194,7 +196,7 @@ def _(ir: Join, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
 
     if pwise_join:
         # Partition-wise join (use default_node_multi)
-        nodes.append(
+        nodes[ir] = [
             default_node_multi(
                 rec.state["context"],
                 ir,
@@ -205,7 +207,7 @@ def _(ir: Join, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
                     channels[right].reserve_output_slot(),
                 ),
             )
-        )
+        ]
         return nodes, channels
 
     else:
@@ -217,7 +219,7 @@ def _(ir: Join, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
         else:
             broadcast_side = "left"
 
-        nodes.append(
+        nodes[ir] = [
             broadcast_join_node(
                 rec.state["context"],
                 ir,
@@ -227,5 +229,5 @@ def _(ir: Join, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
                 channels[right].reserve_output_slot(),
                 broadcast_side=broadcast_side,
             )
-        )
+        ]
         return nodes, channels
