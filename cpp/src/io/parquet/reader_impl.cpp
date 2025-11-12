@@ -473,7 +473,6 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
 
 reader_impl::reader_impl()
   : _options{},
-    _pass_page_mask{cudf::detail::make_host_vector<bool>(0, cudf::get_default_stream())},
     _subpass_page_mask{cudf::detail::hostdevice_vector<bool>(0, cudf::get_default_stream())}
 {
 }
@@ -507,7 +506,6 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
              options.get_row_groups(),
              options.is_enabled_use_jit_filter()},
     _sources{std::move(sources)},
-    _pass_page_mask{cudf::detail::make_host_vector<bool>(0, _stream)},
     _subpass_page_mask{cudf::detail::hostdevice_vector<bool>(0, _stream)},
     _output_chunk_read_limit{chunk_read_limit},
     _input_pass_read_limit{pass_read_limit}
