@@ -98,8 +98,9 @@ void perform_checks(column_view base_column,
   };
 
   for (auto const& col : filter_columns) {
-    CUDF_EXPECTS(
-      col.size() == base_column.size(), "All filter columns must have the same size", std::invalid_argument);
+    CUDF_EXPECTS(col.size() == base_column.size(),
+                 "All filter columns must have the same size",
+                 std::invalid_argument);
   }
 
   check_columns(predicate_columns);
