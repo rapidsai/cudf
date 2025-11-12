@@ -2825,9 +2825,9 @@ def as_column(
     * pandas.Categorical objects
     * range objects
     """
-    # Convert dtype to DtypeObj if provided (since this is a public API)
-    if dtype is not None:
-        dtype = cudf.dtype(dtype)
+    # Always convert dtype up front so that downstream calls can assume it is a dtype
+    # object rather than a string or None.
+    dtype = cudf.dtype(dtype)
 
     if isinstance(arbitrary, (range, pd.RangeIndex, cudf.RangeIndex)):
         with acquire_spill_lock():
