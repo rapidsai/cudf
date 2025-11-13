@@ -136,6 +136,7 @@ CUDF_KERNEL void mapping_indices_kernel(size_type num_input_rows,
   for (auto idx = cudf::detail::grid_1d::global_thread_id();
        idx - block.thread_rank() < num_input_rows;
        idx += grid_stride) {
+    block.sync();
     find_local_mapping(block,
                        idx,
                        num_input_rows,
@@ -166,6 +167,7 @@ CUDF_KERNEL void mapping_indices_kernel(size_type num_input_rows,
 
       find_global_mapping(
         block, iter, cardinality, global_set, shared_set_indices, global_mapping_indices);
+      block.sync();
       if (!is_last_iteration) {
         // printf("not last iter, initialize shared set\n");
         shared_set.initialize(block);

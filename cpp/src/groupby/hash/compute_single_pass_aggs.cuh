@@ -92,6 +92,9 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   rmm::device_uvector<size_type> global_mapping_indices(
     num_strides * grid_size * GROUPBY_SHM_MAX_ELEMENTS, stream);
 
+  // printf("global_mapping_indices.size(): %d\n", (int)global_mapping_indices.size());
+  // printf("num_strides: %d, grid_size: %d\n", (int)num_strides, (int)grid_size);
+
   // Some positions in `global_mapping_indices` will be unused.
   // We just initialize them with a sentinel value so later on we know to ignore them.
   thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
@@ -125,20 +128,14 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
     num_rows, unique_keys, stream, cudf::get_current_device_resource_ref());
 
   // Now, update the target indices for computing aggregations using the shared memory kernel.
-  thrust::for_each_n(
-    rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator(0),
-    grid_size * GROUPBY_BLOCK_SIZE,
-    [key_transform_map      = key_transform_map.begin(),
-     global_mapping_indices = global_mapping_indices.begin()] __device__(auto const idx) {
-      auto const block_id    = idx / GROUPBY_BLOCK_SIZE;
-      auto const thread_rank = idx % GROUPBY_BLOCK_SIZE;
-      auto const mapping_idx = block_id * GROUPBY_SHM_MAX_ELEMENTS + thread_rank;
-      auto const old_idx     = global_mapping_indices[mapping_idx];
-      if (old_idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
-        global_mapping_indices[mapping_idx] = key_transform_map[old_idx];
-      }
-    });
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    global_mapping_indices.begin(),
+                    global_mapping_indices.end(),
+                    global_mapping_indices.begin(),
+                    [key_transform_map = key_transform_map.begin()] __device__(auto const idx) {
+                      return idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL ? key_transform_map[idx]
+                                                                          : idx;
+                    });
   key_transform_map = rmm::device_uvector<size_type>{0, stream};  // done, free up memory early
 
   auto const d_spass_values = table_device_view::create(values, stream);
