@@ -238,7 +238,7 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithStats)
   // Filtering AST - table[0] < 50
   auto literal_value     = cudf::numeric_scalar<T>(50);
   auto literal           = cudf::ast::literal(literal_value);
-  auto col_ref_0         = cudf::ast::column_name_reference("col0");
+  auto col_ref_0         = cudf::ast::column_reference(0);
   auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
 
   // Create reader options with empty source info
@@ -788,7 +788,7 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterFewLiteralsTyped)
     // Build the filter expression
     auto const literal = cudf::ast::literal(literal_value);
     auto const filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_name, literal);
+      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref, literal);
 
     // Check the results
     EXPECT_EQ(filter_row_groups_with_dictionaries(file_buffer_span, filter_expression, stream, mr),
@@ -936,9 +936,9 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterManyLiteralsTyped)
     auto const filter_expression1 =
       cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_name, literal1);
     auto const filter_expression2 =
-      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_name, literal2);
+      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref, literal2);
     auto const filter_expression3 =
-      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_name, literal3);
+      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref, literal3);
     auto const filter_expression12 = cudf::ast::operation(
       cudf::ast::ast_operator::LOGICAL_OR, filter_expression1, filter_expression2);
     auto const filter_expression = cudf::ast::operation(
@@ -966,9 +966,9 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterManyLiteralsTyped)
     auto const literal3 = cudf::ast::literal(literal_value3);
 
     auto const filter_expression1 =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col_name, literal1);
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col_ref, literal1);
     auto const filter_expression2 =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col_name, literal2);
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col_ref, literal2);
     auto const filter_expression3 =
       cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col_name, literal3);
     auto const filter_expression12 = cudf::ast::operation(
