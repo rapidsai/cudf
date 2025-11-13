@@ -561,6 +561,7 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
         and ir.typ == "parquet"
         and ir.row_index is None
         and ir.include_file_paths is None
+        and ir.predicate is None  # TODO: Remove this.
         and ir.n_rows == -1
         and ir.skip_rows == 0
     ):
