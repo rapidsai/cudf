@@ -22,6 +22,7 @@ conda activate clang_tidy
 set -u
 
 source rapids-configure-sccache
+export SCCACHE_RECACHE=1
 
 # Run the build via CMake, which will run clang-tidy when CUDF_STATIC_LINTERS is enabled.
 
