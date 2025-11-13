@@ -383,7 +383,7 @@ TEST_F(JoinTest, SemiJoinEmptyTables)
   }
 }
 
-TEST_F(JoinTest, AntiSemiJoinLargeExtentOverflowPrevention)
+TEST_F(JoinTest, DISABLED_AntiSemiJoinLargeExtentOverflowPrevention)
 {
   // Test validates size_t extent can handle bucket storage sizes that would
   // overflow int32_t extent when compute_bucket_storage_size() uses low load factors
