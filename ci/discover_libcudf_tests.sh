@@ -13,8 +13,6 @@ ENV_YAML_DIR="$(mktemp -d)"
 rapids-dependency-file-generator \
   --output conda \
   --file-key test_cpp \
-  --prepend-channel rapidsai-nightly \
-  --prepend-channel conda-forge \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch)" | tee "${ENV_YAML_DIR}/env.yaml"
 
 rapids-logger "Create test environment"
@@ -24,11 +22,6 @@ rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n test
 set +u
 conda activate test
 set -u
-
-rapids-logger "Installing libcudf and libcudf-tests from rapidsai-nightly"
-
-# Install packages from rapidsai-nightly channel
-rapids-mamba-retry install -y -c rapidsai-nightly -c conda-forge libcudf libcudf-tests
 
 rapids-print-env
 
