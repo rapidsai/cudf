@@ -1161,7 +1161,7 @@ inline __device__ bool prefetch_string_data(int t,
  * @param num_values_to_process Number of values to process
  * @param str_offsets Output buffer for string offsets
  */
-template <int32_t decode_block_size, size_t prefetch_size>
+template <int32_t block_size, size_t prefetch_size>
 inline __device__ void read_string_offsets_buffered(page_state_s* s,
                                                     size_t num_values_to_skip,
                                                     size_t num_values_to_process,
@@ -1186,7 +1186,7 @@ inline __device__ void read_string_offsets_buffered(page_state_s* s,
       // Check if we need to prefetch more data
       if ((next_length_offset + sizeof(int32_t)) > buffer_end) {
         block.sync();  // Make sure all of the threads have finished reading the previous data
-        if (!prefetch_string_data<prefetch_size, decode_block_size>(
+        if (!prefetch_string_data<prefetch_size, block_size>(
               t, next_length_offset, dict_size, cur, prefetch_buffer, buffer_base, buffer_end)) {
           return pos;  // End of the data
         }
@@ -1211,7 +1211,7 @@ inline __device__ void read_string_offsets_buffered(page_state_s* s,
   };
 
   // Initial prefetch
-  if (!prefetch_string_data<prefetch_size, decode_block_size>(
+  if (!prefetch_string_data<prefetch_size, block_size>(
         t, next_length_offset, dict_size, cur, prefetch_buffer, buffer_base, buffer_end)) {
     return;  // No data to process
   }
@@ -1233,8 +1233,7 @@ inline __device__ void read_string_offsets_buffered(page_state_s* s,
   // Use all threads in the block to fill remaining entries with the last offset
   // This fills in the rest if we break early above because the dictionary wasn't large enough
   // But it also fills in the last offset for the page, hence the +1 in the loop limit.
-  for (size_t pos = num_values_written + t; pos < num_values_to_process + 1;
-       pos += decode_block_size) {
+  for (size_t pos = num_values_written + t; pos < num_values_to_process + 1; pos += block_size) {
     str_offsets[pos] = last_string_offset;
   }
 }
@@ -1324,12 +1323,13 @@ inline __device__ void read_string_offsets_sequential(page_state_s* s,
  * @param num_rows Number of rows to read starting from min_row
  */
 template <int decode_block_size, size_t prefetch_size>
-CUDF_KERNEL void preprocess_string_offsets(PageInfo* pages,
-                                           device_span<ColumnChunkDesc const> chunks,
-                                           device_span<size_t const> page_string_offset_indices,
-                                           cudf::device_span<bool const> page_mask,
-                                           size_t min_row,
-                                           size_t num_rows)
+CUDF_KERNEL void preprocess_string_offsets_kernel(
+  PageInfo* pages,
+  device_span<ColumnChunkDesc const> chunks,
+  device_span<size_t const> page_string_offset_indices,
+  cudf::device_span<bool const> page_mask,
+  size_t min_row,
+  size_t num_rows)
 {
   int const page_idx = cg::this_grid().block_rank();
   PageInfo* const pp = &pages[page_idx];
@@ -1423,7 +1423,7 @@ void preprocess_string_offsets(cudf::detail::hostdevice_span<PageInfo> pages,
   dim3 dim_block(preprocess_block_size, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
-  preprocess_string_offsets<preprocess_block_size, prefetch_size>
+  preprocess_string_offsets_kernel<preprocess_block_size, prefetch_size>
     <<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, page_string_offset_indices, page_mask, min_row, num_rows);
 }
