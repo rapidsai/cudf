@@ -18,7 +18,7 @@ rapids-generate-version > ./python/cudf/cudf/VERSION
 rapids-logger "Begin py build"
 
 CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
-PYTHON_CHANNEL=$(rapids-download-from-github conda_python "$(rapids-package-name conda_python cudf)")
+PYTHON_CHANNEL=$(rapids-download-from-github "$(rapids-package-name conda_python cudf)")
 
 RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION)
 export RAPIDS_PACKAGE_VERSION
