@@ -9,7 +9,6 @@ import dataclasses
 import math
 from typing import TYPE_CHECKING, Any
 
-from rapidsmpf.streaming.core.lineariser import Lineariser
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
@@ -48,6 +47,62 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
     from cudf_polars.experimental.stats import ColumnStat, StatsCollector
     from cudf_polars.utils.config import ParquetOptions
+
+
+class Lineariser:
+    """
+    Linearizer that ensures ordered delivery from multiple concurrent producers.
+
+    Creates one input channel per producer and streams messages to output
+    in sequence-number order, buffering only out-of-order arrivals.
+    """
+
+    def __init__(
+        self, context: Context, ch_out: Channel[TableChunk], num_producers: int
+    ):
+        self.context = context
+        self.ch_out = ch_out
+        self.num_producers = num_producers
+        self.input_channels = [context.create_channel() for _ in range(num_producers)]
+
+    async def drain(self) -> None:
+        """
+        Drain producer channels and forward messages in sequence-number order.
+
+        Streams messages to output as soon as they arrive in order, buffering
+        only out-of-order messages to minimize memory pressure.
+        """
+        next_seq = 0
+        buffer = {}
+
+        pending_tasks = {
+            asyncio.create_task(ch.recv(self.context)): ch for ch in self.input_channels
+        }
+
+        while pending_tasks:
+            done, _ = await asyncio.wait(
+                pending_tasks.keys(), return_when=asyncio.FIRST_COMPLETED
+            )
+
+            for task in done:
+                ch = pending_tasks.pop(task)
+                msg = await task
+
+                if msg is not None:
+                    buffer[msg.sequence_number] = msg
+                    new_task = asyncio.create_task(ch.recv(self.context))
+                    pending_tasks[new_task] = ch
+
+            # Forward consecutive messages
+            while next_seq in buffer:
+                await self.ch_out.send(self.context, buffer.pop(next_seq))
+                next_seq += 1
+
+        # Forward any remaining buffered messages
+        for seq in sorted(buffer.keys()):
+            await self.ch_out.send(self.context, buffer[seq])
+
+        await self.ch_out.drain(self.context)
 
 
 @lower_ir_node.register(DataFrameScan)
@@ -125,41 +180,33 @@ async def dataframescan_node(
                 )
             )
 
-        # Read data.
-        # Use Lineariser to ensure ordered delivery.
+        # Use Lineariser to ensure ordered delivery
         num_producers = min(num_producers, len(ir_slices))
         lineariser = Lineariser(context, ch_out.data, num_producers)
-        next_task_idx = 0
 
-        async def _producer(ch_out: Channel) -> None:
-            """Producer that pulls ir_slices using a shared counter."""
-            nonlocal next_task_idx
-            while True:
-                # Atomically grab next task index
-                task_idx = next_task_idx
-                if task_idx >= len(ir_slices):
-                    break
-                next_task_idx += 1
+        # Assign tasks to producers using round-robin
+        producer_tasks: list[list[tuple[int, DataFrameScan]]] = [
+            [] for _ in range(num_producers)
+        ]
+        for task_idx, ir_slice in enumerate(ir_slices):
+            producer_id = task_idx % num_producers
+            producer_tasks[producer_id].append((task_idx, ir_slice))
 
-                # Process task with its sequence number
+        async def _producer(producer_id: int, ch_out: Channel) -> None:
+            for task_idx, ir_slice in producer_tasks[producer_id]:
                 await read_chunk(
                     context,
-                    ir_slices[task_idx],
+                    ir_slice,
                     task_idx,
                     ch_out,
                     ir_context,
                 )
-
-            # Done - drain this producer's channel
             await ch_out.drain(context)
 
-        # Start the lineariser drain task (must run concurrently with producers)
         tasks = [lineariser.drain()]
-
-        # Start all producer tasks
-        tasks.extend(_producer(ch_in) for ch_in in lineariser.get_inputs())
-
-        # Wait for all tasks to complete (drain + all producers)
+        tasks.extend(
+            _producer(i, ch_in) for i, ch_in in enumerate(lineariser.input_channels)
+        )
         await asyncio.gather(*tasks)
 
 
@@ -359,41 +406,33 @@ async def scan_node(
                     )
                 )
 
-        # Read data.
         # Use Lineariser to ensure ordered delivery
         num_producers = min(num_producers, len(scans))
         lineariser = Lineariser(context, ch_out.data, num_producers)
-        next_task_idx = 0
 
-        async def _producer(ch_out: Channel) -> None:
-            """Producer that pulls scan tasks from shared counter."""
-            nonlocal next_task_idx
-            while True:
-                # Atomically grab next task index
-                task_idx = next_task_idx
-                if task_idx >= len(scans):
-                    break
-                next_task_idx += 1
+        # Assign tasks to producers using round-robin
+        producer_tasks: list[list[tuple[int, Scan | SplitScan]]] = [
+            [] for _ in range(num_producers)
+        ]
+        for task_idx, scan in enumerate(scans):
+            producer_id = task_idx % num_producers
+            producer_tasks[producer_id].append((task_idx, scan))
 
-                # Process task with its sequence number
+        async def _producer(producer_id: int, ch_out: Channel) -> None:
+            for task_idx, scan in producer_tasks[producer_id]:
                 await read_chunk(
                     context,
-                    scans[task_idx],
+                    scan,
                     task_idx,
                     ch_out,
                     ir_context,
                 )
-
-            # Done - drain this producer's channel
             await ch_out.drain(context)
 
-        # Start the lineariser drain task (must run concurrently with producers)
         tasks = [lineariser.drain()]
-
-        # Start all producer tasks
-        tasks.extend(_producer(ch_in) for ch_in in lineariser.get_inputs())
-
-        # Wait for all tasks to complete (drain + all producers)
+        tasks.extend(
+            _producer(i, ch_in) for i, ch_in in enumerate(lineariser.input_channels)
+        )
         await asyncio.gather(*tasks)
 
 
