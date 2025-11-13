@@ -9587,6 +9587,8 @@ NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS = {
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_frame_with_scalar[uint16-__rpow__]",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_frame_with_scalar[uint32-__rpow__]",
     r"tests/tools/test_to_datetime.py::TestToDatetimeMisc::test_to_datetime_iso8601_fails[True-2012-01-01 10:00-%Y-%m-%d %H:%M:%S]",
+    "tests/tools/test_to_datetime.py::TestToDatetimeMisc::test_to_datetime_iso8601_fails[True-2012-01-01-%Y-%m-%d %H]",
+    "tests/tools/test_to_datetime.py::TestToDatetimeMisc::test_to_datetime_iso8601_fails[True-2012-01-01 10-%Y-%m-%d %H:%M]",
     "tests/indexing/test_chaining_and_caching.py::TestChaining::test_detect_chained_assignment_warnings_errors",
     "tests/indexes/multi/test_indexing.py::test_pyint_engine",
     "tests/indexes/multi/test_monotonic.py::test_is_monotonic_with_nans[values0-is_monotonic_increasing]",
