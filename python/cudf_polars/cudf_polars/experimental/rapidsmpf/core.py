@@ -341,18 +341,9 @@ def generate_network(
     )
     nodes, channels = mapper(ir)
 
-    # Deduplicate nodes: CachingVisitor can cause the same node object to appear
-    # multiple times when an IR node is referenced from multiple paths (e.g.,
-    # pl.concat with shared sources). This is problematic for CppNode objects
-    # which use C++ move semantics.
-    seen: set[int] = set()
-    unique_nodes: list[Any] = []
-    for node in nodes:
-        node_id = id(node)
-        if node_id not in seen:
-            seen.add(node_id)
-            unique_nodes.append(node)
-    nodes = unique_nodes
+    # Deduplicate nodes.
+    # TODO: Remove after https://github.com/rapidsai/cudf/pull/20586
+    nodes = list(set(nodes))
 
     ch_out = channels[ir].reserve_output_slot()
 
