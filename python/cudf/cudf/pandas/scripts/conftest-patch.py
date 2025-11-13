@@ -4279,8 +4279,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/groupby/methods/test_value_counts.py::test_value_counts_time_grouper[ns-False]",
     "tests/groupby/methods/test_value_counts.py::test_value_counts_time_grouper[s-False]",
     "tests/groupby/methods/test_value_counts.py::test_value_counts_time_grouper[us-False]",
-    "tests/groupby/test_all_methods.py::test_duplicate_columns[cumcount-False]",
-    "tests/groupby/test_all_methods.py::test_duplicate_columns[cumcount-True]",
     "tests/groupby/test_all_methods.py::test_duplicate_columns[cummax-False]",
     "tests/groupby/test_all_methods.py::test_duplicate_columns[cummin-False]",
     "tests/groupby/test_all_methods.py::test_duplicate_columns[cumprod-False]",
@@ -4368,14 +4366,7 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/groupby/test_categorical.py::test_sort_datetimelike[True-False]",
     "tests/groupby/test_categorical.py::test_sort_datetimelike[True-True]",
     "tests/groupby/test_categorical.py::test_unstack_categorical",
-    "tests/groupby/test_counting.py::TestCounting::test_cumcount",
-    "tests/groupby/test_counting.py::TestCounting::test_cumcount_dupe_index",
-    "tests/groupby/test_counting.py::TestCounting::test_cumcount_mi",
-    "tests/groupby/test_counting.py::TestCounting::test_ngroup_cumcount_pair",
     "tests/groupby/test_counting.py::TestCounting::test_ngroup_distinct",
-    "tests/groupby/test_counting.py::TestCounting::test_ngroup_matches_cumcount",
-    "tests/groupby/test_counting.py::TestCounting::test_ngroup_respects_groupby_order[False]",
-    "tests/groupby/test_counting.py::TestCounting::test_ngroup_respects_groupby_order[True]",
     "tests/groupby/test_counting.py::test_count_arrow_string_array[string=string[pyarrow]]",
     "tests/groupby/test_counting.py::test_count_arrow_string_array[string=string[python]]",
     "tests/groupby/test_counting.py::test_count_arrow_string_array[string[pyarrow]]",
@@ -12797,6 +12788,15 @@ NODEIDS_THAT_FAIL_WITH_COW = {
     "tests/groupby/methods/test_value_counts.py::test_series_groupby_value_counts[True-True-True-True-proportion-True-[0, 5]-['1st', '2nd']-5-10-True]",
     "tests/groupby/methods/test_value_counts.py::test_series_groupby_value_counts[True-True-True-True-proportion-True-[0, 5]-['1st', '2nd']-5-50-False]",
     "tests/groupby/methods/test_value_counts.py::test_series_groupby_value_counts[True-True-True-True-proportion-True-[0, 5]-['1st', '2nd']-5-50-True]",
+    "tests/groupby/test_all_methods.py::test_duplicate_columns[cumcount-False]"
+    "tests/groupby/test_all_methods.py::test_duplicate_columns[cumcount-True]"
+    "tests/groupby/test_counting.py::TestCounting::test_cumcount"
+    "tests/groupby/test_counting.py::TestCounting::test_cumcount_dupe_index"
+    "tests/groupby/test_counting.py::TestCounting::test_cumcount_mi"
+    "tests/groupby/test_counting.py::TestCounting::test_ngroup_cumcount_pair"
+    "tests/groupby/test_counting.py::TestCounting::test_ngroup_matches_cumcount"
+    "tests/groupby/test_counting.py::TestCounting::test_ngroup_respects_groupby_order[False]"
+    "tests/groupby/test_counting.py::TestCounting::test_ngroup_respects_groupby_order[True]"
     "tests/groupby/test_numba.py::TestEngine::test_as_index_false_unsupported[max]",
     "tests/groupby/test_numba.py::TestEngine::test_as_index_false_unsupported[mean]",
     "tests/groupby/test_numba.py::TestEngine::test_as_index_false_unsupported[min]",
