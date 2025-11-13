@@ -15,6 +15,7 @@ from cudf_polars.dsl.expressions.base import (
     ExecutionContext,
     Expr,
 )
+from cudf_polars.dsl.utils.reshape import broadcast
 
 if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame, DataType
@@ -41,36 +42,31 @@ class Ternary(Expr):
         when, then, otherwise = (
             child.evaluate(df, context=context) for child in self.children
         )
-        then_obj = then.obj
-        otherwise_obj = otherwise.obj
-        then_is_scalar = then.is_scalar
-        otherwise_is_scalar = otherwise.is_scalar
-
         if when.is_scalar:
             # For scalar predicates: lowering to copy_if_else would require
             # materializing an all true/false mask column. Instead, just pick
             # the correct branch.
             when_predicate = when.obj_scalar(stream=df.stream).to_py()
+            pick, other = (then, otherwise) if when_predicate else (otherwise, then)
 
-            col = then_obj if when_predicate else otherwise_obj
-            branch = then if when_predicate else otherwise
-            other = otherwise if when_predicate else then
-
-            if branch.is_scalar:
-                col = plc.Column.from_scalar(
-                    branch.obj_scalar(stream=df.stream),
-                    1 if other.is_scalar else other.size,
+            if pick.is_scalar:
+                (pick_col,) = broadcast(
+                    pick,
+                    target_length=1 if other.is_scalar else other.size,
                     stream=df.stream,
                 )
+                return Column(pick_col.obj, dtype=self.dtype)
 
-            return Column(col, dtype=self.dtype)
+            return Column(pick.obj, dtype=self.dtype)
+
+        then_col, otherwise_col = broadcast(
+            then, otherwise, target_length=when.size, stream=df.stream
+        )
 
         return Column(
             plc.copying.copy_if_else(
-                then.obj_scalar(stream=df.stream) if then_is_scalar else then.obj,
-                otherwise.obj_scalar(stream=df.stream)
-                if otherwise_is_scalar
-                else otherwise.obj,
+                then_col.obj,
+                otherwise_col.obj,
                 when.obj,
                 stream=df.stream,
             ),
