@@ -446,7 +446,7 @@ def make_rapidsmpf_read_parquet_node(
     ch_out: ChannelPair,
     stats: StatsCollector,
     partition_info: PartitionInfo,
-) -> Any:
+) -> Any | None:
     """
     Make a RapidsMPF read parquet node.
 
@@ -467,7 +467,8 @@ def make_rapidsmpf_read_parquet_node(
 
     Returns
     -------
-    The RapidsMPF read parquet node.
+    The RapidsMPF read parquet node, or None if the predicate cannot be
+    converted to a parquet filter (caller should fall back to scan_node).
     """
     from rapidsmpf.streaming.cudf.parquet import Filter, read_parquet
 
@@ -496,8 +497,11 @@ def make_rapidsmpf_read_parquet_node(
                 ),
                 stream=stream,
             )
-            if filter_expr is not None:
-                filter_obj = Filter(stream, filter_expr)
+            if filter_expr is None:
+                # Predicate cannot be converted to parquet filter
+                # Return None to signal fallback to scan_node
+                return None
+            filter_obj = Filter(stream, filter_expr)
     except Exception as e:
         raise ValueError(f"Failed to build ParquetReaderOptions: {e}") from e
 
@@ -555,27 +559,30 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
     channels: dict[IR, ChannelManager] = {ir: ChannelManager(rec.state["context"])}
 
     # Use rapidsmpf native read_parquet for multi-partition Parquet scans.
+    ch_pair = channels[ir].reserve_input_slot()
     nodes: list[Any]
+    native_node: Any = None
     if (
         partition_info.count > 1
         and ir.typ == "parquet"
         and ir.row_index is None
         and ir.include_file_paths is None
-        and ir.predicate is None  # TODO: Remove this.
         and ir.n_rows == -1
         and ir.skip_rows == 0
     ):
-        nodes = [
-            make_rapidsmpf_read_parquet_node(
-                rec.state["context"],
-                ir,
-                num_producers,
-                channels[ir].reserve_input_slot(),
-                rec.state["stats"],
-                partition_info,
-            )
-        ]
+        native_node = make_rapidsmpf_read_parquet_node(
+            rec.state["context"],
+            ir,
+            num_producers,
+            ch_pair,
+            rec.state["stats"],
+            partition_info,
+        )
+
+    if native_node is not None:
+        nodes = [native_node]
     else:
+        # Fall back to scan_node (predicate not convertible, or other constraint)
         assert partition_info.io_plan is not None, (
             "Scan node must have a partition plan"
         )
@@ -588,7 +595,7 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
                 rec.state["context"],
                 ir,
                 rec.state["ir_context"],
-                channels[ir].reserve_input_slot(),
+                ch_pair,
                 num_producers=num_producers,
                 plan=plan,
                 parquet_options=parquet_options,
