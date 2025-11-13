@@ -416,6 +416,8 @@ class ListDtype(_BaseDtype):
     ListDtype(ListDtype(int32))
     """
 
+    name: str = "list"
+
     def __init__(self, element_type: Dtype) -> None:
         self._element_type = cudf.dtype(element_type)
 
@@ -467,10 +469,6 @@ class ListDtype(_BaseDtype):
         # TODO: we should change this to return something like a
         # ListDtypeType, once we figure out what that should look like
         return pa.array
-
-    @property
-    def name(self) -> str:
-        return "list"
 
     @classmethod
     def from_arrow(cls, typ: pa.ListType) -> Self:
@@ -619,6 +617,8 @@ class StructDtype(_BaseDtype):
     StructDtype({'dict_data': StructDtype({'a': dtype('int64'), 'b': dtype('O')}), 'c': dtype('uint8')})
     """
 
+    name = "struct"
+
     def __init__(self, fields: Mapping[str, Dtype]) -> None:
         with cudf.option_context("mode.pandas_compatible", False):
             # We need to temporarily disable pandas compatibility mode
@@ -646,10 +646,6 @@ class StructDtype(_BaseDtype):
         # TODO: we should change this to return something like a
         # StructDtypeType, once we figure out what that should look like
         return dict
-
-    @property
-    def name(self) -> str:
-        return "struct"
 
     @classmethod
     def from_arrow(cls, typ: pa.StructType) -> Self:
@@ -970,12 +966,9 @@ class DecimalDtype(_BaseDtype):
     )
 )
 class Decimal32Dtype(DecimalDtype):
+    name = "decimal32"
     MAX_PRECISION = np.floor(np.log10(np.iinfo("int32").max))
     ITEMSIZE = 4
-
-    @property
-    def name(self) -> str:
-        return "decimal32"
 
 
 @doc_apply(
@@ -984,12 +977,9 @@ class Decimal32Dtype(DecimalDtype):
     )
 )
 class Decimal64Dtype(DecimalDtype):
+    name = "decimal64"
     MAX_PRECISION = np.floor(np.log10(np.iinfo("int64").max))
     ITEMSIZE = 8
-
-    @property
-    def name(self) -> str:
-        return "decimal64"
 
 
 @doc_apply(
@@ -998,12 +988,9 @@ class Decimal64Dtype(DecimalDtype):
     )
 )
 class Decimal128Dtype(DecimalDtype):
+    name = "decimal128"
     MAX_PRECISION = 38
     ITEMSIZE = 16
-
-    @property
-    def name(self) -> str:
-        return "decimal128"
 
 
 class IntervalDtype(StructDtype):
@@ -1018,6 +1005,8 @@ class IntervalDtype(StructDtype):
         Whether the interval is closed on the left-side, right-side,
         both or neither. See the Notes for more detailed explanation.
     """
+
+    name = "interval"
 
     def __init__(
         self,
@@ -1048,10 +1037,6 @@ class IntervalDtype(StructDtype):
     @property
     def subtype(self) -> DtypeObj | None:
         return self._subtype
-
-    @property
-    def name(self) -> str:
-        return "interval"
 
     def __repr__(self) -> str:
         if self.subtype is None:
