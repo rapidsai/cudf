@@ -1130,8 +1130,9 @@ inline __device__ bool prefetch_string_data(int t,
   buffer_end = buffer_base + total_bytes_to_copy;
 
   // Nominally, each thread will copy an equal number of bytes; this rounds up.
-  int32_t const nominal_thread_bytes_to_copy = (total_bytes_to_copy + block_size - 1) / block_size;
-  int32_t const thread_offset                = nominal_thread_bytes_to_copy * t;
+  auto const nominal_thread_bytes_to_copy =
+    cudf::util::div_rounding_up_unsafe<int32_t>(total_bytes_to_copy, block_size);
+  int32_t const thread_offset = nominal_thread_bytes_to_copy * t;
 
   if (thread_offset < total_bytes_to_copy) {
     // Guard against the end of the data stream
@@ -1196,7 +1197,7 @@ inline __device__ void read_string_offsets_buffered(page_state_s* s,
       int32_t const prefetch_read_index = next_length_offset - buffer_base;
       int32_t len;
       cuda::std::memcpy(reinterpret_cast<void*>(&len),
-                        reinterpret_cast<const void*>(&prefetch_buffer[prefetch_read_index]),
+                        reinterpret_cast<void const*>(&prefetch_buffer[prefetch_read_index]),
                         sizeof(int32_t));
 
       if (string_offset + len > dict_size) { return pos; }  // Data is corrupted or incomplete
@@ -1416,13 +1417,13 @@ void preprocess_string_offsets(cudf::detail::hostdevice_span<PageInfo> pages,
 {
   if (pages.size() == 0) { return; }
 
-  constexpr int decode_block_size = cudf::detail::warp_size;
-  constexpr int prefetch_size     = 1024;
+  constexpr int preprocess_block_size = cudf::detail::warp_size;
+  constexpr int prefetch_size         = 1024;
 
-  dim3 dim_block(decode_block_size, 1);
+  dim3 dim_block(preprocess_block_size, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
-  preprocess_string_offsets<decode_block_size, prefetch_size>
+  preprocess_string_offsets<preprocess_block_size, prefetch_size>
     <<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, page_string_offset_indices, page_mask, min_row, num_rows);
 }
