@@ -12,9 +12,9 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 @pytest.mark.parametrize(
     "when",
     [
-        pl.lit(value=True, dtype=pl.Boolean),
-        pl.lit(value=False, dtype=pl.Boolean),
-        pl.lit(None, dtype=pl.Boolean),
+        pl.lit(value=True, dtype=pl.Boolean()),
+        pl.lit(value=False, dtype=pl.Boolean()),
+        pl.lit(None, dtype=pl.Boolean()),
         pl.col("c"),
     ],
 )
@@ -29,5 +29,5 @@ def test_when_then(when, then, otherwise):
         }
     )
 
-    q = df.select(pl.when(when).then(then).otherwise(otherwise).alias("out"))
+    q = df.select(pl.when(when).then(then).otherwise(otherwise))
     assert_gpu_result_equal(q)
