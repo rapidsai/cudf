@@ -328,7 +328,15 @@ class RunConfig:
             if scale_factor_int == scale_factor:
                 scale_factor = scale_factor_int
 
-        if "pdsh" in name and args.scale is not None:
+        skip_scale_factor_inference = (
+            "LIBCUDF_IO_REROUTE_LOCAL_DIR_PATTERN" in os.environ
+        ) and ("LIBCUDF_IO_REROUTE_REMOTE_DIR_PATTERN" in os.environ)
+
+        if (
+            "pdsh" in name
+            and args.scale is not None
+            and skip_scale_factor_inference is False
+        ):
             # Validate the user-supplied scale factor
             sf_inf = _infer_scale_factor(name, path, args.suffix)
             rel_error = abs((scale_factor - sf_inf) / sf_inf)
