@@ -118,22 +118,6 @@ You can also set the `CUDF_POLARS__CUDA_STREAM_POLICY` environment variable the 
 
 This stream pool is shared between cudf-polars and rapidsmpf.
 
-The ``rapidsmpf`` runtime for the streaming executor also supports using a CUDA Stream Pool.
-
-```python
-engine = GPUEngine(
-    executor="streaming",
-    executor_options={
-        "runtime": "rapidsmpf",
-    },
-    cuda_stream_policy="pool",
-)
-```
-
-Or provide a dictionary with configuration options for the pool, like `cuda_stream_pool={"pool_size": 16}`.
-
-This stream pool is shared between cudf-polars and rapidsmpf.
-
 ## Memory Resource
 
 All GPU memory allocations made by cudf-polars use an RMM Memory Resource object from {mod}`rmm.mr`. You can specify
