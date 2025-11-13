@@ -62,7 +62,9 @@ async def union_node(
                     context,
                     Message(
                         msg.sequence_number + seq_num_offset,
-                        TableChunk.from_message(msg),
+                        TableChunk.from_message(msg).make_available_and_spill(
+                            context.br(), allow_overbooking=True
+                        ),
                     ),
                 )
             seq_num_offset += num_ch_chunks
