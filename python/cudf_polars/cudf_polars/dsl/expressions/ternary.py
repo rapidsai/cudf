@@ -15,6 +15,7 @@ from cudf_polars.dsl.expressions.base import (
     ExecutionContext,
     Expr,
 )
+from cudf_polars.dsl.utils.reshape import broadcast
 
 if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame, DataType
@@ -47,6 +48,7 @@ class Ternary(Expr):
             if otherwise.is_scalar
             else otherwise.obj
         )
+        (when,) = broadcast(when, target_length=df.num_rows, stream=df.stream)
         return Column(
             plc.copying.copy_if_else(
                 then_obj, otherwise_obj, when.obj, stream=df.stream

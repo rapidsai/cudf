@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -11,7 +11,10 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 @pytest.mark.parametrize("then_scalar", [False, True])
 @pytest.mark.parametrize("otherwise_scalar", [False, True])
-@pytest.mark.parametrize("expr", [pl.col("c"), pl.col("c").is_not_null()])
+@pytest.mark.parametrize(
+    "expr",
+    [pl.col("c"), pl.col("c").is_not_null(), pl.lit(True, dtype=pl.Boolean())],  # noqa: FBT003
+)
 def test_when_then(then_scalar, otherwise_scalar, expr):
     ldf = pl.LazyFrame(
         {
