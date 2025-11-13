@@ -561,13 +561,15 @@ named_to_reference_converter::named_to_reference_converter(
 std::reference_wrapper<ast::expression const> named_to_reference_converter::visit(
   ast::column_reference const& expr)
 {
-  // Check if column name is in metadata
+  // Map the column index to its name
   auto const col_name = _column_indices_to_names[expr.get_column_index()];
-  auto col_index_it   = _column_name_to_index.find(col_name);
+  // Check if the column name exists in the metadata and map it to its new column index
+  auto col_index_it = _column_name_to_index.find(col_name);
   if (col_index_it == _column_name_to_index.end()) {
     CUDF_FAIL("Column name not found in metadata");
   }
   auto col_index = col_index_it->second;
+  // Create a new column reference
   _col_ref.emplace_back(col_index);
   _converted_expr = std::reference_wrapper<ast::expression const>(_col_ref.back());
   return std::reference_wrapper<ast::expression const>(_col_ref.back());
@@ -582,6 +584,7 @@ names_from_expression::names_from_expression(
 
   _skip_names = std::unordered_set<std::string>{skip_names.cbegin(), skip_names.cend()};
 
+  // Map column indices to their names
   auto const& root = schema_tree.front();
   std::for_each(thrust::counting_iterator<size_t>(0),
                 thrust::counting_iterator(root.children_idx.size()),
@@ -593,23 +596,14 @@ names_from_expression::names_from_expression(
   expr.value().get().accept(*this);
 }
 
-/**
- * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
- */
 std::reference_wrapper<ast::expression const> names_from_expression::visit(
   ast::column_reference const& expr)
 {
+  // Map the column index to its name
   auto const col_name = _column_indices_to_names[expr.get_column_index()];
+  // If the column name is not in the skip_names, add it to the set
   if (_skip_names.count(col_name) == 0) { _column_names.insert(col_name); }
   return expr;
-}
-
-[[nodiscard]] std::vector<std::string> get_column_names_in_expression(
-  std::optional<std::reference_wrapper<ast::expression const>> expr,
-  std::vector<std::string> const& skip_names,
-  std::vector<SchemaElement> const& schema_tree)
-{
-  return names_from_expression(expr, skip_names, schema_tree).to_vector();
 }
 
 }  // namespace cudf::io::parquet::experimental::detail
