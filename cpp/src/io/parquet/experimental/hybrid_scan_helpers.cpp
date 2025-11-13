@@ -538,19 +538,21 @@ named_to_reference_converter::named_to_reference_converter(
   std::vector<SchemaElement> const& schema_tree)
 {
   if (!expr.has_value()) { return; }
-  // create map for column name.
+
+  // Map column names to their indices
   std::transform(metadata.schema_info.cbegin(),
                  metadata.schema_info.cend(),
                  thrust::counting_iterator<size_t>(0),
                  std::inserter(_column_name_to_index, _column_name_to_index.end()),
                  [](auto const& sch, auto index) { return std::make_pair(sch.name, index); });
 
+  // Map column indices to their names
   auto const& root = schema_tree.front();
   std::for_each(thrust::counting_iterator<size_t>(0),
                 thrust::counting_iterator(root.children_idx.size()),
                 [&](int32_t col_idx) {
                   auto const schema_idx = root.children_idx[col_idx];
-                  _top_level_names.insert({col_idx, schema_tree[schema_idx].name});
+                  _column_indices_to_names.insert({col_idx, schema_tree[schema_idx].name});
                 });
 
   expr.value().get().accept(*this);
@@ -559,8 +561,8 @@ named_to_reference_converter::named_to_reference_converter(
 std::reference_wrapper<ast::expression const> named_to_reference_converter::visit(
   ast::column_reference const& expr)
 {
-  // check if column name is in metadata
-  auto const col_name = _top_level_names[expr.get_column_index()];
+  // Check if column name is in metadata
+  auto const col_name = _column_indices_to_names[expr.get_column_index()];
   auto col_index_it   = _column_name_to_index.find(col_name);
   if (col_index_it == _column_name_to_index.end()) {
     CUDF_FAIL("Column name not found in metadata");
@@ -585,7 +587,7 @@ names_from_expression::names_from_expression(
                 thrust::counting_iterator(root.children_idx.size()),
                 [&](int32_t col_idx) {
                   auto const schema_idx = root.children_idx[col_idx];
-                  _top_level_names.insert({col_idx, schema_tree[schema_idx].name});
+                  _column_indices_to_names.insert({col_idx, schema_tree[schema_idx].name});
                 });
 
   expr.value().get().accept(*this);
@@ -597,7 +599,7 @@ names_from_expression::names_from_expression(
 std::reference_wrapper<ast::expression const> names_from_expression::visit(
   ast::column_reference const& expr)
 {
-  auto const col_name = _top_level_names[expr.get_column_index()];
+  auto const col_name = _column_indices_to_names[expr.get_column_index()];
   if (_skip_names.count(col_name) == 0) { _column_names.insert(col_name); }
   return expr;
 }

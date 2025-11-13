@@ -176,12 +176,8 @@ std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_w
 
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
-  table_metadata metadata;
-  populate_metadata(metadata);
-  auto expr_conv = named_to_reference_converter(
-    options.get_filter(), metadata, _extended_metadata->get_schema_tree());
-  CUDF_EXPECTS(expr_conv.get_converted_expr().has_value(),
-               "Columns names in filter expression must be convertible to index references");
+  // Convert the input expression (must be done after column selection)
+  auto expr_conv     = build_converted_expression(options.get_filter());
   auto output_dtypes = get_output_types(_output_buffers_template);
 
   return _extended_metadata->filter_row_groups_with_stats(row_group_indices,
@@ -201,12 +197,7 @@ hybrid_scan_reader_impl::secondary_filters_byte_ranges(
 
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
-  table_metadata metadata;
-  populate_metadata(metadata);
-  auto expr_conv = named_to_reference_converter(
-    options.get_filter(), metadata, _extended_metadata->get_schema_tree());
-  CUDF_EXPECTS(expr_conv.get_converted_expr().has_value(),
-               "Columns names in filter expression must be convertible to index references");
+  auto expr_conv     = build_converted_expression(options.get_filter());
   auto output_dtypes = get_output_types(_output_buffers_template);
 
   auto const bloom_filter_bytes =
@@ -235,12 +226,8 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
 
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
-  table_metadata metadata;
-  populate_metadata(metadata);
-  auto expr_conv = named_to_reference_converter(
-    options.get_filter(), metadata, _extended_metadata->get_schema_tree());
-  CUDF_EXPECTS(expr_conv.get_converted_expr().has_value(),
-               "Columns names in filter expression must be convertible to index references");
+  // Convert the input expression (must be done after column selection)
+  auto expr_conv     = build_converted_expression(options.get_filter());
   auto output_dtypes = get_output_types(_output_buffers_template);
 
   // Collect literal and operator pairs for each input column with an (in)equality predicate
@@ -303,12 +290,8 @@ std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_w
 
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
-  table_metadata metadata;
-  populate_metadata(metadata);
-  auto expr_conv = named_to_reference_converter(
-    options.get_filter(), metadata, _extended_metadata->get_schema_tree());
-  CUDF_EXPECTS(expr_conv.get_converted_expr().has_value(),
-               "Columns names in filter expression must be convertible to index references");
+  // Convert the input expression (must be done after column selection)
+  auto expr_conv     = build_converted_expression(options.get_filter());
   auto output_dtypes = get_output_types(_output_buffers_template);
 
   return _extended_metadata->filter_row_groups_with_bloom_filters(
@@ -331,12 +314,8 @@ std::unique_ptr<cudf::column> hybrid_scan_reader_impl::build_row_mask_with_page_
 
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
-  table_metadata metadata;
-  populate_metadata(metadata);
-  auto expr_conv = named_to_reference_converter(
-    options.get_filter(), metadata, _extended_metadata->get_schema_tree());
-  CUDF_EXPECTS(expr_conv.get_converted_expr().has_value(),
-               "Columns names in filter expression must be convertible to index references");
+  // Convert the input expression (must be done after column selection)
+  auto expr_conv     = build_converted_expression(options.get_filter());
   auto output_dtypes = get_output_types(_output_buffers_template);
 
   return _extended_metadata->build_row_mask_with_page_index_stats(
@@ -439,12 +418,8 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
 
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
-  table_metadata metadata;
-  populate_metadata(metadata);
-  _expr_conv = named_to_reference_converter(
-    options.get_filter(), metadata, _extended_metadata->get_schema_tree());
-
-  CUDF_EXPECTS(_expr_conv.get_converted_expr().has_value(), "Filter expression must not be empty");
+  // Convert the input expression (must be done after column selection)
+  _expr_conv = build_converted_expression(options.get_filter());
 
   auto data_page_mask = thrust::host_vector<bool>{};
   if (mask_data_pages == use_data_page_mask::YES) {
@@ -511,12 +486,8 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
 
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
-  table_metadata metadata;
-  populate_metadata(metadata);
-  _expr_conv = named_to_reference_converter(
-    options.get_filter(), metadata, _extended_metadata->get_schema_tree());
-
-  CUDF_EXPECTS(_expr_conv.get_converted_expr().has_value(), "Filter expression must not be empty");
+  // Convert the input expression (must be done after column selection)
+  _expr_conv = build_converted_expression(options.get_filter());
 
   auto data_page_mask = thrust::host_vector<bool>{};
   if (mask_data_pages == use_data_page_mask::YES) {
@@ -648,6 +619,18 @@ void hybrid_scan_reader_impl::initialize_options(
 
   // CUDA stream to use for internal operations
   _stream = stream;
+}
+
+named_to_reference_converter hybrid_scan_reader_impl::build_converted_expression(
+  std::optional<std::reference_wrapper<const ast::expression>> filter)
+{
+  table_metadata metadata;
+  populate_metadata(metadata);
+  auto expr_conv =
+    named_to_reference_converter(filter, metadata, _extended_metadata->get_schema_tree());
+  CUDF_EXPECTS(expr_conv.get_converted_expr().has_value(),
+               "Columns names in filter expression must be convertible to index references");
+  return expr_conv;
 }
 
 void hybrid_scan_reader_impl::prepare_data(

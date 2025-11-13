@@ -343,7 +343,7 @@ class named_to_reference_converter : public parquet::detail::named_to_reference_
   std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
 
  private:
-  std::unordered_map<int32_t, std::string> _top_level_names;
+  std::unordered_map<int32_t, std::string> _column_indices_to_names;
 };
 
 /**
@@ -363,7 +363,7 @@ class names_from_expression : public parquet::detail::names_from_expression {
   std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
 
  private:
-  std::unordered_map<int32_t, std::string> _top_level_names;
+  std::unordered_map<int32_t, std::string> _column_indices_to_names;
 };
 
 }  // namespace cudf::io::parquet::experimental::detail

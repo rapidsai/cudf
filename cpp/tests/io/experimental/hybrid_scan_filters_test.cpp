@@ -235,11 +235,19 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithStats)
   auto constexpr rows_per_row_group = page_size_for_ordered_tests;
   auto [written_table, file_buffer] = create_parquet_with_stats<T, num_concat, false>();
 
-  // Filtering AST - table[0] < 50
-  auto literal_value     = cudf::numeric_scalar<T>(50);
-  auto literal           = cudf::ast::literal(literal_value);
-  auto col_ref_0         = cudf::ast::column_reference(0);
-  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+  // Filtering AST - table[0] < 50 and table[2] < "000010000"
+  auto literal_value1     = cudf::numeric_scalar<T>(50);
+  auto literal1           = cudf::ast::literal(literal_value1);
+  auto col_ref0           = cudf::ast::column_reference(0);
+  auto filter_expression1 = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, literal1);
+
+  auto literal_value2     = cudf::string_scalar("000010000");
+  auto literal2           = cudf::ast::literal(literal_value2);
+  auto col_ref2           = cudf::ast::column_reference(2);
+  auto filter_expression2 = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref2, literal2);
+
+  auto filter_expression = cudf::ast::operation(
+    cudf::ast::ast_operator::LOGICAL_AND, filter_expression1, filter_expression2);
 
   // Create reader options with empty source info
   cudf::io::parquet_reader_options options =
