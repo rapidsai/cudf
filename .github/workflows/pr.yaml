@@ -171,7 +171,7 @@ jobs:
     with:
       build_type: pull-request
       script: ci/build_python.sh
-  conda-python-noarch-build:
+  conda-python-build-noarch:
     needs: [conda-cpp-build, conda-python-build]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@main

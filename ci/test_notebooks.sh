@@ -9,7 +9,7 @@ set -euo pipefail
 rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
 PYTHON_CHANNEL=$(rapids-download-from-github conda_python "$(rapids-package-name conda_python cudf)")
-PYTHON_NOARCH_CHANNEL=$(rapids-download-from-github conda_python "$(rapids-package-name cudf-noarch --pure)")
+PYTHON_NOARCH_CHANNEL=$(rapids-download-from-github conda_python "$(rapids-package-name conda_python cudf-noarch --pure)")
 
 rapids-logger "Generate notebook testing dependencies"
 
