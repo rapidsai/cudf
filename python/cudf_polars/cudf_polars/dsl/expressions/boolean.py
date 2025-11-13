@@ -380,9 +380,16 @@ class BooleanFunction(Expr):
             )
         elif self.name is BooleanFunction.Name.Not:
             (column,) = columns
+            # Polars semantics:
+            #   integer input: NOT => bitwise invert.
+            #   boolean input: NOT => logical NOT.
             return Column(
                 plc.unary.unary_operation(
-                    column.obj, plc.unary.UnaryOperator.NOT, stream=df.stream
+                    column.obj,
+                    plc.unary.UnaryOperator.BIT_INVERT
+                    if plc.traits.is_integral_not_bool(column.obj.type())
+                    else plc.unary.UnaryOperator.NOT,
+                    stream=df.stream,
                 ),
                 dtype=self.dtype,
             )
