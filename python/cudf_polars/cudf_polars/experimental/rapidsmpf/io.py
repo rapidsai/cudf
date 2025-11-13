@@ -18,7 +18,10 @@ from cudf_polars.dsl.ir import (
     IR,
     DataFrameScan,
     Scan,
+    _cast_literals_to_physical_types,
+    _parquet_physical_types,
 )
+from cudf_polars.dsl.to_ast import to_parquet_filter
 from cudf_polars.experimental.base import (
     IOPartitionFlavor,
     IOPartitionPlan,
@@ -466,16 +469,35 @@ def make_rapidsmpf_read_parquet_node(
     -------
     The RapidsMPF read parquet node.
     """
-    from rapidsmpf.streaming.cudf.parquet import read_parquet
+    from rapidsmpf.streaming.cudf.parquet import Filter, read_parquet
 
     # Build ParquetReaderOptions
     try:
+        stream = context.get_stream_from_pool()
         parquet_reader_options = plc.io.parquet.ParquetReaderOptions.builder(
             plc.io.SourceInfo(ir.paths)
         ).build()
 
         if ir.with_columns is not None:
             parquet_reader_options.set_columns(ir.with_columns)
+
+        # Build predicate filter if present (passed separately to read_parquet)
+        filter_obj = None
+        if ir.predicate is not None:
+            filter_expr = to_parquet_filter(
+                _cast_literals_to_physical_types(
+                    ir.predicate.value,
+                    _parquet_physical_types(
+                        ir.schema,
+                        ir.paths,
+                        ir.with_columns or list(ir.schema.keys()),
+                        stream,
+                    ),
+                ),
+                stream=stream,
+            )
+            if filter_expr is not None:
+                filter_obj = Filter(stream, filter_expr)
     except Exception as e:
         raise ValueError(f"Failed to build ParquetReaderOptions: {e}") from e
 
@@ -508,6 +530,7 @@ def make_rapidsmpf_read_parquet_node(
             num_producers,
             parquet_reader_options,
             num_rows_per_chunk,
+            filter=filter_obj,
         )
     except Exception as e:
         raise RuntimeError(
@@ -515,7 +538,8 @@ def make_rapidsmpf_read_parquet_node(
             f"  paths: {ir.paths}\n"
             f"  num_producers: {num_producers}\n"
             f"  num_rows_per_chunk: {num_rows_per_chunk}\n"
-            f"  partition_count: {partition_info.count}"
+            f"  partition_count: {partition_info.count}\n"
+            f"  filter: {filter_obj}"
         ) from e
 
 
@@ -531,14 +555,12 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
     channels: dict[IR, ChannelManager] = {ir: ChannelManager(rec.state["context"])}
 
     # Use rapidsmpf native read_parquet for multi-partition Parquet scans.
-    # Start with simple case only (no predicates, row_index, etc.).
     nodes: list[Any]
     if (
         partition_info.count > 1
         and ir.typ == "parquet"
         and ir.row_index is None
         and ir.include_file_paths is None
-        and ir.predicate is None
         and ir.n_rows == -1
         and ir.skip_rows == 0
     ):
