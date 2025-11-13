@@ -15,8 +15,8 @@
 #include <cudf/utilities/pinned_memory.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/mr/device/pool_memory_resource.hpp>
 #include <rmm/mr/pinned_host_memory_resource.hpp>
+#include <rmm/mr/pool_memory_resource.hpp>
 
 using cudf::host_span;
 using cudf::detail::host_2dspan;
