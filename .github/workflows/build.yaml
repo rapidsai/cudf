@@ -51,7 +51,7 @@ jobs:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
-      node_type: cpu8
+      node_type: cpu16
       script: ci/build_cpp.sh
       sha: ${{ inputs.sha }}
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
@@ -100,7 +100,7 @@ jobs:
       branch: ${{ inputs.branch }}
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
-      node_type: cpu8
+      node_type: cpu16
       script: ci/build_wheel_libcudf.sh
       package-name: libcudf
       package-type: cpp
