@@ -386,9 +386,9 @@ class BooleanFunction(Expr):
             return Column(
                 plc.unary.unary_operation(
                     column.obj,
-                    plc.unary.UnaryOperator.BIT_INVERT
-                    if plc.traits.is_integral_not_bool(column.obj.type())
-                    else plc.unary.UnaryOperator.NOT,
+                    plc.unary.UnaryOperator.NOT
+                    if column.obj.type().id() == plc.TypeId.BOOL8
+                    else plc.unary.UnaryOperator.BIT_INVERT,
                     stream=df.stream,
                 ),
                 dtype=self.dtype,
