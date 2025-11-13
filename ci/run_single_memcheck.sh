@@ -23,6 +23,7 @@ rapids-logger "Installing libcudf and libcudf-tests from rapidsai-nightly"
 
 # Install packages from rapidsai-nightly channel
 rapids-mamba-retry create -y -n libcudf -c rapidsai-nightly -c conda-forge libcudf libcudf-tests
+conda activate libcudf
 
 rapids-logger "Running compute-sanitizer on $TEST_NAME"
 
