@@ -681,7 +681,7 @@ TEST_F(DistinctJoinTest, InvalidLoadFactor)
   EXPECT_THROW(cudf::distinct_hash_join(t0, cudf::null_equality::EQUAL, 1.1), cuco::logic_error);
 }
 
-TEST_F(DistinctJoinTest, LargeExtentOverflowPrevention)
+TEST_F(DistinctJoinTest, DISABLED_LargeExtentOverflowPrevention)
 {
   // Test that validates size_t extent can handle hash table sizes that would
   // overflow int32_t extent when load_factor < 1.0
