@@ -8,24 +8,15 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/valid_if.cuh>
 #include <cudf/null_mask.hpp>
-#include <cudf/reshape.hpp>
 #include <cudf/stream_compaction.hpp>
-#include <cudf/strings/detail/gather.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-
-#include <cuda/std/iterator>
-#include <thrust/copy.h>
-#include <thrust/gather.h>
 
 #include <jit/cache.hpp>
 #include <jit/helpers.hpp>
