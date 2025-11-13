@@ -91,6 +91,10 @@ struct characters_tokenizer {
     while (current_position < d_str.size_bytes()) {
       cudf::char_utf8 ch   = 0;
       auto const chr_width = cudf::strings::detail::to_char_utf8(src_ptr + current_position, ch);
+      if (chr_width == 0) {
+        current_position++;
+        continue;
+      }
       if (spaces == is_delimiter(ch)) {
         current_position += chr_width;
         if (spaces) {
