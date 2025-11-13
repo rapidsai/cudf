@@ -21,7 +21,7 @@ jobs:
       - conda-cpp-checks
       - conda-cpp-tests
       - conda-python-build
-      - conda-python-noarch-build
+      - conda-python-build-noarch
       - conda-python-cudf-tests
       - conda-python-other-tests
       - conda-java-tests
@@ -180,7 +180,7 @@ jobs:
       script: ci/build_python_noarch.sh
       conda-pure: true
   conda-python-cudf-tests:
-    needs: [conda-python-build, conda-python-noarch-build, changed-files]
+    needs: [conda-python-build, conda-python-build-noarch, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@main
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
@@ -189,7 +189,7 @@ jobs:
       script: "ci/test_python_cudf.sh"
   conda-python-other-tests:
     # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
-    needs: [conda-python-noarch-build, changed-files]
+    needs: [conda-python-build-noarch, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@main
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
@@ -208,7 +208,7 @@ jobs:
       container_image: "rapidsai/ci-conda:25.12-latest"
       script: "ci/test_java.sh"
   conda-notebook-tests:
-    needs: [conda-python-build, conda-python-noarch-build, changed-files]
+    needs: [conda-python-build, conda-python-build-noarch, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_notebooks
@@ -219,7 +219,7 @@ jobs:
       container_image: "rapidsai/ci-conda:25.12-latest"
       script: "ci/test_notebooks.sh"
   docs-build:
-    needs: [conda-python-build, conda-python-noarch-build]
+    needs: [conda-python-build, conda-python-build-noarch]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     with:
@@ -360,7 +360,7 @@ jobs:
       build_type: pull-request
       script: ci/cudf_pandas_scripts/run_tests.sh
   third-party-integration-tests-cudf-pandas:
-    needs: [conda-python-build, conda-python-noarch-build, changed-files]
+    needs: [conda-python-build, conda-python-build-noarch, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cudf_pandas
@@ -390,7 +390,7 @@ jobs:
       container_image: "rapidsai/citestwheel:25.12-latest"
       script: ci/cudf_pandas_scripts/pandas-tests/run.sh pr
   narwhals-tests:
-    needs: [conda-python-build, conda-python-noarch-build, changed-files]
+    needs: [conda-python-build, conda-python-build-noarch, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
