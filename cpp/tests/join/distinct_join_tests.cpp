@@ -689,7 +689,7 @@ TEST_F(DistinctJoinTest, LargeExtentOverflowPrevention)
   // Use a table size that when divided by low load factor would exceed INT32_MAX
   // if using int32_t extent, but should work fine with size_t extent
   constexpr cudf::size_type table_size = 10000000;  // 10M rows
-  constexpr double load_factor         = 0.0025;    // Hash table extent would be ~4B
+  constexpr double load_factor         = 0.004;     // Hash table extent would be ~2.5B
 
   // Validate our test assumptions
   constexpr auto expected_hash_size = static_cast<size_t>(table_size / load_factor);

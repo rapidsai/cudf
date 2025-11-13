@@ -388,7 +388,7 @@ TEST_F(JoinTest, AntiSemiJoinLargeExtentOverflowPrevention)
   // Test validates size_t extent can handle bucket storage sizes that would
   // overflow int32_t extent when compute_bucket_storage_size() uses low load factors
   constexpr cudf::size_type table_size = 10000000;  // 10M rows
-  constexpr double load_factor         = 0.0025;    // Hash table extent would be ~4B
+  constexpr double load_factor         = 0.004;     // Hash table extent would be ~2.5B
 
   // Compile-time validation
   constexpr auto expected_bucket_size = static_cast<size_t>(table_size / load_factor);
