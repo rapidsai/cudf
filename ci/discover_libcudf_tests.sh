@@ -6,11 +6,31 @@ set -euo pipefail
 
 . /opt/conda/etc/profile.d/conda.sh
 
+rapids-logger "Generate C++ testing dependencies"
+
+ENV_YAML_DIR="$(mktemp -d)"
+
+rapids-dependency-file-generator \
+  --output conda \
+  --file-key test_cpp \
+  --prepend-channel rapidsai-nightly \
+  --prepend-channel conda-forge \
+  --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch)" | tee "${ENV_YAML_DIR}/env.yaml"
+
+rapids-logger "Create test environment"
+rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n test
+
+# Temporarily allow unbound variables for conda activation.
+set +u
+conda activate test
+set -u
+
 rapids-logger "Installing libcudf and libcudf-tests from rapidsai-nightly"
 
 # Install packages from rapidsai-nightly channel
-rapids-mamba-retry create -y -n libcudf -c rapidsai-nightly -c conda-forge libcudf libcudf-tests
-conda activate libcudf
+rapids-mamba-retry install -y -c rapidsai-nightly -c conda-forge libcudf libcudf-tests
+
+rapids-print-env
 
 rapids-logger "Discovering libcudf test executables"
 

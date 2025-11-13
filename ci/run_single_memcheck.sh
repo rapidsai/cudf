@@ -19,14 +19,31 @@ fi
 TEST_NAME="$1"
 shift
 
-rapids-logger "Installing libcudf and libcudf-tests from rapidsai-nightly"
+rapids-logger "Generate C++ testing dependencies"
 
-# Install packages from rapidsai-nightly channel
-rapids-mamba-retry create -y -n libcudf -c rapidsai-nightly -c conda-forge libcudf libcudf-tests
-conda activate libcudf
+ENV_YAML_DIR="$(mktemp -d)"
+
+rapids-dependency-file-generator \
+  --output conda \
+  --file-key test_cpp \
+  --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch)" | tee "${ENV_YAML_DIR}/env.yaml"
+
+rapids-logger "Create test environment"
+rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n test
+
+# Temporarily allow unbound variables for conda activation.
+set +u
+conda activate test
+set -u
+
+rapids-print-env
+
+rapids-logger "Check GPU usage"
+nvidia-smi
 
 rapids-logger "Running compute-sanitizer on $TEST_NAME"
 
+# Set environment variables as per ci/run_cudf_memcheck_ctests.sh
 export GTEST_CUDF_RMM_MODE=cuda
 export GTEST_BRIEF=1
 # compute-sanitizer bug 4553815
@@ -40,9 +57,6 @@ if [ ! -x "$TEST_EXECUTABLE" ]; then
   rapids-logger "Error: Test executable $TEST_EXECUTABLE not found or not executable"
   exit 1
 fi
-
-rapids-logger "Check GPU usage"
-nvidia-smi
 
 # Run compute-sanitizer on the specified test
 compute-sanitizer --tool memcheck "$TEST_EXECUTABLE" "$@"
