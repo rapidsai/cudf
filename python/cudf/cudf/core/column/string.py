@@ -304,7 +304,7 @@ class StringColumn(ColumnBase, Scannable):
         other = [item] if is_scalar(item) else item
         return self.contains(as_column(other, dtype=self.dtype)).any()
 
-    def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
+    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         """
         Copies type metadata from self onto other, returning a new column.
         """
