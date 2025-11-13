@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+import json
 import warnings
 from typing import TYPE_CHECKING, Literal
 
@@ -24,11 +25,6 @@ from cudf.core.index import CategoricalIndex, RangeIndex
 from cudf.core.multiindex import MultiIndex
 from cudf.utils import ioutils
 from cudf.utils.dtypes import cudf_dtype_from_pa_type, dtype_to_pylibcudf_type
-
-try:
-    import ujson as json  # type: ignore[import-untyped]
-except ImportError:
-    import json
 
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase

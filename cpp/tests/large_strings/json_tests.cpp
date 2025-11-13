@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "../io/json/json_utils.cuh"
+#include "../io/json/json_utils.hpp"
 #include "large_strings_fixture.hpp"
 
 #include <cudf_test/column_wrapper.hpp>
@@ -14,6 +14,7 @@
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/codec.hpp>
 #include <cudf/io/json.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
