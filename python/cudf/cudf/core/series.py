@@ -268,6 +268,10 @@ class _SeriesIlocIndexer(_FrameIndexer):
         self._frame._column[key] = value
 
 
+class _SeriesiAtIndexer(_SeriesIlocIndexer):
+    pass
+
+
 class _SeriesLocIndexer(_FrameIndexer):
     """
     Label-based selection
@@ -407,6 +411,10 @@ class _SeriesLocIndexer(_FrameIndexer):
                     )
                     raise KeyError(f"{missing} not in the index.")
                 return indices
+
+
+class _SeriesAtIndexer(_SeriesLocIndexer):
+    pass
 
 
 class Series(SingleColumnFrame, IndexedFrame):
@@ -639,6 +647,20 @@ class Series(SingleColumnFrame, IndexedFrame):
     @_performance_tracking
     def __contains__(self, item) -> bool:
         return item in self.index
+
+    @property
+    def iat(self):
+        """
+        Alias for ``Series.iloc``; provided for compatibility with Pandas.
+        """
+        return _SeriesiAtIndexer(self)
+
+    @property
+    def at(self):
+        """
+        Alias for ``Series.loc``; provided for compatibility with Pandas.
+        """
+        return _SeriesAtIndexer(self)
 
     @classmethod
     @_performance_tracking
