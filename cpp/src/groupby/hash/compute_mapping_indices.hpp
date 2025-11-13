@@ -24,9 +24,9 @@ void compute_mapping_indices(size_type grid_size,
                              size_type num_rows,
                              SetRef global_set,
                              bitmask_type const* row_bitmask,
-                             size_type* block_stride_ends,
                              size_type* local_mapping_index,
                              size_type* global_mapping_index,
                              size_type* block_cardinality,
+                             size_type* block_row_ends,
                              rmm::cuda_stream_view stream);
 }  // namespace cudf::groupby::detail::hash
