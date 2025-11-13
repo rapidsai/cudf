@@ -485,7 +485,6 @@ reader_impl::reader_impl()
     _subpass_page_mask{cudf::detail::hostdevice_vector<bool>(0, cudf::get_default_stream())},
     _string_offset_buffer{0, cudf::get_default_stream()},
     _page_string_offset_indices{0, cudf::get_default_stream()}
-    _subpass_page_mask{cudf::detail::hostdevice_vector<bool>(0, cudf::get_default_stream())}
 {
 }
 
