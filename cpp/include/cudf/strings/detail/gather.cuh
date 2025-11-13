@@ -18,6 +18,7 @@
 #include <cudf/utilities/prefetch.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
@@ -25,6 +26,7 @@
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/transform_iterator.h>
+#include <cub/cub.cuh>
 
 namespace cudf {
 namespace strings {
@@ -299,6 +301,7 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
         if (not d_strings.is_valid(idx)) { return 0; }
         return static_cast<size_type>(d_in_offsets[idx + 1] - d_in_offsets[idx]);
       }));
+
   auto [out_offsets_column, total_bytes] = cudf::strings::detail::make_offsets_child_column(
     sizes_itr, sizes_itr + output_count, stream, mr);
 
@@ -306,8 +309,39 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
   auto const offsets_view =
     cudf::detail::offsetalator_factory::make_input_iterator(out_offsets_column->view());
   cudf::prefetch::detail::prefetch(strings.chars_begin(stream), strings.chars_size(stream), stream);
-  auto out_chars_data = gather_chars(
-    d_strings->begin<string_view>(), begin, end, offsets_view, total_bytes, stream, mr);
+
+  auto out_chars_data = rmm::device_uvector<char>(total_bytes, stream, mr);
+  cudf::prefetch::detail::prefetch(out_chars_data, stream);
+  auto d_out_chars = out_chars_data.data();
+
+  auto in_chars_itr = thrust::make_transform_iterator(
+    begin,
+    cuda::proclaim_return_type<const char*>(
+      [d_strings = *d_strings] __device__(size_type idx) {
+        if (NullifyOutOfBounds && (idx < 0 || idx >= d_strings.size())) { return static_cast<const char*>(nullptr); }
+        if (not d_strings.is_valid(idx)) { return static_cast<const char*>(nullptr); }
+        return d_strings.element<string_view>(idx).data();
+      }));
+
+  auto out_chars_itr = cudf::detail::make_counting_transform_iterator(
+    0,
+    cuda::proclaim_return_type<char*>(
+      [d_strings = *d_strings, offsets_view, d_out_chars] __device__(size_type idx) {
+        return d_out_chars + offsets_view[idx];
+      }));
+
+
+  // Determine temporary device storage requirements
+  size_t temp_storage_bytes = 0;
+  cub::DeviceMemcpy::Batched(
+    nullptr, temp_storage_bytes, in_chars_itr, out_chars_itr, sizes_itr, output_count, stream.value());
+
+  // Allocate temporary storage
+  auto d_temp_storage = rmm::device_buffer(temp_storage_bytes, stream, mr);
+
+  // Run batched copy algorithm (used to permute strings)
+  cub::DeviceMemcpy::Batched(
+    d_temp_storage.data(), temp_storage_bytes, in_chars_itr, out_chars_itr, sizes_itr, output_count, stream.value());
 
   return make_strings_column(output_count,
                              std::move(out_offsets_column),
