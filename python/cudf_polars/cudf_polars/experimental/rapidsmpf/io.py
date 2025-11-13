@@ -45,10 +45,10 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
+    from cudf_polars.experimental.base import ColumnStat, StatsCollector
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.dispatch import LowerIRTransformer
     from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
-    from cudf_polars.experimental.stats import ColumnStat, StatsCollector
     from cudf_polars.utils.config import ParquetOptions
 
 
