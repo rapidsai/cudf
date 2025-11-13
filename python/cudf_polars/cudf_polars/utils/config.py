@@ -30,6 +30,9 @@ import os
 import warnings
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
+from rmm.pylibrmm.cuda_stream import CudaStreamFlags
+from rmm.pylibrmm.cuda_stream_pool import CudaStreamPool
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -848,19 +851,77 @@ class InMemoryExecutor:
     name: Literal["in-memory"] = dataclasses.field(default="in-memory", init=False)
 
 
+@dataclasses.dataclass(frozen=True, eq=True)
+class CUDAStreamPoolConfig:
+    """
+    Configuration for the CUDA stream pool.
+
+    Parameters
+    ----------
+    pool_size
+        The size of the CUDA stream pool.
+    flags
+        The flags to use for the CUDA stream pool.
+    """
+
+    pool_size: int = 16
+    flags: CudaStreamFlags = CudaStreamFlags.NON_BLOCKING
+
+    def build(self) -> CudaStreamPool:
+        return CudaStreamPool(
+            pool_size=self.pool_size,
+            flags=self.flags,
+        )
+
+
 class CUDAStreamPolicy(str, enum.Enum):
     """
     The policy to use for acquiring new CUDA streams.
 
     * ``CUDAStreamPolicy.DEFAULT`` : Use the default CUDA stream.
     * ``CUDAStreamPolicy.NEW`` : Create a new CUDA stream.
-    * ``CUDAStreamPolicy.POOL`` : Use the CUDA stream pool. This is currently
-      only supported by the RapidsMPF runtime.
     """
 
     DEFAULT = "default"
     NEW = "new"
-    POOL = "pool"
+
+
+def _convert_cuda_stream_policy(
+    user_cuda_stream_policy: dict | str,
+) -> CUDAStreamPolicy | CUDAStreamPoolConfig:
+    match user_cuda_stream_policy:
+        case "default" | "new":
+            return CUDAStreamPolicy(user_cuda_stream_policy)
+        case "pool":
+            return CUDAStreamPoolConfig()
+        case dict():
+            return CUDAStreamPoolConfig(**user_cuda_stream_policy)
+        case str():
+            # assume it's a JSON encoded CUDAStreamPoolConfig
+            try:
+                d = json.loads(user_cuda_stream_policy)
+            except json.JSONDecodeError:
+                raise ValueError(
+                    f"Invalid CUDA stream policy: '{user_cuda_stream_policy}'"
+                ) from None
+            match d:
+                case {"pool_size": int(), "flags": int()}:
+                    return CUDAStreamPoolConfig(
+                        pool_size=d["pool_size"], flags=CudaStreamFlags(d["flags"])
+                    )
+                case {"pool_size": int(), "flags": str()}:
+                    # convert the string names to enums
+                    return CUDAStreamPoolConfig(
+                        pool_size=d["pool_size"],
+                        flags=CudaStreamFlags(CudaStreamFlags.__members__[d["flags"]]),
+                    )
+                case _:
+                    try:
+                        return CUDAStreamPoolConfig(**d)
+                    except TypeError:
+                        raise ValueError(
+                            f"Invalid CUDA stream policy: {user_cuda_stream_policy}"
+                        ) from None
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -893,7 +954,7 @@ class ConfigOptions:
     )
     device: int | None = None
     memory_resource_config: MemoryResourceConfig | None = None
-    cuda_stream_policy: CUDAStreamPolicy = dataclasses.field(
+    cuda_stream_policy: CUDAStreamPolicy | CUDAStreamPoolConfig = dataclasses.field(
         default_factory=_make_default_factory(
             "CUDF_POLARS__CUDA_STREAM_POLICY",
             CUDAStreamPolicy.__call__,
@@ -999,16 +1060,23 @@ class ConfigOptions:
         user_cuda_stream_policy = engine.config.get(
             "cuda_stream_policy", None
         ) or os.environ.get("CUDF_POLARS__CUDA_STREAM_POLICY", None)
+
+        cuda_stream_policy: CUDAStreamPolicy | CUDAStreamPoolConfig
+
         if user_cuda_stream_policy is None:
-            # TODO: Use pool by default for rapidsmpf runtime
-            # once stream-ordering bugs are fixed.
-            # See: https://github.com/rapidsai/cudf/issues/20484
-            cuda_stream_policy = CUDAStreamPolicy.DEFAULT
+            if (
+                executor.name == "streaming" and executor.runtime == Runtime.RAPIDSMPF
+            ):  # pragma: no cover; requires rapidsmpf runtime
+                # the rapidsmpf runtime defaults to using a stream pool
+                cuda_stream_policy = CUDAStreamPoolConfig()
+            else:
+                # everything else defaults to the default stream
+                cuda_stream_policy = CUDAStreamPolicy.DEFAULT
         else:
-            cuda_stream_policy = CUDAStreamPolicy(user_cuda_stream_policy)
+            cuda_stream_policy = _convert_cuda_stream_policy(user_cuda_stream_policy)
 
         # Pool policy is only supported by the rapidsmpf runtime.
-        if cuda_stream_policy == CUDAStreamPolicy.POOL and (
+        if isinstance(cuda_stream_policy, CUDAStreamPoolConfig) and (
             (executor.name != "streaming")
             or (executor.name == "streaming" and executor.runtime != Runtime.RAPIDSMPF)
         ):

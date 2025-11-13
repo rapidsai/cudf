@@ -228,7 +228,7 @@ class RunConfig:
     suffix: str
     executor: ExecutorType
     runtime: str
-    stream_policy: str
+    stream_policy: str | None
     cluster: str
     scheduler: str  # Deprecated, kept for backward compatibility
     n_workers: int
@@ -274,10 +274,7 @@ class RunConfig:
 
         # Handle "auto" stream policy
         if stream_policy == "auto":
-            # TODO: Use pool by default for rapidsmpf runtime
-            # once stream-ordering bugs are fixed.
-            # See: https://github.com/rapidsai/cudf/issues/20484
-            stream_policy = "default"
+            stream_policy = None
 
         # Deal with deprecated scheduler argument
         # and non-streaming executors
@@ -331,7 +328,15 @@ class RunConfig:
             if scale_factor_int == scale_factor:
                 scale_factor = scale_factor_int
 
-        if "pdsh" in name and args.scale is not None:
+        skip_scale_factor_inference = (
+            "LIBCUDF_IO_REROUTE_LOCAL_DIR_PATTERN" in os.environ
+        ) and ("LIBCUDF_IO_REROUTE_REMOTE_DIR_PATTERN" in os.environ)
+
+        if (
+            "pdsh" in name
+            and args.scale is not None
+            and skip_scale_factor_inference is False
+        ):
             # Validate the user-supplied scale factor
             sf_inf = _infer_scale_factor(name, path, args.suffix)
             rel_error = abs((scale_factor - sf_inf) / sf_inf)
@@ -580,7 +585,7 @@ def execute_query(
                     return evaluate_streaming(
                         ir,
                         translator.config_options,
-                    ).to_polars()
+                    )
                 assert_never(run_config.executor)
             else:
                 return q.collect(engine=engine)
