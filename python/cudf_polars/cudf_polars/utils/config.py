@@ -613,6 +613,9 @@ class StreamingExecutor:
     stats_planning
         Options controlling statistics-based query planning. See
         :class:`~cudf_polars.utils.config.StatsPlanningOptions` for more.
+    max_io_threads
+        Maximum number of IO threads for the rapidsmpf runtime. Default is 4.
+        This controls the parallelism of IO operations when reading data.
 
     Notes
     -----
@@ -702,6 +705,11 @@ class StreamingExecutor:
     )
     stats_planning: StatsPlanningOptions = dataclasses.field(
         default_factory=StatsPlanningOptions
+    )
+    max_io_threads: int = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__MAX_IO_THREADS", int, default=4
+        )
     )
 
     def __post_init__(self) -> None:  # noqa: D105

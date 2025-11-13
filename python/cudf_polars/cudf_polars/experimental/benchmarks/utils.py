@@ -256,6 +256,7 @@ class RunConfig:
     query_set: str
     collect_traces: bool = False
     stats_planning: bool
+    max_io_threads: int = 4
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.gather_shuffle_stats and self.shuffle != "rapidsmpf":
@@ -363,6 +364,7 @@ class RunConfig:
             query_set=args.query_set,
             collect_traces=args.collect_traces,
             stats_planning=args.stats_planning,
+            max_io_threads=args.max_io_threads,
         )
 
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
@@ -446,6 +448,7 @@ def get_executor_options(
             executor_options["stats_planning"] = {"use_reduction_planning": True}
         executor_options["client_device_threshold"] = run_config.spill_device
         executor_options["runtime"] = run_config.runtime
+        executor_options["max_io_threads"] = run_config.max_io_threads
 
     if (
         benchmark
@@ -870,6 +873,12 @@ def parse_args(
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Enable statistics planning.",
+    )
+    parser.add_argument(
+        "--max-io-threads",
+        default=4,
+        type=int,
+        help="Maximum number of IO threads for rapidsmpf runtime. Default: 4",
     )
 
     parsed_args = parser.parse_args(args)

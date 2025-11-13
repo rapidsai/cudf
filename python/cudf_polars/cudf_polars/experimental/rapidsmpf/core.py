@@ -312,8 +312,12 @@ def generate_network(
     # Determine which nodes need fanout
     fanout_nodes = determine_fanout_nodes(ir, partition_info, ir_dep_count)
 
-    # TODO: Make this configurable
-    max_io_threads_global = 2
+    # Get max_io_threads from config (default: 4)
+    # Type narrowing: rapidsmpf only works with StreamingExecutor
+    from cudf_polars.utils.config import StreamingExecutor
+
+    assert isinstance(config_options.executor, StreamingExecutor)
+    max_io_threads_global = config_options.executor.max_io_threads
     max_io_threads_local = max(1, max_io_threads_global // max(1, num_io_nodes))
 
     # Generate the network
