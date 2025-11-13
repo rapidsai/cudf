@@ -56,16 +56,6 @@ __device__ void setup_shmem_buffers(size_type& col_start,
 
     shmem_agg_res_offsets[col_end]  = bytes_allocated;
     shmem_agg_mask_offsets[col_end] = bytes_allocated + next_col_size;
-
-    // printf(
-    //   "setup_shmem_buffers: col_end: %d, shmem_agg_res_offsets[col_end]: %d, "
-    //   "shmem_agg_mask_offsets[col_end]: %d, next_col_size : %d, next_col_total_size : %d\n",
-    //   (int)col_end,
-    //   (int)shmem_agg_res_offsets[col_end],
-    //   (int)shmem_agg_mask_offsets[col_end],
-    //   (int)next_col_size,
-    //   (int)next_col_total_size);
-
     bytes_allocated += next_col_total_size;
     ++col_end;
   }
@@ -114,12 +104,8 @@ __device__ void aggregate_to_shmem(cooperative_groups::thread_block const& block
   for (auto source_idx = block.thread_rank() + row_start; source_idx < row_end;
        source_idx += cudf::detail::grid_1d::grid_stride()) {
     auto target_idx = local_mapping_index[source_idx];
-    // printf("source idx: %d, local mapping: %d\n", source_idx, local_mapping_index[source_idx]);
-
-    if (target_idx == cudf::detail::CUDF_SIZE_TYPE_SENTINEL) { continue; }
+    if (target_idx == cudf::detail::CUDF_SIZE_TYPE_SENTINEL) { continue; }  // null row
     target_idx += agg_location_offset;
-    // printf(
-    //   "aggregate_to_shmem: source_idx: %d, target_idx: %d\n", (int)source_idx, (int)target_idx);
 
     for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
       auto const source_col = source.column(col_idx);
@@ -138,7 +124,6 @@ __device__ void aggregate_to_shmem(cooperative_groups::thread_block const& block
   }
 }
 
-#if 1
 __device__ void update_aggs_shmem_to_gmem(cooperative_groups::thread_block const& block,
                                           size_type iter,
                                           size_type col_start,
@@ -153,56 +138,15 @@ __device__ void update_aggs_shmem_to_gmem(cooperative_groups::thread_block const
                                           size_type const* agg_mask_offsets,
                                           aggregation::Kind const* d_agg_kinds)
 {
-  {
-    auto const out_col = target.column(0);
-    if (((uintptr_t)out_col.data<char>() % 8) != 0) {
-      printf(
-        "inside update_aggs_shmem_to_gmem: target column 0 is not "
-        "aligned to 8 bytes, "
-        "address = "
-        "%p\n",
-        (void*)out_col.data<char>());
-    }
-  }
   auto const block_data_offset =
     static_cast<int64_t>(GROUPBY_SHM_MAX_ELEMENTS) * (gridDim.x * iter + blockIdx.x);
 
   // Aggregates shared memory sources to global memory targets
   for (auto idx = block.thread_rank(); idx < num_agg_locations; idx += block.num_threads()) {
-    auto const agg_idx    = block_data_offset + (idx % cardinality);
     auto const target_idx = global_mapping_index[block_data_offset + (idx % cardinality)];
-
-    // printf("update_aggs_shmem_to_gmem: idx: %d, target_idx: %d\n", (int)idx, (int)target_idx);
-
-    // if (idx > 256) { break; }
-
     for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
-      auto target_col        = target.column(col_idx);
-      auto const source      = shmem_agg_storage + agg_res_offsets[col_idx];
-      bool is_target_aligned = true;
-
-      if (((uintptr_t)target_col.data<char>() % 8) != 0) {
-        is_target_aligned = false;
-        auto tmp = (block.group_index().x * GROUPBY_SHM_MAX_ELEMENTS) + (idx % cardinality);
-        printf(
-          "before dispatch: iter = %d,  target %d (/%d) is not aligned to 8 bytes, "
-          "target "
-          "address = "
-          "%p, target idx = %d, idx = %d, tid = %d, agg_mask_offsets[col_idx] = %d, "
-          "agg_res_offsets[col_idx] = %d\n",
-          (int)iter,
-          (int)col_idx,
-          col_end,
-          (void*)target_col.data<char>(),
-          (int)target_idx,
-          (int)idx,
-          (int)block.thread_rank(),
-          (int)agg_mask_offsets[col_idx],
-          (int)agg_res_offsets[col_idx]);
-      }
-
-      auto const target_size = target_col.size();
-
+      auto const target_col = target.column(col_idx);
+      auto const source     = shmem_agg_storage + agg_res_offsets[col_idx];
       auto const source_mask =
         reinterpret_cast<bool*>(shmem_agg_storage + agg_mask_offsets[col_idx]);
       cudf::detail::dispatch_type_and_aggregation(input_values.column(col_idx).type(),
@@ -214,26 +158,9 @@ __device__ void update_aggs_shmem_to_gmem(cooperative_groups::thread_block const
                                                   source,
                                                   source_mask,
                                                   idx);
-
-      target_col = target.column(col_idx);
-      if (((uintptr_t)target_col.data<char>() % 8) != 0) {
-        printf(
-          "after dispatch again: was aligned = %d, target %d (/%d) is not aligned to 8 bytes, "
-          "d_agg_kinds[col_idx] = %d, "
-          "agg_idx = %d, target index = %d, target size = %d"
-          "\n",
-          (int)is_target_aligned,
-          (int)col_idx,
-          (int)col_end,
-          (int)d_agg_kinds[col_idx],
-          (int)agg_idx,
-          (int)target_idx,
-          (int)target_size);
-      }
     }
   }
 }
-#endif
 
 /* Takes the local_mapping_index and global_mapping_index to compute
  * pre (shared) and final (global) aggregates*/
@@ -248,13 +175,6 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(size_type num_rows,
                                                size_type total_agg_size,
                                                size_type offsets_size)
 {
-  auto const out_col = output_values.column(0);
-  if (((uintptr_t)out_col.data<char>() % 8) != 0) {
-    printf(
-      "single_pass_shmem_aggs_kernel: output column 0 is not aligned to 8 bytes, address = %p\n",
-      (void*)out_col.data<char>());
-  }
-
   __shared__ size_type col_start;
   __shared__ size_type col_end;
   __shared__ size_type row_start;
@@ -270,38 +190,16 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(size_type num_rows,
   auto const block = cooperative_groups::this_thread_block();
 
   auto iter = 0;
-  if (block.thread_rank() == 0) {
-    row_start = blockIdx.x * GROUPBY_BLOCK_SIZE;
-    // printf("block idx: %d, row_start: %d\n", (int)blockIdx.x, (int)row_start);
-  }
+  if (block.thread_rank() == 0) { row_start = blockIdx.x * GROUPBY_BLOCK_SIZE; }
   block.sync();
 
   while (true) {
-    {
-      auto const out_col = output_values.column(0);
-      if (((uintptr_t)out_col.data<char>() % 8) != 0) {
-        printf(
-          "iter: %d, single_pass_shmem_aggs_kernel: init, output column 0 is not aligned to 8 "
-          "bytes, "
-          "address = "
-          "%p\n",
-          iter,
-          (void*)out_col.data<char>());
-      }
-    }
-
     if (block.thread_rank() == 0) {
       auto const block_data_idx = gridDim.x * iter + blockIdx.x;
       cardinality               = block_cardinality[block_data_idx];
       row_end                   = block_row_ends[block_data_idx];
-
-      col_start = 0;
-      col_end   = 0;
-
-      // printf(
-      //   "iter: %d, block id: %d, block_data_idx: %d, cardinality: %d, row start: %d, row_end:
-      //   %d\n", (int)iter, (int)blockIdx.x, (int)block_data_idx, (int)cardinality, (int)row_start,
-      //   (int)row_end);
+      col_start                 = 0;
+      col_end                   = 0;
     }
     block.sync();
 
@@ -311,30 +209,9 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(size_type num_rows,
     auto const agg_location_offset =
       multiplication_factor > 1 ? (block.thread_rank() % multiplication_factor) * cardinality : 0;
 
-    // if (block.thread_rank() == 0) {
-    //   printf("multiplication_factor: %d,  num_agg_locations: %d, agg_location_offset: %d\n",
-    //          (int)multiplication_factor,
-    //          (int)num_agg_locations,
-    //          (int)agg_location_offset);
-    // }
-    // block.sync();
-
     auto const num_cols = output_values.num_columns();
     while (col_end < num_cols) {
-      {
-        auto const out_col = output_values.column(0);
-        if (((uintptr_t)out_col.data<char>() % 8) != 0) {
-          printf(
-            "iter: %d, single_pass_shmem_aggs_kernel: start col loop, output column 0 is not "
-            "aligned to 8 "
-            "bytes, "
-            "address = "
-            "%p\n",
-            iter,
-            (void*)out_col.data<char>());
-        }
-      }
-
+      block.sync();
       if (block.thread_rank() == 0) {
         setup_shmem_buffers(col_start,
                             col_end,
@@ -347,21 +224,6 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(size_type num_rows,
       }
       block.sync();
 
-      {
-        auto const out_col = output_values.column(0);
-        if (((uintptr_t)out_col.data<char>() % 8) != 0) {
-          printf(
-            "iter: %d, single_pass_shmem_aggs_kernel: after setup_shmem_buffers, output column 0 "
-            "is not "
-            "aligned to 8 "
-            "bytes, "
-            "address = "
-            "%p\n",
-            iter,
-            (void*)out_col.data<char>());
-        }
-      }
-
       initialize_shmem_aggregations(block,
                                     col_start,
                                     col_end,
@@ -372,20 +234,6 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(size_type num_rows,
                                     num_agg_locations,
                                     d_agg_kinds);
       block.sync();
-
-      {
-        auto const out_col = output_values.column(0);
-        if (((uintptr_t)out_col.data<char>() % 8) != 0) {
-          printf(
-            "iter: %d,single_pass_shmem_aggs_kernel: after initialize_shmem_aggregations, output "
-            "column 0 "
-            "is not aligned to 8 bytes, "
-            "address = "
-            "%p\n",
-            iter,
-            (void*)out_col.data<char>());
-        }
-      }
 
       aggregate_to_shmem(block,
                          row_start,
@@ -401,28 +249,6 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(size_type num_rows,
                          agg_location_offset);
       block.sync();
 
-      {
-        auto const out_col = output_values.column(0);
-        if (((uintptr_t)out_col.data<char>() % 8) != 0) {
-          printf(
-            "iter: %d, thread rank: %d, block id: %d, single_pass_shmem_aggs_kernel: after "
-            "aggregate_to_shmem, output column 0 is "
-            "not "
-            "aligned to 8 bytes, "
-            "row start: %d, row end: %d, col start: %d, col end: %d, agg_location_offset: %d, "
-            "total_agg_size: %d\n",
-            (int)iter,
-            (int)block.thread_rank(),
-            (int)blockIdx.x,
-            (int)row_start,
-            (int)row_end,
-            (int)col_start,
-            (int)col_end,
-            (int)agg_location_offset,
-            (int)total_agg_size);
-        }
-      }
-
       update_aggs_shmem_to_gmem(block,
                                 iter,
                                 col_start,
@@ -437,67 +263,10 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(size_type num_rows,
                                 shmem_agg_mask_offsets,
                                 d_agg_kinds);
       block.sync();
-
-      {
-        auto const out_col = output_values.column(0);
-        if (((uintptr_t)out_col.data<char>() % 8) != 0) {
-          printf(
-            "iter: %d, thread rank: %d, block id: %d, single_pass_shmem_aggs_kernel: after "
-            "update_aggs_shmem_to_gmem, output "
-            "column 0 is "
-            "not aligned to 8 bytes, "
-            "row start:  %d, row end: %d, col start: %d, col end: %d, agg_location_offset: %d, "
-            "total_agg_size: %d\n",
-            iter,
-            (int)block.thread_rank(),
-            (int)blockIdx.x,
-            (int)row_start,
-            (int)row_end,
-            (int)col_start,
-            (int)col_end,
-            (int)agg_location_offset,
-            (int)total_agg_size);
-        }
-      }
-
     }  // while (col_end < num_cols)
 
-    {
-      auto const out_col = output_values.column(0);
-      if (((uintptr_t)out_col.data<char>() % 8) != 0) {
-        printf(
-          "iter: %d, thread rank: %d, block id: %d, single_pass_shmem_aggs_kernel: after iter, "
-          "output column 0 is not aligned to "
-          "8 bytes, "
-          "row start: %d, row end: %d, col start: %d, col end: %d, agg_location_offset: %d, "
-          "total_agg_size: %d\n",
-          (int)iter,
-          (int)block.thread_rank(),
-          (int)blockIdx.x,
-          (int)row_start,
-          (int)row_end,
-          (int)col_start,
-          (int)col_end,
-          (int)agg_location_offset,
-          (int)total_agg_size);
-      }
-    }
-
-    if (row_end + cudf::detail::grid_1d::grid_stride() >= num_rows) { break; }
     ++iter;
-
-    // if (iter > 2) {
-    //   if (block.thread_rank() == 0) {
-    //     printf("block id = %d, break at line %d, row_end = %d, num_rows = %d, \n",
-    //            (int)blockIdx.x,
-    //            __LINE__,
-    //            row_end,
-    //            num_rows);
-    //   }
-
-    //   break;
-    // }
-
+    if (row_end + cudf::detail::grid_1d::grid_stride() >= num_rows) { break; }
     if (block.thread_rank() == 0) { row_start = row_end; }
     block.sync();
   }  // while (true)
@@ -541,7 +310,6 @@ void compute_shared_memory_aggs(size_type grid_size,
   // The rest of shmem is utilized for the actual arrays in shmem.
   auto const offsets_size   = compute_shmem_offsets_size(output_values.num_columns());
   auto const shmem_agg_size = available_shmem_size - offsets_size * 2;
-  // printf("shmem_agg_size: %d, offsets_size: %d\n", (int)shmem_agg_size, (int)offsets_size);
 
   single_pass_shmem_aggs_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, available_shmem_size, stream>>>(
     num_input_rows,

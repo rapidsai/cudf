@@ -48,8 +48,6 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   // shared memory for shared memory aggregations, or when SUM_WITH_OVERFLOW aggregations are
   // present.
   auto const run_aggs_by_global_mem_kernel = [&] {
-    printf("Run agg by global mem\n");
-    fflush(stdout);
     auto [agg_results, unique_key_indices] = compute_global_memory_aggs(
       row_bitmask, values, global_set, agg_kinds, d_agg_kinds, stream, mr);
     finalize_output(values, aggs, agg_results, cache, stream);
@@ -92,9 +90,6 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   rmm::device_uvector<size_type> global_mapping_indices(
     num_strides * grid_size * GROUPBY_SHM_MAX_ELEMENTS, stream);
 
-  // printf("global_mapping_indices.size(): %d\n", (int)global_mapping_indices.size());
-  // printf("num_strides: %d, grid_size: %d\n", (int)num_strides, (int)grid_size);
-
   // Some positions in `global_mapping_indices` will be unused.
   // We just initialize them with a sentinel value so later on we know to ignore them.
   thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
@@ -123,20 +118,21 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
                           block_row_ends.data(),
                           stream);
 
-  auto unique_keys       = extract_populated_keys(global_set, num_rows, stream, mr);
-  auto key_transform_map = compute_key_transform_map(
-    num_rows, unique_keys, stream, cudf::get_current_device_resource_ref());
+  auto unique_keys = extract_populated_keys(global_set, num_rows, stream, mr);
 
   // Now, update the target indices for computing aggregations using the shared memory kernel.
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    global_mapping_indices.begin(),
-                    global_mapping_indices.end(),
-                    global_mapping_indices.begin(),
-                    [key_transform_map = key_transform_map.begin()] __device__(auto const idx) {
-                      return idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL ? key_transform_map[idx]
-                                                                          : idx;
-                    });
-  key_transform_map = rmm::device_uvector<size_type>{0, stream};  // done, free up memory early
+  {
+    auto const transform_map = compute_key_transform_map(
+      num_rows, unique_keys, stream, cudf::get_current_device_resource_ref());
+    thrust::transform(rmm::exec_policy_nosync(stream),
+                      global_mapping_indices.begin(),
+                      global_mapping_indices.end(),
+                      global_mapping_indices.begin(),
+                      [transform_map = transform_map.begin()] __device__(auto const idx) {
+                        return idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL ? transform_map[idx]
+                                                                            : idx;
+                      });
+  }
 
   auto const d_spass_values = table_device_view::create(values, stream);
   auto agg_results =

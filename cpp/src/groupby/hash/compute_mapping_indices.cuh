@@ -36,12 +36,9 @@ __device__ void find_local_mapping(cooperative_groups::thread_block const& block
     if (!is_valid_input) { return cuda::std::pair{0, false}; }
     auto const [matched_it, inserted] = shared_set.insert_and_find(idx);
     if (inserted) {
-      // printf("inserted to shared set: %d\n", idx);
-
       auto const ref_cardinality =
         cuda::atomic_ref<size_type, cuda::thread_scope_block>{*cardinality};
       auto const shared_set_index = ref_cardinality.fetch_add(1, cuda::std::memory_order_relaxed);
-      // printf("shared_set_index: %d\n", shared_set_index);
       shared_set_indices[shared_set_index] = idx;
       local_mapping_indices[idx]           = shared_set_index;
     }
@@ -51,23 +48,12 @@ __device__ void find_local_mapping(cooperative_groups::thread_block const& block
   // all threads in the thread block.
   block.sync();
   if (is_valid_input) {
-    if (!inserted) {
-      // printf("not inserted to shared set: %d, inserted_idx: %d\n", idx, inserted_idx);
-      local_mapping_indices[idx] = local_mapping_indices[inserted_idx];
-    } else {
-      // printf("inserted to shared set: %d, inserted_idx: %d\n", idx, inserted_idx);
-    }
-
+    if (!inserted) { local_mapping_indices[idx] = local_mapping_indices[inserted_idx]; }
   } else if (idx < num_input_rows) {
-    // Mark the row as invalid, so later on we can use it to identify which rows are invalid instead
-    // of using the validity bitmask.
-    // printf("marking as invalid: %d\n", idx);
+    // Store a sentinel value, so later on we can use it to identify which rows are invalid without
+    // using the validity bitmask.
     local_mapping_indices[idx] = cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
   }
-
-  // printf(
-  //   "block id: %d, local_mapping_indices[%d] = %d\n", blockIdx.x, idx,
-  //   local_mapping_indices[idx]);
 }
 
 template <typename SetRef>
@@ -83,13 +69,9 @@ __device__ void find_global_mapping(cooperative_groups::thread_block const& bloc
 
   // For all unique keys in shared memory hash set, stores their matches in global hash set to
   // `global_mapping_indices`.
-  for (auto idx = block.thread_rank(); idx < static_cast<unsigned int>(cardinality);
-       idx += block.num_threads()) {
-    auto const input_idx = shared_set_indices[idx];
-    auto const key_idx   = *global_set.insert_and_find(input_idx).first;
-
-    // printf("find_global_mapping: idx: %d, input_idx: %d, key_idx: %d\n", idx, input_idx,
-    // key_idx);
+  for (auto idx = block.thread_rank(); idx < cardinality; idx += block.num_threads()) {
+    auto const input_idx                            = shared_set_indices[idx];
+    auto const key_idx                              = *global_set.insert_and_find(input_idx).first;
     global_mapping_indices[block_data_offset + idx] = key_idx;
   }
 }
@@ -148,43 +130,17 @@ CUDF_KERNEL void mapping_indices_kernel(size_type num_input_rows,
     block.sync();
 
     // The iteration ends here. Flush data and reset the block.
-    auto const is_last_iteration = idx + grid_stride - block.thread_rank() >= num_input_rows;
-
-    // if (block.thread_rank() == 0) {
-    //   printf("block id: %d, idx = %d, is_last_iteration = %d\n",
-    //          (int)blockIdx.x,
-    //          (int)idx,
-    //          (int)is_last_iteration);
-    // }
-
-    if (cardinality > GROUPBY_CARDINALITY_THRESHOLD || is_last_iteration) {
-      // if (block.thread_rank() == 0) { printf("find global mapping\n"); }
-      // block.sync();
-
-      // printf(
-      //   "cardinality exceed or last iteration: iter: %d, cardinality: %d, is last iteration:
-      //   %d\n", iter, cardinality, (int)is_last_iteration);
-
+    if (auto const is_last_iteration = idx + grid_stride - block.thread_rank() >= num_input_rows;
+        is_last_iteration || cardinality > GROUPBY_CARDINALITY_THRESHOLD) {
+      if (!is_last_iteration) { shared_set.initialize(block); }
       find_global_mapping(
         block, iter, cardinality, global_set, shared_set_indices, global_mapping_indices);
-      block.sync();
-      if (!is_last_iteration) {
-        // printf("not last iter, initialize shared set\n");
-        shared_set.initialize(block);
-      }
-
+      block.sync();  // to isolate cardinality from being modified below
       if (block.thread_rank() == 0) {
         auto const block_data_idx         = gridDim.x * iter + blockIdx.x;
         block_cardinality[block_data_idx] = cardinality;
         block_row_ends[block_data_idx] =
           cuda::std::min(static_cast<size_type>(idx + GROUPBY_BLOCK_SIZE), num_input_rows);
-        // printf("block id: %d, iter: %d,block_data_idx: %d, block row end: %d, cardinality: %d\n",
-        //        (int)blockIdx.x,
-        //        (int)iter,
-        //        (int)block_data_idx,
-        //        (int)block_row_ends[block_data_idx],
-        //        (int)cardinality);
-
         cardinality = 0;
       }
       ++iter;
