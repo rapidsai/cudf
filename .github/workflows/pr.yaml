@@ -178,7 +178,7 @@ jobs:
     with:
       build_type: pull-request
       script: ci/build_python_noarch.sh
-      conda-pure: true
+      pure-conda: true
   conda-python-cudf-tests:
     needs: [conda-python-build, conda-python-build-noarch, changed-files]
     secrets: inherit
