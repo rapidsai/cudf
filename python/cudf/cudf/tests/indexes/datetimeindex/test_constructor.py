@@ -86,3 +86,15 @@ def test_datetime_constructor(data, dtype):
     actual = cudf.DatetimeIndex(data=cudf.Series(data), dtype=dtype)
 
     assert_eq(expected, actual)
+
+
+def test_from_pandas_datetimeindex_freq():
+    expected = pd.date_range(start="1990-01-01", periods=10, freq="h")
+    actual = cudf.from_pandas(expected)
+
+    assert_eq(expected, actual)
+    assert actual.freq is not None
+
+    actual = cudf.Index(expected)
+    assert_eq(expected, actual)
+    assert actual.freq is not None
