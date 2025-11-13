@@ -167,3 +167,15 @@ def test_rank_unsupported(ldf: pl.LazyFrame, method: RankMethod, seed: int) -> N
 def test_round(ldf: pl.LazyFrame, mode: RoundMethod) -> None:
     q = ldf.select(pl.col("a").sin().round(2, mode=mode))
     assert_gpu_result_equal(q)
+
+
+def test_bit_negate() -> None:
+    df = pl.LazyFrame(
+        {
+            "a": pl.Series([1, 2, -1, 0, -4], dtype=pl.Int32()),
+            "b": pl.Series([False, True, True, False, False], dtype=pl.Boolean()),
+            "c": pl.Series([1, 2, 4, 5, 7], dtype=pl.UInt32()),
+        }
+    )
+    q = df.select(~pl.all())
+    assert_gpu_result_equal(q)

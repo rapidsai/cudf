@@ -380,10 +380,14 @@ class BooleanFunction(Expr):
             )
         elif self.name is BooleanFunction.Name.Not:
             (column,) = columns
+            # Not means logical not for booleans and bit negation for other types
+            uop = (
+                plc.unary.UnaryOperator.NOT
+                if column.obj.type().id() is plc.TypeId.BOOL8
+                else plc.unary.UnaryOperator.BIT_INVERT
+            )
             return Column(
-                plc.unary.unary_operation(
-                    column.obj, plc.unary.UnaryOperator.NOT, stream=df.stream
-                ),
+                plc.unary.unary_operation(column.obj, uop, stream=df.stream),
                 dtype=self.dtype,
             )
         else:
