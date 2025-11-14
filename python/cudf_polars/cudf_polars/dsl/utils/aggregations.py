@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import itertools
+from decimal import Decimal
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
@@ -45,6 +46,11 @@ def replace_nulls(col: expr.Expr, value: Any, *, is_top: bool) -> expr.Expr:
     """
     if not is_top:
         return col
+    if isinstance(value, int) and value == 0:
+        dtype = col.dtype.plc_type
+        value = (
+            Decimal(0).scaleb(dtype.scale()) if plc.traits.is_fixed_point(dtype) else 0
+        )
     return expr.UnaryFunction(
         col.dtype, "fill_null", (), col, expr.Literal(col.dtype, value)
     )
