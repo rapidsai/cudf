@@ -12,7 +12,8 @@ from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.expressions cimport expression
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
-from pylibcudf.libcudf.types cimport bitmask_type, data_type, size_type, null_aware
+from pylibcudf.libcudf.types cimport bitmask_type, data_type, size_type
+from pylibcudf.libcudf.types cimport null_aware, null_output
 
 from rmm.librmm.device_buffer cimport device_buffer
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
@@ -54,6 +55,7 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
         bool is_ptx,
         optional[void *] user_data,
         null_aware is_null_aware,
+        null_output null_policy,
         cuda_stream_view stream,
         device_memory_resource* mr
     ) except +libcudf_exception_handler

@@ -29,18 +29,11 @@ enum class target {
 };
 
 /**
- * @brief The type information of the variable used in the IR.
- */
-struct type_info {
-  data_type type = data_type{type_id::EMPTY};  ///< The data type of the variable
-};
-
-/**
  * @brief The information about the variable used in the IR.
  */
 struct var_info {
-  std::string id = {};  ///< The variable identifier
-  type_info type = {};  ///< The type information of the variable
+  std::string id = {};                         ///< The variable identifier
+  data_type type = data_type{type_id::EMPTY};  ///< The data type of the variable
 };
 
 /**
@@ -75,6 +68,7 @@ struct instance_context {
  private:
   int32_t num_tmp_vars_   = 0;       ///< The number of temporary variables generated
   std::string tmp_prefix_ = "tmp_";  ///< The prefix for temporary variable identifiers
+  bool has_nulls_         = false;   ///< If expressions involve null values
 
  public:
   instance_context() = default;  ///< Default constructor
@@ -95,7 +89,16 @@ struct instance_context {
    */
   std::string make_tmp_id();
 
-  void reset();
+  /**
+   * @brief Returns true if expressions involve null values
+   */
+  [[nodiscard]] bool has_nulls() const;
+
+  /**
+   * @brief Sets whether expressions involve null values
+   * @param has_nulls True if expressions involve null values
+   */
+  void set_has_nulls(bool has_nulls);
 };
 
 struct node {
@@ -109,7 +112,22 @@ struct node {
    * @brief Get the type info of the IR node
    * @return The type information of the IR node
    */
-  virtual type_info get_type() = 0;
+  virtual data_type get_type() = 0;
+
+  /**
+   * @brief Returns `false` if this node forwards nulls from its inputs to its output.
+   * i.e. `ADD` operator is not null-aware because if any of its inputs is null, the output is null.
+   * but `NULL_EQUAL` operator is null-aware because it can produce a non-null output even if its
+   * inputs are null.
+   */
+  virtual bool is_null_aware() = 0;
+
+  /**
+   * @brief Returns `true` if this node always produces a non-nullable output even if its inputs are
+   * nullable, i.e. `IS_NULL` operator produces a non-nullable boolean output regardless of the
+   * nullability of its input.
+   */
+  virtual bool is_always_nonnullable() = 0;
 
   /**
    * @brief Instantiate the IR node with the given context and instance information, setting up any
@@ -146,7 +164,7 @@ struct get_input final : node {
  private:
   std::string id_;  ///< The identifier of the IR node
   int32_t input_;   ///< The index of the input variable
-  type_info type_;  ///< The type information of the IR node
+  data_type type_;  ///< The type information of the IR node
 
  public:
   /**
@@ -173,7 +191,17 @@ struct get_input final : node {
   /**
    * @copydoc node::get_type
    */
-  type_info get_type() override;
+  data_type get_type() override;
+
+  /**
+   * @copydoc node::is_null_aware
+   */
+  [[nodiscard]] bool is_null_aware() override;
+
+  /**
+   * @copydoc node::is_always_nonnullable
+   */
+  [[nodiscard]] bool is_always_nonnullable() override;
 
   /**
    * @copydoc node::instantiate
@@ -196,7 +224,7 @@ struct set_output final : node {
   std::string id_;                ///< The identifier of the IR node
   int32_t output_;                ///< The index of the output variable
   std::unique_ptr<node> source_;  ///< The source IR node from which the value is taken
-  type_info type_;                ///< The type information of the IR node
+  data_type type_;                ///< The type information of the IR node
   std::string output_id_;         ///< The identifier of the output variable
 
  public:
@@ -225,7 +253,17 @@ struct set_output final : node {
   /**
    * @copydoc node::get_type
    */
-  type_info get_type() override;
+  data_type get_type() override;
+
+  /**
+   * @copydoc node::is_null_aware
+   */
+  [[nodiscard]] bool is_null_aware() override;
+
+  /**
+   * @copydoc node::is_always_nonnullable
+   */
+  [[nodiscard]] bool is_always_nonnullable() override;
 
   /**
    * @brief Get the source IR node from which the value is taken
@@ -253,7 +291,7 @@ struct operation final : node {
   std::string id_;                               ///< The identifier of the IR node
   opcode op_;                                    ///< The operation code
   std::vector<std::unique_ptr<node>> operands_;  ///< The operands of the operation
-  type_info type_;                               ///< The type information of the IR node
+  data_type type_;                               ///< The type information of the IR node
 
   operation(opcode op, std::unique_ptr<node>* move_begin, std::unique_ptr<node>* move_end);
 
@@ -309,7 +347,17 @@ struct operation final : node {
   /**
    * @copydoc node::get_type
    */
-  type_info get_type() override;
+  data_type get_type() override;
+
+  /**
+   * @copydoc node::is_null_aware
+   */
+  [[nodiscard]] bool is_null_aware() override;
+
+  /**
+   * @copydoc node::is_always_nonnullable
+   */
+  [[nodiscard]] bool is_always_nonnullable() override;
 
   /**
    * @brief Get the operation code of the operation
@@ -370,6 +418,7 @@ struct transform_args {
   bool is_ptx                    = false;           ///< Whether the transform is a PTX kernel
   std::optional<void*> user_data = std::nullopt;    ///< User data to pass to the transform
   null_aware is_null_aware       = null_aware::NO;  ///< Whether the transform is null-aware
+  null_output null_policy        = null_output::PRESERVE;  ///< Null-transformation policy
 };
 
 /**
@@ -453,14 +502,15 @@ struct ast_converter {
 
   void add_output_var();
 
-  void generate_code(target target, ast::expression const& expr, ast_args const& args);
+  std::tuple<null_aware, null_output> generate_code(target target,
+                                                    ast::expression const& expr,
+                                                    ast_args const& args);
 
  public:
   /**
    * @brief Convert an AST `compute_column` expression to a `cudf::transform`
    * @param target The target for which the IR is generated
    * @param expr The AST expression to convert
-   * @param null_aware Whether to use null-aware operators
    * @param args The arguments needed to resolve the AST expression
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource used to allocate the returned table's device memory
@@ -476,7 +526,6 @@ struct ast_converter {
    * @brief Convert an AST `filter` expression to a `cudf::filter`
    * @param target The target for which the IR is generated
    * @param expr The AST expression to convert
-   * @param null_aware Whether to use null-aware operators
    * @param args The arguments needed to resolve the AST expression
    * @param filter_table The table to be filtered
    * @param stream CUDA stream used for device memory operations and kernel launches.

@@ -153,6 +153,7 @@ struct q9_data {
                          false,
                          std::nullopt,
                          cudf::null_aware::NO,
+                         cudf::null_output::PRESERVE,
                          stream,
                          mr);
 }

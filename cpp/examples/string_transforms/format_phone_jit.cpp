@@ -122,6 +122,7 @@ __device__ void e164_format(void* scratch,
                     false,
                     scratch.data(),
                     cudf::null_aware::NO,
+                    cudf::null_output::PRESERVE,
                     stream,
                     mr);
 

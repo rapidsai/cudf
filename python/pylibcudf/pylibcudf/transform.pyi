@@ -7,7 +7,7 @@ from pylibcudf.column import Column
 from pylibcudf.expressions import Expression
 from pylibcudf.gpumemoryview import gpumemoryview
 from pylibcudf.table import Table
-from pylibcudf.types import DataType, NullAware
+from pylibcudf.types import DataType, NullAware, NullOutput
 
 def nans_to_nulls(
     input: Column,
@@ -38,6 +38,7 @@ def transform(
     output_type: DataType,
     is_ptx: bool,
     null_aware: NullAware = NullAware.NO,
+    null_output: NullOutput = NullOutput.PRESERVE,
     stream: Stream | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
