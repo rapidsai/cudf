@@ -13,4 +13,6 @@ def test_rename_shallow_copy():
 
     idx = cudf.Index([1])
     result = idx.rename("a")
-    assert idx._column is result._column
+    assert idx._column.base_data.get_ptr(
+        mode="read"
+    ) == result._column.base_data.get_ptr(mode="read")
