@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "ColumnViewJni.hpp"
@@ -1158,20 +1147,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_unaryOperation(JNIEnv* en
     cudf::column_view* input = reinterpret_cast<cudf::column_view*>(input_ptr);
     cudf::unary_operator op  = static_cast<cudf::unary_operator>(int_op);
     return release_as_jlong(cudf::unary_operation(*input, op));
-  }
-  JNI_CATCH(env, 0);
-}
-
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_round(
-  JNIEnv* env, jclass, jlong input_ptr, jint decimal_places, jint rounding_method)
-{
-  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
-  JNI_TRY
-  {
-    cudf::jni::auto_set_device(env);
-    cudf::column_view* input     = reinterpret_cast<cudf::column_view*>(input_ptr);
-    cudf::rounding_method method = static_cast<cudf::rounding_method>(rounding_method);
-    return release_as_jlong(cudf::round(*input, decimal_places, method));
   }
   JNI_CATCH(env, 0);
 }

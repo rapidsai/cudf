@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "lists/utilities.hpp"
@@ -20,7 +9,9 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/row_operator/row_operators.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
+#include <cudf/detail/row_operator/lexicographic.cuh>
+#include <cudf/detail/row_operator/preprocessed_table.cuh>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/linked_column.hpp>
@@ -381,10 +372,12 @@ void check_eq_compatibility(table_view const& input)
 void check_shape_compatibility(table_view const& lhs, table_view const& rhs)
 {
   CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(),
-               "Cannot compare tables with different number of columns");
+               "Cannot compare tables with different number of columns",
+               std::invalid_argument);
   for (size_type i = 0; i < lhs.num_columns(); ++i) {
     CUDF_EXPECTS(column_types_equivalent(lhs.column(i), rhs.column(i)),
-                 "Cannot compare tables with different column types");
+                 "Cannot compare tables with different column types",
+                 std::invalid_argument);
   }
 }
 
@@ -870,6 +863,15 @@ two_table_comparator::two_table_comparator(table_view const& left,
     d_right_table{preprocessed_table::create(right, stream)}
 {
   check_shape_compatibility(left, right);
+}
+
+two_table_comparator::two_table_comparator(std::shared_ptr<preprocessed_table> left,
+                                           std::shared_ptr<preprocessed_table> right)
+  : d_left_table{std::move(left)}, d_right_table{std::move(right)}
+{
+  CUDF_EXPECTS(d_left_table->_t->num_columns() == d_right_table->_t->num_columns(),
+               "Cannot compare tables with different number of columns",
+               std::invalid_argument);
 }
 
 }  // namespace equality

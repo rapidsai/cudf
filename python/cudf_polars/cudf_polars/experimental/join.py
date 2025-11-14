@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import operator
-from functools import reduce
+from functools import partial, reduce
 from typing import TYPE_CHECKING, Any
 
 from cudf_polars.dsl.ir import ConditionalJoin, Join, Slice
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from cudf_polars.dsl.expr import NamedExpr
-    from cudf_polars.dsl.ir import IR
+    from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.parallel import LowerIRTransformer
     from cudf_polars.utils.config import ShuffleMethod
 
@@ -144,6 +144,7 @@ def _make_bcast_join(
     left: IR,
     right: IR,
     shuffle_method: ShuffleMethod,
+    streaming_runtime: str,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     if ir.options[0] != "Inner":
         left_count = partition_info[left].count
@@ -162,22 +163,23 @@ def _make_bcast_join(
         # - In some cases, we can perform the partial joins
         #   sequentially. However, we are starting with a
         #   catch-all algorithm that works for all cases.
-        if left_count >= right_count:
-            right = _maybe_shuffle_frame(
-                right,
-                ir.right_on,
-                partition_info,
-                shuffle_method,
-                right_count,
-            )
-        else:
-            left = _maybe_shuffle_frame(
-                left,
-                ir.left_on,
-                partition_info,
-                shuffle_method,
-                left_count,
-            )
+        if streaming_runtime == "tasks":
+            if left_count >= right_count:
+                right = _maybe_shuffle_frame(
+                    right,
+                    ir.right_on,
+                    partition_info,
+                    shuffle_method,
+                    right_count,
+                )
+            else:
+                left = _maybe_shuffle_frame(
+                    left,
+                    ir.left_on,
+                    partition_info,
+                    shuffle_method,
+                    left_count,
+                )
 
     new_node = ir.reconstruct([left, right])
     partition_info[new_node] = PartitionInfo(count=output_count)
@@ -263,6 +265,15 @@ def _(
     assert config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'lower_join'"
     )
+
+    maintain_order = ir.options[5]
+    if maintain_order != "none" and output_count > 1:
+        return _lower_ir_fallback(
+            ir,
+            rec,
+            msg=f"Join({maintain_order=}) not supported for multiple partitions.",
+        )
+
     if _should_bcast_join(
         ir,
         left,
@@ -279,6 +290,7 @@ def _(
             left,
             right,
             config_options.executor.shuffle_method,
+            config_options.executor.runtime,
         )
     else:
         # Create a hash join
@@ -294,7 +306,9 @@ def _(
 
 @generate_ir_tasks.register(Join)
 def _(
-    ir: Join, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: Join,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     left, right = ir.children
     output_count = partition_info[ir].count
@@ -314,7 +328,7 @@ def _(
         right_name = get_key_name(right)
         return {
             key: (
-                ir.do_evaluate,
+                partial(ir.do_evaluate, context=context),
                 *ir._non_child_args,
                 (left_name, i),
                 (right_name, i),
@@ -376,7 +390,7 @@ def _(
 
                 inter_key = (inter_name, part_out, j)
                 graph[(inter_name, part_out, j)] = (
-                    ir.do_evaluate,
+                    partial(ir.do_evaluate, context=context),
                     ir.left_on,
                     ir.right_on,
                     ir.options,
@@ -386,6 +400,9 @@ def _(
             if len(_concat_list) == 1:
                 graph[(out_name, part_out)] = graph.pop(_concat_list[0])
             else:
-                graph[(out_name, part_out)] = (_concat, *_concat_list)
+                graph[(out_name, part_out)] = (
+                    partial(_concat, context=context),
+                    *_concat_list,
+                )
 
         return graph

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -19,10 +8,10 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_device.hpp>
-#include <rmm/mr/device/cuda_memory_resource.hpp>
-#include <rmm/mr/device/owning_wrapper.hpp>
-#include <rmm/mr/device/pool_memory_resource.hpp>
-#include <rmm/mr/device/statistics_resource_adaptor.hpp>
+#include <rmm/mr/cuda_memory_resource.hpp>
+#include <rmm/mr/owning_wrapper.hpp>
+#include <rmm/mr/pool_memory_resource.hpp>
+#include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <benchmark/benchmark.h>
 
@@ -107,13 +96,14 @@ class benchmark : public ::benchmark::Fixture {
 class memory_stats_logger {
  public:
   memory_stats_logger()
-    : existing_mr(cudf::get_current_device_resource()),
-      statistics_mr(rmm::mr::statistics_resource_adaptor(existing_mr))
+    : existing_mr(cudf::get_current_device_resource_ref()),
+      statistics_mr(
+        rmm::mr::statistics_resource_adaptor<rmm::device_async_resource_ref>(existing_mr))
   {
-    cudf::set_current_device_resource(&statistics_mr);
+    cudf::set_current_device_resource_ref(&statistics_mr);
   }
 
-  ~memory_stats_logger() { cudf::set_current_device_resource(existing_mr); }
+  ~memory_stats_logger() { cudf::set_current_device_resource_ref(existing_mr); }
 
   [[nodiscard]] size_t peak_memory_usage() const noexcept
   {
@@ -121,9 +111,8 @@ class memory_stats_logger {
   }
 
  private:
-  // TODO change to resource_ref once set_current_device_resource supports it
-  rmm::mr::device_memory_resource* existing_mr;
-  rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource> statistics_mr;
+  rmm::device_async_resource_ref existing_mr;
+  rmm::mr::statistics_resource_adaptor<rmm::device_async_resource_ref> statistics_mr;
 };
 
 }  // namespace cudf

@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -239,12 +240,12 @@ class MultiIndex(Index):
         self._name = None
         self.names = names
 
-    @property  # type: ignore
+    @property  # type: ignore[explicit-override]
     @_performance_tracking
     def names(self):
         return self._names
 
-    @names.setter  # type: ignore
+    @names.setter
     @_performance_tracking
     def names(self, value):
         if value is None:
@@ -370,7 +371,7 @@ class MultiIndex(Index):
             existing_names[lev] = names[i]
         names = existing_names
 
-        return self._set_names(names=names, inplace=inplace)  # type: ignore[return-value]
+        return self._set_names(names=names, inplace=inplace)
 
     def _maybe_materialize_codes_and_levels(self: Self) -> Self:
         """
@@ -443,12 +444,12 @@ class MultiIndex(Index):
         mi._name = name
         return mi
 
-    @property  # type: ignore
+    @property  # type: ignore[explicit-override]
     @_performance_tracking
     def name(self):
         return self._name
 
-    @name.setter  # type: ignore
+    @name.setter
     @_performance_tracking
     def name(self, value):
         self._name = value
@@ -577,7 +578,7 @@ class MultiIndex(Index):
         data_output = "\n".join(lines)
         return output_prefix + data_output
 
-    @property  # type: ignore
+    @property
     @_external_only_api("Use ._codes instead")
     @_performance_tracking
     def codes(self) -> pd.core.indexes.frozen.FrozenList:
@@ -608,7 +609,7 @@ class MultiIndex(Index):
             "get_slice_bound is not currently implemented."
         )
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def levels(self) -> list[cudf.Index]:
         """
@@ -642,7 +643,7 @@ class MultiIndex(Index):
             for idx, name in zip(self._levels, self.names, strict=True)  # type: ignore[arg-type]
         ]
 
-    @property  # type: ignore
+    @property  # type: ignore[explicit-override]
     @_performance_tracking
     def ndim(self) -> int:
         """Dimension of the data. For MultiIndex ndim is always 2."""
@@ -917,10 +918,18 @@ class MultiIndex(Index):
         | list[tuple[Any, ...]],
     ) -> DataFrameOrSeries:
         if isinstance(row_tuple, slice):
+            if row_tuple.step == 0:
+                raise ValueError("slice step cannot be zero")
             if row_tuple.start is None:
                 row_tuple = slice(self[0], row_tuple.stop, row_tuple.step)
             if row_tuple.stop is None:
                 row_tuple = slice(row_tuple.start, self[-1], row_tuple.step)
+            if isinstance(row_tuple.start, bool) or isinstance(
+                row_tuple.stop, bool
+            ):
+                raise TypeError(
+                    f"{row_tuple}: boolean values can not be used in a slice"
+                )
         self._validate_indexer(row_tuple)
         valid_indices = self._get_valid_indices_by_tuple(
             df.index, row_tuple, len(df)
@@ -974,7 +983,7 @@ class MultiIndex(Index):
             )
         return NotImplemented
 
-    @property  # type: ignore
+    @property  # type: ignore[explicit-override]
     @_performance_tracking
     def size(self) -> int:
         # The size of a MultiIndex is only dependent on the number of rows.
@@ -1012,6 +1021,8 @@ class MultiIndex(Index):
             start, stop, step = index.indices(len(self))
             idx = range(start, stop, step)
         elif is_scalar(index):
+            if isinstance(index, float):
+                raise IndexError("indexing with a float is disallowed.")
             idx = [index]
         else:
             idx = index
@@ -1273,6 +1284,32 @@ class MultiIndex(Index):
         )
         return cls(levels=pdi.levels, codes=pdi.codes, names=pdi.names)
 
+    @property
+    def dtypes(self) -> pd.Series:
+        """
+        Return the dtypes as a Series for the underlying MultiIndex.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.MultiIndex.from_product([(0, 1, 2), ('green', 'purple')],
+        ...                                  names=['number', 'color'])
+        >>> idx
+        MultiIndex([(0,  'green'),
+                    (0, 'purple'),
+                    (1,  'green'),
+                    (1, 'purple'),
+                    (2,  'green'),
+                    (2, 'purple')],
+                   names=['number', 'color'])
+        >>> idx.dtypes
+        number     int64
+        color     object
+        dtype: object
+        """
+        # Not using DataFrame.dtypes to avoid expensive invocation of `._data.to_pandas_index`
+        return pd.Series(dict(self.to_frame()._dtypes))
+
     @_performance_tracking
     def to_numpy(self) -> np.ndarray:
         return self.values_host
@@ -1420,8 +1457,10 @@ class MultiIndex(Index):
         """
         if isinstance(df, pd.DataFrame):
             source_data = cudf.DataFrame(df)
-        else:
+        elif isinstance(df, cudf.DataFrame):
             source_data = df
+        else:
+            raise TypeError("Input must be a pandas or cudf DataFrame.")
         names = names if names is not None else source_data._column_names
         return cls.from_arrays(
             source_data._columns, sortorder=sortorder, names=names
@@ -1734,7 +1773,7 @@ class MultiIndex(Index):
             nan_as_null=nan_as_null,
         )
 
-    @cached_property  # type: ignore
+    @cached_property  # type: ignore[explicit-override]
     @_performance_tracking
     def is_unique(self) -> bool:
         return len(self) == self.nunique(dropna=False)

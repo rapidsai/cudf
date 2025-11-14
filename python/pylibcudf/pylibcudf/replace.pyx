@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 
 from cython.operator import dereference
@@ -9,13 +10,14 @@ from libcpp.utility cimport move
 from pylibcudf.libcudf cimport replace as cpp_replace
 from pylibcudf.libcudf.column.column cimport column
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from pylibcudf.libcudf.replace import \
     replace_policy as ReplacePolicy  # no-cython-lint
 
 from .column cimport Column
 from .scalar cimport Scalar
-from .utils cimport _get_stream
+from .utils cimport _get_stream, _get_memory_resource
 
 __all__ = [
     "ReplacePolicy",
@@ -30,6 +32,7 @@ cpdef Column replace_nulls(
     Column source_column,
     ReplacementType replacement,
     Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Replace nulls in source_column.
 
@@ -55,6 +58,8 @@ cpdef Column replace_nulls(
         determine the replacement value.
     stream : Stream | None
         CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned column's device memory.
 
     Returns
     -------
@@ -66,6 +71,7 @@ cpdef Column replace_nulls(
     cdef replace_policy policy
 
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     # Due to https://github.com/cython/cython/issues/5984, if this function is
     # called as a Python function (i.e. without typed inputs, which is always
@@ -79,8 +85,9 @@ cpdef Column replace_nulls(
                     source_column.view(),
                     policy,
                     stream.view(),
+                    mr.get_mr()
                 )
-            return Column.from_libcudf(move(c_result), stream)
+            return Column.from_libcudf(move(c_result), stream, mr)
         else:
             raise TypeError("replacement must be a Column, Scalar, or replace_policy")
 
@@ -89,30 +96,34 @@ cpdef Column replace_nulls(
             c_result = cpp_replace.replace_nulls(
                 source_column.view(),
                 replacement.view(),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
         elif ReplacementType is Scalar:
             c_result = cpp_replace.replace_nulls(
                 source_column.view(),
                 dereference(replacement.c_obj),
                 stream.view(),
+                mr.get_mr()
             )
         elif ReplacementType is replace_policy:
             c_result = cpp_replace.replace_nulls(
                 source_column.view(),
                 replacement,
                 stream.view(),
+                mr.get_mr()
             )
         else:
             assert False, "Internal error. Please contact pylibcudf developers"
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Column find_and_replace_all(
     Column source_column,
     Column values_to_replace,
     Column replacement_values,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Replace all occurrences of values_to_replace with replacement_values.
 
@@ -128,6 +139,8 @@ cpdef Column find_and_replace_all(
         The column containing replacement values.
     stream : Stream | None
         CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned column's device memory.
 
     Returns
     -------
@@ -138,6 +151,7 @@ cpdef Column find_and_replace_all(
     cdef unique_ptr[column] c_result
 
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_replace.find_and_replace_all(
@@ -145,8 +159,9 @@ cpdef Column find_and_replace_all(
             values_to_replace.view(),
             replacement_values.view(),
             stream.view(),
+            mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Column clamp(
@@ -155,7 +170,8 @@ cpdef Column clamp(
     Scalar hi,
     Scalar lo_replace=None,
     Scalar hi_replace=None,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Clamp the values in source_column to the range [lo, hi].
 
@@ -177,6 +193,8 @@ cpdef Column clamp(
         specified, the value of hi is used.
     stream : Stream | None
         CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned column's device memory.
 
     Returns
     -------
@@ -189,6 +207,7 @@ cpdef Column clamp(
     cdef unique_ptr[column] c_result
 
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         if lo_replace is None:
@@ -197,6 +216,7 @@ cpdef Column clamp(
                 dereference(lo.c_obj),
                 dereference(hi.c_obj),
                 stream.view(),
+                mr.get_mr()
             )
         else:
             c_result = cpp_replace.clamp(
@@ -206,14 +226,16 @@ cpdef Column clamp(
                 dereference(hi.c_obj),
                 dereference(hi_replace.c_obj),
                 stream.view(),
+                mr.get_mr()
             )
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Column normalize_nans_and_zeros(
     Column source_column,
     bool inplace=False,
     Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Normalize NaNs and zeros in source_column.
 
@@ -228,6 +250,8 @@ cpdef Column normalize_nans_and_zeros(
         column with the normalized values.
     stream : Stream | None
         CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned column's device memory.
 
     Returns
     -------
@@ -237,20 +261,23 @@ cpdef Column normalize_nans_and_zeros(
     cdef unique_ptr[column] c_result
 
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         if inplace:
             cpp_replace.normalize_nans_and_zeros(
                 source_column.mutable_view(),
                 stream.view(),
+                mr.get_mr()
             )
         else:
             c_result = cpp_replace.normalize_nans_and_zeros(
                 source_column.view(),
                 stream.view(),
+                mr.get_mr()
             )
 
     if not inplace:
-        return Column.from_libcudf(move(c_result), stream)
+        return Column.from_libcudf(move(c_result), stream, mr)
 
 ReplacePolicy.__str__ = ReplacePolicy.__repr__

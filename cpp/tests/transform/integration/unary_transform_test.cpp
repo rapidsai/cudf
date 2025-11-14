@@ -1,6 +1,10 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
+ * SPDX-FileCopyrightText: Copyright 2018-2019 BlazingDB, Inc.
+ * SPDX-FileCopyrightText: Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/*
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
  *
@@ -612,6 +616,28 @@ __device__ void transform(void* user_data, cudf::size_type row,
                                 cudf::null_aware::NO);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST_F(StringOperationTest, EmptyInput)
+{
+  std::string rtn_bool = R"***(
+  __device__ void transform(bool * out, cudf::string_view a, cudf::string_view b){
+    *out =  a.find(b) != cudf::string_view::npos;
+  }
+  )***";
+
+  auto empty = cudf::test::strings_column_wrapper();
+  auto result =
+    cudf::transform({empty, empty}, rtn_bool, cudf::data_type(cudf::type_id::BOOL8), false);
+  EXPECT_EQ(0, result->size());
+
+  std::string rtn_str = R"***(
+  __device__ void transform(cudf::string_view * out, cudf::string_view a, cudf::string_view b){
+    *out =  (a==b ? a : cudf::string_view{});
+  }
+  )***";
+  result = cudf::transform({empty, empty}, rtn_str, cudf::data_type(cudf::type_id::STRING), false);
+  EXPECT_EQ(0, result->size());
 }
 
 struct NullTest : public cudf::test::BaseFixture {

@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import itertools
 import operator
 import string
@@ -1616,3 +1617,13 @@ def test_merge_combinations(
         expected = expected.reset_index(drop=True)
 
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("param", ["c", 1, 3.4])
+def test_merge_invalid_input(param):
+    left = cudf.DataFrame({"a": [1, 2, 3]})
+
+    with pytest.raises(TypeError):
+        left.merge(param)
+    with pytest.raises(TypeError):
+        cudf.merge(left["a"], param)

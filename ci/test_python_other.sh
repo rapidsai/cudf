@@ -1,5 +1,6 @@
 #!/bin/bash
-# Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
 
@@ -43,7 +44,7 @@ rapids-logger "pytest custreamz"
 rapids-logger "pytest cudf-polars"
 ./ci/run_cudf_polars_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml" \
-  --numprocesses=6 \
+  --numprocesses=8 \
   --dist=worksteal \
   --cov-config=./pyproject.toml \
   --cov=cudf_polars \

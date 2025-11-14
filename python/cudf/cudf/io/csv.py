@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import itertools
@@ -32,12 +33,10 @@ from cudf.utils.dtypes import (
 from cudf.utils.performance_tracking import _performance_tracking
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable
-
     from cudf._typing import DtypeObj
 
 
-_CSV_HEX_TYPE_MAP = {
+_CSV_HEX_TYPE_MAP: dict[str, np.dtype] = {
     "hex": np.dtype("int64"),
     "hex64": np.dtype("int64"),
     "hex32": np.dtype("int32"),
@@ -155,21 +154,22 @@ def read_csv(
         elif header == "infer":
             header = 0
 
-    hex_cols: list[Hashable] = []
-    cudf_dtypes: list[DtypeObj] | dict[Hashable, DtypeObj] | DtypeObj = []
-    plc_dtypes: list[plc.DataType] | dict[Hashable, plc.DataType] = []
+    hex_cols: list[int | str] = []
+    cudf_dtypes: list[DtypeObj] | dict[str, DtypeObj] | DtypeObj = []
+    plc_dtypes: list[plc.DataType] | dict[str, plc.DataType] = []
     if dtype is not None:
         if isinstance(dtype, Mapping):
             plc_dtypes = {}
             cudf_dtypes = {}
             for k, col_type in dtype.items():
+                k_str = str(k)
                 if isinstance(col_type, str) and col_type in _CSV_HEX_TYPE_MAP:
                     col_type = _CSV_HEX_TYPE_MAP[col_type]
-                    hex_cols.append(str(k))
+                    hex_cols.append(k_str)
 
                 typ = cudf_dtype(col_type)
-                cudf_dtypes[k] = typ
-                plc_dtypes[k] = _get_plc_data_type_from_dtype(typ)
+                cudf_dtypes[k_str] = typ
+                plc_dtypes[k_str] = _get_plc_data_type_from_dtype(typ)
         elif isinstance(
             dtype,
             (
@@ -203,6 +203,17 @@ def read_csv(
             raise ValueError(
                 "dtype should be a scalar/str/list-like/dict-like"
             )
+    # Map int quoting value to QuoteStyle enum
+    quoting_map = {
+        0: plc.io.types.QuoteStyle.MINIMAL,
+        1: plc.io.types.QuoteStyle.ALL,
+        2: plc.io.types.QuoteStyle.NONNUMERIC,
+        3: plc.io.types.QuoteStyle.NONE,
+    }
+    quote_style: plc.io.types.QuoteStyle = quoting_map.get(
+        quoting, plc.io.types.QuoteStyle.MINIMAL
+    )
+
     options = (
         plc.io.csv.CsvReaderOptions.builder(
             plc.io.SourceInfo([filepath_or_buffer])
@@ -214,7 +225,7 @@ def read_csv(
         .nrows(nrows if nrows is not None else -1)
         .skiprows(skiprows)
         .skipfooter(skipfooter)
-        .quoting(quoting)
+        .quoting(quote_style)
         .lineterminator(str(lineterminator))
         .quotechar(quotechar)
         .decimal(decimal)

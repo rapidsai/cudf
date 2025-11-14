@@ -44,7 +44,9 @@ class Literal(Expr):
         """Evaluate this expression given a dataframe for context."""
         return Column(
             plc.Column.from_scalar(
-                plc.Scalar.from_py(self.value, self.dtype.plc_type), 1
+                plc.Scalar.from_py(self.value, self.dtype.plc_type, stream=df.stream),
+                1,
+                stream=df.stream,
             ),
             dtype=self.dtype,
         )
@@ -90,7 +92,9 @@ class LiteralColumn(Expr):
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        return Column(plc.Column.from_arrow(self.value), dtype=self.dtype)
+        return Column(
+            plc.Column.from_arrow(self.value, stream=df.stream), dtype=self.dtype
+        )
 
     @property
     def agg_request(self) -> NoReturn:  # noqa: D102

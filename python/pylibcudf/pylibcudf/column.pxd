@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
@@ -25,7 +26,7 @@ cdef class OwnerWithCAI:
     cdef dict cai
 
     @staticmethod
-    cdef create(column_view cv, object owner)
+    cdef create(column_view cv, object owner, Stream stream)
 
 
 cdef class OwnerMaskWithCAI:
@@ -36,7 +37,7 @@ cdef class OwnerMaskWithCAI:
     cdef create(column_view cv, object owner)
 
 
-cdef gpumemoryview _copy_array_to_device(object buf)
+cdef gpumemoryview _copy_array_to_device(object buf, Stream stream=*)
 
 
 cdef class Column:
@@ -60,14 +61,18 @@ cdef class Column:
     cdef Column from_libcudf(
         unique_ptr[column] libcudf_col,
         Stream stream,
-        DeviceMemoryResource mr=*
+        DeviceMemoryResource mr
     )
 
     @staticmethod
     cdef Column from_column_view(const column_view& cv, Column owner)
 
     @staticmethod
-    cdef Column from_column_view_of_arbitrary(const column_view& cv, object owner)
+    cdef Column from_column_view_of_arbitrary(
+        const column_view& cv,
+        object owner,
+        Stream stream,
+    )
 
     @staticmethod
     cdef Column _wrap_nested_list_column(
@@ -75,6 +80,7 @@ cdef class Column:
         tuple shape,
         DataType dtype,
         Column base=*,
+        Stream stream=*,
     )
 
     cpdef Scalar to_scalar(self, Stream stream=*, DeviceMemoryResource mr=*)
@@ -87,7 +93,7 @@ cdef class Column:
     cpdef gpumemoryview data(self)
     cpdef gpumemoryview null_mask(self)
     cpdef list children(self)
-    cpdef Column copy(self, Stream stream=*)
+    cpdef Column copy(self, Stream stream=*, DeviceMemoryResource mr=*)
     cpdef uint64_t device_buffer_size(self)
     cpdef Column with_mask(self, gpumemoryview, size_type)
 

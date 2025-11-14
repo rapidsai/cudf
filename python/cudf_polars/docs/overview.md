@@ -8,7 +8,7 @@ You will need:
    preferred configuration. Or else, use
    [rustup](https://www.rust-lang.org/tools/install)
 2. A [cudf development
-   environment](https://github.com/rapidsai/cudf/blob/branch-25.12/CONTRIBUTING.md#setting-up-your-build-environment).
+   environment](https://github.com/rapidsai/cudf/blob/main/CONTRIBUTING.md#setting-up-your-build-environment).
    The combined devcontainer works, or whatever your favourite approach is.
 
 :::{note}
@@ -214,7 +214,9 @@ Plan node definitions live in `cudf_polars/dsl/ir.py`, these all
 inherit from the base `IR` node. The evaluation of a plan node is done
 by implementing the `do_evaluate` method. This method takes in
 the non-child arguments specified in `_non_child_args`, followed by
-pre-evaluated child nodes (`DataFrame` objects). To perform the
+pre-evaluated child nodes (`DataFrame` objects), and finally a
+keyword-only `context` argument (an `IRExecutionContext` object
+containing runtime execution context). To perform the
 evaluation, one should use the base class (generic) `evaluate` method
 which handles the recursive evaluation of child nodes.
 
@@ -613,6 +615,78 @@ style](https://en.wikipedia.org/wiki/Fluent_interface). It makes it
 much easier to write iteration over objects and collect the results if
 everyone always returns a value.
 
+# CUDA Streams
+
+CUDA [Streams](https://docs.nvidia.com/cuda/cuda-c-programming-guide/#streams)
+are used to manage concurrent operations. These build on libcudf's and
+pylibcudf's usage of streams when performing operations on pylibcudf `Column`s
+and `Table`s.
+
+In `cudf-polars`, we attach a `Stream` to `cudf_polars.containers.DataFrame`.
+This stream (or a new stream that it's joined into) is used for all pylibcudf
+operations on the data backing that `DataFrame`.
+
+When creating a `cudf_polars.containers.DataFrame` you *must* ensure that all
+the provided pylibcudf Tables / Columns are valid on the provided `stream`.
+
+Take special care when creating a `DataFrame` that combines pylibcudf `Table`s
+or `Column`s from multiple `DataFrame`s, or "bare" pylibcudf objects that don't
+come from a `DataFrame` at all. This also applies to `DataFrame` methods like
+`DataFrame.with_columns` and `DataFrame.filter` which accept
+`cudf_polars.containers.Column` objects that might not be valid on the
+`DataFrame`'s original stream.
+
+Here's an example of the simpler case where a `pylibcudf.Table` is created
+on some CUDA stream and that same stream is used for the `DataFrame`:
+
+```python
+import polars as pl
+import pyarrow as pa
+import pylibcudf as plc
+from rmm.pylibrmm.stream import Stream
+
+from cudf_polars.containers import DataFrame, DataType
+
+stream = Stream()
+t = plc.Table.from_arrow(
+    pa.Table.from_pylist([{"a": 1, "b": 0}, {"a": 1, "b": 1}, {"a": 2, "b": 0}]),
+    stream=stream
+)
+# t is valid on `stream`. So we must provide `stream` or some CUDA Stream that's
+# downstream of it
+df = DataFrame.from_table(
+    t,
+    names=['a', 'b'],
+    dtypes=[DataType(pl.Int64()), DataType(pl.Int64())],
+    stream=stream
+)
+```
+
+Managing multiple containers, which are potentially valid on different streams,
+is more challenging. We have some utilities that can help correctly handle data
+from multiple independent sources. For example, to add a new `Column` to `df`
+that's valid on some independent CUDA stream, we'd use
+`cudf_polars.utils.cuda_stream.get_joined_cuda_stream` to get a new CUDA stream
+that's downstream of both the original `stream` and `stream_b`.
+
+
+```python
+from cudf_polars.containers import Column
+from cudf_polars.utils.cuda_stream import get_joined_cuda_stream
+
+stream_b = Stream()
+col = Column(plc.Column.from_arrow(pa.array([1, 2, 3]), stream=stream_b), dtype=pl.Int64(), name="c")
+
+new_stream = get_joined_cuda_stream(upstreams=(stream, stream_b))
+df2 = df.with_columns([col], stream=new_stream)
+```
+
+The same principle applies to using the `cudf_polars.containers.DataFrame`
+constructor with multiple `cudf_polars.containers.Column` objects that are valid
+on multiple streams. It's the caller's responsibility to provide a stream that
+all the `Column`s are valid on, likely by joining together the streams that each
+individual stream is valid on.
+
 # Writing tests
 
 We use `pytest`, tests live in the `tests/` subdirectory,
@@ -667,15 +741,18 @@ and convert back to polars:
 
 ```python
 from cudf_polars.dsl.translate import Translator
+from cudf_polars.dsl.ir import IRExecutionContext
+from rmm.pylibrmm.stream import DEFAULT_STREAM
 import polars as pl
 
 q = ...
 
 # Convert to our IR
-ir = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
+translator = Translator(q._ldf.visit(), pl.GPUEngine())
+ir = translator.translate_ir()
 
 # DataFrame living on the device
-result = ir.evaluate(cache={}, timer=None)
+result = ir.evaluate(cache={}, timer=None, context=IRExecutionContext.from_config_options(translator.config_options))
 
 # Polars dataframe
 host_result = result.to_polars()

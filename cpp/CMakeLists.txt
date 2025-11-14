@@ -1,15 +1,8 @@
 # =============================================================================
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
-#
-# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
-# in compliance with the License. You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software distributed under the License
-# is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
-# or implied. See the License for the specific language governing permissions and limitations under
-# the License.
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
 # =============================================================================
 
 cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
@@ -30,10 +23,10 @@ project(
   LANGUAGES C CXX CUDA
 )
 
-if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.0)
+if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.2)
   message(
     FATAL_ERROR
-      "libcudf requires CUDA Toolkit 12.0+ to compile (nvcc ${CMAKE_CUDA_COMPILER_VERSION} provided)"
+      "libcudf requires CUDA Toolkit 12.2+ to compile (nvcc ${CMAKE_CUDA_COMPILER_VERSION} provided)"
   )
 endif()
 
@@ -286,10 +279,10 @@ include(cmake/thirdparty/get_nvtx.cmake)
 # find nvCOMP
 include(cmake/thirdparty/get_nvcomp.cmake)
 
-# find CCCL before rmm so that we get cudf's patched version of CCCL
+# find CCCL
 include(cmake/thirdparty/get_cccl.cmake)
 
-# find rmm
+# find rmm, should come after including CCCL to allow overriding the CCCL version used for testing
 include(cmake/thirdparty/get_rmm.cmake)
 
 # find croaring
@@ -428,19 +421,18 @@ add_library(
   src/filling/sequence.cu
   src/groupby/common/m2_var_std.cu
   src/groupby/groupby.cu
-  src/groupby/hash/compute_aggregations.cu
-  src/groupby/hash/compute_aggregations_null.cu
   src/groupby/hash/compute_global_memory_aggs.cu
   src/groupby/hash/compute_global_memory_aggs_null.cu
   src/groupby/hash/compute_groupby.cu
   src/groupby/hash/compute_mapping_indices.cu
   src/groupby/hash/compute_mapping_indices_null.cu
   src/groupby/hash/compute_shared_memory_aggs.cu
-  src/groupby/hash/create_sparse_results_table.cu
-  src/groupby/hash/flatten_single_pass_aggs.cpp
+  src/groupby/hash/compute_single_pass_aggs.cu
+  src/groupby/hash/compute_single_pass_aggs_null.cu
+  src/groupby/hash/extract_single_pass_aggs.cpp
   src/groupby/hash/groupby.cu
   src/groupby/hash/hash_compound_agg_finalizer.cu
-  src/groupby/hash/sparse_to_dense_results.cu
+  src/groupby/hash/output_utils.cu
   src/groupby/sort/aggregate.cpp
   src/groupby/sort/group_argmax.cu
   src/groupby/sort/group_argmin.cu
@@ -546,6 +538,7 @@ add_library(
   src/io/parquet/experimental/hybrid_scan_impl.cpp
   src/io/parquet/experimental/hybrid_scan_preprocess.cu
   src/io/parquet/experimental/page_index_filter.cu
+  src/io/parquet/experimental/page_index_filter_utils.cu
   src/io/parquet/page_data.cu
   src/io/parquet/chunk_dict.cu
   src/io/parquet/page_enc.cu
@@ -635,6 +628,8 @@ add_library(
   src/quantiles/quantiles.cu
   src/reductions/all.cu
   src/reductions/any.cu
+  src/reductions/argmax.cu
+  src/reductions/argmin.cu
   src/reductions/bitwise.cu
   src/reductions/collect_ops.cu
   src/reductions/count.cpp
@@ -795,8 +790,6 @@ add_library(
   src/structs/structs_column_factories.cu
   src/structs/structs_column_view.cpp
   src/structs/utilities.cu
-  src/table/primitive_row_operators.cu
-  src/table/row_operators.cu
   src/table/table.cpp
   src/table/table_device_view.cu
   src/table/table_view.cpp
@@ -1087,13 +1080,13 @@ if(CUDF_BUILD_TESTUTIL)
               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/debug_utilities.cu>
               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/random_seed.cpp>
               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/table_utilities.cu>
-              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/tdigest_utilities.cu>
+              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/tdigest_utilities.cpp>
               $<INSTALL_INTERFACE:src/cudftestutil/io/metadata_utilities.cpp>
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/column_utilities.cu>
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/debug_utilities.cu>
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/random_seed.cpp>
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/table_utilities.cu>
-              $<INSTALL_INTERFACE:src/cudftestutil/utilities/tdigest_utilities.cu>
+              $<INSTALL_INTERFACE:src/cudftestutil/utilities/tdigest_utilities.cpp>
   )
   target_link_libraries(cudftestutil_impl INTERFACE cudf::cudftestutil)
   target_compile_features(cudftestutil_impl INTERFACE cxx_std_20)
@@ -1115,7 +1108,7 @@ if(CUDF_BUILD_TESTUTIL)
           tests/utilities/debug_utilities.cu
           tests/utilities/random_seed.cpp
           tests/utilities/table_utilities.cu
-          tests/utilities/tdigest_utilities.cu
+          tests/utilities/tdigest_utilities.cpp
     DESTINATION src/cudftestutil/utilities
   )
 endif()

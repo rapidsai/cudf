@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/aggregation/host_udf.hpp>
@@ -125,9 +114,10 @@ struct empty_column_constructor {
     if constexpr (k == aggregation::Kind::MERGE_HISTOGRAM) { return empty_like(values); }
 
     if constexpr (k == aggregation::Kind::SUM_WITH_OVERFLOW) {
-      // SUM_WITH_OVERFLOW returns a struct with sum (int64_t) and overflow (bool) children
+      // SUM_WITH_OVERFLOW returns a struct with sum (same type as input) and overflow (bool)
+      // children
       std::vector<std::unique_ptr<cudf::column>> children;
-      children.push_back(make_empty_column(cudf::data_type{cudf::type_id::INT64}));
+      children.push_back(make_empty_column(values.type()));
       children.push_back(make_empty_column(cudf::data_type{cudf::type_id::BOOL8}));
       return make_structs_column(0, std::move(children), 0, {}, stream, mr);
     }
@@ -212,6 +202,18 @@ void verify_valid_requests(host_span<RequestType const> requests)
           });
       }),
     "Invalid type/aggregation combination.");
+
+  // Additional validation for SUM_WITH_OVERFLOW: only signed integers and decimals are supported
+  for (auto const& request : requests) {
+    for (auto const& agg : request.aggregations) {
+      if (agg->kind == aggregation::SUM_WITH_OVERFLOW) {
+        CUDF_EXPECTS(
+          cudf::detail::is_valid_aggregation(request.values.type(), aggregation::SUM_WITH_OVERFLOW),
+          "SUM_WITH_OVERFLOW aggregation only supports signed integer types and decimal types. "
+          "Unsigned integers, bool, dictionary columns, and other types are not supported.");
+      }
+    }
+  }
 }
 
 }  // namespace

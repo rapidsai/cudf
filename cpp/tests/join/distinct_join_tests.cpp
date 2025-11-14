@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -29,6 +18,7 @@
 
 #include <cuco/utility/error.hpp>
 
+#include <limits>
 #include <numeric>
 #include <vector>
 
@@ -689,4 +679,34 @@ TEST_F(DistinctJoinTest, InvalidLoadFactor)
 
   // Test load factor > 1
   EXPECT_THROW(cudf::distinct_hash_join(t0, cudf::null_equality::EQUAL, 1.1), cuco::logic_error);
+}
+
+TEST_F(DistinctJoinTest, DistinctLargeExtentOverflowPrevention)
+{
+  // Test that validates size_t extent can handle hash table sizes that would
+  // overflow int32_t extent when load_factor < 1.0
+
+  // Use a table size that when divided by low load factor would exceed INT32_MAX
+  // if using int32_t extent, but should work fine with size_t extent
+  constexpr cudf::size_type table_size = 10000000;  // 10M rows
+  constexpr double load_factor         = 0.004;     // Hash table extent would be ~2.5B
+
+  // Validate our test assumptions
+  constexpr auto expected_hash_size = static_cast<size_t>(table_size / load_factor);
+  static_assert(expected_hash_size > std::numeric_limits<cudf::size_type>::max(),
+                "Hash table size should be significant");
+
+  auto const init = cudf::numeric_scalar<cudf::size_type>{0};
+  auto build_col  = cudf::sequence(table_size, init, cudf::numeric_scalar<cudf::size_type>{1});
+
+  auto build_table = cudf::table_view{{build_col->view()}};
+  cudf::table empty_probe_table{};
+
+  // This should succeed with size_t extent - would have failed with int32_t extent
+  // in scenarios approaching the overflow boundary
+  EXPECT_NO_THROW({
+    auto distinct_join = cudf::distinct_hash_join(
+      build_table, cudf::null_equality::EQUAL, load_factor, cudf::get_default_stream());
+    auto result = distinct_join.inner_join(empty_probe_table);
+  });
 }

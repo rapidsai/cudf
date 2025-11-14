@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -27,14 +16,14 @@
 
 #include <rmm/aligned.hpp>
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/arena_memory_resource.hpp>
-#include <rmm/mr/device/binning_memory_resource.hpp>
-#include <rmm/mr/device/cuda_async_memory_resource.hpp>
-#include <rmm/mr/device/cuda_memory_resource.hpp>
-#include <rmm/mr/device/managed_memory_resource.hpp>
-#include <rmm/mr/device/owning_wrapper.hpp>
-#include <rmm/mr/device/pool_memory_resource.hpp>
-#include <rmm/mr/device/statistics_resource_adaptor.hpp>
+#include <rmm/mr/arena_memory_resource.hpp>
+#include <rmm/mr/binning_memory_resource.hpp>
+#include <rmm/mr/cuda_async_memory_resource.hpp>
+#include <rmm/mr/cuda_memory_resource.hpp>
+#include <rmm/mr/managed_memory_resource.hpp>
+#include <rmm/mr/owning_wrapper.hpp>
+#include <rmm/mr/pool_memory_resource.hpp>
+#include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <iostream>
 
@@ -238,7 +227,7 @@ inline void init_cudf_test(int argc, char** argv, cudf::test::config const& conf
     init_cudf_test(argc, argv);                                                                  \
     if (std::getenv("GTEST_CUDF_MEMORY_PEAK")) {                                                 \
       auto mr = rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(           \
-        cudf::get_current_device_resource());                                                    \
+        cudf::get_current_device_resource_ref());                                                \
       cudf::set_current_device_resource(&mr);                                                    \
       auto rc = RUN_ALL_TESTS();                                                                 \
       std::cout << "Peak memory usage " << mr.get_bytes_counter().peak << " bytes" << std::endl; \

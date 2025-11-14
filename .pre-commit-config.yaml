@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 ci:
   autofix_commit_msg: "[pre-commit.ci] auto code formatting"
@@ -6,12 +7,12 @@ ci:
   autoupdate_branch: ""
   autoupdate_commit_msg: "[pre-commit.ci] pre-commit autoupdate"
   autoupdate_schedule: quarterly
-  skip: ["verify-alpha-spec"]
+  skip: ["mypy", "verify-alpha-spec"]
   submodules: false
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
         exclude: |
@@ -26,16 +27,17 @@ repos:
             ^python/cudf/cudf/tests/data/vocab.txt
           )
   - repo: https://github.com/MarcoGorelli/cython-lint
-    rev: v0.16.7
+    rev: v0.17.0
     hooks:
       - id: cython-lint
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: 'v1.13.0'
     hooks:
       - id: mypy
-        additional_dependencies: [types-cachetools, pyarrow-stubs]
+        additional_dependencies: [numpy, polars, pyarrow-stubs, pytest, types-cachetools]
         args: ["--config-file=pyproject.toml",
                "python/cudf/cudf",
+               "python/pylibcudf/pylibcudf",
                "python/custreamz/custreamz",
                "python/cudf_kafka/cudf_kafka",
                "python/cudf_polars/cudf_polars",
@@ -55,7 +57,7 @@ repos:
             ^cpp/include/cudf_test/cxxopts.hpp
           )
   - repo: https://github.com/sirosen/texthooks
-    rev: 0.6.8
+    rev: 0.7.1
     hooks:
       - id: fix-smartquotes
         exclude: |
@@ -145,14 +147,78 @@ repos:
         args: ["--fix"]
       - id: ruff-format
   - repo: https://github.com/rapidsai/pre-commit-hooks
-    rev: v0.7.0
+    rev: v1.2.0
     hooks:
       - id: verify-copyright
+        name: verify-copyright-cudf
+        args: [--fix, --spdx]
+        files: |
+          (?x)
+            [.](cmake|cpp|cu|cuh|h|hpp|sh|pxd|py|pyx|pyi|rs|java|bat)$|
+            CMakeLists[.]txt$|
+            CMakeLists_standalone[.]txt$|
+            meta[.]yaml$|
+            pyproject[.]toml$|
+            setup[.]cfg$|
+            ^cpp/src/text/detail/codepoint_metadata[.]ah$|
+            ^cpp/src/strings/regex/regex[.]inl$|
+            ^cpp/src/io/parquet/ipc/schema/.*[.]fbs$|
+            ^java/pom[.]xml$|
+            ^java/buildscripts/build-info$|
+            ^java/ci/Dockerfile[.]rocky$|
+            recipe[.]yaml$|
+            dependencies[.]yaml$|
+            pytest[.]ini$|
+            ^[.]pre-commit-config[.]yaml$|
+            Makefile$
         exclude: |
           (?x)^(
             cpp/include/cudf_test/cxxopts[.]hpp$|
             cpp/src/io/parquet/ipc/Message_generated[.]h$|
-            cpp/src/io/parquet/ipc/Schema_generated[.]h$
+            cpp/src/io/parquet/ipc/Schema_generated[.]h$|
+            cpp/src/io/comp/brotli_dict[.]cpp$|
+            cpp/src/io/comp/brotli_dict[.]hpp$|
+            cpp/src/io/comp/brotli_tables[.]hpp$|
+            cpp/src/io/comp/debrotli[.]cu$|
+            cpp/src/io/comp/cpu_unbz2[.]cpp$|
+            cpp/src/io/comp/unbz2[.]hpp$|
+            cpp/src/io/comp/gpuinflate[.]cu$|
+            cpp/src/io/utilities/base64_utilities[.]cpp$|
+            cpp/src/io/utilities/base64_utilities[.]hpp$
+          )
+      - id: verify-copyright
+        name: verify-copyright-brotli
+        args: [--fix, --spdx, "--spdx-license-identifier=Apache-2.0 AND MIT"]
+        files: |
+          (?x)^(
+            cpp/src/io/comp/brotli_dict[.]cpp$|
+            cpp/src/io/comp/brotli_dict[.]hpp$|
+            cpp/src/io/comp/brotli_tables[.]hpp$|
+            cpp/src/io/comp/debrotli[.]cu$
+          )
+      - id: verify-copyright
+        name: verify-copyright-bzip2
+        args: [--fix, --spdx, "--spdx-license-identifier=Apache-2.0 AND bzip2-1.0.6"]
+        files: |
+          (?x)^(
+            cpp/src/io/comp/cpu_unbz2[.]cpp$|
+            cpp/src/io/comp/unbz2[.]hpp$
+          )
+      - id: verify-copyright
+        name: verify-copyright-zlib
+        args: [--fix, --spdx, "--spdx-license-identifier=Apache-2.0 AND Zlib"]
+        files: |
+          (?x)^(
+            cpp/src/io/comp/gpuinflate[.]cu$|
+            cpp/src/io/utilities/base64_utilities[.]cpp$|
+            cpp/src/io/utilities/base64_utilities[.]hpp$
+          )
+      - id: verify-copyright
+        name: verify-copyright-cxxopts
+        args: [--fix, --spdx, "--spdx-license-identifier=MIT"]
+        files: |
+          (?x)^(
+            cpp/include/cudf_test/cxxopts[.]hpp$
           )
       - id: verify-alpha-spec
       - id: verify-codeowners
@@ -163,7 +229,7 @@ repos:
       - id: rapids-dependency-file-generator
         args: ["--clean", "--warn-all", "--strict"]
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.10.0.1
+    rev: v0.11.0.1
     hooks:
       - id: shellcheck
         args: ["--severity=warning"]

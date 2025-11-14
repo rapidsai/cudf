@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -31,7 +20,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
 
 #include <thrust/host_vector.h>
 
@@ -266,7 +255,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    *
    * @param data_page_mask Input data page mask from page-pruning step
    */
-  void set_pass_page_mask(cudf::host_span<std::vector<bool> const> data_page_mask);
+  void set_pass_page_mask(cudf::host_span<bool const> data_page_mask);
 
   /**
    * @brief Select the columns to be read based on the read mode
@@ -296,11 +285,12 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param row_group_indices Row group indices to read
    * @param column_chunk_buffers Device buffers containing column chunk data
+   * @param data_page_mask Input data page mask from page-pruning step
    */
   void prepare_data(read_mode mode,
                     cudf::host_span<std::vector<size_type> const> row_group_indices,
                     std::vector<rmm::device_buffer>&& column_chunk_buffers,
-                    cudf::host_span<std::vector<bool> const> data_page_mask);
+                    cudf::host_span<bool const> data_page_mask);
 
   /**
    * @brief Create descriptors for filter column chunks and decode dictionary page headers
@@ -341,8 +331,8 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @param data_page_mask Input data page mask from page-pruning step for the current pass
    */
   void handle_chunking(read_mode mode,
-                       std::vector<rmm::device_buffer> column_chunk_buffers,
-                       cudf::host_span<std::vector<bool> const> data_page_mask);
+                       std::vector<rmm::device_buffer>&& column_chunk_buffers,
+                       cudf::host_span<bool const> data_page_mask);
 
   /**
    * @brief Setup step for the next input read pass.
@@ -352,7 +342,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    *
    * @param column_chunk_buffers Device buffers containing column chunk data
    */
-  void setup_next_pass(std::vector<rmm::device_buffer> column_chunk_buffers);
+  void setup_next_pass(std::vector<rmm::device_buffer>&& column_chunk_buffers);
 
   /**
    * @brief Setup pointers to columns chunks to be processed for this pass.
@@ -368,7 +358,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    *
    * @param column_chunk_buffers Device buffers containing column chunk data
    */
-  void setup_compressed_data(std::vector<rmm::device_buffer> column_chunk_buffers);
+  void setup_compressed_data(std::vector<rmm::device_buffer>&& column_chunk_buffers);
 
   /**
    * @brief Reset the internal state of the reader.

@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
@@ -133,9 +134,10 @@ class Aggregation:
             "linear", "lower", "higher", "midpoint", "nearest"
         ] = "linear",
     ) -> Self:
+        q_list: list[float] = [q] if is_scalar(q) else q  # type: ignore[assignment,list-item]
         return cls(
             plc.aggregation.quantile(
-                [q] if is_scalar(q) else q,
+                q_list,
                 plc.types.Interpolation[interpolation.upper()],
             )
         )

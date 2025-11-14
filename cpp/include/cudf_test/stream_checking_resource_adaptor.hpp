@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -19,7 +8,7 @@
 
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
 
 #include <iostream>
 
@@ -82,7 +71,7 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
   void* do_allocate(std::size_t bytes, rmm::cuda_stream_view stream) override
   {
     verify_stream(stream);
-    return upstream_.allocate_async(bytes, rmm::CUDA_ALLOCATION_ALIGNMENT, stream);
+    return upstream_.allocate(stream, bytes, rmm::CUDA_ALLOCATION_ALIGNMENT);
   }
 
   /**
@@ -94,10 +83,10 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
    * @param bytes Size of the allocation
    * @param stream Stream on which to perform the deallocation
    */
-  void do_deallocate(void* ptr, std::size_t bytes, rmm::cuda_stream_view stream) override
+  void do_deallocate(void* ptr, std::size_t bytes, rmm::cuda_stream_view stream) noexcept override
   {
     verify_stream(stream);
-    upstream_.deallocate_async(ptr, bytes, rmm::CUDA_ALLOCATION_ALIGNMENT, stream);
+    upstream_.deallocate(stream, ptr, bytes, rmm::CUDA_ALLOCATION_ALIGNMENT);
   }
 
   /**

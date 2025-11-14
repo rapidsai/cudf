@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "gpuinflate.hpp"
@@ -339,7 +328,7 @@ __device__ void snappy_decode_symbols(unsnap_state_s* s, uint32_t t)
             b[t].offset = ofs;
             ofs += blen;  // for correct out-of-range detection below
           }
-          blen           = WarpReducePos32(blen, t);
+          blen           = warp_reduce_pos<cudf::detail::warp_size>(blen, t);
           bytes_left     = shuffle(bytes_left);
           dst_pos        = shuffle(dst_pos);
           short_sym_mask = __ffs(ballot(blen > bytes_left || ofs > (int32_t)(dst_pos + blen)));
@@ -385,7 +374,7 @@ __device__ void snappy_decode_symbols(unsnap_state_s* s, uint32_t t)
               b[batch_len + t].offset = ofs;
               ofs += blen;  // for correct out-of-range detection below
             }
-            blen           = WarpReducePos32(blen, t);
+            blen           = warp_reduce_pos<cudf::detail::warp_size>(blen, t);
             bytes_left     = shuffle(bytes_left);
             dst_pos        = shuffle(dst_pos);
             short_sym_mask = __ffs(ballot(blen > bytes_left || ofs > (int32_t)(dst_pos + blen)));
@@ -532,7 +521,7 @@ __device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_s
     if (shuffle(min((uint32_t)dist_t, (uint32_t)shuffle_xor(dist_t, 1))) > 8) {
       uint32_t n;
       do {
-        uint32_t bofs      = WarpReducePos32(blen_t, t);
+        uint32_t bofs      = warp_reduce_pos<cudf::detail::warp_size>(blen_t, t);
         uint32_t stop_mask = ballot((uint32_t)dist_t < bofs);
         uint32_t start_mask =
           cub::WarpReduce<uint32_t>(temp_storage).Sum((bofs < 32 && t < batch_len) ? 1 << bofs : 0);
