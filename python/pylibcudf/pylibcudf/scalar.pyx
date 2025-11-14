@@ -316,7 +316,7 @@ cdef class Scalar:
         if tid == type_id.BOOL8:
             return (<numeric_scalar[cbool]*>slr).value(stream.view())
         elif tid == type_id.STRING:
-            return (<string_scalar*>slr).to_string(stream.view()).decode()
+            return (<string_scalar*>slr).to_string().decode()
         elif tid == type_id.FLOAT32:
             return (<numeric_scalar[float]*>slr).value(stream.view())
         elif tid == type_id.FLOAT64:
