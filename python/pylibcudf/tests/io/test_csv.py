@@ -9,7 +9,6 @@ import pytest
 from utils import (
     _convert_types,
     assert_table_and_meta_eq,
-    get_default_stream,
     make_source,
     sink_to_str,
     write_source_str,
@@ -312,7 +311,7 @@ def test_read_csv_from_device_buffers(csv_table_data, stream):
 
     csv_string = pa_table.to_pandas().to_csv(index=False)
     buf = DeviceBuffer.to_device(
-        csv_string.encode("utf-8"), stream or get_default_stream()
+        csv_string.encode("utf-8"), plc.utils._get_stream(stream)
     )
 
     options = plc.io.csv.CsvReaderOptions.builder(

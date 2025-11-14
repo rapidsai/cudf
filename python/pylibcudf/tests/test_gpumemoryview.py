@@ -5,7 +5,6 @@ import itertools
 
 import numpy as np
 import pytest
-from utils import get_default_stream
 
 import rmm
 
@@ -38,7 +37,7 @@ def test_cuda_array_interface(np_array, stream):
     buf = rmm.DeviceBuffer(
         ptr=np_array.__array_interface__["data"][0],
         size=np_array.nbytes,
-        stream=stream or get_default_stream(),
+        stream=plc.utils._get_stream(stream),
     )
     gpumemview = plc.gpumemoryview(buf)
 
@@ -56,7 +55,7 @@ def test_len(np_array, stream):
     buf = rmm.DeviceBuffer(
         ptr=np_array.__array_interface__["data"][0],
         size=np_array.nbytes,
-        stream=stream or get_default_stream(),
+        stream=plc.utils._get_stream(stream),
     )
     gpumemview = plc.gpumemoryview(buf)
 

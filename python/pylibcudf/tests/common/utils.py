@@ -16,12 +16,6 @@ import pylibcudf as plc
 from pylibcudf.io.types import CompressionType
 
 
-def get_default_stream():
-    """Get the default pylibcudf stream."""
-    # Directly access the variable
-    return plc.utils.CUDF_DEFAULT_STREAM
-
-
 def metadata_from_arrow_type(
     pa_type: pa.Array,
     name: str = "",

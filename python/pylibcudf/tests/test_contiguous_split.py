@@ -5,7 +5,7 @@ import string
 
 import pyarrow as pa
 import pytest
-from utils import assert_table_eq, get_default_stream
+from utils import assert_table_eq
 
 import rmm
 from rmm.pylibrmm.device_buffer import to_device
@@ -78,7 +78,7 @@ def test_chunked_pack(bufsize, stream):
 
     result = plc.contiguous_split.unpack_from_memoryviews(
         metadata,
-        plc.gpumemoryview(to_device(h_pack, stream or get_default_stream())),
+        plc.gpumemoryview(to_device(h_pack, plc.utils._get_stream(stream))),
     )
 
     assert_table_eq(h_table, result)

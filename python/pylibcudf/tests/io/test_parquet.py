@@ -9,7 +9,6 @@ from pyarrow.parquet import read_table
 from utils import (
     assert_table_and_meta_eq,
     get_bytes_from_source,
-    get_default_stream,
     make_source,
 )
 
@@ -190,7 +189,7 @@ def test_read_parquet_from_device_buffers(
     )
 
     buf = DeviceBuffer.to_device(
-        get_bytes_from_source(source), stream or get_default_stream()
+        get_bytes_from_source(source), plc.utils._get_stream(stream)
     )
 
     options = plc.io.parquet.ParquetReaderOptions.builder(

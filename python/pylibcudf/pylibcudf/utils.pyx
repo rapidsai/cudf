@@ -68,7 +68,7 @@ def _is_concurrent_managed_access_supported():
     return supports_managed_access != 0
 
 
-cdef Stream _get_stream(Stream stream = None):
+cpdef Stream _get_stream(Stream stream = None):
     if stream is None:
         return CUDF_DEFAULT_STREAM
     return stream
