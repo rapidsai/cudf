@@ -15,6 +15,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <utility>
+
 namespace CUDF_EXPORT cudf {
 namespace io {
 
@@ -46,6 +48,180 @@ struct table_format_header {
   uint64_t data_length;      ///< Length of data buffer in bytes
 };
 
+class table_writer_options_builder;
+
+/**
+ * @brief Settings for `write_table()`.
+ */
+class table_writer_options {
+  sink_info _sink;
+  table_view _table;
+
+  friend table_writer_options_builder;
+
+  /**
+   * @brief Constructor from sink and table.
+   *
+   * @param sink The sink used for writer output
+   * @param table Table to be written to output
+   */
+  explicit table_writer_options(sink_info sink, table_view table)
+    : _sink(std::move(sink)), _table(std::move(table))
+  {
+  }
+
+ public:
+  /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
+  explicit table_writer_options() = default;
+
+  /**
+   * @brief Create builder to create `table_writer_options`.
+   *
+   * @param sink The sink used for writer output
+   * @param table Table to be written to output
+   *
+   * @return Builder to build table_writer_options
+   */
+  static table_writer_options_builder builder(sink_info const& sink, table_view const& table);
+
+  /**
+   * @brief Returns sink used for writer output.
+   *
+   * @return sink used for writer output
+   */
+  [[nodiscard]] sink_info const& get_sink() const { return _sink; }
+
+  /**
+   * @brief Returns table that would be written to output.
+   *
+   * @return Table that would be written to output
+   */
+  [[nodiscard]] table_view const& get_table() const { return _table; }
+
+  /**
+   * @brief Sets sink info.
+   *
+   * @param sink The sink info.
+   */
+  void set_sink(sink_info sink) { _sink = std::move(sink); }
+};
+
+/**
+ * @brief Class to build `table_writer_options`.
+ */
+class table_writer_options_builder {
+ public:
+  /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
+  explicit table_writer_options_builder() = default;
+
+  /**
+   * @brief Constructor from sink and table.
+   *
+   * @param sink The sink used for writer output
+   * @param table Table to be written to output
+   */
+  explicit table_writer_options_builder(sink_info const& sink, table_view const& table)
+    : _options(sink, table)
+  {
+  }
+
+  /**
+   * @brief Build `table_writer_options`.
+   *
+   * @return The constructed `table_writer_options` object
+   */
+  [[nodiscard]] table_writer_options build() const { return _options; }
+
+ private:
+  table_writer_options _options;
+};
+
+class table_reader_options_builder;
+
+/**
+ * @brief Settings for `read_table()`.
+ */
+class table_reader_options {
+  source_info _source;
+
+  friend table_reader_options_builder;
+
+  /**
+   * @brief Constructor from source info.
+   *
+   * @param src source information used to read table file
+   */
+  explicit table_reader_options(source_info src) : _source{std::move(src)} {}
+
+ public:
+  /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
+  explicit table_reader_options() = default;
+
+  /**
+   * @brief Creates a `table_reader_options_builder` to build `table_reader_options`.
+   *
+   * @param src Source information to read table file
+   * @return Builder to build reader options
+   */
+  static table_reader_options_builder builder(source_info src = source_info{});
+
+  /**
+   * @brief Returns source info.
+   *
+   * @return Source info
+   */
+  [[nodiscard]] source_info const& get_source() const { return _source; }
+
+  /**
+   * @brief Sets source info.
+   *
+   * @param src The source info.
+   */
+  void set_source(source_info src) { _source = std::move(src); }
+};
+
+/**
+ * @brief Class to build `table_reader_options`.
+ */
+class table_reader_options_builder {
+ public:
+  /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
+  explicit table_reader_options_builder() = default;
+
+  /**
+   * @brief Constructor from source info.
+   *
+   * @param src source information used to read table file
+   */
+  explicit table_reader_options_builder(source_info src) : _options(std::move(src)) {}
+
+  /**
+   * @brief Build `table_reader_options`.
+   *
+   * @return The constructed `table_reader_options` object
+   */
+  [[nodiscard]] table_reader_options build() const { return _options; }
+
+ private:
+  table_reader_options _options;
+};
+
 /**
  * @brief Write a table using the table binary format.
  *
@@ -64,13 +240,11 @@ struct table_format_header {
  *
  * @throws cudf::logic_error If the sink cannot be written to
  *
- * @param input The table_view to write
- * @param sink_info The sink_info specifying output location
+ * @param options Options specifying the sink and table to write
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr An optional memory resource to use for all device allocations
  */
-void write_table(cudf::table_view const& input,
-                 sink_info const& sink_info,
+void write_table(table_writer_options const& options,
                  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
                  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -90,13 +264,13 @@ void write_table(cudf::table_view const& input,
  * @throws cudf::logic_error If the header is invalid or corrupted
  * @throws cudf::logic_error If the format version is not supported
  *
- * @param source_info The source_info specifying input location
+ * @param options Options specifying the source to read from
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr An optional memory resource to use for all device allocations
  * @return A packed_table containing the deserialized table view and its backing data
  */
 packed_table read_table(
-  source_info const& source_info,
+  table_reader_options const& options,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

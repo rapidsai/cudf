@@ -22,18 +22,19 @@ void table_write_common(cudf::table_view const& view, io_type sink_type, nvbench
   std::size_t encoded_file_size = 0;
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
-             [&](nvbench::launch& launch, auto& timer) {
-               try_drop_l3_cache();
+  state.exec(
+    nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
+      try_drop_l3_cache();
 
-               cuio_source_sink_pair source_sink(sink_type);
+      cuio_source_sink_pair source_sink(sink_type);
 
-               timer.start();
-               cudf::io::write_table(view, source_sink.make_sink_info());
-               timer.stop();
+      timer.start();
+      cudf::io::write_table(
+        cudf::io::table_writer_options::builder(source_sink.make_sink_info(), view).build());
+      timer.stop();
 
-               encoded_file_size = source_sink.size();
-             });
+      encoded_file_size = source_sink.size();
+    });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");

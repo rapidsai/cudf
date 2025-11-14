@@ -41,12 +41,25 @@ void validate_header(table_format_header const& header)
 
 }  // anonymous namespace
 
-void write_table(cudf::table_view const& input,
-                 sink_info const& sink_info,
+table_writer_options_builder table_writer_options::builder(sink_info const& sink,
+                                                           table_view const& table)
+{
+  return table_writer_options_builder(sink, table);
+}
+
+table_reader_options_builder table_reader_options::builder(source_info src)
+{
+  return table_reader_options_builder(std::move(src));
+}
+
+void write_table(table_writer_options const& options,
                  rmm::cuda_stream_view stream,
                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
+
+  auto const& sink_info = options.get_sink();
+  auto const& input     = options.get_table();
 
   // Create data_sink from sink_info based on type
   std::unique_ptr<data_sink> sink;
@@ -88,11 +101,12 @@ void write_table(cudf::table_view const& input,
   sink->flush();
 }
 
-packed_table read_table(source_info const& source_info,
+packed_table read_table(table_reader_options const& options,
                         rmm::cuda_stream_view stream,
                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
+  auto const& source_info = options.get_source();
   CUDF_EXPECTS(source_info.num_sources() == 1, "Table format only supports single source");
 
   // Create datasource from source_info based on type

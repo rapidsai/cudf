@@ -33,10 +33,12 @@ struct TableFormatTest : public cudf::test::BaseFixture {
     auto const filepath = temp_env->get_temp_filepath("test.raw");
 
     // Write table to file
-    cudf::io::write_table(expected, cudf::io::sink_info{filepath});
+    cudf::io::write_table(
+      cudf::io::table_writer_options::builder(cudf::io::sink_info{filepath}, expected).build());
 
     // Read table back from file
-    auto result = cudf::io::read_table(cudf::io::source_info{filepath});
+    auto result = cudf::io::read_table(
+      cudf::io::table_reader_options::builder(cudf::io::source_info{filepath}).build());
 
     // Verify the tables match
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.table);
@@ -50,12 +52,14 @@ struct TableFormatTest : public cudf::test::BaseFixture {
     std::vector<char> buffer;
 
     // Write to memory buffer
-    cudf::io::write_table(expected, cudf::io::sink_info{&buffer});
+    cudf::io::write_table(
+      cudf::io::table_writer_options::builder(cudf::io::sink_info{&buffer}, expected).build());
 
     // Read from memory buffer
     auto host_buffer = cudf::host_span<std::byte const>(
       reinterpret_cast<std::byte const*>(buffer.data()), buffer.size());
-    auto result = cudf::io::read_table(cudf::io::source_info{host_buffer});
+    auto result = cudf::io::read_table(
+      cudf::io::table_reader_options::builder(cudf::io::source_info{host_buffer}).build());
 
     // Verify the tables match
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.table);
@@ -225,7 +229,8 @@ TEST_F(TableFormatTest, InvalidHeaderMagic)
   auto const filepath = temp_env->get_temp_filepath("invalid.raw");
   cudf::test::fixed_width_column_wrapper<int32_t> col({1, 2, 3});
   auto const expected = cudf::table_view{{col}};
-  cudf::io::write_table(expected, cudf::io::sink_info{filepath});
+  cudf::io::write_table(
+    cudf::io::table_writer_options::builder(cudf::io::sink_info{filepath}, expected).build());
 
   // Corrupt the magic number
   std::fstream file(filepath, std::ios::in | std::ios::out | std::ios::binary);
@@ -234,7 +239,9 @@ TEST_F(TableFormatTest, InvalidHeaderMagic)
   file.close();
 
   // Reading should fail
-  EXPECT_THROW(cudf::io::read_table(cudf::io::source_info{filepath}), cudf::logic_error);
+  EXPECT_THROW(cudf::io::read_table(
+                 cudf::io::table_reader_options::builder(cudf::io::source_info{filepath}).build()),
+               cudf::logic_error);
 }
 
 TEST_F(TableFormatTest, InvalidHeaderVersion)
@@ -243,7 +250,8 @@ TEST_F(TableFormatTest, InvalidHeaderVersion)
   auto const filepath = temp_env->get_temp_filepath("invalid_version.raw");
   cudf::test::fixed_width_column_wrapper<int32_t> col({1, 2, 3});
   auto const expected = cudf::table_view{{col}};
-  cudf::io::write_table(expected, cudf::io::sink_info{filepath});
+  cudf::io::write_table(
+    cudf::io::table_writer_options::builder(cudf::io::sink_info{filepath}, expected).build());
 
   // Corrupt the version
   std::fstream file(filepath, std::ios::in | std::ios::out | std::ios::binary);
@@ -253,7 +261,9 @@ TEST_F(TableFormatTest, InvalidHeaderVersion)
   file.close();
 
   // Reading should fail
-  EXPECT_THROW(cudf::io::read_table(cudf::io::source_info{filepath}), cudf::logic_error);
+  EXPECT_THROW(cudf::io::read_table(
+                 cudf::io::table_reader_options::builder(cudf::io::source_info{filepath}).build()),
+               cudf::logic_error);
 }
 
 TEST_F(TableFormatTest, TruncatedFile)
@@ -262,7 +272,8 @@ TEST_F(TableFormatTest, TruncatedFile)
   auto const filepath = temp_env->get_temp_filepath("truncated.raw");
   cudf::test::fixed_width_column_wrapper<int32_t> col({1, 2, 3, 4, 5});
   auto const expected = cudf::table_view{{col}};
-  cudf::io::write_table(expected, cudf::io::sink_info{filepath});
+  cudf::io::write_table(
+    cudf::io::table_writer_options::builder(cudf::io::sink_info{filepath}, expected).build());
 
   // Truncate the file
   std::ofstream file(filepath, std::ios::binary | std::ios::trunc);
@@ -270,7 +281,9 @@ TEST_F(TableFormatTest, TruncatedFile)
   file.close();
 
   // Reading should fail
-  EXPECT_THROW(cudf::io::read_table(cudf::io::source_info{filepath}), cudf::logic_error);
+  EXPECT_THROW(cudf::io::read_table(
+                 cudf::io::table_reader_options::builder(cudf::io::source_info{filepath}).build()),
+               cudf::logic_error);
 }
 
 // ============================================================================
