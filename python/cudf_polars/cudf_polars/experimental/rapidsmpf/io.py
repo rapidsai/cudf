@@ -9,11 +9,19 @@ import dataclasses
 import math
 from typing import TYPE_CHECKING, Any
 
-from rapidsmpf.streaming.core.lineariser import Lineariser
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
-from cudf_polars.dsl.ir import IR, DataFrameScan, Scan
+import pylibcudf as plc
+
+from cudf_polars.dsl.ir import (
+    IR,
+    DataFrameScan,
+    Scan,
+    _cast_literals_to_physical_types,
+    _parquet_physical_types,
+)
+from cudf_polars.dsl.to_ast import to_parquet_filter
 from cudf_polars.experimental.base import (
     IOPartitionFlavor,
     IOPartitionPlan,
@@ -37,10 +45,67 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
+    from cudf_polars.experimental.base import ColumnStat, StatsCollector
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.dispatch import LowerIRTransformer
     from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
     from cudf_polars.utils.config import ParquetOptions
+
+
+class Lineariser:
+    """
+    Linearizer that ensures ordered delivery from multiple concurrent producers.
+
+    Creates one input channel per producer and streams messages to output
+    in sequence-number order, buffering only out-of-order arrivals.
+    """
+
+    def __init__(
+        self, context: Context, ch_out: Channel[TableChunk], num_producers: int
+    ):
+        self.context = context
+        self.ch_out = ch_out
+        self.num_producers = num_producers
+        self.input_channels = [context.create_channel() for _ in range(num_producers)]
+
+    async def drain(self) -> None:
+        """
+        Drain producer channels and forward messages in sequence-number order.
+
+        Streams messages to output as soon as they arrive in order, buffering
+        only out-of-order messages to minimize memory pressure.
+        """
+        next_seq = 0
+        buffer = {}
+
+        pending_tasks = {
+            asyncio.create_task(ch.recv(self.context)): ch for ch in self.input_channels
+        }
+
+        while pending_tasks:
+            done, _ = await asyncio.wait(
+                pending_tasks.keys(), return_when=asyncio.FIRST_COMPLETED
+            )
+
+            for task in done:
+                ch = pending_tasks.pop(task)
+                msg = await task
+
+                if msg is not None:
+                    buffer[msg.sequence_number] = msg
+                    new_task = asyncio.create_task(ch.recv(self.context))
+                    pending_tasks[new_task] = ch
+
+            # Forward consecutive messages
+            while next_seq in buffer:
+                await self.ch_out.send(self.context, buffer.pop(next_seq))
+                next_seq += 1
+
+        # Forward any remaining buffered messages
+        for seq in sorted(buffer.keys()):
+            await self.ch_out.send(self.context, buffer[seq])
+
+        await self.ch_out.drain(self.context)
 
 
 @lower_ir_node.register(DataFrameScan)
@@ -71,7 +136,7 @@ async def dataframescan_node(
     ir_context: IRExecutionContext,
     ch_out: ChannelPair,
     *,
-    max_io_threads: int,
+    num_producers: int,
     rows_per_partition: int,
 ) -> None:
     """
@@ -87,9 +152,8 @@ async def dataframescan_node(
         The execution context for the IR node.
     ch_out
         The output ChannelPair.
-    max_io_threads
-        The maximum number of IO threads to use
-        concurrently for a single DataFrameScan node.
+    num_producers
+        The number of producers to use for the DataFrameScan node.
     rows_per_partition
         The number of rows per partition.
     """
@@ -105,8 +169,6 @@ async def dataframescan_node(
         local_offset = local_count * context.comm().rank
 
     async with shutdown_on_error(context, ch_out.data):
-        io_throttle = asyncio.Semaphore(max_io_threads)
-
         # Build list of IR slices to read
         ir_slices = []
         for seq_num in range(local_count):
@@ -121,42 +183,33 @@ async def dataframescan_node(
                 )
             )
 
-        # Read data.
-        # Use Lineariser to ensure ordered delivery.
-        num_producers = min(max_io_threads, len(ir_slices))
+        # Use Lineariser to ensure ordered delivery
+        num_producers = min(num_producers, len(ir_slices))
         lineariser = Lineariser(context, ch_out.data, num_producers)
-        next_task_idx = 0
 
-        async def _producer(ch_out: Channel) -> None:
-            """Producer that pulls ir_slices using a shared counter."""
-            nonlocal next_task_idx
-            while True:
-                # Atomically grab next task index
-                task_idx = next_task_idx
-                if task_idx >= len(ir_slices):
-                    break
-                next_task_idx += 1
+        # Assign tasks to producers using round-robin
+        producer_tasks: list[list[tuple[int, DataFrameScan]]] = [
+            [] for _ in range(num_producers)
+        ]
+        for task_idx, ir_slice in enumerate(ir_slices):
+            producer_id = task_idx % num_producers
+            producer_tasks[producer_id].append((task_idx, ir_slice))
 
-                # Process task with its sequence number
+        async def _producer(producer_id: int, ch_out: Channel) -> None:
+            for task_idx, ir_slice in producer_tasks[producer_id]:
                 await read_chunk(
                     context,
-                    io_throttle,
-                    ir_slices[task_idx],
+                    ir_slice,
                     task_idx,
                     ch_out,
                     ir_context,
                 )
-
-            # Done - drain this producer's channel
             await ch_out.drain(context)
 
-        # Start the lineariser drain task (must run concurrently with producers)
         tasks = [lineariser.drain()]
-
-        # Start all producer tasks
-        tasks.extend(_producer(ch_in) for ch_in in lineariser.get_inputs())
-
-        # Wait for all tasks to complete (drain + all producers)
+        tasks.extend(
+            _producer(i, ch_in) for i, ch_in in enumerate(lineariser.input_channels)
+        )
         await asyncio.gather(*tasks)
 
 
@@ -169,7 +222,7 @@ def _(
         "'in-memory' executor not supported in 'generate_ir_sub_network'"
     )
     rows_per_partition = config_options.executor.max_rows_per_partition
-    max_io_threads = rec.state["max_io_threads"]
+    num_producers = rec.state["max_io_threads"]
 
     context = rec.state["context"]
     ir_context = rec.state["ir_context"]
@@ -180,7 +233,7 @@ def _(
             ir,
             ir_context,
             channels[ir].reserve_input_slot(),
-            max_io_threads=max_io_threads,
+            num_producers=num_producers,
             rows_per_partition=rows_per_partition,
         )
     ]
@@ -221,7 +274,6 @@ def _(
 
 async def read_chunk(
     context: Context,
-    io_throttle: asyncio.Semaphore,
     scan: IR,
     seq_num: int,
     ch_out: Channel[TableChunk],
@@ -234,8 +286,6 @@ async def read_chunk(
     ----------
     context
         The rapidsmpf context.
-    io_throttle
-        The IO throttle.
     scan
         The Scan or DataFrameScan node.
     seq_num
@@ -245,24 +295,23 @@ async def read_chunk(
     ir_context
         The execution context for the IR node.
     """
-    async with io_throttle:
-        # Evaluate and send the Scan-node result
-        df = await asyncio.to_thread(
-            scan.do_evaluate,
-            *scan._non_child_args,
-            context=ir_context,
-        )
-        await ch_out.send(
-            context,
-            Message(
-                seq_num,
-                TableChunk.from_pylibcudf_table(
-                    df.table,
-                    df.stream,
-                    exclusive_view=True,
-                ),
+    # Evaluate and send the Scan-node result
+    df = await asyncio.to_thread(
+        scan.do_evaluate,
+        *scan._non_child_args,
+        context=ir_context,
+    )
+    await ch_out.send(
+        context,
+        Message(
+            seq_num,
+            TableChunk.from_pylibcudf_table(
+                df.table,
+                df.stream,
+                exclusive_view=True,
             ),
-        )
+        ),
+    )
 
 
 @define_py_node()
@@ -272,7 +321,7 @@ async def scan_node(
     ir_context: IRExecutionContext,
     ch_out: ChannelPair,
     *,
-    max_io_threads: int,
+    num_producers: int,
     plan: IOPartitionPlan,
     parquet_options: ParquetOptions,
 ) -> None:
@@ -289,9 +338,8 @@ async def scan_node(
         The execution context for the IR node.
     ch_out
         The output ChannelPair.
-    max_io_threads
-        The maximum number of IO threads to use
-        concurrently for a single Scan node.
+    num_producers
+        The number of producers to use for the scan node.
     plan
         The partitioning plan.
     parquet_options
@@ -361,44 +409,142 @@ async def scan_node(
                     )
                 )
 
-        # Read data.
         # Use Lineariser to ensure ordered delivery
-        io_throttle = asyncio.Semaphore(max_io_threads)
-        num_producers = min(max_io_threads, len(scans))
+        num_producers = min(num_producers, len(scans))
         lineariser = Lineariser(context, ch_out.data, num_producers)
-        next_task_idx = 0
 
-        async def _producer(ch_out: Channel) -> None:
-            """Producer that pulls scan tasks from shared counter."""
-            nonlocal next_task_idx
-            while True:
-                # Atomically grab next task index
-                task_idx = next_task_idx
-                if task_idx >= len(scans):
-                    break
-                next_task_idx += 1
+        # Assign tasks to producers using round-robin
+        producer_tasks: list[list[tuple[int, Scan | SplitScan]]] = [
+            [] for _ in range(num_producers)
+        ]
+        for task_idx, scan in enumerate(scans):
+            producer_id = task_idx % num_producers
+            producer_tasks[producer_id].append((task_idx, scan))
 
-                # Process task with its sequence number
+        async def _producer(producer_id: int, ch_out: Channel) -> None:
+            for task_idx, scan in producer_tasks[producer_id]:
                 await read_chunk(
                     context,
-                    io_throttle,
-                    scans[task_idx],
+                    scan,
                     task_idx,
                     ch_out,
                     ir_context,
                 )
-
-            # Done - drain this producer's channel
             await ch_out.drain(context)
 
-        # Start the lineariser drain task (must run concurrently with producers)
         tasks = [lineariser.drain()]
-
-        # Start all producer tasks
-        tasks.extend(_producer(ch_in) for ch_in in lineariser.get_inputs())
-
-        # Wait for all tasks to complete (drain + all producers)
+        tasks.extend(
+            _producer(i, ch_in) for i, ch_in in enumerate(lineariser.input_channels)
+        )
         await asyncio.gather(*tasks)
+
+
+def make_rapidsmpf_read_parquet_node(
+    context: Context,
+    ir: Scan,
+    num_producers: int,
+    ch_out: ChannelPair,
+    stats: StatsCollector,
+    partition_info: PartitionInfo,
+) -> Any | None:
+    """
+    Make a RapidsMPF read parquet node.
+
+    Parameters
+    ----------
+    context
+        The rapidsmpf context.
+    ir
+        The Scan node.
+    num_producers
+        The number of producers to use for the scan node.
+    ch_out
+        The output ChannelPair.
+    stats
+        The statistics collector.
+    partition_info
+        The partition information.
+
+    Returns
+    -------
+    The RapidsMPF read parquet node, or None if the predicate cannot be
+    converted to a parquet filter (caller should fall back to scan_node).
+    """
+    from rapidsmpf.streaming.cudf.parquet import Filter, read_parquet
+
+    # Build ParquetReaderOptions
+    try:
+        stream = context.get_stream_from_pool()
+        parquet_reader_options = plc.io.parquet.ParquetReaderOptions.builder(
+            plc.io.SourceInfo(ir.paths)
+        ).build()
+
+        if ir.with_columns is not None:
+            parquet_reader_options.set_columns(ir.with_columns)
+
+        # Build predicate filter if present (passed separately to read_parquet)
+        filter_obj = None
+        if ir.predicate is not None:
+            filter_expr = to_parquet_filter(
+                _cast_literals_to_physical_types(
+                    ir.predicate.value,
+                    _parquet_physical_types(
+                        ir.schema,
+                        ir.paths,
+                        ir.with_columns or list(ir.schema.keys()),
+                        stream,
+                    ),
+                ),
+                stream=stream,
+            )
+            if filter_expr is None:
+                # Predicate cannot be converted to parquet filter
+                # Return None to signal fallback to scan_node
+                return None
+            filter_obj = Filter(stream, filter_expr)
+    except Exception as e:
+        raise ValueError(f"Failed to build ParquetReaderOptions: {e}") from e
+
+    # Calculate num_rows_per_chunk from statistics
+    # Default to a reasonable chunk size if statistics are unavailable
+    estimated_row_count: ColumnStat[int] | None = stats.row_count.get(ir)
+    if estimated_row_count is None:
+        for cs in stats.column_stats.get(ir, {}).values():
+            if cs.source_info.row_count.value is not None:
+                estimated_row_count = cs.source_info.row_count
+                break
+    if estimated_row_count is not None and estimated_row_count.value is not None:
+        num_rows_per_chunk = int(
+            max(1, estimated_row_count.value // partition_info.count)
+        )
+    else:
+        # Fallback: use a default chunk size if statistics are not available
+        num_rows_per_chunk = 1_000_000  # 1 million rows as default
+
+    # Validate inputs
+    if num_rows_per_chunk <= 0:
+        raise ValueError(f"Invalid num_rows_per_chunk: {num_rows_per_chunk}")
+    if num_producers <= 0:
+        raise ValueError(f"Invalid num_producers: {num_producers}")
+
+    try:
+        return read_parquet(
+            context,
+            ch_out.data,
+            num_producers,
+            parquet_reader_options,
+            num_rows_per_chunk,
+            filter=filter_obj,
+        )
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to create read_parquet node: {e}\n"
+            f"  paths: {ir.paths}\n"
+            f"  num_producers: {num_producers}\n"
+            f"  num_rows_per_chunk: {num_rows_per_chunk}\n"
+            f"  partition_count: {partition_info.count}\n"
+            f"  filter: {filter_obj}"
+        ) from e
 
 
 @generate_ir_sub_network.register(Scan)
@@ -409,23 +555,50 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
     )
     parquet_options = config_options.parquet_options
     partition_info = rec.state["partition_info"][ir]
-    max_io_threads = rec.state["max_io_threads"]
-
-    assert partition_info.io_plan is not None, "Scan node must have a partition plan"
-    plan: IOPartitionPlan = partition_info.io_plan
-    if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
-        parquet_options = dataclasses.replace(parquet_options, chunked=False)
-
+    num_producers = rec.state["max_io_threads"]
     channels: dict[IR, ChannelManager] = {ir: ChannelManager(rec.state["context"])}
-    nodes: list[Any] = [
-        scan_node(
+
+    # Use rapidsmpf native read_parquet for multi-partition Parquet scans.
+    ch_pair = channels[ir].reserve_input_slot()
+    nodes: list[Any]
+    native_node: Any = None
+    if (
+        partition_info.count > 1
+        and ir.typ == "parquet"
+        and ir.row_index is None
+        and ir.include_file_paths is None
+        and ir.n_rows == -1
+        and ir.skip_rows == 0
+    ):
+        native_node = make_rapidsmpf_read_parquet_node(
             rec.state["context"],
             ir,
-            rec.state["ir_context"],
-            channels[ir].reserve_input_slot(),
-            max_io_threads=max_io_threads,
-            plan=plan,
-            parquet_options=parquet_options,
+            num_producers,
+            ch_pair,
+            rec.state["stats"],
+            partition_info,
         )
-    ]
+
+    if native_node is not None:
+        nodes = [native_node]
+    else:
+        # Fall back to scan_node (predicate not convertible, or other constraint)
+        assert partition_info.io_plan is not None, (
+            "Scan node must have a partition plan"
+        )
+        plan: IOPartitionPlan = partition_info.io_plan
+        if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
+            parquet_options = dataclasses.replace(parquet_options, chunked=False)
+
+        nodes = [
+            scan_node(
+                rec.state["context"],
+                ir,
+                rec.state["ir_context"],
+                ch_pair,
+                num_producers=num_producers,
+                plan=plan,
+                parquet_options=parquet_options,
+            )
+        ]
     return nodes, channels
