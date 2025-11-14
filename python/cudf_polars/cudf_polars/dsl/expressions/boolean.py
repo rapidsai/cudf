@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     import polars.type_aliases as pl_types
-    from polars.polars import _expr_nodes as pl_expr
+    from polars import polars  # type: ignore[attr-defined]
 
     from rmm.pylibrmm.stream import Stream
 
@@ -57,7 +57,7 @@ class BooleanFunction(Expr):
         Not = auto()
 
         @classmethod
-        def from_polars(cls, obj: pl_expr.BooleanFunction) -> Self:
+        def from_polars(cls, obj: polars._expr_nodes.BooleanFunction) -> Self:
             """Convert from polars' `BooleanFunction`."""
             try:
                 function, name = str(obj).split(".", maxsplit=1)

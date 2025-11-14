@@ -150,7 +150,7 @@ class UnaryFunction(Expr):
         )
 
         if self.name not in UnaryFunction._supported_fns:
-            raise NotImplementedError(f"Unary function {name=}")
+            raise NotImplementedError(f"Unary function {name=}")  # pragma: no cover
         if self.name in UnaryFunction._supported_cum_aggs:
             (reverse,) = self.options
             if reverse:

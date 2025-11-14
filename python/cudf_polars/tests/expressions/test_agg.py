@@ -186,6 +186,8 @@ def test_decimal_aggs(decimal_df: pl.LazyFrame) -> None:
         max=pl.col("a").max(),
         mean=pl.col("a").mean(),
         median=pl.col("a").median(),
+        mean_f32=pl.col("a").mean().cast(pl.Float32),
+        median_f32=pl.col("a").median().cast(pl.Float32),
     )
     assert_gpu_result_equal(q)
 

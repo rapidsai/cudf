@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -18,7 +19,17 @@ from cudf_polars.testing.asserts import (
 
 
 def test_translation_assert_raises():
-    df = pl.LazyFrame({"a": [1, 2, 3]})
+    df = pl.LazyFrame(
+        {
+            "time": pl.datetime_range(
+                start=datetime(2021, 12, 16),
+                end=datetime(2021, 12, 16, 3),
+                interval="30m",
+                eager=True,
+            ),
+            "n": range(7),
+        }
+    )
 
     # This should succeed
     assert_gpu_result_equal(df)
@@ -30,7 +41,7 @@ def test_translation_assert_raises():
     class E(Exception):
         pass
 
-    unsupported = df.group_by("a").agg(pl.col("a").upper_bound().alias("b"))
+    unsupported = df.group_by_dynamic("time", every="1d").agg(pl.col("n").sum())
     # Unsupported query should raise NotImplementedError
     assert_ir_translation_raises(unsupported, NotImplementedError)
 

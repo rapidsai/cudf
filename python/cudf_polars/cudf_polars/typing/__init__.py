@@ -19,7 +19,7 @@ from typing import (
 
 import polars as pl
 import polars.datatypes
-from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
+from polars import polars as plrs  # type: ignore[attr-defined]
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -54,39 +54,39 @@ __all__: list[str] = [
 ]
 
 PolarsIR: TypeAlias = Union[
-    pl_ir.PythonScan,
-    pl_ir.Scan,
-    pl_ir.Cache,
-    pl_ir.DataFrameScan,
-    pl_ir.Select,
-    pl_ir.GroupBy,
-    pl_ir.Join,
-    pl_ir.HStack,
-    pl_ir.Distinct,
-    pl_ir.Sort,
-    pl_ir.Slice,
-    pl_ir.Filter,
-    pl_ir.SimpleProjection,
-    pl_ir.MapFunction,
-    pl_ir.Union,
-    pl_ir.HConcat,
-    pl_ir.ExtContext,
+    plrs._ir_nodes.PythonScan,
+    plrs._ir_nodes.Scan,
+    plrs._ir_nodes.Cache,
+    plrs._ir_nodes.DataFrameScan,
+    plrs._ir_nodes.Select,
+    plrs._ir_nodes.GroupBy,
+    plrs._ir_nodes.Join,
+    plrs._ir_nodes.HStack,
+    plrs._ir_nodes.Distinct,
+    plrs._ir_nodes.Sort,
+    plrs._ir_nodes.Slice,
+    plrs._ir_nodes.Filter,
+    plrs._ir_nodes.SimpleProjection,
+    plrs._ir_nodes.MapFunction,
+    plrs._ir_nodes.Union,
+    plrs._ir_nodes.HConcat,
+    plrs._ir_nodes.ExtContext,
 ]
 
 PolarsExpr: TypeAlias = Union[
-    pl_expr.Function,
-    pl_expr.Window,
-    pl_expr.Literal,
-    pl_expr.Sort,
-    pl_expr.SortBy,
-    pl_expr.Gather,
-    pl_expr.Filter,
-    pl_expr.Cast,
-    pl_expr.Column,
-    pl_expr.Agg,
-    pl_expr.BinaryExpr,
-    pl_expr.Len,
-    pl_expr.PyExprIR,
+    plrs._expr_nodes.Function,
+    plrs._expr_nodes.Window,
+    plrs._expr_nodes.Literal,
+    plrs._expr_nodes.Sort,
+    plrs._expr_nodes.SortBy,
+    plrs._expr_nodes.Gather,
+    plrs._expr_nodes.Filter,
+    plrs._expr_nodes.Cast,
+    plrs._expr_nodes.Column,
+    plrs._expr_nodes.Agg,
+    plrs._expr_nodes.BinaryExpr,
+    plrs._expr_nodes.Len,
+    plrs._expr_nodes.PyExprIR,
 ]
 
 PolarsSchema: TypeAlias = dict[str, pl.DataType]
