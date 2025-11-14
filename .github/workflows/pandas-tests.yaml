@@ -29,7 +29,7 @@ jobs:
         date: ${{ inputs.date }}
         sha: ${{ inputs.sha }}
         node_type: "gpu-l4-latest-1"
-        container_image: "rapidsai/citestwheel:25.12-latest"
+        container_image: "rapidsai/citestwheel:26.02-latest"
         script: ci/cudf_pandas_scripts/pandas-tests/run.sh main
         file_to_upload: ./main-results.json
         artifact-name: main-results.json
