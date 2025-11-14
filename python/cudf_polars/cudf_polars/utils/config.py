@@ -51,6 +51,7 @@ __all__ = [
     "Runtime",
     "Scheduler",  # Deprecated, kept for backward compatibility
     "ShuffleMethod",
+    "ShufflerInsertionMethod",
     "StatsPlanningOptions",
     "StreamingExecutor",
     "StreamingFallbackMode",
@@ -206,6 +207,18 @@ class ShuffleMethod(str, enum.Enum):
     TASKS = "tasks"
     RAPIDSMPF = "rapidsmpf"
     _RAPIDSMPF_SINGLE = "rapidsmpf-single"
+
+
+class ShufflerInsertionMethod(str, enum.Enum):
+    """
+    The method to use for inserting chunks into the rapidsmpf shuffler.
+
+    * ``ShufflerInsertionMethod.INSERT_CHUNKS`` : Use insert_chunks for inserting data.
+    * ``ShufflerInsertionMethod.CONCAT_INSERT`` : Use concat_insert for inserting data.
+    """
+
+    INSERT_CHUNKS = "insert_chunks"
+    CONCAT_INSERT = "concat_insert"
 
 
 T = TypeVar("T")
@@ -598,6 +611,9 @@ class StreamingExecutor:
         The method to use for shuffling data between workers. Defaults to
         'rapidsmpf' for distributed cluster if available (otherwise 'tasks'),
         and 'tasks' for single-GPU cluster.
+    shuffler_insertion_method
+        The method to use for inserting chunks with the rapidsmpf shuffler.
+        Can be 'insert_chunks' (default) or 'concat_insert'.
     rapidsmpf_spill
         Whether to wrap task arguments and output in objects that are
         spillable by 'rapidsmpf'.
@@ -683,6 +699,13 @@ class StreamingExecutor:
             f"{_env_prefix}__SHUFFLE_METHOD",
             ShuffleMethod.__call__,
             default=ShuffleMethod.TASKS,
+        )
+    )
+    shuffler_insertion_method: ShufflerInsertionMethod = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__SHUFFLER_INSERTION_METHOD",
+            ShufflerInsertionMethod.__call__,
+            default=ShufflerInsertionMethod.INSERT_CHUNKS,
         )
     )
     rapidsmpf_spill: bool = dataclasses.field(
@@ -820,6 +843,10 @@ class StreamingExecutor:
             raise TypeError("rapidsmpf_spill must be bool")
         if not isinstance(self.sink_to_directory, bool):
             raise TypeError("sink_to_directory must be bool")
+        if not isinstance(self.shuffler_insertion_method, ShufflerInsertionMethod):
+            raise TypeError(
+                "shuffler_insertion_method must be a ShufflerInsertionMethod"
+            )
         if not isinstance(self.client_device_threshold, float):
             raise TypeError("client_device_threshold must be a float")
 
