@@ -10,7 +10,7 @@
 #include <cudf/io/text/data_chunk_source.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
 
 #include <memory>
 #include <optional>

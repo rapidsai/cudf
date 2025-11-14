@@ -6,6 +6,7 @@
 #include "runtime/context.hpp"
 
 #include <cudf/context.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <jit/cache.hpp>
@@ -103,6 +104,7 @@ std::size_t try_parse_numeric_env_var(char const* const env_name, std::size_t de
 
 jitify2::ProgramCache<>& jit::program_cache::get(jitify2::PreprocessedProgramData const& preprog)
 {
+  CUDF_FUNC_RANGE();
   std::lock_guard<std::mutex> const caches_lock(_caches_mutex);
 
   auto existing_cache = _caches.find(preprog.name());
