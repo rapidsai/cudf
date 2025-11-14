@@ -264,13 +264,15 @@ void reader_impl::setup_next_subpass(read_mode mode)
                                   cuda::std::equal_to{},
                                   cumulative_page_sum{});
 
-    // include scratch space needed for decompression. for certain codecs (eg ZSTD) this
-    // can be considerable.
+    // include scratch space needed for decompression and string offset buffers.
+    // for certain codecs (eg ZSTD) this an be considerable.
     if (is_first_subpass) {
       pass.decomp_scratch_sizes =
         compute_decompression_scratch_sizes(pass.chunks, pass.pages, _stream);
+      pass.string_offset_sizes = compute_string_offset_sizes(pass.chunks, pass.pages, _stream);
     }
-    include_decompression_scratch_size(pass.decomp_scratch_sizes, c_info, _stream);
+    include_scratch_size(pass.decomp_scratch_sizes, c_info, _stream);
+    include_scratch_size(pass.string_offset_sizes, c_info, _stream);
 
     auto iter               = thrust::make_counting_iterator(0);
     auto const pass_max_row = pass.skip_rows + pass.num_rows;
