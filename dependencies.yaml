@@ -1157,7 +1157,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - &rapidsmpf_unsuffixed rapidsmpf==25.12.*,>=0.0.0a0
+          - &rapidsmpf_unsuffixed rapidsmpf==26.2.*,>=0.0.0a0
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -1170,12 +1170,12 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - rapidsmpf-cu12==25.12.*,>=0.0.0a0
+              - rapidsmpf-cu12==26.2.*,>=0.0.0a0
           - matrix:
               cuda: "13.*"
               cuda_suffixed: "true"
             packages:
-              - rapidsmpf-cu13==25.12.*,>=0.0.0a0
+              - rapidsmpf-cu13==26.2.*,>=0.0.0a0
           - matrix:
             packages:
               - *rapidsmpf_unsuffixed
