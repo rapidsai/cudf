@@ -327,7 +327,6 @@ class dictionary_literals_collector : public equality_literals_collector {
 
 /**
  * @brief Converts named columns to index reference columns
- *
  */
 class named_to_reference_converter : public parquet::detail::named_to_reference_converter {
  public:
@@ -353,6 +352,7 @@ class names_from_expression : public parquet::detail::names_from_expression {
  public:
   names_from_expression(std::optional<std::reference_wrapper<ast::expression const>> expr,
                         std::vector<std::string> const& skip_names,
+                        std::optional<std::vector<std::string>> selected_columns,
                         std::vector<SchemaElement> const& schema_tree);
 
   using parquet::detail::names_from_expression::visit;

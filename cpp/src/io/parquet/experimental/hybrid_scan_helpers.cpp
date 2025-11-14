@@ -603,20 +603,31 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
 names_from_expression::names_from_expression(
   std::optional<std::reference_wrapper<ast::expression const>> expr,
   std::vector<std::string> const& skip_names,
+  std::optional<std::vector<std::string>> selected_columns,
   std::vector<SchemaElement> const& schema_tree)
 {
   if (!expr.has_value()) { return; }
 
   _skip_names = std::unordered_set<std::string>{skip_names.cbegin(), skip_names.cend()};
 
-  // Map column indices to their names
-  auto const& root = schema_tree.front();
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(root.children_idx.size()),
-                [&](int32_t col_idx) {
-                  auto const schema_idx = root.children_idx[col_idx];
-                  _column_indices_to_names.insert({col_idx, schema_tree[schema_idx].name});
-                });
+  // If we have a column selection, map column indices to the selected names
+  if (selected_columns.has_value()) {
+    std::transform(
+      thrust::counting_iterator<size_t>(0),
+      thrust::counting_iterator(selected_columns->size()),
+      selected_columns->cbegin(),
+      std::inserter(_column_indices_to_names, _column_indices_to_names.end()),
+      [&](auto col_idx, auto const& col_name) { return std::make_pair(col_idx, col_name); });
+  } else {
+    // Otherwise, map all column indices to their names from the schema tree
+    auto const& root = schema_tree.front();
+    std::for_each(thrust::counting_iterator<size_t>(0),
+                  thrust::counting_iterator(root.children_idx.size()),
+                  [&](int32_t col_idx) {
+                    auto const schema_idx = root.children_idx[col_idx];
+                    _column_indices_to_names.insert({col_idx, schema_tree[schema_idx].name});
+                  });
+  }
 
   expr.value().get().accept(*this);
 }

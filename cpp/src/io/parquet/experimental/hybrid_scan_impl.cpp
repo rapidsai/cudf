@@ -110,7 +110,8 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
     if (_is_filter_columns_selected) { return; }
     // list, struct, dictionary are not supported by AST filter yet.
     _filter_columns_names =
-      names_from_expression(options.get_filter(), {}, _extended_metadata->get_schema_tree())
+      names_from_expression(
+        options.get_filter(), {}, options.get_columns(), _extended_metadata->get_schema_tree())
         .to_vector();
     // Select only filter columns using the base `select_columns` method
     std::tie(_input_columns, _output_buffers, _output_column_schemas) =
