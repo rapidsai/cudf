@@ -59,7 +59,7 @@ void write_table(cudf::table_view const& input,
   }
 
   // Pack the table into contiguous memory
-  auto packed = cudf::pack(input, stream, mr);
+  auto const packed = cudf::pack(input, stream, mr);
 
   // Create and populate the header
   table_format_header header;
@@ -75,15 +75,15 @@ void write_table(cudf::table_view const& input,
   sink->host_write(packed.metadata->data(), header.metadata_length);
 
   // Write the data
-  // Always copy data to host and then write (avoids kvikIO)
-  auto host_buffer = cudf::detail::make_host_vector<uint8_t>(header.data_length, stream);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(host_buffer.data(),
-                                packed.gpu_data->data(),
-                                header.data_length,
-                                cudaMemcpyDeviceToHost,
-                                stream.value()));
-  stream.synchronize();
-  sink->host_write(host_buffer.data(), header.data_length);
+  if (sink->is_device_write_preferred(header.data_length)) {
+    sink->device_write(packed.gpu_data->data(), header.data_length, stream);
+  } else {
+    auto host_buffer = cudf::detail::make_host_vector(
+      cudf::device_span<uint8_t const>{static_cast<uint8_t const*>(packed.gpu_data->data()),
+                                       header.data_length},
+      stream);
+    sink->host_write(host_buffer.data(), header.data_length);
+  }
 
   sink->flush();
 }
@@ -124,42 +124,30 @@ packed_table read_table(source_info const& source_info,
   size_t metadata_offset = header_size;
   size_t data_offset     = metadata_offset + header.metadata_length;
 
-  // Validate file size
   CUDF_EXPECTS(source->size() >= data_offset + header.data_length,
                "File too small for the specified metadata and data sizes");
 
-  // Read metadata into host memory
-  auto metadata = std::make_unique<std::vector<uint8_t>>(header.metadata_length);
-  source->host_read(metadata_offset, header.metadata_length, metadata->data());
+  // Create packed_columns and read directly into it
+  packed_columns packed;
+  packed.metadata->resize(header.metadata_length);
+  source->host_read(metadata_offset, header.metadata_length, packed.metadata->data());
 
-  // Allocate device memory for the data
-  auto gpu_data = std::make_unique<rmm::device_buffer>(header.data_length, stream, mr);
-
-  // Read data into device memory
-  if (source->supports_device_read() && source->is_device_read_preferred(header.data_length)) {
+  packed.gpu_data = std::make_unique<rmm::device_buffer>(header.data_length, stream, mr);
+  if (source->is_device_read_preferred(header.data_length)) {
     source->device_read(
-      data_offset, header.data_length, static_cast<uint8_t*>(gpu_data->data()), stream);
+      data_offset, header.data_length, static_cast<uint8_t*>(packed.gpu_data->data()), stream);
   } else {
-    // For host buffers, use the non-owning buffer interface to avoid intermediate copy
     auto host_buffer = source->host_read(data_offset, header.data_length);
-    CUDF_CUDA_TRY(cudaMemcpyAsync(gpu_data->data(),
+    CUDF_CUDA_TRY(cudaMemcpyAsync(packed.gpu_data->data(),
                                   host_buffer->data(),
                                   header.data_length,
                                   cudaMemcpyHostToDevice,
                                   stream.value()));
+    stream.synchronize();
   }
 
-  // Synchronize to ensure data is ready
-  stream.synchronize();
-
-  // Create packed_columns structure
-  packed_columns packed(std::move(metadata), std::move(gpu_data));
-
-  // Unpack into a table_view
   auto unpacked_view = cudf::unpack(packed);
 
-  // Return packed_table with the view and the data
-  // The table_view points into the packed_columns memory (zero-copy)
   return packed_table{unpacked_view, std::move(packed)};
 }
 
