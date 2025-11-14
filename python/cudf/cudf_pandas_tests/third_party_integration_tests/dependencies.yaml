@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 # Dependency list for https://github.com/rapidsai/dependency-file-generator
 files:
@@ -195,7 +195,7 @@ dependencies:
         packages:
           - cudf==25.12.*,>=0.0.0a0
           - pandas
-          - pytest
+          - pytest<9.0.0a0
           - pytest-xdist
   test_dask:
     common:
