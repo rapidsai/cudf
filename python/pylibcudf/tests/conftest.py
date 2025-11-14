@@ -31,6 +31,21 @@ from utils import (
 )
 
 
+def pytest_collection_modifyitems(config, items):
+    """Add markers to tests based on stream parameter values."""
+    for item in items:
+        # Check if test has parameters (from @pytest.mark.parametrize)
+        if hasattr(item, "callspec") and "stream" in item.callspec.params:
+            stream_value = item.callspec.params["stream"]
+
+            # Add marker based on stream value
+            if stream_value is None:
+                item.add_marker(pytest.mark.uses_default_stream)
+            else:
+                # stream_value is a Stream() object
+                item.add_marker(pytest.mark.uses_custom_stream)
+
+
 def _type_to_str(typ):
     if isinstance(typ, pa.ListType):
         return f"list[{_type_to_str(typ.value_type)}]"
