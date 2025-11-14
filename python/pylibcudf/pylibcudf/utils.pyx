@@ -7,7 +7,6 @@ from libcpp.functional cimport reference_wrapper
 from libcpp.vector cimport vector
 
 from pylibcudf.libcudf.scalar.scalar cimport scalar
-from pylibcudf.testing import get_default_testing_stream
 
 from .scalar cimport Scalar
 
@@ -23,6 +22,13 @@ from cuda.bindings import runtime
 
 import os
 
+
+def _get_testing_stream():
+    # Isolate import to function scope to avoid symbol issues in normal usage
+    from pylibcudf.testing import get_default_testing_stream
+    return get_default_testing_stream()
+
+
 # Check the environment for the variable CUDF_PER_THREAD_STREAM. If it is set,
 # then set the module-scope CUDF_DEFAULT_STREAM variable here to
 # rmm.pylibrmm.stream.PER_THREAD_DEFAULT_STREAM. Otherwise, it will default to
@@ -30,7 +36,7 @@ import os
 if os.getenv("CUDF_PER_THREAD_STREAM", "0") == "1":
     CUDF_DEFAULT_STREAM = PER_THREAD_DEFAULT_STREAM
 elif os.getenv("PYLIBCUDF_STREAM_TESTING", "0") == "1":
-    CUDF_DEFAULT_STREAM = get_default_testing_stream()
+    CUDF_DEFAULT_STREAM = _get_testing_stream()
 else:
     CUDF_DEFAULT_STREAM = DEFAULT_STREAM
 
