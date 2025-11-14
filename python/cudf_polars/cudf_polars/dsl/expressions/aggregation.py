@@ -158,7 +158,10 @@ class Agg(Expr):
         self, column: Column, *, request: plc.aggregation.Aggregation, stream: Stream
     ) -> Column:
         if (
-            self.name in {"mean", "median"}
+            # For sum, this condition can only pass
+            # after expression decomposition in the streaming
+            # engine
+            self.name in {"sum", "mean", "median"}
             and plc.traits.is_fixed_point(column.dtype.plc_type)
             and self.dtype.plc_type.id() in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
         ):
