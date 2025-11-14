@@ -8743,7 +8743,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/tools/test_to_datetime.py::TestToDatetimeMisc::test_to_datetime_iso8601_exact_fails[2012-01-01 10:00-%Y-%m-%d %H]",
     "tests/tools/test_to_datetime.py::TestToDatetimeMisc::test_to_datetime_iso8601_exact_fails[2012-01-01 10:00:00-%Y-%m-%d %H:%M]",
     "tests/tools/test_to_datetime.py::TestToDatetimeMisc::test_to_datetime_iso8601_exact_fails[2012-01-01-%Y-%m]",
-    "tests/tools/test_to_datetime.py::TestToDatetimeMisc::test_to_datetime_iso8601_fails[True-2012-01-01 10-%Y-%m-%d %H:%M]",
     "tests/tools/test_to_datetime.py::TestToDatetimeUnit::test_float_to_datetime_raise_near_bounds",
     "tests/tools/test_to_datetime.py::TestToDatetimeUnit::test_to_datetime_errors_ignore_utc_true",
     "tests/tools/test_to_datetime.py::TestToDatetimeUnit::test_to_datetime_unit[int]",

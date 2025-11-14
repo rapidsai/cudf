@@ -277,6 +277,7 @@ def make_aggregation(
     """
     if kwargs is None:
         kwargs = {}
+
     if isinstance(op, str):
         return getattr(Aggregation, op)(**kwargs)
     elif callable(op):
