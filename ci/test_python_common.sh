@@ -10,7 +10,8 @@ set -euo pipefail
 
 rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
-PYTHON_CHANNEL=$(rapids-download-conda-from-github python)
+PYTHON_CHANNEL=$(rapids-download-from-github "$(rapids-package-name conda_python cudf)")
+PYTHON_NOARCH_CHANNEL=$(rapids-download-from-github "$(rapids-package-name conda_python cudf-noarch --pure)")
 
 rapids-logger "Generate Python testing dependencies"
 
@@ -26,6 +27,7 @@ done
 CMD="${CMD} \
   --prepend-channel \"${CPP_CHANNEL}\" \
   --prepend-channel \"${PYTHON_CHANNEL}\" \
+  --prepend-channel \"${PYTHON_NOARCH_CHANNEL}\" \
   --matrix \"cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}\""
 
 eval ${CMD} | tee "${ENV_YAML_DIR}/env.yaml"
