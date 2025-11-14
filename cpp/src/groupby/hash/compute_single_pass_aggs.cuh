@@ -92,10 +92,10 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
 
   // Some positions in `global_mapping_indices` will be unused.
   // We just initialize them with a sentinel value so later on we know to ignore them.
-  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
-                             global_mapping_indices.begin(),
-                             global_mapping_indices.end(),
-                             cudf::detail::CUDF_SIZE_TYPE_SENTINEL);
+  // thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
+  //                            global_mapping_indices.begin(),
+  //                            global_mapping_indices.end(),
+  //                            cudf::detail::CUDF_SIZE_TYPE_SENTINEL);
 
   // The upper-bound row index for each block to stop processing each iteration.
   rmm::device_uvector<size_type> block_row_ends(num_strides * grid_size, stream);
@@ -121,29 +121,32 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   auto unique_keys = extract_populated_keys(global_set, num_rows, stream, mr);
 
   // Now, update the target indices for computing aggregations using the shared memory kernel.
-  {
-    auto const transform_map = compute_key_transform_map(
-      num_rows, unique_keys, stream, cudf::get_current_device_resource_ref());
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      global_mapping_indices.begin(),
-                      global_mapping_indices.end(),
-                      global_mapping_indices.begin(),
-                      [transform_map = transform_map.begin()] __device__(auto const idx) {
-                        return idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL ? transform_map[idx]
-                                                                            : idx;
-                      });
-  }
+  // {
+  //   auto const transform_map = compute_key_transform_map(
+  //     num_rows, unique_keys, stream, cudf::get_current_device_resource_ref());
+  //   thrust::transform(rmm::exec_policy_nosync(stream),
+  //                     global_mapping_indices.begin(),
+  //                     global_mapping_indices.end(),
+  //                     global_mapping_indices.begin(),
+  //                     [transform_map = transform_map.begin()] __device__(auto const idx) {
+  //                       return idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL ? transform_map[idx]
+  //                                                                           : idx;
+  //                     });
+  // }
 
   auto const d_spass_values = table_device_view::create(values, stream);
   auto agg_results =
     create_results_table(static_cast<size_type>(unique_keys.size()), values, agg_kinds, stream, mr);
   auto d_results_ptr = mutable_table_device_view::create(*agg_results, stream);
 
+  auto const transform_map = compute_key_transform_map(
+    num_rows, unique_keys, stream, cudf::get_current_device_resource_ref());
   compute_shared_memory_aggs(grid_size,
                              available_shmem_size,
                              num_rows,
                              local_mapping_indices.data(),
                              global_mapping_indices.data(),
+                             transform_map.data(),
                              block_cardinality.data(),
                              block_row_ends.data(),
                              *d_spass_values,

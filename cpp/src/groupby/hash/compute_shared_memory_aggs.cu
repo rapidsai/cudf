@@ -133,6 +133,7 @@ __device__ void update_aggs_shmem_to_gmem(cooperative_groups::thread_block const
                                           size_type cardinality,
                                           size_type num_agg_locations,
                                           size_type const* global_mapping_index,
+                                          size_type const* transform_map,
                                           cuda::std::byte* shmem_agg_storage,
                                           size_type const* agg_res_offsets,
                                           size_type const* agg_mask_offsets,
@@ -143,7 +144,8 @@ __device__ void update_aggs_shmem_to_gmem(cooperative_groups::thread_block const
 
   // Aggregates shared memory sources to global memory targets
   for (auto idx = block.thread_rank(); idx < num_agg_locations; idx += block.num_threads()) {
-    auto const target_idx = global_mapping_index[block_data_offset + (idx % cardinality)];
+    auto const target_idx =
+      transform_map[global_mapping_index[block_data_offset + (idx % cardinality)]];
     for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
       auto const target_col = target.column(col_idx);
       auto const source     = shmem_agg_storage + agg_res_offsets[col_idx];
@@ -167,6 +169,7 @@ __device__ void update_aggs_shmem_to_gmem(cooperative_groups::thread_block const
 CUDF_KERNEL void single_pass_shmem_aggs_kernel(size_type num_rows,
                                                size_type const* local_mapping_index,
                                                size_type const* global_mapping_index,
+                                               size_type const* transform_map,
                                                size_type const* block_cardinality,
                                                size_type const* block_row_ends,
                                                table_device_view input_values,
@@ -258,6 +261,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(size_type num_rows,
                                 cardinality,
                                 num_agg_locations,
                                 global_mapping_index,
+                                transform_map,
                                 shmem_agg_storage,
                                 shmem_agg_res_offsets,
                                 shmem_agg_mask_offsets,
@@ -298,6 +302,7 @@ void compute_shared_memory_aggs(size_type grid_size,
                                 size_type num_input_rows,
                                 size_type const* local_mapping_index,
                                 size_type const* global_mapping_index,
+                                size_type const* transform_map,
                                 size_type const* block_cardinality,
                                 size_type const* block_row_ends,
                                 table_device_view const& input_values,
@@ -315,6 +320,7 @@ void compute_shared_memory_aggs(size_type grid_size,
     num_input_rows,
     local_mapping_index,
     global_mapping_index,
+    transform_map,
     block_cardinality,
     block_row_ends,
     input_values,
