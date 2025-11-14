@@ -114,7 +114,7 @@ class host_buffer_sink : public data_sink {
     buffer_->resize(current_size + size);
     CUDF_CUDA_TRY(cudaMemcpyAsync(
       buffer_->data() + current_size, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
-    return std::async(std::launch::deferred, [stream]() { stream.synchronize(); });
+    return std::async(std::launch::deferred, [stream]() -> void { stream.synchronize(); });
   }
 
   void flush() override {}
