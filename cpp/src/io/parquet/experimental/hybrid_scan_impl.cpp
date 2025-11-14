@@ -118,6 +118,7 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
                                          {},
                                          _use_pandas_metadata,
                                          _strings_to_categorical,
+                                         options.is_enabled_ignore_missing_columns(),
                                          _options.timestamp_type.id());
 
     _is_filter_columns_selected  = true;
@@ -130,6 +131,7 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
                                                  _filter_columns_names,
                                                  _use_pandas_metadata,
                                                  _strings_to_categorical,
+                                                 options.is_enabled_ignore_missing_columns(),
                                                  _options.timestamp_type.id());
 
     _is_payload_columns_selected = true;
