@@ -43,14 +43,11 @@ __device__ inline bitmask_type get_mask_offset_word(bitmask_type const* __restri
                                                     size_type source_begin_bit,
                                                     size_type source_end_bit)
 {
-  size_type source_word_index = destination_word_index + word_index(source_begin_bit);
-  bitmask_type curr_word      = source[source_word_index];
-  bitmask_type next_word      = 0;
-  if (word_index(source_end_bit - 1) >
-      word_index(source_begin_bit +
-                 destination_word_index * detail::size_in_bits<bitmask_type>())) {
-    next_word = source[source_word_index + 1];
-  }
+  auto const source_word_index = destination_word_index + word_index(source_begin_bit);
+  auto const end_word_index    = word_index(source_end_bit - 1);
+  auto const curr_word         = source[source_word_index];
+  auto const next_word =
+    end_word_index > source_word_index ? source[source_word_index + 1] : bitmask_type{0};
   return __funnelshift_r(curr_word, next_word, source_begin_bit);
 }
 
