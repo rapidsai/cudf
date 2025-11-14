@@ -73,6 +73,8 @@ class GenState(TypedDict):
     max_io_threads
         The maximum number of IO threads to use for
         a single IO node.
+    stats
+        Statistics collector.
     """
 
     context: Context
@@ -81,6 +83,7 @@ class GenState(TypedDict):
     fanout_nodes: dict[IR, FanoutInfo]
     ir_context: IRExecutionContext
     max_io_threads: int
+    stats: StatsCollector
 
 
 SubNetGenerator: TypeAlias = GenericTransformer[
