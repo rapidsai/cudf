@@ -50,6 +50,7 @@ rapids-logger "Running compute-sanitizer --tool ${TOOL_NAME} on ${TEST_NAME}"
 
 # Set environment variables as per ci/run_cudf_memcheck_ctests.sh
 export GTEST_CUDF_RMM_MODE=cuda
+export GTEST_BRIEF=1
 # compute-sanitizer bug 4553815
 export LIBCUDF_MEMCHECK_ENABLED=1
 
@@ -73,6 +74,7 @@ compute-sanitizer \
 EXITCODE=$?
 
 # Clean up environment variables
+unset GTEST_BRIEF
 unset GTEST_CUDF_RMM_MODE
 unset LIBCUDF_MEMCHECK_ENABLED
 
