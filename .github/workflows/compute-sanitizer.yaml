@@ -22,7 +22,7 @@ jobs:
 
   run-sanitizer:
     needs: discover-tests
-    name: Run compute-sanitizer on ${{ matrix.test }}
+    name: Run compute-sanitizer on ${{ matrix.test_name }}
     runs-on: linux-amd64-gpu-l4-latest-1
     container:
       image: rapidsai/ci-conda:25.12-latest
@@ -30,21 +30,24 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        test: ${{ fromJson(needs.discover-tests.outputs.tests) }}
+        tool_name: ["memcheck", "synccheck", "racecheck"]
+        test_name: ${{ fromJson(needs.discover-tests.outputs.tests) }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Run compute-sanitizer on ${{ matrix.test }}
+      - name: Run compute-sanitizer on ${{ matrix.test_name }}
         shell: bash
+        env:
+          TOOL_NAME: "${{ matrix.tool_name }}"
+          TEST_NAME: "${{ matrix.test_name }}"
         run: |
-          ./ci/run_single_memcheck.sh "${{ matrix.test }}"
-
+          ./ci/run_compute_sanitizer_test.sh "${TOOL_NAME}" "${TEST_NAME}"
       - name: Upload sanitizer logs
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: sanitizer-logs-${{ matrix.test }}
+          name: sanitizer-logs-${{ matrix.test_name }}
           path: |
             compute-sanitizer-*.log
             *.log

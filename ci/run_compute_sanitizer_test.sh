@@ -7,15 +7,20 @@ set -euo pipefail
 . /opt/conda/etc/profile.d/conda.sh
 
 # This script runs compute-sanitizer on a single libcudf test executable
-# Usage: ./run_single_memcheck.sh TEST_NAME [additional gtest args...]
-# Example: ./run_single_memcheck.sh COLUMN_TEST --gtest_filter=ColumnTest.*
+# Usage: ./run_compute_sanitizer_test.sh TOOL TEST_NAME [additional gtest args...]
+# Example: ./run_compute_sanitizer_test.sh memcheck AST_TEST
+# Example: ./run_compute_sanitizer_test.sh racecheck COMPRESSION_TEST --gtest_filter=CompressionTest.*
 
-if [ $# -lt 1 ]; then
-  echo "Error: Test name required"
-  echo "Usage: $0 TEST_NAME [additional gtest args...]"
+if [ $# -lt 2 ]; then
+  echo "Error: Tool and test name required"
+  echo "Usage: $0 TOOL TEST_NAME [additional gtest args...]"
+  echo "  TOOL: compute-sanitizer tool (memcheck, racecheck, synccheck, etc.)"
+  echo "  TEST_NAME: libcudf test name"
   exit 1
 fi
 
+TOOL="$1"
+shift
 TEST_NAME="$1"
 shift
 
@@ -41,11 +46,10 @@ rapids-print-env
 rapids-logger "Check GPU usage"
 nvidia-smi
 
-rapids-logger "Running compute-sanitizer on $TEST_NAME"
+rapids-logger "Running compute-sanitizer --tool $TOOL on $TEST_NAME"
 
 # Set environment variables as per ci/run_cudf_memcheck_ctests.sh
 export GTEST_CUDF_RMM_MODE=cuda
-export GTEST_BRIEF=1
 # compute-sanitizer bug 4553815
 export LIBCUDF_MEMCHECK_ENABLED=1
 
@@ -59,14 +63,13 @@ if [ ! -x "$TEST_EXECUTABLE" ]; then
 fi
 
 # Run compute-sanitizer on the specified test
-compute-sanitizer --tool memcheck "$TEST_EXECUTABLE" "$@"
+compute-sanitizer --tool "$TOOL" --kernel-name-exclude kns=nvcomp "$TEST_EXECUTABLE" "$@"
 
 EXITCODE=$?
 
 # Clean up environment variables
-unset GTEST_BRIEF
 unset GTEST_CUDF_RMM_MODE
 unset LIBCUDF_MEMCHECK_ENABLED
 
-rapids-logger "compute-sanitizer on $TEST_NAME exiting with value: $EXITCODE"
+rapids-logger "compute-sanitizer --tool $TOOL on $TEST_NAME exiting with value: $EXITCODE"
 exit $EXITCODE
