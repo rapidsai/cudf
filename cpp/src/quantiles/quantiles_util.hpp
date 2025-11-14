@@ -17,17 +17,6 @@
 
 namespace cudf {
 namespace detail {
-template <typename Result, typename T>
-CUDF_HOST_DEVICE inline Result get_array_value(T const* devarr, size_type location)
-{
-  T result;
-#if defined(__CUDA_ARCH__)
-  result = devarr[location];
-#else
-  CUDF_CUDA_TRY(cudaMemcpy(&result, devarr + location, sizeof(T), cudaMemcpyDefault));
-#endif
-  return static_cast<Result>(result);
-}
 
 namespace interpolate {
 template <typename Result, typename T>
