@@ -7,6 +7,7 @@ from libcpp.functional cimport reference_wrapper
 from libcpp.vector cimport vector
 
 from pylibcudf.libcudf.scalar.scalar cimport scalar
+from pylibcudf.testing import get_default_testing_stream
 
 from .scalar cimport Scalar
 
@@ -28,6 +29,8 @@ import os
 # rmm.pylibrmm.stream.DEFAULT_STREAM.
 if os.getenv("CUDF_PER_THREAD_STREAM", "0") == "1":
     CUDF_DEFAULT_STREAM = PER_THREAD_DEFAULT_STREAM
+elif os.getenv("PYLIBCUDF_STREAM_TESTING", "0") == "1":
+    CUDF_DEFAULT_STREAM = get_default_testing_stream()
 else:
     CUDF_DEFAULT_STREAM = DEFAULT_STREAM
 
