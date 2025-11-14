@@ -393,7 +393,7 @@ class StringFunction(Expr):
                 plc.aggregation.all(),
                 plc.DataType(plc.TypeId.BOOL8),
                 stream=df.stream,
-            ).to_py():
+            ).to_py(stream=df.stream):
                 raise InvalidOperationError(
                     "zfill only supports ascii strings with no unicode characters"
                 )
@@ -430,15 +430,12 @@ class StringFunction(Expr):
                     stream=df.stream,
                 )
 
-                if (
-                    POLARS_VERSION_LT_132
-                    and not plc.reduce.reduce(
-                        all_gt_0,
-                        plc.aggregation.all(),
-                        plc.DataType(plc.TypeId.BOOL8),
-                        stream=df.stream,
-                    ).to_py()
-                ):  # pragma: no cover
+                if POLARS_VERSION_LT_132 and not plc.reduce.reduce(
+                    all_gt_0,
+                    plc.aggregation.all(),
+                    plc.DataType(plc.TypeId.BOOL8),
+                    stream=df.stream,
+                ).to_py(stream=df.stream):  # pragma: no cover
                     raise InvalidOperationError("fill conversion failed.")
 
                 return Column(
@@ -890,11 +887,11 @@ class StringFunction(Expr):
                     filtered = table.columns()[0]
                     first_valid_data = plc.copying.get_element(
                         filtered, 0, stream=df.stream
-                    ).to_py()
+                    ).to_py(stream=df.stream)
                 else:
                     first_valid_data = plc.copying.get_element(
                         plc_col, 0, stream=df.stream
-                    ).to_py()
+                    ).to_py(stream=df.stream)
 
                 # See https://github.com/rapidsai/cudf/issues/20202 for we type ignore
                 format = _infer_datetime_format(first_valid_data)  # type: ignore[arg-type]
@@ -912,7 +909,7 @@ class StringFunction(Expr):
                     plc.aggregation.all(),
                     plc.DataType(plc.TypeId.BOOL8),
                     stream=df.stream,
-                ).to_py():
+                ).to_py(stream=df.stream):
                     raise InvalidOperationError("conversion from `str` failed.")
             else:
                 not_timestamps = plc.unary.unary_operation(
@@ -953,18 +950,24 @@ class StringFunction(Expr):
         elif self.name is StringFunction.Name.PadStart:
             if POLARS_VERSION_LT_132:  # pragma: no cover
                 (column,) = columns
-                width, char = self.options
+                width_arg, char = self.options
+                pad_width = cast(int, width_arg)
             else:
                 (column, width_col) = columns
                 (char,) = self.options
                 # TODO: Maybe accept a string scalar in
                 # cudf::strings::pad to avoid DtoH transfer
-                # See https://github.com/rapidsai/cudf/issues/20202 for we type ignore
-                width: int = width_col.obj.to_scalar(stream=df.stream).to_py()  # type: ignore[no-redef]
+                # See https://github.com/rapidsai/cudf/issues/20202
+                width_py = width_col.obj.to_scalar(stream=df.stream).to_py(
+                    stream=df.stream
+                )
+                assert width_py is not None
+                pad_width = int(width_py)
+
             return Column(
                 plc.strings.padding.pad(
                     column.obj,
-                    width,  # type: ignore[arg-type]
+                    pad_width,
                     plc.strings.SideType.LEFT,
                     char,
                     stream=df.stream,
@@ -974,17 +977,23 @@ class StringFunction(Expr):
         elif self.name is StringFunction.Name.PadEnd:
             if POLARS_VERSION_LT_132:  # pragma: no cover
                 (column,) = columns
-                width, char = self.options
+                width_arg, char = self.options
+                pad_width = cast(int, width_arg)
             else:
                 (column, width_col) = columns
                 (char,) = self.options
                 # TODO: Maybe accept a string scalar in
                 # cudf::strings::pad to avoid DtoH transfer
-                width: int = width_col.obj.to_scalar(stream=df.stream).to_py()  # type: ignore[no-redef]
+                width_py = width_col.obj.to_scalar(stream=df.stream).to_py(
+                    stream=df.stream
+                )
+                assert width_py is not None
+                pad_width = int(width_py)
+
             return Column(
                 plc.strings.padding.pad(
                     column.obj,
-                    width,  # type: ignore[arg-type]
+                    pad_width,
                     plc.strings.SideType.RIGHT,
                     char,
                     stream=df.stream,

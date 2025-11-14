@@ -42,31 +42,36 @@ class Ternary(Expr):
         when, then, otherwise = (
             child.evaluate(df, context=context) for child in self.children
         )
+
         if when.is_scalar:
             # For scalar predicates: lowering to copy_if_else would require
             # materializing an all true/false mask column. Instead, just pick
             # the correct branch.
-            when_predicate = when.obj_scalar(stream=df.stream).to_py()
+            when_predicate = when.obj_scalar(stream=df.stream).to_py(stream=df.stream)
             pick, other = (then, otherwise) if when_predicate else (otherwise, then)
 
-            if pick.is_scalar:
-                (pick_col,) = broadcast(
+            pick_col = (
+                broadcast(
                     pick,
                     target_length=1 if other.is_scalar else other.size,
                     stream=df.stream,
-                )
-                return Column(pick_col.obj, dtype=self.dtype)
+                )[0]
+                if pick.is_scalar
+                else pick
+            )
+            return Column(pick_col.obj, dtype=self.dtype)
 
-            return Column(pick.obj, dtype=self.dtype)
-
-        then_col, otherwise_col = broadcast(
-            then, otherwise, target_length=when.size, stream=df.stream
+        then_obj = then.obj_scalar(stream=df.stream) if then.is_scalar else then.obj
+        otherwise_obj = (
+            otherwise.obj_scalar(stream=df.stream)
+            if otherwise.is_scalar
+            else otherwise.obj
         )
 
         return Column(
             plc.copying.copy_if_else(
-                then_col.obj,
-                otherwise_col.obj,
+                then_obj,
+                otherwise_obj,
                 when.obj,
                 stream=df.stream,
             ),
