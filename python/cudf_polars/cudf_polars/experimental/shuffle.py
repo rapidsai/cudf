@@ -346,9 +346,6 @@ def _(
 
             cluster_kind = "dask"
 
-        # TODO: use_concat_insert should come from the configuration
-        # / environment. We need to plumb that though Shuffler init to here.
-
         shuffle_on = [k.name for k in _keys]
 
         try:
