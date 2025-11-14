@@ -519,7 +519,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         self,
         data=None,
         index=None,
-        dtype=None,
+        dtype: Dtype | None = None,
         name=None,
         copy=False,
         nan_as_null=no_default,
