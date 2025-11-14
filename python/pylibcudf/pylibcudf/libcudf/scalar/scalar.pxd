@@ -42,7 +42,7 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
         ) except +libcudf_exception_handler
 
     cdef cppclass string_scalar(scalar):
-        string to_string() except +libcudf_exception_handler
+        string to_string(cuda_stream_view stream) except +libcudf_exception_handler
 
     cdef cppclass list_scalar(scalar):
         pass
