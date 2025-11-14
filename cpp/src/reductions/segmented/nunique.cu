@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "update_validity.hpp"
@@ -19,9 +8,9 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/labeling/label_segments.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/reduction/detail/segmented_reduction.cuh>
 #include <cudf/reduction/detail/segmented_reduction_functions.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -63,9 +52,8 @@ std::unique_ptr<cudf::column> segmented_nunique(column_view const& col,
 
   // compute the unique identifiers within each segment
   auto const identifiers = [&] {
-    auto const d_col = column_device_view::create(col, stream);
-    auto const comparator =
-      cudf::experimental::row::equality::self_comparator{table_view({col}), stream};
+    auto const d_col      = column_device_view::create(col, stream);
+    auto const comparator = cudf::detail::row::equality::self_comparator{table_view({col}), stream};
     auto const row_equal =
       comparator.equal_to<false>(cudf::nullate::DYNAMIC{col.has_nulls()}, null_equality::EQUAL);
 

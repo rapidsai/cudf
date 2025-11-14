@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -46,6 +35,7 @@ using parquet::detail::row_group_info;
  */
 struct metadata : private metadata_base {
   explicit metadata(cudf::host_span<uint8_t const> footer_bytes);
+  explicit metadata(FileMetaData const& other) { static_cast<FileMetaData&>(*this) = other; }
   metadata_base get_file_metadata() && { return std::move(*this); }
 };
 
@@ -91,6 +81,22 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   aggregate_reader_metadata(cudf::host_span<uint8_t const> footer_bytes,
                             bool use_arrow_schema,
                             bool has_cols_from_mismatched_srcs);
+
+  /**
+   * @brief Constructor for aggregate_reader_metadata
+   *
+   * @param parquet_metadata Pre-populated Parquet file metadata
+   * @param use_arrow_schema Whether to use Arrow schema
+   * @param has_cols_from_mismatched_srcs Whether to have columns from mismatched sources
+   */
+  aggregate_reader_metadata(FileMetaData const& parquet_metadata,
+                            bool use_arrow_schema,
+                            bool has_cols_from_mismatched_srcs);
+
+  /**
+   * @brief Initialize the internal variables
+   */
+  void initialize_internals(bool use_arrow_schema, bool has_cols_from_mismatched_srcs);
 
   /**
    * @brief Fetch the byte range of the page index in the Parquet file
@@ -264,20 +270,24 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * Compute a vector of boolean vectors indicating which data pages need to be decoded to
    * construct each input column based on the row mask, one vector per column
    *
+   * @tparam ColumnView Type of the row mask column view - cudf::mutable_column_view for filter
+   * columns and cudf::column_view for payload columns
+   *
    * @param row_mask Boolean column indicating which rows need to be read after page-pruning
    * @param row_group_indices Input row groups indices
-   * @param output_dtypes Datatypes of output columns
-   * @param output_column_schemas schema indices of output columns
+   * @param input_columns Input column information
+   * @param row_mask_offset Offset into the row mask column for the current pass
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @return A vector of boolean vectors indicating which data pages need to be decoded to produce
-   *         the output table based on the input row mask, one per input column
+   * @return Boolean vector indicating which data pages need to be decoded to produce
+   *         the output table based on the input row mask across all input columns
    */
-  [[nodiscard]] std::vector<std::vector<bool>> compute_data_page_mask(
-    cudf::column_view row_mask,
+  template <typename ColumnView>
+  [[nodiscard]] thrust::host_vector<bool> compute_data_page_mask(
+    ColumnView const& row_mask,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
-    cudf::host_span<cudf::data_type const> output_dtypes,
-    cudf::host_span<cudf::size_type const> output_column_schemas,
+    cudf::host_span<input_column_info const> input_columns,
+    cudf::size_type row_mask_offset,
     rmm::cuda_stream_view stream) const;
 };
 

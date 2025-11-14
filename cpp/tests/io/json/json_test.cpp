@@ -1,18 +1,9 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
+
+#include "../io_test_utils.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -2146,8 +2137,8 @@ TEST_F(JsonReaderTest, JSONLinesRecoveringSync)
   // Set up host pinned memory pool to avoid implicit synchronizations to test for any potential
   // races due to missing host-device synchronizations
   using host_pooled_mr = rmm::mr::pool_memory_resource<rmm::mr::pinned_host_memory_resource>;
-  host_pooled_mr mr{std::make_shared<rmm::mr::pinned_host_memory_resource>().get(),
-                    size_t{128} * 1024 * 1024};
+  auto pinned_mr       = std::make_shared<rmm::mr::pinned_host_memory_resource>();
+  host_pooled_mr mr{pinned_mr.get(), size_t{128} * 1024 * 1024};
 
   // Set new resource
   auto last_mr = cudf::set_pinned_memory_resource(mr);
@@ -3589,6 +3580,60 @@ TEST_F(JsonBatchedReaderTest, EmptyLastBatch)
   EXPECT_EQ(result.metadata.schema_info[0].name, "a");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
                                  cudf::test::strings_column_wrapper{{"b", "b", "b", "b"}});
+}
+
+TEST_F(JsonReaderTest, DeviceReadAsyncThrows)
+{
+  // Create simple JSON data
+  std::string json_string = R"({"a": 1}
+{"a": 2}
+{"a": 3}
+{"a": 4}
+{"a": 5})";
+
+  // Convert to char vector
+  std::vector<char> json_data(json_string.begin(), json_string.end());
+
+  // Create our throwing datasource
+  auto throwing_source = std::make_unique<cudf::test::ThrowingDeviceReadDatasource>(json_data);
+  cudf::io::source_info source_info(throwing_source.get());
+
+  // Try to read the JSON data - this should either succeed or propagate AsyncException
+  // from device_read_async.
+  cudf::io::json_reader_options read_args =
+    cudf::io::json_reader_options::builder(source_info).lines(true);
+  try {
+    cudf::io::read_json(read_args);
+    // Test passes if no exception is thrown
+  } catch (const cudf::test::AsyncException&) {
+    // Test passes if AsyncException is thrown (expected test exception)
+  } catch (const std::exception& e) {
+    // Test fails if any other exception is thrown
+    FAIL() << "Unexpected exception thrown: " << e.what();
+  }
+}
+
+TEST_F(JsonReaderTest, DeviceWriteAsyncThrows)
+{
+  // Create a simple table to write
+  auto col0           = cudf::test::fixed_width_column_wrapper<int>{{1, 2, 3, 4, 5}};
+  auto table_to_write = cudf::table_view{{col0}};
+
+  auto throwing_sink = std::make_unique<cudf::test::ThrowingDeviceWriteDataSink>();
+
+  cudf::io::json_writer_options write_args = cudf::io::json_writer_options::builder(
+    cudf::io::sink_info{throwing_sink.get()}, table_to_write);
+
+  // The write_json call should either succeed or throw AsyncException.
+  try {
+    cudf::io::write_json(write_args);
+    // Test passes if no exception is thrown
+  } catch (const cudf::test::AsyncException&) {
+    // Test passes if AsyncException is thrown (expected test exception)
+  } catch (const std::exception& e) {
+    // Test fails if any other exception is thrown
+    FAIL() << "Unexpected exception thrown: " << e.what();
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()

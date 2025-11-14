@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/detail/utilities/stream_pool.hpp>
@@ -209,6 +198,40 @@ DEFINE_OVERLOAD(cudaLaunchKernel,
                     size_t sharedMem,
                     cudaStream_t stream),
                 ARG(func, gridDim, blockDim, args, sharedMem, stream));
+
+#if CUDART_VERSION >= 13000
+// We need to define the __cudaLaunchKernel ABI as
+// it isn't part of cuda_runtime.h when compiling as a C++ source
+extern "C" cudaError_t CUDARTAPI __cudaLaunchKernel(cudaKernel_t kernel,
+                                                    dim3 gridDim,
+                                                    dim3 blockDim,
+                                                    void** args,
+                                                    size_t sharedMem,
+                                                    cudaStream_t stream);
+extern "C" cudaError_t CUDARTAPI __cudaLaunchKernel_ptsz(cudaKernel_t kernel,
+                                                         dim3 gridDim,
+                                                         dim3 blockDim,
+                                                         void** args,
+                                                         size_t sharedMem,
+                                                         cudaStream_t stream);
+DEFINE_OVERLOAD(__cudaLaunchKernel,
+                ARG(cudaKernel_t kernel,
+                    dim3 gridDim,
+                    dim3 blockDim,
+                    void** args,
+                    size_t sharedMem,
+                    cudaStream_t stream),
+                ARG(kernel, gridDim, blockDim, args, sharedMem, stream));
+DEFINE_OVERLOAD(__cudaLaunchKernel_ptsz,
+                ARG(cudaKernel_t kernel,
+                    dim3 gridDim,
+                    dim3 blockDim,
+                    void** args,
+                    size_t sharedMem,
+                    cudaStream_t stream),
+                ARG(kernel, gridDim, blockDim, args, sharedMem, stream));
+#endif
+
 DEFINE_OVERLOAD(cudaLaunchCooperativeKernel,
                 ARG(void const* func,
                     dim3 gridDim,
@@ -223,9 +246,16 @@ DEFINE_OVERLOAD(cudaLaunchHostFunc,
 
 // Memory transfer APIS:
 // https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__MEMORY.html#group__CUDART__MEMORY
+#if CUDART_VERSION >= 13000
+DEFINE_OVERLOAD(
+  cudaMemPrefetchAsync,
+  ARG(void const* devPtr, size_t count, cudaMemLocation loc, int flags, cudaStream_t stream),
+  ARG(devPtr, count, loc, flags, stream));
+#else
 DEFINE_OVERLOAD(cudaMemPrefetchAsync,
                 ARG(void const* devPtr, size_t count, int dstDevice, cudaStream_t stream),
                 ARG(devPtr, count, dstDevice, stream));
+#endif
 DEFINE_OVERLOAD(cudaMemcpy2DAsync,
                 ARG(void* dst,
                     size_t dpitch,

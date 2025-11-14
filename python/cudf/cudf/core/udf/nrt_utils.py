@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import contextvars
 from contextlib import contextmanager
@@ -37,7 +38,7 @@ def nrt_enabled():
     for a single kernel launch, so we use this context
     to enable it for those that we know need it.
     """
-    original_value = numba_config.CUDA_ENABLE_NRT
+    original_value = getattr(numba_config, "CUDA_ENABLE_NRT", False)
     numba_config.CUDA_ENABLE_NRT = True
     try:
         yield

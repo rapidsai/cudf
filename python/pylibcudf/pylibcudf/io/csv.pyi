@@ -1,7 +1,9 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from typing_extensions import Self
 
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.io.types import (
@@ -30,6 +32,7 @@ class CsvReaderOptions:
     def set_true_values(self, true_values: list[str]): ...
     def set_false_values(self, false_values: list[str]): ...
     def set_na_values(self, na_values: list[str]): ...
+    def set_source(self, src: SourceInfo) -> None: ...
     @staticmethod
     def builder(source: SourceInfo) -> CsvReaderOptionsBuilder: ...
 
@@ -59,8 +62,9 @@ class CsvReaderOptionsBuilder:
 def read_csv(
     options: CsvReaderOptions,
     stream: Stream = None,
+    mr: DeviceMemoryResource = None,
 ) -> TableWithMetadata: ...
-def write_csv(options: CsvWriterOptionsBuilder, stream: Stream = None): ...
+def write_csv(options: CsvWriterOptions, stream: Stream = None): ...
 
 class CsvWriterOptions:
     def __init__(self): ...

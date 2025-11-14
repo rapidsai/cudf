@@ -1,4 +1,5 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -253,7 +254,9 @@ class ColumnAccessor(MutableMapping):
         return the underlying mapping as a nested mapping.
         """
         if self.multiindex:
-            return _NestedGetItemDict.from_zip(zip(self.names, self.columns))
+            return _NestedGetItemDict.from_zip(
+                zip(self.names, self.columns, strict=True)
+            )
         else:
             return self._data
 
@@ -383,7 +386,7 @@ class ColumnAccessor(MutableMapping):
         else:
             new_keys = self.names[:loc] + (name,) + self.names[loc:]
             new_values = self.columns[:loc] + (value,) + self.columns[loc:]
-            self._data = dict(zip(new_keys, new_values))
+            self._data = dict(zip(new_keys, new_values, strict=True))
         self._clear_cache(old_ncols, old_ncols + 1)
         # The type(name) may no longer match the prior label_dtype
 
@@ -458,7 +461,9 @@ class ColumnAccessor(MutableMapping):
                     "Cannot use Series object for mask iloc indexing"
                 )
             # TODO: Doesn't handle on-device columns
-            return tuple(n for n, keep in zip(self.names, index) if keep)
+            return tuple(
+                n for n, keep in zip(self.names, index, strict=True) if keep
+            )
         else:
             if len(set(index)) != len(index):  # type: ignore[arg-type]
                 raise NotImplementedError(
@@ -569,7 +574,9 @@ class ColumnAccessor(MutableMapping):
                 )
             data = dict(
                 item
-                for item, keep in zip(self._grouped_data.items(), key)
+                for item, keep in zip(
+                    self._grouped_data.items(), key, strict=True
+                )
                 if keep
             )
         else:
@@ -743,7 +750,7 @@ class ColumnAccessor(MutableMapping):
             if not all(isinstance(label, old_type) for label in new_col_names):
                 label_dtype = None
 
-        data = dict(zip(new_col_names, self.values()))
+        data = dict(zip(new_col_names, self.values(), strict=True))
         return type(self)(
             data=data,
             level_names=self.level_names,

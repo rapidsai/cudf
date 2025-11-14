@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
@@ -22,6 +11,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/strings/attributes.hpp>
+#include <cudf/strings/detail/attributes.hpp>
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -152,8 +142,9 @@ std::unique_ptr<column> count_characters_parallel(strings_column_view const& inp
   auto const d_strings = cudf::column_device_view::create(input.parent(), stream);
 
   // fill in the lengths
-  constexpr int block_size = 256;
-  cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
+  constexpr thread_index_type block_size = 256;
+  constexpr thread_index_type warp_size  = cudf::detail::warp_size;
+  cudf::detail::grid_1d grid{input.size() * warp_size, block_size};
   count_characters_parallel_fn<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     *d_strings, d_lengths);
 

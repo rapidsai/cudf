@@ -9,7 +9,11 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    DEFAULT_CLUSTER,
+    DEFAULT_RUNTIME,
+    assert_gpu_result_equal,
+)
 from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
@@ -20,7 +24,8 @@ def engine():
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 4,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
         },
     )
 
@@ -55,7 +60,8 @@ def test_groupby_single_partitions(df, op, keys):
             executor="streaming",
             executor_options={
                 "max_rows_per_partition": int(1e9),
-                "scheduler": DEFAULT_SCHEDULER,
+                "cluster": DEFAULT_CLUSTER,
+                "runtime": DEFAULT_RUNTIME,
             },
         ),
         check_row_order=False,
@@ -84,8 +90,9 @@ def test_groupby_agg_config_options(df, op, keys):
             "unique_fraction": {"z": 0.5},
             # Check that we can change the n-ary factor
             "groupby_n_ary": 8,
-            "scheduler": DEFAULT_SCHEDULER,
-            "shuffle_method": "tasks",
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+            "shuffle_method": DEFAULT_RUNTIME,  # Names coincide
         },
     )
     agg = getattr(pl.col("x"), op)()
@@ -105,7 +112,8 @@ def test_groupby_fallback(df, engine, fallback_mode):
         executor_options={
             "fallback_mode": fallback_mode,
             "max_rows_per_partition": 4,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
         },
     )
     match = "Failed to decompose groupby aggs"
@@ -225,7 +233,36 @@ def test_mean_partitioned(values: list[int | None]) -> None:
     assert_gpu_result_equal(
         q,
         engine=pl.GPUEngine(
-            executor="streaming", executor_options={"max_rows_per_partition": 2}
+            executor="streaming",
+            executor_options={
+                "max_rows_per_partition": 2,
+                "cluster": DEFAULT_CLUSTER,
+                "runtime": DEFAULT_RUNTIME,
+            },
         ),
         check_row_order=False,
     )
+
+
+def test_groupby_literal_with_stats_planning(df):
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 4,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+            "stats_planning": {"use_reduction_planning": True},
+        },
+    )
+
+    q = (
+        df.group_by(
+            pl.lit(True).alias("key"),  # noqa: FBT003
+            maintain_order=False,
+        )
+        .agg(pl.col("x").sum())
+        .drop("key")
+    )
+
+    assert_gpu_result_equal(q, engine=engine)

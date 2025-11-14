@@ -1,22 +1,11 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/row_operator/lexicographic.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -41,7 +30,7 @@ bool is_sorted(cudf::table_view const& in,
                rmm::cuda_stream_view stream)
 {
   auto const comparator =
-    experimental::row::lexicographic::self_comparator{in, column_order, null_precedence, stream};
+    detail::row::lexicographic::self_comparator{in, column_order, null_precedence, stream};
 
   if (cudf::detail::has_nested_columns(in)) {
     auto const device_comparator = comparator.less<true>(has_nested_nulls(in));

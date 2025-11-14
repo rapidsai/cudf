@@ -1,46 +1,26 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "detail/optimized_unbounded_window.hpp"
 #include "detail/range_window_bounds.hpp"
 #include "detail/rolling.cuh"
-#include "detail/rolling_jit.hpp"
+#include "detail/rolling_udf.cuh"
 #include "detail/rolling_utils.cuh"
-#include "rolling/detail/rolling.hpp"
 
+#include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/rolling.hpp>
-#include <cudf/detail/utilities/assert.cuh>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/rolling/range_window_bounds.hpp>
 #include <cudf/types.hpp>
-#include <cudf/unary.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <cuda/functional>
-
-#include <iterator>
-#include <variant>
 
 namespace cudf {
 

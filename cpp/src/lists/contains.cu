@@ -1,23 +1,13 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/contains.hpp>
 #include <cudf/lists/detail/contains.hpp>
@@ -26,8 +16,6 @@
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
-#include <cudf/table/row_operators.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
@@ -142,8 +130,8 @@ struct search_list_fn {
   template <bool forward>
   __device__ inline size_type search_list_op(list_device_view const list) const
   {
-    using cudf::experimental::row::lhs_index_type;
-    using cudf::experimental::row::rhs_index_type;
+    using cudf::detail::row::lhs_index_type;
+    using cudf::detail::row::rhs_index_type;
 
     auto const [begin, end] = element_index_pair_iter<forward>(list.size());
     auto const found_iter =
@@ -221,7 +209,7 @@ std::unique_ptr<column> dispatch_index_of(lists_column_view const& lists,
   auto const child_tview = cudf::table_view{{child}};
   auto const has_nulls   = has_nested_nulls(child_tview) || has_nested_nulls(keys_tview);
   auto const comparator =
-    cudf::experimental::row::equality::two_table_comparator(child_tview, keys_tview, stream);
+    cudf::detail::row::equality::two_table_comparator(child_tview, keys_tview, stream);
   if (cudf::is_nested(search_keys.type())) {
     auto const d_comp = comparator.equal_to<true>(nullate::DYNAMIC{has_nulls});
     index_of(input_it, num_rows, output_it, child, search_keys, find_option, d_comp, stream);

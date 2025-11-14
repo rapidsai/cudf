@@ -1,22 +1,13 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "table_helpers.hpp"
 
 #include "random_column_generator.hpp"
+
+#include <benchmarks/common/nvtx_ranges.hpp>
 
 #include <cudf/aggregation.hpp>
 #include <cudf/ast/detail/operators.cuh>
@@ -24,7 +15,6 @@
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/reduction.hpp>
@@ -55,7 +45,7 @@ std::unique_ptr<cudf::column> add_calendrical_days(cudf::column_view const& time
                                                    rmm::cuda_stream_view stream,
                                                    rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   auto const days_duration_type = cudf::cast(days, cudf::data_type{cudf::type_id::DURATION_DAYS});
   auto const data_type          = cudf::data_type{cudf::type_id::TIMESTAMP_DAYS};
   return cudf::binary_operation(
@@ -80,7 +70,7 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   constexpr auto oob_policy = cudf::out_of_bounds_policy::NULLIFY;
   auto const left_selected  = left_input.select(left_on);
   auto const right_selected = right_input.select(right_on);
@@ -116,7 +106,7 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   // Expression: (90000 + ((p_partkey/10) modulo 20001) + 100 * (p_partkey modulo 1000)) / 100
   auto table             = cudf::table_view({p_partkey});
   auto p_partkey_col_ref = cudf::ast::column_reference(0);
@@ -160,7 +150,7 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
                                                                 rmm::cuda_stream_view stream,
                                                                 rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   // Expression: (l_partkey + (i * (s/4 + (int)(l_partkey - 1)/s))) % s + 1
 
   // Generate the `s` col
@@ -232,7 +222,7 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   // Expression: ps_suppkey = (ps_partkey + (i * (s/4 + (int)(ps_partkey - 1)/s))) % s + 1
 
   // Generate the `s` col
@@ -299,7 +289,7 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
                                                       rmm::cuda_stream_view stream,
                                                       rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   auto const sum_agg = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
   auto const l_num_rows_scalar =
     cudf::reduce(o_rep_freqs, *sum_agg, cudf::data_type{cudf::type_id::INT32}, stream, mr);
@@ -322,7 +312,7 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
                                                              rmm::cuda_stream_view stream,
                                                              rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   auto const one                = cudf::numeric_scalar<double>(1);
   auto const one_minus_discount = cudf::binary_operation(
     one, discount, cudf::binary_operator::SUB, cudf::data_type{cudf::type_id::FLOAT64}, stream, mr);
@@ -352,7 +342,7 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
 [[nodiscard]] std::unique_ptr<cudf::column> generate_address_column(
   cudf::size_type num_rows, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   return generate_random_string_column(10, 40, num_rows, stream, mr);
 }
 
@@ -367,7 +357,7 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
                                                                   rmm::cuda_stream_view stream,
                                                                   rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   auto const part_a = cudf::strings::from_integers(
     generate_random_numeric_column<int16_t>(10, 34, num_rows, stream, mr)->view());
   auto const part_b = cudf::strings::from_integers(

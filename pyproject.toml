@@ -1,7 +1,11 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 [tool.mypy]
 ignore_missing_imports = true
+ignore_errors = false
+enable_error_code = "ignore-without-code"
+warn_unused_ignores = true
 # If we don't specify this, then mypy will check excluded files if
 # they are imported by a checked file.
 follow_imports = "skip"
@@ -47,6 +51,8 @@ select = [
     "W",
     # isort
     "I",
+    # zip-without-explicit-strict
+    "B905",
     # no-blank-line-before-function
     "D201",
     # one-blank-line-after-class
@@ -134,6 +140,10 @@ fixable = ["ALL"]
 exclude = [
     "cpp/scripts/gdb-pretty-printers.py",
 ]
+extend-unsafe-fixes = [
+    # zip-without-explicit-strict's autofix sets strict to False, but we want to enforce True
+    "B905",
+]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "numpy.can_cast".msg = "Use find_common_dtype from cudf.utils.dtypes instead"
@@ -144,6 +154,9 @@ exclude = [
 [tool.ruff.lint.per-file-ignores]
 # We use "== None" to demonstrate null handling in this notebook
 "docs/cudf/source/user_guide/missing-data.ipynb" = ["E711"]
+# We demonstrate UDFs where numba doesn't support `zip(..., strict=True)` (or
+# any keywords) and we don't want to litter demo notebooks with noqas
+"docs/cudf/source/user_guide/guide-to-udfs.ipynb" = ["B905"]
 # Lots of pytest implicitly injected attributes in conftest-patch.py
 "python/cudf/cudf/pandas/scripts/conftest-patch.py" = ["F821"]
 "python/cudf/cudf/pandas/scripts/*" = ["D"]

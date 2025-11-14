@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/utilities/getenv_or.hpp"
@@ -59,22 +48,22 @@ class fixed_pinned_pool_memory_resource {
     CUDF_LOG_INFO("Pinned pool size = %zu", pool_size_);
 
     // Allocate full size from the pinned pool to figure out the beginning and end address
-    pool_begin_ = pool_->allocate_async(pool_size_, stream_);
+    pool_begin_ = pool_->allocate(stream_, pool_size_);
     pool_end_   = static_cast<void*>(static_cast<uint8_t*>(pool_begin_) + pool_size_);
-    pool_->deallocate_async(pool_begin_, pool_size_, stream_);
+    pool_->deallocate(stream_, pool_begin_, pool_size_);
   }
 
   void* allocate_async(std::size_t bytes, std::size_t alignment, cuda::stream_ref stream)
   {
     if (bytes <= pool_size_) {
       try {
-        return pool_->allocate_async(bytes, alignment, stream);
+        return pool_->allocate(stream, bytes, alignment);
       } catch (...) {
         // If the pool is exhausted, fall back to the upstream memory resource
       }
     }
 
-    return upstream_mr_.allocate_async(bytes, alignment, stream);
+    return upstream_mr_.allocate(stream, bytes, alignment);
   }
 
   void* allocate_async(std::size_t bytes, cuda::stream_ref stream)
@@ -85,33 +74,33 @@ class fixed_pinned_pool_memory_resource {
   void* allocate(std::size_t bytes, std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
   {
     auto const result = allocate_async(bytes, alignment, stream_);
-    stream_.wait();
+    stream_.sync();
     return result;
   }
 
   void deallocate_async(void* ptr,
                         std::size_t bytes,
                         std::size_t alignment,
-                        cuda::stream_ref stream)
+                        cuda::stream_ref stream) noexcept
   {
     if (bytes <= pool_size_ && ptr >= pool_begin_ && ptr < pool_end_) {
-      pool_->deallocate_async(ptr, bytes, alignment, stream);
+      pool_->deallocate(stream, ptr, bytes, alignment);
     } else {
-      upstream_mr_.deallocate_async(ptr, bytes, alignment, stream);
+      upstream_mr_.deallocate(stream, ptr, bytes, alignment);
     }
   }
 
-  void deallocate_async(void* ptr, std::size_t bytes, cuda::stream_ref stream)
+  void deallocate_async(void* ptr, std::size_t bytes, cuda::stream_ref stream) noexcept
   {
     return deallocate_async(ptr, bytes, rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream);
   }
 
   void deallocate(void* ptr,
                   std::size_t bytes,
-                  std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
+                  std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT) noexcept
   {
     deallocate_async(ptr, bytes, alignment, stream_);
-    stream_.wait();
+    stream_.sync();
   }
 
   bool operator==(fixed_pinned_pool_memory_resource const& other) const
@@ -140,6 +129,33 @@ class fixed_pinned_pool_memory_resource {
                            cuda::mr::host_accessible) noexcept
   {
   }
+
+  // BEGIN CCCL >=3.1.0 COMPATIBILITY APIS
+
+  void* allocate_sync(std::size_t bytes, std::size_t alignment)
+  {
+    return this->allocate(bytes, alignment);
+  }
+
+  void deallocate_sync(void* ptr, std::size_t bytes, std::size_t alignment) noexcept
+  {
+    return this->deallocate(ptr, bytes, alignment);
+  }
+
+  void* allocate(rmm::cuda_stream_view stream, std::size_t bytes, std::size_t alignment)
+  {
+    return this->allocate_async(bytes, alignment, stream);
+  }
+
+  void deallocate(rmm::cuda_stream_view stream,
+                  void* ptr,
+                  std::size_t bytes,
+                  std::size_t alignment) noexcept
+  {
+    return this->deallocate_async(ptr, bytes, alignment, stream);
+  }
+
+  // END CCCL >=3.1.0 COMPATIBILITY APIS
 };
 
 static_assert(cuda::mr::resource_with<fixed_pinned_pool_memory_resource,
@@ -228,7 +244,7 @@ class new_delete_memory_resource {
 
   void deallocate(void* ptr,
                   std::size_t bytes,
-                  std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
+                  std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT) noexcept
   {
     rmm::detail::aligned_host_deallocate(
       ptr, bytes, alignment, [](void* ptr) { ::operator delete(ptr); });
@@ -237,12 +253,12 @@ class new_delete_memory_resource {
   void deallocate_async(void* ptr,
                         std::size_t bytes,
                         std::size_t alignment,
-                        [[maybe_unused]] cuda::stream_ref stream)
+                        [[maybe_unused]] cuda::stream_ref stream) noexcept
   {
     deallocate(ptr, bytes, alignment);
   }
 
-  void deallocate_async(void* ptr, std::size_t bytes, cuda::stream_ref stream)
+  void deallocate_async(void* ptr, std::size_t bytes, cuda::stream_ref stream) noexcept
   {
     deallocate(ptr, bytes, rmm::RMM_DEFAULT_HOST_ALIGNMENT);
   }
@@ -254,6 +270,33 @@ class new_delete_memory_resource {
   // NOLINTBEGIN
   friend void get_property(new_delete_memory_resource const&, cuda::mr::host_accessible) noexcept {}
   // NOLINTEND
+
+  // BEGIN CCCL >=3.1.0 COMPATIBILITY APIS
+
+  void* allocate_sync(std::size_t bytes, std::size_t alignment)
+  {
+    return this->allocate(bytes, alignment);
+  }
+
+  void deallocate_sync(void* ptr, std::size_t bytes, std::size_t alignment) noexcept
+  {
+    return this->deallocate(ptr, bytes, alignment);
+  }
+
+  void* allocate(rmm::cuda_stream_view stream, std::size_t bytes, std::size_t alignment)
+  {
+    return this->allocate_async(bytes, alignment, stream);
+  }
+
+  void deallocate(rmm::cuda_stream_view stream,
+                  void* ptr,
+                  std::size_t bytes,
+                  std::size_t alignment) noexcept
+  {
+    return this->deallocate_async(ptr, bytes, alignment, stream);
+  }
+
+  // END CCCL >=3.1.0 COMPATIBILITY APIS
 };
 
 static_assert(cuda::mr::resource_with<new_delete_memory_resource, cuda::mr::host_accessible>,

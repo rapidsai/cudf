@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import math
 
@@ -94,7 +95,7 @@ def custom_pyop(func):
                 return None
             return func(x, y)
 
-        return pa.array([inner(x, y) for x, y in zip(x, y)])
+        return pa.array([inner(x, y) for x, y in zip(x, y, strict=True)])
 
     return wrapper
 

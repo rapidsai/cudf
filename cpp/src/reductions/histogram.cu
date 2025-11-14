@@ -1,26 +1,16 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
+#include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/structs/structs_column_view.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -121,23 +111,21 @@ compute_row_frequencies(table_view const& input,
                std::invalid_argument);
 
   auto const preprocessed_input =
-    cudf::experimental::row::hash::preprocessed_table::create(input, stream);
+    cudf::detail::row::hash::preprocessed_table::create(input, stream);
   auto const has_nulls = nullate::DYNAMIC{cudf::has_nested_nulls(input)};
 
-  auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
+  auto const row_hasher = cudf::detail::row::hash::row_hasher(preprocessed_input);
   auto const key_hasher = row_hasher.device_hasher(has_nulls);
-  auto const row_comp   = cudf::experimental::row::equality::self_comparator(preprocessed_input);
+  auto const row_comp   = cudf::detail::row::equality::self_comparator(preprocessed_input);
 
   // Always compare NaNs as equal.
-  using nan_equal_comparator =
-    cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
-  auto const value_comp = nan_equal_comparator{};
+  using nan_equal_comparator = cudf::detail::row::equality::nan_equal_physical_equality_comparator;
+  auto const value_comp      = nan_equal_comparator{};
   // Hard set the tparam `has_nested_columns` = false for now as we don't yet support nested columns
   auto const key_equal = row_comp.equal_to<false>(has_nulls, null_equality::EQUAL, value_comp);
 
-  using row_hash =
-    cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
-                                                     cudf::nullate::DYNAMIC>;
+  using row_hash = cudf::detail::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
+                                                              cudf::nullate::DYNAMIC>;
 
   size_t const num_rows = input.num_rows();
 
@@ -149,16 +137,16 @@ compute_row_frequencies(table_view const& input,
                              histogram_count_type{0});
 
   // Construct a hash set
-  auto row_set = cuco::static_set{
-    cuco::extent{num_rows},
-    cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
-    cuco::empty_key<size_type>{-1},
-    key_equal,
-    cuco::linear_probing<DEFAULT_HISTOGRAM_CG_SIZE, row_hash>{key_hasher},
-    {},  // thread scope
-    {},  // storage
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-    stream.value()};
+  auto row_set =
+    cuco::static_set{cuco::extent{num_rows},
+                     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
+                     cuco::empty_key<size_type>{-1},
+                     key_equal,
+                     cuco::linear_probing<DEFAULT_HISTOGRAM_CG_SIZE, row_hash>{key_hasher},
+                     {},  // thread scope
+                     {},  // storage
+                     rmm::mr::polymorphic_allocator<char>{},
+                     stream.value()};
 
   // Device-accessible reference to the hash set with `insert_and_find` operator
   auto row_set_ref = row_set.ref(cuco::op::insert_and_find);

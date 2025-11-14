@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/copying.hpp>
@@ -20,6 +9,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/merge.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/row_operator/lexicographic.cuh>
 #include <cudf/detail/search.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -30,7 +20,6 @@
 #include <cudf/merge.hpp>
 #include <cudf/strings/detail/merge.hpp>
 #include <cudf/structs/structs_column_view.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
@@ -83,10 +72,10 @@ struct row_lexicographic_tagged_comparator {
     table_device_view const* ptr_right_dview{r_side == side::LEFT ? &_lhs : &_rhs};
     auto const comparator = [&]() {
       if constexpr (has_nulls) {
-        return cudf::experimental::row::lexicographic::device_row_comparator<false, bool>{
+        return cudf::detail::row::lexicographic::device_row_comparator<false, bool>{
           has_nulls, *ptr_left_dview, *ptr_right_dview, _column_order, _null_precedence};
       } else {
-        return cudf::experimental::row::lexicographic::device_row_comparator<false, bool>{
+        return cudf::detail::row::lexicographic::device_row_comparator<false, bool>{
           has_nulls, *ptr_left_dview, *ptr_right_dview, _column_order};
       }
     }();

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/column_utilities.hpp>
@@ -25,10 +14,10 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/list_view.hpp>
 #include <cudf/structs/struct_view.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_checks.hpp>
@@ -364,8 +353,8 @@ class corresponding_rows_unequal {
 
   __device__ bool operator()(size_type index)
   {
-    using cudf::experimental::row::lhs_index_type;
-    using cudf::experimental::row::rhs_index_type;
+    using cudf::detail::row::lhs_index_type;
+    using cudf::detail::row::rhs_index_type;
 
     return !comp(lhs_index_type{lhs_row_indices.element<size_type>(index)},
                  rhs_index_type{rhs_row_indices.element<size_type>(index)});
@@ -443,8 +432,8 @@ class corresponding_rows_not_equivalent {
 
   __device__ bool operator()(size_type index)
   {
-    using cudf::experimental::row::lhs_index_type;
-    using cudf::experimental::row::rhs_index_type;
+    using cudf::detail::row::lhs_index_type;
+    using cudf::detail::row::rhs_index_type;
 
     auto const lhs_index = lhs_row_indices.element<size_type>(index);
     auto const rhs_index = rhs_row_indices.element<size_type>(index);
@@ -524,7 +513,7 @@ struct column_comparator_impl {
     auto lhs_tview = table_view{{lhs}};
     auto rhs_tview = table_view{{rhs}};
 
-    auto const comparator = cudf::experimental::row::equality::two_table_comparator{
+    auto const comparator = cudf::detail::row::equality::two_table_comparator{
       lhs_tview, rhs_tview, cudf::test::get_default_stream()};
     auto const has_nulls = cudf::has_nulls(lhs_tview) or cudf::has_nulls(rhs_tview);
 

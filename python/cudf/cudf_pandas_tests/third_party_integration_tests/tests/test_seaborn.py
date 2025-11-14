@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import pandas as pd
 import pytest
 import seaborn as sns
@@ -12,7 +13,7 @@ from pandas._testing import assert_equal
 def assert_plots_equal(expect, got):
     if isinstance(expect, Axes) and isinstance(got, Axes):
         for expect_ch, got_ch in zip(
-            expect.get_children(), got.get_children()
+            expect.get_children(), got.get_children(), strict=True
         ):
             assert type(expect_ch) is type(got_ch)
             if isinstance(expect_ch, Line2D):

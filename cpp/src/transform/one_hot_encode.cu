@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_device_view.cuh>
@@ -19,7 +8,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -48,8 +37,8 @@ struct ohe_equality_functor {
 
   auto __device__ operator()(size_type i) const noexcept
   {
-    auto const element_index  = cudf::experimental::row::lhs_index_type{i % _input_size};
-    auto const category_index = cudf::experimental::row::rhs_index_type{i / _input_size};
+    auto const element_index  = cudf::detail::row::lhs_index_type{i % _input_size};
+    auto const category_index = cudf::detail::row::rhs_index_type{i / _input_size};
     return _d_equal(element_index, category_index);
   }
 
@@ -79,10 +68,9 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
   auto all_encodings =
     make_numeric_column(data_type{type_id::BOOL8}, total_size, mask_state::UNALLOCATED, stream, mr);
 
-  auto const t_lhs = table_view{{input}};
-  auto const t_rhs = table_view{{categories}};
-  auto const comparator =
-    cudf::experimental::row::equality::two_table_comparator{t_lhs, t_rhs, stream};
+  auto const t_lhs      = table_view{{input}};
+  auto const t_rhs      = table_view{{categories}};
+  auto const comparator = cudf::detail::row::equality::two_table_comparator{t_lhs, t_rhs, stream};
 
   auto const comparator_helper = [&](auto const d_equal) {
     thrust::transform(rmm::exec_policy(stream),

@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import pyarrow as pa
 import pytest
@@ -26,11 +27,10 @@ def test_transpose(arr):
     arrow_tbl = pa.table(data)
     plc_tbl = plc.Table.from_arrow(arrow_tbl)
     got = plc.transpose.transpose(plc_tbl)
-    pa_got = plc.interop.to_arrow(got)
     expect = pa.table(
         pa.Table.from_pandas(
             arrow_tbl.to_pandas().T, preserve_index=False
         ).rename_columns([""] * len(arr)),
-        schema=pa_got.schema,
+        schema=got.to_arrow().schema,
     )
     assert_table_eq(expect, got)

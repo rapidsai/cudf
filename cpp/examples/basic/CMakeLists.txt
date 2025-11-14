@@ -1,4 +1,7 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
 
 cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
 
@@ -28,5 +31,5 @@ add_executable(basic_example src/process_csv.cpp)
 target_link_libraries(basic_example PRIVATE cudf::cudf)
 target_compile_features(basic_example PRIVATE cxx_std_20)
 
-install(TARGETS basic_example DESTINATION bin/examples/libcudf)
-install(FILES ${CMAKE_CURRENT_LIST_DIR}/4stock_5day.csv DESTINATION bin/examples/libcudf)
+install(TARGETS basic_example DESTINATION bin/examples/libcudf/basic)
+install(FILES ${CMAKE_CURRENT_LIST_DIR}/4stock_5day.csv DESTINATION bin/examples/libcudf/basic)

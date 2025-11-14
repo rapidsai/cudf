@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -14,10 +15,14 @@ import pylibcudf as plc
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.api.types import is_integer, is_scalar
+from cudf.api.types import (
+    is_integer,
+    is_scalar,
+    is_string_dtype,
+)
 from cudf.core.accessors.base_accessor import BaseAccessor
-from cudf.core.column.column import ColumnBase, as_column
-from cudf.core.column.lists import ListColumn
+from cudf.core.accessors.lists import ListMethods
+from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.dtypes import ListDtype
 from cudf.options import get_option
 from cudf.utils.dtypes import (
@@ -87,7 +92,17 @@ class StringMethods(BaseAccessor):
             if isinstance(parent.dtype, ListDtype)
             else parent.dtype
         )
-        if value_type != CUDF_STRING_DTYPE:
+        # Convert categorical with string categories to string dtype
+        if isinstance(value_type, cudf.CategoricalDtype) and is_string_dtype(
+            value_type.categories.dtype
+        ):
+            parent = parent.astype(value_type.categories.dtype)
+            value_type = parent.dtype
+            is_valid_string = True
+        else:
+            # Validate dtype is suitable for string operations
+            is_valid_string = is_string_dtype(value_type)
+        if not is_valid_string:
             raise AttributeError(
                 "Can only use .str accessor with string values"
             )
@@ -304,6 +319,8 @@ class StringMethods(BaseAccessor):
 
         if others is None:
             data = self._column.join_strings(sep, na_rep)
+            if len(data) == 0:
+                return ""
         else:
             parent_index = (
                 self._parent.index
@@ -499,14 +516,18 @@ class StringMethods(BaseAccessor):
             )
 
         if isinstance(self._column.dtype, ListDtype):
-            list_column: ListColumn = self._column  # type: ignore[assignment]
+            list_column = self._column
         else:
             # If self._column is not a ListColumn, we will have to
             # split each row by character and create a ListColumn out of it.
-            list_column = self._split_by_character()  # type: ignore[assignment]
+            list_column = self._column.fillna("").character_tokenize()
+            if len(list_column) == 0:
+                list_column = column_empty(  # type: ignore[assignment]
+                    len(self._column), dtype=list_column.dtype
+                )
 
         if is_scalar(sep):
-            data = list_column.join_list_elements(sep, string_na_rep, "")
+            data = list_column.join_list_elements(sep, string_na_rep, "")  # type: ignore[attr-defined]
         elif can_convert_to_column(sep):
             sep_column = as_column(sep)
             if len(sep_column) != len(list_column):
@@ -519,10 +540,10 @@ class StringMethods(BaseAccessor):
                     f"sep_na_rep should be a string scalar, got {sep_na_rep} "
                     f"of type: {type(sep_na_rep)}"
                 )
-            data = list_column.join_list_elements(
-                sep_column,  # type: ignore[arg-type]
+            data = list_column.join_list_elements(  # type: ignore[attr-defined]
+                sep_column,
                 sep_na_rep,
-                string_na_rep,  # type: ignore[arg-type]
+                string_na_rep,
             )
         else:
             raise TypeError(
@@ -530,22 +551,8 @@ class StringMethods(BaseAccessor):
                 f"found {type(sep)}"
             )
 
-        return self._return_or_inplace(data)
-
-    def _split_by_character(self) -> ListColumn:
-        col = self._column.fillna("")  # sanitize nulls
-        result_col = col.character_tokenize()
-
-        offset_col = col.children[0]
-
-        return ListColumn(
-            data=None,
-            size=len(col),
-            dtype=ListDtype(col.dtype),
-            mask=col.mask,
-            offset=0,
-            null_count=0,
-            children=(offset_col, result_col),  # type: ignore[arg-type]
+        return self._return_or_inplace(
+            data._with_type_metadata(self._column.dtype)
         )
 
     def extract(
@@ -608,6 +615,8 @@ class StringMethods(BaseAccessor):
             The `flags` parameter currently only supports re.DOTALL and
             re.MULTILINE.
         """
+        if not isinstance(expand, bool):
+            raise ValueError("expand parameter must be True or False")
         if not _is_supported_regex_flags(flags):
             raise NotImplementedError(
                 "unsupported value for `flags` parameter"
@@ -616,6 +625,8 @@ class StringMethods(BaseAccessor):
         data = self._column.extract(pat, flags)
         if len(data) == 1 and expand is False:
             _, data = data.popitem()  # type: ignore[assignment]
+        elif expand is False and len(data) > 1:
+            expand = True
         return self._return_or_inplace(data, expand=expand)
 
     def contains(
@@ -765,7 +776,7 @@ class StringMethods(BaseAccessor):
                 result_col = self._column.contains_re(pat, flags)  # type: ignore[arg-type]
             else:
                 if case is False:
-                    input_column = self._column.to_lower()  # type: ignore[union-attr]
+                    input_column = self._column.to_lower()
                     pat_normed = pat.lower()  # type: ignore[union-attr]
                 else:
                     input_column = self._column
@@ -775,7 +786,7 @@ class StringMethods(BaseAccessor):
             # TODO: we silently ignore the `regex=` flag here
             col_pat = as_column(pat, dtype=CUDF_STRING_DTYPE)
             if case is False:
-                input_column = self._column.to_lower()  # type: ignore[union-attr]
+                input_column = self._column.to_lower()
                 col_pat = col_pat.to_lower()  # type: ignore[attr-defined]
             else:
                 input_column = self._column
@@ -983,7 +994,7 @@ class StringMethods(BaseAccessor):
             if regex:
                 result = self._column.replace_re(
                     list(pat),
-                    as_column(repl, dtype=CUDF_STRING_DTYPE),
+                    as_column(repl, dtype=CUDF_STRING_DTYPE),  # type: ignore[arg-type]
                 )
             else:
                 result = self._column.replace_multiple(
@@ -991,9 +1002,6 @@ class StringMethods(BaseAccessor):
                     as_column(repl, dtype=CUDF_STRING_DTYPE),  # type: ignore[arg-type]
                 )
             return self._return_or_inplace(result)
-        # Pandas treats 0 as all
-        if n == 0:
-            n = -1
 
         # If 'pat' is re.Pattern then get the pattern string from it
         if regex and isinstance(pat, re.Pattern):
@@ -1004,8 +1012,8 @@ class StringMethods(BaseAccessor):
             raise TypeError(f"repl must be a str, not {type(repl).__name__}.")
 
         # Pandas forces non-regex replace when pat is a single-character
-        if regex is True and len(pat) > 1:
-            result = self._column.replace_re(  # type: ignore[arg-type]
+        if regex is True and len(pat) > 0:
+            result = self._column.replace_re(
                 pat,  # type: ignore[arg-type]
                 pa_repl,
                 n,
@@ -1014,6 +1022,7 @@ class StringMethods(BaseAccessor):
             result = self._column.replace_str(
                 pat,  # type: ignore[arg-type]
                 pa_repl,
+                n,
             )
         return self._return_or_inplace(result)
 
@@ -1120,7 +1129,7 @@ class StringMethods(BaseAccessor):
         dtype: object
         """
         return self._return_or_inplace(
-            self._column.slice_strings(start, stop, step)  # type: ignore[arg-type]
+            self._column.slice_strings(start, stop, step)
         )
 
     def isinteger(self) -> Series | Index:
@@ -2147,7 +2156,7 @@ class StringMethods(BaseAccessor):
         dtype: object
         """
         return self._return_or_inplace(
-            self._column.slice_strings(starts._column, stops._column)  # type: ignore[arg-type]
+            self._column.slice_strings(starts._column, stops._column)
         )
 
     def slice_replace(
@@ -2328,17 +2337,19 @@ class StringMethods(BaseAccessor):
         2    f
         dtype: object
         """
+        if isinstance(self._column.dtype, ListDtype):
+            return ListMethods(self._parent).get(i)
         str_lens = self.len()
         if i < 0:
             next_index = i - 1
             step = -1
-            to_mask = str_lens < abs(i)  # type: ignore[operator]
+            to_mask = str_lens < abs(i)
         else:
             next_index = i + 1
             step = 1
-            to_mask = str_lens <= i  # type: ignore[operator]
+            to_mask = str_lens <= i
         result = self.slice(i, next_index, step)
-        if to_mask.any():  # type: ignore[union-attr]
+        if to_mask.any():
             result[to_mask] = pd.NA  # type: ignore[index]
         return result
 
@@ -2557,12 +2568,16 @@ class StringMethods(BaseAccessor):
 
         if pat is None:
             pat = ""
+            regex = False
 
         if regex and isinstance(pat, re.Pattern):
             pat = pat.pattern
 
-        if len(str(pat)) <= 1:
-            regex = False
+        if regex is None:
+            if len(str(pat)) <= 1:
+                regex = False
+            else:
+                regex = True
 
         result_table: StringColumn | dict[int, StringColumn]
         if expand:
@@ -3005,12 +3020,14 @@ class StringMethods(BaseAccessor):
             raise TypeError(msg)
 
         try:
-            side = plc.strings.side_type.SideType[side.upper()]
+            side_type = plc.strings.side_type.SideType[side.upper()]
         except KeyError:
             raise ValueError(
                 "side has to be either one of {'left', 'right', 'both'}"
             )
-        return self._return_or_inplace(self._column.pad(width, side, fillchar))
+        return self._return_or_inplace(
+            self._column.pad(width, side_type, fillchar)
+        )
 
     def zfill(self, width: int) -> Series | Index:
         """
@@ -3419,6 +3436,8 @@ class StringMethods(BaseAccessor):
         if expand_tabs is True:
             raise NotImplementedError("`expand_tabs=True` is not supported")
         elif expand_tabs is None:
+            if cudf.get_option("mode.pandas_compatible"):
+                raise NotImplementedError("not implemented for pandas mode")
             warnings.warn(
                 "wrap current implementation defaults to `expand_tabs`=False"
             )
@@ -3805,14 +3824,8 @@ class StringMethods(BaseAccessor):
         method: Callable[[plc.Column, plc.Column | plc.Scalar], plc.Column],
         pat: str | tuple[str, ...],
     ) -> Series | Index:
-        if isinstance(pat, tuple) and all(isinstance(p, str) for p in pat):
-            pat = as_column(pat, dtype=CUDF_STRING_DTYPE)  # type: ignore[assignment]
-        elif not isinstance(pat, str):
-            raise TypeError(
-                f"expected a string or tuple, not {type(pat).__name__}"
-            )
         return self._return_or_inplace(
-            self._column.starts_ends_with(method, pat)  # type: ignore[arg-type]
+            self._column.starts_ends_with(method, pat)
         )
 
     def endswith(self, pat: str | tuple[str, ...]) -> Series | Index:
@@ -3821,12 +3834,8 @@ class StringMethods(BaseAccessor):
 
         Parameters
         ----------
-        pat : str or list-like
-            If `str` is an `str`, evaluates whether each string of
-            series ends with `pat`.
-            If `pat` is a list-like, evaluates whether `self[i]`
-            ends with `pat[i]`.
-            Regular expressions are not accepted.
+        pat : str or tuple[str, ...]
+            String pattern or tuple of patterns. Regular expressions are not accepted.
 
         Returns
         -------
@@ -3868,12 +3877,8 @@ class StringMethods(BaseAccessor):
 
         Parameters
         ----------
-        pat : str or list-like
-            If `str` is an `str`, evaluates whether each string of
-            series starts with `pat`.
-            If `pat` is a list-like, evaluates whether `self[i]`
-            starts with `pat[i]`.
-            Regular expressions are not accepted.
+        pat : str or tuple[str, ...]
+            String pattern or tuple of patterns. Regular expressions are not accepted.
 
         Returns
         -------
@@ -3941,10 +3946,10 @@ class StringMethods(BaseAccessor):
         """
         if suffix is None or len(suffix) == 0:
             return self._return_or_inplace(self._column)
-        ends_column = self.endswith(suffix)._column  # type: ignore[union-attr]
-        removed_column = self.slice(0, -len(suffix), None)._column  # type: ignore[union-attr]
+        ends_column = self.endswith(suffix)._column
+        removed_column = self.slice(0, -len(suffix), None)._column
 
-        result = removed_column.copy_if_else(self._column, ends_column)  # type: ignore[arg-type]
+        result = removed_column.copy_if_else(self._column, ends_column)
         return self._return_or_inplace(result)
 
     def removeprefix(self, prefix: str) -> Series | Index:
@@ -3980,9 +3985,9 @@ class StringMethods(BaseAccessor):
         """
         if prefix is None or len(prefix) == 0:
             return self._return_or_inplace(self._column)
-        starts_column = self.startswith(prefix)._column  # type: ignore[union-attr]
-        removed_column = self.slice(len(prefix), None, None)._column  # type: ignore[union-attr]
-        result = removed_column.copy_if_else(self._column, starts_column)  # type: ignore[arg-type]
+        starts_column = self.startswith(prefix)._column
+        removed_column = self.slice(len(prefix), None, None)._column
+        result = removed_column.copy_if_else(self._column, starts_column)
         return self._return_or_inplace(result)
 
     def _find(
@@ -4149,7 +4154,7 @@ class StringMethods(BaseAccessor):
         if end is None:
             end = -1
 
-        result_col = self.find(sub, start, end)._column  # type: ignore[union-attr]
+        result_col = self.find(sub, start, end)._column
 
         result = self._return_or_inplace(result_col)
 
@@ -4211,7 +4216,7 @@ class StringMethods(BaseAccessor):
         if end is None:
             end = -1
 
-        result_col = self.rfind(sub, start, end)._column  # type: ignore[union-attr]
+        result_col = self.rfind(sub, start, end)._column
 
         result = self._return_or_inplace(result_col)
 
@@ -4270,6 +4275,10 @@ class StringMethods(BaseAccessor):
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
         if isinstance(pat, re.Pattern):
+            if flags:
+                raise ValueError(
+                    "cannot process flags argument with a compiled pattern"
+                )
             flags = pat.flags & ~re.U
             pat = pat.pattern
         if not _is_supported_regex_flags(flags):
@@ -4518,7 +4527,7 @@ class StringMethods(BaseAccessor):
 
         if isinstance(delim, ColumnBase):
             result = self._return_or_inplace(
-                self._column.tokenize_column(delim),  # type: ignore[arg-type]
+                self._column.tokenize_column(delim),
                 retain_index=False,
             )
         elif isinstance(delim, plc.Scalar):
@@ -4532,7 +4541,7 @@ class StringMethods(BaseAccessor):
                 for delimiters, but got {type(delimiter)}"
             )
         if isinstance(self._parent, cudf.Series):
-            result.index = self._parent.index.repeat(  # type: ignore
+            result.index = self._parent.index.repeat(  # type: ignore[union-attr]
                 self.token_count(delimiter=delimiter)
             )
         return result
@@ -4621,7 +4630,7 @@ class StringMethods(BaseAccessor):
         2    .
         dtype: object
         """
-        result_col = self._column.character_tokenize()
+        result_col = self._column.character_tokenize().children[1]
         if isinstance(self._parent, cudf.Series):
             lengths = self.len().fillna(0)
             index = self._parent.index.repeat(lengths)
@@ -4659,12 +4668,12 @@ class StringMethods(BaseAccessor):
         delim = _massage_string_arg(delimiter, "delimiter", allow_col=True)
         if isinstance(delim, ColumnBase):
             return self._return_or_inplace(
-                self._column.count_tokens_column(delim)  # type: ignore[arg-type]
+                self._column.count_tokens_column(delim)
             )
 
         elif isinstance(delim, plc.Scalar):
             return self._return_or_inplace(
-                self._column.count_tokens_scalar(delim)  # type: ignore[arg-type]
+                self._column.count_tokens_scalar(delim)
             )
         else:
             raise TypeError(
@@ -4758,11 +4767,11 @@ class StringMethods(BaseAccessor):
         if isinstance(result, cudf.Series) and not as_list:
             # before exploding, removes those lists which have 0 length
             result = result[result.list.len() > 0]
-            return result.explode()  # type: ignore
+            return result.explode()  # type: ignore[union-attr]
         return result
 
     def hash_character_ngrams(
-        self, n: int = 5, as_list: bool = False, seed: np.uint32 = 0
+        self, n: int = 5, as_list: bool = False, seed: int | np.uint32 = 0
     ) -> Series | Index:
         """
         Generate hashes of n-grams from characters in a column of strings.
@@ -5056,9 +5065,7 @@ class StringMethods(BaseAccessor):
         """
         if can_convert_to_column(position):
             position = as_column(position)
-        return self._return_or_inplace(
-            self._column.is_letter(False, position)  # type: ignore[arg-type]
-        )
+        return self._return_or_inplace(self._column.is_letter(False, position))
 
     def is_vowel(self, position) -> Series | Index:
         """
@@ -5093,9 +5100,7 @@ class StringMethods(BaseAccessor):
         """
         if can_convert_to_column(position):
             position = as_column(position)
-        return self._return_or_inplace(
-            self._column.is_letter(True, position)  # type: ignore[arg-type]
-        )
+        return self._return_or_inplace(self._column.is_letter(True, position))
 
     def build_suffix_array(self, min_width: int) -> Series | Index:
         """
@@ -5119,7 +5124,7 @@ class StringMethods(BaseAccessor):
             New column of suffix array
         """
         return self._return_or_inplace(
-            self._column.build_suffix_array(min_width),  # type: ignore[arg-type]
+            self._column.build_suffix_array(min_width),
             inplace=False,
             expand=False,
             retain_index=False,
@@ -5148,7 +5153,7 @@ class StringMethods(BaseAccessor):
         """
         sa_column = sa._column
         return self._return_or_inplace(
-            self._column.resolve_duplicates(sa_column, min_width),  # type: ignore[arg-type]
+            self._column.resolve_duplicates(sa_column, min_width),
             inplace=False,
             expand=False,
             retain_index=False,
@@ -5187,7 +5192,7 @@ class StringMethods(BaseAccessor):
         return self._return_or_inplace(
             self._column.resolve_duplicates_pair(
                 sa1_col, input2_col, sa2_col, min_width
-            ),  # type: ignore[arg-type]
+            ),
             inplace=False,
             expand=False,
             retain_index=False,
@@ -5353,7 +5358,7 @@ class StringMethods(BaseAccessor):
                 return self.minhash64(seed, a_column, b_column, width)
 
     def minhash64(
-        self, seed: np.uint64, a: ColumnLike, b: ColumnLike, width: int
+        self, seed: int | np.uint64, a: ColumnLike, b: ColumnLike, width: int
     ) -> Series | Index:
         """
         Compute the minhash of a strings column.
@@ -5404,7 +5409,7 @@ class StringMethods(BaseAccessor):
         )
 
     def minhash_ngrams(
-        self, ngrams: int, seed: np.uint32, a: ColumnLike, b: ColumnLike
+        self, ngrams: int, seed: int | np.uint32, a: ColumnLike, b: ColumnLike
     ) -> Series | Index:
         """
         Compute the minhash of a list column of strings.
@@ -5455,7 +5460,7 @@ class StringMethods(BaseAccessor):
         )
 
     def minhash64_ngrams(
-        self, ngrams: int, seed: np.uint64, a: ColumnLike, b: ColumnLike
+        self, ngrams: int, seed: int | np.uint64, a: ColumnLike, b: ColumnLike
     ) -> Series | Index:
         """
         Compute the minhash of a list column of strings.
@@ -5529,5 +5534,5 @@ class StringMethods(BaseAccessor):
         dtype: float32
         """
         return self._return_or_inplace(
-            self._column.jaccard_index(input._column, width)  # type: ignore[arg-type]
+            self._column.jaccard_index(input._column, width)
         )

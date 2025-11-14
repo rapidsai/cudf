@@ -1,27 +1,15 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/utilities/parsing_utils.cuh"
-#include "io/utilities/string_parsing.hpp"
 #include "nested_json.hpp"
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/io/detail/json.hpp>
@@ -129,7 +117,7 @@ reduce_to_column_tree(tree_meta_t const& tree,
                         unique_col_ids.begin(),
                         max_row_offsets.begin(),
                         cuda::std::equal_to<size_type>(),
-                        cudf::detail::maximum<size_type>());
+                        cuda::maximum<size_type>());
 
   // 3. reduce_by_key {col_id}, {node_categories} - custom opp (*+v=*, v+v=v, *+#=E)
   rmm::device_uvector<NodeT> column_categories(num_columns, stream);
@@ -503,8 +491,12 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
         null_count == 0 ? rmm::device_buffer{0, stream, mr} : std::move(result_bitmask),
         stream,
         mr);
-      // Since some rows in child column may need to be nullified due to mixed types, we can not
-      // skip the purge_nonempty_nulls call in make_lists_column factory
+      // Since some rows in child column may need to be nullified due to mixed types, we cannot
+      // skip the purge_nonempty_nulls call.
+      if (auto const output_cv = ret_col->view();
+          cudf::detail::has_nonempty_nulls(output_cv, stream)) {
+        ret_col = cudf::detail::purge_nonempty_nulls(output_cv, stream, mr);
+      }
       return {std::move(ret_col), std::move(column_names)};
     }
     default: CUDF_FAIL("Unsupported column type"); break;

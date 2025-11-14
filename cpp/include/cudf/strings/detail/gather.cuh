@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -233,7 +222,7 @@ rmm::device_uvector<char> gather_chars(StringIterator strings_begin,
   if (output_count == 0) return rmm::device_uvector<char>(0, stream, mr);
 
   auto chars_data = rmm::device_uvector<char>(chars_bytes, stream, mr);
-  cudf::experimental::prefetch::detail::prefetch("gather", chars_data, stream);
+  cudf::prefetch::detail::prefetch(chars_data, stream);
   auto d_chars = chars_data.data();
 
   constexpr int warps_per_threadblock = 4;
@@ -316,8 +305,7 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
   // build chars column
   auto const offsets_view =
     cudf::detail::offsetalator_factory::make_input_iterator(out_offsets_column->view());
-  cudf::experimental::prefetch::detail::prefetch(
-    "gather", strings.chars_begin(stream), strings.chars_size(stream), stream);
+  cudf::prefetch::detail::prefetch(strings.chars_begin(stream), strings.chars_size(stream), stream);
   auto out_chars_data = gather_chars(
     d_strings->begin<string_view>(), begin, end, offsets_view, total_bytes, stream, mr);
 

@@ -1,8 +1,11 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from cython.operator import dereference
 
+from libc.stddef cimport size_t
 from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.optional cimport optional
 from libcpp.utility cimport move
 from pylibcudf.libcudf cimport join as cpp_join
 from pylibcudf.libcudf.column.column cimport column
@@ -10,10 +13,13 @@ from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.types cimport null_equality
 
 from rmm.librmm.device_buffer cimport device_buffer
+from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from .column cimport Column
 from .expressions cimport Expression
 from .table cimport Table
+from .utils cimport _get_stream, _get_memory_resource
 
 __all__ = [
     "conditional_full_join",
@@ -34,7 +40,9 @@ __all__ = [
     "mixed_left_semi_join",
 ]
 
-cdef Column _column_from_gather_map(cpp_join.gather_map_type gather_map):
+cdef Column _column_from_gather_map(
+    cpp_join.gather_map_type gather_map, Stream stream, DeviceMemoryResource mr
+):
     # helper to convert a gather map to a Column
     return Column.from_libcudf(
         move(
@@ -43,14 +51,18 @@ cdef Column _column_from_gather_map(cpp_join.gather_map_type gather_map):
                 device_buffer(),
                 0
             )
-        )
+        ),
+        stream,
+        mr
     )
 
 
 cpdef tuple inner_join(
     Table left_keys,
     Table right_keys,
-    null_equality nulls_equal
+    null_equality nulls_equal,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Perform an inner join between two tables.
 
@@ -72,18 +84,26 @@ cpdef tuple inner_join(
         join.
     """
     cdef cpp_join.gather_map_pair_type c_result
+
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
+
     with nogil:
-        c_result = cpp_join.inner_join(left_keys.view(), right_keys.view(), nulls_equal)
+        c_result = cpp_join.inner_join(
+            left_keys.view(), right_keys.view(), nulls_equal, stream.view(), mr.get_mr()
+        )
     return (
-        _column_from_gather_map(move(c_result.first)),
-        _column_from_gather_map(move(c_result.second)),
+        _column_from_gather_map(move(c_result.first), stream, mr),
+        _column_from_gather_map(move(c_result.second), stream, mr),
     )
 
 
 cpdef tuple left_join(
     Table left_keys,
     Table right_keys,
-    null_equality nulls_equal
+    null_equality nulls_equal,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Perform a left join between two tables.
 
@@ -105,18 +125,26 @@ cpdef tuple left_join(
         join.
     """
     cdef cpp_join.gather_map_pair_type c_result
+
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
+
     with nogil:
-        c_result = cpp_join.left_join(left_keys.view(), right_keys.view(), nulls_equal)
+        c_result = cpp_join.left_join(
+            left_keys.view(), right_keys.view(), nulls_equal, stream.view(), mr.get_mr()
+        )
     return (
-        _column_from_gather_map(move(c_result.first)),
-        _column_from_gather_map(move(c_result.second)),
+        _column_from_gather_map(move(c_result.first), stream, mr),
+        _column_from_gather_map(move(c_result.second), stream, mr),
     )
 
 
 cpdef tuple full_join(
     Table left_keys,
     Table right_keys,
-    null_equality nulls_equal
+    null_equality nulls_equal,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Perform a full join between two tables.
 
@@ -138,18 +166,26 @@ cpdef tuple full_join(
         join.
     """
     cdef cpp_join.gather_map_pair_type c_result
+
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
+
     with nogil:
-        c_result = cpp_join.full_join(left_keys.view(), right_keys.view(), nulls_equal)
+        c_result = cpp_join.full_join(
+            left_keys.view(), right_keys.view(), nulls_equal, stream.view(), mr.get_mr()
+        )
     return (
-        _column_from_gather_map(move(c_result.first)),
-        _column_from_gather_map(move(c_result.second)),
+        _column_from_gather_map(move(c_result.first), stream, mr),
+        _column_from_gather_map(move(c_result.second), stream, mr),
     )
 
 
 cpdef Column left_semi_join(
     Table left_keys,
     Table right_keys,
-    null_equality nulls_equal
+    null_equality nulls_equal,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Perform a left semi join between two tables.
 
@@ -170,19 +206,27 @@ cpdef Column left_semi_join(
         A column containing the row indices from the left table after the join.
     """
     cdef cpp_join.gather_map_type c_result
+
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
+
     with nogil:
         c_result = cpp_join.left_semi_join(
             left_keys.view(),
             right_keys.view(),
-            nulls_equal
+            nulls_equal,
+            stream.view(),
+            mr.get_mr()
         )
-    return _column_from_gather_map(move(c_result))
+    return _column_from_gather_map(move(c_result), stream, mr)
 
 
 cpdef Column left_anti_join(
     Table left_keys,
     Table right_keys,
-    null_equality nulls_equal
+    null_equality nulls_equal,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Perform a left anti join between two tables.
 
@@ -203,16 +247,24 @@ cpdef Column left_anti_join(
         A column containing the row indices from the left table after the join.
     """
     cdef cpp_join.gather_map_type c_result
+
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
+
     with nogil:
         c_result = cpp_join.left_anti_join(
             left_keys.view(),
             right_keys.view(),
-            nulls_equal
+            nulls_equal,
+            stream.view(),
+            mr.get_mr()
         )
-    return _column_from_gather_map(move(c_result))
+    return _column_from_gather_map(move(c_result), stream, mr)
 
 
-cpdef Table cross_join(Table left, Table right):
+cpdef Table cross_join(
+    Table left, Table right, Stream stream=None, DeviceMemoryResource mr=None
+):
     """Perform a cross join on two tables.
 
     For details see :cpp:func:`cross_join`.
@@ -223,6 +275,10 @@ cpdef Table cross_join(Table left, Table right):
         The left table to join.
     right: Table
         The right table to join.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned table's device memory.
 
     Returns
     -------
@@ -230,15 +286,23 @@ cpdef Table cross_join(Table left, Table right):
         The result of cross joining the two inputs.
     """
     cdef unique_ptr[table] result
+
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
+
     with nogil:
-        result = cpp_join.cross_join(left.view(), right.view())
-    return Table.from_libcudf(move(result))
+        result = cpp_join.cross_join(
+            left.view(), right.view(), stream.view(), mr.get_mr()
+        )
+    return Table.from_libcudf(move(result), stream, mr)
 
 
 cpdef tuple conditional_inner_join(
     Table left,
     Table right,
     Expression binary_predicate,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Perform a conditional inner join between two tables.
 
@@ -260,13 +324,23 @@ cpdef tuple conditional_inner_join(
         join.
     """
     cdef cpp_join.gather_map_pair_type c_result
+    cdef optional[size_t] output_size
+
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
+
     with nogil:
         c_result = cpp_join.conditional_inner_join(
-            left.view(), right.view(), dereference(binary_predicate.c_obj.get())
+            left.view(),
+            right.view(),
+            dereference(binary_predicate.c_obj.get()),
+            output_size,
+            stream.view(),
+            mr.get_mr()
         )
     return (
-        _column_from_gather_map(move(c_result.first)),
-        _column_from_gather_map(move(c_result.second)),
+        _column_from_gather_map(move(c_result.first), stream, mr),
+        _column_from_gather_map(move(c_result.second), stream, mr),
     )
 
 
@@ -274,6 +348,8 @@ cpdef tuple conditional_left_join(
     Table left,
     Table right,
     Expression binary_predicate,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Perform a conditional left join between two tables.
 
@@ -295,13 +371,23 @@ cpdef tuple conditional_left_join(
         join.
     """
     cdef cpp_join.gather_map_pair_type c_result
+    cdef optional[size_t] output_size
+
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
+
     with nogil:
         c_result = cpp_join.conditional_left_join(
-            left.view(), right.view(), dereference(binary_predicate.c_obj.get())
+            left.view(),
+            right.view(),
+            dereference(binary_predicate.c_obj.get()),
+            output_size,
+            stream.view(),
+            mr.get_mr()
         )
     return (
-        _column_from_gather_map(move(c_result.first)),
-        _column_from_gather_map(move(c_result.second)),
+        _column_from_gather_map(move(c_result.first), stream, mr),
+        _column_from_gather_map(move(c_result.second), stream, mr),
     )
 
 
@@ -309,6 +395,8 @@ cpdef tuple conditional_full_join(
     Table left,
     Table right,
     Expression binary_predicate,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Perform a conditional full join between two tables.
 
@@ -330,13 +418,21 @@ cpdef tuple conditional_full_join(
         join.
     """
     cdef cpp_join.gather_map_pair_type c_result
+
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
+
     with nogil:
         c_result = cpp_join.conditional_full_join(
-            left.view(), right.view(), dereference(binary_predicate.c_obj.get())
+            left.view(),
+            right.view(),
+            dereference(binary_predicate.c_obj.get()),
+            stream.view(),
+            mr.get_mr()
         )
     return (
-        _column_from_gather_map(move(c_result.first)),
-        _column_from_gather_map(move(c_result.second)),
+        _column_from_gather_map(move(c_result.first), stream, mr),
+        _column_from_gather_map(move(c_result.second), stream, mr),
     )
 
 
@@ -344,6 +440,8 @@ cpdef Column conditional_left_semi_join(
     Table left,
     Table right,
     Expression binary_predicate,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Perform a conditional left semi join between two tables.
 
@@ -364,17 +462,29 @@ cpdef Column conditional_left_semi_join(
         A column containing the row indices from the left table after the join.
     """
     cdef cpp_join.gather_map_type c_result
+    cdef optional[size_t] output_size
+
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
+
     with nogil:
         c_result = cpp_join.conditional_left_semi_join(
-            left.view(), right.view(), dereference(binary_predicate.c_obj.get())
+            left.view(),
+            right.view(),
+            dereference(binary_predicate.c_obj.get()),
+            output_size,
+            stream.view(),
+            mr.get_mr()
         )
-    return _column_from_gather_map(move(c_result))
+    return _column_from_gather_map(move(c_result), stream, mr)
 
 
 cpdef Column conditional_left_anti_join(
     Table left,
     Table right,
     Expression binary_predicate,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Perform a conditional left anti join between two tables.
 
@@ -395,11 +505,21 @@ cpdef Column conditional_left_anti_join(
         A column containing the row indices from the left table after the join.
     """
     cdef cpp_join.gather_map_type c_result
+    cdef optional[size_t] output_size
+
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
+
     with nogil:
         c_result = cpp_join.conditional_left_anti_join(
-            left.view(), right.view(), dereference(binary_predicate.c_obj.get())
+            left.view(),
+            right.view(),
+            dereference(binary_predicate.c_obj.get()),
+            output_size,
+            stream.view(),
+            mr.get_mr()
         )
-    return _column_from_gather_map(move(c_result))
+    return _column_from_gather_map(move(c_result), stream, mr)
 
 
 cpdef tuple mixed_inner_join(
@@ -408,7 +528,9 @@ cpdef tuple mixed_inner_join(
     Table left_conditional,
     Table right_conditional,
     Expression binary_predicate,
-    null_equality nulls_equal
+    null_equality nulls_equal,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Perform a mixed inner join between two tables.
 
@@ -436,6 +558,11 @@ cpdef tuple mixed_inner_join(
         join.
     """
     cdef cpp_join.gather_map_pair_type c_result
+    cdef cpp_join.output_size_data_type empty_optional
+
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
+
     with nogil:
         c_result = cpp_join.mixed_inner_join(
             left_keys.view(),
@@ -444,10 +571,13 @@ cpdef tuple mixed_inner_join(
             right_conditional.view(),
             dereference(binary_predicate.c_obj.get()),
             nulls_equal,
+            empty_optional,
+            stream.view(),
+            mr.get_mr()
         )
     return (
-        _column_from_gather_map(move(c_result.first)),
-        _column_from_gather_map(move(c_result.second)),
+        _column_from_gather_map(move(c_result.first), stream, mr),
+        _column_from_gather_map(move(c_result.second), stream, mr),
     )
 
 
@@ -457,7 +587,9 @@ cpdef tuple mixed_left_join(
     Table left_conditional,
     Table right_conditional,
     Expression binary_predicate,
-    null_equality nulls_equal
+    null_equality nulls_equal,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Perform a mixed left join between two tables.
 
@@ -485,6 +617,11 @@ cpdef tuple mixed_left_join(
         join.
     """
     cdef cpp_join.gather_map_pair_type c_result
+    cdef cpp_join.output_size_data_type empty_optional
+
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
+
     with nogil:
         c_result = cpp_join.mixed_left_join(
             left_keys.view(),
@@ -493,10 +630,13 @@ cpdef tuple mixed_left_join(
             right_conditional.view(),
             dereference(binary_predicate.c_obj.get()),
             nulls_equal,
+            empty_optional,
+            stream.view(),
+            mr.get_mr()
         )
     return (
-        _column_from_gather_map(move(c_result.first)),
-        _column_from_gather_map(move(c_result.second)),
+        _column_from_gather_map(move(c_result.first), stream, mr),
+        _column_from_gather_map(move(c_result.second), stream, mr),
     )
 
 
@@ -506,7 +646,9 @@ cpdef tuple mixed_full_join(
     Table left_conditional,
     Table right_conditional,
     Expression binary_predicate,
-    null_equality nulls_equal
+    null_equality nulls_equal,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Perform a mixed full join between two tables.
 
@@ -534,6 +676,11 @@ cpdef tuple mixed_full_join(
         join.
     """
     cdef cpp_join.gather_map_pair_type c_result
+    cdef cpp_join.output_size_data_type empty_optional
+
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
+
     with nogil:
         c_result = cpp_join.mixed_full_join(
             left_keys.view(),
@@ -542,10 +689,13 @@ cpdef tuple mixed_full_join(
             right_conditional.view(),
             dereference(binary_predicate.c_obj.get()),
             nulls_equal,
+            empty_optional,
+            stream.view(),
+            mr.get_mr()
         )
     return (
-        _column_from_gather_map(move(c_result.first)),
-        _column_from_gather_map(move(c_result.second)),
+        _column_from_gather_map(move(c_result.first), stream, mr),
+        _column_from_gather_map(move(c_result.second), stream, mr),
     )
 
 
@@ -555,7 +705,9 @@ cpdef Column mixed_left_semi_join(
     Table left_conditional,
     Table right_conditional,
     Expression binary_predicate,
-    null_equality nulls_equal
+    null_equality nulls_equal,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Perform a mixed left semi join between two tables.
 
@@ -582,6 +734,10 @@ cpdef Column mixed_left_semi_join(
         A column containing the row indices from the left table after the join.
     """
     cdef cpp_join.gather_map_type c_result
+
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
+
     with nogil:
         c_result = cpp_join.mixed_left_semi_join(
             left_keys.view(),
@@ -590,8 +746,10 @@ cpdef Column mixed_left_semi_join(
             right_conditional.view(),
             dereference(binary_predicate.c_obj.get()),
             nulls_equal,
+            stream.view(),
+            mr.get_mr()
         )
-    return _column_from_gather_map(move(c_result))
+    return _column_from_gather_map(move(c_result), stream, mr)
 
 
 cpdef Column mixed_left_anti_join(
@@ -600,7 +758,9 @@ cpdef Column mixed_left_anti_join(
     Table left_conditional,
     Table right_conditional,
     Expression binary_predicate,
-    null_equality nulls_equal
+    null_equality nulls_equal,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Perform a mixed left anti join between two tables.
 
@@ -627,6 +787,10 @@ cpdef Column mixed_left_anti_join(
         A column containing the row indices from the left table after the join.
     """
     cdef cpp_join.gather_map_type c_result
+
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
+
     with nogil:
         c_result = cpp_join.mixed_left_anti_join(
             left_keys.view(),
@@ -635,5 +799,7 @@ cpdef Column mixed_left_anti_join(
             right_conditional.view(),
             dereference(binary_predicate.c_obj.get()),
             nulls_equal,
+            stream.view(),
+            mr.get_mr()
         )
-    return _column_from_gather_map(move(c_result))
+    return _column_from_gather_map(move(c_result), stream, mr)

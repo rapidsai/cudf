@@ -1,25 +1,14 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #include "nvcomp_adapter.cuh"
 
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
@@ -58,6 +47,23 @@ batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> c
           std::move(input_data_sizes),
           std::move(output_data_ptrs),
           std::move(output_data_sizes)};
+}
+
+std::pair<rmm::device_uvector<void const*>, rmm::device_uvector<size_t>> create_get_temp_size_args(
+  device_span<device_span<uint8_t const> const> inputs, rmm::cuda_stream_view stream)
+{
+  rmm::device_uvector<void const*> input_data_ptrs(inputs.size(), stream);
+  rmm::device_uvector<size_t> input_data_sizes(inputs.size(), stream);
+
+  auto ins_it = thrust::make_zip_iterator(input_data_ptrs.begin(), input_data_sizes.begin());
+  thrust::transform(
+    rmm::exec_policy_nosync(stream),
+    inputs.begin(),
+    inputs.end(),
+    ins_it,
+    [] __device__(auto const& in) { return thrust::make_tuple(in.data(), in.size()); });
+
+  return {std::move(input_data_ptrs), std::move(input_data_sizes)};
 }
 
 void update_compression_results(device_span<nvcompStatus_t const> nvcomp_stats,
@@ -119,11 +125,8 @@ void skip_unsupported_inputs(device_span<size_t> input_sizes,
 std::pair<size_t, size_t> max_chunk_and_total_input_size(device_span<size_t const> input_sizes,
                                                          rmm::cuda_stream_view stream)
 {
-  auto const max = thrust::reduce(rmm::exec_policy(stream),
-                                  input_sizes.begin(),
-                                  input_sizes.end(),
-                                  0ul,
-                                  cudf::detail::maximum<size_t>());
+  auto const max = thrust::reduce(
+    rmm::exec_policy(stream), input_sizes.begin(), input_sizes.end(), 0ul, cuda::maximum<size_t>());
   auto const sum = thrust::reduce(rmm::exec_policy(stream), input_sizes.begin(), input_sizes.end());
   return {max, sum};
 }

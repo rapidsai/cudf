@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -116,6 +105,8 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
 
 class aggregation_finalizer {  // Declares the interface for the finalizer
  public:
+  virtual ~aggregation_finalizer() = default;
+
   // Declare overloads for each kind of a agg to dispatch
   virtual void visit(aggregation const& agg);
   virtual void visit(class sum_aggregation const& agg);
@@ -185,7 +176,9 @@ class sum_aggregation final : public rolling_aggregation,
  * @brief Derived class for specifying a sum_with_overflow aggregation
  */
 class sum_with_overflow_aggregation final : public groupby_aggregation,
-                                            public groupby_scan_aggregation {
+                                            public groupby_scan_aggregation,
+                                            public reduce_aggregation,
+                                            public segmented_reduce_aggregation {
  public:
   sum_with_overflow_aggregation() : aggregation(SUM_WITH_OVERFLOW) {}
 
@@ -277,7 +270,8 @@ class max_aggregation final : public rolling_aggregation,
  */
 class count_aggregation final : public rolling_aggregation,
                                 public groupby_aggregation,
-                                public groupby_scan_aggregation {
+                                public groupby_scan_aggregation,
+                                public reduce_aggregation {
  public:
   count_aggregation(aggregation::Kind kind) : aggregation(kind) {}
 
@@ -558,7 +552,9 @@ class quantile_aggregation final : public groupby_aggregation, public reduce_agg
 /**
  * @brief Derived class for specifying an argmax aggregation
  */
-class argmax_aggregation final : public rolling_aggregation, public groupby_aggregation {
+class argmax_aggregation final : public rolling_aggregation,
+                                 public groupby_aggregation,
+                                 public reduce_aggregation {
  public:
   argmax_aggregation() : aggregation(ARGMAX) {}
 
@@ -577,7 +573,9 @@ class argmax_aggregation final : public rolling_aggregation, public groupby_aggr
 /**
  * @brief Derived class for specifying an argmin aggregation
  */
-class argmin_aggregation final : public rolling_aggregation, public groupby_aggregation {
+class argmin_aggregation final : public rolling_aggregation,
+                                 public groupby_aggregation,
+                                 public reduce_aggregation {
  public:
   argmin_aggregation() : aggregation(ARGMIN) {}
 
@@ -1376,11 +1374,9 @@ constexpr bool is_sum_product_agg(aggregation::Kind k)
          (k == aggregation::SUM_OF_SQUARES);
 }
 
-// Summing/Multiplying integers of any type, always use int64_t accumulator (except
-// SUM_WITH_OVERFLOW which has its own template)
+// Summing/Multiplying integers of any type, always use int64_t accumulator
 template <typename Source, aggregation::Kind k>
-  requires(std::is_integral_v<Source> && is_sum_product_agg(k) &&
-           k != aggregation::SUM_WITH_OVERFLOW)
+  requires(std::is_integral_v<Source> && is_sum_product_agg(k))
 struct target_type_impl<Source, k> {
   using type = int64_t;
 };
@@ -1394,11 +1390,9 @@ struct target_type_impl<
   using type = Source;
 };
 
-// Summing/Multiplying float/doubles, use same type accumulator (except SUM_WITH_OVERFLOW which has
-// its own template)
+// Summing/Multiplying float/doubles, use same type accumulator
 template <typename Source, aggregation::Kind k>
-  requires(std::is_floating_point_v<Source> && is_sum_product_agg(k) &&
-           k != aggregation::SUM_WITH_OVERFLOW)
+  requires(std::is_floating_point_v<Source> && is_sum_product_agg(k))
 struct target_type_impl<Source, k> {
   using type = Source;
 };
@@ -1411,8 +1405,11 @@ struct target_type_impl<Source,
   using type = Source;
 };
 
-// SUM_WITH_OVERFLOW always outputs a struct {sum: int64_t, overflow: bool} regardless of input type
+// SUM_WITH_OVERFLOW outputs a struct {sum: Source, overflow: bool} where sum type matches input
+// type, only supports signed integral types (excluding bool) and decimal types
 template <typename Source>
+  requires((cudf::is_integral_not_bool<Source>() && cudf::is_signed<Source>()) ||
+           cudf::is_fixed_point<Source>())
 struct target_type_impl<Source, aggregation::SUM_WITH_OVERFLOW> {
   using type = struct_view;  // SUM_WITH_OVERFLOW outputs a struct with sum and overflow fields
 };
@@ -1514,12 +1511,14 @@ struct target_type_impl<Source, aggregation::LAG> {
 
 // Always use list for MERGE_LISTS
 template <typename Source>
+  requires cuda::std::is_same_v<Source, cudf::list_view>
 struct target_type_impl<Source, aggregation::MERGE_LISTS> {
   using type = list_view;
 };
 
 // Always use list for MERGE_SETS
 template <typename Source>
+  requires cuda::std::is_same_v<Source, cudf::list_view>
 struct target_type_impl<Source, aggregation::MERGE_SETS> {
   using type = list_view;
 };
@@ -1812,7 +1811,7 @@ bool is_valid_aggregation(data_type source, aggregation::Kind k);
  * columns. The aggregations determine the identity value for each column.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-void initialize_with_identity(mutable_table_view& table,
+void initialize_with_identity(mutable_table_view const& table,
                               host_span<cudf::aggregation::Kind const> aggs,
                               rmm::cuda_stream_view stream);
 

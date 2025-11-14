@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -19,9 +8,10 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/row_operator/equality.cuh>
+#include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -33,43 +23,17 @@
 #include <utility>
 
 namespace cudf::detail {
-/**
- * @brief Remaps a hash value to a new value if it is equal to the specified sentinel value.
- *
- * @param hash The hash value to potentially remap
- * @param sentinel The reserved value
- */
-template <typename H, typename S>
-constexpr auto remap_sentinel_hash(H hash, S sentinel)
-{
-  // Arbitrarily choose hash - 1
-  return (hash == sentinel) ? (hash - 1) : hash;
-}
+template <typename Hasher>
+struct pair_fn {
+  CUDF_HOST_DEVICE pair_fn(Hasher hash) : _hash{std::move(hash)} {}
 
-/**
- * @brief Device functor to create a pair of {hash_value, row_index} for a given row.
- *
- * @tparam T Type of row index, must be convertible to `size_type`.
- * @tparam Hasher The type of internal hasher to compute row hash.
- */
-template <typename Hasher, typename T = size_type>
-class make_pair_function {
- public:
-  CUDF_HOST_DEVICE make_pair_function(Hasher const& hash, hash_value_type const empty_key_sentinel)
-    : _hash{hash}, _empty_key_sentinel{empty_key_sentinel}
+  __device__ cuco::pair<hash_value_type, size_type> operator()(size_type i) const noexcept
   {
-  }
-
-  __device__ __forceinline__ auto operator()(size_type i) const noexcept
-  {
-    // Compute the hash value of row `i`
-    auto row_hash_value = remap_sentinel_hash(_hash(i), _empty_key_sentinel);
-    return cuco::make_pair(row_hash_value, T{i});
+    return cuco::pair{_hash(i), i};
   }
 
  private:
   Hasher _hash;
-  hash_value_type const _empty_key_sentinel;
 };
 
 /**
@@ -120,8 +84,8 @@ class pair_equality {
   template <typename LhsPair, typename RhsPair>
   __device__ __forceinline__ bool operator()(LhsPair const& lhs, RhsPair const& rhs) const noexcept
   {
-    using experimental::row::lhs_index_type;
-    using experimental::row::rhs_index_type;
+    using detail::row::lhs_index_type;
+    using detail::row::rhs_index_type;
 
     return lhs.first == rhs.first and
            _check_row_equality(lhs_index_type{rhs.second}, rhs_index_type{lhs.second});
@@ -137,7 +101,7 @@ class pair_equality {
  *
  * In this case all the valid indices of the left table
  * are returned with their corresponding right indices being set to
- * JoinNoneValue, i.e. -1.
+ * `JoinNoMatch`, i.e. `cuda::std::numeric_limits<size_type>::min()`.
  *
  * @param left Table of left columns to join
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -157,45 +121,47 @@ get_trivial_left_join_indices(table_view const& left,
  * @tparam MultimapType The type of the hash table
  *
  * @param build Table of columns used to build join hash.
- * @param preprocessed_build shared_ptr to cudf::experimental::row::equality::preprocessed_table
+ * @param preprocessed_build shared_ptr to cudf::detail::row::equality::preprocessed_table
  * for build
  * @param hash_table Build hash table.
- * @param has_nulls Flag to denote if build or probe tables have nested nulls
+ * @param has_nested_nulls Flag to denote if build or probe tables have nested nulls
  * @param nulls_equal Flag to denote nulls are equal or not.
  * @param bitmask Bitmask to denote whether a row is valid.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-template <typename MultimapType>
+template <typename HashTable>
 void build_join_hash_table(
   cudf::table_view const& build,
-  std::shared_ptr<experimental::row::equality::preprocessed_table> const& preprocessed_build,
-  MultimapType& hash_table,
-  bool has_nulls,
+  std::shared_ptr<detail::row::equality::preprocessed_table> const& preprocessed_build,
+  HashTable& hash_table,
+  bool has_nested_nulls,
   null_equality nulls_equal,
   [[maybe_unused]] bitmask_type const* bitmask,
   rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(0 != build.num_columns(), "Selected build dataset is empty");
-  CUDF_EXPECTS(0 != build.num_rows(), "Build side table has no rows");
+  CUDF_EXPECTS(0 != build.num_columns(), "Selected build dataset is empty", std::invalid_argument);
+  CUDF_EXPECTS(0 != build.num_rows(), "Build side table has no rows", std::invalid_argument);
 
-  auto const row_hash   = experimental::row::hash::row_hasher{preprocessed_build};
-  auto const hash_build = row_hash.device_hasher(nullate::DYNAMIC{has_nulls});
+  auto insert_rows = [&](auto const& build, auto const& d_hasher) {
+    auto const iter = cudf::detail::make_counting_transform_iterator(0, pair_fn{d_hasher});
 
-  auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
-  make_pair_function pair_func{hash_build, empty_key_sentinel};
+    if (nulls_equal == cudf::null_equality::EQUAL or not nullable(build)) {
+      hash_table.insert_async(iter, iter + build.num_rows(), stream.value());
+    } else {
+      auto const stencil = thrust::counting_iterator<size_type>{0};
+      auto const pred    = row_is_valid{bitmask};
 
-  auto const iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
+      // insert valid rows
+      hash_table.insert_if_async(iter, iter + build.num_rows(), stencil, pred, stream.value());
+    }
+  };
 
-  size_type const build_table_num_rows{build.num_rows()};
-  if (nulls_equal == cudf::null_equality::EQUAL or (not nullable(build))) {
-    hash_table.insert(iter, iter + build_table_num_rows, stream.value());
-  } else {
-    thrust::counting_iterator<size_type> stencil(0);
-    row_is_valid pred{bitmask};
+  auto const nulls = nullate::DYNAMIC{has_nested_nulls};
 
-    // insert valid rows
-    hash_table.insert_if(iter, iter + build_table_num_rows, stencil, pred, stream.value());
-  }
+  auto const row_hash = detail::row::hash::row_hasher{preprocessed_build};
+  auto const d_hasher = row_hash.device_hasher(nulls);
+
+  insert_rows(build, d_hasher);
 }
 
 // Convenient alias for a pair of unique pointers to device uvectors.
@@ -229,7 +195,7 @@ VectorPair concatenate_vector_pairs(VectorPair& a, VectorPair& b, rmm::cuda_stre
 /**
  * @brief  Creates a table containing the complement of left join indices.
  *
- * This table has two columns. The first one is filled with JoinNoneValue(-1)
+ * This table has two columns. The first one is filled with `JoinNoMatch`
  * and the second one contains values from 0 to right_table_row_count - 1
  * excluding those found in the right_indices column.
  *
@@ -262,4 +228,5 @@ struct valid_range {
     return ((index >= start) && (index < stop));
   }
 };
+
 }  // namespace cudf::detail

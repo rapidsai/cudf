@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "join_common_utils.cuh"
@@ -20,12 +9,12 @@
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
-#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/join/mixed_join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -119,11 +108,11 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   auto right_conditional_view = table_device_view::create(right_conditional, stream);
 
   auto const preprocessed_build =
-    cudf::experimental::row::equality::preprocessed_table::create(build, stream);
+    cudf::detail::row::equality::preprocessed_table::create(build, stream);
   auto const preprocessed_probe =
-    cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
+    cudf::detail::row::equality::preprocessed_table::create(probe, stream);
   auto const row_comparator =
-    cudf::experimental::row::equality::two_table_comparator{preprocessed_build, preprocessed_probe};
+    cudf::detail::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
   auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
   // Create hash table containing all keys found in right table
@@ -131,7 +120,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   // places. However, this probably isn't worth adding any time soon since we
   // won't be able to support AST conditions for those types anyway.
   auto const build_nulls    = cudf::nullate::DYNAMIC{cudf::has_nulls(build)};
-  auto const row_hash_build = cudf::experimental::row::hash::row_hasher{preprocessed_build};
+  auto const row_hash_build = cudf::detail::row::hash::row_hasher{preprocessed_build};
 
   // Since we may see multiple rows that are identical in the equality tables
   // but differ in the conditional tables, the equality comparator used for
@@ -143,26 +132,25 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   // that requires additional plumbing through the AST machinery and is out of
   // scope for now.
   auto const row_comparator_build =
-    cudf::experimental::row::equality::two_table_comparator{preprocessed_build, preprocessed_build};
+    cudf::detail::row::equality::two_table_comparator{preprocessed_build, preprocessed_build};
   auto const equality_build_equality =
     row_comparator_build.equal_to<false>(build_nulls, compare_nulls);
   auto const preprocessed_build_condtional =
-    cudf::experimental::row::equality::preprocessed_table::create(right_conditional, stream);
-  auto const row_comparator_conditional_build =
-    cudf::experimental::row::equality::two_table_comparator{preprocessed_build_condtional,
-                                                            preprocessed_build_condtional};
+    cudf::detail::row::equality::preprocessed_table::create(right_conditional, stream);
+  auto const row_comparator_conditional_build = cudf::detail::row::equality::two_table_comparator{
+    preprocessed_build_condtional, preprocessed_build_condtional};
   auto const equality_build_conditional =
     row_comparator_conditional_build.equal_to<false>(build_nulls, compare_nulls);
 
-  hash_set_type row_set{
-    {compute_hash_table_size(build.num_rows())},
-    cuco::empty_key{JoinNoneValue},
-    {equality_build_equality, equality_build_conditional},
-    {row_hash_build.device_hasher(build_nulls)},
-    {},
-    {},
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-    {stream.value()}};
+  hash_set_type row_set{{static_cast<std::size_t>(build.num_rows())},
+                        cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
+                        cuco::empty_key{JoinNoMatch},
+                        {equality_build_equality, equality_build_conditional},
+                        {row_hash_build.device_hasher(build_nulls)},
+                        {},
+                        {},
+                        rmm::mr::polymorphic_allocator<char>{},
+                        {stream.value()}};
 
   auto iter = thrust::make_counting_iterator(0);
 
@@ -184,7 +172,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
     parser.shmem_per_thread *
     cuco::detail::int_div_ceil(config.num_threads_per_block, hash_set_type::cg_size);
 
-  auto const row_hash   = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
+  auto const row_hash   = cudf::detail::row::hash::row_hasher{preprocessed_probe};
   auto const hash_probe = row_hash.device_hasher(has_nulls);
 
   hash_set_ref_type const row_set_ref =

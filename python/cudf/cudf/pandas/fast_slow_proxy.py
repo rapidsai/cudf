@@ -1,9 +1,9 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
+import datetime
 import functools
 import inspect
 import operator
@@ -148,6 +148,8 @@ def make_final_proxy_type(
     slow_to_fast: callable
         Function that accepts a single argument of type `slow_type`
         and returns an object of type `fast_type`
+    module: str | None
+        Module name to assign to the generated proxy type.
     additional_attributes
         Mapping of additional attributes to add to the class
        (optional), these will override any defaulted attributes (e.g.
@@ -210,7 +212,7 @@ def make_final_proxy_type(
     def as_cpu_object(self):
         return self._fsproxy_fast_to_slow()
 
-    @property  # type: ignore
+    @property  # type: ignore[misc]
     def _fsproxy_state(self) -> _State:
         return (
             _State.FAST
@@ -254,7 +256,7 @@ def make_final_proxy_type(
 
     metaclass = _FastSlowProxyMeta
     if metaclasses:
-        metaclass = types.new_class(  # type: ignore
+        metaclass = types.new_class(  # type: ignore[assignment]
             f"{name}_Meta",
             (*metaclasses, _FastSlowProxyMeta),
             {},
@@ -287,6 +289,7 @@ def make_intermediate_proxy_type(
     slow_type: type,
     *,
     module: str | None = None,
+    additional_attributes: Mapping[str, Any] | None = None,
 ) -> type[_IntermediateProxy]:
     """
     Defines a proxy type for a pair of "intermediate" fast and slow
@@ -303,6 +306,13 @@ def make_intermediate_proxy_type(
         The name of the class returned
     fast_type: type
     slow_type: type
+    module: str | None
+        Module name to assign to the generated proxy type.
+    additional_attributes
+        Mapping of additional attributes to add to the class
+       (optional), these will override any defaulted attributes (e.g.
+       ``__init__``). If you want to remove a defaulted attribute
+       completely, pass the special sentinel ``_DELETE`` as a value.
     """
 
     def __init__(self, *args, **kwargs):
@@ -313,7 +323,7 @@ def make_intermediate_proxy_type(
             f"Cannot directly instantiate object of type {type(self)}"
         )
 
-    @property  # type: ignore
+    @property  # type: ignore[misc]
     def _fsproxy_state(self):
         return (
             _State.FAST
@@ -355,6 +365,11 @@ def make_intermediate_proxy_type(
     for method in _SPECIAL_METHODS:
         if method in slow_dir and getattr(slow_type, method, False):
             cls_dict[method] = _FastSlowAttribute(method)
+
+    if additional_attributes is None:
+        additional_attributes = {}
+    for k, v in additional_attributes.items():
+        cls_dict[k] = v
 
     for slow_name in dir(slow_type):
         if slow_name in cls_dict or slow_name.startswith("__"):
@@ -596,6 +611,26 @@ class _FinalProxy(_FastSlowProxy):
             proxy = base_class.__new__(cls)
         elif base_class is ProxyNDarrayBase:
             proxy = base_class.__new__(cls, value)
+        elif base_class is datetime.datetime:
+            proxy = base_class.__new__(
+                cls,
+                year=value.year,
+                month=value.month,
+                day=value.day,
+                hour=value.hour,
+                minute=value.minute,
+                second=value.second,
+                microsecond=value.microsecond,
+                tzinfo=value.tzinfo,
+                fold=value.fold,
+            )
+        elif base_class is datetime.timedelta:
+            proxy = base_class.__new__(
+                cls,
+                days=value.days,
+                seconds=value.seconds,
+                microseconds=value.microseconds,
+            )
         else:
             raise TypeError(
                 f"Cannot create an proxy instance of {cls.__name__} using base class {base_class.__name__}. "
@@ -716,7 +751,7 @@ class _CallableProxyMixin:
     """
 
     # For wrapped callables isinstance(self, FunctionType) should return True
-    __class__ = types.FunctionType  # type: ignore
+    __class__ = types.FunctionType  # type: ignore[assignment]
 
     def __call__(self, *args, **kwargs) -> Any:
         result, _ = _fast_slow_function_call(
@@ -731,6 +766,18 @@ class _CallableProxyMixin:
             kwargs,
         )
         return result
+
+    @property
+    def __code__(self):
+        return self._fsproxy_slow.__code__
+
+    @property
+    def __defaults__(self):
+        return self._fsproxy_slow.__defaults__
+
+    @property
+    def __kwdefaults__(self):
+        return self._fsproxy_slow.__kwdefaults__
 
 
 class _FunctionProxy(_CallableProxyMixin):
@@ -829,13 +876,16 @@ class _FastSlowAttribute:
                 if instance is not None:
                     return _maybe_wrap_result(
                         getattr(instance._fsproxy_slow, self._name),
-                        None,  # type: ignore
+                        None,  # type: ignore[arg-type]
                     )
                 else:
                     raise e
 
             if _is_function_or_method(slow_attr):
-                self._attr = _MethodProxy(fast_attr, slow_attr)
+                self._attr = _MethodProxy(
+                    fast_attr,
+                    slow_attr,
+                )
             else:
                 # for anything else, use a fast-slow attribute:
                 self._attr, _ = _fast_slow_function_call(
@@ -860,13 +910,14 @@ class _FastSlowAttribute:
                 if self._private:
                     return _maybe_wrap_result(
                         getattr(instance._fsproxy_slow, self._name),
-                        None,  # type: ignore
+                        None,  # type: ignore[arg-type]
                     )
                 return _fast_slow_function_call(
                     getattr,
                     instance,
                     self._name,
                 )[0]
+
         return self._attr
 
 
@@ -1147,7 +1198,7 @@ def _transform_arg(
             for k, a in arg.items()
         }
     elif isinstance(arg, np.ndarray) and arg.dtype == "O":
-        transformed = [
+        transformed: list[Any] = [  # type: ignore[var-annotated]
             _transform_arg(a, attribute_name, seen) for a in arg.flat
         ]
         # Keep the same memory layout as arg (the default is C_CONTIGUOUS)
@@ -1155,7 +1206,9 @@ def _transform_arg(
             order = "F"
         else:
             order = "C"
-        result = np.empty(int(np.prod(arg.shape)), dtype=object, order=order)
+        result = np.empty(  # type: ignore[call-overload]
+            int(np.prod(arg.shape)), dtype=np.object_, order=order
+        )
         result[...] = transformed
         return result.reshape(arg.shape)
     elif isinstance(arg, Iterator) and attribute_name == "_fsproxy_fast":
@@ -1367,10 +1420,12 @@ def is_proxy_instance(obj, type):
 
 PROXY_BASE_CLASSES: set[type] = {
     ProxyNDarrayBase,
+    datetime.datetime,
+    datetime.timedelta,
 }
 
 
-NUMPY_TYPES: set[str] = set(np.sctypeDict.values())
+NUMPY_TYPES: set[type[np.generic]] = set(np.sctypeDict.values())
 
 
 _SPECIAL_METHODS: set[str] = {

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "error.hpp"
@@ -20,7 +9,6 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 
@@ -187,18 +175,13 @@ void generate_depth_remappings(
   // Transfer chunk data, coalescing adjacent chunks
   std::vector<std::future<size_t>> read_tasks;
   for (size_t chunk = begin_chunk; chunk < end_chunk;) {
-    size_t const io_offset   = column_chunk_offsets[chunk];
-    size_t io_size           = chunks[chunk].compressed_size;
-    size_t next_chunk        = chunk + 1;
-    bool const is_compressed = (chunks[chunk].codec != Compression::UNCOMPRESSED);
+    size_t const io_offset = column_chunk_offsets[chunk];
+    size_t io_size         = chunks[chunk].compressed_size;
+    size_t next_chunk      = chunk + 1;
     while (next_chunk < end_chunk) {
-      size_t const next_offset      = column_chunk_offsets[next_chunk];
-      bool const is_next_compressed = (chunks[next_chunk].codec != Compression::UNCOMPRESSED);
-      if (next_offset != io_offset + io_size || is_next_compressed != is_compressed ||
+      size_t const next_offset = column_chunk_offsets[next_chunk];
+      if (next_offset != io_offset + io_size ||
           chunk_source_map[chunk] != chunk_source_map[next_chunk]) {
-        // Can't merge if not contiguous or mixing compressed and uncompressed
-        // Not coalescing uncompressed with compressed chunks is so that compressed buffers can be
-        // freed earlier (immediately after decompression stage) to limit peak memory requirements
         break;
       }
       io_size += chunks[next_chunk].compressed_size;
@@ -238,7 +221,7 @@ void generate_depth_remappings(
   }
   auto sync_fn = [](decltype(read_tasks) read_tasks) {
     for (auto& task : read_tasks) {
-      task.wait();
+      task.get();
     }
   };
   return std::async(std::launch::deferred, sync_fn, std::move(read_tasks));
@@ -415,8 +398,7 @@ cudf::detail::hostdevice_vector<PageInfo> sort_pages(device_span<PageInfo const>
                              page_keys.end(),
                              sort_indices.begin(),
                              cuda::std::less<int>());
-  auto pass_pages =
-    cudf::detail::hostdevice_vector<PageInfo>(unsorted_pages.size(), unsorted_pages.size(), stream);
+  auto pass_pages = cudf::detail::hostdevice_vector<PageInfo>(unsorted_pages.size(), stream);
   thrust::transform(
     rmm::exec_policy_nosync(stream),
     sort_indices.begin(),
@@ -491,7 +473,7 @@ void decode_page_headers(pass_intermediate_data& pass,
                                             level_bit_size,
                                             level_bit_size + pass.chunks.size(),
                                             0,
-                                            cudf::detail::maximum<int>());
+                                            cuda::maximum<int>());
   pass.level_type_size     = std::max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
 
   // sort the pages in chunk/schema order.

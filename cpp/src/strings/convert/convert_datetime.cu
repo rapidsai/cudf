@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_device_view.cuh>
@@ -135,7 +124,7 @@ struct format_compiler {
         items.push_back(format_item::new_literal(ch));
         continue;
       }
-      CUDF_EXPECTS(length > 0, "Unfinished specifier in timestamp format");
+      CUDF_EXPECTS(length > 0, "Unfinished specifier in timestamp format", std::invalid_argument);
 
       ch = *str++;
       length--;
@@ -145,7 +134,9 @@ struct format_compiler {
         continue;
       }
       if (ch >= '0' && ch <= '9') {
-        CUDF_EXPECTS(*str == 'f', "precision not supported for specifier: " + std::string(1, *str));
+        CUDF_EXPECTS(*str == 'f',
+                     "precision not supported for specifier: " + std::string(1, *str),
+                     std::invalid_argument);
         specifiers[*str] = static_cast<int8_t>(ch - '0');
         ch               = *str++;
         length--;
@@ -153,7 +144,8 @@ struct format_compiler {
 
       // check if the specifier found is supported
       CUDF_EXPECTS(specifiers.find(ch) != specifiers.end(),
-                   "invalid format specifier: " + std::string(1, ch));
+                   "invalid format specifier: " + std::string(1, ch),
+                   std::invalid_argument);
 
       // create the format item for this specifier
       items.push_back(format_item::new_specifier(ch, specifiers[ch]));
@@ -428,7 +420,7 @@ struct dispatch_to_timestamps_fn {
                   rmm::cuda_stream_view) const
     requires(not cudf::is_timestamp<T>())
   {
-    CUDF_FAIL("Only timestamps type are expected");
+    CUDF_FAIL("Only timestamps type are expected", std::invalid_argument);
   }
 };
 
@@ -441,10 +433,9 @@ std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& input,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
-  if (input.is_empty())
-    return make_empty_column(timestamp_type);  // make_timestamp_column(timestamp_type, 0);
+  if (input.is_empty()) { return make_empty_column(timestamp_type); }
 
-  CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
+  CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.", std::invalid_argument);
 
   auto d_strings = column_device_view::create(input.parent(), stream);
 
@@ -682,7 +673,7 @@ std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& input,
   size_type strings_count = input.size();
   if (strings_count == 0) return make_empty_column(type_id::BOOL8);
 
-  CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
+  CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.", std::invalid_argument);
 
   auto d_strings = column_device_view::create(input.parent(), stream);
 
@@ -1123,7 +1114,7 @@ struct dispatch_from_timestamps_fn {
   strings_children operator()(Args&&...) const
     requires(not cudf::is_timestamp<T>())
   {
-    CUDF_FAIL("Only timestamps type are expected");
+    CUDF_FAIL("Only timestamps type are expected", std::invalid_argument);
   }
 };
 
@@ -1138,9 +1129,10 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
 {
   if (timestamps.is_empty()) return make_empty_column(type_id::STRING);
 
-  CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
+  CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.", std::invalid_argument);
   CUDF_EXPECTS(names.is_empty() || names.size() == format_names_size,
-               "Invalid size for format names.");
+               "Invalid size for format names.",
+               std::invalid_argument);
 
   auto const d_names = column_device_view::create(names.parent(), stream);
 

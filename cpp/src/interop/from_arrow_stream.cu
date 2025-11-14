@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "arrow_utilities.hpp"
@@ -154,13 +143,6 @@ std::unique_ptr<column> from_arrow_stream_column(ArrowArrayStream* input,
   input->release(input);
 
   if (chunks.empty()) {
-    if (schema.n_children == 0) {
-      schema.release(&schema);
-      return std::make_unique<cudf::column>();
-    }
-
-    // If there are no chunks but the schema has children, we need to construct a suitable empty
-    // column.
     auto empty_column = make_empty_column_from_schema(&schema, stream, mr);
     schema.release(&schema);
     return empty_column;

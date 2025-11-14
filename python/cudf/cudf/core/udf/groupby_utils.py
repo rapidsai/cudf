@@ -1,4 +1,5 @@
-# Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 
 from functools import cache
@@ -126,7 +127,8 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
     offsets = as_column(offsets)
     ngroups = len(offsets) - 1
 
-    output = column_empty(ngroups, dtype=return_type, for_numba=True)
+    output = column_empty(ngroups, dtype=return_type)
+    output = output.set_mask(None)
     launch_args = [
         offsets,
         output,

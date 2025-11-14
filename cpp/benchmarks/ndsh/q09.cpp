@@ -1,20 +1,11 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "utilities.hpp"
+
+#include <benchmarks/common/nvtx_ranges.hpp>
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/binaryop.hpp>
@@ -115,7 +106,7 @@ struct q9_data {
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
 
   auto const one = cudf::numeric_scalar<double>(1);
   auto const one_minus_discount =
@@ -147,7 +138,7 @@ struct q9_data {
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
 
   std::string udf =
     R"***(
@@ -161,6 +152,7 @@ struct q9_data {
                          cudf::data_type{cudf::type_id::FLOAT64},
                          false,
                          std::nullopt,
+                         cudf::null_aware::NO,
                          stream,
                          mr);
 }
@@ -173,7 +165,7 @@ struct q9_data {
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
 
   cudf::ast::tree tree;
   cudf::table_view table{std::vector{discount, extendedprice, supplycost, quantity}};
@@ -244,13 +236,12 @@ q9_data load_data(std::unordered_map<std::string, cuio_source_sink_pair>& source
 
 std::unique_ptr<table_with_names> join_data(q9_data const& data)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
 
   // Generating the `profit` table
   // Filter the part table using `p_name like '%green%'`
-  auto const p_name = data.part->table().column(1);
-  auto const mask =
-    cudf::strings::like(cudf::strings_column_view(p_name), cudf::string_scalar("%green%"));
+  auto const p_name        = data.part->table().column(1);
+  auto const mask          = cudf::strings::like(cudf::strings_column_view(p_name), "%green%");
   auto const part_filtered = apply_mask(data.part, mask);
 
   // Perform the joins

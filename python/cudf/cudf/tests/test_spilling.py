@@ -1,4 +1,5 @@
-# Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import contextlib
@@ -791,5 +792,5 @@ def test_scatter_by_map():
     with cudf.option_context("spill", True):
         df = cudf.DataFrame(data)
         result = df.scatter_by_map(data)
-    for i, res in zip(data, result):
+    for i, res in zip(data, result, strict=True):
         assert_eq(res, cudf.DataFrame([i], index=[i]))

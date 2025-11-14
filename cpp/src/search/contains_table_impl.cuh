@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -20,9 +9,8 @@
 
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/search.hpp>
-#include <cudf/hashing/detail/helper_functions.cuh>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -35,8 +23,8 @@
 
 namespace cudf::detail {
 
-using cudf::experimental::row::lhs_index_type;
-using cudf::experimental::row::rhs_index_type;
+using cudf::detail::row::lhs_index_type;
+using cudf::detail::row::rhs_index_type;
 
 /**
  * @brief An hasher adapter wrapping both haystack hasher and needles hasher
@@ -143,15 +131,15 @@ void perform_contains(table_view const& haystack,
       return lhs_index_type{idx};
     }));
 
-  auto set = cuco::static_set{
-    cuco::extent{compute_hash_table_size(haystack.num_rows())},
-    cuco::empty_key{rhs_index_type{-1}},
-    d_equal,
-    probing_scheme,
-    {},
-    {},
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-    stream.value()};
+  auto set = cuco::static_set{cuco::extent{haystack.num_rows()},
+                              cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
+                              cuco::empty_key{rhs_index_type{-1}},
+                              d_equal,
+                              probing_scheme,
+                              {},
+                              {},
+                              rmm::mr::polymorphic_allocator<char>{},
+                              stream.value()};
 
   if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {
     auto const bitmask_buffer_and_ptr = build_row_bitmask(haystack, stream);
@@ -206,19 +194,18 @@ void perform_contains(table_view const& haystack,
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 template <bool HasNested, typename Hasher>
-void dispatch_nan_comparator(
-  table_view const& haystack,
-  table_view const& needles,
-  null_equality compare_nulls,
-  nan_equality compare_nans,
-  bool haystack_has_nulls,
-  bool needles_has_nulls,
-  bool has_any_nulls,
-  cudf::experimental::row::equality::self_comparator self_equal,
-  cudf::experimental::row::equality::two_table_comparator two_table_equal,
-  Hasher const& d_hasher,
-  rmm::device_uvector<bool>& contained,
-  rmm::cuda_stream_view stream)
+void dispatch_nan_comparator(table_view const& haystack,
+                             table_view const& needles,
+                             null_equality compare_nulls,
+                             nan_equality compare_nans,
+                             bool haystack_has_nulls,
+                             bool needles_has_nulls,
+                             bool has_any_nulls,
+                             cudf::detail::row::equality::self_comparator self_equal,
+                             cudf::detail::row::equality::two_table_comparator two_table_equal,
+                             Hasher const& d_hasher,
+                             rmm::device_uvector<bool>& contained,
+                             rmm::cuda_stream_view stream)
 {
   // Distinguish probing scheme CG sizes between nested and flat types for better performance
   auto const probing_scheme = [&]() {
@@ -231,7 +218,7 @@ void dispatch_nan_comparator(
 
   if (compare_nans == nan_equality::ALL_EQUAL) {
     using nan_equal_comparator =
-      cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
+      cudf::detail::row::equality::nan_equal_physical_equality_comparator;
     auto const d_self_equal = self_equal.equal_to<HasNested>(
       nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, nan_equal_comparator{});
     auto const d_two_table_equal = two_table_equal.equal_to<HasNested>(
@@ -247,7 +234,7 @@ void dispatch_nan_comparator(
                      contained,
                      stream);
   } else {
-    using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
+    using nan_unequal_comparator = cudf::detail::row::equality::physical_equality_comparator;
     auto const d_self_equal      = self_equal.equal_to<HasNested>(
       nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, nan_unequal_comparator{});
     auto const d_two_table_equal = two_table_equal.equal_to<HasNested>(

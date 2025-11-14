@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import calendar
 import datetime
@@ -70,9 +71,9 @@ def test_extract_datetime_component(datetime_column, component):
     got = plc.datetime.extract_datetime_component(datetime_column, component)
     # libcudf produces an int16, arrow produces an int64
 
-    expect = getattr(pc, attr)(
-        plc.interop.to_arrow(datetime_column), **kwargs
-    ).cast(pa.int16())
+    expect = getattr(pc, attr)(datetime_column.to_arrow(), **kwargs).cast(
+        pa.int16()
+    )
 
     assert_column_eq(expect, got)
 
@@ -87,8 +88,8 @@ def test_extract_datetime_component(datetime_column, component):
 )
 def test_rounding_operations(datetime_column, op, rounding_frequency):
     got = getattr(plc.datetime, op[1])(datetime_column, rounding_frequency[1])
-    pa_col = plc.interop.to_arrow(datetime_column)
-    pa_got = plc.interop.to_arrow(got)
+    pa_col = datetime_column.to_arrow()
+    pa_got = got.to_arrow()
     expect = getattr(pc, op[0])(
         pa_col,
         unit=rounding_frequency[0],
@@ -125,22 +126,22 @@ def test_calendrical_months(datetime_column, months):
                 result.append(None)
         return pa.array(result)
 
-    pa_col = plc.interop.to_arrow(datetime_column)
+    pa_col = datetime_column.to_arrow()
     got = plc.datetime.add_calendrical_months(
         datetime_column,
         plc.Scalar.from_arrow(months)
         if isinstance(months, pa.Scalar)
         else plc.Column.from_arrow(months),
     )
-    pa_got = plc.interop.to_arrow(got)
+    pa_got = got.to_arrow()
     expect = add_calendrical_months(pa_col, months).cast(pa_got.type)
     assert_column_eq(expect, got)
 
 
 def test_day_of_year(datetime_column):
     got = plc.datetime.day_of_year(datetime_column)
-    pa_got = plc.interop.to_arrow(got)
-    pa_col = plc.interop.to_arrow(datetime_column)
+    pa_got = got.to_arrow()
+    pa_col = datetime_column.to_arrow()
     expect = pa.array(
         [
             d.as_py().timetuple().tm_yday if d.as_py() is not None else None
@@ -153,7 +154,7 @@ def test_day_of_year(datetime_column):
 
 def test_is_leap_year(datetime_column):
     got = plc.datetime.is_leap_year(datetime_column)
-    pa_col = plc.interop.to_arrow(datetime_column)
+    pa_col = datetime_column.to_arrow()
     expect = pc.is_leap_year(pa_col)
     assert_column_eq(expect, got)
 
@@ -168,16 +169,16 @@ def test_last_day_of_month(datetime_column):
         ]
 
     got = plc.datetime.last_day_of_month(datetime_column)
-    pa_got = plc.interop.to_arrow(got)
-    pa_col = plc.interop.to_arrow(datetime_column)
+    pa_got = got.to_arrow()
+    pa_col = datetime_column.to_arrow()
     expect = pa.array(last_day_of_month(pa_col), type=pa_got.type)
     assert_column_eq(expect, got)
 
 
 def test_extract_quarter(datetime_column):
     got = plc.datetime.extract_quarter(datetime_column)
-    pa_col = plc.interop.to_arrow(datetime_column)
-    pa_got = plc.interop.to_arrow(got)
+    pa_col = datetime_column.to_arrow()
+    pa_got = got.to_arrow()
     expect = pc.quarter(pa_col).cast(pa_got.type)
     assert_column_eq(expect, got)
 
@@ -190,7 +191,7 @@ def test_days_in_month(datetime_column):
         ]
 
     got = plc.datetime.days_in_month(datetime_column)
-    pa_col = plc.interop.to_arrow(datetime_column)
-    pa_got = plc.interop.to_arrow(got)
+    pa_col = datetime_column.to_arrow()
+    pa_got = got.to_arrow()
     expect = pa.array(days_in_month(pa_col), type=pa_got.type)
     assert_column_eq(expect, got)

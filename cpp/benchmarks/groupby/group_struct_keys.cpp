@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
@@ -73,8 +62,6 @@ void bench_groupby_struct_keys(nvbench::state& state)
   auto const keys_table = cudf::table(std::move(child_cols));
   auto const vals = create_random_column(cudf::type_to_id<int64_t>(), row_count{n_rows}, profile);
 
-  cudf::groupby::groupby gb_obj(keys_table.view());
-
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());
   requests[0].values = vals->view();
@@ -85,8 +72,10 @@ void bench_groupby_struct_keys(nvbench::state& state)
   auto stream                 = cudf::get_default_stream();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
-  state.exec(nvbench::exec_tag::sync,
-             [&](nvbench::launch& launch) { auto const result = gb_obj.aggregate(requests); });
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    cudf::groupby::groupby gb_obj(keys_table.view());
+    auto const result = gb_obj.aggregate(requests);
+  });
 
   state.add_buffer_size(
     mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");

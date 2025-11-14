@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_device_view.cuh>
@@ -63,23 +52,27 @@ CUDF_KERNEL void find_instance_warp_parallel_fn(column_device_view const d_strin
   auto const max_pos   = d_str.size_bytes();
   size_type char_pos   = max_pos;
   size_type char_count = 0;
-  size_type count      = 0;
-  for (auto itr = begin + lane_idx; itr + d_target.size_bytes() <= end;
-       itr += cudf::detail::warp_size) {
-    size_type const is_char = !is_utf8_continuation_char(*itr);
-    size_type const found   = is_char && (d_target.compare(itr, d_target.size_bytes()) == 0);
+  size_type byte_count = 0;
+  size_type offset     = 0;
+  auto itr             = begin + lane_idx;
+  while (byte_count + d_target.size_bytes() <= d_str.size_bytes()) {
+    size_type const is_char =
+      (itr + d_target.size_bytes() <= end) && !is_utf8_continuation_char(*itr);
+    size_type const found = is_char && (d_target.compare(itr, d_target.size_bytes()) == 0);
     // count of threads that matched in this warp and produce an offset in each thread
     auto const found_count = cg::reduce(warp, found, cg::plus<size_type>());
     auto const found_scan  = cg::inclusive_scan(warp, found);
     // handy character counter for threads in this warp
     auto const chars_scan = cg::exclusive_scan(warp, is_char);
     // activate the thread where we hit the desired find instance
-    auto const found_pos = (found_scan + count) == (instance + 1) ? chars_scan : char_pos;
+    auto const found_pos = (found_scan + offset) == (instance + 1) ? chars_scan : char_pos;
     // copy the position value for that thread into all warp threads
     char_pos = cg::reduce(warp, found_pos, cg::less<size_type>());
     if (char_pos < max_pos) { break; }  // all threads will stop
-    count += found_count;               // otherwise continue with the next set
+    offset += found_count;              // otherwise continue with the next set
     char_count += cg::reduce(warp, is_char, cg::plus<size_type>());
+    itr += cudf::detail::warp_size;
+    byte_count += cudf::detail::warp_size;
   }
 
   // output the position if an instance match has been found

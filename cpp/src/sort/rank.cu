@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
@@ -19,10 +8,9 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/sorting.hpp>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/sorting.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
@@ -75,7 +63,7 @@ rmm::device_uvector<size_type> sorted_dense_rank(column_view input_col,
                                                  rmm::cuda_stream_view stream)
 {
   auto const t_input    = table_view{{input_col}};
-  auto const comparator = cudf::experimental::row::equality::self_comparator{t_input, stream};
+  auto const comparator = cudf::detail::row::equality::self_comparator{t_input, stream};
 
   auto const sorted_index_order = thrust::make_permutation_iterator(
     sorted_order_view.begin<size_type>(), thrust::make_counting_iterator<size_type>(0));
@@ -203,7 +191,7 @@ void rank_min(cudf::device_span<size_type const> group_keys,
                                        thrust::make_counting_iterator<size_type>(1),
                                        sorted_order_view,
                                        rank_mutable_view.begin<outputType>(),
-                                       cudf::detail::minimum{},
+                                       cuda::minimum{},
                                        cuda::std::identity{},
                                        stream);
 }
@@ -221,7 +209,7 @@ void rank_max(cudf::device_span<size_type const> group_keys,
                                        thrust::make_counting_iterator<size_type>(1),
                                        sorted_order_view,
                                        rank_mutable_view.begin<outputType>(),
-                                       cudf::detail::maximum{},
+                                       cuda::maximum{},
                                        cuda::std::identity{},
                                        stream);
 }

@@ -17,7 +17,9 @@ Attributes
 .. autosummary::
    :toctree: api/
 
+   Series.at
    Series.axes
+   Series.iat
    Series.index
    Series.values
    Series.data
@@ -235,6 +237,13 @@ Time Series-related
 
    Series.shift
    Series.resample
+
+Metadata
+~~~~~~~~
+.. autosummary::
+   :toctree: api/
+
+   Series.attrs
 
 Accessors
 ---------

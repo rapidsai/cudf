@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "hybrid_scan_helpers.hpp"
@@ -113,8 +102,7 @@ void decode_dictionary_page_headers(cudf::detail::hostdevice_span<ColumnChunkDes
 }  // namespace
 
 void hybrid_scan_reader_impl::prepare_row_groups(
-  cudf::host_span<std::vector<size_type> const> row_group_indices,
-  parquet_reader_options const& options)
+  read_mode mode, cudf::host_span<std::vector<size_type> const> row_group_indices)
 {
   std::tie(_file_itm_data.global_skip_rows,
            _file_itm_data.global_num_rows,
@@ -122,7 +110,8 @@ void hybrid_scan_reader_impl::prepare_row_groups(
            _file_itm_data.num_rows_per_source,
            _file_itm_data.num_input_row_groups,
            _file_itm_data.surviving_row_groups) =
-    _extended_metadata->select_row_groups({}, row_group_indices, {}, {}, {}, {}, {}, _stream);
+    _extended_metadata->select_row_groups(
+      {}, row_group_indices, {}, {}, {}, {}, {}, {}, {}, _stream);
 
   CUDF_EXPECTS(
     std::cmp_less_equal(_file_itm_data.global_num_rows, std::numeric_limits<size_type>::max()),
@@ -142,7 +131,7 @@ void hybrid_scan_reader_impl::prepare_row_groups(
     create_global_chunk_info();
 
     // compute schedule of input reads.
-    compute_input_passes(read_mode::READ_ALL);
+    compute_input_passes(mode);
   }
 
   _file_preprocessed = true;
@@ -183,7 +172,7 @@ bool hybrid_scan_reader_impl::setup_column_chunks()
 }
 
 void hybrid_scan_reader_impl::setup_compressed_data(
-  std::vector<rmm::device_buffer> column_chunk_buffers)
+  std::vector<rmm::device_buffer>&& column_chunk_buffers)
 {
   auto& pass = *_pass_itm_data;
 
@@ -220,15 +209,14 @@ hybrid_scan_reader_impl::prepare_dictionaries(
   rmm::cuda_stream_view stream)
 {
   // Create row group information for the input row group indices
-  auto const row_groups_info = std::get<2>(
-    _extended_metadata->select_row_groups({}, row_group_indices, {}, {}, {}, {}, {}, _stream));
+  auto const row_groups_info = std::get<2>(_extended_metadata->select_row_groups(
+    {}, row_group_indices, {}, {}, {}, {}, {}, {}, {}, _stream));
 
-  CUDF_EXPECTS(row_groups_info.size() * _input_columns.size() == dictionary_page_data.size(),
-               "Dictionary page data size must match the number of row groups times the number of "
-               "input columns");
+  CUDF_EXPECTS(
+    row_groups_info.size() * dictionary_col_schemas.size() == dictionary_page_data.size(),
+    "Dictionary page data size must match the number of row groups times the number of columns "
+    "with dictionaries and an (in)equality predicate");
 
-  // Number of input columns
-  auto const num_input_columns = _input_columns.size();
   // Number of column chunks
   auto const total_column_chunks = dictionary_page_data.size();
 
@@ -310,25 +298,28 @@ hybrid_scan_reader_impl::prepare_dictionaries(
   return {has_compressed_data, std::move(chunks), std::move(pages)};
 }
 
-void hybrid_scan_reader_impl::update_row_mask(cudf::column_view in_row_mask,
-                                              cudf::mutable_column_view out_row_mask,
+void hybrid_scan_reader_impl::update_row_mask(cudf::column_view const& in_row_mask,
+                                              cudf::mutable_column_view& out_row_mask,
+                                              cudf::size_type out_row_mask_offset,
                                               rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
 
   auto const total_rows = static_cast<cudf::size_type>(in_row_mask.size());
 
-  CUDF_EXPECTS(total_rows == out_row_mask.size(),
+  CUDF_EXPECTS(out_row_mask_offset + total_rows <= out_row_mask.size(),
                "Input and output row mask columns must have the same number of rows");
   CUDF_EXPECTS(out_row_mask.type().id() == type_id::BOOL8,
                "Output row mask column must be a boolean column");
+  CUDF_EXPECTS(in_row_mask.type().id() == type_id::BOOL8,
+               "Input row mask column must be a boolean column");
 
   // Update output row mask such that out_row_mask[i] = true, iff in_row_mask[i] is valid and true.
   // This is inline with the masking behavior of cudf::detail::apply_boolean_mask.
   thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator(total_rows),
-                    out_row_mask.begin<bool>(),
+                    out_row_mask.begin<bool>() + out_row_mask_offset,
                     [is_nullable = in_row_mask.nullable(),
                      in_row_mask = in_row_mask.begin<bool>(),
                      in_bitmask  = in_row_mask.null_mask()] __device__(auto row_idx) {

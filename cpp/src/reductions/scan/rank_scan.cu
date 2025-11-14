@@ -1,26 +1,15 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/scan.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -71,7 +60,7 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
                                        rmm::device_async_resource_ref mr)
 {
   auto const order_by_tview = table_view{{order_by}};
-  auto comp = cudf::experimental::row::equality::self_comparator(order_by_tview, stream);
+  auto comp                 = cudf::detail::row::equality::self_comparator(order_by_tview, stream);
 
   auto ranks = make_fixed_width_column(
     data_type{type_to_id<size_type>()}, order_by.size(), mask_state::UNALLOCATED, stream, mr);

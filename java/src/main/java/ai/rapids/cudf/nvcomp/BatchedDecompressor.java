@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package ai.rapids.cudf.nvcomp;
@@ -71,7 +60,8 @@ public abstract class BatchedDecompressor {
         totalChunks += numBufferChunks;
       }
 
-      final long tempBufferSize = batchedDecompressGetTempSize(totalChunks, chunkSize);
+      final long tempBufferSize = batchedDecompressGetTempSize(totalChunks, chunkSize,
+        totalChunks * chunkSize);
       try (DeviceMemoryBuffer devAddrsSizes = buildAddrsSizesBuffer(chunkSize, totalChunks,
               inputs.getArray(), chunksPerInput, outputs, stream);
            DeviceMemoryBuffer devTemp = DeviceMemoryBuffer.allocate(tempBufferSize)) {
@@ -198,10 +188,11 @@ public abstract class BatchedDecompressor {
    * Computes the temporary storage size in bytes needed to decompress a compressed batch.
    * @param numChunks number of chunks in the batch
    * @param maxUncompressedChunkBytes maximum uncompressed size of any chunk in bytes
+   * @param maxTotalSize Upper bound on the total uncompressed size of all chunks
    * @return number of temporary storage bytes needed to decompress the batch
    */
   protected abstract long batchedDecompressGetTempSize(long numChunks,
-      long maxUncompressedChunkBytes);
+      long maxUncompressedChunkBytes, long maxTotalSize);
 
     /**
    * Asynchronously decompress a batch of compressed data buffers.

@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import pytest
 
@@ -26,7 +27,7 @@ def test_basic(loop, delayed):  # noqa: F811
     with dask_cuda.LocalCUDACluster(loop=loop) as cluster:
         with Client(cluster):
             pdf = dask.datasets.timeseries(dtypes={"x": int}).reset_index()
-            gdf = pdf.map_partitions(cudf.DataFrame.from_pandas)
+            gdf = pdf.map_partitions(cudf.DataFrame)
             if delayed:
                 gdf = dd.from_delayed(gdf.to_delayed())
             assert_eq(pdf.head(), gdf.head())
@@ -57,7 +58,7 @@ def test_merge():
     not at_least_n_gpus(2), reason="Machine does not have two GPUs"
 )
 def test_ucx_seriesgroupby():
-    pytest.importorskip("ucp")
+    pytest.importorskip("distributed_ucxx")
 
     # Repro Issue#3913
     with dask_cuda.LocalCUDACluster(n_workers=2, protocol="ucx") as cluster:

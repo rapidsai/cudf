@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <tests/interop/arrow_utils.hpp>
@@ -50,23 +39,12 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
   std::vector<uint8_t> validity(length);
   std::vector<bool> bool_validity(length);
   std::vector<uint8_t> bool_data_validity;
-  cudf::size_type length_of_individual_list = 3;
-  cudf::size_type length_of_list            = length_of_individual_list * length;
-  std::vector<int64_t> list_int64_data(length_of_list);
-  std::vector<uint8_t> list_int64_data_validity(length_of_list);
-  std::vector<int32_t> list_offsets(length + 1);
 
   std::vector<std::unique_ptr<cudf::column>> columns;
 
-  std::generate(int64_data.begin(), int64_data.end(), []() { return rand() % 500000; });
-  std::generate(list_int64_data.begin(), list_int64_data.end(), []() { return rand() % 500000; });
   auto validity_generator = []() { return rand() % 7 != 0; };
-  std::generate(
-    list_int64_data_validity.begin(), list_int64_data_validity.end(), validity_generator);
-  std::generate(
-    list_offsets.begin(), list_offsets.end(), [length_of_individual_list, n = 0]() mutable {
-      return (n++) * length_of_individual_list;
-    });
+
+  std::generate(int64_data.begin(), int64_data.end(), []() { return rand() % 500000; });
   std::generate(bool_data.begin(), bool_data.end(), validity_generator);
   std::generate(
     string_data.begin(), string_data.end(), []() { return rand() % 7 != 0 ? "CUDF" : "Rocks"; });
@@ -77,6 +55,20 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
                  bool_validity.cend(),
                  std::back_inserter(bool_data_validity),
                  [](auto val) { return static_cast<uint8_t>(val); });
+
+  std::vector<uint8_t> list_validity = bool_data_validity;
+  std::vector<int32_t> list_offsets(length + 1);
+  list_offsets[0] = 0;
+
+  constexpr cudf::size_type length_of_individual_list = 3;
+  for (cudf::size_type i = 0; i < length; ++i) {
+    list_offsets[i + 1] = list_offsets[i] + (list_validity[i] ? length_of_individual_list : 0);
+  }
+  std::vector<uint8_t> list_int64_data_validity(list_offsets.back());
+  std::vector<int64_t> list_int64_data(list_offsets.back());
+  std::generate(list_int64_data.begin(), list_int64_data.end(), []() { return rand() % 500000; });
+  std::generate(
+    list_int64_data_validity.begin(), list_int64_data_validity.end(), validity_generator);
 
   columns.emplace_back(cudf::test::fixed_width_column_wrapper<int64_t>(
                          int64_data.begin(), int64_data.end(), validity.begin())
@@ -94,8 +86,8 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
     list_int64_data.begin(), list_int64_data.end(), list_int64_data_validity.begin());
   auto list_offsets_column =
     cudf::test::fixed_width_column_wrapper<int32_t>(list_offsets.begin(), list_offsets.end());
-  auto [list_mask, list_nulls] = cudf::bools_to_mask(cudf::test::fixed_width_column_wrapper<bool>(
-    bool_data_validity.begin(), bool_data_validity.end()));
+  auto [list_mask, list_nulls] = cudf::bools_to_mask(
+    cudf::test::fixed_width_column_wrapper<bool>(list_validity.begin(), list_validity.end()));
   columns.emplace_back(cudf::make_lists_column(length,
                                                list_offsets_column.release(),
                                                list_child_column.release(),
@@ -127,7 +119,7 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
                                          validity);
   auto boolarray  = get_arrow_array<bool>(bool_data, bool_validity);
   auto list_array = get_arrow_list_array<int64_t>(
-    list_int64_data, list_offsets, list_int64_data_validity, bool_data_validity);
+    list_int64_data, list_offsets, list_int64_data_validity, list_validity);
 
   arrow::ArrayVector child_arrays({int64array, string_array});
   std::vector<std::shared_ptr<arrow::Field>> fields = {

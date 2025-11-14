@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
@@ -87,14 +76,14 @@ void orc_read_common(cudf::size_type num_rows_to_read,
 
 }  // namespace
 
-template <data_type DataType, io_type IOType>
-void BM_orc_read_data(nvbench::state& state,
-                      nvbench::type_list<nvbench::enum_type<DataType>, nvbench::enum_type<IOType>>)
+template <data_type DataType>
+void BM_orc_read_data(nvbench::state& state, nvbench::type_list<nvbench::enum_type<DataType>>)
 {
   auto const d_type                 = get_type_or_group(static_cast<int32_t>(DataType));
   cudf::size_type const cardinality = state.get_int64("cardinality");
   cudf::size_type const run_length  = state.get_int64("run_length");
-  cuio_source_sink_pair source_sink(IOType);
+  auto const source_type            = retrieve_io_type_enum(state.get_string("io_type"));
+  cuio_source_sink_pair source_sink(source_type);
 
   auto const num_rows_written = [&]() {
     auto const tbl = create_random_table(
@@ -112,16 +101,18 @@ void BM_orc_read_data(nvbench::state& state,
   orc_read_common<false>(num_rows_written, source_sink, state);
 }
 
-template <io_type IOType, cudf::io::compression_type Compression, bool chunked_read>
+template <bool chunked_read>
 void orc_read_io_compression(nvbench::state& state)
 {
-  auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL_SIGNED),
-                                         static_cast<int32_t>(data_type::FLOAT),
-                                         static_cast<int32_t>(data_type::DECIMAL),
-                                         static_cast<int32_t>(data_type::TIMESTAMP),
-                                         static_cast<int32_t>(data_type::STRING),
-                                         static_cast<int32_t>(data_type::LIST),
-                                         static_cast<int32_t>(data_type::STRUCT)});
+  auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
+  auto const compression = retrieve_compression_type_enum(state.get_string("compression_type"));
+  auto const d_type      = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL_SIGNED),
+                                              static_cast<int32_t>(data_type::FLOAT),
+                                              static_cast<int32_t>(data_type::DECIMAL),
+                                              static_cast<int32_t>(data_type::TIMESTAMP),
+                                              static_cast<int32_t>(data_type::STRING),
+                                              static_cast<int32_t>(data_type::LIST),
+                                              static_cast<int32_t>(data_type::STRUCT)});
 
   auto const [cardinality, run_length] = [&]() -> std::pair<cudf::size_type, cudf::size_type> {
     if constexpr (chunked_read) {
@@ -131,7 +122,7 @@ void orc_read_io_compression(nvbench::state& state)
               static_cast<cudf::size_type>(state.get_int64("run_length"))};
     }
   }();
-  cuio_source_sink_pair source_sink(IOType);
+  cuio_source_sink_pair source_sink(source_type);
 
   auto const num_rows_written = [&]() {
     auto const tbl = create_random_table(
@@ -142,7 +133,7 @@ void orc_read_io_compression(nvbench::state& state)
 
     cudf::io::orc_writer_options opts =
       cudf::io::orc_writer_options::builder(source_sink.make_sink_info(), view)
-        .compression(Compression);
+        .compression(compression);
     cudf::io::write_orc(opts);
     return view.num_rows();
   }();
@@ -150,20 +141,14 @@ void orc_read_io_compression(nvbench::state& state)
   orc_read_common<chunked_read>(num_rows_written, source_sink, state);
 }
 
-template <io_type IOType, cudf::io::compression_type Compression>
-void BM_orc_read_io_compression(
-  nvbench::state& state,
-  nvbench::type_list<nvbench::enum_type<IOType>, nvbench::enum_type<Compression>>)
+void BM_orc_read_io_compression(nvbench::state& state)
 {
-  return orc_read_io_compression<IOType, Compression, false>(state);
+  return orc_read_io_compression<false>(state);
 }
 
-template <cudf::io::compression_type Compression>
-void BM_orc_chunked_read_io_compression(nvbench::state& state,
-                                        nvbench::type_list<nvbench::enum_type<Compression>>)
+void BM_orc_chunked_read_io_compression(nvbench::state& state)
 {
-  // Only run benchmark using HOST_BUFFER IO.
-  return orc_read_io_compression<io_type::HOST_BUFFER, Compression, true>(state);
+  return orc_read_io_compression<true>(state);
 }
 
 using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL_SIGNED,
@@ -174,31 +159,27 @@ using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL_SIGNED,
                                             data_type::LIST,
                                             data_type::STRUCT>;
 
-using io_list =
-  nvbench::enum_type_list<io_type::FILEPATH, io_type::HOST_BUFFER, io_type::DEVICE_BUFFER>;
-
-using compression_list =
-  nvbench::enum_type_list<cudf::io::compression_type::SNAPPY, cudf::io::compression_type::NONE>;
-
-NVBENCH_BENCH_TYPES(BM_orc_read_data,
-                    NVBENCH_TYPE_AXES(d_type_list, nvbench::enum_type_list<io_type::DEVICE_BUFFER>))
+NVBENCH_BENCH_TYPES(BM_orc_read_data, NVBENCH_TYPE_AXES(d_type_list))
   .set_name("orc_read_decode")
-  .set_type_axes_names({"data_type", "io"})
+  .set_type_axes_names({"data_type"})
+  .add_string_axis("io_type", {"DEVICE_BUFFER"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});
 
-NVBENCH_BENCH_TYPES(BM_orc_read_io_compression, NVBENCH_TYPE_AXES(io_list, compression_list))
+NVBENCH_BENCH(BM_orc_read_io_compression)
   .set_name("orc_read_io_compression")
-  .set_type_axes_names({"io", "compression"})
+  .add_string_axis("io_type", {"FILEPATH", "HOST_BUFFER", "DEVICE_BUFFER"})
+  .add_string_axis("compression_type", {"SNAPPY", "ZSTD", "ZLIB", "NONE"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});
 
 // Should have the same parameters as `BM_orc_read_io_compression` for comparison.
-NVBENCH_BENCH_TYPES(BM_orc_chunked_read_io_compression, NVBENCH_TYPE_AXES(compression_list))
+NVBENCH_BENCH(BM_orc_chunked_read_io_compression)
   .set_name("orc_chunked_read_io_compression")
-  .set_type_axes_names({"compression"})
+  .add_string_axis("io_type", {"DEVICE_BUFFER"})
+  .add_string_axis("compression_type", {"SNAPPY", "ZSTD", "ZLIB", "NONE"})
   .set_min_samples(4)
   // The input has approximately 520MB and 127K rows.
   // The limits below are given in MBs.

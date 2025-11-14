@@ -1,14 +1,20 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings.convert cimport convert_ipv4 as cpp_convert_ipv4
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 __all__ = ["integers_to_ipv4", "ipv4_to_integers", "is_ipv4"]
 
-cpdef Column ipv4_to_integers(Column input):
+cpdef Column ipv4_to_integers(
+    Column input, Stream stream=None, DeviceMemoryResource mr=None
+):
     """
     Converts IPv4 addresses into integers.
 
@@ -19,20 +25,29 @@ cpdef Column ipv4_to_integers(Column input):
     input : Column
         Strings instance for this operation
 
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+
     Returns
     -------
     Column
         New uint32 column converted from strings.
     """
     cdef unique_ptr[column] c_result
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_convert_ipv4.ipv4_to_integers(input.view())
+        c_result = cpp_convert_ipv4.ipv4_to_integers(
+            input.view(), stream.view(), mr.get_mr()
+        )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
-cpdef Column integers_to_ipv4(Column integers):
+cpdef Column integers_to_ipv4(
+    Column integers, Stream stream=None, DeviceMemoryResource mr=None
+):
     """
     Converts integers into IPv4 addresses as strings.
 
@@ -43,20 +58,27 @@ cpdef Column integers_to_ipv4(Column integers):
     integers : Column
         Integer (uint32) column to convert.
 
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+
     Returns
     -------
     Column
         New strings column.
     """
     cdef unique_ptr[column] c_result
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_convert_ipv4.integers_to_ipv4(integers.view())
+        c_result = cpp_convert_ipv4.integers_to_ipv4(
+            integers.view(), stream.view(), mr.get_mr()
+        )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
-cpdef Column is_ipv4(Column input):
+cpdef Column is_ipv4(Column input, Stream stream=None, DeviceMemoryResource mr=None):
     """
     Returns a boolean column identifying strings in which all
     characters are valid for conversion to integers from IPv4 format.
@@ -68,14 +90,19 @@ cpdef Column is_ipv4(Column input):
     input : Column
         Strings instance for this operation.
 
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+
     Returns
     -------
     Column
         New column of boolean results for each string.
     """
     cdef unique_ptr[column] c_result
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_convert_ipv4.is_ipv4(input.view())
+        c_result = cpp_convert_ipv4.is_ipv4(input.view(), stream.view(), mr.get_mr())
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream, mr)

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_view.hpp>
@@ -22,6 +11,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/prefetch.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
@@ -37,21 +27,20 @@ namespace {
 template <typename ColumnView>
 void prefetch_col_data(ColumnView& col, void const* data_ptr, std::string_view key) noexcept
 {
-  if (cudf::experimental::prefetch::detail::prefetch_config::instance().get(key)) {
+  if (cudf::prefetch::detail::enabled()) {
     if (col.type().id() == cudf::type_id::EMPTY) {
       // Skip prefetching for empty columns
       return;
     } else if (cudf::is_fixed_width(col.type())) {
-      cudf::experimental::prefetch::detail::prefetch_noexcept(
-        key, data_ptr, col.size() * size_of(col.type()), cudf::get_default_stream());
+      cudf::prefetch::detail::prefetch_noexcept(
+        data_ptr, col.size() * size_of(col.type()), cudf::get_default_stream());
     } else if (col.type().id() == type_id::STRING) {
       strings_column_view const scv{col};
       if (data_ptr == nullptr) {
         // Do not call chars_size if the data_ptr is nullptr.
         return;
       }
-      cudf::experimental::prefetch::detail::prefetch_noexcept(
-        key,
+      cudf::prefetch::detail::prefetch_noexcept(
         data_ptr,
         scv.chars_size(cudf::get_default_stream()) * sizeof(char),
         cudf::get_default_stream());

@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import pyarrow as pa
 import pytest
@@ -137,7 +138,7 @@ def validate_empty_column(col, mask_state, dtype):
     elif mask_state == plc.types.MaskState.ALL_NULL:
         assert col.null_count() == EMPTY_COL_SIZE
 
-    assert plc.interop.to_arrow(col).type == dtype
+    assert col.to_arrow().type == dtype
 
 
 def test_make_numeric_column(numeric_pa_type, mask_state):

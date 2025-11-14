@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
 import pandas as pd
@@ -41,7 +42,7 @@ def test_basic_assert_frame_equal(
         p_left["c"] = np.array(data, dtype="int64")
 
     p_right = pd.DataFrame(index=index)
-    for dtype, name in zip(rdtype, rname):
+    for dtype, name in zip(rdtype, rname, strict=True):
         p_right[name] = np.array(data, dtype=dtype)
 
     left = cudf.from_pandas(p_left)

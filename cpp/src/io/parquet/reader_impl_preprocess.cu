@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "error.hpp"
@@ -40,6 +29,23 @@
 #include <numeric>
 
 namespace cudf::io::parquet::detail {
+
+namespace {
+// Tests the passed in logical type for a FIXED_LENGTH_BYTE_ARRAY column to see if it should
+// be treated as a string. Currently the only logical type that has special handling is DECIMAL.
+// Other valid types in the future would be UUID (still treated as string) and FLOAT16 (which
+// for now would also be treated as a string).
+inline bool is_treat_fixed_length_as_string(std::optional<LogicalType> const& logical_type)
+{
+  if (!logical_type.has_value()) { return true; }
+  return logical_type->type != LogicalType::DECIMAL;
+}
+
+struct set_str_bytes_all {
+  __device__ void operator()(PageInfo& p) { p.str_bytes_all = p.str_bytes; }
+};
+
+}  // namespace
 
 void reader_impl::build_string_dict_indices()
 {
@@ -345,10 +351,10 @@ void reader_impl::read_compressed_data()
 
   auto& chunks = pass.chunks;
 
-  auto const [has_compressed_data, read_chunks_tasks] = read_column_chunks();
-  pass.has_compressed_data                            = has_compressed_data;
+  auto [has_compressed_data, read_chunks_tasks] = read_column_chunks();
+  pass.has_compressed_data                      = has_compressed_data;
 
-  read_chunks_tasks.wait();
+  read_chunks_tasks.get();
 
   // Process dataset chunk pages into output columns
   auto const total_pages = _has_page_index ? count_page_headers_with_pgidx(chunks, _stream)
@@ -386,6 +392,8 @@ void reader_impl::preprocess_file(read_mode mode)
                                  _options.row_group_indices,
                                  _options.skip_rows,
                                  _options.num_rows,
+                                 _options.skip_bytes,
+                                 _options.num_bytes,
                                  output_dtypes,
                                  _output_column_schemas,
                                  _expr_conv.get_converted_expr(),
@@ -497,8 +505,13 @@ void reader_impl::generate_list_column_row_counts(is_estimate_row_counts is_esti
 
 void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_limit)
 {
+  CUDF_FUNC_RANGE();
+
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
+
+  // figure out which kernels to run
+  subpass.kernel_mask = get_aggregated_decode_kernel_mask(subpass.pages, _stream);
 
   // iterate over all input columns and determine if they contain lists.
   // TODO: we could do this once at the file level instead of every time we get in here. the set of
@@ -537,10 +550,10 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
     // - we will be doing a chunked read
     compute_page_sizes(subpass.pages,
                        pass.chunks,
+                       _subpass_page_mask,
                        0,  // 0-max size_t. process all possible rows
                        std::numeric_limits<size_t>::max(),
-                       true,                  // compute num_rows
-                       chunk_read_limit > 0,  // compute string sizes
+                       true,  // compute num_rows
                        _pass_itm_data->level_type_size,
                        _stream);
   }
@@ -578,6 +591,33 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
                      update_subpass_chunk_row{pass.pages, subpass.pages, subpass.page_src_index});
   }
 
+  // compute string sizes if necessary. if we are doing chunking, we need to know
+  // the sizes of all strings so we can properly compute chunk boundaries.
+  if ((chunk_read_limit > 0) && (subpass.kernel_mask & STRINGS_MASK)) {
+    auto const has_flba =
+      std::any_of(pass.chunks.begin(), pass.chunks.end(), [](auto const& chunk) {
+        return chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY and
+               is_treat_fixed_length_as_string(chunk.logical_type);
+      });
+    if (!_has_page_index || has_flba) {
+      constexpr bool compute_all_string_sizes = true;
+      compute_page_string_sizes_pass1(subpass.pages,
+                                      pass.chunks,
+                                      _subpass_page_mask,
+                                      pass.skip_rows,
+                                      pass.num_rows,
+                                      subpass.kernel_mask,
+                                      compute_all_string_sizes,
+                                      _pass_itm_data->level_type_size,
+                                      _stream);
+    }
+    // set str_bytes_all
+    thrust::for_each(rmm::exec_policy_nosync(_stream),
+                     subpass.pages.device_begin(),
+                     subpass.pages.device_end(),
+                     set_str_bytes_all{});
+  }
+
   // retrieve pages back
   pass.pages.device_to_host_async(_stream);
   if (!subpass.single_subpass) { subpass.pages.device_to_host_async(_stream); }
@@ -606,9 +646,9 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
     // subpass since we know that will safely completed.
     bool const is_list = last_chunk.max_level[level_type::REPETITION] > 0;
     // corner case: only decode up to the second-to-last row, except if this is the last page in the
-    // entire pass. this handles the case where we only have 1 chunk, 1 page, and potentially even
-    // just 1 row.
-    if (is_list && max_col_row < last_pass_row) {
+    // entire pass or if we have the page index. this handles the case where we only have 1 chunk, 1
+    // page, and potentially even just 1 row.
+    if (is_list and std::cmp_less(max_col_row, last_pass_row) and not _has_page_index) {
       // compute min row for this column in the subpass
       auto const& first_page  = subpass.pages[first_page_index];
       auto const& first_chunk = pass.chunks[first_page.chunk_idx];
@@ -639,34 +679,18 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
 
 void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_rows)
 {
+  CUDF_FUNC_RANGE();
+
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
   // Should not reach here if there is no page data.
   CUDF_EXPECTS(subpass.pages.size() > 0, "There are no pages present in the subpass");
 
-  // computes:
-  // PageNestingInfo::batch_size for each level of nesting, for each page, taking row bounds into
-  // account. PageInfo::skipped_values, which tells us where to start decoding in the input to
-  // respect the user bounds. It is only necessary to do this second pass if uses_custom_row_bounds
-  // is set (if the user has specified artificial bounds).
-  if (uses_custom_row_bounds(mode)) {
-    compute_page_sizes(subpass.pages,
-                       pass.chunks,
-                       skip_rows,
-                       num_rows,
-                       false,  // num_rows is already computed
-                       false,  // no need to compute string sizes
-                       pass.level_type_size,
-                       _stream);
-  }
-
   // iterate over all input columns and allocate any associated output
   // buffers if they are not part of a list hierarchy. mark down
   // if we have any list columns that need further processing.
   bool has_lists = false;
-  // Casting to std::byte since data buffer pointer is void *
-  std::vector<cudf::device_span<cuda::std::byte>> memset_bufs;
   // Validity Buffer is a uint32_t pointer
   std::vector<cudf::device_span<cudf::bitmask_type>> nullmask_bufs;
 
@@ -694,8 +718,6 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
                      std::overflow_error);
         out_buf.create_with_mask(
           out_buf_size, cudf::mask_state::UNINITIALIZED, false, _stream, _mr);
-        memset_bufs.emplace_back(static_cast<cuda::std::byte*>(out_buf.data()),
-                                 out_buf.data_size());
         nullmask_bufs.emplace_back(
           out_buf.null_mask(),
           cudf::util::round_up_safe(out_buf.null_mask_size(), sizeof(cudf::bitmask_type)) /
@@ -747,6 +769,7 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
 
     // To keep track of the starting key of an iteration
     size_t key_start = 0;
+
     // Loop until all keys are processed
     while (key_start < num_keys) {
       // Number of keys processed in this iteration
@@ -813,8 +836,6 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
           // we're going to start null mask as all valid and then turn bits off if necessary
           out_buf.create_with_mask(
             buffer_size, cudf::mask_state::UNINITIALIZED, false, _stream, _mr);
-          memset_bufs.emplace_back(static_cast<cuda::std::byte*>(out_buf.data()),
-                                   out_buf.data_size());
           nullmask_bufs.emplace_back(
             out_buf.null_mask(),
             cudf::util::round_up_safe(out_buf.null_mask_size(), sizeof(cudf::bitmask_type)) /
@@ -824,8 +845,6 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
     }
   }
 
-  cudf::detail::batched_memset<cuda::std::byte>(
-    memset_bufs, static_cast<cuda::std::byte>(0), _stream);
   // Need to set null mask bufs to all high bits
   cudf::detail::batched_memset<cudf::bitmask_type>(
     nullmask_bufs, std::numeric_limits<cudf::bitmask_type>::max(), _stream);

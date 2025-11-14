@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "hybrid_scan_common.hpp"
@@ -133,8 +122,8 @@ TEST_F(HybridScanFiltersTest, TestMetadata)
   auto parquet_metadata = reader->parquet_metadata();
 
   // Check that the offset and column indices are not present
-  ASSERT_FALSE(parquet_metadata.row_groups[0].columns[0].offset_index.has_value());
-  ASSERT_FALSE(parquet_metadata.row_groups[0].columns[0].column_index.has_value());
+  EXPECT_FALSE(parquet_metadata.row_groups[0].columns[0].offset_index.has_value());
+  EXPECT_FALSE(parquet_metadata.row_groups[0].columns[0].column_index.has_value());
 
   // Get page index byte range from the reader
   auto const page_index_byte_range = reader->page_index_byte_range();
@@ -149,8 +138,8 @@ TEST_F(HybridScanFiltersTest, TestMetadata)
   parquet_metadata = reader->parquet_metadata();
 
   // Check that the offset and column indices are now present
-  ASSERT_TRUE(parquet_metadata.row_groups[0].columns[0].offset_index.has_value());
-  ASSERT_TRUE(parquet_metadata.row_groups[0].columns[0].column_index.has_value());
+  EXPECT_TRUE(parquet_metadata.row_groups[0].columns[0].offset_index.has_value());
+  EXPECT_TRUE(parquet_metadata.row_groups[0].columns[0].column_index.has_value());
 
   // Get all row groups from the reader
   auto input_row_group_indices = reader->all_row_groups(options);
@@ -164,6 +153,75 @@ TEST_F(HybridScanFiltersTest, TestMetadata)
   input_row_group_indices = reader->all_row_groups(options);
   // Expect only 2 row groups now
   EXPECT_EQ(input_row_group_indices.size(), 2);
+  EXPECT_EQ(reader->total_rows_in_row_groups(input_row_group_indices), 2 * rows_per_row_group);
+}
+
+TEST_F(HybridScanFiltersTest, TestExternalMetadata)
+{
+  srand(0xcaffe);
+
+  auto parquet_metadata = [&]() {
+    // Create a table with several row groups each with a single page.
+    auto constexpr num_concat = 1;
+    auto file_buffer = std::get<1>(create_parquet_with_stats<cudf::timestamp_ms, num_concat>());
+    // Input file buffer span
+    auto const file_buffer_span = cudf::host_span<uint8_t const>(
+      reinterpret_cast<uint8_t const*>(file_buffer.data()), file_buffer.size());
+
+    // Fetch footer and page index bytes from the buffer.
+    auto const footer_buffer = fetch_footer_bytes(file_buffer_span);
+
+    auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
+      footer_buffer, cudf::io::parquet_reader_options::builder().build());
+
+    // Get page index byte range from the reader
+    auto const page_index_byte_range = reader->page_index_byte_range();
+
+    // Fetch page index bytes from the input buffer
+    auto const page_index_buffer = fetch_page_index_bytes(file_buffer_span, page_index_byte_range);
+
+    // Setup page index
+    reader->setup_page_index(page_index_buffer);
+
+    return reader->parquet_metadata();
+  }();
+
+  // Filtering AST - table[0] < 100
+  using T                = cudf::timestamp_ms;
+  auto literal_value     = cudf::timestamp_scalar<T>(T(typename T::duration(100)));
+  auto literal           = cudf::ast::literal(literal_value);
+  auto col_ref_0         = cudf::ast::column_name_reference("col0");
+  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+
+  // Create reader options with empty source info
+  cudf::io::parquet_reader_options options =
+    cudf::io::parquet_reader_options::builder().filter(filter_expression);
+
+  // Get Parquet file metadata from the reader
+  auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
+    parquet_metadata, options);
+
+  // Get Parquet file metadata from the reader
+  parquet_metadata = reader->parquet_metadata();
+
+  // Check that the offset and column indices are present
+  EXPECT_TRUE(parquet_metadata.row_groups[0].columns[0].offset_index.has_value());
+  EXPECT_TRUE(parquet_metadata.row_groups[0].columns[0].column_index.has_value());
+
+  // Get all row groups from the reader
+  auto input_row_group_indices = reader->all_row_groups(options);
+  // Expect 4 = 20000 rows / 5000 rows per row group
+  EXPECT_EQ(input_row_group_indices.size(), 4);
+
+  // Explicitly set the row groups to read
+  options.set_row_groups({{2, 3}});
+
+  // Get all row groups from the reader again
+  input_row_group_indices = reader->all_row_groups(options);
+  // Expect only 2 row groups now
+  EXPECT_EQ(input_row_group_indices.size(), 2);
+
+  auto constexpr rows_per_row_group = page_size_for_ordered_tests;
   EXPECT_EQ(reader->total_rows_in_row_groups(input_row_group_indices), 2 * rows_per_row_group);
 }
 
@@ -374,9 +432,8 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
   srand(0xcafe);
   using T = uint32_t;
 
-  // A table not concated with itself with result in a parquet file with several row groups each
-  // with a single page. Since there is only one page per row group, the page and row group stats
-  // are identical and we can only prune row groups.
+  // A table with several row groups each containing a single page per column. The data page and row
+  // group stats are identical so only row groups can be pruned using stats
   auto constexpr num_concat = 1;
   auto const buffer         = std::get<1>(create_parquet_with_stats<T, num_concat>());
   auto stream               = cudf::get_default_stream();
@@ -659,11 +716,14 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterFewLiteralsTyped)
   srand(0xace);
   using T = TypeParam;
 
-  auto constexpr num_concat = 1;
+  auto constexpr num_concat          = 1;
+  auto constexpr is_constant_strings = true;
+  auto constexpr is_nullable         = true;
 
   // Specifying ZSTD compression to explicitly test decompression of dictionary pages
   auto const buffer =
-    std::get<1>(create_parquet_with_stats<T, num_concat>(100, cudf::io::compression_type::ZSTD));
+    std::get<1>(create_parquet_with_stats<T, num_concat, is_constant_strings, is_nullable>(
+      100, cudf::io::compression_type::ZSTD));
 
   // For string tests use `col2` containing constant "0100" and for temporal types use `col1`
   // containing low cardinality descending values. For all other types use `col0`
@@ -765,10 +825,14 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterManyLiteralsTyped)
   srand(0xcabab);
   using T = TypeParam;
 
-  auto constexpr num_concat = 1;
+  auto constexpr num_concat          = 1;
+  auto constexpr is_constant_strings = true;
+  auto constexpr is_nullable         = false;
+
   // Specifying no compression to explicitly test uncompressed dictionary pages
   auto const buffer =
-    std::get<1>(create_parquet_with_stats<T, num_concat>(100, cudf::io::compression_type::NONE));
+    std::get<1>(create_parquet_with_stats<T, num_concat, is_constant_strings, is_nullable>(
+      100, cudf::io::compression_type::NONE));
 
   // For string tests use `col2` containing constant "0100" and for temporal types use `col1`
   // containing low cardinality descending values. For all other types use `col0`

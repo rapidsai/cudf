@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "binary_ops.hpp"
@@ -22,7 +11,6 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/structs/utilities.hpp>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/utilities/memory_resource.hpp>
@@ -239,8 +227,8 @@ struct null_considering_binop {
           return invalid_str;
         else if (lhs_valid && rhs_valid) {
           return (op == binary_operator::NULL_MAX)
-                   ? cudf::detail::maximum<cudf::string_view>()(lhs_value, rhs_value)
-                   : cudf::detail::minimum<cudf::string_view>()(lhs_value, rhs_value);
+                   ? cuda::maximum<cudf::string_view>()(lhs_value, rhs_value)
+                   : cuda::minimum<cudf::string_view>()(lhs_value, rhs_value);
         } else if (lhs_valid)
           return lhs_value;
         else
@@ -422,7 +410,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
         is_lhs_scalar,
         is_rhs_scalar,
         op,
-        cudf::experimental::row::equality::nan_equal_physical_equality_comparator{},
+        cudf::detail::row::equality::nan_equal_physical_equality_comparator{},
         stream);
       break;
     case binary_operator::LESS:
@@ -432,7 +420,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
         rhs,
         is_lhs_scalar,
         is_rhs_scalar,
-        cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+        cudf::detail::row::lexicographic::sorting_physical_element_comparator{},
         stream);
       break;
     case binary_operator::GREATER:
@@ -442,7 +430,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
         rhs,
         is_lhs_scalar,
         is_rhs_scalar,
-        cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+        cudf::detail::row::lexicographic::sorting_physical_element_comparator{},
         stream);
       break;
     case binary_operator::LESS_EQUAL:
@@ -452,7 +440,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
         rhs,
         is_lhs_scalar,
         is_rhs_scalar,
-        cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+        cudf::detail::row::lexicographic::sorting_physical_element_comparator{},
         stream);
       break;
     case binary_operator::GREATER_EQUAL:
@@ -462,7 +450,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
         rhs,
         is_lhs_scalar,
         is_rhs_scalar,
-        cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+        cudf::detail::row::lexicographic::sorting_physical_element_comparator{},
         stream);
       break;
     default: CUDF_FAIL("Unsupported operator for structs");

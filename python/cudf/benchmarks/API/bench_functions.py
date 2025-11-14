@@ -1,4 +1,5 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 """Benchmarks of free functions that accept cudf objects."""
 
@@ -12,21 +13,15 @@ from utils import benchmark_with_object
 @pytest_cases.parametrize_with_cases(
     "objs", prefix="concat", cases="cases_functions"
 )
-@pytest.mark.parametrize(
-    "axis",
-    [
-        1,
-    ],
-)
 @pytest.mark.parametrize("join", ["inner", "outer"])
 @pytest.mark.parametrize("ignore_index", [True, False])
 def bench_concat_axis_1(benchmark, objs, axis, join, ignore_index):
     benchmark(
-        cudf.concat, objs=objs, axis=axis, join=join, ignore_index=ignore_index
+        cudf.concat, objs=objs, axis=1, join=join, ignore_index=ignore_index
     )
 
 
-@pytest.mark.parametrize("size", [10_000, 100_000])
+@pytest.mark.parametrize("size", NUM_ROWS)
 @pytest.mark.parametrize("cardinality", [10, 100, 1000])
 @pytest.mark.parametrize("dtype", [cupy.bool_, cupy.float64])
 def bench_get_dummies_high_cardinality(benchmark, size, cardinality, dtype):

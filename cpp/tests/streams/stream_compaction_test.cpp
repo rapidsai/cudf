@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -20,6 +9,7 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 
+#include <cudf/ast/expressions.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
@@ -374,6 +364,39 @@ TEST_F(StreamCompactionTest, ApplyBooleanMask)
   auto const col_expected = int32s_col{9526, 9347, 9569, 9807, 9279, 9691};
   cudf::table_view expected({col_expected});
   auto const result = cudf::apply_boolean_mask(input, mask, cudf::test::get_default_stream());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
+}
+
+TEST_F(StreamCompactionTest, FilterUDF)
+{
+  auto const col      = int32s_col{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14};
+  auto col_ref_0      = cudf::ast::column_reference(0);
+  auto const expected = int32s_col{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}.release();
+  auto const result   = cudf::filter({col},
+                                   R"***(
+__device__ void filter(bool * out, int32_t a){
+  *out = a < 10;
+})***",
+                                     {col},
+                                   false,
+                                   std::nullopt,
+                                   cudf::null_aware::NO,
+                                   cudf::test::get_default_stream());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *result[0]);
+}
+
+TEST_F(StreamCompactionTest, FilterASTJit)
+{
+  auto const col  = int32s_col{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14};
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto max_scalar = cudf::numeric_scalar<int32_t>(
+    10, true, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref());
+  auto const max_literal = cudf::ast::literal(max_scalar);
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, max_literal);
+  cudf::table_view input({col});
+  auto const col_expected = int32s_col{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  cudf::table_view expected({col_expected});
+  auto const result = cudf::filter(input, expression, input, cudf::test::get_default_stream());
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
 }
 

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
@@ -82,10 +71,7 @@ void BM_parq_write_encode(nvbench::state& state, nvbench::type_list<nvbench::enu
   state.add_buffer_size(encoded_file_size, "encoded_file_size", "encoded_file_size");
 }
 
-template <io_type IO, cudf::io::compression_type Compression>
-void BM_parq_write_io_compression(
-  nvbench::state& state,
-  nvbench::type_list<nvbench::enum_type<IO>, nvbench::enum_type<Compression>>)
+void BM_parq_write_io_compression(nvbench::state& state)
 {
   auto const data_types = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
                                              static_cast<int32_t>(data_type::FLOAT),
@@ -99,8 +85,8 @@ void BM_parq_write_io_compression(
 
   cudf::size_type const cardinality = state.get_int64("cardinality");
   cudf::size_type const run_length  = state.get_int64("run_length");
-  auto const compression            = Compression;
-  auto const sink_type              = IO;
+  auto const sink_type              = retrieve_io_type_enum(state.get_string("io_type"));
+  auto const compression = retrieve_compression_type_enum(state.get_string("compression_type"));
 
   auto const tbl =
     create_random_table(cycle_dtypes(data_types, num_cols),
@@ -133,13 +119,12 @@ void BM_parq_write_io_compression(
   state.add_buffer_size(encoded_file_size, "encoded_file_size", "encoded_file_size");
 }
 
-template <cudf::io::statistics_freq Statistics, cudf::io::compression_type Compression>
-void BM_parq_write_varying_options(
-  nvbench::state& state,
-  nvbench::type_list<nvbench::enum_type<Statistics>, nvbench::enum_type<Compression>>)
+template <cudf::io::statistics_freq Statistics>
+void BM_parq_write_varying_options(nvbench::state& state,
+                                   nvbench::type_list<nvbench::enum_type<Statistics>>)
 {
   auto const enable_stats = Statistics;
-  auto const compression  = Compression;
+  auto const compression  = retrieve_compression_type_enum(state.get_string("compression_type"));
   auto const file_path    = state.get_string("file_path");
 
   auto const data_types = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL_SIGNED),
@@ -191,11 +176,6 @@ using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
                                             data_type::LIST,
                                             data_type::STRUCT>;
 
-using io_list = nvbench::enum_type_list<io_type::FILEPATH, io_type::HOST_BUFFER, io_type::VOID>;
-
-using compression_list =
-  nvbench::enum_type_list<cudf::io::compression_type::SNAPPY, cudf::io::compression_type::NONE>;
-
 using stats_list = nvbench::enum_type_list<cudf::io::STATISTICS_NONE,
                                            cudf::io::STATISTICS_ROWGROUP,
                                            cudf::io::STATISTICS_COLUMN,
@@ -208,15 +188,17 @@ NVBENCH_BENCH_TYPES(BM_parq_write_encode, NVBENCH_TYPE_AXES(d_type_list))
   .add_int64_axis("cardinality", {0, 1000, 10'000, 100'000})
   .add_int64_axis("run_length", {1, 8, 32});
 
-NVBENCH_BENCH_TYPES(BM_parq_write_io_compression, NVBENCH_TYPE_AXES(io_list, compression_list))
+NVBENCH_BENCH(BM_parq_write_io_compression)
   .set_name("parquet_write_io_compression")
-  .set_type_axes_names({"io", "compression"})
+  .add_string_axis("io_type", {"FILEPATH", "HOST_BUFFER", "VOID"})
+  .add_string_axis("compression_type", {"SNAPPY", "ZSTD", "NONE"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});
 
-NVBENCH_BENCH_TYPES(BM_parq_write_varying_options, NVBENCH_TYPE_AXES(stats_list, compression_list))
+NVBENCH_BENCH_TYPES(BM_parq_write_varying_options, NVBENCH_TYPE_AXES(stats_list))
   .set_name("parquet_write_options")
-  .set_type_axes_names({"statistics", "compression"})
+  .set_type_axes_names({"statistics"})
+  .add_string_axis("compression_type", {"SNAPPY", "ZSTD", "NONE"})
   .set_min_samples(4)
   .add_string_axis("file_path", {"unused_path.parquet", ""});

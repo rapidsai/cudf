@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/comp/common.hpp"
@@ -259,9 +248,10 @@ void reader_impl::preprocess_file(read_mode mode)
         });
       });
 
-    return has_timestamp_column ? cudf::detail::make_timezone_transition_table(
-                                    {}, selected_stripes[0].stripe_footer->writerTimezone, _stream)
-                                : std::make_unique<cudf::table>();
+    return (has_timestamp_column && !_options.ignore_timezone_in_stripe_footer)
+             ? cudf::detail::make_timezone_transition_table(
+                 {}, selected_stripes[0].stripe_footer->writerTimezone, _stream)
+             : std::make_unique<cudf::table>();
   }();
 
   //
@@ -690,7 +680,8 @@ void reader_impl::load_next_stripe_data(read_mode mode)
         // Cache these parsed numbers so they can be reused in the decompression/decoding step.
         compinfo_map[info.source] = {stream_compinfo.num_compressed_blocks,
                                      stream_compinfo.num_uncompressed_blocks,
-                                     stream_compinfo.max_uncompressed_size};
+                                     stream_compinfo.max_uncompressed_size,
+                                     stream_compinfo.max_uncompressed_block_size};
         stripe_decomp_sizes[info.source.stripe_idx - stripe_start].size_bytes +=
           stream_compinfo.max_uncompressed_size;
       }

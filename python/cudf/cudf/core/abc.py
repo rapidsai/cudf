@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 """Common abstract base classes for cudf."""
 
 import numpy
@@ -157,7 +158,7 @@ class Serializable:
         header["writeable"] = len(frames) * (None,)
         frames = [
             f.memoryview() if c else memoryview(f)
-            for c, f in zip(header["is-cuda"], frames)
+            for c, f in zip(header["is-cuda"], frames, strict=True)
         ]
         return header, frames
 
@@ -183,7 +184,9 @@ class Serializable:
         """
         frames = [
             cudf.core.buffer.as_buffer(f) if c else f
-            for c, f in zip(header["is-cuda"], map(memoryview, frames))
+            for c, f in zip(
+                header["is-cuda"], map(memoryview, frames), strict=True
+            )
         ]
         obj = cls.device_deserialize(header, frames)
         return obj

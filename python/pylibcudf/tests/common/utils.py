@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import io
@@ -69,15 +70,11 @@ def assert_column_eq(
     if isinstance(lhs, (pa.Array, pa.ChunkedArray)) and isinstance(
         rhs, plc.Column
     ):
-        rhs = plc.interop.to_arrow(
-            rhs, metadata=metadata_from_arrow_type(lhs.type)
-        )
+        rhs = rhs.to_arrow(metadata=metadata_from_arrow_type(lhs.type))
     elif isinstance(lhs, plc.Column) and isinstance(
         rhs, (pa.Array, pa.ChunkedArray)
     ):
-        lhs = plc.interop.to_arrow(
-            lhs, metadata=metadata_from_arrow_type(rhs.type)
-        )
+        lhs = lhs.to_arrow(metadata=metadata_from_arrow_type(rhs.type))
     else:
         raise ValueError(
             "One of the inputs must be a Column and the other an Array"
@@ -163,7 +160,7 @@ def assert_column_eq(
                 return _is_supported_for_pc_is_nan(arr_type.value_type)
             return True
 
-        for lh_arr, rh_arr in zip(lhs, rhs):
+        for lh_arr, rh_arr in zip(lhs, rhs, strict=True):
             # pc.is_nan does not support nested list
             # with float (eg. list<list<float>>)
             if not _is_supported_for_pc_is_nan(lh_arr.type):
@@ -213,7 +210,9 @@ def assert_table_eq(pa_table: pa.Table, plc_table: plc.Table) -> None:
     """Verify that a pylibcudf table and PyArrow table are equal."""
     assert plc_table.shape() == pa_table.shape
 
-    for plc_col, pa_col in zip(plc_table.columns(), pa_table.columns):
+    for plc_col, pa_col in zip(
+        plc_table.columns(), pa_table.columns, strict=True
+    ):
         assert_column_eq(pa_col, plc_col)
 
 
@@ -235,7 +234,9 @@ def assert_table_and_meta_eq(
     if not check_types_if_empty and plc_table.num_rows() == 0:
         return
 
-    for plc_col, pa_col in zip(plc_table.columns(), pa_table.columns):
+    for plc_col, pa_col in zip(
+        plc_table.columns(), pa_table.columns, strict=True
+    ):
         assert_column_eq(pa_col, plc_col, check_field_nullability)
 
     # Check column name equality
@@ -263,7 +264,9 @@ def nesting_level(typ) -> tuple[int, int]:
         list_, struct = nesting_level(typ.value_type)
         return list_ + 1, struct
     elif isinstance(typ, pa.StructType):
-        lists, structs = map(max, zip(*(nesting_level(t.type) for t in typ)))
+        lists, structs = map(
+            max, zip(*(nesting_level(t.type) for t in typ), strict=True)
+        )
         return lists, structs + 1
     else:
         return 0, 0
@@ -332,11 +335,11 @@ def sink_to_str(sink):
     for comparison
     """
     if isinstance(sink, (str, os.PathLike)):
-        with open(sink, "r") as f:
+        with open(sink, "r", encoding="utf-8") as f:
             str_result = f.read()
     elif isinstance(sink, io.BytesIO):
         sink.seek(0)
-        str_result = sink.read().decode()
+        str_result = sink.read().decode("utf-8")
     else:
         sink.seek(0)
         str_result = sink.read()

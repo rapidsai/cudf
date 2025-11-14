@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libc.stdint cimport uint32_t, uint64_t
 from libcpp.memory cimport unique_ptr
@@ -12,6 +13,9 @@ from pylibcudf.libcudf.nvtext.minhash cimport (
     minhash64_ngrams as cpp_minhash64_ngrams,
 )
 from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 __all__ = [
     "minhash",
@@ -25,7 +29,9 @@ cpdef Column minhash(
     uint32_t seed,
     Column a,
     Column b,
-    size_type width
+    size_type width,
+    Stream stream=None,
+    DeviceMemoryResource mr=None
 ):
     """
     Returns the minhash values for each string.
@@ -52,6 +58,8 @@ cpdef Column minhash(
         List column of minhash values for each string per seed
     """
     cdef unique_ptr[column] c_result
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_minhash(
@@ -59,17 +67,21 @@ cpdef Column minhash(
             seed,
             a.view(),
             b.view(),
-            width
+            width,
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 cpdef Column minhash64(
     Column input,
     uint64_t seed,
     Column a,
     Column b,
-    size_type width
+    size_type width,
+    Stream stream=None,
+    DeviceMemoryResource mr=None
 ):
     """
     Returns the minhash values for each string.
@@ -89,6 +101,8 @@ cpdef Column minhash64(
         2nd parameter value used for the minhash algorithm.
     width : size_type
         Character width used for apply substrings;
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -96,6 +110,8 @@ cpdef Column minhash64(
         List column of minhash values for each string per seed
     """
     cdef unique_ptr[column] c_result
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_minhash64(
@@ -103,17 +119,21 @@ cpdef Column minhash64(
             seed,
             a.view(),
             b.view(),
-            width
+            width,
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 cpdef Column minhash_ngrams(
     Column input,
     size_type ngrams,
     uint32_t seed,
     Column a,
-    Column b
+    Column b,
+    Stream stream=None,
+    DeviceMemoryResource mr=None
 ):
     """
     Returns the minhash values for each input row of strings.
@@ -133,6 +153,8 @@ cpdef Column minhash_ngrams(
         1st parameter value used for the minhash algorithm.
     b : Column
         2nd parameter value used for the minhash algorithm.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -141,6 +163,8 @@ cpdef Column minhash_ngrams(
         value in columns a and b.
     """
     cdef unique_ptr[column] c_result
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_minhash_ngrams(
@@ -148,17 +172,21 @@ cpdef Column minhash_ngrams(
             ngrams,
             seed,
             a.view(),
-            b.view()
+            b.view(),
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 cpdef Column minhash64_ngrams(
     Column input,
     size_type ngrams,
     uint64_t seed,
     Column a,
-    Column b
+    Column b,
+    Stream stream=None,
+    DeviceMemoryResource mr=None
 ):
     """
     Returns the minhash values for each input row of strings.
@@ -178,6 +206,8 @@ cpdef Column minhash64_ngrams(
         1st parameter value used for the minhash algorithm.
     b : Column
         2nd parameter value used for the minhash algorithm.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -186,6 +216,8 @@ cpdef Column minhash64_ngrams(
         value in columns a and b.
     """
     cdef unique_ptr[column] c_result
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_minhash64_ngrams(
@@ -193,7 +225,9 @@ cpdef Column minhash64_ngrams(
             ngrams,
             seed,
             a.view(),
-            b.view()
+            b.view(),
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream, mr)

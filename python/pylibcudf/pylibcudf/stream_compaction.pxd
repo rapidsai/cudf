@@ -1,4 +1,5 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from pylibcudf.libcudf.stream_compaction cimport duplicate_keep_option
 from pylibcudf.libcudf.types cimport (
@@ -8,22 +9,43 @@ from pylibcudf.libcudf.types cimport (
     null_policy,
     size_type,
 )
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .table cimport Table
 
 
-cpdef Table drop_nulls(Table source_table, list keys, size_type keep_threshold)
+cpdef Table drop_nulls(
+    Table source_table,
+    list keys,
+    size_type keep_threshold,
+    Stream stream = *,
+    DeviceMemoryResource mr = *,
+)
 
-cpdef Table drop_nans(Table source_table, list keys, size_type keep_threshold)
+cpdef Table drop_nans(
+    Table source_table,
+    list keys,
+    size_type keep_threshold,
+    Stream stream = *,
+    DeviceMemoryResource mr = *,
+)
 
-cpdef Table apply_boolean_mask(Table source_table, Column boolean_mask)
+cpdef Table apply_boolean_mask(
+    Table source_table,
+    Column boolean_mask,
+    Stream stream = *,
+    DeviceMemoryResource mr = *,
+)
 
 cpdef Table unique(
     Table input,
     list keys,
     duplicate_keep_option keep,
     null_equality nulls_equal,
+    Stream stream = *,
+    DeviceMemoryResource mr = *,
 )
 
 cpdef Table distinct(
@@ -32,6 +54,8 @@ cpdef Table distinct(
     duplicate_keep_option keep,
     null_equality nulls_equal,
     nan_equality nans_equal,
+    Stream stream = *,
+    DeviceMemoryResource mr = *,
 )
 
 cpdef Column distinct_indices(
@@ -39,6 +63,8 @@ cpdef Column distinct_indices(
     duplicate_keep_option keep,
     null_equality nulls_equal,
     nan_equality nans_equal,
+    Stream stream = *,
+    DeviceMemoryResource mr = *,
 )
 
 cpdef Table stable_distinct(
@@ -47,16 +73,20 @@ cpdef Table stable_distinct(
     duplicate_keep_option keep,
     null_equality nulls_equal,
     nan_equality nans_equal,
+    Stream stream = *,
+    DeviceMemoryResource mr = *,
 )
 
 cpdef size_type unique_count(
     Column column,
     null_policy null_handling,
-    nan_policy nan_handling
+    nan_policy nan_handling,
+    Stream stream = *
 )
 
 cpdef size_type distinct_count(
     Column column,
     null_policy null_handling,
-    nan_policy nan_handling
+    nan_policy nan_handling,
+    Stream stream = *
 )

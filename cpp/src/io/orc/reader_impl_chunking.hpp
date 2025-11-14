@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -74,6 +63,7 @@ struct stripe_level_comp_info {
   std::size_t num_compressed_blocks{0};
   std::size_t num_uncompressed_blocks{0};
   std::size_t total_decomp_size{0};
+  std::size_t max_uncompressed_block_size{0};
 };
 
 /**
@@ -127,6 +117,13 @@ struct orc_stream_info {
  * @brief Struct storing intermediate processing data loaded from data sources.
  */
 struct file_intermediate_data {
+  file_intermediate_data() = default;
+
+  file_intermediate_data(file_intermediate_data const&)            = delete;
+  file_intermediate_data& operator=(file_intermediate_data const&) = delete;
+  file_intermediate_data(file_intermediate_data&&)                 = default;
+  file_intermediate_data& operator=(file_intermediate_data&&)      = default;
+
   int64_t rows_to_skip;
   int64_t rows_to_read;
   std::vector<metadata::orc_stripe_info> selected_stripes;

@@ -1,17 +1,64 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
 import warnings
+from typing import cast
 
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from pandas import testing as tm
 
 import cudf
 from cudf.core.missing import NA, NaT
 from cudf.utils.dtypes import CUDF_STRING_DTYPE, is_dtype_obj_numeric
+
+pa_types = pa.types
+
+
+def _is_string_view(dtype: pa.DataType) -> bool:
+    return hasattr(pa_types, "is_string_view") and pa_types.is_string_view(
+        dtype
+    )
+
+
+def _map_string_view_to_string(dtype: pa.DataType) -> pa.DataType:
+    """Convert string_view -> string"""
+    if _is_string_view(dtype):
+        return pa.string()
+    if pa_types.is_list(dtype):
+        return pa.list_(_map_string_view_to_string(dtype.value_type))
+    return dtype
+
+
+def _string_view_to_string_schema(schema: pa.Schema) -> pa.Schema:
+    return pa.schema(
+        [
+            pa.field(
+                f.name,
+                _map_string_view_to_string(f.type),
+                nullable=f.nullable,
+                metadata=f.metadata,
+            )
+            for f in schema
+        ],
+        # Cast needed because schema.metadata is dict[bytes, bytes] but
+        # pa.schema expects dict[bytes | str, bytes | str] | None
+        metadata=cast(dict[bytes | str, bytes | str] | None, schema.metadata),
+    )
+
+
+def _string_view_to_string(obj):
+    """Cast string_view -> string"""
+    if isinstance(obj, pa.Table):
+        return pa.Table.from_arrays(
+            obj.columns, schema=_string_view_to_string_schema(obj.schema)
+        )
+
+    return obj
 
 
 def dtype_can_compare_equal_to_other(dtype):
@@ -90,6 +137,41 @@ def _check_types(
             raise_assert_detail(
                 obj, "Categorical difference", f"{left}", f"{right}"
             )
+
+
+def assert_arrow_table_equal(left: pa.Table, right: pa.Table) -> None:
+    """
+    Check if two pyarrow Tables are equal.
+
+    Parameters
+    ----------
+    left : pyarrow.Table
+        Left table to compare.
+    right : pyarrow.Table
+        Right table to compare.
+
+    Raises
+    ------
+    AssertionError
+
+    Notes
+    -----
+    PyArrow 21+ has shifted toward using ``string_view``
+    internally in more places, whereas previous versions
+    used ``string``. This change causes schema equality
+    checks in cuDF tests to fail. To make our tests stable
+    and future-proof against Arrow changing representations
+    over time, we cast all ``string_view`` types to ``string``
+    before comparison.
+    """
+    left = _string_view_to_string(left)
+    right = _string_view_to_string(right)
+    try:
+        assert left.equals(right)
+    except AssertionError:
+        raise_assert_detail(
+            "pyarrow.Table", "Arrow Tables are different", left, right
+        )
 
 
 def assert_column_equal(
@@ -809,3 +891,27 @@ def assert_neq(left, right, **kwargs):
         pass
     else:
         raise AssertionError
+
+
+def assert_groupby_results_equal(
+    expect, got, sort=True, as_index=True, by=None, **kwargs
+):
+    # Because we don't sort by index by default in groupby,
+    # sort expect and got by index before comparing.
+    if sort:
+        if as_index:
+            expect = expect.sort_index()
+            got = got.sort_index()
+        else:
+            assert by is not None
+            if isinstance(expect, (pd.DataFrame, cudf.DataFrame)):
+                expect = expect.sort_values(by=by).reset_index(drop=True)
+            else:
+                expect = expect.sort_values(by=by).reset_index(drop=True)
+
+            if isinstance(got, cudf.DataFrame):
+                got = got.sort_values(by=by).reset_index(drop=True)
+            else:
+                got = got.sort_values(by=by).reset_index(drop=True)
+
+    assert_eq(expect, got, **kwargs)

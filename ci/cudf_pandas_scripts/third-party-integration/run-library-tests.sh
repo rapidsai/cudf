@@ -1,6 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 cleanup() {
@@ -14,13 +13,13 @@ runtest() {
     local mode=$2
 
     echo "Running tests for $lib in $mode mode"
-    local plugin=""
+    local plugin=()
     if [ "$mode" = "cudf" ]; then
-        plugin="-p cudf.pandas"
+        plugin=("-p cudf.pandas")
     fi
 
     pytest \
-    "$plugin" \
+    "${plugin[@]}" \
     -v \
     --continue-on-collection-errors \
     --cache-clear \

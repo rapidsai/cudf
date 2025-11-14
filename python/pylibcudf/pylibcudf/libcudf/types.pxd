@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libc.stddef cimport size_t
 from libc.stdint cimport int32_t, uint32_t
 from libcpp cimport bool
@@ -48,6 +49,10 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
     cpdef enum class null_equality(bool):
         EQUAL
         UNEQUAL
+
+    cpdef enum class null_aware(bool):
+        NO
+        YES
 
     cpdef enum class nan_equality(bool):
         ALL_EQUAL

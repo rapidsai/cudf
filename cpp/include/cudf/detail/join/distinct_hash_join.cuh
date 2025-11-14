@@ -1,22 +1,10 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
-#include <cudf/hashing/detail/helper_functions.cuh>
-#include <cudf/table/experimental/row_operators.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
@@ -32,8 +20,8 @@
 
 namespace cudf::detail {
 
-using cudf::experimental::row::lhs_index_type;
-using cudf::experimental::row::rhs_index_type;
+using cudf::detail::row::lhs_index_type;
+using cudf::detail::row::rhs_index_type;
 
 /**
  * @brief A custom comparator used for the build table insertion
@@ -164,13 +152,13 @@ class distinct_hash_join {
                                            cuda::thread_scope_device,
                                            always_not_equal,
                                            probing_scheme_type,
-                                           cudf::detail::cuco_allocator<char>,
+                                           rmm::mr::polymorphic_allocator<char>,
                                            cuco_storage_type>;
 
   bool _has_nested_columns;  ///< True if nested columns are present in build and probe tables
   cudf::null_equality _nulls_equal;  ///< Whether to consider nulls as equal
   cudf::table_view _build;           ///< Input table to build the hash map
-  std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table>
     _preprocessed_build;        ///< Input table preprocssed for row operators
   hash_table_type _hash_table;  ///< Hash table built on `_build`
 };

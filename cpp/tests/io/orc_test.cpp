@@ -1,20 +1,10 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "compression_common.hpp"
+#include "io_test_utils.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -2305,6 +2295,59 @@ TEST_F(OrcWriterTest, MultipleBlocksInStripeFooter)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
+TEST_F(OrcReaderTest, DeviceReadAsyncThrows)
+{
+  // Create a simple ORC file in memory
+  auto col0           = cudf::test::fixed_width_column_wrapper<int>{{1, 2, 3, 4, 5}};
+  auto table_to_write = table_view{{col0}};
+
+  std::vector<char> out_buffer;
+  cudf::io::orc_writer_options write_args =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{&out_buffer}, table_to_write);
+  cudf::io::write_orc(write_args);
+
+  // Create our throwing datasource
+  auto throwing_source = std::make_unique<cudf::test::ThrowingDeviceReadDatasource>(out_buffer);
+  cudf::io::source_info source_info(throwing_source.get());
+
+  // Try to read the ORC file - this should either succeed or propagate AsyncException
+  // from device_read_async.
+  cudf::io::orc_reader_options read_args = cudf::io::orc_reader_options::builder(source_info);
+  try {
+    cudf::io::read_orc(read_args);
+    // Test passes if no exception is thrown
+  } catch (const cudf::test::AsyncException&) {
+    // Test passes if AsyncException is thrown (expected test exception)
+  } catch (const std::exception& e) {
+    // Test fails if any other exception is thrown
+    FAIL() << "Unexpected exception thrown: " << e.what();
+  }
+}
+
+TEST_F(OrcReaderTest, DeviceWriteAsyncThrows)
+{
+  // Create a simple table to write
+  auto col0           = cudf::test::fixed_width_column_wrapper<int>{{1, 2, 3, 4, 5}};
+  auto table_to_write = table_view{{col0}};
+
+  auto throwing_sink = std::make_unique<cudf::test::ThrowingDeviceWriteDataSink>();
+
+  cudf::io::orc_writer_options write_args =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{throwing_sink.get()}, table_to_write);
+
+  // The write_orc call should either succeed or throw AsyncException.
+  // Should only fail if a different exception is thrown.
+  try {
+    cudf::io::write_orc(write_args);
+    // Test passes if no exception is thrown
+  } catch (const cudf::test::AsyncException&) {
+    // Test passes if AsyncException is thrown (expected test exception)
+  } catch (const std::exception& e) {
+    // Test fails if any other exception is thrown
+    FAIL() << "Unexpected exception thrown: " << e.what();
+  }
+}
+
 INSTANTIATE_TEST_CASE_P(Nvcomp,
                         OrcCompressionTest,
                         ::testing::Combine(::testing::Values("NVCOMP"),
@@ -2344,7 +2387,7 @@ INSTANTIATE_TEST_CASE_P(DeviceInternal,
 
 INSTANTIATE_TEST_CASE_P(Host,
                         OrcDecompressionTest,
-                        ::testing::Combine(::testing::Values("HOST"),
+                        ::testing::Combine(::testing::Values("HOST", "HYBRID", "AUTO"),
                                            ::testing::Values(cudf::io::compression_type::AUTO,
                                                              cudf::io::compression_type::SNAPPY,
                                                              cudf::io::compression_type::ZSTD)));

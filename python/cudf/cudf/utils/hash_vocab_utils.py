@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 # This function is from the rapidsai/clx repo at below link
 # https://github.com/rapidsai/clx/blob/267c6d30805c9dcbf80840f222bf31c5c4b7068a/python/clx/analytics/_perfect_hash.py
 import numpy as np
@@ -195,7 +196,9 @@ def _store_func(
         f.write(f"{num_outer_bins}\n")
         f.writelines(
             f"{coeff} {offset}\n"
-            for coeff, offset in zip(inner_table_coeffs, offsets_into_ht)
+            for coeff, offset in zip(
+                inner_table_coeffs, offsets_into_ht, strict=True
+            )
         )
         f.write(f"{len(hash_table)}\n")
         f.writelines(f"{kv}\n" for kv in hash_table)

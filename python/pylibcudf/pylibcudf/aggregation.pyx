@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
 from libcpp cimport bool
@@ -102,6 +103,7 @@ __all__ = [
     "covariance",
     "ewma",
     "histogram",
+    "is_valid_aggregation",
     "lag",
     "lead",
     "m2",

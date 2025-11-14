@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "hybrid_scan_impl.hpp"
@@ -42,14 +31,14 @@ using parquet::detail::ColumnChunkDesc;
 using parquet::detail::pass_intermediate_data;
 
 void hybrid_scan_reader_impl::handle_chunking(
-  std::vector<rmm::device_buffer> column_chunk_buffers,
-  cudf::host_span<std::vector<bool> const> data_page_mask,
-  parquet_reader_options const& options)
+  read_mode mode,
+  std::vector<rmm::device_buffer>&& column_chunk_buffers,
+  cudf::host_span<bool const> data_page_mask)
 {
   // if this is our first time in here, setup the first pass.
   if (!_pass_itm_data) {
     // setup the next pass
-    setup_next_pass(std::move(column_chunk_buffers), options);
+    setup_next_pass(std::move(column_chunk_buffers));
 
     // Must be called as soon as we create the pass
     set_pass_page_mask(data_page_mask);
@@ -76,20 +65,20 @@ void hybrid_scan_reader_impl::handle_chunking(
       _pass_itm_data.reset();
 
       _file_itm_data._current_input_pass++;
-      // no more passes. we are absolutely done with this file.
-      if (_file_itm_data._current_input_pass == _file_itm_data.num_passes()) { return; }
 
-      // setup the next pass
-      setup_next_pass(std::move(column_chunk_buffers), options);
+      // no more passes. we are absolutely done with this file.
+      CUDF_EXPECTS(_file_itm_data._current_input_pass == _file_itm_data.num_passes(),
+                   "Hybrid scan reader must only create one pass per chunking setup");
+      return;
     }
   }
 
   // setup the next sub pass
-  setup_next_subpass(read_mode::READ_ALL);
+  setup_next_subpass(mode);
 }
 
-void hybrid_scan_reader_impl::setup_next_pass(std::vector<rmm::device_buffer> column_chunk_buffers,
-                                              parquet_reader_options const& options)
+void hybrid_scan_reader_impl::setup_next_pass(
+  std::vector<rmm::device_buffer>&& column_chunk_buffers)
 {
   auto const num_passes = _file_itm_data.num_passes();
   CUDF_EXPECTS(num_passes == 1,
@@ -141,7 +130,7 @@ void hybrid_scan_reader_impl::setup_next_pass(std::vector<rmm::device_buffer> co
     //   confuses the chunked reader
     detect_malformed_pages(pass.pages,
                            pass.chunks,
-                           (options.get_num_rows().has_value() or options.get_skip_rows() > 0)
+                           uses_custom_row_bounds(read_mode::READ_ALL)
                              ? std::nullopt
                              : std::make_optional(pass.num_rows),
                            _stream);
@@ -164,6 +153,16 @@ void hybrid_scan_reader_impl::setup_next_pass(std::vector<rmm::device_buffer> co
     pass.base_mem_size =
       decomp_dict_data_size +
       thrust::reduce(rmm::exec_policy(_stream), chunk_iter, chunk_iter + pass.chunks.size());
+
+    // if we are doing subpass reading, generate more accurate num_row estimates for list columns.
+    // this helps us to generate more accurate subpass splits.
+    if (pass.has_compressed_data && _input_pass_read_limit != 0) {
+      if (_has_page_index) {
+        generate_list_column_row_counts(is_estimate_row_counts::NO);
+      } else {
+        generate_list_column_row_counts(is_estimate_row_counts::YES);
+      }
+    }
 
     _stream.synchronize();
   }

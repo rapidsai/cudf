@@ -1,24 +1,13 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
@@ -46,7 +35,7 @@ std::unique_ptr<column> murmurhash3_x86_32(table_view const& input,
   if (input.num_columns() == 0 || input.num_rows() == 0) { return output; }
 
   bool const nullable   = has_nulls(input);
-  auto const row_hasher = cudf::experimental::row::hash::row_hasher(input, stream);
+  auto const row_hasher = cudf::detail::row::hash::row_hasher(input, stream);
   auto output_view      = output->mutable_view();
 
   // Compute the hash value for each row

@@ -13,8 +13,12 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from cudf_polars.dsl import ir
-    from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import PartitionInfo
+    from cudf_polars.dsl.ir import IR, IRExecutionContext
+    from cudf_polars.experimental.base import (
+        ColumnStats,
+        PartitionInfo,
+        StatsCollector,
+    )
     from cudf_polars.utils.config import ConfigOptions
 
 
@@ -26,9 +30,12 @@ class State(TypedDict):
     ----------
     config_options
         GPUEngine configuration options.
+    stats
+        Statistics collector.
     """
 
     config_options: ConfigOptions
+    stats: StatsCollector
 
 
 LowerIRTransformer: TypeAlias = GenericTransformer[
@@ -70,7 +77,9 @@ def lower_ir_node(
 
 @singledispatch
 def generate_ir_tasks(
-    ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: IR,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     """
     Generate a task graph for evaluation of an IR node.
@@ -81,6 +90,8 @@ def generate_ir_tasks(
         IR node to generate tasks for.
     partition_info
         Partitioning information, obtained from :func:`lower_ir_graph`.
+    context
+        Runtime context for IR node execution.
 
     Returns
     -------
@@ -95,5 +106,57 @@ def generate_ir_tasks(
     See Also
     --------
     task_graph
+    """
+    raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover
+
+
+@singledispatch
+def initialize_column_stats(
+    ir: IR, stats: StatsCollector, config_options: ConfigOptions
+) -> dict[str, ColumnStats]:
+    """
+    Initialize column statistics for an IR node.
+
+    Parameters
+    ----------
+    ir
+        The IR node to collect source statistics for.
+    stats
+        The `StatsCollector` object containing known source statistics.
+    config_options
+        GPUEngine configuration options.
+
+    Returns
+    -------
+    base_stats_mapping
+        Mapping between column names and base ``ColumnStats`` objects.
+
+    Notes
+    -----
+    Base column stats correspond to ``ColumnStats`` objects **without**
+    populated ``unique_stats`` information. The purpose of this function
+    is to propagate ``DataSourceInfo`` references and set ``children``
+    attributes for each column of each IR node.
+    """
+    raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover
+
+
+@singledispatch
+def update_column_stats(
+    ir: IR,
+    stats: StatsCollector,
+    config_options: ConfigOptions,
+) -> None:
+    """
+    Finalize local column statistics for an IR node.
+
+    Parameters
+    ----------
+    ir
+        The IR node to finalize local column statistics for.
+    stats
+        The `StatsCollector` object containing known statistics.
+    config_options
+        GPUEngine configuration options.
     """
     raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover

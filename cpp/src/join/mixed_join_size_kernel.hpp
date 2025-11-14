@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -21,19 +10,12 @@
 #include "mixed_join_common_utils.cuh"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
-#include <cudf/ast/detail/expression_parser.hpp>
-#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
-
-#include <cooperative_groups.h>
-#include <cub/cub.cuh>
-#include <thrust/iterator/discard_iterator.h>
 
 namespace CUDF_EXPORT cudf {
 namespace detail {
@@ -71,21 +53,20 @@ namespace detail {
  */
 
 template <bool has_nulls>
-std::size_t launch_compute_mixed_join_output_size(
-  cudf::table_device_view left_table,
-  cudf::table_device_view right_table,
-  cudf::table_device_view probe,
-  cudf::table_device_view build,
-  row_hash const hash_probe,
-  row_equality const equality_probe,
-  join_kind const join_type,
-  cudf::detail::mixed_multimap_type::device_view hash_table_view,
+void launch_mixed_join_count(
+  table_device_view left_table,
+  table_device_view right_table,
+  bool is_outer_join,
+  bool swap_tables,
+  row_equality equality_probe,
+  cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
+  cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
+  cuda::std::pair<uint32_t, uint32_t> const* hash_indices,
   ast::detail::expression_device_view device_expression_data,
-  bool const swap_tables,
   cudf::device_span<cudf::size_type> matches_per_row,
-  detail::grid_1d const config,
+  detail::grid_1d config,
   int64_t shmem_size_per_block,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
+  rmm::cuda_stream_view stream);
+
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf

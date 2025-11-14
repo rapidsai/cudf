@@ -1,5 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import os
@@ -27,19 +26,6 @@ __all__ = [
 
 
 LOADED = False
-
-_SUPPORTED_PREFETCHES = {
-    "column_view::get_data",
-    "mutable_column_view::get_data",
-    "gather",
-    "hash_join",
-}
-
-
-def _enable_managed_prefetching(rmm_mode, managed_memory_is_supported):
-    if managed_memory_is_supported and "managed" in rmm_mode:
-        for key in _SUPPORTED_PREFETCHES:
-            pylibcudf.experimental.enable_prefetching(key)
 
 
 def install():
@@ -69,11 +55,6 @@ def install():
     if rmm_mode is None:
         rmm_mode = "managed_pool" if managed_memory_is_supported else "pool"
 
-    if "managed" in rmm_mode and not managed_memory_is_supported:
-        raise ValueError(
-            f"Managed memory is not supported on this system, so the requested {rmm_mode=} is invalid."
-        )
-
     # Check if a non-default memory resource is set
     current_mr = rmm.mr.get_current_device_resource()
     if not isinstance(current_mr, rmm.mr.CudaMemoryResource):
@@ -96,22 +77,31 @@ def install():
             initial_pool_size=free_memory,
         )
     elif rmm_mode == "async":
-        new_mr = rmm.mr.CudaAsyncMemoryResource(initial_pool_size=free_memory)
-    elif rmm_mode == "managed":
-        new_mr = rmm.mr.PrefetchResourceAdaptor(rmm.mr.ManagedMemoryResource())
-    elif rmm_mode == "managed_pool":
-        new_mr = rmm.mr.PrefetchResourceAdaptor(
-            rmm.mr.PoolMemoryResource(
-                rmm.mr.ManagedMemoryResource(),
-                initial_pool_size=free_memory,
+        new_mr = rmm.mr.CudaAsyncMemoryResource()
+    elif "managed" in rmm_mode:
+        if not managed_memory_is_supported:
+            raise ValueError(
+                "Managed memory is not supported on this system, so the "
+                f"requested {rmm_mode=} is invalid."
             )
-        )
+        if rmm_mode == "managed":
+            new_mr = rmm.mr.PrefetchResourceAdaptor(
+                rmm.mr.ManagedMemoryResource()
+            )
+        elif rmm_mode == "managed_pool":
+            new_mr = rmm.mr.PrefetchResourceAdaptor(
+                rmm.mr.PoolMemoryResource(
+                    rmm.mr.ManagedMemoryResource(),
+                    initial_pool_size=free_memory,
+                )
+            )
+        else:
+            raise ValueError(f"Unsupported {rmm_mode=}")
+        pylibcudf.prefetch.enable()
     elif rmm_mode != "cuda":
         raise ValueError(f"Unsupported {rmm_mode=}")
 
     rmm.mr.set_current_device_resource(new_mr)
-
-    _enable_managed_prefetching(rmm_mode, managed_memory_is_supported)
 
 
 def pytest_load_initial_conftests(early_config, parser, args):

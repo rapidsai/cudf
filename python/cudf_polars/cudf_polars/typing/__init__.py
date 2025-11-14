@@ -48,6 +48,7 @@ __all__: list[str] = [
     "OptimizationArgs",
     "PolarsExpr",
     "PolarsIR",
+    "RankMethod",
     "Schema",
     "Slice",
 ]
@@ -173,6 +174,53 @@ class GenericTransformer(Protocol[U_contra, V_co, StateT_co]):
         ...
 
 
+class _ScalarDataTypeHeader(TypedDict):
+    kind: Literal["scalar"]
+    name: str
+
+
+class _DecimalDataTypeHeader(TypedDict):
+    kind: Literal["decimal"]
+    precision: int
+    scale: int
+
+
+class _DatetimeDataTypeHeader(TypedDict):
+    kind: Literal["datetime"]
+    time_unit: str
+    time_zone: str | None
+
+
+class _DurationDataTypeHeader(TypedDict):
+    kind: Literal["duration"]
+    time_unit: str
+
+
+class _ListDataTypeHeader(TypedDict):
+    kind: Literal["list"]
+    inner: DataTypeHeader
+
+
+class _StructFieldHeader(TypedDict):
+    name: str
+    dtype: DataTypeHeader
+
+
+class _StructDataTypeHeader(TypedDict):
+    kind: Literal["struct"]
+    fields: list[_StructFieldHeader]
+
+
+DataTypeHeader = (
+    _ScalarDataTypeHeader
+    | _DecimalDataTypeHeader
+    | _DatetimeDataTypeHeader
+    | _DurationDataTypeHeader
+    | _ListDataTypeHeader
+    | _StructDataTypeHeader
+)
+
+
 class ColumnOptions(TypedDict):
     """
     Column constructor options.
@@ -186,7 +234,7 @@ class ColumnOptions(TypedDict):
     order: plc.types.Order
     null_order: plc.types.NullOrder
     name: str | None
-    dtype: str
+    dtype: DataTypeHeader
 
 
 class DeserializedColumnOptions(TypedDict):
@@ -217,3 +265,9 @@ class DataFrameHeader(TypedDict):
 
     columns_kwargs: list[ColumnOptions]
     frame_count: int
+
+
+# Not public in polars yet
+RankMethod = Literal["ordinal", "dense", "min", "max", "average"]
+
+RoundMethod = Literal["half_away_from_zero", "half_to_even"]

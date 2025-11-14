@@ -1,12 +1,14 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from cudf import DataFrame
+import cudf
 from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal
 
 
 @pytest.mark.parametrize("n", [10, 5])
@@ -18,7 +20,7 @@ def test_dataframe_nlargest_nsmallest(n, op, columns):
     aa = rng.random(nelem)
     bb = rng.random(nelem)
 
-    df = DataFrame({"a": aa, "b": bb})
+    df = cudf.DataFrame({"a": aa, "b": bb})
     pdf = df.to_pandas()
     assert_eq(getattr(df, op)(n, columns), getattr(pdf, op)(n, columns))
 
@@ -35,7 +37,7 @@ def test_dataframe_nlargest_sliced(sliceobj):
     df["b"] = rng.random(nelem)
 
     expect = df[sliceobj].nlargest(n, "a")
-    gdf = DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
     got = gdf[sliceobj].nlargest(n, "a")
     assert (got.to_pandas() == expect).all().all()
 
@@ -52,6 +54,19 @@ def test_dataframe_nsmallest_sliced(sliceobj):
     df["b"] = rng.random(nelem)
 
     expect = df[sliceobj].nsmallest(n, "a")
-    gdf = DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
     got = gdf[sliceobj].nsmallest(n, "a")
     assert (got.to_pandas() == expect).all().all()
+
+
+@pytest.mark.parametrize("attr", ["nlargest", "nsmallest"])
+def test_dataframe_nlargest_nsmallest_str_error(attr):
+    gdf = cudf.DataFrame({"a": [1, 2, 3, 4], "b": ["a", "b", "c", "d"]})
+    pdf = gdf.to_pandas()
+
+    assert_exceptions_equal(
+        getattr(gdf, attr),
+        getattr(pdf, attr),
+        ([], {"n": 1, "columns": ["a", "b"]}),
+        ([], {"n": 1, "columns": ["a", "b"]}),
+    )

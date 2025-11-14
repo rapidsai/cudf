@@ -1,17 +1,6 @@
 #
-# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 
 ###
@@ -30,7 +19,7 @@ ARG TOOLSET_VERSION=14
 ARG CMAKE_VERSION=3.30.7
 ARG CCACHE_VERSION=4.11.2
 ### Install basic requirements
-RUN dnf --enablerepo=powertools install -y  scl-utils gcc-toolset-11 gcc-toolset-${TOOLSET_VERSION} git zlib-devel maven tar wget patch ninja-build boost-devel
+RUN dnf --enablerepo=powertools install -y  scl-utils gcc-toolset-11 gcc-toolset-${TOOLSET_VERSION} git zlib-devel maven tar wget patch ninja-build
 ## pre-create the CMAKE_INSTALL_PREFIX folder, set writable by any user for Jenkins
 RUN mkdir /usr/local/rapids /rapids && chmod 777 /usr/local/rapids /rapids
 
@@ -57,6 +46,16 @@ RUN cd /tmp && wget --quiet https://github.com/ccache/ccache/releases/download/v
       cmake --build . --parallel 4 --target install" && \
    cd ../.. && \
    rm -rf ccache-${CCACHE_VERSION}
+
+## install a version of boost that is needed for arrow/parquet to work
+RUN cd /usr/local && wget --quiet https://archives.boost.io/release/1.79.0/source/boost_1_79_0.tar.gz && \
+  tar -xzf boost_1_79_0.tar.gz && \
+  rm boost_1_79_0.tar.gz && \
+  cd boost_1_79_0 && \
+  ./bootstrap.sh --prefix=/usr/local && \
+  ./b2 install --prefix=/usr/local --with-filesystem --with-system && \
+   cd /usr/local && \
+   rm -rf boost_1_79_0
 
 # disable cuda container constraints to allow running w/ elder drivers on data-center GPUs
 ENV NVIDIA_DISABLE_REQUIRE="true"

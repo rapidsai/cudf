@@ -1,13 +1,14 @@
-# Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 """Benchmarks of Index methods."""
 
 import pytest
-from config import cudf, cupy
+from config import NUM_ROWS, cudf, cupy
 from utils import benchmark_with_object
 
 
-@pytest.mark.parametrize("N", [100, 1_000_000])
+@pytest.mark.parametrize("N", NUM_ROWS)
 def bench_construction(benchmark, N):
     benchmark(cudf.Index, cupy.random.rand(N))
 
@@ -17,6 +18,7 @@ def bench_sort_values(benchmark, index):
     benchmark(index.sort_values)
 
 
-def bench_large_unique_categories_repr(benchmark):
-    pi = cudf.CategoricalIndex(range(100_000_000))
+@pytest.mark.parametrize("N", NUM_ROWS)
+def bench_large_unique_categories_repr(benchmark, N):
+    pi = cudf.CategoricalIndex(range(N))
     benchmark(repr, pi)

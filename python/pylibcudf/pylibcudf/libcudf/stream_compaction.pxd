@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
@@ -14,6 +15,8 @@ from pylibcudf.libcudf.types cimport (
     null_policy,
     size_type,
 )
+from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.memory_resource cimport device_memory_resource
 
 
 cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
@@ -26,18 +29,24 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
     cdef unique_ptr[table] drop_nulls(
         table_view source_table,
         vector[size_type] keys,
-        size_type keep_threshold
+        size_type keep_threshold,
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[table] drop_nans(
         table_view source_table,
         vector[size_type] keys,
-        size_type keep_threshold
+        size_type keep_threshold,
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[table] apply_boolean_mask(
         table_view source_table,
-        column_view boolean_mask
+        column_view boolean_mask,
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[table] unique(
@@ -45,6 +54,8 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
         vector[size_type] keys,
         duplicate_keep_option keep,
         null_equality nulls_equal,
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[table] distinct(
@@ -53,6 +64,8 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
         duplicate_keep_option keep,
         null_equality nulls_equal,
         nan_equality nans_equals,
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] distinct_indices(
@@ -60,6 +73,8 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
         duplicate_keep_option keep,
         null_equality nulls_equal,
         nan_equality nans_equal,
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[table] stable_distinct(
@@ -68,12 +83,15 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
         duplicate_keep_option keep,
         null_equality nulls_equal,
         nan_equality nans_equal,
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef size_type unique_count(
         column_view column,
         null_policy null_handling,
-        nan_policy nan_handling) except +libcudf_exception_handler
+        nan_policy nan_handling,
+        cuda_stream_view stream) except +libcudf_exception_handler
 
     cdef size_type unique_count(
         table_view source_table,
@@ -82,7 +100,8 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
     cdef size_type distinct_count(
         column_view column,
         null_policy null_handling,
-        nan_policy nan_handling) except +libcudf_exception_handler
+        nan_policy nan_handling,
+        cuda_stream_view stream) except +libcudf_exception_handler
 
     cdef size_type distinct_count(
         table_view source_table,

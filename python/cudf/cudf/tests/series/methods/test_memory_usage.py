@@ -1,7 +1,24 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import cudf
 from cudf.testing import assert_eq
+
+
+def test_memory_usage_list():
+    s1 = cudf.Series([[1, 2], [3, 4]])
+    assert s1.memory_usage() == 44
+    s2 = cudf.Series([[[[1, 2]]], [[[3, 4]]]])
+    assert s2.memory_usage() == 68
+    s3 = cudf.Series([[{"b": 1, "a": 10}, {"b": 2, "a": 100}]])
+    assert s3.memory_usage() == 40
+
+
+def test_empty_nested_list_uninitialized_offsets_memory_usage():
+    ser = cudf.Series(
+        [[[1, 2], [3]], []], dtype=cudf.ListDtype(cudf.ListDtype("int64"))
+    )
+    assert ser.iloc[:0].memory_usage() == 8
 
 
 def test_series_memory_usage():

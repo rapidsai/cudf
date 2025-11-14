@@ -1,9 +1,10 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import pandas as pd
 from packaging import version
 
-PANDAS_CURRENT_SUPPORTED_VERSION = version.parse("2.3.1")
+PANDAS_CURRENT_SUPPORTED_VERSION = version.parse("2.3.3")
 PANDAS_VERSION = version.parse(pd.__version__)
 
 

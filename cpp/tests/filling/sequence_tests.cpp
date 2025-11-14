@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -84,15 +73,15 @@ TEST_F(SequenceTestFixture, BadTypes)
 {
   cudf::string_scalar string_init("zero");
   cudf::string_scalar string_step("???");
-  EXPECT_THROW(cudf::sequence(10, string_init, string_step), cudf::logic_error);
+  EXPECT_THROW(cudf::sequence(10, string_init, string_step), std::invalid_argument);
 
   cudf::numeric_scalar<bool> bool_init(true);
   cudf::numeric_scalar<bool> bool_step(false);
-  EXPECT_THROW(cudf::sequence(10, bool_init, bool_step), cudf::logic_error);
+  EXPECT_THROW(cudf::sequence(10, bool_init, bool_step), cudf::data_type_error);
 
   cudf::timestamp_scalar<cudf::timestamp_s> ts_init(cudf::duration_s{10}, true);
   cudf::timestamp_scalar<cudf::timestamp_s> ts_step(cudf::duration_s{10}, true);
-  EXPECT_THROW(cudf::sequence(10, ts_init, ts_step), cudf::logic_error);
+  EXPECT_THROW(cudf::sequence(10, ts_init, ts_step), std::invalid_argument);
 }
 
 TEST_F(SequenceTestFixture, MismatchedInputs)
@@ -108,6 +97,19 @@ TEST_F(SequenceTestFixture, MismatchedInputs)
   cudf::numeric_scalar<float> init3(0);
   cudf::numeric_scalar<double> step3(-5);
   EXPECT_THROW(cudf::sequence(10, init3, step3), cudf::data_type_error);
+}
+
+TEST_F(SequenceTestFixture, InvalidInput)
+{
+  cudf::numeric_scalar<int> init(0, false);
+  EXPECT_THROW(cudf::sequence(10, init), std::invalid_argument);
+  cudf::numeric_scalar<int8_t> step1(1);
+  EXPECT_THROW(cudf::sequence(10, init, step1), std::invalid_argument);
+
+  cudf::numeric_scalar<int> zero(0);
+  cudf::numeric_scalar<float> step(1, false);
+  EXPECT_THROW(cudf::sequence(10, zero, step), std::invalid_argument);
+  EXPECT_THROW(cudf::sequence(10, init, step), std::invalid_argument);
 }
 
 TYPED_TEST(SequenceTypedTestFixture, DefaultStep)

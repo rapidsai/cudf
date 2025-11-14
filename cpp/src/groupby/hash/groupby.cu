@@ -1,30 +1,19 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "compute_groupby.hpp"
+#include "extract_single_pass_aggs.hpp"
 #include "groupby/common/utils.hpp"
 #include "helpers.cuh"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/groupby.hpp>
-#include <cudf/detail/utilities/cuda.hpp>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -33,44 +22,38 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <algorithm>
 #include <memory>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
 namespace cudf::groupby::detail::hash {
 namespace {
 /**
- * @brief List of aggregation operations that can be computed with a hash-based
- * implementation.
+ * @brief List of aggregation operations that can be computed with a hash-based implementation.
+ *
+ * For single pass aggregations, the supported operations are the ones that can be atomically
+ * updated: SUM, SUM_WITH_OVERFLOW, SUM_OF_SQUARES, PRODUCT, MIN, MAX, COUNT_VALID, COUNT_ALL.
+ * For compound aggregations, the supported operations are the ones that depends on the single pass
+ * aggregations above: ARGMIN(MIN), ARGMAX(MAX), MEAN(SUM, COUNT_VALID), M2/STD/VARIANCE(M2,
+ * COUNT_VALID).
  */
-constexpr std::array<aggregation::Kind, 13> hash_aggregations{aggregation::SUM,
-                                                              aggregation::SUM_WITH_OVERFLOW,
-                                                              aggregation::PRODUCT,
-                                                              aggregation::MIN,
-                                                              aggregation::MAX,
-                                                              aggregation::COUNT_VALID,
-                                                              aggregation::COUNT_ALL,
-                                                              aggregation::ARGMIN,
-                                                              aggregation::ARGMAX,
-                                                              aggregation::SUM_OF_SQUARES,
-                                                              aggregation::MEAN,
-                                                              aggregation::STD,
-                                                              aggregation::VARIANCE};
-
-// Could be hash: SUM, PRODUCT, MIN, MAX, COUNT_VALID, COUNT_ALL, ANY, ALL,
-// Compound: MEAN(SUM, COUNT_VALID), VARIANCE, STD(MEAN (SUM, COUNT_VALID), COUNT_VALID),
-// ARGMAX, ARGMIN
-
-// TODO replace with std::find in C++20 onwards.
-template <class T, size_t N>
-constexpr bool array_contains(std::array<T, N> const& haystack, T needle)
-{
-  for (auto const& val : haystack) {
-    if (val == needle) return true;
-  }
-  return false;
-}
+const auto hash_aggregations = std::unordered_set{// Single pass aggregations:
+                                                  aggregation::SUM,
+                                                  aggregation::SUM_WITH_OVERFLOW,
+                                                  aggregation::SUM_OF_SQUARES,
+                                                  aggregation::PRODUCT,
+                                                  aggregation::MIN,
+                                                  aggregation::MAX,
+                                                  aggregation::COUNT_VALID,
+                                                  aggregation::COUNT_ALL,
+                                                  // Compound aggregations:
+                                                  aggregation::ARGMIN,
+                                                  aggregation::ARGMAX,
+                                                  aggregation::MEAN,
+                                                  aggregation::M2,
+                                                  aggregation::STD,
+                                                  aggregation::VARIANCE};
 
 /**
  * @brief Indicates whether the specified aggregation operation can be computed
@@ -80,10 +63,7 @@ constexpr bool array_contains(std::array<T, N> const& haystack, T needle)
  * @return true `t` is valid for a hash based groupby
  * @return false `t` is invalid for a hash based groupby
  */
-bool constexpr is_hash_aggregation(aggregation::Kind t)
-{
-  return array_contains(hash_aggregations, t);
-}
+bool is_hash_aggregation(aggregation::Kind t) { return hash_aggregations.contains(t); }
 
 std::unique_ptr<table> dispatch_groupby(table_view const& keys,
                                         host_span<aggregation_request const> requests,
@@ -97,9 +77,9 @@ std::unique_ptr<table> dispatch_groupby(table_view const& keys,
   auto const has_null             = nullate::DYNAMIC{cudf::has_nested_nulls(keys)};
   auto const skip_rows_with_nulls = keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
 
-  auto preprocessed_keys = cudf::experimental::row::hash::preprocessed_table::create(keys, stream);
-  auto const comparator  = cudf::experimental::row::equality::self_comparator{preprocessed_keys};
-  auto const row_hash    = cudf::experimental::row::hash::row_hasher{std::move(preprocessed_keys)};
+  auto preprocessed_keys = cudf::detail::row::hash::preprocessed_table::create(keys, stream);
+  auto const comparator  = cudf::detail::row::equality::self_comparator{preprocessed_keys};
+  auto const row_hash    = cudf::detail::row::hash::row_hasher{std::move(preprocessed_keys)};
   auto const d_row_hash  = row_hash.device_hasher(has_null);
 
   if (cudf::detail::has_nested_columns(keys)) {
@@ -112,6 +92,47 @@ std::unique_ptr<table> dispatch_groupby(table_view const& keys,
       keys, requests, skip_rows_with_nulls, d_row_equal, d_row_hash, cache, stream, mr);
   }
 }
+
+// check if the target_type of the aggregation/type pair supports atomic operations
+struct can_use_hash_groupby_fn {
+  template <typename T, aggregation::Kind K>
+    requires(cudf::is_nested<T>())
+  bool operator()() const
+  {
+    // Currently, input values (not keys) of STRUCT and LIST types are not supported in any of
+    // hash-based aggregations. For those situations, we fallback to sort-based aggregations.
+    return false;
+  }
+
+  template <aggregation::Kind k>
+  constexpr static bool uses_underlying_type()
+  {
+    return k == aggregation::MIN or k == aggregation::MAX or k == aggregation::SUM;
+  }
+
+  template <typename T, aggregation::Kind K>
+    requires(cudf::is_fixed_point<T>())
+  bool operator()() const
+  {
+    using TargetType       = cudf::detail::target_type_t<T, K>;
+    using DeviceTargetType = std::
+      conditional_t<uses_underlying_type<K>(), cudf::device_storage_type_t<TargetType>, TargetType>;
+    if constexpr (not std::is_void_v<DeviceTargetType>) {
+      return cudf::has_atomic_support<DeviceTargetType>();
+    }
+    return false;
+  }
+
+  template <typename T, aggregation::Kind K>
+    requires(not cudf::is_nested<T>() and not cudf::is_fixed_point<T>())
+  bool operator()() const
+  {
+    using TargetType = cudf::detail::target_type_t<T, K>;
+    if constexpr (not std::is_void_v<TargetType>) { return cudf::has_atomic_support<TargetType>(); }
+    return false;
+  }
+};
+
 }  // namespace
 
 /**
@@ -130,13 +151,13 @@ bool can_use_hash_groupby(host_span<aggregation_request const> requests)
                           ? cudf::dictionary_column_view(r.values).keys().type()
                           : r.values.type();
 
-    // Currently, input values (not keys) of STRUCT and LIST types are not supported in any of
-    // hash-based aggregations. For those situations, we fallback to sort-based aggregations.
-    if (v_type.id() == type_id::STRUCT or v_type.id() == type_id::LIST) { return false; }
-
     return std::all_of(r.aggregations.begin(), r.aggregations.end(), [v_type](auto const& a) {
-      return cudf::has_atomic_support(cudf::detail::target_type(v_type, a->kind)) and
-             is_hash_aggregation(a->kind);
+      if (not is_hash_aggregation(a->kind)) { return false; }
+      // compound aggregations are made up of simple aggregations
+      auto const agg_kinds = get_simple_aggregations(*a, v_type);
+      return std::all_of(agg_kinds.begin(), agg_kinds.end(), [v_type = v_type](auto k) {
+        return cudf::detail::dispatch_type_and_aggregation(v_type, k, can_use_hash_groupby_fn{});
+      });
     });
   });
 }

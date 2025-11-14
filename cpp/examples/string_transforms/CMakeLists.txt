@@ -1,4 +1,7 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
 
 cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
 
@@ -33,7 +36,7 @@ target_compile_options(
 target_link_libraries(
   compute_checksum_jit PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
 )
-install(TARGETS compute_checksum_jit DESTINATION bin/examples/libcudf)
+install(TARGETS compute_checksum_jit DESTINATION bin/examples/libcudf/string_transformers)
 
 add_executable(extract_email_jit extract_email_jit.cpp)
 target_compile_features(extract_email_jit PRIVATE cxx_std_20)
@@ -41,7 +44,7 @@ target_compile_options(extract_email_jit PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${C
 target_link_libraries(
   extract_email_jit PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
 )
-install(TARGETS extract_email_jit DESTINATION bin/examples/libcudf)
+install(TARGETS extract_email_jit DESTINATION bin/examples/libcudf/string_transformers)
 
 add_executable(extract_email_precompiled extract_email_precompiled.cpp)
 target_compile_features(extract_email_precompiled PRIVATE cxx_std_20)
@@ -51,13 +54,13 @@ target_compile_options(
 target_link_libraries(
   extract_email_precompiled PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
 )
-install(TARGETS extract_email_precompiled DESTINATION bin/examples/libcudf)
+install(TARGETS extract_email_precompiled DESTINATION bin/examples/libcudf/string_transformers)
 
 add_executable(format_phone_jit format_phone_jit.cpp)
 target_compile_features(format_phone_jit PRIVATE cxx_std_20)
 target_compile_options(format_phone_jit PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
 target_link_libraries(format_phone_jit PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>)
-install(TARGETS format_phone_jit DESTINATION bin/examples/libcudf)
+install(TARGETS format_phone_jit DESTINATION bin/examples/libcudf/string_transformers)
 
 add_executable(format_phone_precompiled format_phone_precompiled.cpp)
 target_compile_features(format_phone_precompiled PRIVATE cxx_std_20)
@@ -67,7 +70,7 @@ target_compile_options(
 target_link_libraries(
   format_phone_precompiled PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
 )
-install(TARGETS format_phone_precompiled DESTINATION bin/examples/libcudf)
+install(TARGETS format_phone_precompiled DESTINATION bin/examples/libcudf/string_transformers)
 
 add_executable(localize_phone_jit localize_phone_jit.cpp)
 target_compile_features(localize_phone_jit PRIVATE cxx_std_20)
@@ -75,7 +78,7 @@ target_compile_options(localize_phone_jit PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${
 target_link_libraries(
   localize_phone_jit PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
 )
-install(TARGETS localize_phone_jit DESTINATION bin/examples/libcudf)
+install(TARGETS localize_phone_jit DESTINATION bin/examples/libcudf/string_transformers)
 
 add_executable(localize_phone_precompiled localize_phone_precompiled.cpp)
 target_compile_features(localize_phone_precompiled PRIVATE cxx_std_20)
@@ -85,6 +88,8 @@ target_compile_options(
 target_link_libraries(
   localize_phone_precompiled PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
 )
-install(TARGETS localize_phone_precompiled DESTINATION bin/examples/libcudf)
+install(TARGETS localize_phone_precompiled DESTINATION bin/examples/libcudf/string_transformers)
 
-install(FILES ${CMAKE_CURRENT_LIST_DIR}/info.csv DESTINATION bin/examples/libcudf)
+install(FILES ${CMAKE_CURRENT_LIST_DIR}/info.csv
+        DESTINATION bin/examples/libcudf/string_transformers
+)

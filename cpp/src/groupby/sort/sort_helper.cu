@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "common_utils.cuh"
@@ -25,11 +14,11 @@
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/labeling/label_segments.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/sequence.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/strings/string_view.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -143,7 +132,7 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
   // This way, a 2nd (parallel) call to this will not be given a partially created object.
   auto group_offsets = std::make_unique<index_vector>(size + 1, stream);
 
-  auto const comparator = cudf::experimental::row::equality::self_comparator{_keys, stream};
+  auto const comparator = cudf::detail::row::equality::self_comparator{_keys, stream};
 
   auto const sorted_order = key_sort_order(stream).data<size_type>();
   decltype(group_offsets->begin()) result_end;

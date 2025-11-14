@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -80,14 +81,20 @@ class BaseAccessor(NotIterable):
                     idx.names = None
                     return idx
                 else:
-                    return self._parent._constructor_expanddim._from_data(
-                        data=table, index=self._parent.index
+                    df = self._parent._constructor_expanddim._from_data(
+                        data=table,
+                        index=self._parent.index,
+                        attrs=self._parent.attrs,
                     )
+                    if len(table) == 0:
+                        df._data.rangeindex = True
+                    return df
             elif isinstance(self._parent, cudf.Series):
                 return cudf.Series._from_column(
                     new_col,
                     name=self._parent.name,
                     index=self._parent.index if retain_index else None,
+                    attrs=self._parent.attrs,
                 )
             elif isinstance(self._parent, cudf.Index):
                 return cudf.Index._from_column(new_col, name=self._parent.name)

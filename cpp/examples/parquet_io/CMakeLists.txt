@@ -1,4 +1,7 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
 
 cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
 
@@ -34,7 +37,7 @@ target_link_libraries(
                      $<TARGET_OBJECTS:parquet_io_utils>
 )
 target_compile_features(parquet_io PRIVATE cxx_std_20)
-install(TARGETS parquet_io DESTINATION bin/examples/libcudf)
+install(TARGETS parquet_io DESTINATION bin/examples/libcudf/parquet_io)
 
 # Build and install parquet_io_multithreaded
 add_executable(parquet_io_multithreaded parquet_io_multithreaded.cpp)
@@ -43,7 +46,7 @@ target_link_libraries(
                                    $<TARGET_OBJECTS:parquet_io_utils>
 )
 target_compile_features(parquet_io_multithreaded PRIVATE cxx_std_20)
-install(TARGETS parquet_io_multithreaded DESTINATION bin/examples/libcudf)
+install(TARGETS parquet_io_multithreaded DESTINATION bin/examples/libcudf/parquet_io)
 
 # Install the example.parquet file
-install(FILES ${CMAKE_CURRENT_LIST_DIR}/example.parquet DESTINATION bin/examples/libcudf)
+install(FILES ${CMAKE_CURRENT_LIST_DIR}/example.parquet DESTINATION bin/examples/libcudf/parquet_io)

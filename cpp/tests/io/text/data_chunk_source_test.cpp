@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "../compression_common.hpp"
@@ -21,6 +10,8 @@
 
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/detail/bgzip_utils.hpp>
+
+#include <rmm/mr/pinned_host_memory_resource.hpp>
 
 #include <fstream>
 #include <random>
@@ -39,58 +30,71 @@ std::string chunk_to_host(cudf::io::text::device_data_chunk const& chunk)
 
 void test_source(std::string const& content, cudf::io::text::data_chunk_source const& source)
 {
+  using host_pooled_mr  = rmm::mr::pool_memory_resource<rmm::mr::pinned_host_memory_resource>;
+  auto static pinned_mr = std::make_shared<rmm::mr::pinned_host_memory_resource>();
+  host_pooled_mr mr{pinned_mr.get(), size_t{128} * 1024 * 1024};
+  auto last_mr = cudf::set_pinned_memory_resource(mr);
+
+  auto stream = cudf::get_default_stream();
   {
     // full contents
     auto reader      = source.create_reader();
-    auto const chunk = reader->get_next_chunk(content.size(), cudf::get_default_stream());
-    ASSERT_EQ(chunk->size(), content.size());
-    ASSERT_EQ(chunk_to_host(*chunk), content);
+    auto const chunk = reader->get_next_chunk(content.size(), stream);
+    stream.synchronize();
+    EXPECT_EQ(chunk->size(), content.size());
+    EXPECT_EQ(chunk_to_host(*chunk), content);
   }
   {
     // skipping contents
     auto reader = source.create_reader();
     reader->skip_bytes(4);
-    auto const chunk = reader->get_next_chunk(content.size(), cudf::get_default_stream());
-    ASSERT_EQ(chunk->size(), content.size() - 4);
-    ASSERT_EQ(chunk_to_host(*chunk), content.substr(4));
+    auto const chunk = reader->get_next_chunk(content.size(), stream);
+    stream.synchronize();
+    EXPECT_EQ(chunk->size(), content.size() - 4);
+    EXPECT_EQ(chunk_to_host(*chunk), content.substr(4));
   }
   {
     // reading multiple chunks, starting with a small one
     auto reader       = source.create_reader();
-    auto const chunk1 = reader->get_next_chunk(5, cudf::get_default_stream());
-    auto const chunk2 = reader->get_next_chunk(content.size() - 5, cudf::get_default_stream());
-    ASSERT_EQ(chunk1->size(), 5);
-    ASSERT_EQ(chunk2->size(), content.size() - 5);
-    ASSERT_EQ(chunk_to_host(*chunk1), content.substr(0, 5));
-    ASSERT_EQ(chunk_to_host(*chunk2), content.substr(5));
+    auto const chunk1 = reader->get_next_chunk(5, stream);
+    auto const chunk2 = reader->get_next_chunk(content.size() - 5, stream);
+    stream.synchronize();
+    EXPECT_EQ(chunk1->size(), 5);
+    EXPECT_EQ(chunk2->size(), content.size() - 5);
+    EXPECT_EQ(chunk_to_host(*chunk1), content.substr(0, 5));
+    EXPECT_EQ(chunk_to_host(*chunk2), content.substr(5));
   }
   {
     // reading multiple chunks
     auto reader       = source.create_reader();
-    auto const chunk1 = reader->get_next_chunk(content.size() / 2, cudf::get_default_stream());
-    auto const chunk2 =
-      reader->get_next_chunk(content.size() - content.size() / 2, cudf::get_default_stream());
-    ASSERT_EQ(chunk1->size(), content.size() / 2);
-    ASSERT_EQ(chunk2->size(), content.size() - content.size() / 2);
-    ASSERT_EQ(chunk_to_host(*chunk1), content.substr(0, content.size() / 2));
-    ASSERT_EQ(chunk_to_host(*chunk2), content.substr(content.size() / 2));
+    auto const chunk1 = reader->get_next_chunk(content.size() / 2, stream);
+    auto const chunk2 = reader->get_next_chunk(content.size() - content.size() / 2, stream);
+    stream.synchronize();
+    EXPECT_EQ(chunk1->size(), content.size() / 2);
+    EXPECT_EQ(chunk2->size(), content.size() - content.size() / 2);
+    EXPECT_EQ(chunk_to_host(*chunk1), content.substr(0, content.size() / 2));
+    EXPECT_EQ(chunk_to_host(*chunk2), content.substr(content.size() / 2));
   }
   {
     // reading too many bytes
     auto reader      = source.create_reader();
-    auto const chunk = reader->get_next_chunk(content.size() + 10, cudf::get_default_stream());
-    ASSERT_EQ(chunk->size(), content.size());
-    ASSERT_EQ(chunk_to_host(*chunk), content);
-    auto next_chunk = reader->get_next_chunk(1, cudf::get_default_stream());
-    ASSERT_EQ(next_chunk->size(), 0);
+    auto const chunk = reader->get_next_chunk(content.size() + 10, stream);
+    stream.synchronize();
+    EXPECT_EQ(chunk->size(), content.size());
+    EXPECT_EQ(chunk_to_host(*chunk), content);
+    auto next_chunk = reader->get_next_chunk(1, stream);
+    stream.synchronize();
+    EXPECT_EQ(next_chunk->size(), 0);
   }
   {
     // skipping past the end
     auto reader = source.create_reader();
     reader->skip_bytes(content.size() + 10);
-    auto const next_chunk = reader->get_next_chunk(1, cudf::get_default_stream());
-    ASSERT_EQ(next_chunk->size(), 0);
+    auto const next_chunk = reader->get_next_chunk(1, stream);
+    stream.synchronize();
+    EXPECT_EQ(next_chunk->size(), 0);
   }
+  cudf::set_pinned_memory_resource(last_mr);
 }
 
 TEST_F(DataChunkSourceTest, DataSourceHost)

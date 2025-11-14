@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -9,16 +10,21 @@ from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.strings.regex_program cimport RegexProgram
 from pylibcudf.table cimport Table
 from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 __all__ = ["extract", "extract_all_record", "extract_single"]
 
-cpdef Table extract(Column input, RegexProgram prog):
+cpdef Table extract(
+    Column input, RegexProgram prog, Stream stream=None, DeviceMemoryResource mr=None
+):
     """
     Returns a table of strings columns where each column
     corresponds to the matching group specified in the given
     egex_program object.
 
-    For details, see :cpp:func:`cudf::strings::extract`.
+    For details, see :cpp:func:`extract`.
 
     Parameters
     ----------
@@ -26,6 +32,8 @@ cpdef Table extract(Column input, RegexProgram prog):
         Strings instance for this operation
     prog : RegexProgram
         Regex program instance
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -33,23 +41,29 @@ cpdef Table extract(Column input, RegexProgram prog):
         Columns of strings extracted from the input column.
     """
     cdef unique_ptr[table] c_result
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_extract.extract(
             input.view(),
-            prog.c_obj.get()[0]
+            prog.c_obj.get()[0],
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Table.from_libcudf(move(c_result))
+    return Table.from_libcudf(move(c_result), stream, mr)
 
 
-cpdef Column extract_all_record(Column input, RegexProgram prog):
+cpdef Column extract_all_record(
+    Column input, RegexProgram prog, Stream stream=None, DeviceMemoryResource mr=None
+):
     """
     Returns a lists column of strings where each string column
     row corresponds to the matching group specified in the given
     regex_program object.
 
-    For details, see :cpp:func:`cudf::strings::extract_all_record`.
+    For details, see :cpp:func:`extract_all_record`.
 
     Parameters
     ----------
@@ -57,6 +71,8 @@ cpdef Column extract_all_record(Column input, RegexProgram prog):
         Strings instance for this operation
     prog : RegexProgram
         Regex program instance
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -64,26 +80,32 @@ cpdef Column extract_all_record(Column input, RegexProgram prog):
         Lists column containing strings extracted from the input column
     """
     cdef unique_ptr[column] c_result
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_extract.extract_all_record(
             input.view(),
-            prog.c_obj.get()[0]
+            prog.c_obj.get()[0],
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Column extract_single(
     Column input,
     RegexProgram prog,
-    size_type group
+    size_type group,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Returns a column of strings where each string corresponds to the
     matching group specified in the given regex_program object.
 
-    For details, see :cpp:func:`cudf::strings::extract_single`.
+    For details, see :cpp:func:`extract_single`.
 
     Parameters
     ----------
@@ -93,6 +115,8 @@ cpdef Column extract_single(
         Regex program instance
     group : size_type
         Index of the group number to extract
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -100,12 +124,16 @@ cpdef Column extract_single(
         Column of strings extracted from the input column
     """
     cdef unique_ptr[column] c_result
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_extract.extract_single(
             input.view(),
             prog.c_obj.get()[0],
-            group
+            group,
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream, mr)

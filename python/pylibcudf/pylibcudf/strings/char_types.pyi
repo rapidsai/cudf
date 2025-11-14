@@ -1,6 +1,10 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from enum import IntEnum
+
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
+from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.column import Column
 from pylibcudf.scalar import Scalar
@@ -21,10 +25,14 @@ def all_characters_of_type(
     source_strings: Column,
     types: StringCharacterTypes,
     verify_types: StringCharacterTypes,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def filter_characters_of_type(
     source_strings: Column,
     types_to_remove: StringCharacterTypes,
     replacement: Scalar,
     types_to_keep: StringCharacterTypes,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/aggregation.hpp>
@@ -480,6 +469,10 @@ template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
 make_sum_with_overflow_aggregation<groupby_aggregation>();
 template CUDF_EXPORT std::unique_ptr<groupby_scan_aggregation>
 make_sum_with_overflow_aggregation<groupby_scan_aggregation>();
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_sum_with_overflow_aggregation<reduce_aggregation>();
+template CUDF_EXPORT std::unique_ptr<segmented_reduce_aggregation>
+make_sum_with_overflow_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a PRODUCT aggregation
 template <typename Base>
@@ -550,6 +543,8 @@ template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
 make_count_aggregation<groupby_aggregation>(null_policy null_handling);
 template CUDF_EXPORT std::unique_ptr<groupby_scan_aggregation>
 make_count_aggregation<groupby_scan_aggregation>(null_policy null_handling);
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation> make_count_aggregation<reduce_aggregation>(
+  null_policy null_handling);
 
 /// Factory to create a HISTOGRAM aggregation
 template <typename Base>
@@ -697,6 +692,8 @@ template CUDF_EXPORT std::unique_ptr<rolling_aggregation>
 make_argmax_aggregation<rolling_aggregation>();
 template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
 make_argmax_aggregation<groupby_aggregation>();
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_argmax_aggregation<reduce_aggregation>();
 
 /// Factory to create an ARGMIN aggregation
 template <typename Base>
@@ -709,6 +706,8 @@ template CUDF_EXPORT std::unique_ptr<rolling_aggregation>
 make_argmin_aggregation<rolling_aggregation>();
 template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
 make_argmin_aggregation<groupby_aggregation>();
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_argmin_aggregation<reduce_aggregation>();
 
 /// Factory to create an NUNIQUE aggregation
 template <typename Base>

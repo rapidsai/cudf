@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libc.stdint cimport uint8_t
 from libc.stddef cimport size_t
 from libcpp cimport bool
@@ -41,11 +42,15 @@ cdef extern from "cudf/contiguous_split.hpp" namespace "cudf" nogil:
 
     cdef vector[contiguous_split_result] contiguous_split (
         table_view input_table,
-        vector[size_type] splits
+        vector[size_type] splits,
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef packed_columns pack (
-        const table_view& input
+        const table_view& input,
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef table_view unpack (

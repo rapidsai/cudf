@@ -14,6 +14,7 @@ from polars.testing.asserts import assert_frame_equal
 
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.utils.config import ConfigOptions, StreamingFallbackMode
+from cudf_polars.utils.versions import POLARS_VERSION_LT_1323
 
 if TYPE_CHECKING:
     from cudf_polars.typing import OptimizationArgs
@@ -27,9 +28,10 @@ __all__: list[str] = [
 ]
 
 # Will be overriden by `conftest.py` with the value from the `--executor`
-# and `--scheduler` command-line arguments
+# and `--cluster` command-line arguments
 DEFAULT_EXECUTOR = "in-memory"
-DEFAULT_SCHEDULER = "synchronous"
+DEFAULT_RUNTIME = "tasks"
+DEFAULT_CLUSTER = "single"
 DEFAULT_BLOCKSIZE_MODE: Literal["small", "default"] = "default"
 
 
@@ -110,18 +112,31 @@ def assert_gpu_result_equal(
 
     # These keywords are correct, but mypy doesn't see that.
     # the 'misc' is for 'error: Keywords must be strings'
-    expect = lazydf.collect(**final_polars_collect_kwargs)  # type: ignore[call-overload,misc]
-    got = lazydf.collect(**final_cudf_collect_kwargs, engine=engine)  # type: ignore[call-overload,misc]
+    expect = lazydf.collect(**final_polars_collect_kwargs)  # type: ignore[misc, call-overload]
+    got = lazydf.collect(**final_cudf_collect_kwargs, engine=engine)  # type: ignore[misc, call-overload]
+
+    assert_kwargs_bool: dict[str, bool] = {
+        "check_row_order": check_row_order,
+        "check_column_order": check_column_order,
+        "check_dtypes": check_dtypes,
+        "check_exact": check_exact,
+        "categorical_as_str": categorical_as_str,
+    }
+
+    tol_kwargs: dict[str, float]
+    if POLARS_VERSION_LT_1323:  # pragma: no cover
+        tol_kwargs = {"rtol": rtol, "atol": atol}
+    else:
+        tol_kwargs = {"rel_tol": rtol, "abs_tol": atol}
+
+    # the type checker errors with:
+    # Argument 4 to "assert_frame_equal" has incompatible type "**dict[str, float]"; expected "bool"  [arg-type]
+    # which seems to be a bug in the type checker / type annotations.
     assert_frame_equal(
         expect,
         got,
-        check_row_order=check_row_order,
-        check_column_order=check_column_order,
-        check_dtypes=check_dtypes,
-        check_exact=check_exact,
-        rtol=rtol,
-        atol=atol,
-        categorical_as_str=categorical_as_str,
+        **assert_kwargs_bool,
+        **tol_kwargs,  # type: ignore[arg-type]
     )
 
 
@@ -191,7 +206,8 @@ def get_default_engine(
     executor_options: dict[str, Any] = {}
     executor = executor or DEFAULT_EXECUTOR
     if executor == "streaming":
-        executor_options["scheduler"] = DEFAULT_SCHEDULER
+        executor_options["cluster"] = DEFAULT_CLUSTER
+        executor_options["runtime"] = DEFAULT_RUNTIME
 
         blocksize_mode = blocksize_mode or DEFAULT_BLOCKSIZE_MODE
 
@@ -246,10 +262,10 @@ def assert_collect_raises(
         Useful for controlling optimization settings.
     polars_except
         Exception or exceptions polars CPU is expected to raise. If
-        None, CPU is not expected to raise an exception.
+        an empty tuple ``()``, CPU is expected to succeed without raising.
     cudf_except
         Exception or exceptions polars GPU is expected to raise. If
-        None, GPU is not expected to raise an exception.
+        an empty tuple ``()``, GPU is expected to succeed without raising.
     collect_kwargs
         Common keyword arguments to pass to collect for both polars CPU and
         cudf-polars.
@@ -278,7 +294,7 @@ def assert_collect_raises(
     )
 
     try:
-        lazydf.collect(**final_polars_collect_kwargs)  # type: ignore[call-overload,misc]
+        lazydf.collect(**final_polars_collect_kwargs)  # type: ignore[misc, call-overload]
     except polars_except:
         pass
     except Exception as e:
@@ -291,7 +307,7 @@ def assert_collect_raises(
 
     engine = GPUEngine(raise_on_fail=True)
     try:
-        lazydf.collect(**final_cudf_collect_kwargs, engine=engine)  # type: ignore[call-overload,misc]
+        lazydf.collect(**final_cudf_collect_kwargs, engine=engine)  # type: ignore[misc, call-overload]
     except cudf_except:
         pass
     except Exception as e:

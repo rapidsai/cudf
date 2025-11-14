@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -152,6 +141,20 @@ struct device_optional_span : device_span<T> {
   [[nodiscard]] __device__ bool is_null(size_t element_index) const
   {
     return !is_valid(element_index);
+  }
+
+  CUDF_HOST_DEVICE constexpr T& element(size_t idx) const { return base::operator[](idx); }
+
+  /// @copydoc column_device_view::element
+  __device__ void set_valid(size_type element_index) const noexcept
+  {
+    return set_bit(_null_mask, element_index);
+  }
+
+  /// @copydoc column_device_view::set_null
+  __device__ void set_null(size_type element_index) const noexcept
+  {
+    return clear_bit(_null_mask, element_index);
   }
 
   /// @brief converts the optional span to a regular non-nullable span.

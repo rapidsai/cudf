@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -19,6 +8,7 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/copying.hpp>
 #include <cudf/lists/combine.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -767,6 +757,7 @@ TEST_F(ListConcatenateRowsNestedTypesTest, StructWithNulls)
     cudf::test::detail::make_null_mask(l0_validity.begin(), l0_validity.end());
   auto l0 = cudf::make_lists_column(
     l0_size, l0_offsets.release(), s0.release(), null_count, std::move(null_mask));
+  l0 = cudf::purge_nonempty_nulls(l0->view());
 
   // col1
   cudf::test::fixed_width_column_wrapper<int> s1_0{
@@ -874,7 +865,8 @@ TEST_F(ListConcatenateRowsNestedTypesTest, StructWithNullsSliced)
     cudf::test::detail::make_null_mask(l0_validity.begin(), l0_validity.end());
   auto l0_unsliced = cudf::make_lists_column(
     l0_size, l0_offsets.release(), s0.release(), null_count, std::move(null_mask));
-  auto l0 = cudf::split(*l0_unsliced, {2})[1];
+  l0_unsliced = cudf::purge_nonempty_nulls(l0_unsliced->view());
+  auto l0     = cudf::split(*l0_unsliced, {2})[1];
 
   // col1
   cudf::test::fixed_width_column_wrapper<int> s1_0{
@@ -905,7 +897,8 @@ TEST_F(ListConcatenateRowsNestedTypesTest, StructWithNullsSliced)
     cudf::test::detail::make_null_mask(l1_validity.begin(), l1_validity.end());
   auto l1_unsliced = cudf::make_lists_column(
     l1_size, l1_offsets.release(), s1.release(), null_count, std::move(null_mask));
-  auto l1 = cudf::split(*l1_unsliced, {2})[1];
+  l1_unsliced = cudf::purge_nonempty_nulls(l1_unsliced->view());
+  auto l1     = cudf::split(*l1_unsliced, {2})[1];
 
   // concatenate_policy::IGNORE_NULLS
   {

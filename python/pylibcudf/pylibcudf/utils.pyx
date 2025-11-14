@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from cython.operator import dereference
 
@@ -10,6 +11,10 @@ from pylibcudf.libcudf.scalar.scalar cimport scalar
 from .scalar cimport Scalar
 
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport (
+    DeviceMemoryResource,
+    get_current_device_resource,
+)
 
 from rmm.pylibrmm.stream import DEFAULT_STREAM, PER_THREAD_DEFAULT_STREAM
 
@@ -66,3 +71,9 @@ cdef Stream _get_stream(Stream stream = None):
     if stream is None:
         return CUDF_DEFAULT_STREAM
     return stream
+
+
+cdef DeviceMemoryResource _get_memory_resource(DeviceMemoryResource mr = None):
+    if mr is None:
+        return get_current_device_resource()
+    return mr

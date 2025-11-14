@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "error.hpp"
@@ -235,6 +224,25 @@ __device__ decode_kernel_mask kernel_mask_for_page(PageInfo const& page,
 }
 
 /**
+ * @brief Functor to set value to bool read from byte stream
+ *
+ * @return True if field type is not bool
+ */
+struct ParquetFieldBool {
+  int field;
+  bool& val;
+
+  __device__ ParquetFieldBool(int f, bool& v) : field(f), val(v) {}
+
+  inline __device__ bool operator()(byte_stream_s* bs, int field_type)
+  {
+    val = static_cast<FieldType>(field_type) == FieldType::BOOLEAN_TRUE;
+    return not(static_cast<FieldType>(field_type) == FieldType::BOOLEAN_TRUE or
+               static_cast<FieldType>(field_type) == FieldType::BOOLEAN_FALSE);
+  }
+};
+
+/**
  * @brief Functor to set value to 32 bit integer read from byte stream
  *
  * @return True if field type is not int32
@@ -391,7 +399,8 @@ struct gpuParseDataPageHeaderV2 {
                                  ParquetFieldInt32(3, bs->page.num_rows),
                                  ParquetFieldEnum<Encoding>(4, bs->page.encoding),
                                  ParquetFieldInt32(5, bs->page.lvl_bytes[level_type::DEFINITION]),
-                                 ParquetFieldInt32(6, bs->page.lvl_bytes[level_type::REPETITION]));
+                                 ParquetFieldInt32(6, bs->page.lvl_bytes[level_type::REPETITION]),
+                                 ParquetFieldBool(7, bs->page.is_compressed));
     return parse_header(op, bs);
   }
 };
@@ -470,6 +479,7 @@ void __launch_bounds__(decode_page_headers_block_size)
       bs->page.temp_string_size     = 0;
       bs->page.temp_string_buf      = nullptr;
       bs->page.kernel_mask          = decode_kernel_mask::NONE;
+      bs->page.is_compressed        = true;
     }
     num_values    = bs->ck.num_values;
     page_info     = chunk_pages ? chunk_pages[chunk].pages : nullptr;
@@ -484,8 +494,10 @@ void __launch_bounds__(decode_page_headers_block_size)
         // they will be recomputed in the preprocess step by examining repetition and
         // definition levels
         bs->page.chunk_row += bs->page.num_rows;
-        bs->page.num_rows = 0;
-        bs->page.flags    = 0;
+        bs->page.num_rows      = 0;
+        bs->page.flags         = 0;
+        bs->page.str_bytes     = 0;
+        bs->page.str_bytes_all = 0;
         // zero out V2 info
         bs->page.num_nulls                         = 0;
         bs->page.lvl_bytes[level_type::DEFINITION] = 0;

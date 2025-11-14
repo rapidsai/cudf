@@ -12,6 +12,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import Column, DataFrame, DataType
 from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 
 def test_select_missing_raises():
@@ -20,12 +21,13 @@ def test_select_missing_raises():
         [
             Column(
                 plc.column_factories.make_numeric_column(
-                    dtype.plc, 2, plc.MaskState.ALL_VALID
+                    dtype.plc_type, 2, plc.MaskState.ALL_VALID
                 ),
                 dtype=dtype,
                 name="a",
             )
-        ]
+        ],
+        stream=get_cuda_stream(),
     )
     with pytest.raises(ValueError):
         df.select(["b", "a"])
@@ -37,54 +39,60 @@ def test_replace_missing_raises():
         [
             Column(
                 plc.column_factories.make_numeric_column(
-                    dtype.plc, 2, plc.MaskState.ALL_VALID
+                    dtype.plc_type, 2, plc.MaskState.ALL_VALID
                 ),
                 dtype=dtype,
                 name="a",
             )
-        ]
+        ],
+        stream=get_cuda_stream(),
     )
     replacement = df.column_map["a"].copy().rename("b")
     with pytest.raises(ValueError):
-        df.with_columns([replacement], replace_only=True)
+        df.with_columns([replacement], replace_only=True, stream=df.stream)
 
 
 def test_from_table_wrong_names():
+    stream = get_cuda_stream()
     table = plc.Table(
         [
             plc.column_factories.make_numeric_column(
-                plc.DataType(plc.TypeId.INT8), 1, plc.MaskState.ALL_VALID
+                plc.DataType(plc.TypeId.INT8), 1, plc.MaskState.ALL_VALID, stream=stream
             )
         ]
     )
     with pytest.raises(ValueError):
-        DataFrame.from_table(table, ["a", "b"], [DataType(pl.Int8())])
+        DataFrame.from_table(table, ["a", "b"], [DataType(pl.Int8())], stream=stream)
 
 
 def test_unnamed_column_raise():
+    stream = get_cuda_stream()
     dtype = DataType(pl.Int8())
     payload = plc.column_factories.make_numeric_column(
-        dtype.plc, 0, plc.MaskState.ALL_VALID
+        dtype.plc_type, 0, plc.MaskState.ALL_VALID, stream=stream
     )
 
     with pytest.raises(ValueError):
         DataFrame(
-            [Column(payload, name="a", dtype=dtype), Column(payload, dtype=dtype)]
+            [Column(payload, name="a", dtype=dtype), Column(payload, dtype=dtype)],
+            stream=stream,
         )
 
 
 def test_sorted_like_raises_mismatching_names():
+    stream = get_cuda_stream()
     dtype = DataType(pl.Int8())
     df = DataFrame(
         [
             Column(
                 plc.column_factories.make_numeric_column(
-                    dtype.plc, 2, plc.MaskState.ALL_VALID
+                    dtype.plc_type, 2, plc.MaskState.ALL_VALID, stream=stream
                 ),
                 dtype=dtype,
                 name="a",
             )
-        ]
+        ],
+        stream=stream,
     )
     like = df.copy().rename_columns({"a": "b"})
     with pytest.raises(ValueError):
@@ -92,9 +100,12 @@ def test_sorted_like_raises_mismatching_names():
 
 
 def test_shallow_copy():
+    stream = get_cuda_stream()
     dtype = DataType(pl.Int8())
     column = Column(
-        plc.column_factories.make_numeric_column(dtype.plc, 2, plc.MaskState.ALL_VALID),
+        plc.column_factories.make_numeric_column(
+            dtype.plc_type, 2, plc.MaskState.ALL_VALID, stream=stream
+        ),
         dtype=dtype,
         name="a",
     )
@@ -103,7 +114,7 @@ def test_shallow_copy():
         order=plc.types.Order.ASCENDING,
         null_order=plc.types.NullOrder.AFTER,
     )
-    df = DataFrame([column])
+    df = DataFrame([column], stream=stream)
     copy = df.copy()
     copy.column_map["a"].set_sorted(
         is_sorted=plc.types.Sorted.NO,
@@ -115,10 +126,11 @@ def test_shallow_copy():
 
 
 def test_sorted_flags_preserved_empty():
+    stream = get_cuda_stream()
     df = pl.DataFrame({"a": pl.Series([], dtype=pl.Int8())})
     df.select(pl.col("a").sort())
 
-    gf = DataFrame.from_polars(df)
+    gf = DataFrame.from_polars(df, stream=stream)
 
     a = gf.column_map["a"]
 
@@ -129,6 +141,7 @@ def test_sorted_flags_preserved_empty():
 
 @pytest.mark.parametrize("nulls_last", [True, False])
 def test_sorted_flags_preserved(with_nulls, nulls_last):
+    stream = get_cuda_stream()
     values = [1, 2, -1, 2, 4, 5]
     if with_nulls:
         values[4] = None
@@ -140,7 +153,7 @@ def test_sorted_flags_preserved(with_nulls, nulls_last):
         pl.col("c"),
     )
 
-    gf = DataFrame.from_polars(df)
+    gf = DataFrame.from_polars(df, stream=stream)
 
     a_null_order = (
         plc.types.NullOrder.AFTER
@@ -185,9 +198,10 @@ def test_empty_name_roundtrips_no_overlap():
     ],
 )
 def test_serialization_roundtrip(polars_tbl):
-    df = DataFrame.from_polars(polars_tbl)
+    stream = get_cuda_stream()
+    df = DataFrame.from_polars(polars_tbl, stream=stream)
 
     header, frames = df.serialize()
-    res = DataFrame.deserialize(header, frames)
+    res = DataFrame.deserialize(header, frames, stream=stream)
 
     assert_frame_equal(df.to_polars(), res.to_polars())

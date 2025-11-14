@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -22,6 +11,7 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/join/conditional_join.hpp>
+#include <cudf/join/filtered_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/join/mixed_join.hpp>
 #include <cudf/join/sort_merge_join.hpp>
@@ -81,14 +71,20 @@ TEST_F(JoinTest, FullJoin)
 
 TEST_F(JoinTest, LeftSemiJoin)
 {
-  cudf::left_semi_join(
-    table0, table1, cudf::null_equality::EQUAL, cudf::test::get_default_stream());
+  cudf::filtered_join obj(table1,
+                          cudf::null_equality::EQUAL,
+                          cudf::set_as_build_table::RIGHT,
+                          cudf::test::get_default_stream());
+  [[maybe_unused]] auto join_result = obj.semi_join(table0, cudf::test::get_default_stream());
 }
 
 TEST_F(JoinTest, LeftAntiJoin)
 {
-  cudf::left_anti_join(
-    table0, table1, cudf::null_equality::EQUAL, cudf::test::get_default_stream());
+  cudf::filtered_join obj(table1,
+                          cudf::null_equality::EQUAL,
+                          cudf::set_as_build_table::RIGHT,
+                          cudf::test::get_default_stream());
+  [[maybe_unused]] auto join_result = obj.anti_join(table0, cudf::test::get_default_stream());
 }
 
 TEST_F(JoinTest, CrossJoin) { cudf::cross_join(table0, table1, cudf::test::get_default_stream()); }

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -287,6 +276,16 @@ class hybrid_scan_reader {
                               parquet_reader_options const& options);
 
   /**
+   * @brief Constructor for the experimental parquet reader class to optimally read Parquet files
+   * subject to highly selective filters
+   *
+   * @param parquet_metadata Pre-populated Parquet file metadata
+   * @param options Parquet reader options
+   */
+  explicit hybrid_scan_reader(FileMetaData const& parquet_metadata,
+                              parquet_reader_options const& options);
+
+  /**
    * @brief Destructor for the experimental parquet reader class
    */
   ~hybrid_scan_reader();
@@ -442,8 +441,8 @@ class hybrid_scan_reader {
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns(
     cudf::host_span<size_type const> row_group_indices,
-    std::vector<rmm::device_buffer> column_chunk_buffers,
-    cudf::mutable_column_view row_mask,
+    std::vector<rmm::device_buffer>&& column_chunk_buffers,
+    cudf::mutable_column_view& row_mask,
     use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
@@ -472,11 +471,88 @@ class hybrid_scan_reader {
    */
   [[nodiscard]] table_with_metadata materialize_payload_columns(
     cudf::host_span<size_type const> row_group_indices,
-    std::vector<rmm::device_buffer> column_chunk_buffers,
-    cudf::column_view row_mask,
+    std::vector<rmm::device_buffer>&& column_chunk_buffers,
+    cudf::column_view const& row_mask,
     use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Setup chunking information for filter columns and preprocess the input data pages
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per table chunk. `0` if
+   * there is no limit
+   * @param pass_read_limit Limit on the memory used for reading and decompressing data. `0` if
+   * there is no limit
+   * @param row_group_indices Input row groups indices
+   * @param row_mask Boolean column indicating which rows need to be read. All rows read if empty
+   * @param mask_data_pages Whether to build and use a data page mask using the row mask
+   * @param column_chunk_buffers Device buffers containing column chunk data of filter columns
+   * @param options Parquet reader options
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   */
+  void setup_chunking_for_filter_columns(std::size_t chunk_read_limit,
+                                         std::size_t pass_read_limit,
+                                         cudf::host_span<size_type const> row_group_indices,
+                                         cudf::column_view const& row_mask,
+                                         use_data_page_mask mask_data_pages,
+                                         std::vector<rmm::device_buffer>&& column_chunk_buffers,
+                                         parquet_reader_options const& options,
+                                         rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Materializes a chunk of filter columns and updates the corresponding range of input row
+   * mask to only the rows that exist in the output table
+   *
+   * @param[in,out] row_mask Mutable boolean column indicating surviving rows from page pruning
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @return Table chunk of materialized filter columns and metadata
+   */
+  [[nodiscard]] table_with_metadata materialize_filter_columns_chunk(
+    cudf::mutable_column_view& row_mask, rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Setup chunking information for payload columns and preprocess the input data pages
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per table chunk. `0` if
+   * there is no limit
+   * @param pass_read_limit Limit on the memory used for reading and decompressing data. `0` if
+   * there is no limit
+   * @param row_group_indices Input row groups indices
+   * @param row_mask Boolean column indicating which rows need to be read. All rows read if empty
+   * @param mask_data_pages Whether to build and use a data page mask using the row mask
+   * @param column_chunk_buffers Device buffers containing column chunk data of payload columns
+   * @param options Parquet reader options
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   */
+  void setup_chunking_for_payload_columns(std::size_t chunk_read_limit,
+                                          std::size_t pass_read_limit,
+                                          cudf::host_span<size_type const> row_group_indices,
+                                          cudf::column_view const& row_mask,
+                                          use_data_page_mask mask_data_pages,
+                                          std::vector<rmm::device_buffer>&& column_chunk_buffers,
+                                          parquet_reader_options const& options,
+                                          rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Materializes a chunk of payload columns and applies the corresponding range of input row
+   * mask to the output table chunk
+   *
+   * @param row_mask Boolean column indicating which rows need to be read. All rows read if empty
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @return Table chunk of materialized filter columns and metadata
+   */
+  [[nodiscard]] table_with_metadata materialize_payload_columns_chunk(
+    cudf::column_view const& row_mask, rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Check if there is any parquet data left to read for the current setup
+   *
+   * @return Boolean indicating if there is any data left to read
+   */
+  [[nodiscard]] bool has_next_table_chunk() const;
 
  private:
   std::unique_ptr<detail::hybrid_scan_reader_impl> _impl;

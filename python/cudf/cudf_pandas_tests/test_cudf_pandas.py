@@ -1,5 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import collections
@@ -13,6 +12,7 @@ import pathlib
 import pickle
 import pstats
 import subprocess
+import sys
 import tempfile
 import time
 import types
@@ -719,10 +719,6 @@ def test_rolling_win_type():
     tm.assert_equal(result, expected)
 
 
-@pytest.mark.skipif(
-    version.parse(numba_version) < version.parse("0.59"),
-    reason="Requires Numba 0.59 to fix segfaults on ARM. See https://github.com/numba/llvmlite/pull/1009",
-)
 @pytest.mark.xfail(
     version.parse(numba_version) >= version.parse("0.59")
     and PANDAS_VERSION < version.parse("2.1"),
@@ -791,14 +787,14 @@ def test_chunked_json_reader(tmpdir, data):
         pd.read_json(file_path, lines=True, chunksize=1) as pd_reader,
         xpd.read_json(file_path, lines=True, chunksize=1) as xpd_reader,
     ):
-        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader):
+        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader, strict=True):
             tm.assert_equal(pd_chunk, xpd_chunk)
 
     with (
         pd.read_json(StringIO(data), lines=True, chunksize=1) as pd_reader,
         xpd.read_json(StringIO(data), lines=True, chunksize=1) as xpd_reader,
     ):
-        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader):
+        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader, strict=True):
             tm.assert_equal(pd_chunk, xpd_chunk)
 
 
@@ -818,14 +814,14 @@ def test_chunked_csv_reader(tmpdir, data):
         pd.read_csv(file_path, chunksize=1) as pd_reader,
         xpd.read_csv(file_path, chunksize=1) as xpd_reader,
     ):
-        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader):
+        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader, strict=True):
             tm.assert_equal(pd_chunk, xpd_chunk, check_index_type=False)
 
     with (
         pd.read_json(StringIO(data), lines=True, chunksize=1) as pd_reader,
         xpd.read_json(StringIO(data), lines=True, chunksize=1) as xpd_reader,
     ):
-        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader):
+        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader, strict=True):
             tm.assert_equal(pd_chunk, xpd_chunk, check_index_type=False)
 
 
@@ -1407,6 +1403,7 @@ def test_inplace_ops_series(op):
 @pytest.mark.parametrize("data", [pd.NaT, 1234, "nat"])
 def test_timestamp(data):
     xtimestamp = xpd.Timestamp(data)
+    assert isinstance(xtimestamp, datetime.datetime)
     timestamp = pd.Timestamp(data)
     tm.assert_equal(xtimestamp, timestamp)
 
@@ -1414,6 +1411,9 @@ def test_timestamp(data):
 @pytest.mark.parametrize("data", [pd.NaT, 1234, "nat"])
 def test_timedelta(data):
     xtimedelta = xpd.Timedelta(data)
+    if not (data is pd.NaT or data == "nat"):
+        # pandas.NaT subclasses datetime.datetime
+        assert isinstance(xtimedelta, datetime.timedelta)
     timedelta = pd.Timedelta(data)
     tm.assert_equal(xtimedelta, timedelta)
 
@@ -2127,3 +2127,19 @@ def test_pandas_objects_not_callable():
     assert isinstance(xpd.DataFrame, Callable)
     assert isinstance(xpd.Index, Callable)
     assert isinstance(xpd.RangeIndex, Callable)
+
+
+def test_memory_usage():
+    s = xpd.Series(range(10), index=[f"i-{i}" for i in range(10)], name="a")
+
+    res_deep = s.memory_usage(deep=True)
+    res = sys.getsizeof(s)
+
+    assert abs(res_deep - res) < 100
+
+
+def test_module_proxy_write_through_config(monkeypatch):
+    cf = xpd._config.config
+    cf.register_option("foo", 1)
+    monkeypatch.setattr(cf, "_registered_options", {})
+    cf.register_option("foo", 1)

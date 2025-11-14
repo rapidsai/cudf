@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
@@ -9,6 +10,9 @@ from pylibcudf.libcudf.scalar.scalar cimport string_scalar
 from pylibcudf.libcudf.strings cimport translate as cpp_translate
 from pylibcudf.libcudf.types cimport char_utf8
 from pylibcudf.scalar cimport Scalar
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from cython.operator import dereference
 from pylibcudf.libcudf.strings.translate import \
@@ -38,11 +42,13 @@ cdef vector[pair[char_utf8, char_utf8]] _table_to_c_table(dict table):
     return c_table
 
 
-cpdef Column translate(Column input, dict chars_table):
+cpdef Column translate(
+    Column input, dict chars_table, Stream stream=None, DeviceMemoryResource mr=None
+):
     """
     Translates individual characters within each string.
 
-    For details, see :cpp:func:`cudf::strings::translate`.
+    For details, see :cpp:func:`translate`.
 
     Parameters
     ----------
@@ -51,6 +57,8 @@ cpdef Column translate(Column input, dict chars_table):
 
     chars_table : dict
         Table of UTF-8 character mappings
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -61,25 +69,31 @@ cpdef Column translate(Column input, dict chars_table):
     cdef vector[pair[char_utf8, char_utf8]] c_chars_table = _table_to_c_table(
         chars_table
     )
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_translate.translate(
             input.view(),
-            c_chars_table
+            c_chars_table,
+            stream.view(),
+            mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Column filter_characters(
     Column input,
     dict characters_to_filter,
     filter_type keep_characters,
-    Scalar replacement
+    Scalar replacement,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Removes ranges of characters from each string in a strings column.
 
-    For details, see :cpp:func:`cudf::strings::filter_characters`.
+    For details, see :cpp:func:`filter_characters`.
 
     Parameters
     ----------
@@ -95,6 +109,8 @@ cpdef Column filter_characters(
 
     replacement : Scalar
         Replacement string for each character removed.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -108,6 +124,8 @@ cpdef Column filter_characters(
     cdef const string_scalar* c_replacement = <const string_scalar*>(
         replacement.c_obj.get()
     )
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_translate.filter_characters(
@@ -115,7 +133,9 @@ cpdef Column filter_characters(
             c_characters_to_filter,
             keep_characters,
             dereference(c_replacement),
+            stream.view(),
+            mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 FilterType.__str__ = FilterType.__repr__

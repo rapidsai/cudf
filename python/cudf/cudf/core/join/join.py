@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import itertools
@@ -233,7 +234,9 @@ class Merge:
             if on
             else {
                 lkey.name
-                for lkey, rkey in zip(self._left_keys, self._right_keys)
+                for lkey, rkey in zip(
+                    self._left_keys, self._right_keys, strict=True
+                )
                 if lkey.name == rkey.name
                 and not (
                     isinstance(lkey, _IndexIndexer)
@@ -276,7 +279,7 @@ class Merge:
             as_column(range(n), dtype=SIZE_TYPE_DTYPE).take(
                 map_, nullify=null, check_bounds=False
             )
-            for map_, n, null in zip(maps, lengths, nullify)
+            for map_, n, null in zip(maps, lengths, nullify, strict=True)
         ]
         if self.how == "right":
             # If how is right, right map is primary sort key.
@@ -296,7 +299,9 @@ class Merge:
         left_join_cols = []
         right_join_cols = []
 
-        for left_key, right_key in zip(self._left_keys, self._right_keys):
+        for left_key, right_key in zip(
+            self._left_keys, self._right_keys, strict=True
+        ):
             lcol = left_key.get(self.lhs)
             rcol = right_key.get(self.rhs)
             lcol_casted, rcol_casted = _match_join_keys(lcol, rcol, self.how)
@@ -405,7 +410,9 @@ class Merge:
         # combined by filling nulls in the left key column with corresponding
         # values from the right key column:
         if self.how == "outer":
-            for lkey, rkey in zip(self._left_keys, self._right_keys):
+            for lkey, rkey in zip(
+                self._left_keys, self._right_keys, strict=True
+            ):
                 if lkey.name == rkey.name:
                     # fill nulls in lhs from values in the rhs
                     lkey.set(
@@ -548,7 +555,13 @@ class Merge:
         suffixes,
     ):
         # Error for various invalid combinations of merge input parameters
+        from cudf.core.dataframe import DataFrame
+        from cudf.core.series import Series
 
+        if not isinstance(lhs, (Series, DataFrame)):
+            raise TypeError("left must be a Series or DataFrame")
+        if not isinstance(rhs, (Series, DataFrame)):
+            raise TypeError("right must be a Series or DataFrame")
         # We must actually support the requested merge type
         if how not in {
             "left",
@@ -611,8 +624,6 @@ class Merge:
                         "column label, which is ambiguous."
                     )
 
-        from cudf.core.series import Series
-
         # Can't merge on unnamed Series
         if (isinstance(lhs, Series) and not lhs.name) or (
             isinstance(rhs, Series) and not rhs.name
@@ -643,8 +654,6 @@ class Merge:
                         "there are overlapping columns but "
                         "lsuffix and rsuffix are not defined"
                     )
-
-        from cudf.core.dataframe import DataFrame
 
         if (
             isinstance(lhs, DataFrame)

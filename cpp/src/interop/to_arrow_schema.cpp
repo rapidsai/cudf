@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "arrow_utilities.hpp"
@@ -79,37 +68,43 @@ struct dispatch_to_arrow_type {
 template <typename DeviceType>
 int decimals_to_arrow(column_view input, int32_t precision, ArrowSchema* out)
 {
+  CUDF_EXPECTS(precision >= 1 and precision <= 38,
+               "Precision must be between 1 and 38 inclusive",
+               cudf::data_type_error);
   return ArrowSchemaSetTypeDecimal(
     out, id_to_arrow_type(input.type().id()), precision, -input.type().scale());
 }
 
 template <>
 int dispatch_to_arrow_type::operator()<numeric::decimal32>(column_view input,
-                                                           column_metadata const&,
+                                                           column_metadata const& metadata,
                                                            ArrowSchema* out)
 {
-  using DeviceType = int32_t;
-  return decimals_to_arrow<DeviceType>(input, cudf::detail::max_precision<DeviceType>(), out);
+  using DeviceType  = int32_t;
+  int32_t precision = metadata.precision.value_or(cudf::detail::max_precision<DeviceType>());
+  return decimals_to_arrow<DeviceType>(input, precision, out);
 }
 
 template <>
 int dispatch_to_arrow_type::operator()<numeric::decimal64>(column_view input,
-                                                           column_metadata const&,
+                                                           column_metadata const& metadata,
                                                            ArrowSchema* out)
 {
   using DeviceType = int64_t;
   // Arrow decimal 64 maxes at precision of 18, cudf::detail::max_precision<int64_t>() produces 19.
   // decimal32 has precision 1 - 9, decimal64 has precision 10 - 18, decimal128 is 19 - 38
-  return decimals_to_arrow<DeviceType>(input, cudf::detail::max_precision<DeviceType>() - 1, out);
+  int32_t precision = metadata.precision.value_or(cudf::detail::max_precision<DeviceType>() - 1);
+  return decimals_to_arrow<DeviceType>(input, precision, out);
 }
 
 template <>
 int dispatch_to_arrow_type::operator()<numeric::decimal128>(column_view input,
-                                                            column_metadata const&,
+                                                            column_metadata const& metadata,
                                                             ArrowSchema* out)
 {
-  using DeviceType = __int128_t;
-  return decimals_to_arrow<DeviceType>(input, cudf::detail::max_precision<DeviceType>(), out);
+  using DeviceType  = __int128_t;
+  int32_t precision = metadata.precision.value_or(cudf::detail::max_precision<DeviceType>());
+  return decimals_to_arrow<DeviceType>(input, precision, out);
 }
 
 template <>

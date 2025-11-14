@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 # If libcudf was installed as a wheel, we must request it to load the library symbols.
 # Otherwise, we assume that the library was installed in a system path that ld can find.
@@ -33,6 +34,7 @@ from . import (
     null_mask,
     nvtext,
     partitioning,
+    prefetch,
     quantiles,
     reduce,
     replace,
@@ -49,6 +51,7 @@ from . import (
     types,
     unary,
     utilities,
+    utils,
 )
 from .column import Column
 from .gpumemoryview import gpumemoryview
@@ -86,6 +89,7 @@ __all__ = [
     "null_mask",
     "nvtext",
     "partitioning",
+    "prefetch",
     "quantiles",
     "reduce",
     "replace",
@@ -102,4 +106,5 @@ __all__ = [
     "types",
     "unary",
     "utilities",
+    "utils",
 ]
