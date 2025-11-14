@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  discover-tests:
+  discover-sanitizer-tests:
     runs-on: linux-amd64-cpu4
     container:
       image: rapidsai/ci-conda:25.12-latest
@@ -20,8 +20,8 @@ jobs:
         run: |
           ./ci/discover_libcudf_tests.sh
 
-  run-sanitizer:
-    needs: discover-tests
+  run-sanitizer-tests:
+    needs: discover-sanitizer-tests
     name: Run compute-sanitizer on ${{ matrix.test_name }}
     runs-on: linux-amd64-gpu-l4-latest-1
     container:
@@ -31,7 +31,7 @@ jobs:
       fail-fast: false
       matrix:
         tool_name: ["memcheck", "synccheck", "racecheck"]
-        test_name: ${{ fromJson(needs.discover-tests.outputs.tests) }}
+        test_name: ${{ fromJson(needs.discover-sanitizer-tests.outputs.tests) }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v5

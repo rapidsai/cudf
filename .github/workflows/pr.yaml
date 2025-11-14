@@ -14,8 +14,8 @@ jobs:
   pr-builder:
     needs:
       # TEMPORARY: Testing compute-sanitizer workflow
-      - discover-tests
-      - run-sanitizer
+      - discover-sanitizer-tests
+      - run-sanitizer-tests
       # - check-nightly-ci
       # - changed-files
       # - checks
@@ -51,7 +51,7 @@ jobs:
       needs: ${{ toJSON(needs) }}
 
   # TEMPORARY: Compute-sanitizer test jobs
-  discover-tests:
+  discover-sanitizer-tests:
     runs-on: ubuntu-latest
     container:
       image: rapidsai/ci-conda:25.12-latest
@@ -67,8 +67,8 @@ jobs:
           source /opt/conda/etc/profile.d/conda.sh
           ./ci/discover_libcudf_tests.sh
 
-  run-sanitizer:
-    needs: discover-tests
+  run-sanitizer-tests:
+    needs: discover-sanitizer-tests
     runs-on: linux-amd64-gpu-l4-latest-1
     container:
       image: rapidsai/ci-conda:25.12-latest
@@ -79,7 +79,7 @@ jobs:
       matrix:
         tool_name: ["memcheck", "synccheck", "racecheck"]
         test_name: ["COMPRESSION_TEST", "DATA_CHUNK_SOURCE_TEST"]
-#       test: ${{ fromJson(needs.discover-tests.outputs.tests) }}
+#       test: ${{ fromJson(needs.discover-sanitizer-tests.outputs.tests) }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v5

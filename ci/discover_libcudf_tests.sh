@@ -30,12 +30,12 @@ rapids-logger "Discovering libcudf test executables"
 # Navigate to test installation directory
 TEST_DIR="${CONDA_PREFIX}/bin/gtests/libcudf"
 
-if [ ! -d "$TEST_DIR" ]; then
-  rapids-logger "Error: Test directory $TEST_DIR not found"
+if [ ! -d "${TEST_DIR}" ]; then
+  rapids-logger "Error: Test directory ${TEST_DIR} not found"
   exit 1
 fi
 
-cd "$TEST_DIR"
+cd "${TEST_DIR}"
 
 # Find all *_TEST executables
 if ! ls *_TEST 1> /dev/null 2>&1; then
@@ -46,12 +46,10 @@ fi
 # Create JSON array of test names
 tests=$(ls -1 *_TEST | jq -R -s -c 'split("\n") | map(select(length > 0))')
 
-rapids-logger "Found tests: $tests"
+rapids-logger "Found tests:"
+echo "${tests}" | jq .[]
 
 # Output to GITHUB_OUTPUT if available (for GitHub Actions)
 if [ -n "${GITHUB_OUTPUT:-}" ]; then
-  echo "tests=$tests" >> "$GITHUB_OUTPUT"
+  echo "tests=${tests}" >> "${GITHUB_OUTPUT}"
 fi
-
-# Also print to stdout for direct script usage
-echo "$tests"
