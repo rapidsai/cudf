@@ -248,7 +248,7 @@ void generate_depth_remappings(
               kernel_error::to_string(error));
   }
 
-  for (auto chunk = chunks.host_begin(); chunk != chunks.host_end(); std::advance(chunk, 1)) {
+  for (auto chunk = chunks.host_begin(); chunk != chunks.host_end(); chunk++) {
     total_pages += chunk->num_data_pages + chunk->num_dict_pages;
   }
 
@@ -259,7 +259,7 @@ void generate_depth_remappings(
   cudf::detail::hostdevice_span<ColumnChunkDesc> chunks, rmm::cuda_stream_view stream)
 {
   size_t total_pages = 0;
-  for (auto chunk = chunks.host_begin(); chunk != chunks.host_end(); std::advance(chunk, 1)) {
+  for (auto chunk = chunks.host_begin(); chunk != chunks.host_end(); chunk++) {
     CUDF_EXPECTS(chunk->h_chunk_info != nullptr, "Expected non-null column info struct");
     auto const& chunk_info = *(chunk->h_chunk_info);
     chunk->num_dict_pages  = static_cast<int32_t>(chunk_info.has_dictionary());
