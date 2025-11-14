@@ -13,13 +13,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
-
       - name: Discover test executables
         id: find-tests
         shell: bash
         run: |
           ./ci/discover_libcudf_tests.sh
-
   run-sanitizer-tests:
     needs: discover-sanitizer-tests
     name: Run compute-sanitizer on ${{ matrix.test_name }}
@@ -35,7 +33,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
-
       - name: Run compute-sanitizer on ${{ matrix.test_name }}
         shell: bash
         env:
@@ -43,12 +40,3 @@ jobs:
           TEST_NAME: "${{ matrix.test_name }}"
         run: |
           ./ci/run_compute_sanitizer_test.sh "${TOOL_NAME}" "${TEST_NAME}"
-      - name: Upload sanitizer logs
-        if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: sanitizer-logs-${{ matrix.test_name }}
-          path: |
-            compute-sanitizer-*.log
-            *.log
-          if-no-files-found: ignore

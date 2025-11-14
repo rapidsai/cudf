@@ -90,16 +90,6 @@ jobs:
           TEST_NAME: "${{ matrix.test_name }}"
         run: |
           ./ci/run_compute_sanitizer_test.sh "${TOOL_NAME}" "${TEST_NAME}"
-      - name: Upload sanitizer logs
-        if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: sanitizer-logs-${{ matrix.tool_name }}-${{ matrix.test_name }}
-          path: |
-            compute-sanitizer-*.log
-            *.log
-          if-no-files-found: ignore
-
 # TEMPORARY: All jobs below are commented out for compute-sanitizer testing
 #   telemetry-setup:
 #     continue-on-error: true

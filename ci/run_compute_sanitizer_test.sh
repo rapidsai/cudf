@@ -7,21 +7,21 @@ set -euo pipefail
 . /opt/conda/etc/profile.d/conda.sh
 
 # This script runs compute-sanitizer on a single libcudf test executable
-# Usage: ./run_compute_sanitizer_test.sh TOOL TEST_NAME [additional gtest args...]
+# Usage: ./run_compute_sanitizer_test.sh TOOL_NAME TEST_NAME [additional gtest args...]
 # Example: ./run_compute_sanitizer_test.sh memcheck AST_TEST
 # Example: ./run_compute_sanitizer_test.sh racecheck COMPRESSION_TEST --gtest_filter=CompressionTest.*
 
 if [ $# -lt 2 ]; then
   echo "Error: Tool and test name required"
-  echo "Usage: $0 TOOL TEST_NAME [additional gtest args...]"
-  echo "  TOOL: compute-sanitizer tool (memcheck, racecheck, synccheck, etc.)"
+  echo "Usage: $0 TOOL_NAME TEST_NAME [additional gtest args...]"
+  echo "  TOOL_NAME: compute-sanitizer tool (memcheck, racecheck, initcheck, synccheck)"
   echo "  TEST_NAME: libcudf test name"
   exit 1
 fi
 
-TOOL="$1"
+TOOL_NAME="${1}"
 shift
-TEST_NAME="$1"
+TEST_NAME="${1}"
 shift
 
 rapids-logger "Generate C++ testing dependencies"
@@ -46,7 +46,7 @@ rapids-print-env
 rapids-logger "Check GPU usage"
 nvidia-smi
 
-rapids-logger "Running compute-sanitizer --tool $TOOL on $TEST_NAME"
+rapids-logger "Running compute-sanitizer --tool ${TOOL_NAME} on ${TEST_NAME}"
 
 # Set environment variables as per ci/run_cudf_memcheck_ctests.sh
 export GTEST_CUDF_RMM_MODE=cuda
@@ -55,15 +55,20 @@ export LIBCUDF_MEMCHECK_ENABLED=1
 
 # Navigate to test installation directory
 TEST_DIR="${CONDA_PREFIX}/bin/gtests/libcudf"
-TEST_EXECUTABLE="$TEST_DIR/$TEST_NAME"
+TEST_EXECUTABLE="${TEST_DIR}/${TEST_NAME}"
 
-if [ ! -x "$TEST_EXECUTABLE" ]; then
-  rapids-logger "Error: Test executable $TEST_EXECUTABLE not found or not executable"
+if [ ! -x "${TEST_EXECUTABLE}" ]; then
+  rapids-logger "Error: Test executable ${TEST_EXECUTABLE} not found or not executable"
   exit 1
 fi
 
 # Run compute-sanitizer on the specified test
-compute-sanitizer --tool "$TOOL" --kernel-name-exclude kns=nvcomp "$TEST_EXECUTABLE" "$@"
+compute-sanitizer \
+  --tool "${TOOL_NAME}" \
+  --kernel-name-exclude kns=nvcomp \
+  --error-exitcode=1 \
+  "${TEST_EXECUTABLE}" \
+  "$@"
 
 EXITCODE=$?
 
@@ -71,5 +76,5 @@ EXITCODE=$?
 unset GTEST_CUDF_RMM_MODE
 unset LIBCUDF_MEMCHECK_ENABLED
 
-rapids-logger "compute-sanitizer --tool $TOOL on $TEST_NAME exiting with value: $EXITCODE"
+rapids-logger "compute-sanitizer --tool ${TOOL_NAME} on ${TEST_NAME} exiting with value: $EXITCODE"
 exit $EXITCODE
