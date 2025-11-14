@@ -37,7 +37,7 @@ print(tips_df.groupby('size').tip_percentage.mean())
 
 A "hello world" of using cuStreamz with python streamz can be found [here](https://github.com/rapidsai-community/notebooks-contrib/blob/main/getting_started_materials/hello_worlds/hello_streamz.ipynb)
 
-A more detailed example of [parsing haproxy logs](https://github.com/rapidsai-community/notebooks-contrib/blob/branch-0.14/intermediate_notebooks/examples/custreamz/parsing_haproxy_logs.ipynb) is also available.
+A more detailed example of [parsing haproxy logs](https://github.com/rapidsai-community/notebooks-contrib/blob/main/the_archive/archived_rapids_demos/custreamz/parsing_haproxy_logs.ipynb) is also available.
 
 ## Quick Start
 

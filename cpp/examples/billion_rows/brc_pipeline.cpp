@@ -13,7 +13,7 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_pool.hpp>
-#include <rmm/mr/device/statistics_resource_adaptor.hpp>
+#include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <chrono>
 #include <filesystem>

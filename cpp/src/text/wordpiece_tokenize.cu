@@ -652,6 +652,7 @@ CUDF_KERNEL void find_words_kernel(cudf::column_device_view const d_strings,
       }
       itr += tile_size;
     }
+    tile.sync();
     // keep track of how much of start_words/end_words we used
     last_idx = cg::reduce(tile, last_idx, cg::greater<cudf::size_type>{}) + 1;
 
@@ -666,6 +667,7 @@ CUDF_KERNEL void find_words_kernel(cudf::column_device_view const d_strings,
       first_word   = (count > words_found) ? start_words[words_found] : no_word;
       output_count = cuda::std::min(words_found, max_words - word_count);
     }
+    tile.sync();
 
     // copy results to the output
     auto out_starts = d_start_words + word_count;

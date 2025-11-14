@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -116,7 +116,22 @@ void scan_result_functor::operator()<aggregation::COUNT_ALL>(aggregation const& 
 {
   if (cache.has_result(values, agg)) return;
 
-  cache.add_result(values, agg, detail::count_scan(helper.group_labels(stream), stream, mr));
+  cache.add_result(
+    values,
+    agg,
+    detail::count_scan(values, null_policy::INCLUDE, helper.group_labels(stream), stream, mr));
+}
+
+template <>
+void scan_result_functor::operator()<aggregation::COUNT_VALID>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) return;
+
+  cache.add_result(
+    values,
+    agg,
+    detail::count_scan(
+      get_grouped_values(), null_policy::EXCLUDE, helper.group_labels(stream), stream, mr));
 }
 
 template <>

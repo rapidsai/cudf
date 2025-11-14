@@ -549,7 +549,7 @@ class NumericalColumn(NumericalBaseColumn):
     def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
-    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
+    def as_numerical_column(self, dtype: DtypeObj) -> NumericalColumn:
         if dtype == self.dtype:
             return self
 
@@ -590,7 +590,7 @@ class NumericalColumn(NumericalBaseColumn):
                 else:
                     self._dtype = dtype
                     return self
-            if self.dtype.kind == "f" and dtype.kind in "iu":  # type: ignore[union-attr]
+            if self.dtype.kind == "f" and dtype.kind in "iu":
                 if (
                     not is_pandas_nullable_extension_dtype(dtype)
                     and self.nan_count > 0

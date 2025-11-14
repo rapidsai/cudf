@@ -14,9 +14,9 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/aligned.hpp>
-#include <rmm/mr/device/aligned_resource_adaptor.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
-#include <rmm/mr/device/statistics_resource_adaptor.hpp>
+#include <rmm/mr/aligned_resource_adaptor.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
+#include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <thrust/host_vector.h>
 

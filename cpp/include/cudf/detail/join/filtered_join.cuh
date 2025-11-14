@@ -164,7 +164,7 @@ class filtered_join {
   using storage_type =
     cuco::bucket_storage<key,
                          1,  /// fixing bucket size to be 1 i.e each thread handles one slot
-                         cuco::extent<cudf::size_type>,
+                         cuco::extent<std::size_t>,
                          rmm::mr::polymorphic_allocator<char>>;
 
   // Hasher for primitive row types

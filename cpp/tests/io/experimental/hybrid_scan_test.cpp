@@ -22,7 +22,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/aligned.hpp>
-#include <rmm/mr/device/aligned_resource_adaptor.hpp>
+#include <rmm/mr/aligned_resource_adaptor.hpp>
 
 namespace {
 

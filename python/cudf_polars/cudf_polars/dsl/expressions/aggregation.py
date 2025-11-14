@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -190,12 +191,16 @@ class Agg(Expr):
 
     def _sum(self, column: Column, stream: Stream) -> Column:
         if column.size == 0 or column.null_count == column.size:
-            return Column(
-                plc.Column.from_scalar(
-                    plc.Scalar.from_py(0, self.dtype.plc_type, stream=stream),
-                    1,
+            if self.dtype.id() == plc.TypeId.DECIMAL128:
+                zero = plc.Scalar.from_py(
+                    Decimal(0).scaleb(self.dtype.scale()),
+                    plc.DataType(plc.TypeId.DECIMAL128),
                     stream=stream,
-                ),
+                )
+            else:
+                zero = plc.Scalar.from_py(0, self.dtype.plc_type, stream=stream)
+            return Column(
+                plc.Column.from_scalar(zero, 1, stream=stream),
                 name=column.name,
                 dtype=self.dtype,
             )

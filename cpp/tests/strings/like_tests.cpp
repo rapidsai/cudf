@@ -396,18 +396,14 @@ TEST_F(StringsLikeTests, AllNulls)
 
 TEST_F(StringsLikeTests, Errors)
 {
-  auto const input       = cudf::test::strings_column_wrapper({"3", "33"});
-  auto const sv          = cudf::strings_column_view(input);
-  auto const invalid_str = cudf::string_scalar("", false);
+  auto const input = cudf::test::strings_column_wrapper({"3", "33"});
+  auto const sv    = cudf::strings_column_view(input);
 
-  EXPECT_THROW(cudf::strings::like(sv, invalid_str), std::invalid_argument);
-  EXPECT_THROW(cudf::strings::like(sv, std::string_view("3"), invalid_str), std::invalid_argument);
   EXPECT_THROW(cudf::strings::like(sv, std::string_view("3"), std::string_view("ee")),
                std::invalid_argument);
 
   auto patterns          = cudf::test::strings_column_wrapper({"3", ""}, {true, false});
   auto const sv_patterns = cudf::strings_column_view(patterns);
   EXPECT_THROW(cudf::strings::like(sv, sv_patterns), std::invalid_argument);
-  EXPECT_THROW(cudf::strings::like(sv, sv, invalid_str), std::invalid_argument);
   EXPECT_THROW(cudf::strings::like(sv, sv_patterns, std::string_view("ee")), std::invalid_argument);
 }

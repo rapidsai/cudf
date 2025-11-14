@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.node import define_py_node
@@ -60,7 +60,9 @@ async def default_node_single(
     """
     async with shutdown_on_error(context, ch_in.data, ch_out.data):
         while (msg := await ch_in.data.recv(context)) is not None:
-            chunk = TableChunk.from_message(msg)
+            chunk = TableChunk.from_message(msg).make_available_and_spill(
+                context.br(), allow_overbooking=True
+            )
             seq_num = msg.sequence_number
             df = await asyncio.to_thread(
                 ir.do_evaluate,
@@ -149,6 +151,11 @@ async def default_node_multi(
             assert all(chunk is not None for chunk in ready_chunks), (
                 "All chunks must be non-None"
             )
+            # Ensure all table chunks are unspilled and available.
+            ready_chunks = [
+                chunk.make_available_and_spill(context.br(), allow_overbooking=True)
+                for chunk in cast(list[TableChunk], ready_chunks)
+            ]
             dfs = [
                 DataFrame.from_table(
                     chunk.table_view(),  # type: ignore[union-attr]
@@ -208,7 +215,9 @@ async def fanout_node_bounded(
     # See: https://github.com/rapidsai/rapidsmpf/issues/560
     async with shutdown_on_error(context, ch_in.data, *[ch.data for ch in chs_out]):
         while (msg := await ch_in.data.recv(context)) is not None:
-            table_chunk = TableChunk.from_message(msg)
+            table_chunk = TableChunk.from_message(msg).make_available_and_spill(
+                context.br(), allow_overbooking=True
+            )
             seq_num = msg.sequence_number
             for ch_out in chs_out:
                 await ch_out.data.send(
@@ -327,7 +336,9 @@ async def fanout_node_unbounded(
                         needs_drain.update(range(len(chs_out)))
                     else:
                         # Add message to all output buffers
-                        chunk = TableChunk.from_message(msg)
+                        chunk = TableChunk.from_message(msg).make_available_and_spill(
+                            context.br(), allow_overbooking=True
+                        )
                         seq_num = msg.sequence_number
                         for buffer in output_buffers:
                             message = Message(
