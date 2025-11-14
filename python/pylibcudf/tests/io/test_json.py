@@ -7,6 +7,7 @@ import pyarrow as pa
 import pytest
 from utils import (
     assert_table_and_meta_eq,
+    get_default_stream,
     make_source,
     sink_to_str,
     write_source_str,
@@ -427,7 +428,9 @@ def test_read_json_from_device_buffers(table_data, num_buffers, stream):
     _, pa_table = table_data
 
     json_str = pa_table.to_pandas().to_json(orient="records", lines=True)
-    buf = DeviceBuffer.to_device(json_str.encode("utf-8"))
+    buf = DeviceBuffer.to_device(
+        json_str.encode("utf-8"), stream or get_default_stream()
+    )
 
     options = (
         plc.io.json.JsonReaderOptions.builder(

@@ -5,9 +5,10 @@ import io
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+from utils import get_default_stream
 
 from rmm import DeviceBuffer
-from rmm.pylibrmm.stream import DEFAULT_STREAM, Stream
+from rmm.pylibrmm.stream import Stream
 
 import pylibcudf as plc
 from pylibcudf.expressions import (
@@ -322,7 +323,7 @@ def test_hybrid_scan_materialize_columns(
     filter_buffers = [
         DeviceBuffer.to_device(
             simple_parquet_bytes[r.offset : r.offset + r.size],
-            stream or DEFAULT_STREAM,
+            stream or get_default_stream(),
         )
         for r in filter_ranges
     ]
@@ -351,7 +352,7 @@ def test_hybrid_scan_materialize_columns(
     payload_buffers = [
         DeviceBuffer.to_device(
             simple_parquet_bytes[r.offset : r.offset + r.size],
-            stream or DEFAULT_STREAM,
+            stream or get_default_stream(),
         )
         for r in payload_ranges
     ]
@@ -431,7 +432,8 @@ def test_hybrid_scan_has_next_table_chunk(
     )
     filter_buffers = [
         DeviceBuffer.to_device(
-            simple_parquet_bytes[r.offset : r.offset + r.size]
+            simple_parquet_bytes[r.offset : r.offset + r.size],
+            get_default_stream(),
         )
         for r in filter_ranges
     ]
@@ -497,7 +499,7 @@ def test_hybrid_scan_chunked_reading(
     filter_buffers = [
         DeviceBuffer.to_device(
             simple_parquet_bytes[r.offset : r.offset + r.size],
-            stream or DEFAULT_STREAM,
+            stream or get_default_stream(),
         )
         for r in filter_ranges
     ]
