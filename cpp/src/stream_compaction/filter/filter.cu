@@ -173,6 +173,7 @@ std::vector<std::unique_ptr<column>> filter_operation(
   auto kernel = build_kernel("cudf::filtering::jit::kernel",
                              base_column.size(),
                              {"bool"},
+                             {"bool"},
                              predicate_columns,
                              user_data.has_value(),
                              is_null_aware,
