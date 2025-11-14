@@ -319,14 +319,26 @@ class CategoricalDtype(_BaseDtype):
         elif other.ordered is None and other._categories is None:
             # other is equivalent to the string "category"
             return True
-        elif self.ordered != other.ordered:
-            return False
         elif self._categories is None or other._categories is None:
-            return True
+            return self._categories is other._categories
+        elif self.ordered or other.ordered:
+            return (self.ordered == other.ordered) and self._categories.equals(
+                other._categories
+            )
         else:
-            return (
-                self._categories.dtype == other._categories.dtype
-                and self._categories.equals(other._categories)
+            left_cats = self._categories
+            right_cats = other._categories
+            if left_cats.dtype != right_cats.dtype:
+                return False
+            if len(left_cats) != len(right_cats):
+                return False
+            if self.ordered in {None, False} and other.ordered in {
+                None,
+                False,
+            }:
+                return left_cats.sort_values().equals(right_cats.sort_values())
+            return self.ordered == other.ordered and left_cats.equals(
+                right_cats
             )
 
     def construct_from_string(self):

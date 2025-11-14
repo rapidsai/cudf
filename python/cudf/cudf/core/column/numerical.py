@@ -130,7 +130,13 @@ class NumericalColumn(NumericalBaseColumn):
         except (TypeError, ValueError):
             return False
         # TODO: Use `scalar`-based `contains` wrapper
-        return self.contains(as_column([search_item], dtype=self.dtype)).any()
+        return self.contains(
+            as_column(
+                [search_item],
+                dtype=self.dtype,
+                nan_as_null=not cudf.get_option("mode.pandas_compatible"),
+            ),
+        ).any()
 
     @property
     def values(self) -> cp.ndarray:

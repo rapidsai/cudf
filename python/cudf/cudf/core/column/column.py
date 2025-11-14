@@ -65,6 +65,7 @@ from cudf.utils.dtypes import (
     dtype_from_pylibcudf_column,
     dtype_to_pylibcudf_type,
     find_common_type,
+    get_dtype_of_same_kind,
     is_column_like,
     is_dtype_obj_decimal,
     is_dtype_obj_interval,
@@ -881,9 +882,23 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             raise ValueError(
                 f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
             )
-        if self.null_count == self.size:
+        if self.size == 0:
             return True
-        return bool(self.reduce("all"))
+        if self.null_count == self.size:
+            if not skipna:
+                return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
+            else:
+                return True
+        result = bool(self.reduce("all"))
+        if (
+            result
+            and not skipna
+            and self.null_count > 0
+            and is_pandas_nullable_extension_dtype(self.dtype)
+        ):
+            return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
+
+        return result
 
     def any(self, skipna: bool = True) -> bool:
         # Early exit for fast cases.
@@ -1174,10 +1189,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def slice(self, start: int, stop: int, stride: int | None = None) -> Self:
         stride = 1 if stride is None else stride
+        if stop < 0 and not (stride < 0 and stop == -1 and start >= 0):
+            stop = stop + len(self)
         if start < 0:
             start = start + len(self)
-        if stop < 0 and not (stride < 0 and stop == -1):
-            stop = stop + len(self)
+
         if (stride > 0 and start >= stop) or (stride < 0 and start <= stop):
             return cast(Self, column_empty(0, self.dtype))
         # compute mask slice
@@ -1503,7 +1519,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def notnull(self) -> ColumnBase:
         """Identify non-missing values in a Column."""
         if not self.has_nulls(include_nan=self.dtype.kind == "f"):
-            return as_column(True, length=len(self))
+            return as_column(True, length=len(self))._with_type_metadata(
+                get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
+            )
 
         with acquire_spill_lock():
             result = type(self).from_pylibcudf(
@@ -1515,7 +1533,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             # of a float column
             result = result & self.notnan()
 
-        return result
+        return result._with_type_metadata(
+            get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
+        )
 
     @cached_property
     def nan_count(self) -> int:
