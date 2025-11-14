@@ -18,6 +18,7 @@ from cudf_polars.dsl.tracing import log_do_evaluate, nvtx_annotate_cudf_polars
 from cudf_polars.experimental.base import get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.utils import _concat
+from cudf_polars.utils.config import ShufflerInsertionMethod
 from cudf_polars.utils.cuda_stream import get_dask_cuda_stream
 
 if TYPE_CHECKING:
@@ -43,7 +44,7 @@ class ShuffleOptions(TypedDict):
     column_names: Sequence[str]
     dtypes: Sequence[DataType]
     cluster_kind: Literal["dask", "single"]
-    use_concat_insert: bool
+    shuffler_insertion_method: ShufflerInsertionMethod
 
 
 # Experimental rapidsmpf shuffler integration
@@ -82,7 +83,10 @@ class RMPFIntegration:  # pragma: no cover
             stream=DEFAULT_STREAM,
         )
 
-        if options["use_concat_insert"]:
+        if (
+            options["shuffler_insertion_method"]
+            == ShufflerInsertionMethod.CONCAT_INSERT
+        ):
             shuffler.concat_insert(packed_inputs)
         else:
             shuffler.insert_chunks(packed_inputs)
@@ -138,28 +142,28 @@ class Shuffle(IR):
     `ShuffleSorted` for sorting-based shuffling.
     """
 
-    __slots__ = ("keys", "shuffle_method", "use_concat_insert")
-    _non_child = ("schema", "keys", "shuffle_method", "use_concat_insert")
+    __slots__ = ("keys", "shuffle_method", "shuffler_insertion_method")
+    _non_child = ("schema", "keys", "shuffle_method", "shuffler_insertion_method")
     keys: tuple[NamedExpr, ...]
     """Keys to shuffle on."""
     shuffle_method: ShuffleMethod
     """Shuffle method to use."""
-    use_concat_insert: bool
-    """Whether to use concat_insert for inserting chunks with the rapidsmpf shuffler."""
+    shuffler_insertion_method: ShufflerInsertionMethod
+    """Insertion method for rapidsmpf shuffler."""
 
     def __init__(
         self,
         schema: Schema,
         keys: tuple[NamedExpr, ...],
         shuffle_method: ShuffleMethod,
-        use_concat_insert: bool,  # noqa: FBT001
+        shuffler_insertion_method: ShufflerInsertionMethod,
         df: IR,
     ):
         self.schema = schema
         self.keys = keys
         self.shuffle_method = shuffle_method
-        self.use_concat_insert = use_concat_insert
-        self._non_child_args = (schema, keys, shuffle_method, use_concat_insert)
+        self.shuffler_insertion_method = shuffler_insertion_method
+        self._non_child_args = (schema, keys, shuffle_method, shuffler_insertion_method)
         self.children = (df,)
 
     # the type-ignore is for
@@ -360,7 +364,7 @@ def _(
                     "column_names": list(ir.schema.keys()),
                     "dtypes": list(ir.schema.values()),
                     "cluster_kind": cluster_kind,
-                    "use_concat_insert": ir.use_concat_insert,
+                    "shuffler_insertion_method": ir.shuffler_insertion_method,
                 },
             )
         except ValueError as err:

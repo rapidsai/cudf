@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.parallel import LowerIRTransformer
-    from cudf_polars.utils.config import ShuffleMethod
+    from cudf_polars.utils.config import ShuffleMethod, ShufflerInsertionMethod
 
 
 def _maybe_shuffle_frame(
@@ -31,7 +31,7 @@ def _maybe_shuffle_frame(
     shuffle_method: ShuffleMethod,
     output_count: int,
     *,
-    use_concat_insert: bool,
+    shuffler_insertion_method: ShufflerInsertionMethod,
 ) -> IR:
     # Shuffle `frame` if it isn't already shuffled.
     if (
@@ -46,7 +46,7 @@ def _maybe_shuffle_frame(
             frame.schema,
             on,
             shuffle_method,
-            use_concat_insert,
+            shuffler_insertion_method,
             frame,
         )
         partition_info[frame] = PartitionInfo(
@@ -64,7 +64,7 @@ def _make_hash_join(
     right: IR,
     shuffle_method: ShuffleMethod,
     *,
-    use_concat_insert: bool,
+    shuffler_insertion_method: ShufflerInsertionMethod,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Shuffle left and right dataframes (if necessary)
     new_left = _maybe_shuffle_frame(
@@ -73,7 +73,7 @@ def _make_hash_join(
         partition_info,
         shuffle_method,
         output_count,
-        use_concat_insert=use_concat_insert,
+        shuffler_insertion_method=shuffler_insertion_method,
     )
     new_right = _maybe_shuffle_frame(
         right,
@@ -81,7 +81,7 @@ def _make_hash_join(
         partition_info,
         shuffle_method,
         output_count,
-        use_concat_insert=use_concat_insert,
+        shuffler_insertion_method=shuffler_insertion_method,
     )
     if left != new_left or right != new_right:
         ir = ir.reconstruct([new_left, new_right])
@@ -153,7 +153,7 @@ def _make_bcast_join(
     shuffle_method: ShuffleMethod,
     *,
     streaming_runtime: str,
-    use_concat_insert: bool,
+    shuffler_insertion_method: ShufflerInsertionMethod,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     if ir.options[0] != "Inner":
         left_count = partition_info[left].count
@@ -180,7 +180,7 @@ def _make_bcast_join(
                     partition_info,
                     shuffle_method,
                     right_count,
-                    use_concat_insert=use_concat_insert,
+                    shuffler_insertion_method=shuffler_insertion_method,
                 )
             else:
                 left = _maybe_shuffle_frame(
@@ -189,7 +189,7 @@ def _make_bcast_join(
                     partition_info,
                     shuffle_method,
                     left_count,
-                    use_concat_insert=use_concat_insert,
+                    shuffler_insertion_method=shuffler_insertion_method,
                 )
 
     new_node = ir.reconstruct([left, right])
@@ -302,7 +302,7 @@ def _(
             right,
             config_options.executor.shuffle_method,
             streaming_runtime=config_options.executor.runtime,
-            use_concat_insert=config_options.executor.use_concat_insert,
+            shuffler_insertion_method=config_options.executor.shuffler_insertion_method,
         )
     else:
         # Create a hash join
@@ -313,7 +313,7 @@ def _(
             left,
             right,
             config_options.executor.shuffle_method,
-            use_concat_insert=config_options.executor.use_concat_insert,
+            shuffler_insertion_method=config_options.executor.shuffler_insertion_method,
         )
 
 

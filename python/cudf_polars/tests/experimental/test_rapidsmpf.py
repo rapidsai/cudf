@@ -12,7 +12,7 @@ from cudf_polars.testing.asserts import (
     DEFAULT_RUNTIME,
     assert_gpu_result_equal,
 )
-from cudf_polars.utils.config import ConfigOptions
+from cudf_polars.utils.config import ConfigOptions, ShufflerInsertionMethod
 
 REQUIRE_TASKS_RUNTIME = pytest.mark.skipif(
     DEFAULT_RUNTIME != "tasks", reason="Requires 'tasks' runtime."
@@ -22,12 +22,18 @@ REQUIRE_TASKS_RUNTIME = pytest.mark.skipif(
 @REQUIRE_TASKS_RUNTIME
 @pytest.mark.parametrize("rapidsmpf_spill", [False, True])
 @pytest.mark.parametrize("max_rows_per_partition", [1, 5])
-@pytest.mark.parametrize("use_concat_insert", [False, True])
+@pytest.mark.parametrize(
+    "shuffler_insertion_method",
+    [
+        ShufflerInsertionMethod.INSERT_CHUNKS,
+        ShufflerInsertionMethod.CONCAT_INSERT,
+    ],
+)
 def test_join_rapidsmpf(
     max_rows_per_partition: int,
     *,
     rapidsmpf_spill: bool,
-    use_concat_insert: bool,
+    shuffler_insertion_method: ShufflerInsertionMethod,
 ) -> None:
     # Check that we have a distributed cluster running.
     # This tests must be run with: --cluster='distributed'
@@ -61,7 +67,7 @@ def test_join_rapidsmpf(
             "cluster": "distributed",
             "runtime": DEFAULT_RUNTIME,
             "rapidsmpf_spill": rapidsmpf_spill,
-            "use_concat_insert": use_concat_insert,
+            "shuffler_insertion_method": shuffler_insertion_method,
         },
     )
 

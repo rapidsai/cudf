@@ -57,7 +57,7 @@ def test_hash_shuffle(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
         qir.schema,
         keys,
         options.executor.shuffle_method,
-        options.executor.use_concat_insert,
+        options.executor.shuffler_insertion_method,
         qir,
     )
 
@@ -66,7 +66,7 @@ def test_hash_shuffle(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
         qir.schema,
         keys,
         options.executor.shuffle_method,
-        options.executor.use_concat_insert,
+        options.executor.shuffler_insertion_method,
         qir1,
     )
 
@@ -81,7 +81,7 @@ def test_hash_shuffle(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
         qir2.schema,
         keys2,
         options.executor.shuffle_method,
-        options.executor.use_concat_insert,
+        options.executor.shuffler_insertion_method,
         qir2,
     )
 
