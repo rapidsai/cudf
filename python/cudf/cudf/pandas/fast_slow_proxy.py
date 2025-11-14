@@ -887,6 +887,17 @@ class _FastSlowAttribute:
                     slow_attr,
                 )
             else:
+                if self._private:
+                    if instance is not None:
+                        return _maybe_wrap_result(
+                            getattr(instance._fsproxy_slow, self._name),
+                            None,  # type: ignore[arg-type]
+                        )
+                    else:
+                        return _maybe_wrap_result(
+                            getattr(owner._fsproxy_slow, self._name),
+                            None,  # type: ignore[arg-type]
+                        )
                 # for anything else, use a fast-slow attribute:
                 self._attr, _ = _fast_slow_function_call(
                     getattr,
