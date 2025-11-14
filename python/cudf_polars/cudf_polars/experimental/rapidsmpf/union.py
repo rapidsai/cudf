@@ -73,7 +73,9 @@ async def union_node(
 
 
 @generate_ir_sub_network.register(Union)
-def _(ir: Union, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]]:
+def _(
+    ir: Union, rec: SubNetGenerator
+) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     # Union operation.
     # Pass-through all child chunks in channel order.
 
@@ -84,7 +86,7 @@ def _(ir: Union, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManag
     channels[ir] = ChannelManager(rec.state["context"])
 
     # Add simple python node
-    nodes.append(
+    nodes[ir] = [
         union_node(
             rec.state["context"],
             ir,
@@ -92,5 +94,5 @@ def _(ir: Union, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManag
             channels[ir].reserve_input_slot(),
             *[channels[c].reserve_output_slot() for c in ir.children],
         )
-    )
+    ]
     return nodes, channels

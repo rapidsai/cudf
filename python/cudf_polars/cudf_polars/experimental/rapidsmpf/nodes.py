@@ -365,7 +365,9 @@ async def fanout_node_unbounded(
 
 
 @generate_ir_sub_network.register(IR)
-def _(ir: IR, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]]:
+def _(
+    ir: IR, rec: SubNetGenerator
+) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     # Default generate_ir_sub_network logic.
     # Use simple pointwise node.
 
@@ -377,7 +379,7 @@ def _(ir: IR, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]
 
     if len(ir.children) == 1:
         # Single-channel default node
-        nodes.append(
+        nodes[ir] = [
             default_node_single(
                 rec.state["context"],
                 ir,
@@ -385,10 +387,10 @@ def _(ir: IR, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]
                 channels[ir].reserve_input_slot(),
                 channels[ir.children[0]].reserve_output_slot(),
             )
-        )
+        ]
     else:
         # Multi-channel default node
-        nodes.append(
+        nodes[ir] = [
             default_node_multi(
                 rec.state["context"],
                 ir,
@@ -396,7 +398,7 @@ def _(ir: IR, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]
                 channels[ir].reserve_input_slot(),
                 tuple(channels[c].reserve_output_slot() for c in ir.children),
             )
-        )
+        ]
 
     return nodes, channels
 
@@ -436,20 +438,22 @@ async def empty_node(
 
 
 @generate_ir_sub_network.register(Empty)
-def _(ir: Empty, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]]:
+def _(
+    ir: Empty, rec: SubNetGenerator
+) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     """Generate network for Empty node - produces one empty chunk."""
     context = rec.state["context"]
     ir_context = rec.state["ir_context"]
     channels: dict[IR, ChannelManager] = {ir: ChannelManager(rec.state["context"])}
-    nodes: list[Any] = [
-        empty_node(context, ir, ir_context, channels[ir].reserve_input_slot())
-    ]
+    nodes: dict[IR, list[Any]] = {
+        ir: [empty_node(context, ir, ir_context, channels[ir].reserve_input_slot())]
+    }
     return nodes, channels
 
 
 def generate_ir_sub_network_wrapper(
     ir: IR, rec: SubNetGenerator
-) -> tuple[list[Any], dict[IR, ChannelManager]]:
+) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     """
     Generate a sub-network for the RapidsMPF streaming runtime.
 
@@ -463,7 +467,7 @@ def generate_ir_sub_network_wrapper(
     Returns
     -------
     nodes
-        List of streaming-network node(s) for the subgraph.
+        Dictionary mapping each IR node to its list of streaming-network node(s).
     channels
         Dictionary mapping between each IR node and its
         corresponding streaming-network output ChannelManager.
@@ -474,21 +478,19 @@ def generate_ir_sub_network_wrapper(
     if (fanout_info := rec.state["fanout_nodes"].get(ir)) is not None:
         count = fanout_info.num_consumers
         manager = ChannelManager(rec.state["context"], count=count)
+        fanout_node: Any
         if fanout_info.unbounded:
-            nodes.append(
-                fanout_node_unbounded(
-                    rec.state["context"],
-                    channels[ir].reserve_output_slot(),
-                    *[manager.reserve_input_slot() for _ in range(count)],
-                )
+            fanout_node = fanout_node_unbounded(
+                rec.state["context"],
+                channels[ir].reserve_output_slot(),
+                *[manager.reserve_input_slot() for _ in range(count)],
             )
         else:  # "bounded"
-            nodes.append(
-                fanout_node_bounded(
-                    rec.state["context"],
-                    channels[ir].reserve_output_slot(),
-                    *[manager.reserve_input_slot() for _ in range(count)],
-                )
+            fanout_node = fanout_node_bounded(
+                rec.state["context"],
+                channels[ir].reserve_output_slot(),
+                *[manager.reserve_input_slot() for _ in range(count)],
             )
+        nodes[ir].append(fanout_node)
         channels[ir] = manager
     return nodes, channels

@@ -241,7 +241,9 @@ async def local_shuffle_node(
 
 
 @generate_ir_sub_network.register(Shuffle)
-def _(ir: Shuffle, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]]:
+def _(
+    ir: Shuffle, rec: SubNetGenerator
+) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     # Local shuffle operation.
 
     # Process children
@@ -262,7 +264,7 @@ def _(ir: Shuffle, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelMan
 
     # Complete shuffle pipeline in a single node
     # LocalShuffle context manager handles shuffle ID lifecycle internally
-    nodes.append(
+    nodes[ir] = [
         local_shuffle_node(
             context,
             ir,
@@ -272,6 +274,6 @@ def _(ir: Shuffle, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelMan
             columns_to_hash=columns_to_hash,
             num_partitions=num_partitions,
         )
-    )
+    ]
 
     return nodes, channels
