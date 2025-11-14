@@ -4,6 +4,7 @@
  */
 
 #include "compute_global_memory_aggs.cuh"
+#include "helpers.cuh"
 
 namespace cudf::groupby::detail::hash {
 
