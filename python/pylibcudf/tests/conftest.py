@@ -103,15 +103,10 @@ def pytest_collection_modifyitems(config, items):
     directly to indicate this.
     """
     for item in items:
-        # Check if test has parameters (from @pytest.mark.parametrize)
         if hasattr(item, "callspec") and "stream" in item.callspec.params:
             stream_value = item.callspec.params["stream"]
-
-            # Add marker based on stream value
-            if stream_value is None:
-                item.add_marker(pytest.mark.uses_default_stream)
-            else:
-                # stream_value is a Stream() object
+            # Add marker based on stream parameter value being non-None
+            if stream_value is not None:
                 item.add_marker(pytest.mark.uses_custom_stream)
 
 
