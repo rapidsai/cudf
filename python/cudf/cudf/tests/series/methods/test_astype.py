@@ -1329,3 +1329,11 @@ def test_empty_series_category_cast(ordered):
 
     assert_eq(expected, actual)
     assert_eq(expected.dtype.ordered, actual.dtype.ordered)
+
+
+@pytest.mark.parametrize("copy", [True, False])
+def test_series_astype_no_copy(copy):
+    gsr = cudf.Series([1, 2, 3])
+    result = gsr.astype("int64", copy=copy)
+    assert_eq(result, gsr)
+    assert (result is gsr) is (not copy)
