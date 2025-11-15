@@ -28,7 +28,7 @@ rapids-logger "Prepending channel ${CPP_CHANNEL} to RATTLER_CHANNELS"
 
 RATTLER_CHANNELS=("--channel" "${CPP_CHANNEL}" "${RATTLER_CHANNELS[@]}")
 
-sccache --stop-server >/dev/null 2>&1 || true
+sccache --stop-server 2>/dev/null || true
 
 rapids-logger "Building pylibcudf"
 
@@ -41,7 +41,7 @@ rapids-telemetry-record build-pylibcudf.log \
                     "${RATTLER_CHANNELS[@]}"
 
 rapids-telemetry-record sccache-stats-pylibcudf.txt sccache --show-adv-stats
-sccache --stop-server >/dev/null 2>&1 || true
+sccache --stop-server 2>/dev/null || true
 
 rapids-logger "Building cudf"
 
@@ -51,7 +51,7 @@ rapids-telemetry-record build-cudf.log \
                     "${RATTLER_CHANNELS[@]}"
 
 rapids-telemetry-record sccache-stats-cudf.txt sccache --show-adv-stats
-sccache --stop-server >/dev/null 2>&1 || true
+sccache --stop-server 2>/dev/null || true
 
 rapids-logger "Building dask-cudf"
 
@@ -61,7 +61,7 @@ rapids-telemetry-record build-dask-cudf.log \
                     "${RATTLER_CHANNELS[@]}"
 
 rapids-telemetry-record sccache-stats-dask-cudf.txt sccache --show-adv-stats
-sccache --stop-server >/dev/null 2>&1 || true
+sccache --stop-server 2>/dev/null || true
 
 rapids-logger "Building cudf_kafka"
 
@@ -71,7 +71,7 @@ rapids-telemetry-record build-cudf_kafka.log \
                     "${RATTLER_CHANNELS[@]}"
 
 rapids-telemetry-record sccache-stats-cudf_kafka.txt sccache --show-adv-stats
-sccache --stop-server >/dev/null 2>&1 || true
+sccache --stop-server 2>/dev/null || true
 
 rapids-logger "Building custreamz"
 
@@ -81,7 +81,7 @@ rapids-telemetry-record build-custreamz.log \
                     "${RATTLER_CHANNELS[@]}"
 
 rapids-telemetry-record sccache-stats-custreamz.txt sccache --show-adv-stats
-sccache --stop-server >/dev/null 2>&1 || true
+sccache --stop-server 2>/dev/null || true
 
 rapids-logger "Building cudf-polars"
 
