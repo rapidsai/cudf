@@ -11,92 +11,76 @@ import numpy as np
 import pyarrow as pa
 import pytest
 
-
-def _get_default_stream():
-    """Load the C++ stream identification library and fetch its default stream.
-
-    This function leverages subprocess and ctypes to avoid needing to build and ship a
-    testing-specific submodule in pylibcudf for this purpose. The testing module would
-    also exhibit missing symbols by default without suitable library preloading in the
-    test suite, so this approach is cleaner. Moreover, this approach avoids bloating the
-    shipped wheels.
-    """
-    import ctypes
-    import subprocess
-    import textwrap
-
-    from rmm.pylibrmm.stream import Stream
-
-    # Find the library in a subprocess so we don't pollute the loader's proc map for
-    # this process.
-    script = textwrap.dedent("""
-    import cudf
-    import os
-
-    with open("/proc/self/maps") as f:
-        for line in f:
-            if "libcudf.so" in line:
-                path = line.split()[-1]
-                print(os.path.dirname(path))
-                break
-    """)
-    lib_dir = subprocess.check_output(
-        [sys.executable, "-c", script], text=True
-    ).strip()
-    stream_identification_lib_path = os.path.join(
-        lib_dir,
-        "libcudf_identify_stream_usage_mode_testing.so",
-    )
-
-    assert os.path.exists(stream_identification_lib_path), (
-        "Could not find stream identification library at "
-        f"{stream_identification_lib_path}"
-    )
-
-    # Get the symbol name for the default stream function
-    symbols = subprocess.check_output(
-        ["nm", "-D", "--defined-only", stream_identification_lib_path],
-        text=True,
-    )
-    default_stream_func_name = next(
-        line for line in symbols.splitlines() if "get_default_stream" in line
-    ).split(" ")[2]
-
-    # Simply loading the library with RTLD_GLOBAL is sufficient to redirect the CUDA
-    # calls. Even though this function-local reference will be dropped, the underlying
-    # system loader will retain the library and its symbols.
-    stream_identification_lib = ctypes.CDLL(
-        stream_identification_lib_path, mode=ctypes.RTLD_GLOBAL
-    )
-    stream_func = getattr(stream_identification_lib, default_stream_func_name)
-    # Make sure the return type is not treated as a signed int
-    stream_func.restype = ctypes.c_void_p
-    stream_val = stream_func()
-
-    # The CUDA stream protocol is currently the only way to produce an rmm Stream
-    # pointing to an arbitrary cudaStream_t from Python (not Cython) code.
-    class _Stream:
-        def __init__(self, value):
-            self._value = value
-
-        def __cuda_stream__(self):
-            return (0, self._value)
-
-    return Stream(_Stream(stream_val))
-
-
-# IMPORTANT: This load must happen before anything importing CUDA symbols (i.e. before
-# pylibcudf is imported) in order for the symbol resolution to work correctly
-if os.getenv("PYLIBCUDF_STREAM_TESTING", "0") == "1":
-    _TESTING_STREAM = _get_default_stream()
-
 import pylibcudf as plc
 from pylibcudf.io.types import CompressionType
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "common"))
 
+# Since we assume that the stream identification library is preloaded when tests are run
+# in this mode, it is fine to load the library after pylibcudf inside conftest.
+# Using conftest itself as the first point of loading is not viable since there is no
+# guarantee that something else won't load CUDA libraries on startup (e.g. pth files)
 if os.getenv("PYLIBCUDF_STREAM_TESTING", "0") == "1":
-    plc.utils.CUDF_DEFAULT_STREAM = _TESTING_STREAM
+
+    def _get_default_stream():
+        """Load the C++ stream identification library and fetch its default stream.
+
+        This function leverages subprocess and ctypes to avoid needing to build and ship a
+        testing-specific submodule in pylibcudf for this purpose. The testing module would
+        also exhibit missing symbols by default without suitable library preloading in the
+        test suite, so this approach is cleaner. Moreover, this approach avoids bloating the
+        shipped wheels.
+        """
+        import ctypes
+        import subprocess
+
+        from rmm.pylibrmm.stream import Stream
+
+        with open("/proc/self/maps") as f:
+            for line in f:
+                if "libcudf_identify_stream_usage_mode_testing.so" in line:
+                    stream_identification_lib_path = line.split()[-1]
+                    break
+            else:
+                raise RuntimeError(
+                    "The stream identification library must be preloaded when PYLIBCUDF_STREAM_TESTING=1"
+                )
+
+        # Get the symbol name for the default stream function
+        symbols = subprocess.check_output(
+            ["nm", "-D", "--defined-only", stream_identification_lib_path],
+            text=True,
+        )
+        default_stream_func_name = next(
+            line
+            for line in symbols.splitlines()
+            if "get_default_stream" in line
+        ).split(" ")[2]
+
+        # The library must already be preloaded at this point so neither RTLD_GLOBAL nor the
+        # full path are strictly necessary, but we use them for clarity.
+        stream_identification_lib = ctypes.CDLL(
+            stream_identification_lib_path, mode=ctypes.RTLD_GLOBAL
+        )
+        stream_func = getattr(
+            stream_identification_lib, default_stream_func_name
+        )
+        # Make sure the return type is not treated as a signed int
+        stream_func.restype = ctypes.c_void_p
+        stream_val = stream_func()
+
+        # The CUDA stream protocol is currently the only way to produce an rmm Stream
+        # pointing to an arbitrary cudaStream_t from Python (not Cython) code.
+        class _Stream:
+            def __init__(self, value):
+                self._value = value
+
+            def __cuda_stream__(self):
+                return (0, self._value)
+
+        return Stream(_Stream(stream_val))
+
+    plc.utils.CUDF_DEFAULT_STREAM = _get_default_stream()
 
 # This ensures that assertions from expressions like `left == right` in the
 # common/utils.py are rewritten so that we get nice tracebacks.
