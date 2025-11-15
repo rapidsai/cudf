@@ -1,0 +1,42 @@
+name: Compute Sanitizer
+
+on:
+  workflow_dispatch:
+
+jobs:
+  discover-sanitizer-tests:
+    runs-on: linux-amd64-cpu4
+    container:
+      image: rapidsai/ci-conda:25.12-latest
+    outputs:
+      tests: ${{ steps.find-tests.outputs.tests }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+      - name: Discover test executables
+        id: find-tests
+        shell: bash
+        run: |
+          ./ci/discover_libcudf_tests.sh
+  run-sanitizer-tests:
+    needs: discover-sanitizer-tests
+    name: Run compute-sanitizer on ${{ matrix.test_name }}
+    runs-on: linux-amd64-gpu-l4-latest-1
+    container:
+      image: rapidsai/ci-conda:25.12-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        tool_name: ["memcheck", "racecheck", "initcheck", "synccheck"]
+        test_name: ${{ fromJson(needs.discover-sanitizer-tests.outputs.tests) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+      - name: Run compute-sanitizer on ${{ matrix.test_name }}
+        shell: bash
+        env:
+          TOOL_NAME: "${{ matrix.tool_name }}"
+          TEST_NAME: "${{ matrix.test_name }}"
+        run: |
+          ./ci/run_compute_sanitizer_test.sh "${TOOL_NAME}" "${TEST_NAME}"
