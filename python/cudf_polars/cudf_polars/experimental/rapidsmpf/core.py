@@ -35,11 +35,12 @@ from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo, lower_ir_nod
 from cudf_polars.experimental.rapidsmpf.nodes import generate_ir_sub_network_wrapper
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
-from cudf_polars.utils.config import CUDAStreamPoolConfig
+from cudf_polars.utils.config import CUDAStreamPolicy, CUDAStreamPoolConfig
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
+    from rapidsmpf.communicator.local import Communicator
     from rapidsmpf.streaming.core.leaf_node import DeferredMessages
 
     import polars as pl
@@ -87,45 +88,101 @@ def evaluate_logical_plan(
     # Lower the IR graph on the client process (for now).
     ir, partition_info, stats = lower_ir_graph(ir, config_options)
 
-    # Configure the context.
-    # TODO: Multi-GPU version will be different. The rest of this function
-    #       will be executed on each rank independently.
-    # TODO: Need a way to configure options specific to the rapidmspf engine.
+    return execute_query(
+        ir,
+        partition_info,
+        config_options,
+        stats,
+    )
+
+
+def execute_query(
+    ir: IR,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    config_options: ConfigOptions,
+    stats: StatsCollector,
+) -> pl.DataFrame:
+    """
+    Execute a query with the RapidsMPF streaming runtime.
+
+    Parameters
+    ----------
+    ir
+        The IR node.
+    partition_info
+        The partition information.
+    config_options
+        The configuration options.
+    stats
+        The statistics collector.
+
+    Returns
+    -------
+    The output DataFrame.
+    """
+    assert config_options.executor.name == "streaming", "Executor must be streaming"
+
+    # TODO: Try to find an existing rmpf_context on
+    # the current Dask worker.
+    rmpf_context: Context | None = None
+
+    # Create a local comm whether or not we are
+    # using "single" or "distributed" mode
     options = Options(get_environment_variables())
-    comm = new_communicator(options)
-    mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
-    rmm.mr.set_current_device_resource(mr)
-    memory_available: MutableMapping[MemoryType, LimitAvailableMemory] | None = None
-    single_spill_device = config_options.executor.client_device_threshold
-    if single_spill_device > 0.0 and single_spill_device < 1.0:
-        total_memory = rmm.mr.available_device_memory()[1]
-        memory_available = {
-            MemoryType.DEVICE: LimitAvailableMemory(
-                mr, limit=int(total_memory * single_spill_device)
-            )
-        }
+    local_comm = new_communicator(options)
 
-    # We have a couple of cases to consider here:
-    # 1: we want to use the same stream pool for cudf-polars and rapidsmpf
-    # 2: rapidsmpf uses its own pool and cudf-polars uses the default stream
-    if isinstance(config_options.cuda_stream_policy, CUDAStreamPoolConfig):
-        stream_pool = config_options.cuda_stream_policy.build()
-    else:
-        stream_pool = None
+    if rmpf_context is None:
+        # Using "single" mode.
+        # There was no context on the current worker,
+        # so we need to create a new (local) context.
 
-    br = BufferResource(mr, memory_available=memory_available, stream_pool=stream_pool)
-    rmpf_context = Context(comm, br, options)
+        # Create a new local RapidsMPF context
+        mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
+        rmm.mr.set_current_device_resource(mr)
+        memory_available: MutableMapping[MemoryType, LimitAvailableMemory] | None = None
+        single_spill_device = config_options.executor.client_device_threshold
+        if single_spill_device > 0.0 and single_spill_device < 1.0:
+            total_memory = rmm.mr.available_device_memory()[1]
+            memory_available = {
+                MemoryType.DEVICE: LimitAvailableMemory(
+                    mr, limit=int(total_memory * single_spill_device)
+                )
+            }
 
-    executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cpse")
+        # We have a couple of cases to consider here:
+        # 1: we want to use the same stream pool for cudf-polars and rapidsmpf
+        # 2: rapidsmpf uses its own pool and cudf-polars uses the default stream
+        if isinstance(config_options.cuda_stream_policy, CUDAStreamPoolConfig):
+            stream_pool = config_options.cuda_stream_policy.build()
+        else:
+            stream_pool = None
 
-    # Create the IR execution context.
-    if stream_pool is not None:
-        # both cudf-polars and rapidsmpf are using the same stream pool
-        ir_context = IRExecutionContext(
-            get_cuda_stream=rmpf_context.get_stream_from_pool
+        br = BufferResource(
+            mr, memory_available=memory_available, stream_pool=stream_pool
         )
+        rmpf_context = Context(local_comm, br, options)
+
+        # Create the IR execution context.
+        if stream_pool is not None:
+            # both cudf-polars and rapidsmpf are using the same stream pool
+            ir_context = IRExecutionContext(
+                get_cuda_stream=rmpf_context.get_stream_from_pool
+            )
+        else:
+            ir_context = IRExecutionContext.from_config_options(config_options)
+
     else:
-        ir_context = IRExecutionContext.from_config_options(config_options)
+        # Using "distributed" mode.
+        # We can use the existing rapidsmpf context, but we
+        # still need to create an IR execution context. It is
+        # too late to configure the stream pool, but we can still
+        # use it if "cuda_stream_policy" isn't a CUDAStreamPolicy.
+        if isinstance(config_options.cuda_stream_policy, CUDAStreamPolicy):
+            ir_context = IRExecutionContext.from_config_options(config_options)
+        else:
+            ir_context = IRExecutionContext(
+                get_cuda_stream=rmpf_context.get_stream_from_pool
+            )
 
     # Generate network nodes
     nodes, output = generate_network(
@@ -135,9 +192,11 @@ def evaluate_logical_plan(
         config_options,
         stats,
         ir_context=ir_context,
+        local_comm=local_comm,
     )
 
     # Run the network
+    executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cpse")
     run_streaming_pipeline(nodes=nodes, py_executor=executor)
 
     # Extract/return the concatenated result.
@@ -287,6 +346,7 @@ def generate_network(
     stats: StatsCollector,
     *,
     ir_context: IRExecutionContext,
+    local_comm: Communicator,
 ) -> tuple[list[Any], DeferredMessages]:
     """
     Translate the IR graph to a RapidsMPF streaming network.
@@ -305,6 +365,8 @@ def generate_network(
         Statistics collector.
     ir_context
         The execution context for the IR node.
+    local_comm
+        The local communicator.
 
     Returns
     -------
@@ -335,6 +397,7 @@ def generate_network(
         "ir_context": ir_context,
         "max_io_threads": max_io_threads_local,
         "stats": stats,
+        "local_comm": local_comm,
     }
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state

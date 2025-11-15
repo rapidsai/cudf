@@ -12,6 +12,7 @@ from cudf_polars.typing import GenericTransformer
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
+    from rapidsmpf.communicator.local import Communicator
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
@@ -75,6 +76,8 @@ class GenState(TypedDict):
         a single IO node.
     stats
         Statistics collector.
+    local_comm
+        The local communicator.
     """
 
     context: Context
@@ -84,6 +87,7 @@ class GenState(TypedDict):
     ir_context: IRExecutionContext
     max_io_threads: int
     stats: StatsCollector
+    local_comm: Communicator
 
 
 SubNetGenerator: TypeAlias = GenericTransformer[
