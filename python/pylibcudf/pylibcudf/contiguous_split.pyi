@@ -28,7 +28,7 @@ class ChunkedPack:
     def create(
         input: Table,
         user_buffer_size: int,
-        stream: Stream,
+        stream: Stream | None = None,
         temp_mr: DeviceMemoryResource | None = None,
     ) -> ChunkedPack: ...
     def has_next(self) -> bool: ...

@@ -6,7 +6,11 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pytest
 from pyarrow.parquet import read_table
-from utils import assert_table_and_meta_eq, get_bytes_from_source, make_source
+from utils import (
+    assert_table_and_meta_eq,
+    get_bytes_from_source,
+    make_source,
+)
 
 from rmm.pylibrmm.device_buffer import DeviceBuffer
 from rmm.pylibrmm.stream import Stream
@@ -184,7 +188,9 @@ def test_read_parquet_from_device_buffers(
         binary_source_or_sink, pa_table, **_COMMON_PARQUET_SOURCE_KWARGS
     )
 
-    buf = DeviceBuffer.to_device(get_bytes_from_source(source))
+    buf = DeviceBuffer.to_device(
+        get_bytes_from_source(source), plc.utils._get_stream(stream)
+    )
 
     options = plc.io.parquet.ParquetReaderOptions.builder(
         plc.io.SourceInfo([buf] * num_buffers)
