@@ -88,7 +88,7 @@ def evaluate_logical_plan(
     # Lower the IR graph on the client process (for now).
     ir, partition_info, stats = lower_ir_graph(ir, config_options)
 
-    return execute_query(
+    return evaluate_pipeline(
         ir,
         partition_info,
         config_options,
@@ -96,7 +96,7 @@ def evaluate_logical_plan(
     )
 
 
-def execute_query(
+def evaluate_pipeline(
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
