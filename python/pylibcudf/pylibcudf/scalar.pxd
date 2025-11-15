@@ -24,7 +24,7 @@ cdef class Scalar:
     cdef const scalar* get(self) noexcept nogil
 
     cpdef DataType type(self)
-    cpdef bool is_valid(self)
+    cpdef bool is_valid(self, Stream stream)
 
     @staticmethod
     cdef Scalar empty_like(Column column, Stream stream, DeviceMemoryResource mr)

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -9,11 +9,19 @@ import polars as pl
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
-@pytest.mark.parametrize("then_scalar", [False, True])
-@pytest.mark.parametrize("otherwise_scalar", [False, True])
-@pytest.mark.parametrize("expr", [pl.col("c"), pl.col("c").is_not_null()])
-def test_when_then(then_scalar, otherwise_scalar, expr):
-    ldf = pl.LazyFrame(
+@pytest.mark.parametrize(
+    "when",
+    [
+        pl.lit(value=True, dtype=pl.Boolean()),
+        pl.lit(value=False, dtype=pl.Boolean()),
+        pl.lit(None, dtype=pl.Boolean()),
+        pl.col("c"),
+    ],
+)
+@pytest.mark.parametrize("then", [pl.lit(10), pl.col("a")])
+@pytest.mark.parametrize("otherwise", [pl.lit(-2), pl.col("b")])
+def test_when_then(when, then, otherwise):
+    df = pl.LazyFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7],
             "b": [10, 13, 11, 15, 16, 11, 10],
@@ -21,7 +29,5 @@ def test_when_then(then_scalar, otherwise_scalar, expr):
         }
     )
 
-    then = pl.lit(10) if then_scalar else pl.col("a")
-    otherwise = pl.lit(-2) if otherwise_scalar else pl.col("b")
-    q = ldf.select(pl.when(expr).then(then).otherwise(otherwise))
+    q = df.select(pl.when(when).then(then).otherwise(otherwise))
     assert_gpu_result_equal(q)

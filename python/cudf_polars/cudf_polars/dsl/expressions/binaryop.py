@@ -100,7 +100,7 @@ class BinOp(Expr):
         }:
             if (
                 right.obj.size() == 1
-                and right.obj.to_scalar(stream=df.stream).to_py() == 0
+                and right.obj.to_scalar(stream=df.stream).to_py(stream=df.stream) == 0
             ):
                 return Column(
                     plc.Column.all_null_like(

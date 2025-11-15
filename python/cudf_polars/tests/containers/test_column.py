@@ -52,9 +52,9 @@ def test_obj_scalar_caching():
         plc.Column.from_iterable_of_py([1], dtype.plc_type),
         dtype=dtype,
     )
-    assert column.obj_scalar(stream=stream).to_py() == 1
+    assert column.obj_scalar(stream=stream).to_py(stream=stream) == 1
     # test caching behavior
-    assert column.obj_scalar(stream=stream).to_py() == 1
+    assert column.obj_scalar(stream=stream).to_py(stream=stream) == 1
 
 
 def test_check_sorted():
