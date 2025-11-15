@@ -4,11 +4,6 @@
 
 set -euo pipefail
 
-# It is essential to cd into python/pylibcudf/pylibcudf as `pytest-xdist` + `coverage` seem to work only at this directory level.
-
-# Support invoking run_cudf_pytests.sh outside the script directory
-cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/pylibcudf/
-
 # Find the libcudf_identify_stream_usage_mode_testing.so library
 TESTING_LIB=$(python3 <<'EOF'
 import os
@@ -37,6 +32,12 @@ else:
     print("")
 EOF
 )
+
+# It is essential to cd into python/pylibcudf/pylibcudf as `pytest-xdist` + `coverage` seem to work only at this directory level.
+# Do this after determining TESTING_LIB to avoid import path issues
+
+# Support invoking run_cudf_pytests.sh outside the script directory
+cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/pylibcudf/
 
 if [ -n "$TESTING_LIB" ] && [ -f "$TESTING_LIB" ]; then
     # If the stream testing library was found, split the tests into two passes.
