@@ -16,7 +16,7 @@ rapids-generate-version > ./python/cudf/cudf/VERSION
 
 cd "${package_dir}"
 
-sccache --zero-stats
+sccache --stop-server 2>/dev/null || true
 
 rapids-logger "Building '${package_name}' wheel"
 rapids-telemetry-record build-${package_name}.log rapids-pip-retry wheel \
