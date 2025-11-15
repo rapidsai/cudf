@@ -5,7 +5,7 @@
 set -euo pipefail
 
 # Find the libcudf_identify_stream_usage_mode_testing.so library
-TESTING_LIB=$(python3 <<'EOF'
+TESTING_LIB=$(python <<'EOF'
 import os
 
 # Import pylibcudf to ensure libcudf.so is loaded
