@@ -42,7 +42,5 @@ cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/pylibcudf/
 if [ -n "$TESTING_LIB" ] && [ -f "$TESTING_LIB" ]; then
     # If the stream testing library was found, split the tests into two passes.
     LD_PRELOAD="$TESTING_LIB" PYLIBCUDF_STREAM_TESTING=1 pytest --cache-clear -m "not uses_custom_stream" --ignore="benchmarks" "$@" tests
-    pytest --cache-clear -m "uses_custom_stream" --ignore="benchmarks" "$@" tests
-else
-    pytest --cache-clear --ignore="benchmarks" "$@" tests
 fi
+pytest --cache-clear --ignore="benchmarks" "$@" tests
