@@ -28,7 +28,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        tool_name: ["memcheck", "synccheck", "racecheck"]
+        tool_name: ["memcheck", "racecheck", "initcheck", "synccheck"]
         test_name: ${{ fromJson(needs.discover-sanitizer-tests.outputs.tests) }}
     steps:
       - name: Checkout code
