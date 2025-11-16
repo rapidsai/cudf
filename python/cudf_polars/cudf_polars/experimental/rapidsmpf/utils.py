@@ -11,11 +11,10 @@ from dataclasses import dataclass
 from functools import reduce
 from typing import TYPE_CHECKING, Any, TypeAlias
 
-from rapidsmpf.streaming.core.channel import Channel
-
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
+    from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
@@ -75,24 +74,29 @@ class ChannelPair:
     data: Channel[TableChunk]
 
     @classmethod
-    def create(cls) -> ChannelPair:
+    def create(cls, context: Context) -> ChannelPair:
         """Create a new ChannelPair with fresh channels."""
-        return cls(metadata=Channel(), data=Channel())
+        return cls(
+            metadata=context.create_channel(),
+            data=context.create_channel(),
+        )
 
 
 class ChannelManager:
     """A utility class for managing ChannelPair objects."""
 
-    def __init__(self, *, count: int = 1):
+    def __init__(self, context: Context, *, count: int = 1):
         """
         Initialize the ChannelManager with a given number of ChannelPair slots.
 
         Parameters
         ----------
+        context
+            The rapidsmpf context.
         count: int
             The number of ChannelPair slots to allocate.
         """
-        self._channel_slots = [ChannelPair.create() for _ in range(count)]
+        self._channel_slots = [ChannelPair.create(context) for _ in range(count)]
         self._reserved_output_slots: int = 0
         self._reserved_input_slots: int = 0
 

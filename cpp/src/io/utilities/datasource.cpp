@@ -426,6 +426,35 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
   } else if (use_memory_mapping) {
     return std::make_unique<memory_mapped_source>(filepath.c_str(), offset, max_size_estimate);
   } else {
+    // Reroute I/O: If the following two env vars are specified, the filepath for an existing local
+    // file will be modified (only in-memory, not affecting the original file) such that the first
+    // occurrence of local_dir_pattern is replaced by remote_dir_pattern, and a remote file resource
+    // will be used instead of a local file resource.
+    //
+    // For example, let "LIBCUDF_IO_REROUTE_LOCAL_DIR_PATTERN" be "/mnt/nvme/tmp", and
+    // "LIBCUDF_IO_REROUTE_REMOTE_DIR_PATTERN" be
+    // "http://example.com:9870/webhdfs/v1/home/ubuntu/data". If a local file with the name
+    // "/mnt/nvme/tmp/test.bin" exists, libcudf will create a remote file resource with the URL
+    // "http://example.com:9870/webhdfs/v1/home/ubuntu/data/test.bin"
+    //
+    // This feature can be used as a workaround for PDS-H benchmark using WebHDFS without the need
+    // for upstream Polars change.
+    auto* local_dir_pattern  = std::getenv("LIBCUDF_IO_REROUTE_LOCAL_DIR_PATTERN");
+    auto* remote_dir_pattern = std::getenv("LIBCUDF_IO_REROUTE_REMOTE_DIR_PATTERN");
+
+    if (local_dir_pattern != nullptr and remote_dir_pattern != nullptr) {
+      auto remote_file_path = std::regex_replace(filepath,
+                                                 std::regex{local_dir_pattern},
+                                                 remote_dir_pattern,
+                                                 std::regex_constants::format_first_only);
+
+      // Create a remote file resource only when the pattern is found and replaced; otherwise, still
+      // create a local file resource
+      if (filepath != remote_file_path) {
+        return std::make_unique<remote_file_source>(remote_file_path.c_str());
+      }
+    }
+
     // `file_source` reads the file directly, without memory mapping
     return std::make_unique<file_source>(filepath.c_str());
   }

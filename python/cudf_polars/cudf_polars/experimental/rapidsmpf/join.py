@@ -58,7 +58,11 @@ async def get_small_table(
     """
     small_chunks = []
     while (msg := await ch_small.data.recv(context)) is not None:
-        small_chunks.append(TableChunk.from_message(msg))
+        small_chunks.append(
+            TableChunk.from_message(msg).make_available_and_spill(
+                context.br(), allow_overbooking=True
+            )
+        )
     assert small_chunks, "Empty small side"
 
     return [
@@ -124,7 +128,9 @@ async def broadcast_join_node(
 
         # Stream through large side, joining with the small-side
         while (msg := await large_ch.data.recv(context)) is not None:
-            large_chunk = TableChunk.from_message(msg)
+            large_chunk = TableChunk.from_message(msg).make_available_and_spill(
+                context.br(), allow_overbooking=True
+            )
             seq_num = msg.sequence_number
             large_df = DataFrame.from_table(
                 large_chunk.table_view(),
@@ -190,7 +196,7 @@ def _(ir: Join, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
     nodes, channels = process_children(ir, rec)
 
     # Create output ChannelManager
-    channels[ir] = ChannelManager()
+    channels[ir] = ChannelManager(rec.state["context"])
 
     if pwise_join:
         # Partition-wise join (use default_node_multi)

@@ -12,8 +12,8 @@
 #include <cudf/utilities/pinned_memory.hpp>
 
 #include <rmm/cuda_device.hpp>
-#include <rmm/mr/device/pool_memory_resource.hpp>
 #include <rmm/mr/pinned_host_memory_resource.hpp>
+#include <rmm/mr/pool_memory_resource.hpp>
 
 #include <algorithm>
 #include <atomic>
@@ -48,22 +48,22 @@ class fixed_pinned_pool_memory_resource {
     CUDF_LOG_INFO("Pinned pool size = %zu", pool_size_);
 
     // Allocate full size from the pinned pool to figure out the beginning and end address
-    pool_begin_ = pool_->allocate_async(pool_size_, stream_);
+    pool_begin_ = pool_->allocate(stream_, pool_size_);
     pool_end_   = static_cast<void*>(static_cast<uint8_t*>(pool_begin_) + pool_size_);
-    pool_->deallocate_async(pool_begin_, pool_size_, stream_);
+    pool_->deallocate(stream_, pool_begin_, pool_size_);
   }
 
   void* allocate_async(std::size_t bytes, std::size_t alignment, cuda::stream_ref stream)
   {
     if (bytes <= pool_size_) {
       try {
-        return pool_->allocate_async(bytes, alignment, stream);
+        return pool_->allocate(stream, bytes, alignment);
       } catch (...) {
         // If the pool is exhausted, fall back to the upstream memory resource
       }
     }
 
-    return upstream_mr_.allocate_async(bytes, alignment, stream);
+    return upstream_mr_.allocate(stream, bytes, alignment);
   }
 
   void* allocate_async(std::size_t bytes, cuda::stream_ref stream)
@@ -84,9 +84,9 @@ class fixed_pinned_pool_memory_resource {
                         cuda::stream_ref stream) noexcept
   {
     if (bytes <= pool_size_ && ptr >= pool_begin_ && ptr < pool_end_) {
-      pool_->deallocate_async(ptr, bytes, alignment, stream);
+      pool_->deallocate(stream, ptr, bytes, alignment);
     } else {
-      upstream_mr_.deallocate_async(ptr, bytes, alignment, stream);
+      upstream_mr_.deallocate(stream, ptr, bytes, alignment);
     }
   }
 

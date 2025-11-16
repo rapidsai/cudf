@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "common.hpp"
@@ -13,7 +13,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <rmm/mr/device/statistics_resource_adaptor.hpp>
+#include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <chrono>
 #include <iostream>

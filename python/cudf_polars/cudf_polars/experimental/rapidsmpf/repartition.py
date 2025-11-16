@@ -68,8 +68,11 @@ async def concatenate_node(
                 msg = await ch_in.data.recv(context)
                 if msg is None:
                     break
-                chunk = TableChunk.from_message(msg)
-                chunks.append(chunk)
+                chunks.append(
+                    TableChunk.from_message(msg).make_available_and_spill(
+                        context.br(), allow_overbooking=True
+                    )
+                )
 
             # Process collected chunks
             if chunks:
@@ -132,7 +135,7 @@ def _(
     nodes, channels = rec(ir.children[0])
 
     # Create output ChannelManager
-    channels[ir] = ChannelManager()
+    channels[ir] = ChannelManager(rec.state["context"])
 
     # Add python node
     nodes.append(
