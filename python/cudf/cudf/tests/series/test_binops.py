@@ -3077,15 +3077,10 @@ def test_eq_ne_non_comparable_types(
 ):
     left_data = left_data.copy()
     expected_data = expected_data.copy()
-    # if with_na:
-    #     left_data[0] = None
     left = cudf.Series(left_data)
     right = cudf.Series(right_data)
     result = op(left, right)
-    # if with_na:
-    #     expected_data[0] = None
     expected = cudf.Series(expected_data)
-    # import pdb;pdb.set_trace()
     assert_eq(result, expected)
 
 
