@@ -1146,7 +1146,11 @@ def test_series_compare_scalar(
     request.applymarker(
         pytest.mark.xfail(
             numeric_and_temporal_types_as_str
-            in {"datetime64[ns]", "timedelta64[ns]"},
+            in {"datetime64[ns]", "timedelta64[ns]"}
+            and not (
+                numeric_and_temporal_types_as_str == "datetime64[ns]"
+                and comparison_op in {operator.eq, operator.ne}
+            ),
             reason=f"Fails with {numeric_and_temporal_types_as_str}",
         )
     )
