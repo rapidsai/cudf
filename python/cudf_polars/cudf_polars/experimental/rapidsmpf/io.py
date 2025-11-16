@@ -558,6 +558,9 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
     num_producers = rec.state["max_io_threads"]
     channels: dict[IR, ChannelManager] = {ir: ChannelManager(rec.state["context"])}
 
+    assert partition_info.io_plan is not None, "Scan node must have a partition plan"
+    plan: IOPartitionPlan = partition_info.io_plan
+
     # Use rapidsmpf native read_parquet for multi-partition Parquet scans.
     ch_pair = channels[ir].reserve_input_slot()
     nodes: list[Any]
@@ -579,16 +582,18 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
             partition_info,
         )
 
+    # Native node cannot split large files in distributed mode yet
+    if (
+        config_options.executor.cluster == "distributed"
+        and plan.flavor == IOPartitionFlavor.SPLIT_FILES
+    ):
+        native_node = None
+
     if native_node is not None:
         nodes = [native_node]
     else:
         # Fall back to scan_node (predicate not convertible, or other constraint)
-        assert partition_info.io_plan is not None, (
-            "Scan node must have a partition plan"
-        )
-        plan: IOPartitionPlan = partition_info.io_plan
-        if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
-            parquet_options = dataclasses.replace(parquet_options, chunked=False)
+        parquet_options = dataclasses.replace(parquet_options, chunked=False)
 
         nodes = [
             scan_node(

@@ -7,8 +7,6 @@ from __future__ import annotations
 import threading
 from typing import TYPE_CHECKING, Any, Literal
 
-from rapidsmpf.communicator.single import new_communicator
-from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.integrations.cudf.partition import (
     partition_and_pack as py_partition_and_pack,
     unpack_and_concat as py_unpack_and_concat,
@@ -30,6 +28,7 @@ from cudf_polars.experimental.shuffle import Shuffle
 if TYPE_CHECKING:
     from types import TracebackType
 
+    from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.context import Context
 
     import pylibcudf as plc
@@ -75,6 +74,8 @@ class LocalShuffle:
     ----------
     context: Context
         The streaming context.
+    local_comm: Communicator
+        The local communicator.
     num_partitions: int
         The number of partitions to shuffle into.
     columns_to_hash: tuple[int, ...]
@@ -84,10 +85,12 @@ class LocalShuffle:
     def __init__(
         self,
         context: Context,
+        local_comm: Communicator,
         num_partitions: int,
         columns_to_hash: tuple[int, ...],
     ):
         self.context = context
+        self.local_comm = local_comm
         self.br = context.br()
         self.num_partitions = num_partitions
         self.columns_to_hash = columns_to_hash
@@ -97,10 +100,9 @@ class LocalShuffle:
         """Enter the local shuffle instance context manager."""
         self.op_id = _get_new_shuffle_id()
         statistics = self.context.statistics()
-        comm = new_communicator(Options(get_environment_variables()))
-        progress_thread = ProgressThread(comm, statistics)
+        progress_thread = ProgressThread(self.local_comm, statistics)
         self.shuffler = Shuffler(
-            comm=comm,
+            comm=self.local_comm,
             progress_thread=progress_thread,
             op_id=self.op_id,
             total_num_partitions=self.num_partitions,
@@ -174,6 +176,7 @@ async def local_shuffle_node(
     context: Context,
     ir: Shuffle,
     ir_context: IRExecutionContext,
+    local_comm: Communicator,
     ch_in: ChannelPair,
     ch_out: ChannelPair,
     columns_to_hash: tuple[int, ...],
@@ -194,6 +197,8 @@ async def local_shuffle_node(
         The Shuffle IR node.
     ir_context
         The execution context for the IR node.
+    local_comm
+        The local communicator.
     ch_in
         Input ChannelPair with metadata and data channels.
     ch_out
@@ -208,7 +213,9 @@ async def local_shuffle_node(
     ):
         # Create LocalShuffle context manager to handle shuffler lifecycle
         # TODO: Use ir_context to get the stream (not available yet)
-        with LocalShuffle(context, num_partitions, columns_to_hash) as local_shuffle:
+        with LocalShuffle(
+            context, local_comm, num_partitions, columns_to_hash
+        ) as local_shuffle:
             # Process input chunks
             while True:
                 msg = await ch_in.data.recv(context)
@@ -267,6 +274,7 @@ def _(ir: Shuffle, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelMan
             context,
             ir,
             rec.state["ir_context"],
+            rec.state["local_comm"],
             ch_in=channels[child].reserve_output_slot(),
             ch_out=channels[ir].reserve_input_slot(),
             columns_to_hash=columns_to_hash,
