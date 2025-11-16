@@ -1911,12 +1911,17 @@ class Series(SingleColumnFrame, IndexedFrame):
         bool_only: bool | None = None,
         skipna: bool = True,
         **kwargs,
-    ) -> bool:
+    ) -> bool | np.bool_:
         if bool_only not in (None, True):
             raise NotImplementedError(
                 "The bool_only parameter is not supported for Series."
             )
-        return super().all(axis, skipna, **kwargs)
+        result = super().all(axis, skipna, **kwargs)
+        if cudf.get_option("mode.pandas_compatible") and isinstance(
+            result, bool
+        ):
+            return np.bool_(result)
+        return result
 
     @_performance_tracking
     def any(
