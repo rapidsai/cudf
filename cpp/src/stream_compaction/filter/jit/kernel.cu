@@ -31,10 +31,6 @@ CUDF_KERNEL void kernel(cudf::jit::device_optional_span<typename Out::type> cons
                         cudf::column_device_view_core const* inputs,
                         void* user_data)
 {
-  using index_type = typename Out::type;
-
-  static constexpr index_type NOT_APPLIED = -1;
-
   auto const start  = cudf::detail::grid_1d::global_thread_id();
   auto const stride = cudf::detail::grid_1d::grid_stride();
   auto const output = outputs[0].to_span();
@@ -61,7 +57,7 @@ CUDF_KERNEL void kernel(cudf::jit::device_optional_span<typename Out::type> cons
       }
     }
 
-    output[i] = applies ? static_cast<index_type>(i) : NOT_APPLIED;
+    output[i] = applies;
   }
 }
 
