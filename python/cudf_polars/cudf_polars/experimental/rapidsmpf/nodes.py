@@ -7,8 +7,10 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any, cast
 
+from rapidsmpf.buffer.buffer import MemoryType
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.node import define_py_node
+from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 from cudf_polars.containers import DataFrame
@@ -242,14 +244,15 @@ async def fanout_node_unbounded(
     *chs_out: ChannelPair,
 ) -> None:
     """
-    Unbounded fanout node for rapidsmpf.
+    Unbounded fanout node for rapidsmpf with spilling support.
 
     Broadcasts chunks from input to all output channels. This is called
     "unbounded" because it handles the case where one channel may consume
     all data before another channel consumes any data.
 
-    The implementation uses adaptive sending:
-    - Maintains a FIFO buffer for each output channel
+    The implementation uses adaptive sending with spillable buffers:
+    - Maintains a spillable FIFO buffer for each output channel
+    - Messages are buffered in host memory (spillable to disk)
     - Sends to all channels concurrently
     - Receives next chunk as soon as any channel makes progress
     - Efficient for both balanced and imbalanced consumption patterns
@@ -266,102 +269,149 @@ async def fanout_node_unbounded(
     # TODO: Use rapidsmpf fanout node once available.
     # See: https://github.com/rapidsai/rapidsmpf/issues/560
     async with shutdown_on_error(context, ch_in.data, *[ch.data for ch in chs_out]):
-        # FIFO buffer for each output channel
-        output_buffers: list[list[Message]] = [[] for _ in chs_out]
+        # Spillable FIFO buffer for each output channel
+        output_buffers: list[SpillableMessages] = [SpillableMessages() for _ in chs_out]
 
-        # Track active send/drain tasks for each output
-        active_tasks: dict[int, asyncio.Task] = {}
+        # Track message IDs in FIFO order for each output buffer
+        buffer_ids: list[list[int]] = [[] for _ in chs_out]
 
-        # Track which outputs need to be drained (set when no more input)
-        needs_drain: set[int] = set()
+        # Register spill functions for each buffer
+        spill_func_ids: list[int] = []
+        for idx, sm in enumerate(output_buffers):
 
-        # Receive task
-        recv_task: asyncio.Task | None = asyncio.create_task(ch_in.data.recv(context))
+            def make_spill_func(sm_ref: SpillableMessages, idx_ref: int) -> Any:
+                """Create a spill function for a specific buffer."""
 
-        # Flag to indicate we should start a new receive (for backpressure)
-        can_receive: bool = True
+                def spill_func(amount: int) -> int:
+                    """Spill messages from the buffer to free device/host memory."""
+                    spilled = 0
+                    # Get all content descriptions sorted by message ID (FIFO)
+                    descs = sm_ref.get_content_descriptions()
+                    sorted_mids = sorted(descs.keys())
 
-        async def send_one_from_buffer(idx: int) -> None:
-            """Send one buffered message for output idx."""
-            if output_buffers[idx]:
-                msg = output_buffers[idx].pop(0)
-                await chs_out[idx].data.send(context, msg)
+                    for mid in sorted_mids:
+                        if spilled >= amount:
+                            break
+                        # Try to spill this message
+                        spilled += sm_ref.spill(mid=mid, br=context.br())
+                    return spilled
 
-        async def drain_output(idx: int) -> None:
-            """Drain output channel idx."""
-            await chs_out[idx].data.drain(context)
+                return spill_func
 
-        # Main loop: coordinate receiving, sending, and draining
-        while (
-            recv_task is not None or active_tasks or any(output_buffers) or needs_drain
-        ):
-            # Collect all currently active tasks
-            tasks_to_wait = list(active_tasks.values())
-            # Only include recv_task if we're allowed to receive
-            if recv_task is not None and can_receive:
-                tasks_to_wait.append(recv_task)
+            func_id = context.br().spill_manager.add_spill_function(
+                make_spill_func(sm, idx),
+                priority=0,  # Priority 0 - adjust if needed
+            )
+            spill_func_ids.append(func_id)
 
-            # Start new tasks for outputs with work to do
-            for idx in range(len(chs_out)):
-                if idx not in active_tasks:
-                    if output_buffers[idx]:
-                        # Send next buffered message
-                        task = asyncio.create_task(send_one_from_buffer(idx))
-                        active_tasks[idx] = task
-                        tasks_to_wait.append(task)
-                    elif idx in needs_drain:
-                        # Buffer empty and no more input - drain this output
-                        task = asyncio.create_task(drain_output(idx))
-                        active_tasks[idx] = task
-                        tasks_to_wait.append(task)
-                        needs_drain.discard(idx)
+        try:
+            # Track active send/drain tasks for each output
+            active_tasks: dict[int, asyncio.Task] = {}
 
-            # If nothing to wait for, we're done
-            if not tasks_to_wait:
-                break
+            # Track which outputs need to be drained (set when no more input)
+            needs_drain: set[int] = set()
 
-            # Wait for ANY task to complete
-            done, _ = await asyncio.wait(
-                tasks_to_wait, return_when=asyncio.FIRST_COMPLETED
+            # Receive task
+            recv_task: asyncio.Task | None = asyncio.create_task(
+                ch_in.data.recv(context)
             )
 
-            # Process completed tasks
-            for task in done:
-                if task is recv_task:
-                    # Receive completed
-                    msg = task.result()
-                    if msg is None:
-                        # End of input - mark all outputs as needing drain
-                        recv_task = None
-                        needs_drain.update(range(len(chs_out)))
-                    else:
-                        # Add message to all output buffers
-                        chunk = TableChunk.from_message(msg).make_available_and_spill(
-                            context.br(), allow_overbooking=True
-                        )
-                        seq_num = msg.sequence_number
-                        for buffer in output_buffers:
-                            message = Message(
-                                seq_num,
-                                TableChunk.from_pylibcudf_table(
-                                    chunk.table_view(),
-                                    chunk.stream,
-                                    exclusive_view=False,
-                                ),
-                            )
-                            buffer.append(message)
+            # Flag to indicate we should start a new receive (for backpressure)
+            can_receive: bool = True
 
-                        # Don't receive next chunk until at least one send completes
-                        can_receive = False
-                        recv_task = asyncio.create_task(ch_in.data.recv(context))
-                else:
-                    # Must be a send or drain task - find which output and remove it
-                    for idx, at in list(active_tasks.items()):
-                        if at is task:
-                            del active_tasks[idx]
-                            # A send completed - allow receiving again
-                            can_receive = True
-                            break
+            async def send_one_from_buffer(idx: int) -> None:
+                """
+                Send one buffered message for output idx.
+
+                The message remains in host memory (spillable) through the channel.
+                The downstream consumer will call make_available() when needed.
+                """
+                if buffer_ids[idx]:
+                    mid = buffer_ids[idx].pop(0)
+                    msg = output_buffers[idx].extract(mid=mid)
+                    await chs_out[idx].data.send(context, msg)
+
+            async def drain_output(idx: int) -> None:
+                """Drain output channel idx."""
+                await chs_out[idx].data.drain(context)
+
+            # Main loop: coordinate receiving, sending, and draining
+            while (
+                recv_task is not None or active_tasks or any(buffer_ids) or needs_drain
+            ):
+                # Collect all currently active tasks
+                tasks_to_wait = list(active_tasks.values())
+                # Only include recv_task if we're allowed to receive
+                if recv_task is not None and can_receive:
+                    tasks_to_wait.append(recv_task)
+
+                # Start new tasks for outputs with work to do
+                for idx in range(len(chs_out)):
+                    if idx not in active_tasks:
+                        if buffer_ids[idx]:
+                            # Send next buffered message
+                            task = asyncio.create_task(send_one_from_buffer(idx))
+                            active_tasks[idx] = task
+                            tasks_to_wait.append(task)
+                        elif idx in needs_drain:
+                            # Buffer empty and no more input - drain this output
+                            task = asyncio.create_task(drain_output(idx))
+                            active_tasks[idx] = task
+                            tasks_to_wait.append(task)
+                            needs_drain.discard(idx)
+
+                # If nothing to wait for, we're done
+                if not tasks_to_wait:
+                    break
+
+                # Wait for ANY task to complete
+                done, _ = await asyncio.wait(
+                    tasks_to_wait, return_when=asyncio.FIRST_COMPLETED
+                )
+
+                # Process completed tasks
+                for task in done:
+                    if task is recv_task:
+                        # Receive completed
+                        msg = task.result()
+                        if msg is None:
+                            # End of input - mark all outputs as needing drain
+                            recv_task = None
+                            needs_drain.update(range(len(chs_out)))
+                        else:
+                            # Copy message to host memory for each output buffer
+                            # This makes the buffered messages spillable and allows
+                            # them to remain in host memory through the channel
+                            for idx, sm in enumerate(output_buffers):
+                                # Reserve host memory for the copy
+                                copy_cost = msg.copy_cost()
+                                res, _ = context.br().reserve(
+                                    MemoryType.HOST,
+                                    copy_cost,
+                                    allow_overbooking=True,
+                                )
+                                # Copy to host memory (can copy from device or host)
+                                host_msg = msg.copy(res)
+                                # Insert into spillable buffer and track the ID
+                                mid = sm.insert(host_msg)
+                                buffer_ids[idx].append(mid)
+
+                            # Don't receive next chunk until at least one send completes
+                            can_receive = False
+                            recv_task = asyncio.create_task(ch_in.data.recv(context))
+                    else:
+                        # Must be a send or drain task - find which output and remove it
+                        for idx, at in list(active_tasks.items()):
+                            if at is task:
+                                del active_tasks[idx]
+                                # A send completed - allow receiving again
+                                can_receive = True
+                                break
+
+        finally:
+            # Clean up spill function registrations
+            for func_id in spill_func_ids:
+                context.br().spill_manager.remove_spill_function(func_id)
 
 
 @generate_ir_sub_network.register(IR)
