@@ -1170,7 +1170,7 @@ def select_columns_params():
                 {"a": None, "b": None},
                 {"a": 15, "b": None},
             ],
-            [["struct"], ["struct.a"], ["struct.b"]],
+            [["struct"], ["struct.a"], ["struct.b"], ["c"]],
         ),
         # struct-of-list
         (
@@ -1233,10 +1233,7 @@ def test_parquet_reader_struct_select_columns(data, columns):
     pa.parquet.write_table(table, buff)
 
     expect = pq.ParquetFile(buff).read(columns=columns)
-    got = cudf.read_parquet(
-        buff,
-        columns=columns,
-    )
+    got = cudf.read_parquet(buff, columns=columns)
     assert_arrow_table_equal(expect, got.to_arrow())
 
 
