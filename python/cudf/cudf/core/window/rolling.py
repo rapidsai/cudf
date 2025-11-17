@@ -13,7 +13,11 @@ from pandas.api.indexers import BaseIndexer
 
 import pylibcudf as plc
 
-from cudf.api.types import is_integer, is_number, is_scalar
+from cudf.api.types import (
+    is_integer,
+    is_number,
+    is_scalar,
+)
 from cudf.core._internals import aggregation
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
@@ -24,6 +28,8 @@ from cudf.options import get_option
 from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from typing_extensions import Self
 
     from cudf.core.dataframe import DataFrame
@@ -346,17 +352,23 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             )
 
     def _apply_agg_column(
-        self, source_column: ColumnBase, agg_name: str, **agg_kwargs
+        self, source_column: ColumnBase, agg_name: str | Callable, **agg_kwargs
     ) -> ColumnBase:
         pre, fwd = self._plc_windows
+
         rolling_agg = aggregation.make_aggregation(
             agg_name,
-            {"dtype": source_column.dtype}
+            {
+                "dtype": np.dtype("float64")
+                if get_option("mode.pandas_compatible")
+                else source_column.dtype
+            }
             if callable(agg_name)
             else agg_kwargs,
         ).plc_obj
+
         with acquire_spill_lock():
-            return ColumnBase.from_pylibcudf(
+            col = ColumnBase.from_pylibcudf(
                 plc.rolling.rolling_window(
                     source_column.plc_column,
                     pre,
@@ -365,6 +377,10 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                     rolling_agg,
                 )
             )
+
+        if isinstance(agg_name, str) and get_option("mode.pandas_compatible"):
+            return col.astype(np.dtype("float64"))
+        return col
 
     def _reduce(
         self,
@@ -424,6 +440,11 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             Return type is the same as the original object.
         """
         return self._apply_agg("count")
+
+    def median(self, **kwargs):
+        raise NotImplementedError(
+            "groupby().rolling().median() is not yet implemented"
+        )
 
     def apply(self, func, *args, **kwargs) -> DataFrame | Series:
         """
@@ -496,6 +517,12 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                 "Handling UDF with null values is not yet supported"
             )
         return self._apply_agg(func)
+
+    def aggregate(self, func, *args, **kwargs) -> DataFrame | Series:
+        raise NotImplementedError("rolling.aggregate() is not yet implemented")
+
+    # agg is an alias for aggregate
+    agg = aggregate
 
     def _normalize_window_and_min_periods(
         self, window, min_periods
