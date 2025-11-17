@@ -158,7 +158,7 @@ cdef class Scalar:
     def to_arrow(
         self,
         metadata: list[ColumnMetadata] | str | None = None,
-        stream: Stream = None,
+        stream: Stream | None = None,
     ) -> ArrowLike:
         """Create a PyArrow array from a pylibcudf scalar.
 

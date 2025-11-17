@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Mapping, Sequence
@@ -44,7 +44,7 @@ class ChunkedParquetReader:
     def __init__(
         self,
         options: ParquetReaderOptions,
-        stream: Stream = None,
+        stream: Stream | None = None,
         chunk_read_limit: int = 0,
         pass_read_limit: int = 1024000000,
     ) -> None: ...
@@ -53,7 +53,7 @@ class ChunkedParquetReader:
 
 def read_parquet(
     options: ParquetReaderOptions,
-    stream: Stream = None,
+    stream: Stream | None = None,
     mr: DeviceMemoryResource = None,
 ) -> TableWithMetadata: ...
 
@@ -91,7 +91,7 @@ class ParquetWriterOptionsBuilder:
     def build(self) -> ParquetWriterOptions: ...
 
 def write_parquet(
-    options: ParquetWriterOptions, stream: Stream = None
+    options: ParquetWriterOptions, stream: Stream | None = None
 ) -> memoryview: ...
 def is_supported_read_parquet(compression: CompressionType) -> bool: ...
 def is_supported_write_parquet(compression: CompressionType) -> bool: ...
@@ -102,7 +102,7 @@ class ChunkedParquetWriter:
     def write(self, table: Table, partitions_info: object = None) -> None: ...
     @staticmethod
     def from_options(
-        options: ChunkedParquetWriterOptions, stream: Stream = None
+        options: ChunkedParquetWriterOptions, stream: Stream | None = None
     ) -> ChunkedParquetWriter: ...
 
 class ChunkedParquetWriterOptions:
