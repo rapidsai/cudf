@@ -42,6 +42,11 @@ __device__ void find_local_mapping(cooperative_groups::thread_block const& block
         auto const ref_cardinality =
           cuda::atomic_ref<size_type, cuda::thread_scope_block>{*cardinality};
         auto const shared_set_index = ref_cardinality.fetch_add(1, cuda::std::memory_order_relaxed);
+
+        // The value of shared_set_index is before increment, thus we will have the
+        // cardinality exceeded its threshold value.
+        if (shared_set_index >= GROUPBY_CARDINALITY_THRESHOLD) { return cuda::std::pair{0, true}; }
+
         shared_set_indices[shared_set_index] = idx;
         local_mapping_indices[idx]           = shared_set_index;
       }
@@ -71,7 +76,7 @@ __device__ void find_global_mapping(cooperative_groups::thread_block const& bloc
     auto const input_idx = shared_set_indices[idx];
     auto const key_idx   = *global_set.insert_and_find(input_idx).first;
 
-    global_mapping_indices[block.group_index().x * GROUPBY_SHM_MAX_ELEMENTS + idx] = key_idx;
+    global_mapping_indices[block.group_index().x * GROUPBY_CARDINALITY_THRESHOLD + idx] = key_idx;
   }
 }
 
@@ -90,7 +95,7 @@ CUDF_KERNEL void mapping_indices_kernel(size_type num_input_rows,
                                         size_type* global_mapping_indices,
                                         size_type* block_cardinality)
 {
-  __shared__ size_type shared_set_indices[GROUPBY_SHM_MAX_ELEMENTS];
+  __shared__ size_type shared_set_indices[GROUPBY_CARDINALITY_THRESHOLD];
 
   // Shared set initialization
   __shared__ size_type slots[valid_extent.value()];
@@ -126,12 +131,12 @@ CUDF_KERNEL void mapping_indices_kernel(size_type num_input_rows,
                        shared_set_indices);
 
     block.sync();
-    if (cardinality >= GROUPBY_CARDINALITY_THRESHOLD) { break; }
+    if (cardinality > GROUPBY_CARDINALITY_THRESHOLD) { break; }
   }
 
   // Insert unique keys from shared to global hash set if block-cardinality
   // doesn't exceed the threshold upper-limit
-  if (cardinality < GROUPBY_CARDINALITY_THRESHOLD) {
+  if (cardinality <= GROUPBY_CARDINALITY_THRESHOLD) {
     find_global_mapping(block, cardinality, global_set, shared_set_indices, global_mapping_indices);
   }
 

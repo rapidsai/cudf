@@ -145,7 +145,7 @@ __device__ void compute_final_aggregations(cooperative_groups::thread_block cons
   // Aggregates shared memory sources to global memory targets
   for (auto idx = block.thread_rank(); idx < num_agg_locations; idx += block.num_threads()) {
     auto const target_idx =
-      global_mapping_index[(block.group_index().x * GROUPBY_SHM_MAX_ELEMENTS) +
+      global_mapping_index[(block.group_index().x * GROUPBY_CARDINALITY_THRESHOLD) +
                            (idx % cardinality)];
     for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
       auto target_col = target.column(col_idx);

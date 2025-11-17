@@ -79,7 +79,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   // Maps from the global row index of the input table to its block-wise rank.
   rmm::device_uvector<size_type> local_mapping_indices(num_rows, stream);
   // Maps from the block-wise rank to the row index of result table.
-  rmm::device_uvector<size_type> global_mapping_indices(grid_size * GROUPBY_SHM_MAX_ELEMENTS,
+  rmm::device_uvector<size_type> global_mapping_indices(grid_size * GROUPBY_CARDINALITY_THRESHOLD,
                                                         stream);
   // Initialize it with a sentinel value, so later we can identify which ones are unused and which
   // ones need to be updated.
@@ -193,7 +193,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
      global_mapping_indices = global_mapping_indices.begin()] __device__(auto const idx) {
       auto const block_id    = idx / GROUPBY_BLOCK_SIZE;
       auto const thread_rank = idx % GROUPBY_BLOCK_SIZE;
-      auto const mapping_idx = block_id * GROUPBY_SHM_MAX_ELEMENTS + thread_rank;
+      auto const mapping_idx = block_id * GROUPBY_CARDINALITY_THRESHOLD + thread_rank;
       auto const old_idx     = global_mapping_indices[mapping_idx];
       if (old_idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
         global_mapping_indices[mapping_idx] = key_transform_map[old_idx];
