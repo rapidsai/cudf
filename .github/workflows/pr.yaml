@@ -196,7 +196,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:25.12-latest"
+      container_image: "rapidsai/ci-conda:26.02-latest"
       script: "ci/test_java.sh"
   conda-notebook-tests:
     needs: [conda-python-build, changed-files]
@@ -207,7 +207,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:25.12-latest"
+      container_image: "rapidsai/ci-conda:26.02-latest"
       script: "ci/test_notebooks.sh"
   docs-build:
     needs: conda-python-build
@@ -217,7 +217,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:25.12-latest"
+      container_image: "rapidsai/ci-conda:26.02-latest"
       script: "ci/build_docs.sh"
   wheel-build-libcudf:
     needs: checks
@@ -363,7 +363,7 @@ jobs:
       node_type: "gpu-l4-latest-1"
       continue-on-error: true
       # TODO: Switch to ci-conda:25-10-latest when XGBoost has CUDA 13 packages
-      container_image: "rapidsai/ci-conda:25.12-cuda12.9.1-ubuntu24.04-py3.13"
+      container_image: "rapidsai/ci-conda:26.02-cuda12.9.1-ubuntu24.04-py3.13"
       script: |
         ci/cudf_pandas_scripts/third-party-integration/test.sh python/cudf/cudf_pandas_tests/third_party_integration_tests/dependencies.yaml
   pandas-tests:
@@ -378,7 +378,7 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
-      container_image: "rapidsai/citestwheel:25.12-latest"
+      container_image: "rapidsai/citestwheel:26.02-latest"
       script: ci/cudf_pandas_scripts/pandas-tests/run.sh pr
   narwhals-tests:
     needs: [conda-python-build, changed-files]
@@ -391,7 +391,7 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
-      container_image: "rapidsai/ci-conda:25.12-latest"
+      container_image: "rapidsai/ci-conda:26.02-latest"
       script: ci/test_narwhals.sh
   spark-rapids-jni:
     needs: changed-files

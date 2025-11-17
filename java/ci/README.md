@@ -48,4 +48,4 @@ ${sclCMD} "java/ci/build-in-docker.sh"
 
 ### The output
 
-You can find the cuDF jar in java/target/ like cudf-25.12.0-SNAPSHOT-cuda12.jar.
+You can find the cuDF jar in java/target/ like cudf-26.02.0-SNAPSHOT-cuda12.jar.
