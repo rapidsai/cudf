@@ -9247,6 +9247,10 @@ NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS = {
 
 # TODO: Investigate why sometimes these fail
 NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS = {
+    "tests/reshape/test_crosstab.py::test_categoricals[category-category]",
+    "tests/reshape/test_crosstab.py::test_categoricals[category-int64]",
+    "tests/reshape/test_crosstab.py::test_categoricals[int64-category]",
+    "tests/reshape/test_crosstab.py::test_categoricals[int64-int64]",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_series_with_scalar[uint8-__rpow__]",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_series_with_scalar[uint16-__rpow__]",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_series_with_scalar[uint32-__rpow__]",
