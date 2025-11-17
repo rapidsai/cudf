@@ -2198,7 +2198,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def _with_type_metadata(self: ColumnBase, dtype: DtypeObj) -> ColumnBase:
         """
         Copies type metadata from self onto other, returning a new column.
-
         When ``self`` is a nested column, recursively apply this function on
         the children of ``self``.
         """
@@ -2827,6 +2826,11 @@ def as_column(
     * pandas.Categorical objects
     * range objects
     """
+    # Always convert dtype up front so that downstream calls can assume it is a dtype
+    # object rather than a string.
+    if dtype is not None:
+        dtype = cudf.dtype(dtype)
+
     if isinstance(arbitrary, (range, pd.RangeIndex, cudf.RangeIndex)):
         with acquire_spill_lock():
             column = ColumnBase.from_pylibcudf(

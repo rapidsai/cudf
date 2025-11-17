@@ -356,6 +356,20 @@ def _Series_dtype(self):
     return _maybe_wrap_result(self._fsproxy_wrapped.dtype, None)
 
 
+_SeriesAtIndexer = make_intermediate_proxy_type(
+    "_SeriesAtIndexer",
+    cudf.core.series._SeriesAtIndexer,
+    pd.core.indexing._AtIndexer,
+)
+
+
+_SeriesiAtIndexer = make_intermediate_proxy_type(
+    "_SeriesiAtIndexer",
+    cudf.core.series._SeriesiAtIndexer,
+    pd.core.indexing._iAtIndexer,
+)
+
+
 def _argsort(self, *args, **kwargs):
     return _maybe_wrap_result(
         self._fsproxy_wrapped.argsort(*args, **kwargs).astype(np.intp), self
@@ -378,6 +392,8 @@ Series = make_final_proxy_type(
         "memory_usage": _FastSlowAttribute("memory_usage"),
         "__sizeof__": _FastSlowAttribute("__sizeof__"),
         "dt": _AccessorAttr(CombinedDatetimelikeProperties),
+        "at": _FastSlowAttribute("at"),
+        "iat": _FastSlowAttribute("iat"),
         "str": _AccessorAttr(StringMethods),
         "list": _AccessorAttr(ListMethods),
         "struct": _AccessorAttr(StructAccessor),
