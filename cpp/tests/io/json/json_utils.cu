@@ -2,10 +2,13 @@
  * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
-#pragma once
 
 #include "io/json/read_json.hpp"
+#include "json_utils.hpp"
 
+#include <cudf/detail/iterator.cuh>
+#include <cudf/detail/offsets_iterator_factory.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/types.hpp>
@@ -14,13 +17,14 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/iterator>
+#include <thrust/adjacent_difference.h>
 
 #include <numeric>
 
 // Helper function to test correctness of JSON byte range reading.
 // We split the input source files into a set of byte range chunks each of size
 // `chunk_size` and return an array of partial tables constructed from each chunk
-template <typename IndexType = std::int32_t>
+template <typename IndexType>
 std::vector<cudf::io::table_with_metadata> split_byte_range_reading(
   cudf::host_span<std::unique_ptr<cudf::io::datasource>> sources,
   cudf::host_span<std::unique_ptr<cudf::io::datasource>> csources,
@@ -96,4 +100,33 @@ std::vector<cudf::io::table_with_metadata> split_byte_range_reading(
   // assume all records have same number of columns, and inferred same type. (or schema is passed)
   // TODO a step before to merge all columns, types and infer final schema.
   return tables;
+}
+
+template std::vector<cudf::io::table_with_metadata> split_byte_range_reading<std::int32_t>(
+  cudf::host_span<std::unique_ptr<cudf::io::datasource>> sources,
+  cudf::host_span<std::unique_ptr<cudf::io::datasource>> csources,
+  cudf::io::json_reader_options const& reader_opts,
+  cudf::io::json_reader_options const& creader_opts,
+  std::int32_t chunk_size,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
+template std::vector<cudf::io::table_with_metadata> split_byte_range_reading<std::int64_t>(
+  cudf::host_span<std::unique_ptr<cudf::io::datasource>> sources,
+  cudf::host_span<std::unique_ptr<cudf::io::datasource>> csources,
+  cudf::io::json_reader_options const& reader_opts,
+  cudf::io::json_reader_options const& creader_opts,
+  std::int64_t chunk_size,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
+rmm::device_uvector<cudf::size_type> string_offset_to_length(
+  cudf::strings_column_view const& column, rmm::cuda_stream_view stream)
+{
+  rmm::device_uvector<cudf::size_type> svs_length(column.size(), stream);
+  auto itr =
+    cudf::detail::offsetalator_factory::make_input_iterator(column.offsets(), column.offset());
+  thrust::adjacent_difference(
+    rmm::exec_policy(stream), itr + 1, itr + column.size() + 1, svs_length.begin());
+  return svs_length;
 }

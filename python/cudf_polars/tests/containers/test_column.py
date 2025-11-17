@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
 import polars as pl
@@ -14,8 +16,11 @@ import cudf_polars.containers.datatype
 from cudf_polars.containers import Column, DataType
 from cudf_polars.utils.cuda_stream import get_cuda_stream
 
+if TYPE_CHECKING:
+    from cudf_polars.typing import PolarsDataType
 
-def _as_instance(dtype: pl.DataType) -> pl.DataType:
+
+def _as_instance(dtype: PolarsDataType) -> pl.DataType:
     if isinstance(dtype, type):
         return dtype()
     if isinstance(dtype, pl.List):

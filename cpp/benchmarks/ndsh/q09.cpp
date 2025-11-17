@@ -240,9 +240,8 @@ std::unique_ptr<table_with_names> join_data(q9_data const& data)
 
   // Generating the `profit` table
   // Filter the part table using `p_name like '%green%'`
-  auto const p_name = data.part->table().column(1);
-  auto const mask =
-    cudf::strings::like(cudf::strings_column_view(p_name), cudf::string_scalar("%green%"));
+  auto const p_name        = data.part->table().column(1);
+  auto const mask          = cudf::strings::like(cudf::strings_column_view(p_name), "%green%");
   auto const part_filtered = apply_mask(data.part, mask);
 
   // Perform the joins

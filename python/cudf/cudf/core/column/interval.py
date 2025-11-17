@@ -17,33 +17,32 @@ from cudf.utils.dtypes import is_dtype_obj_interval
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-    from cudf.core.buffer import Buffer
+    import pylibcudf as plc
+
     from cudf.core.column import ColumnBase
 
 
 class IntervalColumn(StructColumn):
     def __init__(
         self,
-        data: None,
+        plc_column: plc.Column,
         size: int,
         dtype: IntervalDtype,
-        mask: Buffer | None,
         offset: int,
         null_count: int,
-        children: tuple[ColumnBase, ColumnBase],
-    ):
-        if len(children) != 2:
+        exposed: bool,
+    ) -> None:
+        if plc_column.num_children() != 2:
             raise ValueError(
-                "children must be a tuple of two columns (left edges, right edges)."
+                "plc_column must have two children (left edges, right edges)."
             )
         super().__init__(
-            data=data,
+            plc_column=plc_column,
             size=size,
             dtype=dtype,
-            mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
+            exposed=exposed,
         )
 
     @staticmethod
