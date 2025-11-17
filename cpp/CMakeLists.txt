@@ -440,25 +440,26 @@ add_library(
   src/groupby/sort/group_collect.cu
   src/groupby/sort/group_correlation.cu
   src/groupby/sort/group_count.cu
+  src/groupby/sort/group_count_scan.cu
   src/groupby/sort/group_histogram.cu
   src/groupby/sort/group_m2.cu
   src/groupby/sort/group_max.cu
-  src/groupby/sort/group_min.cu
+  src/groupby/sort/group_max_scan.cu
   src/groupby/sort/group_merge_lists.cu
   src/groupby/sort/group_merge_m2.cu
+  src/groupby/sort/group_min.cu
+  src/groupby/sort/group_min_scan.cu
   src/groupby/sort/group_nth_element.cu
   src/groupby/sort/group_nunique.cu
   src/groupby/sort/group_product.cu
-  src/groupby/sort/group_quantiles.cu
-  src/groupby/sort/group_std.cu
-  src/groupby/sort/group_sum.cu
-  src/groupby/sort/group_count_scan.cu
-  src/groupby/sort/group_max_scan.cu
-  src/groupby/sort/group_min_scan.cu
   src/groupby/sort/group_product_scan.cu
+  src/groupby/sort/group_quantiles.cu
   src/groupby/sort/group_rank_scan.cu
   src/groupby/sort/group_replace_nulls.cu
+  src/groupby/sort/group_std.cu
+  src/groupby/sort/group_sum.cu
   src/groupby/sort/group_sum_scan.cu
+  src/groupby/sort/group_topk.cu
   src/groupby/sort/host_udf_aggregation.cpp
   src/groupby/sort/scan.cpp
   src/groupby/sort/sort_helper.cu

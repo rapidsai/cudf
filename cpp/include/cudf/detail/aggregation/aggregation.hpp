@@ -101,6 +101,8 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
     data_type col_type, class merge_tdigest_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class bitwise_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          class top_k_aggregation const& agg);
 };
 
 class aggregation_finalizer {  // Declares the interface for the finalizer
@@ -146,6 +148,7 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class merge_tdigest_aggregation const& agg);
   virtual void visit(class ewma_aggregation const& agg);
   virtual void visit(class bitwise_aggregation const& agg);
+  virtual void visit(class top_k_aggregation const& agg);
 };
 
 /**
@@ -1281,6 +1284,42 @@ class bitwise_aggregation final : public groupby_aggregation, public reduce_aggr
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
+class top_k_aggregation final : public groupby_aggregation {
+ public:
+  explicit top_k_aggregation(size_type k, order topk_order)
+    : aggregation{TOP_K}, k{k}, topk_order{topk_order}
+  {
+  }
+
+  size_type const k;
+  order const topk_order;
+
+  [[nodiscard]] bool is_equal(aggregation const& _other) const override
+  {
+    if (!this->aggregation::is_equal(_other)) { return false; }
+    auto const& other = dynamic_cast<top_k_aggregation const&>(_other);
+    return k == other.k and topk_order == other.topk_order;
+  }
+
+  [[nodiscard]] size_t do_hash() const override
+  {
+    return this->aggregation::do_hash() ^ static_cast<size_t>(k) ^ static_cast<size_t>(topk_order);
+  }
+
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<top_k_aggregation>(*this);
+  }
+
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
 /**
  * @brief Sentinel value used for `ARGMAX` aggregation.
  *
@@ -1579,6 +1618,13 @@ struct target_type_impl<Source,
   using type = Source;
 };
 
+// TOP_K returns a list_view
+template <typename Source>
+  requires(cudf::is_relationally_comparable<Source, Source>())
+struct target_type_impl<Source, aggregation::TOP_K> {
+  using type = list_view;
+};
+
 /**
  * @brief Helper alias to get the accumulator type for performing aggregation
  * `k` on elements of type `Source`
@@ -1702,6 +1748,8 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
       return f.template operator()<aggregation::HOST_UDF>(std::forward<Ts>(args)...);
     case aggregation::BITWISE_AGG:
       return f.template operator()<aggregation::BITWISE_AGG>(std::forward<Ts>(args)...);
+    case aggregation::TOP_K:
+      return f.template operator()<aggregation::TOP_K>(std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported aggregation.");
