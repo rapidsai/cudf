@@ -980,9 +980,6 @@ class StringColumn(ColumnBase, Scannable):
                 )
             res = res._with_type_metadata(new_type)
         return res
-        # ._with_type_metadata(
-        #     get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
-        # )
 
     @acquire_spill_lock()
     def replace_multiple(self, pattern: Self, replacements: Self) -> Self:
@@ -1139,9 +1136,6 @@ class StringColumn(ColumnBase, Scannable):
                 )
             return res_col._with_type_metadata(new_type)
         return res_col
-        # ._with_type_metadata(
-        #     get_dtype_of_same_kind(self.dtype, res_col.dtype)
-        # )
 
     def split_record(self, delimiter: plc.Scalar, maxsplit: int) -> Self:
         return self._split_record(
@@ -1760,13 +1754,6 @@ class StringColumn(ColumnBase, Scannable):
                 )
             res = res._with_type_metadata(new_type)
         return res
-        # return (
-        #     type(self)
-        #     .from_pylibcudf(plc_result)
-        #     ._with_type_metadata(
-        #         get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
-        #     )
-        # )
 
     @acquire_spill_lock()
     def find(
