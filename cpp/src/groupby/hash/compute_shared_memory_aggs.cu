@@ -181,7 +181,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
 {
   auto const block       = cooperative_groups::this_thread_block();
   auto const cardinality = block_cardinality[block.group_index().x];
-  if (cardinality >= GROUPBY_CARDINALITY_THRESHOLD or cardinality == 0) { return; }
+  if (cardinality > GROUPBY_CARDINALITY_THRESHOLD or cardinality == 0) { return; }
 
   auto constexpr min_shmem_agg_locations = 32;
   auto const multiplication_factor       = min_shmem_agg_locations / cardinality;

@@ -97,7 +97,8 @@ CUDF_KERNEL void mapping_indices_kernel(size_type num_input_rows,
                                         bitmask_type const* row_bitmask,
                                         size_type* local_mapping_indices,
                                         size_type* global_mapping_indices,
-                                        size_type* block_cardinality)
+                                        size_type* block_cardinality,
+                                        cuda::std::atomic_flag* needs_global_memory_fallback)
 {
   __shared__ size_type shared_set_indices[GROUPBY_CARDINALITY_THRESHOLD];
 
@@ -135,7 +136,12 @@ CUDF_KERNEL void mapping_indices_kernel(size_type num_input_rows,
                        shared_set_indices);
 
     block.sync();
-    if (cardinality > GROUPBY_CARDINALITY_THRESHOLD) { break; }
+    if (cardinality > GROUPBY_CARDINALITY_THRESHOLD) {
+      if (block.thread_rank() == 0) {
+        needs_global_memory_fallback->test_and_set(cuda::std::memory_order_relaxed);
+      }
+      break;
+    }
   }
 
   // Insert unique keys from shared to global hash set if block-cardinality
@@ -164,13 +170,16 @@ void compute_mapping_indices(size_type grid_size,
                              size_type* local_mapping_indices,
                              size_type* global_mapping_indices,
                              size_type* block_cardinality,
+                             cuda::std::atomic_flag* needs_global_memory_fallback,
                              rmm::cuda_stream_view stream)
 {
-  mapping_indices_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, 0, stream>>>(num_rows,
-                                                                       global_set,
-                                                                       row_bitmask,
-                                                                       local_mapping_indices,
-                                                                       global_mapping_indices,
-                                                                       block_cardinality);
+  mapping_indices_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, 0, stream>>>(
+    num_rows,
+    global_set,
+    row_bitmask,
+    local_mapping_indices,
+    global_mapping_indices,
+    block_cardinality,
+    needs_global_memory_fallback);
 }
 }  // namespace cudf::groupby::detail::hash
