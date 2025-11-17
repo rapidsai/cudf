@@ -55,6 +55,7 @@
 #include <memory>
 #include <optional>
 #include <random>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
