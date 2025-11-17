@@ -886,7 +886,7 @@ def parse_args(
         "--max-io-threads",
         default=2,
         type=int,
-        help="Maximum number of IO threads for rapidsmpf runtime. Default: 2",
+        help="Maximum number of IO threads for rapidsmpf runtime.",
     )
 
     parsed_args = parser.parse_args(args)
