@@ -793,8 +793,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          # pin pytest to avoid https://github.com/rapidsai/cudf/issues/20570
-          - pytest<9.0.0a0
+          - pytest
           - pytest-cov
           - pytest-xdist
   test_python_cudf_common:
