@@ -69,7 +69,7 @@ def explain_query(
                 lower_ir_graph as rapidsmpf_lower_ir_graph,
             )
 
-            lowered_ir, partition_info = rapidsmpf_lower_ir_graph(ir, config)
+            lowered_ir, partition_info, _ = rapidsmpf_lower_ir_graph(ir, config)
         else:
             lowered_ir, partition_info = lower_ir_graph(ir, config)
         return _repr_ir_tree(lowered_ir, partition_info)

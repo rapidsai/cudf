@@ -523,7 +523,8 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - cython>=3.0.3
+          # Pin Cython to <3.2 to avoid https://github.com/rapidsai/rmm/issues/2134
+          - cython>=3.0.3,<3.2.0a0
   numpy_run:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -792,7 +793,8 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - pytest
+          # pin pytest to avoid https://github.com/rapidsai/cudf/issues/20570
+          - pytest<9.0.0a0
           - pytest-cov
           - pytest-xdist
   test_python_cudf_common:

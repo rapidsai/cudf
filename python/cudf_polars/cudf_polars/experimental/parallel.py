@@ -43,7 +43,8 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
     from typing import Any
 
-    from cudf_polars.containers import DataFrame
+    import polars as pl
+
     from cudf_polars.experimental.dispatch import LowerIRTransformer, State
     from cudf_polars.utils.config import ConfigOptions
 
@@ -227,7 +228,7 @@ def post_process_task_graph(
 def evaluate_rapidsmpf(
     ir: IR,
     config_options: ConfigOptions,
-) -> DataFrame:  # pragma: no cover; rapidsmpf runtime not tested in CI yet
+) -> pl.DataFrame:  # pragma: no cover; rapidsmpf runtime not tested in CI yet
     """
     Evaluate with the RapidsMPF streaming runtime.
 
@@ -250,7 +251,7 @@ def evaluate_rapidsmpf(
 def evaluate_streaming(
     ir: IR,
     config_options: ConfigOptions,
-) -> DataFrame:
+) -> pl.DataFrame:
     """
     Evaluate an IR graph with partitioning.
 
@@ -280,7 +281,7 @@ def evaluate_streaming(
 
         graph, key = task_graph(ir, partition_info, config_options)
 
-        return get_scheduler(config_options)(graph, key)
+        return get_scheduler(config_options)(graph, key).to_polars()
 
 
 @generate_ir_tasks.register(IR)

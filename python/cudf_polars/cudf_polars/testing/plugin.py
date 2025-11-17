@@ -57,11 +57,11 @@ def pytest_configure(config: pytest.Config) -> None:
         collect = polars.LazyFrame.collect
         engine = polars.GPUEngine(raise_on_fail=no_fallback)
         # https://github.com/python/mypy/issues/2427
-        polars.LazyFrame.collect = partialmethod(collect, engine=engine)
+        polars.LazyFrame.collect = partialmethod(collect, engine=engine)  # type: ignore[method-assign, assignment]
     elif executor == "in-memory":
         collect = polars.LazyFrame.collect
         engine = polars.GPUEngine(executor=executor)
-        polars.LazyFrame.collect = partialmethod(collect, engine=engine)
+        polars.LazyFrame.collect = partialmethod(collect, engine=engine)  # type: ignore[method-assign, assignment]
     elif executor == "streaming" and blocksize_mode == "small":
         executor_options: dict[str, Any] = {}
         executor_options["max_rows_per_partition"] = 4
@@ -70,7 +70,7 @@ def pytest_configure(config: pytest.Config) -> None:
         executor_options["fallback_mode"] = StreamingFallbackMode.SILENT
         collect = polars.LazyFrame.collect
         engine = polars.GPUEngine(executor=executor, executor_options=executor_options)
-        polars.LazyFrame.collect = partialmethod(collect, engine=engine)
+        polars.LazyFrame.collect = partialmethod(collect, engine=engine)  # type: ignore[method-assign, assignment]
     else:
         # run with streaming executor and default blocksize
         polars.Config.set_engine_affinity("gpu")
