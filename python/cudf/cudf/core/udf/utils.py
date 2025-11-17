@@ -242,9 +242,7 @@ def _get_input_args_from_frame(fr: IndexedFrame) -> list:
     offsets = []
     for col in _supported_cols_from_frame(fr).values():
         if col.dtype == CUDF_STRING_DTYPE:
-            data = column_to_string_view_array_init_heap(
-                col.to_pylibcudf(mode="read")
-            )
+            data = column_to_string_view_array_init_heap(col.plc_column)
         else:
             data = col.data
         if col.mask is not None:
