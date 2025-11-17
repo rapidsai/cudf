@@ -58,11 +58,11 @@ test = [
     "fastavro>=0.22.9",
     "hypothesis>=6.131.7",
     "msgpack",
-    "pytest",
     "pytest-benchmark",
     "pytest-cases>=3.8.2",
     "pytest-cov",
     "pytest-xdist",
+    "pytest<9.0.0a0",
     "s3fs>=2022.3.0",
     "scipy",
     "tzdata",
@@ -126,7 +126,7 @@ dependencies-file = "../../dependencies.yaml"
 matrix-entry = "cuda_suffixed=true"
 requires = [
     "cmake>=3.30.4",
-    "cython>=3.0.3",
+    "cython>=3.0.3,<3.2.0a0",
     "libcudf==25.12.*,>=0.0.0a0",
     "librmm==25.12.*,>=0.0.0a0",
     "ninja",
