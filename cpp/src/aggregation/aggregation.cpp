@@ -5,6 +5,7 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/strings/string_view.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
