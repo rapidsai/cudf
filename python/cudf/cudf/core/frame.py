@@ -408,6 +408,11 @@ class Frame(BinaryOperand, Scannable, Serializable):
         """
         raise NotImplementedError
 
+    def __sizeof__(self):
+        if cudf.get_option("mode.pandas_compatible"):
+            return self.memory_usage(deep=True, index=True)
+        return object.__sizeof__(self)
+
     @_performance_tracking
     def __len__(self) -> int:
         return self._num_rows

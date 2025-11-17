@@ -9,7 +9,6 @@ import operator
 import warnings
 from collections.abc import Hashable, MutableMapping
 from functools import cache, cached_property
-from numbers import Number
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import cupy
@@ -1910,6 +1909,11 @@ class Index(SingleColumnFrame):
     def memory_usage(self, deep: bool = False) -> int:
         return self._column.memory_usage
 
+    def __sizeof__(self):
+        if cudf.get_option("mode.pandas_compatible"):
+            return self.memory_usage(deep=True)
+        return object.__sizeof__(self)
+
     @cached_property  # type: ignore[explicit-override]
     @_performance_tracking
     def is_unique(self) -> bool:
@@ -2444,24 +2448,40 @@ class Index(SingleColumnFrame):
             inplace=inplace,
         )
 
-    def unique(self, level: int | None = None) -> Self:
-        if level is not None and level > 0:
-            raise IndexError(
-                f"Too many levels: Index has only 1 level, not {level + 1}"
+    def _validate_index_level(self, level) -> None:
+        """
+        Validate index level.
+
+        Same validation done as pandas. Use for methods that accept a level parameter.
+        """
+        if isinstance(level, int):
+            if level < 0 and level != -1:
+                raise IndexError(
+                    "Too many levels: Index has only 1 level, "
+                    f"{level} is not a valid level number"
+                )
+            if level > 0:
+                raise IndexError(
+                    f"Too many levels: Index has only 1 level, not {level + 1}"
+                )
+        elif level != self.name:
+            raise KeyError(
+                f"Requested level ({level}) does not match index name ({self.name})"
             )
+
+    def unique(self, level: int | None = None) -> Self:
+        if level is not None:
+            self._validate_index_level(level)
         return type(self)._from_column(self._column.unique(), name=self.name)
 
     def isin(self, values, level=None) -> cupy.ndarray:
-        if level is not None and level > 0:
-            raise IndexError(
-                f"Too many levels: Index has only 1 level, not {level + 1}"
-            )
+        if level is not None:
+            self._validate_index_level(level)
         if is_scalar(values):
             raise TypeError(
                 "only list-like objects are allowed to be passed "
                 f"to isin(), you passed a {type(values).__name__}"
             )
-
         return self._column.isin(values).values
 
     def get_level_values(self, level: Hashable) -> Self:
@@ -2805,21 +2825,25 @@ class RangeIndex(Index):
 
     @_performance_tracking
     def __getitem__(self, index):
+        if index is Ellipsis:
+            index = slice(None)
         if isinstance(index, slice):
-            sl_start, sl_stop, sl_step = index.indices(len(self))
-
-            lo = self.start + sl_start * self.step
-            hi = self.start + sl_stop * self.step
-            st = self.step * sl_step
-            return RangeIndex(start=lo, stop=hi, step=st, name=self.name)
-
-        elif isinstance(index, Number):
-            len_self = len(self)
-            if index < 0:
-                index += len_self
-            if not (0 <= index < len_self):
-                raise IndexError("Index out of bounds")
-            return self.start + index * self.step
+            return type(self)(self._range[index], name=self.name)
+        elif is_integer(index):
+            new_key = int(index)
+            try:
+                return self._range[new_key]
+            except IndexError as err:
+                raise IndexError(
+                    f"index {index} is out of bounds for axis 0 with size {len(self)}"
+                ) from err
+        elif is_scalar(index):
+            raise IndexError(
+                "only integers, slices (`:`), "
+                "ellipsis (`...`), numpy.newaxis (`None`) "
+                "and integer or boolean "
+                "arrays are valid indices"
+            )
         return self._as_int_index()[index]
 
     def _get_columns_by_label(self, labels) -> Index:
@@ -2964,10 +2988,8 @@ class RangeIndex(Index):
 
     def unique(self, level: int | None = None) -> Self:
         # RangeIndex always has unique values
-        if level is not None and level > 0:
-            raise IndexError(
-                f"Too many levels: Index has only 1 level, not {level + 1}"
-            )
+        if level is not None:
+            self._validate_index_level(level)
         return self.copy()
 
     @_performance_tracking
@@ -3358,6 +3380,8 @@ class RangeIndex(Index):
         return 0 not in self._range
 
     def append(self, other):
+        if len(other) == 0:
+            return self.copy()
         result = self._as_int_index().append(other)
         return self._try_reconstruct_range_index(result)
 
@@ -3372,19 +3396,6 @@ class RangeIndex(Index):
         except ValueError:
             i = []
         return as_column(i, dtype=SIZE_TYPE_DTYPE)  # type: ignore[return-value]
-
-    def isin(self, values, level=None) -> cupy.ndarray:
-        if level is not None and level > 0:
-            raise IndexError(
-                f"Too many levels: Index has only 1 level, not {level + 1}"
-            )
-        if is_scalar(values):
-            raise TypeError(
-                "only list-like objects are allowed to be passed "
-                f"to isin(), you passed a {type(values).__name__}"
-            )
-
-        return self._column.isin(values).values
 
     @_performance_tracking
     def nans_to_nulls(self) -> Self:

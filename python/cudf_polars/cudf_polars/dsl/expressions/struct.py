@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from enum import IntEnum, auto
 from io import StringIO
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
+
+import polars as pl
 
 import pylibcudf as plc
 
@@ -87,13 +89,14 @@ class StructFunction(Expr):
         """Evaluate this expression given a dataframe for context."""
         columns = [child.evaluate(df, context=context) for child in self.children]
         (column,) = columns
-        # these type ignores are needed because the type checker doesn't
-        # know that polars only calls StructFunction with struct types.
+        # Type checker doesn't know polars only calls StructFunction with struct types
         if self.name == StructFunction.Name.FieldByName:
             field_index = next(
                 (
                     i
-                    for i, field in enumerate(self.children[0].dtype.polars_type.fields)
+                    for i, field in enumerate(
+                        cast(pl.Struct, self.children[0].dtype.polars_type).fields
+                    )
                     if field.name == self.options[0]
                 ),
                 None,
@@ -113,7 +116,9 @@ class StructFunction(Expr):
                 table,
                 [
                     (field.name, [])
-                    for field in self.children[0].dtype.polars_type.fields
+                    for field in cast(
+                        pl.Struct, self.children[0].dtype.polars_type
+                    ).fields
                 ],
             )
             options = (

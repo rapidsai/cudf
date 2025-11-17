@@ -22,7 +22,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/aligned.hpp>
-#include <rmm/mr/device/aligned_resource_adaptor.hpp>
+#include <rmm/mr/aligned_resource_adaptor.hpp>
 
 namespace {
 
@@ -125,7 +125,7 @@ void test_hybrid_scan(std::vector<cudf::column_view> const& columns)
   auto stream     = cudf::get_default_stream();
   auto mr         = cudf::get_current_device_resource_ref();
   auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-    cudf::get_current_device_resource(), bloom_filter_alignment);
+    cudf::get_current_device_resource_ref(), bloom_filter_alignment);
 
   // Read parquet using the hybrid scan reader
   auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
@@ -199,7 +199,7 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanAllColumns)
   auto stream     = cudf::get_default_stream();
   auto mr         = cudf::get_current_device_resource_ref();
   auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-    cudf::get_current_device_resource(), bloom_filter_alignment);
+    cudf::get_current_device_resource_ref(), bloom_filter_alignment);
 
   // Read parquet using the hybrid scan reader
   auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
@@ -256,7 +256,7 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanSelectColumns)
   auto stream     = cudf::get_default_stream();
   auto mr         = cudf::get_current_device_resource_ref();
   auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-    cudf::get_current_device_resource(), bloom_filter_alignment);
+    cudf::get_current_device_resource_ref(), bloom_filter_alignment);
 
   {
     auto const payload_column_names = std::vector<std::string>{"col0", "col2"};
@@ -345,7 +345,7 @@ TEST_F(HybridScanTest, PruneDataPagesOnlyAndScanAllColumns)
   auto stream     = cudf::get_default_stream();
   auto mr         = cudf::get_current_device_resource_ref();
   auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-    cudf::get_current_device_resource(), bloom_filter_alignment);
+    cudf::get_current_device_resource_ref(), bloom_filter_alignment);
 
   // Read parquet using the hybrid scan reader
   auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =

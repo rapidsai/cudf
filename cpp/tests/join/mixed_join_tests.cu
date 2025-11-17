@@ -10,6 +10,7 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/join/conditional_join.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/join/mixed_join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -39,9 +40,6 @@ using ColumnVector = std::vector<std::vector<T>>;
 
 template <typename T>
 using NullableColumnVector = std::vector<std::pair<std::vector<T>, NullMaskVector>>;
-
-constexpr cudf::size_type JoinNoneValue =
-  std::numeric_limits<cudf::size_type>::min();  // TODO: how to test if this isn't public?
 
 // Common column references.
 auto const col_ref_left_0  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
@@ -692,7 +690,7 @@ TYPED_TEST(MixedLeftJoinTest, Basic)
              {1, 2},
              left_zero_eq_right_zero,
              {1, 1, 1},
-             {{0, JoinNoneValue}, {1, 1}, {2, JoinNoneValue}});
+             {{0, cudf::JoinNoMatch}, {1, 1}, {2, cudf::JoinNoMatch}});
 }
 
 TYPED_TEST(MixedLeftJoinTest, Basic2)
@@ -717,7 +715,7 @@ TYPED_TEST(MixedLeftJoinTest, Basic2)
              {1, 2},
              predicate,
              {1, 1, 1, 1},
-             {{0, JoinNoneValue}, {1, JoinNoneValue}, {2, JoinNoneValue}, {3, 3}});
+             {{0, cudf::JoinNoMatch}, {1, cudf::JoinNoMatch}, {2, cudf::JoinNoMatch}, {3, 3}});
 }
 
 TYPED_TEST(MixedLeftJoinTest, SizeBasedLeftJoinRegression)
@@ -824,14 +822,17 @@ TYPED_TEST_SUITE(MixedFullJoinTest, cudf::test::IntegralTypesNotBool);
 
 TYPED_TEST(MixedFullJoinTest, Basic)
 {
-  this->test(
-    {{0, 1, 2}, {3, 4, 5}, {10, 20, 30}},
-    {{0, 1, 3}, {5, 4, 5}, {30, 40, 50}},
-    {0},
-    {1, 2},
-    left_zero_eq_right_zero,
-    {1, 1, 1},
-    {{0, JoinNoneValue}, {1, 1}, {2, JoinNoneValue}, {JoinNoneValue, 0}, {JoinNoneValue, 2}});
+  this->test({{0, 1, 2}, {3, 4, 5}, {10, 20, 30}},
+             {{0, 1, 3}, {5, 4, 5}, {30, 40, 50}},
+             {0},
+             {1, 2},
+             left_zero_eq_right_zero,
+             {1, 1, 1},
+             {{0, cudf::JoinNoMatch},
+              {1, 1},
+              {2, cudf::JoinNoMatch},
+              {cudf::JoinNoMatch, 0},
+              {cudf::JoinNoMatch, 2}});
 }
 
 TYPED_TEST(MixedFullJoinTest, Basic2)
@@ -856,13 +857,13 @@ TYPED_TEST(MixedFullJoinTest, Basic2)
              {1, 2},
              predicate,
              {1, 1, 1, 1},
-             {{0, JoinNoneValue},
-              {1, JoinNoneValue},
-              {2, JoinNoneValue},
+             {{0, cudf::JoinNoMatch},
+              {1, cudf::JoinNoMatch},
+              {2, cudf::JoinNoMatch},
               {3, 3},
-              {JoinNoneValue, 0},
-              {JoinNoneValue, 1},
-              {JoinNoneValue, 2}});
+              {cudf::JoinNoMatch, 0},
+              {cudf::JoinNoMatch, 1},
+              {cudf::JoinNoMatch, 2}});
 }
 
 template <typename T>

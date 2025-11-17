@@ -7,8 +7,19 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import DEFAULT_CLUSTER, assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    DEFAULT_CLUSTER,
+    DEFAULT_RUNTIME,
+    assert_gpu_result_equal,
+)
 from cudf_polars.utils.versions import POLARS_VERSION_LT_130
+
+# TODO: Add multi-partition Sort support to the rapidsmpf runtime.
+# See: https://github.com/rapidsai/cudf/issues/20486
+pytestmark = pytest.mark.skipif(
+    DEFAULT_RUNTIME == "rapidsmpf",
+    reason="Sort not yet supported for rapidsmpf runtime.",
+)
 
 
 @pytest.fixture(scope="module")
@@ -19,6 +30,7 @@ def engine():
         executor_options={
             "max_rows_per_partition": 3,
             "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
             "shuffle_method": "tasks",
             "fallback_mode": "raise",
         },
@@ -33,6 +45,7 @@ def engine_large():
         executor_options={
             "max_rows_per_partition": 2_100,
             "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
             "shuffle_method": "tasks",
             "fallback_mode": "raise",
         },
@@ -141,6 +154,7 @@ def test_sort_after_sparse_join():
         executor="streaming",
         executor_options={
             "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
             "max_rows_per_partition": 4,
         },
     )

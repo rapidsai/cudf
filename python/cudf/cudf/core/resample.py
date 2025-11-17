@@ -275,6 +275,12 @@ class _ResampleGrouping(_Grouping):
             cast_bin_labels = cast_bin_labels[:nbins]
 
         cast_bin_labels.name = self.names[0]
+        if isinstance(cast_bin_labels, cudf.DatetimeIndex):
+            cast_bin_labels = cudf.DatetimeIndex._from_data(
+                data=cast_bin_labels._data,
+                name=cast_bin_labels.name,
+                freq=freq,
+            )
         self.bin_labels = cast_bin_labels
 
         # replace self._key_columns with the binned key column:
@@ -353,8 +359,10 @@ def _get_timestamp_range_edges(
             first = first.tz_localize(index_tz)
             last = last.tz_localize(index_tz)
     else:
-        first = first.normalize()
-        last = last.normalize()
+        if first is not pd.NaT:
+            first = first.normalize()
+        if last is not pd.NaT:
+            last = last.normalize()
 
         if closed == "left":
             first = pd.Timestamp(freq.rollback(first))
@@ -375,6 +383,8 @@ def _adjust_dates_anchored(
     # not a multiple of the frequency. See GH 8683
     # To handle frequencies that are not multiple or divisible by a day we let
     # the possibility to define a fixed origin timestamp. See GH 31809
+    if first is pd.NaT and last is pd.NaT:
+        return first, last
     origin_nanos = 0  # origin == "epoch"
     if origin == "start_day":
         origin_nanos = first.normalize().value

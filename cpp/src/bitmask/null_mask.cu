@@ -22,7 +22,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
 
 #include <cooperative_groups.h>
 #include <cub/cub.cuh>
@@ -296,17 +296,6 @@ void set_null_mask(bitmask_type* bitmask,
 {
   CUDF_FUNC_RANGE();
   return detail::set_null_mask(bitmask, begin_bit, end_bit, valid, stream);
-}
-
-// Deprecated: Bulk set pre-allocated null masks to corresponding valid state without handling
-// intra-word aliasing in the corresponding bit ranges
-void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
-                    cudf::host_span<size_type const> begin_bits,
-                    cudf::host_span<size_type const> end_bits,
-                    cudf::host_span<bool const> valids,
-                    rmm::cuda_stream_view stream)
-{
-  return set_null_masks_unsafe(bitmasks, begin_bits, end_bits, valids, stream);
 }
 
 // Bulk set pre-allocated null masks to corresponding valid state safely handling intra-word

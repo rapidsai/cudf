@@ -11,7 +11,6 @@
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/orc_types.hpp>
@@ -24,6 +23,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/cub.cuh>
+#include <cuda/functional>
 #include <cuda/std/limits>
 #include <thrust/for_each.h>
 #include <thrust/iterator/zip_iterator.h>
@@ -405,9 +405,9 @@ static __device__ uint32_t IntegerRLE(
       T vmin = (t < literal_run) ? v0 : cuda::std::numeric_limits<T>::max();
       T vmax = (t < literal_run) ? v0 : cuda::std::numeric_limits<T>::min();
       uint32_t literal_mode, literal_w;
-      vmin = block_reduce(temp_storage).Reduce(vmin, cudf::detail::minimum{});
+      vmin = block_reduce(temp_storage).Reduce(vmin, cuda::minimum{});
       __syncthreads();
-      vmax = block_reduce(temp_storage).Reduce(vmax, cudf::detail::maximum{});
+      vmax = block_reduce(temp_storage).Reduce(vmax, cuda::maximum{});
       if (t == 0) {
         uint32_t mode1_w, mode2_w;
         typename std::make_unsigned<T>::type vrange_mode1, vrange_mode2;

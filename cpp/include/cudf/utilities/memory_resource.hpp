@@ -1,13 +1,13 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
 #include <rmm/cuda_device.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
+#include <rmm/mr/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
 namespace cudf {
@@ -21,8 +21,12 @@ namespace cudf {
 /**
  * @brief Get the current device memory resource.
  *
+ * @deprecated Since 25.12. Use get_current_device_resource_ref() instead.
+ * This function will be removed in 26.02.
+ *
  * @return The current device memory resource.
  */
+[[deprecated("Use get_current_device_resource_ref() instead. Will be removed in 26.02.")]]
 inline rmm::mr::device_memory_resource* get_current_device_resource()
 {
   return rmm::mr::get_current_device_resource();

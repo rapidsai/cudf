@@ -24,7 +24,7 @@ from cudf.core._internals.timezones import (
     get_compatible_timezone,
     get_tz_data,
 )
-from cudf.core.buffer import Buffer, acquire_spill_lock
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.temporal_base import TemporalBaseColumn
 from cudf.utils.dtypes import (
@@ -101,26 +101,30 @@ class DatetimeColumn(TemporalBaseColumn):
         "__radd__",
         "__rsub__",
     }
+    _VALID_PLC_TYPES = {
+        plc.TypeId.TIMESTAMP_SECONDS,
+        plc.TypeId.TIMESTAMP_MILLISECONDS,
+        plc.TypeId.TIMESTAMP_MICROSECONDS,
+        plc.TypeId.TIMESTAMP_NANOSECONDS,
+    }
 
     def __init__(
         self,
-        data: Buffer,
+        plc_column: plc.Column,
         size: int,
         dtype: np.dtype | pd.DatetimeTZDtype,
-        mask: Buffer | None,
         offset: int,
         null_count: int,
-        children: tuple,
-    ):
+        exposed: bool,
+    ) -> None:
         dtype = self._validate_dtype_instance(dtype)
         super().__init__(
-            data=data,
+            plc_column=plc_column,
             size=size,
             dtype=dtype,
-            mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
+            exposed=exposed,
         )
 
     def _clear_cache(self) -> None:
@@ -154,6 +158,15 @@ class DatetimeColumn(TemporalBaseColumn):
             except AttributeError:
                 # attr was not called yet, so ignore.
                 pass
+
+    def _scan(self, op: str) -> ColumnBase:
+        if op not in {"cummin", "cummax"}:
+            raise TypeError(
+                f"Accumulation {op} not supported for {self.dtype}"
+            )
+        return self.scan(op.replace("cum", ""), True)._with_type_metadata(
+            self.dtype
+        )
 
     @staticmethod
     def _validate_dtype_instance(dtype: np.dtype) -> np.dtype:
@@ -678,13 +691,12 @@ class DatetimeColumn(TemporalBaseColumn):
     def _with_type_metadata(self, dtype: DtypeObj) -> DatetimeColumn:
         if isinstance(dtype, pd.DatetimeTZDtype):
             return DatetimeTZColumn(
-                data=self.base_data,  # type: ignore[arg-type]
-                dtype=dtype,
-                mask=self.base_mask,
+                plc_column=self.plc_column,
                 size=self.size,
+                dtype=dtype,
                 offset=self.offset,
                 null_count=self.null_count,
-                children=self.base_children,
+                exposed=False,
             )
         if cudf.get_option("mode.pandas_compatible"):
             self._dtype = get_dtype_of_same_type(dtype, self.dtype)
@@ -846,13 +858,12 @@ class DatetimeTZColumn(DatetimeColumn):
     def _utc_time(self) -> DatetimeColumn:
         """Return UTC time as naive timestamps."""
         return DatetimeColumn(
-            data=self.base_data,  # type: ignore[arg-type]
-            dtype=_get_base_dtype(self.dtype),
-            mask=self.base_mask,
+            plc_column=self.plc_column,
             size=self.size,
+            dtype=_get_base_dtype(self.dtype),
             offset=self.offset,
             null_count=self.null_count,
-            children=self.base_children,
+            exposed=False,
         )
 
     @functools.cached_property

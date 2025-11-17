@@ -93,14 +93,8 @@ class rmm_host_allocator {
    */
   rmm_host_allocator() = delete;
 
-#if CCCL_MAJOR_VERSION > 3 || (CCCL_MAJOR_VERSION == 3 && CCCL_MINOR_VERSION >= 1)
   template <class... Properties>
   using async_host_resource_ref = cuda::mr::resource_ref<cuda::mr::host_accessible, Properties...>;
-#else
-  template <class... Properties>
-  using async_host_resource_ref =
-    cuda::mr::async_resource_ref<cuda::mr::host_accessible, Properties...>;
-#endif
 
   /**
    * @brief Construct from a `cudf::host_async_resource_ref`
@@ -126,7 +120,7 @@ class rmm_host_allocator {
   {
     if (cnt > this->max_size()) { throw std::bad_alloc(); }  // end if
     auto const result =
-      mr.allocate_async(cnt * sizeof(value_type), rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream);
+      mr.allocate(stream, cnt * sizeof(value_type), rmm::RMM_DEFAULT_HOST_ALIGNMENT);
     // Synchronize to ensure the memory is allocated before thrust::host_vector initialization
     // TODO: replace thrust::host_vector with a type that does not require synchronization
     stream.synchronize();
@@ -145,7 +139,7 @@ class rmm_host_allocator {
    */
   inline void deallocate(pointer p, size_type cnt) noexcept
   {
-    mr.deallocate_async(p, cnt * sizeof(value_type), rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream);
+    mr.deallocate(stream, p, cnt * sizeof(value_type), rmm::RMM_DEFAULT_HOST_ALIGNMENT);
   }
 
   /**

@@ -4,13 +4,11 @@
  */
 
 #include "io/utilities/parsing_utils.cuh"
-#include "io/utilities/string_parsing.hpp"
 #include "nested_json.hpp"
 
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/algorithm.cuh>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
@@ -204,7 +202,7 @@ void propagate_first_sibling_to_other(cudf::device_span<TreeDepthT const> node_l
     thrust::make_permutation_iterator(parent_node_ids.begin(), sorted_order.begin()),
     thrust::make_permutation_iterator(parent_node_ids.begin(), sorted_order.begin()),
     cuda::std::equal_to<TreeDepthT>{},
-    cudf::detail::maximum<NodeIndexT>{});
+    cuda::maximum<NodeIndexT>{});
 }
 
 // Generates a tree representation of the given tokens, token_indices.

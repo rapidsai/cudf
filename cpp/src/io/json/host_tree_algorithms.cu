@@ -4,12 +4,10 @@
  */
 
 #include "io/utilities/parsing_utils.cuh"
-#include "io/utilities/string_parsing.hpp"
 #include "nested_json.hpp"
 
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -995,13 +993,13 @@ void scatter_offsets(tree_meta_t const& tree,
                              col.string_offsets.begin(),
                              col.string_offsets.end(),
                              col.string_offsets.begin(),
-                             cudf::detail::maximum<json_column::row_offset_t>{});
+                             cuda::maximum<json_column::row_offset_t>{});
     } else if (col.type == json_col_t::ListColumn) {
       thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
                              col.child_offsets.begin(),
                              col.child_offsets.end(),
                              col.child_offsets.begin(),
-                             cudf::detail::maximum<json_column::row_offset_t>{});
+                             cuda::maximum<json_column::row_offset_t>{});
     }
   }
   stream.synchronize();

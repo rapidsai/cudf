@@ -4,7 +4,6 @@
  */
 
 #include "io/utilities/parsing_utils.cuh"
-#include "io/utilities/string_parsing.hpp"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -13,7 +12,6 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
@@ -805,7 +803,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
     str_tuples + col_size,
     cuda::proclaim_return_type<std::size_t>([] __device__(auto t) { return t.second; }),
     size_type{0},
-    cudf::detail::maximum<size_type>{});
+    cuda::maximum<size_type>{});
 
   auto sizes           = rmm::device_uvector<size_type>(col_size, stream);
   auto d_sizes         = sizes.data();

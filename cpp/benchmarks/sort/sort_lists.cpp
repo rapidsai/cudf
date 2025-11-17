@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,7 +12,7 @@
 
 namespace {
 constexpr cudf::size_type min_val = 0;
-constexpr cudf::size_type max_val = 100;
+constexpr cudf::size_type max_val = 10;
 
 void sort_multiple_lists(nvbench::state& state)
 {

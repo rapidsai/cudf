@@ -153,7 +153,7 @@ class ArrayInterfaceWrapper:
         self.__array_interface__ = iface
 
 
-cdef gpumemoryview _copy_array_to_device(object buf):
+cdef gpumemoryview _copy_array_to_device(object buf, Stream stream=None):
     """
     Copy a host-side array.array buffer to device memory.
 
@@ -161,6 +161,8 @@ cdef gpumemoryview _copy_array_to_device(object buf):
     ----------
     buf : array.array
         Array of bytes.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -170,9 +172,11 @@ cdef gpumemoryview _copy_array_to_device(object buf):
     cdef memoryview mv = memoryview(buf)
     cdef uintptr_t ptr = <uintptr_t>mv.obj.buffer_info()[0]
     cdef size_t nbytes = len(mv) * mv.itemsize
+    stream = _get_stream(stream)
 
     return gpumemoryview(DeviceBuffer.to_device(
-        <const unsigned char[:nbytes:1]><const unsigned char*>ptr
+        <const unsigned char[:nbytes:1]><const unsigned char*>ptr,
+        stream
     ))
 
 
@@ -633,6 +637,8 @@ cdef class Column:
         calling libcudf algorithms, and should generally not be needed by users
         (even direct pylibcudf Cython users).
         """
+        assert stream is not None, "stream cannot be None"
+        assert mr is not None, "mr cannot be None"
         cdef DataType dtype = DataType.from_libcudf(libcudf_col.get().type())
         cdef size_type size = libcudf_col.get().size()
 
@@ -881,6 +887,7 @@ cdef class Column:
         tuple shape,
         DataType dtype,
         Column base=None,
+        Stream stream=None,
     ):
         """
         Construct a list Column from a gpumemoryview and array
@@ -894,6 +901,7 @@ cdef class Column:
         """
         ndim = len(shape)
         flat_size = functools.reduce(operator.mul, shape)
+        stream = _get_stream(stream)
 
         if base is None:
             base = Column(
@@ -914,8 +922,9 @@ cdef class Column:
 
             offsets_col = sequence(
                 outer_len + 1,
-                Scalar.from_py(0, int32_dtype),
-                Scalar.from_py(shape[i], int32_dtype),
+                Scalar.from_py(0, int32_dtype, stream=stream),
+                Scalar.from_py(shape[i], int32_dtype, stream=stream),
+                stream,
             )
 
             nested = Column(
@@ -980,10 +989,12 @@ cdef class Column:
         else:
             dbuf = DeviceBuffer(size=0, stream=stream)
 
-        return Column._wrap_nested_list_column(gpumemoryview(dbuf), shape, dtype)
+        return Column._wrap_nested_list_column(
+            gpumemoryview(dbuf), shape, dtype, None, stream
+        )
 
     @classmethod
-    def from_cuda_array_interface(cls, obj):
+    def from_cuda_array_interface(cls, obj, Stream stream=None):
         """
         Create a Column from an object implementing the CUDA Array Interface.
 
@@ -991,6 +1002,8 @@ cdef class Column:
         ----------
         obj : Any
             Must implement the ``__cuda_array_interface__`` protocol.
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
 
         Returns
         -------
@@ -1013,11 +1026,14 @@ cdef class Column:
             raise TypeError("Object does not implement __cuda_array_interface__")
 
         _, _, shape, _, dtype = _prepare_array_metadata(iface)
+        stream = _get_stream(stream)
 
-        return Column._wrap_nested_list_column(gpumemoryview(obj), shape, dtype)
+        return Column._wrap_nested_list_column(
+            gpumemoryview(obj), shape, dtype, None, stream
+        )
 
     @classmethod
-    def from_array(cls, obj):
+    def from_array(cls, obj, Stream stream=None):
         """
         Create a Column from any object which supports the NumPy
         or CUDA array interface.
@@ -1026,6 +1042,8 @@ cdef class Column:
         ----------
         obj : object
             The input array to be converted into a `pylibcudf.Column`.
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
 
         Returns
         -------
@@ -1049,9 +1067,9 @@ cdef class Column:
         >>> col = plc.Column.from_array(cp_arr)
         """
         if hasattr(obj, "__cuda_array_interface__"):
-            return cls.from_cuda_array_interface(obj)
+            return cls.from_cuda_array_interface(obj, stream=stream)
         if hasattr(obj, "__array_interface__"):
-            return cls.from_array_interface(obj)
+            return cls.from_array_interface(obj, stream=stream)
 
         raise TypeError(
             f"Cannot convert object of type {type(obj)} to a pylibcudf Column"
@@ -1148,9 +1166,13 @@ cdef class Column:
             )
 
             offsets_data = _copy_array_to_device(
-                array.array(offset_dtype._python_typecode, offsets)
+                array.array(offset_dtype._python_typecode, offsets),
+                stream,
             )
-            chars_data = _copy_array_to_device(array.array("B", b"".join(encoded)))
+            chars_data = _copy_array_to_device(
+                array.array("B", b"".join(encoded)),
+                stream,
+            )
 
             offsets_col = Column(
                 offset_dtype,
@@ -1174,7 +1196,9 @@ cdef class Column:
 
             return (
                 base if depth == 1
-                else Column._wrap_nested_list_column(None, shape, dtype, base=base)
+                else Column._wrap_nested_list_column(
+                    None, shape, dtype, base=base, stream=stream
+                )
             )
 
         buf = array.array(dtype._python_typecode, flat)

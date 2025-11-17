@@ -3011,6 +3011,8 @@ class IndexedFrame(Frame):
         -----
         This slicing has normal python semantics.
         """
+        if arg.step == 0:
+            raise ValueError("slice step cannot be zero")
         num_rows = len(self)
         if num_rows == 0:
             return self
@@ -3596,7 +3598,7 @@ class IndexedFrame(Frame):
         else:
             col = as_column(ans_col, retty)
 
-        col.set_base_mask(ans_mask.as_mask())
+        col = col.set_mask(ans_mask.as_mask())
         result = cudf.Series._from_column(
             col, index=self.index, attrs=self.attrs
         )

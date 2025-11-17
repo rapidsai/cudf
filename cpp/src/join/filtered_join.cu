@@ -28,6 +28,7 @@
 #include <cuco/static_set_ref.cuh>
 #include <cuda/std/iterator>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/sequence.h>
 
 namespace cudf {
 namespace detail {
@@ -77,15 +78,15 @@ struct gather_mask {
 
 auto filtered_join::compute_bucket_storage_size(cudf::table_view tbl, double load_factor)
 {
-  auto const size_with_primitive_probe = static_cast<cudf::size_type>(
-    cuco::make_valid_extent<primitive_probing_scheme, storage_type, cudf::size_type>(tbl.num_rows(),
-                                                                                     load_factor));
-  auto const size_with_nested_probe = static_cast<cudf::size_type>(
-    cuco::make_valid_extent<nested_probing_scheme, storage_type, cudf::size_type>(tbl.num_rows(),
-                                                                                  load_factor));
-  auto const size_with_simple_probe = static_cast<cudf::size_type>(
-    cuco::make_valid_extent<simple_probing_scheme, storage_type, cudf::size_type>(tbl.num_rows(),
-                                                                                  load_factor));
+  auto const size_with_primitive_probe = static_cast<std::size_t>(
+    cuco::make_valid_extent<primitive_probing_scheme, storage_type, std::size_t>(tbl.num_rows(),
+                                                                                 load_factor));
+  auto const size_with_nested_probe = static_cast<std::size_t>(
+    cuco::make_valid_extent<nested_probing_scheme, storage_type, std::size_t>(tbl.num_rows(),
+                                                                              load_factor));
+  auto const size_with_simple_probe = static_cast<std::size_t>(
+    cuco::make_valid_extent<simple_probing_scheme, storage_type, std::size_t>(tbl.num_rows(),
+                                                                              load_factor));
   return std::max({size_with_primitive_probe, size_with_nested_probe, size_with_simple_probe});
 }
 
@@ -214,10 +215,11 @@ filtered_join::filtered_join(cudf::table_view const& build,
     _nulls_equal{compare_nulls},
     _build{build},
     _preprocessed_build{cudf::detail::row::equality::preprocessed_table::create(_build, stream)},
-    _bucket_storage{cuco::extent<cudf::size_type>{compute_bucket_storage_size(build, load_factor)},
+    _bucket_storage{cuco::extent<std::size_t>{compute_bucket_storage_size(build, load_factor)},
                     rmm::mr::polymorphic_allocator<char>{},
                     stream.value()}
 {
+  if (_build.num_rows() == 0) return;
   _bucket_storage.initialize(empty_sentinel_key, stream);
 }
 
@@ -228,6 +230,7 @@ distinct_filtered_join::distinct_filtered_join(cudf::table_view const& build,
   : filtered_join(build, compare_nulls, load_factor, stream)
 {
   cudf::scoped_range range{"distinct_filtered_join::distinct_filtered_join"};
+  if (_build.num_rows() == 0) return;
   // Any mismatch in nullate between probe and build row operators results in UB. Ideally, nullate
   // should be determined by the logical OR of probe nulls and build nulls. However, since we do not
   // know if the probe has nulls apriori, we set nullate::DYNAMIC{true} (in the case of primitive
@@ -334,12 +337,28 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::se
 std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::semi_join(
   cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
+  // Early return for empty build or probe table
+  if (_build.num_rows() == 0 || probe.num_rows() == 0) {
+    return std::make_unique<rmm::device_uvector<cudf::size_type>>(0, stream, mr);
+  }
+
   return semi_anti_join(probe, join_kind::LEFT_SEMI_JOIN, stream, mr);
 }
 
 std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::anti_join(
   cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
+  // Early return for empty probe table
+  if (probe.num_rows() == 0) {
+    return std::make_unique<rmm::device_uvector<cudf::size_type>>(0, stream, mr);
+  }
+  if (_build.num_rows() == 0) {
+    auto result =
+      std::make_unique<rmm::device_uvector<cudf::size_type>>(probe.num_rows(), stream, mr);
+    thrust::sequence(rmm::exec_policy_nosync(stream), result->begin(), result->end());
+    return result;
+  }
+
   return semi_anti_join(probe, join_kind::LEFT_ANTI_JOIN, stream, mr);
 }
 

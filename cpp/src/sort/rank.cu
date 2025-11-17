@@ -10,7 +10,6 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/sorting.hpp>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -192,7 +191,7 @@ void rank_min(cudf::device_span<size_type const> group_keys,
                                        thrust::make_counting_iterator<size_type>(1),
                                        sorted_order_view,
                                        rank_mutable_view.begin<outputType>(),
-                                       cudf::detail::minimum{},
+                                       cuda::minimum{},
                                        cuda::std::identity{},
                                        stream);
 }
@@ -210,7 +209,7 @@ void rank_max(cudf::device_span<size_type const> group_keys,
                                        thrust::make_counting_iterator<size_type>(1),
                                        sorted_order_view,
                                        rank_mutable_view.begin<outputType>(),
-                                       cudf::detail::maximum{},
+                                       cuda::maximum{},
                                        cuda::std::identity{},
                                        stream);
 }

@@ -858,7 +858,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   // finally, copy the string data into place
   auto const dst = nesting_info_base[leaf_level_index].string_out;
   auto const src = page_string_data + string_offset;
-  memcpy_block<decode_block_size, true>(dst, src, s->page.str_bytes, block.thread_rank());
+  memcpy_block<decode_block_size, true>(dst, src, s->page.str_bytes, block);
 
   if (block.thread_rank() == 0 and s->error != 0) { set_error(s->error, error_code); }
 }

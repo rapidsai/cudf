@@ -10,16 +10,16 @@
 
 #include <rmm/aligned.hpp>
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/aligned_resource_adaptor.hpp>
-#include <rmm/mr/device/arena_memory_resource.hpp>
-#include <rmm/mr/device/cuda_async_memory_resource.hpp>
-#include <rmm/mr/device/cuda_memory_resource.hpp>
-#include <rmm/mr/device/limiting_resource_adaptor.hpp>
-#include <rmm/mr/device/logging_resource_adaptor.hpp>
-#include <rmm/mr/device/managed_memory_resource.hpp>
-#include <rmm/mr/device/owning_wrapper.hpp>
-#include <rmm/mr/device/pool_memory_resource.hpp>
+#include <rmm/mr/aligned_resource_adaptor.hpp>
+#include <rmm/mr/arena_memory_resource.hpp>
+#include <rmm/mr/cuda_async_memory_resource.hpp>
+#include <rmm/mr/cuda_memory_resource.hpp>
+#include <rmm/mr/limiting_resource_adaptor.hpp>
+#include <rmm/mr/logging_resource_adaptor.hpp>
+#include <rmm/mr/managed_memory_resource.hpp>
+#include <rmm/mr/owning_wrapper.hpp>
 #include <rmm/mr/pinned_host_memory_resource.hpp>
+#include <rmm/mr/pool_memory_resource.hpp>
 
 #include <atomic>
 #include <ctime>
@@ -534,7 +534,6 @@ class pinned_fallback_host_memory_resource {
   }
   // NOLINTEND(bugprone-easily-swappable-parameters)
 
-#if CCCL_MAJOR_VERSION > 3 || (CCCL_MAJOR_VERSION == 3 && CCCL_MINOR_VERSION >= 1)
   /**
    * @brief Allocates pinned host memory of size at least \p bytes bytes.
    *
@@ -603,7 +602,6 @@ class pinned_fallback_host_memory_resource {
   {
     return deallocate_async(ptr, bytes, alignment, stream);
   }
-#endif
 
   /**
    * @briefreturn{true if the specified resource is the same type as this resource.}
@@ -638,15 +636,9 @@ class pinned_fallback_host_memory_resource {
 };
 
 // carryover from RMM pinned_host_memory_resource
-#if CCCL_MAJOR_VERSION > 3 || (CCCL_MAJOR_VERSION == 3 && CCCL_MINOR_VERSION >= 1)
 static_assert(cuda::mr::resource_with<pinned_fallback_host_memory_resource,
                                       cuda::mr::device_accessible,
                                       cuda::mr::host_accessible>);
-#else
-static_assert(cuda::mr::async_resource_with<pinned_fallback_host_memory_resource,
-                                            cuda::mr::device_accessible,
-                                            cuda::mr::host_accessible>);
-#endif
 
 // we set this to our fallback resource if we have set it.
 std::unique_ptr<pinned_fallback_host_memory_resource> pinned_fallback_mr;
@@ -683,7 +675,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocInternal(JNIEnv* env,
     cudf::jni::auto_set_device(env);
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
     auto c_stream = rmm::cuda_stream_view(reinterpret_cast<cudaStream_t>(stream));
-    void* ret     = mr.allocate_async(size, rmm::CUDA_ALLOCATION_ALIGNMENT, c_stream);
+    void* ret     = mr.allocate(c_stream, size, rmm::CUDA_ALLOCATION_ALIGNMENT);
     return reinterpret_cast<jlong>(ret);
   }
   JNI_CATCH(env, 0);
@@ -698,7 +690,7 @@ Java_ai_rapids_cudf_Rmm_free(JNIEnv* env, jclass clazz, jlong ptr, jlong size, j
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
     void* cptr                        = reinterpret_cast<void*>(ptr);
     auto c_stream = rmm::cuda_stream_view(reinterpret_cast<cudaStream_t>(stream));
-    mr.deallocate_async(cptr, size, rmm::CUDA_ALLOCATION_ALIGNMENT, c_stream);
+    mr.deallocate(c_stream, cptr, size, rmm::CUDA_ALLOCATION_ALIGNMENT);
   }
   JNI_CATCH(env, );
 }
@@ -1209,9 +1201,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_freeFromFallbackPinnedPool(JNIEnv
   JNI_CATCH(env, );
 }
 
-JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Rmm_configureDefaultCudfPinnedPoolSize(JNIEnv* env,
-                                                                                      jclass clazz,
-                                                                                      jlong size)
+JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Rmm_configureDefaultCudfPinnedPoolSizeImpl(
+  JNIEnv* env, jclass clazz, jlong size)
 {
   JNI_TRY
   {

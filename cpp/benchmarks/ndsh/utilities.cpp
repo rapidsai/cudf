@@ -21,9 +21,9 @@
 #include <cudf/transform.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-#include <rmm/mr/device/managed_memory_resource.hpp>
-#include <rmm/mr/device/owning_wrapper.hpp>
-#include <rmm/mr/device/pool_memory_resource.hpp>
+#include <rmm/mr/managed_memory_resource.hpp>
+#include <rmm/mr/owning_wrapper.hpp>
+#include <rmm/mr/pool_memory_resource.hpp>
 
 #include <algorithm>
 #include <cstdlib>
@@ -401,7 +401,7 @@ void generate_parquet_data_sources(double scale_factor,
   CUDF_BENCHMARK_RANGE();
 
   // Set the memory resource to the managed pool
-  auto old_mr = cudf::get_current_device_resource();
+  auto* old_mr = rmm::mr::get_current_device_resource();
   // if already managed pool or managed, don't create new one.
   using managed_pool_mr_t = decltype(make_managed_pool());
   managed_pool_mr_t managed_pool_mr;

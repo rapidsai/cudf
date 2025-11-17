@@ -144,7 +144,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
 
   hash_set_type row_set{{static_cast<std::size_t>(build.num_rows())},
                         cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
-                        cuco::empty_key{JoinNoneValue},
+                        cuco::empty_key{JoinNoMatch},
                         {equality_build_equality, equality_build_conditional},
                         {row_hash_build.device_hasher(build_nulls)},
                         {},

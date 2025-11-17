@@ -15,7 +15,7 @@ docker build -f java/ci/Dockerfile.rocky --build-arg CUDA_VERSION=12.9.1 -t cudf
 ```
 
 The following CUDA versions are supported w/ CUDA Enhanced Compatibility:
-* CUDA 12.0+
+* CUDA 12.2+
 
 Change the --build-arg CUDA_VERSION to what you need.
 You can replace the tag "cudf-build:12.9.1-devel-rocky8" with another name you like.
@@ -34,7 +34,7 @@ nvidia-docker run -it cudf-build:12.9.1-devel-rocky8 bash
 You can download the cuDF repo in the docker container or you can mount it into the container.
 Here I choose to download again in the container.
 ```bash
-git clone --recursive https://github.com/rapidsai/cudf.git -b branch-25.12
+git clone --recursive https://github.com/rapidsai/cudf.git -b main
 ```
 
 ### Build cuDF jar with devtoolset
@@ -48,4 +48,4 @@ ${sclCMD} "java/ci/build-in-docker.sh"
 
 ### The output
 
-You can find the cuDF jar in java/target/ like cudf-25.12.0-SNAPSHOT-cuda12.jar.
+You can find the cuDF jar in java/target/ like cudf-26.02.0-SNAPSHOT-cuda12.jar.

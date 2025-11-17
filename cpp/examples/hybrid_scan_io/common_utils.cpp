@@ -14,10 +14,10 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/cuda_async_memory_resource.hpp>
-#include <rmm/mr/device/cuda_memory_resource.hpp>
-#include <rmm/mr/device/owning_wrapper.hpp>
-#include <rmm/mr/device/pool_memory_resource.hpp>
+#include <rmm/mr/cuda_async_memory_resource.hpp>
+#include <rmm/mr/cuda_memory_resource.hpp>
+#include <rmm/mr/owning_wrapper.hpp>
+#include <rmm/mr/pool_memory_resource.hpp>
 
 #include <string>
 #include <vector>
@@ -70,13 +70,24 @@ void check_tables_equal(cudf::table_view const& lhs_table,
     cudf::filtered_join join_obj(
       lhs_table, cudf::null_equality::EQUAL, cudf::set_as_build_table::RIGHT, stream);
     auto const indices = join_obj.anti_join(rhs_table, stream);
-
     // No exception thrown, check indices
-    auto const valid = indices->size() == 0;
-    std::cout << "Tables identical: " << std::boolalpha << valid << "\n\n";
+    auto const tables_equal = indices->size() == 0;
+    if (tables_equal) {
+      std::cout << "Tables identical: " << std::boolalpha << tables_equal << "\n\n";
+    } else {
+      // Helper to write parquet data for inspection
+      auto const write_parquet =
+        [](cudf::table_view table, std::string filepath, rmm::cuda_stream_view stream) {
+          auto sink_info = cudf::io::sink_info(filepath);
+          auto opts      = cudf::io::parquet_writer_options::builder(sink_info, table).build();
+          cudf::io::write_parquet(opts, stream);
+        };
+      write_parquet(lhs_table, "lhs_table.parquet", stream);
+      write_parquet(rhs_table, "rhs_table.parquet", stream);
+      throw std::logic_error("Tables identical: false\n\n");
+    }
   } catch (std::exception& e) {
-    std::cerr << e.what() << std::endl << std::endl;
-    throw std::runtime_error("Tables identical: false\n\n");
+    std::cout << e.what() << std::endl;
   }
 }
 
