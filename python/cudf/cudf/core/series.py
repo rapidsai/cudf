@@ -268,6 +268,10 @@ class _SeriesIlocIndexer(_FrameIndexer):
         self._frame._column[key] = value
 
 
+class _SeriesiAtIndexer(_SeriesIlocIndexer):
+    pass
+
+
 class _SeriesLocIndexer(_FrameIndexer):
     """
     Label-based selection
@@ -408,6 +412,10 @@ class _SeriesLocIndexer(_FrameIndexer):
                 return indices
 
 
+class _SeriesAtIndexer(_SeriesLocIndexer):
+    pass
+
+
 class Series(SingleColumnFrame, IndexedFrame):
     """
     One-dimensional GPU array (including time series).
@@ -510,7 +518,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         self,
         data=None,
         index=None,
-        dtype=None,
+        dtype: Dtype | None = None,
         name=None,
         copy=False,
         nan_as_null=no_default,
@@ -638,6 +646,20 @@ class Series(SingleColumnFrame, IndexedFrame):
     @_performance_tracking
     def __contains__(self, item) -> bool:
         return item in self.index
+
+    @property
+    def iat(self):
+        """
+        Alias for ``Series.iloc``; provided for compatibility with Pandas.
+        """
+        return _SeriesiAtIndexer(self)
+
+    @property
+    def at(self):
+        """
+        Alias for ``Series.loc``; provided for compatibility with Pandas.
+        """
+        return _SeriesAtIndexer(self)
 
     @classmethod
     @_performance_tracking

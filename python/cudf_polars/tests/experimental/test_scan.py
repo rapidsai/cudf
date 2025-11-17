@@ -9,7 +9,11 @@ import polars as pl
 
 from cudf_polars import Translator
 from cudf_polars.experimental.parallel import lower_ir_graph
-from cudf_polars.testing.asserts import DEFAULT_CLUSTER, assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    DEFAULT_CLUSTER,
+    DEFAULT_RUNTIME,
+    assert_gpu_result_equal,
+)
 from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.config import ConfigOptions
 
@@ -55,6 +59,7 @@ def test_target_partition_size(tmp_path, df, blocksize, n_files):
         executor_options={
             "target_partition_size": blocksize,
             "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
         },
     )
     assert_gpu_result_equal(q, engine=engine)
@@ -81,6 +86,7 @@ def test_split_scan_predicate(tmp_path, df, mask):
         executor_options={
             "target_partition_size": 1_000,
             "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
         },
     )
     assert_gpu_result_equal(q, engine=engine)

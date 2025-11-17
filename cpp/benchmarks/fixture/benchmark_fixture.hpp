@@ -8,10 +8,10 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_device.hpp>
-#include <rmm/mr/device/cuda_memory_resource.hpp>
-#include <rmm/mr/device/owning_wrapper.hpp>
-#include <rmm/mr/device/pool_memory_resource.hpp>
-#include <rmm/mr/device/statistics_resource_adaptor.hpp>
+#include <rmm/mr/cuda_memory_resource.hpp>
+#include <rmm/mr/owning_wrapper.hpp>
+#include <rmm/mr/pool_memory_resource.hpp>
+#include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <benchmark/benchmark.h>
 
@@ -98,9 +98,9 @@ class memory_stats_logger {
   memory_stats_logger()
     : existing_mr(cudf::get_current_device_resource_ref()),
       statistics_mr(
-        rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(existing_mr))
+        rmm::mr::statistics_resource_adaptor<rmm::device_async_resource_ref>(existing_mr))
   {
-    cudf::set_current_device_resource(&statistics_mr);
+    cudf::set_current_device_resource_ref(&statistics_mr);
   }
 
   ~memory_stats_logger() { cudf::set_current_device_resource_ref(existing_mr); }
@@ -112,7 +112,7 @@ class memory_stats_logger {
 
  private:
   rmm::device_async_resource_ref existing_mr;
-  rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource> statistics_mr;
+  rmm::mr::statistics_resource_adaptor<rmm::device_async_resource_ref> statistics_mr;
 };
 
 }  // namespace cudf

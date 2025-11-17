@@ -2,12 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 import abc
 import copyreg
+import datetime
 import functools
 import importlib
 import inspect
 import os
 import pickle
 
+import numpy as np
 import pandas as pd
 
 # cuGraph third party integration test, test_cugraph_from_pandas_adjacency,
@@ -68,6 +70,7 @@ from pandas.io.sas.sas_xport import (  # isort: skip
 from pandas.core.resample import (  # isort: skip
     Resampler as pd_Resampler,
     TimeGrouper as pd_TimeGrouper,
+    DatetimeIndexResampler as pd_DatetimeIndexResampler,
 )
 
 try:
@@ -189,6 +192,7 @@ Timedelta = make_final_proxy_type(
     "Timedelta",
     _Unusable,
     pd.Timedelta,
+    bases=(datetime.timedelta,),
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
@@ -203,6 +207,7 @@ Timestamp = make_final_proxy_type(
     "Timestamp",
     _Unusable,
     pd.Timestamp,
+    bases=(datetime.datetime,),
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
@@ -351,6 +356,26 @@ def _Series_dtype(self):
     return _maybe_wrap_result(self._fsproxy_wrapped.dtype, None)
 
 
+_SeriesAtIndexer = make_intermediate_proxy_type(
+    "_SeriesAtIndexer",
+    cudf.core.series._SeriesAtIndexer,
+    pd.core.indexing._AtIndexer,
+)
+
+
+_SeriesiAtIndexer = make_intermediate_proxy_type(
+    "_SeriesiAtIndexer",
+    cudf.core.series._SeriesiAtIndexer,
+    pd.core.indexing._iAtIndexer,
+)
+
+
+def _argsort(self, *args, **kwargs):
+    return _maybe_wrap_result(
+        self._fsproxy_wrapped.argsort(*args, **kwargs).astype(np.intp), self
+    )
+
+
 Series = make_final_proxy_type(
     "Series",
     cudf.Series,
@@ -367,6 +392,8 @@ Series = make_final_proxy_type(
         "memory_usage": _FastSlowAttribute("memory_usage"),
         "__sizeof__": _FastSlowAttribute("__sizeof__"),
         "dt": _AccessorAttr(CombinedDatetimelikeProperties),
+        "at": _FastSlowAttribute("at"),
+        "iat": _FastSlowAttribute("iat"),
         "str": _AccessorAttr(StringMethods),
         "list": _AccessorAttr(ListMethods),
         "struct": _AccessorAttr(StructAccessor),
@@ -375,6 +402,7 @@ Series = make_final_proxy_type(
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
         "_accessors": set(),
         "dtype": property(_Series_dtype),
+        "argsort": _argsort,
         "attrs": _FastSlowAttribute("attrs"),
         "_mgr": _FastSlowAttribute("_mgr", private=True),
         "array": _FastSlowAttribute("array", private=True),
@@ -444,6 +472,9 @@ Index = make_final_proxy_type(
         "name": _FastSlowAttribute("name"),
         "nbytes": _FastSlowAttribute("nbytes", private=True),
         "array": _FastSlowAttribute("array", private=True),
+        # TODO: Handle special cases like mergesort being unsupported
+        # and raising for certain types like Categorical and RangeIndex
+        "argsort": _argsort,
     },
 )
 
@@ -1146,6 +1177,10 @@ DataFrameResampler = make_intermediate_proxy_type(
 
 SeriesResampler = make_intermediate_proxy_type(
     "SeriesResampler", cudf.core.resample.SeriesResampler, pd_Resampler
+)
+
+DatetimeIndexResampler = make_intermediate_proxy_type(
+    "DatetimeIndexResampler", _Unusable, pd_DatetimeIndexResampler
 )
 
 StataReader = make_intermediate_proxy_type(
@@ -2019,6 +2054,7 @@ ArrowExtensionArray = make_final_proxy_type(
         "__abs__": _FastSlowAttribute("__abs__"),
         "__contains__": _FastSlowAttribute("__contains__"),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+        "__arrow_array__": arrow_array_method,
     },
 )
 
@@ -2287,15 +2323,6 @@ def initial_setup():
     cudf.set_option("mode.pandas_compatible", True)
 
 
-def _reduce_obj(obj):
-    from cudf.pandas.module_accelerator import disable_module_accelerator
-
-    with disable_module_accelerator():
-        pickled_args = pickle.dumps(obj.__reduce__())
-
-    return _unpickle_obj, (pickled_args,)
-
-
 def _unpickle_obj(pickled_args):
     from cudf.pandas.module_accelerator import disable_module_accelerator
 
@@ -2303,6 +2330,24 @@ def _unpickle_obj(pickled_args):
         unpickler, args = pickle.loads(pickled_args)
     obj = unpickler(*args)
     return obj
+
+
+def _reduce_proxied_td_obj(obj):
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        pickled_args = pickle.dumps(obj._fsproxy_wrapped.__reduce__())
+
+    return _unpickle_obj, (pickled_args,)
+
+
+def _reduce_obj(obj):
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        pickled_args = pickle.dumps(obj.__reduce__())
+
+    return _unpickle_obj, (pickled_args,)
 
 
 def _generic_reduce_obj(obj, unpickle_func):
@@ -2356,8 +2401,10 @@ def _unpickle_offset_obj(pickled_args):
     return obj
 
 
+copyreg.dispatch_table[Timestamp] = _reduce_proxied_td_obj
 copyreg.dispatch_table[pd.Timestamp] = _reduce_obj
 # same reducer/unpickler can be used for Timedelta:
+copyreg.dispatch_table[Timedelta] = _reduce_proxied_td_obj
 copyreg.dispatch_table[pd.Timedelta] = _reduce_obj
 
 # TODO: Need to find a way to unpickle cross-version(old) pickled objects.

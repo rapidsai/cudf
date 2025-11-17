@@ -98,6 +98,10 @@ def find_sort_splits(
         stream=stream,
     )
     # And convert to list for final processing
+    # The type ignores are for cross-library boundaries: plc.Column -> pl.Series
+    # These work at runtime via the Arrow C Data Interface protocol
+    # TODO: Find a way for pylibcudf types to show they export the Arrow protocol
+    # (mypy wasn't happy with a custom protocol)
     split_first_list = pl.Series(split_first_col).to_list()
     split_last_list = pl.Series(split_last_col).to_list()
     split_part_id_list = pl.Series(split_part_id).to_list()

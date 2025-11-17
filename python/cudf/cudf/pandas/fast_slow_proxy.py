@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import datetime
 import functools
 import inspect
 import operator
@@ -610,6 +611,26 @@ class _FinalProxy(_FastSlowProxy):
             proxy = base_class.__new__(cls)
         elif base_class is ProxyNDarrayBase:
             proxy = base_class.__new__(cls, value)
+        elif base_class is datetime.datetime:
+            proxy = base_class.__new__(
+                cls,
+                year=value.year,
+                month=value.month,
+                day=value.day,
+                hour=value.hour,
+                minute=value.minute,
+                second=value.second,
+                microsecond=value.microsecond,
+                tzinfo=value.tzinfo,
+                fold=value.fold,
+            )
+        elif base_class is datetime.timedelta:
+            proxy = base_class.__new__(
+                cls,
+                days=value.days,
+                seconds=value.seconds,
+                microseconds=value.microseconds,
+            )
         else:
             raise TypeError(
                 f"Cannot create an proxy instance of {cls.__name__} using base class {base_class.__name__}. "
@@ -1399,6 +1420,8 @@ def is_proxy_instance(obj, type):
 
 PROXY_BASE_CLASSES: set[type] = {
     ProxyNDarrayBase,
+    datetime.datetime,
+    datetime.timedelta,
 }
 
 

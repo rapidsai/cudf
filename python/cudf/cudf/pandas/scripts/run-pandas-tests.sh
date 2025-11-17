@@ -164,11 +164,14 @@ IGNORE_TESTS_THAT_TEST_PRIVATE_FUNTIONALITY=("--ignore=tests/test_nanops.py"
                                              "--ignore=tests/util/test_deprecate_kwarg.py"
                                              "--ignore=tests/util/test_deprecate.py"
                                              "--ignore=tests/util/test_doc.py"
+                                             "--ignore=tests/frame/methods/test_to_dict_of_blocks.py"
                                              "--ignore=tests/tslibs/"
                                              "--ignore=tests/libs/"
                                              "--ignore=tests/internals/"
                                              "--ignore=tests/groupby/test_libgroupby.py"
                                              "--ignore=tests/frame/test_block_internals.py"
+                                             "--ignore=tests/arrays/sparse/test_libsparse.py"
+                                             "--ignore=tests/copy_view/test_internals.py"
 )
 
 

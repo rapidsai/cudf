@@ -864,6 +864,11 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort
     auto store_functor =
       detail::aggregate_result_functor(request.values, helper(), cache, stream, mr);
     for (auto const& agg : request.aggregations) {
+      // SUM_WITH_OVERFLOW is only supported with hash-based groupby, not sort-based
+      CUDF_EXPECTS(agg->kind != aggregation::SUM_WITH_OVERFLOW,
+                   "SUM_WITH_OVERFLOW aggregation is only supported with hash-based groupby, not "
+                   "sort-based groupby");
+
       // TODO (dm): single pass compute all supported reductions
       cudf::detail::aggregation_dispatcher(agg->kind, store_functor, *agg);
     }

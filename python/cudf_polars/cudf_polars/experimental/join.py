@@ -144,6 +144,7 @@ def _make_bcast_join(
     left: IR,
     right: IR,
     shuffle_method: ShuffleMethod,
+    streaming_runtime: str,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     if ir.options[0] != "Inner":
         left_count = partition_info[left].count
@@ -162,22 +163,23 @@ def _make_bcast_join(
         # - In some cases, we can perform the partial joins
         #   sequentially. However, we are starting with a
         #   catch-all algorithm that works for all cases.
-        if left_count >= right_count:
-            right = _maybe_shuffle_frame(
-                right,
-                ir.right_on,
-                partition_info,
-                shuffle_method,
-                right_count,
-            )
-        else:
-            left = _maybe_shuffle_frame(
-                left,
-                ir.left_on,
-                partition_info,
-                shuffle_method,
-                left_count,
-            )
+        if streaming_runtime == "tasks":
+            if left_count >= right_count:
+                right = _maybe_shuffle_frame(
+                    right,
+                    ir.right_on,
+                    partition_info,
+                    shuffle_method,
+                    right_count,
+                )
+            else:
+                left = _maybe_shuffle_frame(
+                    left,
+                    ir.left_on,
+                    partition_info,
+                    shuffle_method,
+                    left_count,
+                )
 
     new_node = ir.reconstruct([left, right])
     partition_info[new_node] = PartitionInfo(count=output_count)
@@ -288,6 +290,7 @@ def _(
             left,
             right,
             config_options.executor.shuffle_method,
+            config_options.executor.runtime,
         )
     else:
         # Create a hash join

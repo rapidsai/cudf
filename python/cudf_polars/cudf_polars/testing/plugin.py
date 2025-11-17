@@ -57,11 +57,11 @@ def pytest_configure(config: pytest.Config) -> None:
         collect = polars.LazyFrame.collect
         engine = polars.GPUEngine(raise_on_fail=no_fallback)
         # https://github.com/python/mypy/issues/2427
-        polars.LazyFrame.collect = partialmethod(collect, engine=engine)
+        polars.LazyFrame.collect = partialmethod(collect, engine=engine)  # type: ignore[method-assign, assignment]
     elif executor == "in-memory":
         collect = polars.LazyFrame.collect
         engine = polars.GPUEngine(executor=executor)
-        polars.LazyFrame.collect = partialmethod(collect, engine=engine)
+        polars.LazyFrame.collect = partialmethod(collect, engine=engine)  # type: ignore[method-assign, assignment]
     elif executor == "streaming" and blocksize_mode == "small":
         executor_options: dict[str, Any] = {}
         executor_options["max_rows_per_partition"] = 4
@@ -70,7 +70,7 @@ def pytest_configure(config: pytest.Config) -> None:
         executor_options["fallback_mode"] = StreamingFallbackMode.SILENT
         collect = polars.LazyFrame.collect
         engine = polars.GPUEngine(executor=executor, executor_options=executor_options)
-        polars.LazyFrame.collect = partialmethod(collect, engine=engine)
+        polars.LazyFrame.collect = partialmethod(collect, engine=engine)  # type: ignore[method-assign, assignment]
     else:
         # run with streaming executor and default blocksize
         polars.Config.set_engine_affinity("gpu")
@@ -96,7 +96,6 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_lazy_count_star.py::test_count_compressed_csv_18057": "Need to determine if file is compressed",
     "tests/unit/io/test_lazy_count_star.py::test_count_parquet[small.parquet-4]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_lazy_count_star.py::test_count_parquet[foods*.parquet-54]": "Debug output on stderr doesn't match",
-    "tests/unit/io/test_lazy_csv.py::test_scan_csv_slice_offset_zero": "Integer overflow in sliced read",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_is_in_statistics": "Debug output on stderr doesn't match",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_statistics": "Debug output on stderr doesn't match",
     "tests/unit/io/test_partition.py::test_partition_to_memory[io_type0]": "partition sinks not yet supported in standard engine.",
@@ -265,6 +264,7 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/streaming/test_streaming.py::test_streaming_apply": "https://github.com/pola-rs/polars/issues/22558",
     # New iceberg release causes this test to fail. We can remove in the next polars version bump: https://github.com/rapidsai/cudf/pull/19912
     "tests/unit/io/test_iceberg.py::test_fill_missing_fields_with_identity_partition_values[False]": "https://github.com/pola-rs/polars/pull/24456",
+    "tests/unit/operations/test_rolling.py::test_rolling_agg_bad_input_types[str]": "https://github.com/rapidsai/cudf/issues/20551",
 }
 
 

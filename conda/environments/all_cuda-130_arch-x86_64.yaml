@@ -25,7 +25,7 @@ dependencies:
 - cuda-version=13.0
 - cupy>=13.6.0
 - cxx-compiler
-- cython>=3.0.3
+- cython>=3.0.3,<3.2.0a0
 - dask-cuda==25.12.*,>=0.0.0a0
 - dlpack>=0.8,<1.0
 - doxygen=1.9.1
@@ -71,13 +71,13 @@ dependencies:
 - pre-commit
 - pyarrow>=15.0.0
 - pydata-sphinx-theme>=0.15.4
-- pytest
 - pytest-benchmark
 - pytest-cases>=3.8.2
 - pytest-cov
 - pytest-httpserver
 - pytest-rerunfailures!=16.0.0
 - pytest-xdist
+- pytest<9.0.0a0
 - python-confluent-kafka>=2.8.0,<2.9.0a0
 - python-xxhash
 - python>=3.10,<3.14

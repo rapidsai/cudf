@@ -24,7 +24,6 @@ from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
-    SIZE_TYPE_DTYPE,
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     get_dtype_of_same_kind,
@@ -116,6 +115,7 @@ class StringColumn(ColumnBase, Scannable):
         "__truediv__",
         "__floordiv__",
     }
+    _VALID_PLC_TYPES = {plc.TypeId.STRING}
     _VALID_SCANS = {
         "cummin",
         "cummax",
@@ -123,16 +123,13 @@ class StringColumn(ColumnBase, Scannable):
 
     def __init__(
         self,
-        data: Buffer,
+        plc_column: plc.Column,
         size: int,
         dtype: np.dtype,
-        mask: Buffer | None,
         offset: int,
         null_count: int,
-        children: tuple[ColumnBase],
-    ):
-        if not isinstance(data, Buffer):
-            raise ValueError("data must be a Buffer")
+        exposed: bool,
+    ) -> None:
         if (
             not cudf.get_option("mode.pandas_compatible")
             and dtype != CUDF_STRING_DTYPE
@@ -148,32 +145,18 @@ class StringColumn(ColumnBase, Scannable):
             and dtype.kind == "U"
         ):
             dtype = CUDF_STRING_DTYPE
-        if len(children) > 1:
-            raise ValueError("StringColumn must have at most 1 offset column.")
-
-        if len(children) == 0 and size != 0:
-            # all nulls-column:
-            offsets = as_column(0, length=size + 1, dtype=SIZE_TYPE_DTYPE)
-
-            children = (offsets,)
 
         super().__init__(
-            data=data,
+            plc_column=plc_column,
             size=size,
             dtype=dtype,
-            mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
+            exposed=exposed,
         )
 
         self._start_offset = None
         self._end_offset = None
-
-    def copy(self, deep: bool = True) -> Self:
-        # Since string columns are immutable, both deep
-        # and shallow copies share the underlying device data and mask.
-        return super().copy(deep=False)
 
     @property
     def start_offset(self) -> int:
@@ -321,7 +304,7 @@ class StringColumn(ColumnBase, Scannable):
         other = [item] if is_scalar(item) else item
         return self.contains(as_column(other, dtype=self.dtype)).any()
 
-    def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
+    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         """
         Copies type metadata from self onto other, returning a new column.
         """
@@ -1364,8 +1347,8 @@ class StringColumn(ColumnBase, Scannable):
     def like(self, pattern: str, escape: str) -> Self:
         plc_column = plc.strings.contains.like(
             self.to_pylibcudf(mode="read"),
-            pa_scalar_to_plc_scalar(pa.scalar(pattern)),
-            pa_scalar_to_plc_scalar(pa.scalar(escape)),
+            pattern,
+            escape,
         )
         return (
             type(self)
