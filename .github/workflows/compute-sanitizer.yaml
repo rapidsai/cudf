@@ -18,25 +18,31 @@ jobs:
         shell: bash
         run: |
           ./ci/discover_libcudf_tests.sh
-  run-sanitizer-tests:
+  run-sanitizer-tests-memcheck:
+    name: compute-sanitizer memcheck tests
     needs: discover-sanitizer-tests
-    name: Run compute-sanitizer on ${{ matrix.test_name }}
-    runs-on: linux-amd64-gpu-l4-latest-1
-    container:
-      image: rapidsai/ci-conda:25.12-latest
-    continue-on-error: true
-    strategy:
-      fail-fast: false
-      matrix:
-        tool_name: ["memcheck", "racecheck", "initcheck", "synccheck"]
-        test_name: ${{ fromJson(needs.discover-sanitizer-tests.outputs.tests) }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-      - name: Run compute-sanitizer on ${{ matrix.test_name }}
-        shell: bash
-        env:
-          TOOL_NAME: "${{ matrix.tool_name }}"
-          TEST_NAME: "${{ matrix.test_name }}"
-        run: |
-          ./ci/run_compute_sanitizer_test.sh "${TOOL_NAME}" "${TEST_NAME}"
+    uses: ./.github/workflows/compute-sanitizer-run.yaml
+    with:
+      tool_name: "memcheck"
+      test_names: ${{ needs.discover-sanitizer-tests.outputs.tests }}
+  run-sanitizer-tests-racecheck:
+    name: compute-sanitizer racecheck tests
+    needs: discover-sanitizer-tests
+    uses: ./.github/workflows/compute-sanitizer-run.yaml
+    with:
+      tool_name: "racecheck"
+      test_names: ${{ needs.discover-sanitizer-tests.outputs.tests }}
+  run-sanitizer-tests-initcheck:
+    name: compute-sanitizer initcheck tests
+    needs: discover-sanitizer-tests
+    uses: ./.github/workflows/compute-sanitizer-run.yaml
+    with:
+      tool_name: "initcheck"
+      test_names: ${{ needs.discover-sanitizer-tests.outputs.tests }}
+  run-sanitizer-tests-synccheck:
+    name: compute-sanitizer synccheck tests
+    needs: discover-sanitizer-tests
+    uses: ./.github/workflows/compute-sanitizer-run.yaml
+    with:
+      tool_name: "synccheck"
+      test_names: ${{ needs.discover-sanitizer-tests.outputs.tests }}

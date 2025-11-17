@@ -49,7 +49,7 @@ tests=$(ls -1 *_TEST | jq -R -s -c 'split("\n") | map(select(length > 0))')
 rapids-logger "Found tests:"
 echo "${tests}" | jq .[]
 
-# Output to GITHUB_OUTPUT if available (for GitHub Actions)
+# Output to GITHUB_OUTPUT for GitHub Actions
 if [ -n "${GITHUB_OUTPUT:-}" ]; then
   echo "tests=${tests}" >> "${GITHUB_OUTPUT}"
 fi
