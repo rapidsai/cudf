@@ -387,7 +387,7 @@ class BooleanFunction(Expr):
                 plc.unary.cast(
                     plc.unary.unary_operation(
                         column.obj,
-                        plc.unary.UnaryOperator.NOT,
+                        plc.unary.UnaryOperator.NOT
                         if column.obj.type().id() == plc.TypeId.BOOL8
                         else plc.unary.UnaryOperator.BIT_INVERT,
                         stream=df.stream
