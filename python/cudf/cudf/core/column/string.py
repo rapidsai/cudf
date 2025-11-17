@@ -1663,7 +1663,7 @@ class StringColumn(ColumnBase, Scannable):
         )
         res = type(self).from_pylibcudf(plc_result)
         if cudf.get_option("mode.pandas_compatible"):
-            res = res.astype("int64")  # type: ignore[assignment]
+            res = res.astype(np.dtype("int64"))  # type: ignore[assignment]
 
             if (
                 isinstance(self.dtype, pd.StringDtype)
@@ -1784,7 +1784,7 @@ class StringColumn(ColumnBase, Scannable):
         )
         res = type(self).from_pylibcudf(plc_result)
         if cudf.get_option("mode.pandas_compatible"):
-            res = res.astype("int64")  # type: ignore[assignment]
+            res = res.astype(np.dtype("int64"))  # type: ignore[assignment]
             if (
                 isinstance(self.dtype, pd.StringDtype)
                 and self.dtype.na_value is np.nan

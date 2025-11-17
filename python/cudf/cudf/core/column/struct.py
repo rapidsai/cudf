@@ -50,7 +50,6 @@ class StructColumn(ColumnBase):
     the number of fields in the Struct Dtype.
     """
 
-    _VALID_BINARY_OPERATIONS = {"__eq__", "__ne__"}
     _VALID_PLC_TYPES = {plc.TypeId.STRUCT}
 
     def __init__(
@@ -98,11 +97,6 @@ class StructColumn(ColumnBase):
         """
         # TODO: handle if self.has_nulls(): case
         return self
-
-    def _binaryop(self, other, op: str) -> ColumnBase:
-        raise NotImplementedError(
-            f"Binary operation '{op}' not yet supported for StructColumn"
-        )
 
     @staticmethod
     def _validate_dtype_instance(dtype: StructDtype) -> StructDtype:

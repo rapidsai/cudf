@@ -318,9 +318,19 @@ def test_dataframe_axis1_unsupported_ops(op):
         "any",
     ],
 )
-def test_dataframe_reductions(data, axis, func, skipna):
+def test_dataframe_reductions(request, data, axis, func, skipna):
     pdf = pd.DataFrame(data=data)
-    gdf = cudf.DataFrame(pdf)
+    gdf = cudf.DataFrame(pdf, nan_as_null=False)
+    if request.node.callspec.id in {
+        "True-cumsum-1-data0",
+        "True-cumprod-1-data0",
+        "True-any-1-data2",
+    }:
+        request.applymarker(
+            pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/20628"
+            )
+        )
 
     # Reductions can fail in numerous possible ways when attempting row-wise
     # reductions, which are only partially supported. Catching the appropriate

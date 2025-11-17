@@ -6973,7 +6973,6 @@ def _is_same_dtype(lhs_dtype, rhs_dtype):
         and isinstance(rhs_dtype, cudf.CategoricalDtype)
         and lhs_dtype.categories.dtype == rhs_dtype.categories.dtype
     ):
-        # OK if categories are not all the same
         return True
     elif (
         isinstance(lhs_dtype, cudf.CategoricalDtype)
