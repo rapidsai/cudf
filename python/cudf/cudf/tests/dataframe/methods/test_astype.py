@@ -280,3 +280,13 @@ def test_dataframe_astype_no_copy(copy):
     result = gdf.astype("int64", copy=copy)
     assert_eq(result, gdf)
     assert (result is gdf) is (not copy)
+
+
+def test_astype_copy_none_warns():
+    df = cudf.DataFrame({"a": [1, 2, 3]})
+
+    with pytest.warns(
+        FutureWarning,
+        match="`copy=None` is deprecated",
+    ):
+        df.astype("int64", copy=None)

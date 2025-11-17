@@ -2062,8 +2062,6 @@ class Series(SingleColumnFrame, IndexedFrame):
         copy: bool | None = None,
         errors: Literal["raise", "ignore"] = "raise",
     ) -> Self:
-        if copy is None:
-            copy = True
         if cudf.get_option("mode.pandas_compatible"):
             if inspect.isclass(dtype) and issubclass(
                 dtype, pd.api.extensions.ExtensionDtype

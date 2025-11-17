@@ -423,6 +423,12 @@ class Frame(BinaryOperand, Scannable, Serializable):
     ) -> Self:
         if copy is None:
             copy = True
+            warnings.warn(
+                "`copy=None` is deprecated in 25.12 and will be removed in a future release. "
+                "Explicitly pass `copy=True` or `copy=False` to avoid this warning.",
+                FutureWarning,
+                stacklevel=2,
+            )
         if not copy:
             if all(
                 dtype.get(col_name, col.dtype) == col.dtype
