@@ -1921,7 +1921,6 @@ class Index(SingleColumnFrame):
 
     @_performance_tracking
     def equals(self, other) -> bool:
-        # import pdb; pdb.set_trace()
         if not isinstance(other, Index) or len(self) != len(other):
             return False
 

@@ -141,7 +141,6 @@ def _match_categorical_dtypes_both(
 
     # when both are ordered and both have the same categories,
     # no casting required:
-    # import pdb; pdb.set_trace()
     if ltype._internal_eq(rtype):
         return lcol, rcol
 
