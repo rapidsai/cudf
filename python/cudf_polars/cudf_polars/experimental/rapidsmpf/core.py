@@ -91,7 +91,15 @@ def evaluate_logical_plan(
     # TODO: Multi-GPU version will be different. The rest of this function
     #       will be executed on each rank independently.
     # TODO: Need a way to configure options specific to the rapidmspf engine.
-    options = Options(get_environment_variables())
+    options = Options(
+        {
+            # By default, set the number of streaming threads to the max
+            # number of IO threads. The user may override this with an
+            # environment variable (i.e. RAPIDSMPF_NUM_STREAMING_THREADS)
+            "num_streaming_threads": str(max(config_options.executor.max_io_threads, 1))
+        }
+        | get_environment_variables()
+    )
     comm = new_communicator(options)
     mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
     rmm.mr.set_current_device_resource(mr)
@@ -322,11 +330,8 @@ def generate_network(
     # Determine which nodes need fanout
     fanout_nodes = determine_fanout_nodes(ir, partition_info, ir_dep_count)
 
-    # Get max_io_threads from config (default: 4)
-    # Type narrowing: rapidsmpf only works with StreamingExecutor
-    from cudf_polars.utils.config import StreamingExecutor
-
-    assert isinstance(config_options.executor, StreamingExecutor)
+    # Get max_io_threads from config (default: 2)
+    assert config_options.executor.name == "streaming", "Executor must be streaming"
     max_io_threads_global = config_options.executor.max_io_threads
     max_io_threads_local = max(1, max_io_threads_global // max(1, num_io_nodes))
 

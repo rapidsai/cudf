@@ -256,7 +256,7 @@ class RunConfig:
     query_set: str
     collect_traces: bool = False
     stats_planning: bool
-    max_io_threads: int = 4
+    max_io_threads: int
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.gather_shuffle_stats and self.shuffle != "rapidsmpf":
@@ -884,9 +884,9 @@ def parse_args(
     )
     parser.add_argument(
         "--max-io-threads",
-        default=4,
+        default=2,
         type=int,
-        help="Maximum number of IO threads for rapidsmpf runtime. Default: 4",
+        help="Maximum number of IO threads for rapidsmpf runtime. Default: 2",
     )
 
     parsed_args = parser.parse_args(args)

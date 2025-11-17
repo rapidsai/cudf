@@ -614,7 +614,7 @@ class StreamingExecutor:
         Options controlling statistics-based query planning. See
         :class:`~cudf_polars.utils.config.StatsPlanningOptions` for more.
     max_io_threads
-        Maximum number of IO threads for the rapidsmpf runtime. Default is 4.
+        Maximum number of IO threads for the rapidsmpf runtime. Default is 2.
         This controls the parallelism of IO operations when reading data.
 
     Notes
@@ -708,7 +708,7 @@ class StreamingExecutor:
     )
     max_io_threads: int = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__MAX_IO_THREADS", int, default=4
+            f"{_env_prefix}__MAX_IO_THREADS", int, default=2
         )
     )
 
@@ -830,6 +830,8 @@ class StreamingExecutor:
             raise TypeError("sink_to_directory must be bool")
         if not isinstance(self.client_device_threshold, float):
             raise TypeError("client_device_threshold must be a float")
+        if not isinstance(self.max_io_threads, int):
+            raise TypeError("max_io_threads must be an int")
 
         # RapidsMPF spill is only supported for distributed clusters for now.
         # This is because the spilling API is still within the RMPF-Dask integration.
