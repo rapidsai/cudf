@@ -3792,7 +3792,7 @@ class DatetimeIndex(Index):
             elif freq == pd.Timedelta("7 days"):
                 raise NotImplementedError("Can't infer anchored week")
 
-            assert isinstance(freq, pd.Timedelta)
+            assert isinstance(freq, pd.Timedelta)  # pacify mypy
             cmps = freq.components
 
             kwds = {}
@@ -3802,8 +3802,8 @@ class DatetimeIndex(Index):
 
             return cudf.DateOffset(**kwds)
 
-            # maximum unique count supported is months with 4 unique lengths
-            # bail above that for now
+        # maximum unique count supported is months with 4 unique lengths
+        # bail above that for now
         elif 1 < uniques.size() <= 4:
             # length between 1 and 4, small host copy
             if all(
@@ -3823,13 +3823,6 @@ class DatetimeIndex(Index):
         else:
             return None
         return None
-
-    @property
-    def _safe_inferred_freq(self):
-        try:
-            return self.inferred_freq
-        except NotImplementedError:
-            return None
 
     def _get_slice_frequency(self, slc=None):
         if slc.step in (1, None):
