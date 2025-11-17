@@ -217,7 +217,6 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   compute_shared_memory_aggs(grid_size,
                              available_shmem_size,
                              num_rows,
-                             row_bitmask,
                              local_mapping_indices.data(),
                              global_mapping_indices.data(),
                              block_cardinality.data(),

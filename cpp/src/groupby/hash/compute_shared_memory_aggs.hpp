@@ -28,7 +28,6 @@ size_type constexpr compute_shmem_offsets_size(size_type num_cols)
 void compute_shared_memory_aggs(size_type grid_size,
                                 size_type available_shmem_size,
                                 size_type num_input_rows,
-                                bitmask_type const* row_bitmask,
                                 size_type* local_mapping_index,
                                 size_type* global_mapping_index,
                                 size_type* block_cardinality,

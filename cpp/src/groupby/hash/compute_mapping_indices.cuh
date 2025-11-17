@@ -60,6 +60,10 @@ __device__ void find_local_mapping(cooperative_groups::thread_block const& block
   if (is_valid_input) {
     // element was already in set
     if (!inserted) { local_mapping_indices[idx] = local_mapping_indices[result_idx]; }
+  } else if (idx < num_input_rows) {
+    // Store a sentinel value, so later on we can use it to identify which rows are invalid without
+    // using the validity bitmask.
+    local_mapping_indices[idx] = cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
   }
 }
 
