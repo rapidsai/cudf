@@ -1,6 +1,12 @@
-name: Compute Sanitizer
+name: Compute Sanitizer Trigger
+
+# This workflow runs all compute-sanitizer tools on all libcudf tests weekly.
+# WARNING: This is very resource intensive and runs hundreds of GPU jobs.
+# For targeted testing, manually trigger compute-sanitizer-run.yaml with specific tool_name and test_names.
 
 on:
+  schedule:
+    - cron: '0 10 * * 6'  # Weekly on Saturday at 10:00 UTC
   workflow_dispatch:
 
 jobs:
