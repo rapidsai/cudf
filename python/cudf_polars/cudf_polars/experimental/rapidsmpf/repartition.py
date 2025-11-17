@@ -118,7 +118,7 @@ async def concatenate_node(
 @generate_ir_sub_network.register(Repartition)
 def _(
     ir: Repartition, rec: SubNetGenerator
-) -> tuple[list[Any], dict[IR, ChannelManager]]:
+) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     # Repartition node.
 
     partition_info = rec.state["partition_info"]
@@ -138,7 +138,7 @@ def _(
     channels[ir] = ChannelManager(rec.state["context"])
 
     # Add python node
-    nodes.append(
+    nodes[ir] = [
         concatenate_node(
             rec.state["context"],
             ir,
@@ -147,5 +147,5 @@ def _(
             channels[ir.children[0]].reserve_output_slot(),
             max_chunks=max_chunks,
         )
-    )
+    ]
     return nodes, channels
