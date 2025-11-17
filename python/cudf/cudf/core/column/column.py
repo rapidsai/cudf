@@ -1245,7 +1245,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     ) -> ColumnBase:
         # Might be able to remove if we share more of
         # DatetimeColumn._binaryop & TimedeltaColumn._binaryop
-        # import pdb;pdb.set_trace()
         if self.has_nulls() and (
             isinstance(other, ColumnBase) and other.has_nulls()
         ):
