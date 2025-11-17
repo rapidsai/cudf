@@ -172,7 +172,7 @@ bool hybrid_scan_reader_impl::setup_column_chunks()
 }
 
 void hybrid_scan_reader_impl::setup_compressed_data(
-  std::vector<rmm::device_buffer> column_chunk_buffers)
+  std::vector<rmm::device_buffer>&& column_chunk_buffers)
 {
   auto& pass = *_pass_itm_data;
 

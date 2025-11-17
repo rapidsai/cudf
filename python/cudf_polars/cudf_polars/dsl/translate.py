@@ -273,6 +273,9 @@ def _(node: pl_ir.Scan, translator: Translator, schema: Schema) -> ir.IR:
         skip_rows = 0
     else:
         skip_rows, n_rows = pre_slice
+        if (n_rows == 2**32 - 1) or (n_rows == 2**64 - 1):
+            # Polars translates slice(10, None) -> (10, u32/64max)
+            n_rows = -1
 
     return ir.Scan(
         schema,

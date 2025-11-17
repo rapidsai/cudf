@@ -1909,6 +1909,11 @@ class Index(SingleColumnFrame):
     def memory_usage(self, deep: bool = False) -> int:
         return self._column.memory_usage
 
+    def __sizeof__(self):
+        if cudf.get_option("mode.pandas_compatible"):
+            return self.memory_usage(deep=True)
+        return object.__sizeof__(self)
+
     @cached_property  # type: ignore[explicit-override]
     @_performance_tracking
     def is_unique(self) -> bool:

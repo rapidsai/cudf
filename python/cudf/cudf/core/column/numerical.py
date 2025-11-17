@@ -48,7 +48,6 @@ if TYPE_CHECKING:
         DtypeObj,
         ScalarLike,
     )
-    from cudf.core.buffer import Buffer
     from cudf.core.column import DecimalBaseColumn
     from cudf.core.column.datetime import DatetimeColumn
     from cudf.core.column.string import StringColumn
@@ -69,17 +68,29 @@ class NumericalColumn(NumericalBaseColumn):
     """
 
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
+    _VALID_PLC_TYPES = {
+        plc.TypeId.INT8,
+        plc.TypeId.INT16,
+        plc.TypeId.INT32,
+        plc.TypeId.INT64,
+        plc.TypeId.UINT8,
+        plc.TypeId.UINT16,
+        plc.TypeId.UINT32,
+        plc.TypeId.UINT64,
+        plc.TypeId.FLOAT32,
+        plc.TypeId.FLOAT64,
+        plc.TypeId.BOOL8,
+    }
 
     def __init__(
         self,
-        data: Buffer,
+        plc_column: plc.Column,
         size: int,
         dtype: np.dtype,
-        mask: Buffer | None,
         offset: int,
         null_count: int,
-        children: tuple,
-    ):
+        exposed: bool,
+    ) -> None:
         if (
             cudf.get_option("mode.pandas_compatible")
             and dtype.kind not in "iufb"
@@ -91,13 +102,12 @@ class NumericalColumn(NumericalBaseColumn):
                 f"dtype must be a floating, integer or boolean dtype. Got: {dtype}"
             )
         super().__init__(
-            data=data,
+            plc_column=plc_column,
             size=size,
             dtype=dtype,
-            mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
+            exposed=exposed,
         )
 
     def _clear_cache(self) -> None:
@@ -539,7 +549,7 @@ class NumericalColumn(NumericalBaseColumn):
     def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
-    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
+    def as_numerical_column(self, dtype: DtypeObj) -> NumericalColumn:
         if dtype == self.dtype:
             return self
 
@@ -580,7 +590,7 @@ class NumericalColumn(NumericalBaseColumn):
                 else:
                     self._dtype = dtype
                     return self
-            if self.dtype.kind == "f" and dtype.kind in "iu":  # type: ignore[union-attr]
+            if self.dtype.kind == "f" and dtype.kind in "iu":
                 if (
                     not is_pandas_nullable_extension_dtype(dtype)
                     and self.nan_count > 0
@@ -892,19 +902,18 @@ class NumericalColumn(NumericalBaseColumn):
 
     def _with_type_metadata(
         self: Self,
-        dtype: Dtype,
+        dtype: DtypeObj,
     ) -> ColumnBase:
         if isinstance(dtype, CategoricalDtype):
             codes_dtype = min_unsigned_type(len(dtype.categories))
             codes = cast(NumericalColumn, self.astype(codes_dtype))
             return CategoricalColumn(
-                data=None,
-                size=self.size,
+                plc_column=codes.to_pylibcudf(mode="read"),
+                size=codes.size,
                 dtype=dtype,
-                mask=self.base_mask,
-                offset=self.offset,
-                null_count=self.null_count,
-                children=(codes,),
+                offset=codes.offset,
+                null_count=codes.null_count,
+                exposed=False,
             )
         if cudf.get_option("mode.pandas_compatible"):
             res_dtype = get_dtype_of_same_type(dtype, self.dtype)
