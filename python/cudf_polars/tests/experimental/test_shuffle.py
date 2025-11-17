@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from typing import Literal, cast
+
 import pytest
 
 import polars as pl
@@ -75,7 +77,9 @@ def test_hash_shuffle(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
         qir3,
         options,
     )
-    # ignore is for polars' EngineType, which isn't publicly exported.
+    # Cast needed because polars' EngineType "cpu" isn't publicly exported.
     # https://github.com/pola-rs/polars/issues/17420
-    expect = df.collect(engine="cpu")
+    expect = df.collect(
+        engine=cast(Literal["auto", "in-memory", "streaming", "gpu"], "cpu")
+    )
     assert_frame_equal(result, expect, check_row_order=False)

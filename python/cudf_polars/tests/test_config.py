@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import sys
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -537,7 +537,7 @@ def test_validate_parquet_options(option: str) -> None:
 def test_validate_raise_on_fail() -> None:
     with pytest.raises(TypeError, match="'raise_on_fail' must be"):
         ConfigOptions.from_polars_engine(
-            pl.GPUEngine(executor="streaming", raise_on_fail=object())
+            pl.GPUEngine(executor="streaming", raise_on_fail=cast(bool, object()))
         )
 
 

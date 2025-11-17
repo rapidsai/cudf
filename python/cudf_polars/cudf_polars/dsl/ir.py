@@ -598,7 +598,8 @@ class Scan(IR):
             plc.Table(
                 [
                     plc.Column.from_arrow(
-                        pl.Series(values=map(str, paths)), stream=df.stream
+                        pl.Series(values=map(str, paths)),
+                        stream=df.stream,
                     )
                 ]
             ),
