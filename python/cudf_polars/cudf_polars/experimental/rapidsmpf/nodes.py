@@ -300,7 +300,7 @@ async def fanout_node_unbounded(
 
             func_id = context.br().spill_manager.add_spill_function(
                 make_spill_func(sm, idx),
-                priority=0,  # Priority 0 - adjust if needed
+                priority=0,
             )
             spill_func_ids.append(func_id)
 
@@ -379,21 +379,35 @@ async def fanout_node_unbounded(
                             recv_task = None
                             needs_drain.update(range(len(chs_out)))
                         else:
-                            # Copy message to host memory for each output buffer
-                            # This makes the buffered messages spillable and allows
-                            # them to remain in host memory through the channel
+                            # Determine where to copy based on current message location
+                            # to avoid unnecessary device<->host transfers
+                            content_desc = msg.get_content_description()
+                            device_size = content_desc.content_sizes.get(
+                                MemoryType.DEVICE, 0
+                            )
+
+                            # If message is in device memory, copy to device (spillable)
+                            # If message is in host memory, copy to host
+                            target_memory = (
+                                MemoryType.DEVICE
+                                if device_size > 0
+                                else MemoryType.HOST
+                            )
+
+                            # Copy message for each output buffer
+                            # Copies are spillable and allow downstream consumers
+                            # to control device memory allocation
                             for idx, sm in enumerate(output_buffers):
-                                # Reserve host memory for the copy
                                 copy_cost = msg.copy_cost()
                                 res, _ = context.br().reserve(
-                                    MemoryType.HOST,
+                                    target_memory,
                                     copy_cost,
                                     allow_overbooking=True,
                                 )
-                                # Copy to host memory (can copy from device or host)
-                                host_msg = msg.copy(res)
+                                # Copy to target memory
+                                copied_msg = msg.copy(res)
                                 # Insert into spillable buffer and track the ID
-                                mid = sm.insert(host_msg)
+                                mid = sm.insert(copied_msg)
                                 buffer_ids[idx].append(mid)
 
                             # Don't receive next chunk until at least one send completes
