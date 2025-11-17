@@ -390,7 +390,7 @@ class BooleanFunction(Expr):
                         plc.unary.UnaryOperator.NOT
                         if column.obj.type().id() == plc.TypeId.BOOL8
                         else plc.unary.UnaryOperator.BIT_INVERT,
-                        stream=df.stream
+                        stream=df.stream,
                     ),
                     self.dtype.plc_type,
                     stream=df.stream,
