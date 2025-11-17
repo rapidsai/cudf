@@ -271,6 +271,7 @@ async def fanout_node_unbounded(
     async with shutdown_on_error(context, ch_in.data, *[ch.data for ch in chs_out]):
         # Spillable FIFO buffer for each output channel
         output_buffers: list[SpillableMessages] = [SpillableMessages() for _ in chs_out]
+        num_outputs = len(chs_out)
 
         # Track message IDs in FIFO order for each output buffer
         buffer_ids: list[list[int]] = [[] for _ in chs_out]
@@ -379,35 +380,59 @@ async def fanout_node_unbounded(
                             recv_task = None
                             needs_drain.update(range(len(chs_out)))
                         else:
-                            # Determine where to copy based on current message location
-                            # to avoid unnecessary device<->host transfers
+                            # Determine where to copy based on:
+                            # 1. Current message location (avoid unnecessary transfers)
+                            # 2. Available memory (avoid OOM)
                             content_desc = msg.get_content_description()
                             device_size = content_desc.content_sizes.get(
                                 MemoryType.DEVICE, 0
                             )
+                            copy_cost = msg.copy_cost()
 
-                            # If message is in device memory, copy to device (spillable)
-                            # If message is in host memory, copy to host
-                            target_memory = (
+                            # Check if we have enough device memory for all copies
+                            # We need (num_outputs - 1) copies since last one reuses original
+                            num_copies = num_outputs - 1
+                            total_copy_cost = copy_cost * num_copies
+                            available_device_mem = context.br().memory_available(
                                 MemoryType.DEVICE
-                                if device_size > 0
-                                else MemoryType.HOST
                             )
+
+                            # Decide target memory:
+                            # - Use device ONLY if message is in device AND we have LOTS of headroom
+                            # - We need significant headroom because:
+                            #   1. Downstream operations (groupby, join) need 2-3x working memory
+                            #   2. Buffered data won't auto-spill unless allocations go through BufferResource
+                            #   3. Most compute operations allocate directly through RMM
+                            # - Be conservative: require 4x the copy cost as headroom
+                            required_headroom = total_copy_cost * 4
+                            if (
+                                device_size > 0
+                                and available_device_mem >= required_headroom
+                            ):
+                                target_memory = MemoryType.DEVICE
+                            else:
+                                # Use host memory for buffering - much safer
+                                # Downstream consumers will make_available() when they need device memory
+                                target_memory = MemoryType.HOST
 
                             # Copy message for each output buffer
                             # Copies are spillable and allow downstream consumers
                             # to control device memory allocation
                             for idx, sm in enumerate(output_buffers):
-                                copy_cost = msg.copy_cost()
-                                res, _ = context.br().reserve(
-                                    target_memory,
-                                    copy_cost,
-                                    allow_overbooking=True,
-                                )
-                                # Copy to target memory
-                                copied_msg = msg.copy(res)
-                                # Insert into spillable buffer and track the ID
-                                mid = sm.insert(copied_msg)
+                                if idx < num_outputs - 1:
+                                    # Use reserve_and_spill to automatically trigger
+                                    # spilling if needed to make room for the copy
+                                    res = context.br().reserve_and_spill(
+                                        target_memory,
+                                        copy_cost,
+                                        allow_overbooking=True,
+                                    )
+                                    # Copy to target memory and insert into spillable buffer
+                                    mid = sm.insert(msg.copy(res))
+                                else:
+                                    # Optimization: reuse the original message for last output
+                                    # (no copy needed)
+                                    mid = sm.insert(msg)
                                 buffer_ids[idx].append(mid)
 
                             # Don't receive next chunk until at least one send completes
