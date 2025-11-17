@@ -304,15 +304,14 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                 orderby_obj = as_column(range(len(self.obj)))
             if self._group_keys is not None:
                 group_cols: list[plc.Column] = [
-                    col.to_pylibcudf(mode="read")
-                    for col in self._group_keys._columns
+                    col.plc_column for col in self._group_keys._columns
                 ]
             else:
                 group_cols = []
             group_keys = plc.Table(group_cols)
             return plc.rolling.make_range_windows(
                 group_keys,
-                orderby_obj.to_pylibcudf(mode="read"),
+                orderby_obj.plc_column,
                 plc.types.Order.ASCENDING,
                 plc.types.NullOrder.BEFORE,
                 plc.rolling.BoundedOpen(plc.Scalar.from_py(pre)),
@@ -337,8 +336,8 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                 SIZE_TYPE_DTYPE
             )
             return (
-                preceding_window.to_pylibcudf(mode="read"),
-                following_window.to_pylibcudf(mode="read"),
+                preceding_window.plc_column,
+                following_window.plc_column,
             )
         else:
             raise ValueError(
@@ -359,7 +358,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         with acquire_spill_lock():
             return ColumnBase.from_pylibcudf(
                 plc.rolling.rolling_window(
-                    source_column.to_pylibcudf(mode="read"),
+                    source_column.plc_column,
                     pre,
                     fwd,
                     self.min_periods or 1,
