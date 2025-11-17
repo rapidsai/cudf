@@ -11,6 +11,7 @@
 #include <cudf/detail/join/join.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -59,8 +60,8 @@ __launch_bounds__(max_block_size) __global__
     auto result = cudf::ast::detail::value_expression_result<bool, has_nulls>{};
 
     // Check for non-match sentinels (used by outer joins for unmatched rows)
-    bool const has_non_match = (left_row_index == cudf::detail::JoinNoneValue ||
-                                right_row_index == cudf::detail::JoinNoneValue);
+    bool const has_non_match =
+      (left_row_index == cudf::JoinNoMatch || right_row_index == cudf::JoinNoMatch);
 
     // Mixed join behavior: preserve unmatched rows, filter only matched rows
     if (has_non_match) {
