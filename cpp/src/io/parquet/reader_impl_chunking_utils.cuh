@@ -225,12 +225,22 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
   rmm::cuda_stream_view stream);
 
 /**
+ * @brief Computes the per-page buffer sizes required for string offsets.
+ *
+ * For non-dictionary, non-FLBA string columns, this computes the size needed
+ * to store string offsets (uint32_t per value) for each page.
+ */
+rmm::device_uvector<size_t> compute_string_offset_sizes(device_span<ColumnChunkDesc const> chunks,
+                                                        device_span<PageInfo const> pages,
+                                                        rmm::cuda_stream_view stream);
+
+/**
  * @brief Add the cost of decompression codec scratch space to the per-page cumulative
  * size information
  */
-void include_decompression_scratch_size(device_span<size_t const> pages,
-                                        device_span<cumulative_page_info> c_info,
-                                        rmm::cuda_stream_view stream);
+void include_scratch_size(device_span<size_t const> pages,
+                          device_span<cumulative_page_info> c_info,
+                          rmm::cuda_stream_view stream);
 
 /**
  * @brief Struct to store split information
