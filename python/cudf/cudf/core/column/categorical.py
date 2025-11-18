@@ -262,6 +262,17 @@ class CategoricalColumn(column.ColumnBase):
             self.codes._reduce(op, skipna, min_count, *args, **kwargs)
         )
 
+    def astype(self, dtype: DtypeObj, copy: bool | None = False) -> ColumnBase:
+        if isinstance(dtype, CategoricalDtype):
+            if self.dtype._internal_eq(dtype):
+                if copy:
+                    return self.copy(deep=copy)
+                return self
+            else:
+                return self.as_categorical_column(dtype)
+        else:
+            return super().astype(dtype, copy=copy)
+
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         if isinstance(other, column.ColumnBase):
             if (
