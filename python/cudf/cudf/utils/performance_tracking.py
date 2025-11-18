@@ -31,7 +31,14 @@ def _get_color_for_nvtx(name):
 def _performance_tracking(func, domain="cudf_python"):
     """Decorator for applying performance tracking (if enabled)."""
     global dummy_annotate
-    if dummy_annotate.domain is nvtx.nvtx.dummy_domain:
+    if dummy_annotate.domain is nvtx.nvtx.dummy_domain and not get_option(
+        "memory_profiling"
+    ):
+        # `dummy_domain` means NVTX is present by nsys profiling is not enabled.
+        # nsys profiler enabled (in which case dummy_annotate.domain is not a dummy_domain):
+        # `nsys profile --trace=nvtx python script.py`
+        # nsys profiler disabled (in which case dummy_annotate.domain is a dummy_domain):
+        # `python script.py`
         return func
 
     @functools.wraps(func)
