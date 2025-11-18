@@ -373,7 +373,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                     source_column.plc_column,
                     pre,
                     fwd,
-                    self.min_periods or 1,
+                    1 if self.min_periods is None else self.min_periods,
                     rolling_agg,
                 )
             )
