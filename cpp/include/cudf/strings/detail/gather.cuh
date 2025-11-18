@@ -270,9 +270,9 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
       stream.value()>>>(
       d_strings->begin<string_view>(), d_out_chars, offsets_view, begin, output_count);
   } else {
-    // Threshold is based on empirical data on H100. Ref:
-    // https://github.com/rapidsai/cudf/pull/20656 If row count is above this threshold we use the
-    // cub::DeviceMemcpy::Batched API, otherwise we use the custom cuDF kernel.
+    // Threshold is based on empirical data on H100.
+    // If row count is above this threshold we use the cub::DeviceMemcpy::Batched API, otherwise we
+    // use the custom cuDF kernel.
     constexpr int64_t cub_batch_copy_threshold = 1024 * 1024 * 0.5;
 
     if (output_count < cub_batch_copy_threshold) {
