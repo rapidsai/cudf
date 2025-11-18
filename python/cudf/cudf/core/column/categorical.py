@@ -21,6 +21,7 @@ from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     cudf_dtype_to_pa_type,
+    dtype_from_pylibcudf_column,
     find_common_type,
     is_mixed_with_object_dtype,
     min_signed_type,
@@ -169,9 +170,15 @@ class CategoricalColumn(column.ColumnBase):
         if self.offset == 0 and self.size == self.base_size:
             return super().children  # type: ignore[return-value]
         if self._children is None:
-            # Compute children from the column view (children factoring self.size)
-            child = type(self).from_pylibcudf(
-                self.to_pylibcudf(mode="read").copy()
+            # Pass along size, offset, null_count from __init__
+            # which doesn't necessarily match the attributes of plc_column
+            child = cudf.core.column.numerical.NumericalColumn(
+                plc_column=self.plc_column,
+                size=self.size,
+                dtype=dtype_from_pylibcudf_column(self.plc_column),
+                offset=self.offset,
+                null_count=self.null_count,
+                exposed=False,
             )
             self._children = (child,)
         return self._children
