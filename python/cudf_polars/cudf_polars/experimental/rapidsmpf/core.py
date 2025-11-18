@@ -80,61 +80,41 @@ def evaluate_logical_plan(
     # Lower the IR graph on the client process (for now).
     ir, partition_info, stats = lower_ir_graph(ir, config_options)
 
-    # Get the client and context for the distributed execution.
-    if (client := get_distributed_client(config_options)) is not None:
+    # Build and execute the streaming pipeline.
+    # This must be done on all worker processes
+    # for cluster == "distributed".
+    if (
+        config_options.executor.cluster == "distributed"
+    ):  # pragma: no cover; block depends on executor type and Distributed cluster
+        # Distributed execution: Use client.run
+        client = get_dask_client()
         result = client.run(
             evaluate_pipeline, ir, partition_info, config_options, stats
         )
         return pl.concat(result.values())
     else:
+        # Single-process execution: Run locally
         return evaluate_pipeline(ir, partition_info, config_options, stats)
 
 
-def get_distributed_client(config_options: ConfigOptions) -> Any:
-    """
-    Get a distributed Dask client.
+def get_dask_client() -> Any:
+    """Get a distributed Dask client."""
+    from distributed import get_client
 
-    Parameters
-    ----------
-    config_options
-        The configuration options.
+    from cudf_polars.experimental.dask_registers import DaskRegisterManager
 
-    Returns
-    -------
-    The distributed Dask client.
-    Returns None if the executor is not distributed.
-    """
-    assert config_options.executor.name == "streaming", "Executor must be streaming"
-    cluster = config_options.executor.cluster
-
-    if (
-        cluster == "distributed"
-    ):  # pragma: no cover; block depends on executor type and Distributed cluster
-        from distributed import get_client
-
-        from cudf_polars.experimental.dask_registers import DaskRegisterManager
-
-        client = get_client()
-        DaskRegisterManager.register_once()
-        DaskRegisterManager.run_on_cluster(client)
-        return client
-    else:
-        return None
+    client = get_client()
+    DaskRegisterManager.register_once()
+    DaskRegisterManager.run_on_cluster(client)
+    return client
 
 
-def make_distributed_context(
-    worker: Any, options: Options, config_options: ConfigOptions
-) -> Context | None:
-    """Make distributed RapidsMPF context."""
-    assert config_options.executor.name == "streaming", "Executor must be streaming"
-    if config_options.executor.cluster == "distributed":
-        # Must be running on Dask worker
-        from rapidsmpf.integrations.dask import get_worker_context
+def make_context_on_dask_worker(worker: Any, options: Options) -> Context:
+    """Make distributed RapidsMPF context on a Dask worker."""
+    from rapidsmpf.integrations.dask import get_worker_context
 
-        dask_context = get_worker_context(worker)
-        return Context(dask_context.comm, dask_context.br, options)
-    else:
-        return None
+    dask_context = get_worker_context(worker)
+    return Context(dask_context.comm, dask_context.br, options)
 
 
 def evaluate_pipeline(
@@ -159,7 +139,9 @@ def evaluate_pipeline(
     stats
         The statistics collector.
     dask_worker
-        The Dask worker.
+        Dask worker reference.
+        This kwarg is automatically populated by Dask
+        when evaluate_pipeline is called with `client.run`.
 
     Returns
     -------
@@ -172,16 +154,24 @@ def evaluate_pipeline(
     options = Options(get_environment_variables())
     local_comm = new_communicator(options)
 
-    # Try to build a RapidsMPF context if we are running
-    # on a distributed-Dask worker.
-    rmpf_context = make_distributed_context(dask_worker, options, config_options)
-
-    if rmpf_context is None:
+    rmpf_context: Context
+    if dask_worker is not None:
+        # Using "distributed" mode.
+        # We can use the existing rapidsmpf context, but we
+        # still need to create an IR execution context. It is
+        # too late to configure the stream pool, but we can still
+        # use it if "cuda_stream_policy" isn't a CUDAStreamPolicy.
+        rmpf_context = make_context_on_dask_worker(dask_worker, options)
+        if isinstance(config_options.cuda_stream_policy, CUDAStreamPolicy):
+            ir_context = IRExecutionContext.from_config_options(config_options)
+        else:
+            ir_context = IRExecutionContext(
+                get_cuda_stream=rmpf_context.get_stream_from_pool
+            )
+        br = rmpf_context.br()
+    else:
         # Using "single" mode.
-        # There was no context on the current worker,
-        # so we need to create a new (local) context.
-
-        # Create a new local RapidsMPF context
+        # Create a new local RapidsMPF context.
         mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
         rmm.mr.set_current_device_resource(mr)
         memory_available: MutableMapping[MemoryType, LimitAvailableMemory] | None = None
@@ -215,20 +205,6 @@ def evaluate_pipeline(
             )
         else:
             ir_context = IRExecutionContext.from_config_options(config_options)
-
-    else:
-        # Using "distributed" mode.
-        # We can use the existing rapidsmpf context, but we
-        # still need to create an IR execution context. It is
-        # too late to configure the stream pool, but we can still
-        # use it if "cuda_stream_policy" isn't a CUDAStreamPolicy.
-        if isinstance(config_options.cuda_stream_policy, CUDAStreamPolicy):
-            ir_context = IRExecutionContext.from_config_options(config_options)
-        else:
-            ir_context = IRExecutionContext(
-                get_cuda_stream=rmpf_context.get_stream_from_pool
-            )
-        br = rmpf_context.br()
 
     # Generate network nodes
     nodes, output = generate_network(
