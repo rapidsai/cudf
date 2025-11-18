@@ -34,7 +34,7 @@ def _performance_tracking(func, domain="cudf_python"):
     if dummy_annotate.domain is nvtx.nvtx.dummy_domain and not get_option(
         "memory_profiling"
     ):
-        # `dummy_domain` means NVTX is present by nsys profiling is not enabled.
+        # If `dummy_domain` is enabled it means NVTX is present but nsys profiling is not enabled.
         # nsys profiler enabled (in which case dummy_annotate.domain is not a dummy_domain):
         # `nsys profile --trace=nvtx python script.py`
         # nsys profiler disabled (in which case dummy_annotate.domain is a dummy_domain):
