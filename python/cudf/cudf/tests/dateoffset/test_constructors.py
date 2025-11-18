@@ -9,6 +9,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_230
 
 
 @pytest.mark.parametrize("period", [1.5, 0.5, "string", "1", "1.0"])
@@ -67,7 +68,9 @@ def test_dateoffset_instance_subclass_check():
     assert not isinstance(pd.DateOffset(), cudf.DateOffset)
 
 
-@pytest.mark.parametrize("freqstr", ["M", "ME", "Y", "YE-DEC"])
+@pytest.mark.parametrize(
+    "freqstr", ["M", "ME", "Y", "YE-DEC"] if PANDAS_GE_230 else ["M", "Y"]
+)
 def test_dateoffset_freq_edgecases(freqstr):
     def test():
         expect = pd.tseries.frequencies.to_offset(freqstr)
