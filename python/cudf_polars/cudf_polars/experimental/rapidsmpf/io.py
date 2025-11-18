@@ -183,6 +183,29 @@ async def dataframescan_node(
                 )
             )
 
+        # If no slices assigned to this rank, send an empty chunk with correct schema
+        if len(ir_slices) == 0:
+            # Create an empty table with the correct schema
+            empty_columns = [
+                plc.column_factories.make_empty_column(plc.DataType(dtype.id()))
+                for dtype in ir.schema.values()
+            ]
+            empty_table = plc.Table(empty_columns)
+
+            await ch_out.data.send(
+                context,
+                Message(
+                    0,
+                    TableChunk.from_pylibcudf_table(
+                        empty_table,
+                        context.get_stream_from_pool(),
+                        exclusive_view=True,
+                    ),
+                ),
+            )
+            await ch_out.data.drain(context)
+            return
+
         # Use Lineariser to ensure ordered delivery
         num_producers = min(num_producers, len(ir_slices))
         lineariser = Lineariser(context, ch_out.data, num_producers)
@@ -394,22 +417,46 @@ async def scan_node(
             paths_offset_end = paths_offset_start + plan.factor * local_count
             for offset in range(paths_offset_start, paths_offset_end, plan.factor):
                 local_paths = ir.paths[offset : offset + plan.factor]
-                scans.append(
-                    Scan(
-                        ir.schema,
-                        ir.typ,
-                        ir.reader_options,
-                        ir.cloud_options,
-                        local_paths,
-                        ir.with_columns,
-                        ir.skip_rows,
-                        ir.n_rows,
-                        ir.row_index,
-                        ir.include_file_paths,
-                        ir.predicate,
-                        parquet_options,
+                if len(local_paths) > 0:  # Only add scan if there are paths
+                    scans.append(
+                        Scan(
+                            ir.schema,
+                            ir.typ,
+                            ir.reader_options,
+                            ir.cloud_options,
+                            local_paths,
+                            ir.with_columns,
+                            ir.skip_rows,
+                            ir.n_rows,
+                            ir.row_index,
+                            ir.include_file_paths,
+                            ir.predicate,
+                            parquet_options,
+                        )
                     )
-                )
+
+        # If no scans assigned to this rank, send an empty chunk with correct schema
+        if len(scans) == 0:
+            # Create an empty table with the correct schema
+            empty_columns = [
+                plc.column_factories.make_empty_column(plc.DataType(dtype.id()))
+                for dtype in ir.schema.values()
+            ]
+            empty_table = plc.Table(empty_columns)
+
+            await ch_out.data.send(
+                context,
+                Message(
+                    0,
+                    TableChunk.from_pylibcudf_table(
+                        empty_table,
+                        context.get_stream_from_pool(),
+                        exclusive_view=True,
+                    ),
+                ),
+            )
+            await ch_out.data.drain(context)
+            return
 
         # Use Lineariser to ensure ordered delivery
         num_producers = min(num_producers, len(scans))
