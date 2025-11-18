@@ -434,7 +434,7 @@ def test_rolling_count_aggregations(
     expected = getattr(post_get(pre_get(df).rolling(window)), op)(**kwargs)
 
     sdf = DataFrame(example=df, stream=stream)
-    with cudf.option_context("mode.pandas_comptatible", True):
+    with cudf.option_context("mode.pandas_compatible", True):
         roll = getattr(post_get(pre_get(sdf).rolling(window)), op)(**kwargs)
         L = roll.stream.gather().sink_to_list()
     assert len(L) == 0
@@ -443,8 +443,8 @@ def test_rolling_count_aggregations(
         sdf.emit(df.iloc[i : i + m])
 
     assert len(L) > 1
-
-    assert_eq(cudf.concat(L), expected)
+    with cudf.option_context("mode.pandas_compatible", True):
+        assert_eq(cudf.concat(L), expected)
 
 
 def test_stream_to_dataframe(stream):
