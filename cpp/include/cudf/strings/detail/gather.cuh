@@ -267,49 +267,63 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
           max_threadblocks),
       warps_per_threadblock * cudf::detail::warp_size,
       0,
-      stream.value()>>>(d_strings->begin<string_view>(), d_out_chars, offsets_view, begin, output_count);
+      stream.value()>>>(
+      d_strings->begin<string_view>(), d_out_chars, offsets_view, begin, output_count);
   } else {
-    // Threshold is based on empirical data on H100. Ref: https://github.com/rapidsai/cudf/pull/20656
-    // If row count is above this threshold we use the cub::DeviceMemcpy::Batched API, otherwise we use the custom cuDF kernel.
-    constexpr int64_t cub_batch_copy_threshold = 1024*1024*0.5;
+    // Threshold is based on empirical data on H100. Ref:
+    // https://github.com/rapidsai/cudf/pull/20656 If row count is above this threshold we use the
+    // cub::DeviceMemcpy::Batched API, otherwise we use the custom cuDF kernel.
+    constexpr int64_t cub_batch_copy_threshold = 1024 * 1024 * 0.5;
 
     if (output_count < cub_batch_copy_threshold) {
       constexpr int strings_per_threadblock = 32;
       gather_chars_fn_char_parallel<strings_per_threadblock>
         <<<(output_count + strings_per_threadblock - 1) / strings_per_threadblock,
-          warps_per_threadblock * cudf::detail::warp_size,
-          0,
-          stream.value()>>>(d_strings->begin<string_view>(), d_out_chars, offsets_view, begin, output_count);
+           warps_per_threadblock * cudf::detail::warp_size,
+           0,
+           stream.value()>>>(
+          d_strings->begin<string_view>(), d_out_chars, offsets_view, begin, output_count);
     } else {
       // Iterator over the character column of input strings to gather
       auto in_chars_itr = thrust::make_transform_iterator(
         begin,
-        cuda::proclaim_return_type<const char*>(
-          [d_strings = *d_strings] __device__(size_type idx) {
-            if (NullifyOutOfBounds && (idx < 0 || idx >= d_strings.size())) { return static_cast<const char*>(nullptr); }
-            if (not d_strings.is_valid(idx)) { return static_cast<const char*>(nullptr); }
-            return d_strings.element<string_view>(idx).data();
-          }));
-      
+        cuda::proclaim_return_type<const char*>([d_strings = *d_strings] __device__(size_type idx) {
+          if (NullifyOutOfBounds && (idx < 0 || idx >= d_strings.size())) {
+            return static_cast<const char*>(nullptr);
+          }
+          if (not d_strings.is_valid(idx)) { return static_cast<const char*>(nullptr); }
+          return d_strings.element<string_view>(idx).data();
+        }));
+
       // Iterator over the output locations to write the output
       auto out_chars_itr = cudf::detail::make_counting_transform_iterator(
         0,
         cuda::proclaim_return_type<char*>(
           [d_strings = *d_strings, offsets_view, d_out_chars] __device__(size_type idx) {
             return d_out_chars + offsets_view[idx];
-        }));
+          }));
 
       // Determine temporary device storage requirements
       size_t temp_storage_bytes = 0;
-      cub::DeviceMemcpy::Batched(
-        nullptr, temp_storage_bytes, in_chars_itr, out_chars_itr, sizes_itr, output_count, stream.value());
+      cub::DeviceMemcpy::Batched(nullptr,
+                                 temp_storage_bytes,
+                                 in_chars_itr,
+                                 out_chars_itr,
+                                 sizes_itr,
+                                 output_count,
+                                 stream.value());
 
       // Allocate temporary storage
       auto d_temp_storage = rmm::device_buffer(temp_storage_bytes, stream, mr);
 
       // Run batched copy algorithm
-      cub::DeviceMemcpy::Batched(
-        d_temp_storage.data(), temp_storage_bytes, in_chars_itr, out_chars_itr, sizes_itr, output_count, stream.value());
+      cub::DeviceMemcpy::Batched(d_temp_storage.data(),
+                                 temp_storage_bytes,
+                                 in_chars_itr,
+                                 out_chars_itr,
+                                 sizes_itr,
+                                 output_count,
+                                 stream.value());
     }
   }
 
