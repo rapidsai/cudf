@@ -81,7 +81,7 @@ Java_ai_rapids_cudf_ParquetChunkedReader_create(JNIEnv* env,
     auto const read_opts = opts_builder.convert_strings_to_categories(false)
                              .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
                              // Ignore any missing projected column(s) by default
-                             .is_enabled_ignore_missing_columns(true)
+                             .ignore_missing_columns(true)
                              .build();
     n_addrs_sizes.cancel();
     n_col_binary_read.cancel();
