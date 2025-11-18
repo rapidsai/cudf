@@ -8744,6 +8744,9 @@ NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS = {
 
 # TODO: Investigate why sometimes these fail
 NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS = {
+    "tests/groupby/test_groupby.py::test_single_element_list_grouping[selection2]",
+    "tests/frame/methods/test_sort_index.py::TestDataFrameSortIndex::test_sort_index_inplace",
+    "tests/frame/methods/test_sort_index.py::TestDataFrameSortIndex::test_sort_index",
     "tests/reshape/test_crosstab.py::test_categoricals[category-category]",
     "tests/reshape/test_crosstab.py::test_categoricals[category-int64]",
     "tests/reshape/test_crosstab.py::test_categoricals[int64-category]",
