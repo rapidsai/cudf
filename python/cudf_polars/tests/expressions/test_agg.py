@@ -196,3 +196,9 @@ def test_invalid_agg():
     df = pl.LazyFrame({"s": pl.Series(["a", "b", "c"], dtype=pl.String())})
     q = df.select(pl.col("s").sum())
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_sum_all_null_decimal_dtype():
+    df = pl.LazyFrame({"foo": pl.Series([None], dtype=pl.Decimal(9, 2))})
+    q = df.select(pl.col("foo").sum())
+    assert_gpu_result_equal(q)
