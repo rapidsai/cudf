@@ -124,7 +124,7 @@ struct node {
 
   /**
    * @brief Returns `true` if this node always produces a non-nullable output even if its inputs are
-   * nullable, i.e. `IS_NULL` operator produces a non-nullable boolean output regardless of the
+   * nullable, e.g., `IS_NULL` operator produces a non-nullable boolean output regardless of the
    * nullability of its input.
    */
   virtual bool is_always_nonnullable() = 0;
