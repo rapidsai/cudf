@@ -5369,8 +5369,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/indexes/test_common.py::TestCommon::test_to_frame[uint8-new_name]",
     "tests/indexes/test_common.py::test_ndarray_compat_properties[multi]",
     "tests/indexes/test_common.py::test_ndarray_compat_properties[tuples]",
-    "tests/indexes/test_common.py::test_sort_values_invalid_na_position[nullable_int-None]",
-    "tests/indexes/test_common.py::test_sort_values_invalid_na_position[nullable_int-middle]",
     "tests/indexes/test_datetimelike.py::TestDatetimeLike::test_argsort_matches_array[simple_index1]",
     "tests/indexes/test_datetimelike.py::TestDatetimeLike::test_argsort_matches_array[simple_index2]",
     "tests/indexes/test_indexing.py::TestGetIndexer::test_get_indexer_base[multi]",
