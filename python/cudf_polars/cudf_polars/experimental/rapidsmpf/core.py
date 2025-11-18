@@ -123,6 +123,11 @@ def make_context_on_dask_worker(worker: Any, options: Options) -> Context:
     """Make distributed RapidsMPF context on a Dask worker."""
     from rapidsmpf.integrations.dask import get_worker_context
 
+    # NOTE: The Dask-CUDA cluster must be bootstrapped
+    # ahead of time using bootstrap_dask_cluster
+    # (rapidsmpf.integrations.dask.bootstrap_dask_cluster).
+    # TODO: Automatically bootstrap the cluster if necessary.
+
     dask_context = get_worker_context(worker)
     return Context(dask_context.comm, dask_context.br, options)
 
