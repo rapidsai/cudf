@@ -430,7 +430,10 @@ class MonthEnd:
 
 class YearEnd:
     def _maybe_as_fast_pandas_offset(self):
-        return pd._libs.tslibs.offsets.YearEnd()
+        return pd._libs.tslibs.offsets.YearEnd(month=12)
+
+    def __eq__(self, other):
+        return self._maybe_as_fast_pandas_offset() == other
 
 
 class DateOffset:
