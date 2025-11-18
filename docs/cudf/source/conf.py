@@ -618,6 +618,8 @@ nitpick_ignore = [
     ("py:class", "DtypeObj"),
     ("py:class", "Axis"),
     ("py:class", "ArrowLike"),
+    ("py:class", "numpy.bool_"),
+    ("py:class", "np.bool_"),
 ]
 
 
