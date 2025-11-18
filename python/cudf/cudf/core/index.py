@@ -47,7 +47,6 @@ from cudf.core.copy_types import GatherMap
 from cudf.core.dtypes import IntervalDtype, dtype as cudf_dtype
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.single_column_frame import SingleColumnFrame
-
 from cudf.errors import MixedTypeError
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
