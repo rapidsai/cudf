@@ -116,9 +116,9 @@ struct node {
 
   /**
    * @brief Returns `false` if this node forwards nulls from its inputs to its output.
-   * e.g., `ADD` operator is not null-aware because if any of its inputs is null, the output is null.
-   * but `NULL_EQUAL` operator is null-aware because it can produce a non-null output even if its
-   * inputs are null.
+   * e.g., `ADD` operator is not null-aware because if any of its inputs is null, the output is
+   * null. but `NULL_EQUAL` operator is null-aware because it can produce a non-null output even if
+   * its inputs are null.
    */
   virtual bool is_null_aware() = 0;
 
