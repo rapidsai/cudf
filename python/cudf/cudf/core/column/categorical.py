@@ -645,7 +645,10 @@ class CategoricalColumn(column.ColumnBase):
                 return codes._with_type_metadata(dtype)  # type: ignore[return-value]
 
         return self.set_categories(
-            new_categories=dtype.categories, ordered=bool(dtype.ordered)
+            new_categories=self.dtype.categories
+            if dtype._categories is None
+            else dtype.categories,
+            ordered=bool(dtype.ordered),
         )
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
