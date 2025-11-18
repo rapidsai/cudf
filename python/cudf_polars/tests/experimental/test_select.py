@@ -178,3 +178,9 @@ def test_select_with_empty_partitions(df, engine):
     # Polars pre their decimal overhaul: https://github.com/pola-rs/polars/issues/19784
     # returned a different precision and scale, so we skip dtype check
     assert_gpu_result_equal(q, engine=engine, check_dtypes=not POLARS_VERSION_LT_134)
+
+
+def test_select_mean_with_decimals(df, engine):
+    df = pl.LazyFrame({"d": [Decimal("1.23")] * 4})
+    q = df.select(pl.mean("d"))
+    assert_gpu_result_equal(q, engine=engine, check_dtypes=not POLARS_VERSION_LT_134)

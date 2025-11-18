@@ -210,7 +210,7 @@ class StringColumn(ColumnBase, Scannable):
 
     @property
     def data(self) -> None | Buffer:
-        if self._data is None:
+        if self._data is None:  # type: ignore[has-type]
             assert self.base_data is not None
             if (
                 self.offset == 0
@@ -219,10 +219,10 @@ class StringColumn(ColumnBase, Scannable):
             ):
                 self._data = self.base_data  # type: ignore[assignment]
             else:
-                self._data = self.base_data[  # type: ignore[assignment]
+                self._data = self.base_data[  # type: ignore[has-type]
                     self.start_offset : self.end_offset
                 ]
-        return self._data
+        return self._data  # type: ignore[has-type]
 
     def all(self, skipna: bool = True) -> bool:
         if skipna and self.null_count == self.size:
