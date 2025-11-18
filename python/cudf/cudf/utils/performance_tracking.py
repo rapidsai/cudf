@@ -39,6 +39,8 @@ def _performance_tracking(func, domain="cudf_python"):
         # `nsys profile --trace=nvtx python script.py`
         # nsys profiler disabled (in which case dummy_annotate.domain is a dummy_domain):
         # `python script.py`
+        # We also need to set the env variable `CUDF_MEMORY_PROFILING=1` prior to the launch of the Python
+        # interpreter if `memory_profiling` is needed.
         return func
 
     @functools.wraps(func)
