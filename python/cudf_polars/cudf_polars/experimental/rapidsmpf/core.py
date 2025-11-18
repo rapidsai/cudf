@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     import polars as pl
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import PartitionInfo
+    from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.dispatch import (
         GenState,
@@ -85,7 +85,7 @@ def evaluate_logical_plan(
         )
 
     # Lower the IR graph on the client process (for now).
-    ir, partition_info = lower_ir_graph(ir, config_options)
+    ir, partition_info, stats = lower_ir_graph(ir, config_options)
 
     # Configure the context.
     # TODO: Multi-GPU version will be different. The rest of this function
@@ -133,6 +133,7 @@ def evaluate_logical_plan(
         ir,
         partition_info,
         config_options,
+        stats,
         ir_context=ir_context,
     )
 
@@ -175,7 +176,7 @@ def evaluate_logical_plan(
 def lower_ir_graph(
     ir: IR,
     config_options: ConfigOptions,
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[IR, MutableMapping[IR, PartitionInfo], StatsCollector]:
     """
     Rewrite an IR graph and extract partitioning information.
 
@@ -188,7 +189,7 @@ def lower_ir_graph(
 
     Returns
     -------
-    new_ir, partition_info
+    new_ir, partition_info, stats
         The rewritten graph, and a mapping from unique nodes
         in the new graph to associated partitioning information.
 
@@ -198,6 +199,7 @@ def lower_ir_graph(
     in the `parallel` module, but with some differences:
     - A distinct `lower_ir_node` function is used.
     - A `Repartition` node is added to ensure a single chunk is produced.
+    - Statistics are returned.
 
     See Also
     --------
@@ -208,7 +210,7 @@ def lower_ir_graph(
         "stats": collect_statistics(ir, config_options),
     }
     mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
-    return mapper(ir)
+    return *mapper(ir), state["stats"]
 
 
 def determine_fanout_nodes(
@@ -282,6 +284,7 @@ def generate_network(
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
+    stats: StatsCollector,
     *,
     ir_context: IRExecutionContext,
 ) -> tuple[list[Any], DeferredMessages]:
@@ -298,6 +301,8 @@ def generate_network(
         The partition information.
     config_options
         The configuration options.
+    stats
+        Statistics collector.
     ir_context
         The execution context for the IR node.
 
@@ -329,11 +334,12 @@ def generate_network(
         "fanout_nodes": fanout_nodes,
         "ir_context": ir_context,
         "max_io_threads": max_io_threads_local,
+        "stats": stats,
     }
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state
     )
-    nodes, channels = mapper(ir)
+    nodes_dict, channels = mapper(ir)
     ch_out = channels[ir].reserve_output_slot()
 
     # TODO: We will need an additional node here to drain
@@ -344,6 +350,9 @@ def generate_network(
     # Add final node to pull from the output data channel
     # (metadata channel is unused)
     output_node, output = pull_from_channel(context, ch_in=ch_out.data)
+
+    # Flatten the nodes dictionary into a list for run_streaming_pipeline
+    nodes: list[Any] = [node for node_list in nodes_dict.values() for node in node_list]
     nodes.append(output_node)
 
     # Return network and output hook
