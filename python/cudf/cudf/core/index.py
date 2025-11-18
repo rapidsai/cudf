@@ -48,7 +48,6 @@ from cudf.core.dtypes import IntervalDtype, dtype as cudf_dtype
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.single_column_frame import SingleColumnFrame
 
-# from cudf.core.tools.datetimes import DateOffset
 from cudf.errors import MixedTypeError
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -3523,7 +3522,7 @@ class DatetimeIndex(Index):
         ),
     }
 
-    _allowed = [
+    _allowed = (
         "days",
         "hours",
         "minutes",
@@ -3531,7 +3530,7 @@ class DatetimeIndex(Index):
         "milliseconds",
         "microseconds",
         "nanoseconds",
-    ]
+    )
 
     MONTHLY_PERIODS = {
         pd.Timedelta("28 days"),
@@ -3599,7 +3598,6 @@ class DatetimeIndex(Index):
 
         name = _getdefault_name(data, name=name)
 
-        was_pd_index = isinstance(data, pd.DatetimeIndex)
         data = as_column(data)
         if data.dtype.kind == "b":
             raise ValueError(
