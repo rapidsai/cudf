@@ -25,6 +25,7 @@ def test_memory_profiling(rmm_reset):
     import subprocess
     import sys
 
+    # abc
     test_code = """
 import rmm.mr
 import rmm.statistics
