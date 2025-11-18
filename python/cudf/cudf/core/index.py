@@ -3806,10 +3806,7 @@ class DatetimeIndex(Index):
         # bail above that for now
         elif 1 < uniques.size() <= 4:
             # length between 1 and 4, small host copy
-            if all(
-                x in {pd.Timedelta("365 days"), pd.Timedelta("366 days")}
-                for x in uniques_host
-            ):
+            if all(x in self.YEARLY_PERIODS for x in uniques_host):
                 # Could be year end or could be an anchored year end
                 if self.is_year_end.all():
                     return cudf.DateOffset._from_freqstr("YE-DEC")
