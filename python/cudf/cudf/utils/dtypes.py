@@ -109,22 +109,43 @@ def cudf_dtype_to_pa_type(dtype: DtypeObj) -> pa.DataType:
     """Given a cudf pandas dtype, converts it into the equivalent cuDF
     Python dtype.
     """
+    # Try to unwrap pandas nullable extension dtypes to their numpy equivalent
     dtype = getattr(dtype, "numpy_dtype", dtype)
-    if isinstance(dtype, cudf.CategoricalDtype):
-        raise NotImplementedError(
-            "No conversion from Categorical to pyarrow type"
-        )
-    elif isinstance(
-        dtype,
-        (cudf.StructDtype, cudf.ListDtype, cudf.core.dtypes.DecimalDtype),
-    ):
-        return dtype.to_arrow()
-    elif isinstance(dtype, pd.DatetimeTZDtype):
-        return pa.timestamp(dtype.unit, str(dtype.tz))
-    elif dtype == CUDF_STRING_DTYPE or isinstance(dtype, pd.StringDtype):
-        return pa.string()
-    else:
+
+    # Fast path: numpy dtypes (most common case)
+    if isinstance(dtype, np.dtype):
+        if dtype == CUDF_STRING_DTYPE:
+            return pa.string()
         return pa.from_numpy_dtype(dtype)
+
+    # cuDF extension dtypes
+    if isinstance(dtype, cudf.core.dtypes._BaseDtype):
+        if isinstance(dtype, cudf.CategoricalDtype):
+            raise NotImplementedError(
+                "No conversion from Categorical to pyarrow type"
+            )
+        # All other _BaseDtype subclasses have to_arrow() method
+        assert isinstance(
+            dtype,
+            (
+                cudf.ListDtype,
+                cudf.StructDtype,
+                cudf.core.dtypes.DecimalDtype,
+                cudf.IntervalDtype,
+            ),
+        ), f"Unexpected _BaseDtype subclass: {type(dtype)}"
+        return dtype.to_arrow()
+
+    # Pandas extension dtypes
+    if isinstance(dtype, pd.DatetimeTZDtype):
+        return pa.timestamp(dtype.unit, str(dtype.tz))
+    if isinstance(dtype, pd.StringDtype):
+        return pa.string()
+
+    # Shouldn't reach here given DtypeObj = ExtensionDtype | np.dtype
+    raise TypeError(
+        f"Cannot convert dtype {dtype} of type {type(dtype)} to pyarrow"
+    )
 
 
 def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:

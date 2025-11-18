@@ -6,6 +6,7 @@ import decimal
 import operator
 import textwrap
 import warnings
+from collections.abc import Mapping
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -309,7 +310,7 @@ class CategoricalDtype(_BaseDtype):
         else:
             return column
 
-    def __eq__(self, other: Dtype) -> bool:
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, str):
             return other == self.name
         elif other is self:
@@ -598,7 +599,7 @@ class StructDtype(_BaseDtype):
 
     name = "struct"
 
-    def __init__(self, fields: dict[str, Dtype]) -> None:
+    def __init__(self, fields: Mapping[str, Dtype]) -> None:
         with cudf.option_context("mode.pandas_compatible", False):
             # We need to temporarily disable pandas compatibility mode
             # because `cudf.dtype("object")` raises an error.
@@ -928,7 +929,7 @@ class DecimalDtype(_BaseDtype):
         _check_type(cls, header, frames, is_valid_class=issubclass)
         return cls(header["precision"], header["scale"])
 
-    def __eq__(self, other: Dtype) -> bool:
+    def __eq__(self, other: object) -> bool:
         if other is self:
             return True
         elif not isinstance(other, self.__class__):
