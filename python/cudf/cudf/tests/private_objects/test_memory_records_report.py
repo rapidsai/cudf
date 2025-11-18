@@ -50,6 +50,9 @@ print_memory_report(file=out)
 assert "DataFrame.merge" in out.getvalue()
 """
 
+    # We need to run this test in a subprocess because we
+    # need to set the env variable `CUDF_MEMORY_PROFILING=1` prior to
+    # the launch of the Python interpreter if `memory_profiling` is needed.
     result = subprocess.run(
         [sys.executable, "-c", test_code],
         env={**os.environ, "CUDF_MEMORY_PROFILING": "true"},
