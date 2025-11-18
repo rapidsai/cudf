@@ -28,6 +28,7 @@ void test_udf(char const* udf, Data data_init, cudf::size_type size, bool is_ptx
                   is_ptx,
                   std::nullopt,
                   cudf::null_aware::NO,
+                  cudf::null_output::PRESERVE,
                   cudf::test::get_default_stream());
 }
 

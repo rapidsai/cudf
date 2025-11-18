@@ -60,8 +60,6 @@ struct executor_jit {
 
 using Executors = cudf::test::Types<executor_ast, executor_jit>;
 
-using AstTransformTest = TransformTest<executor_ast>;
-
 TYPED_TEST_SUITE(TransformTest, Executors);
 
 TYPED_TEST(TransformTest, ColumnReference)
@@ -134,8 +132,10 @@ TYPED_TEST(TransformTest, NullLiteral)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
-TEST_F(AstTransformTest, IsNull)
+TYPED_TEST(TransformTest, IsNull)
 {
+  using Executor = TypeParam;
+
   auto c_0   = column_wrapper<int32_t>{{0, 1, 2, 0}, {0, 1, 1, 0}};
   auto table = cudf::table_view{{c_0}};
 
@@ -145,18 +145,18 @@ TEST_F(AstTransformTest, IsNull)
   auto literal       = cudf::ast::literal(literal_value);
   auto expression    = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, literal);
 
-  auto result    = executor_ast::compute_column(table, expression);
+  auto result    = Executor::compute_column(table, expression);
   auto expected1 = column_wrapper<bool>({0, 0, 0, 0});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, result->view(), verbosity);
 
   literal_value.set_valid_async(false);
-  result         = executor_ast::compute_column(table, expression);
+  result         = Executor::compute_column(table, expression);
   auto expected2 = column_wrapper<bool>({1, 1, 1, 1}, cudf::test::iterators::no_nulls());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected2, result->view(), verbosity);
 
   auto col_ref_0   = cudf::ast::column_reference(0);
   auto expression2 = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_ref_0);
-  result           = executor_ast::compute_column(table, expression2);
+  result           = Executor::compute_column(table, expression2);
   auto expected3   = column_wrapper<bool>({1, 0, 0, 1}, cudf::test::iterators::no_nulls());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected3, result->view(), verbosity);
 }
@@ -767,8 +767,10 @@ TYPED_TEST(TransformTest, PyMod)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
-TEST_F(AstTransformTest, BasicEqualityNullEqualNoNulls)
+TYPED_TEST(TransformTest, BasicEqualityNullEqualNoNulls)
 {
+  using Executor = TypeParam;
+
   auto c_0   = column_wrapper<int32_t>{3, 20, 1, 50};
   auto c_1   = column_wrapper<int32_t>{3, 7, 1, 0};
   auto table = cudf::table_view{{c_0, c_1}};
@@ -778,7 +780,7 @@ TEST_F(AstTransformTest, BasicEqualityNullEqualNoNulls)
   auto expression = cudf::ast::operation(cudf::ast::ast_operator::NULL_EQUAL, col_ref_0, col_ref_1);
 
   auto expected = column_wrapper<bool>{true, false, true, false};
-  auto result   = executor_ast::compute_column(table, expression);
+  auto result   = Executor::compute_column(table, expression);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
@@ -801,8 +803,10 @@ TYPED_TEST(TransformTest, BasicEqualityNormalEqualWithNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
-TEST_F(AstTransformTest, BasicEqualityNulls)
+TYPED_TEST(TransformTest, BasicEqualityNulls)
 {
+  using Executor = TypeParam;
+
   auto c_0   = column_wrapper<int32_t>{{3, 20, 1, 2, 50}, {1, 1, 0, 1, 0}};
   auto c_1   = column_wrapper<int32_t>{{3, 7, 1, 2, 0}, {1, 1, 1, 0, 0}};
   auto table = cudf::table_view{{c_0, c_1}};
@@ -812,7 +816,7 @@ TEST_F(AstTransformTest, BasicEqualityNulls)
   auto expression = cudf::ast::operation(cudf::ast::ast_operator::NULL_EQUAL, col_ref_0, col_ref_1);
 
   auto expected = column_wrapper<bool>{{true, false, false, false, true}, {1, 1, 1, 1, 1}};
-  auto result   = executor_ast::compute_column(table, expression);
+  auto result   = Executor::compute_column(table, expression);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
@@ -880,8 +884,10 @@ TYPED_TEST(TransformTest, BasicAdditionLargeNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
-TEST_F(AstTransformTest, NullLogicalAnd)
+TYPED_TEST(TransformTest, NullLogicalAnd)
 {
+  using Executor = TypeParam;
+
   auto c_0   = column_wrapper<bool>{{false, false, true, true, false, false, true, true},
                                     {1, 1, 1, 1, 1, 0, 0, 0}};
   auto c_1   = column_wrapper<bool>{{false, true, false, true, true, true, false, true},
@@ -895,13 +901,15 @@ TEST_F(AstTransformTest, NullLogicalAnd)
 
   auto expected = column_wrapper<bool>{{false, false, false, true, false, false, false, true},
                                        {1, 1, 1, 1, 1, 0, 1, 0}};
-  auto result   = executor_ast::compute_column(table, expression);
+  auto result   = Executor::compute_column(table, expression);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
-TEST_F(AstTransformTest, NullLogicalOr)
+TYPED_TEST(TransformTest, NullLogicalOr)
 {
+  using Executor = TypeParam;
+
   auto c_0   = column_wrapper<bool>{{false, false, true, true, false, false, true, true},
                                     {1, 1, 1, 1, 1, 0, 1, 0}};
   auto c_1   = column_wrapper<bool>{{false, true, false, true, true, true, false, true},
@@ -915,7 +923,7 @@ TEST_F(AstTransformTest, NullLogicalOr)
 
   auto expected = column_wrapper<bool>{{false, true, true, true, false, true, true, true},
                                        {1, 1, 1, 1, 0, 1, 1, 0}};
-  auto result   = executor_ast::compute_column(table, expression);
+  auto result   = Executor::compute_column(table, expression);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }

@@ -20,6 +20,7 @@ from pylibcudf.libcudf.types import mask_state as MaskState  # no-cython-lint, i
 from pylibcudf.libcudf.types import nan_equality as NanEquality  # no-cython-lint, isort:skip
 from pylibcudf.libcudf.types import null_equality as NullEquality  # no-cython-lint, isort:skip
 from pylibcudf.libcudf.types import null_aware as NullAware  # no-cython-lint, isort:skip
+from pylibcudf.libcudf.types import null_output as NullOutput  # no-cython-lint, isort:skip
 from pylibcudf.libcudf.types import null_order as NullOrder  # no-cython-lint, isort:skip
 from pylibcudf.libcudf.types import order as Order  # no-cython-lint, isort:skip
 from pylibcudf.libcudf.types import sorted as Sorted  # no-cython-lint, isort:skip
@@ -90,6 +91,7 @@ __all__ = [
     "NullEquality",
     "NullOrder",
     "NullAware",
+    "NullOutput",
     "NullPolicy",
     "Order",
     "SIZE_TYPE",
@@ -381,6 +383,7 @@ MaskState.__str__ = MaskState.__repr__
 NanEquality.__str__ = NanEquality.__repr__
 NullEquality.__str__ = NullEquality.__repr__
 NullAware.__str__ = NullAware.__repr__
+NullOutput.__str__ = NullOutput.__repr__
 NullOrder.__str__ = NullOrder.__repr__
 Order.__str__ = Order.__repr__
 Sorted.__str__ = Sorted.__repr__

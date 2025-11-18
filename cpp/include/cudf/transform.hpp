@@ -46,6 +46,7 @@ namespace CUDF_EXPORT cudf {
  * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
  * @param user_data     User-defined device data to pass to the UDF.
  * @param is_null_aware Signifies the UDF will receive row inputs as optional values
+ * @param null_policy   Signifies if a null mask should be created for the output column
  * @param stream        CUDA stream used for device memory operations and kernel launches
  * @param mr            Device memory resource used to allocate the returned column's device memory
  * @return              The column resulting from applying the transform function to
@@ -58,6 +59,7 @@ std::unique_ptr<column> transform(
   bool is_ptx,
   std::optional<void*> user_data    = std::nullopt,
   null_aware is_null_aware          = null_aware::NO,
+  null_output null_policy           = null_output::PRESERVE,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

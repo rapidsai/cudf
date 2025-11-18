@@ -224,9 +224,24 @@ enum class type_id : int32_t {
 };
 
 /// @brief Indicates whether a function is null-aware or not.
+/// i.e:
+/// The function:
+/// ```void add(int * out, int a, int b);```
+/// is not null-aware as it does not take nullability into account.
+///
+/// The function:
+/// ```void add(optional<int> * out, optional<int> a, optional<int> b);```
+/// is null-aware as it takes nullability into account.
 enum class null_aware : bool {
   NO  = 0,  ///< The function is not null-aware
   YES = 1   ///< The function is null-aware
+};
+
+/// @brief Indicates the null output policy of a function.
+enum class null_output : uint8_t {
+  PRESERVE     = 0,  ///< A null-mask may be produced if needed
+  NON_NULLABLE = 1   ///< A null-mask is not produced and all values are considered valid even if
+                     ///< null values are produced
 };
 
 /**
