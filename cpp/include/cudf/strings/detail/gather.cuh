@@ -21,12 +21,12 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/cub.cuh>
 #include <cuda/functional>
 #include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <cub/cub.cuh>
 
 namespace cudf {
 namespace strings {
@@ -316,12 +316,13 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
 
   auto in_chars_itr = thrust::make_transform_iterator(
     begin,
-    cuda::proclaim_return_type<const char*>(
-      [d_strings = *d_strings] __device__(size_type idx) {
-        if (NullifyOutOfBounds && (idx < 0 || idx >= d_strings.size())) { return static_cast<const char*>(nullptr); }
-        if (not d_strings.is_valid(idx)) { return static_cast<const char*>(nullptr); }
-        return d_strings.element<string_view>(idx).data();
-      }));
+    cuda::proclaim_return_type<const char*>([d_strings = *d_strings] __device__(size_type idx) {
+      if (NullifyOutOfBounds && (idx < 0 || idx >= d_strings.size())) {
+        return static_cast<const char*>(nullptr);
+      }
+      if (not d_strings.is_valid(idx)) { return static_cast<const char*>(nullptr); }
+      return d_strings.element<string_view>(idx).data();
+    }));
 
   auto out_chars_itr = cudf::detail::make_counting_transform_iterator(
     0,
@@ -330,18 +331,27 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
         return d_out_chars + offsets_view[idx];
       }));
 
-
   // Determine temporary device storage requirements
   size_t temp_storage_bytes = 0;
-  cub::DeviceMemcpy::Batched(
-    nullptr, temp_storage_bytes, in_chars_itr, out_chars_itr, sizes_itr, output_count, stream.value());
+  cub::DeviceMemcpy::Batched(nullptr,
+                             temp_storage_bytes,
+                             in_chars_itr,
+                             out_chars_itr,
+                             sizes_itr,
+                             output_count,
+                             stream.value());
 
   // Allocate temporary storage
   auto d_temp_storage = rmm::device_buffer(temp_storage_bytes, stream, mr);
 
   // Run batched copy algorithm (used to permute strings)
-  cub::DeviceMemcpy::Batched(
-    d_temp_storage.data(), temp_storage_bytes, in_chars_itr, out_chars_itr, sizes_itr, output_count, stream.value());
+  cub::DeviceMemcpy::Batched(d_temp_storage.data(),
+                             temp_storage_bytes,
+                             in_chars_itr,
+                             out_chars_itr,
+                             sizes_itr,
+                             output_count,
+                             stream.value());
 
   return make_strings_column(output_count,
                              std::move(out_offsets_column),

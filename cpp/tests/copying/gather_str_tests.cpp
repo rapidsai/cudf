@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf_test/base_fixture.hpp>
@@ -150,8 +150,8 @@ TEST_F(GatherTestStr, GatherZeroSizeStringsColumn)
 
 TEST_F(GatherTestStr, GatherRandomStringsColumn)
 {
-  constexpr int num_total_strings = 512;  // strings
-  constexpr int num_gathered_strings = 128;   // strings to gather
+  constexpr int num_total_strings    = 512;  // strings
+  constexpr int num_gathered_strings = 128;  // strings to gather
 
   std::mt19937 rng(12345);
   std::uniform_int_distribution<int> len_dist(0, 20);
@@ -163,13 +163,17 @@ TEST_F(GatherTestStr, GatherRandomStringsColumn)
     int len = len_dist(rng);
     std::string s;
     s.reserve(len);
-    for (int j = 0; j < len; ++j) { s.push_back(static_cast<char>(ch_dist(rng))); }
+    for (int j = 0; j < len; ++j) {
+      s.push_back(static_cast<char>(ch_dist(rng)));
+    }
     host_strings.push_back(std::move(s));
   }
 
   std::vector<char const*> h_ptrs;
   h_ptrs.reserve(num_total_strings);
-  for (auto& s : host_strings) { h_ptrs.push_back(s.c_str()); }
+  for (auto& s : host_strings) {
+    h_ptrs.push_back(s.c_str());
+  }
 
   cudf::test::strings_column_wrapper strings(h_ptrs.begin(), h_ptrs.end());
   cudf::table_view source_table({strings});
@@ -177,14 +181,18 @@ TEST_F(GatherTestStr, GatherRandomStringsColumn)
   std::uniform_int_distribution<int> idx_dist(0, num_total_strings - 1);
   std::vector<int32_t> h_map;
   h_map.reserve(num_gathered_strings);
-  for (int i = 0; i < num_gathered_strings; ++i) { h_map.push_back(static_cast<int32_t>(idx_dist(rng))); }
+  for (int i = 0; i < num_gathered_strings; ++i) {
+    h_map.push_back(static_cast<int32_t>(idx_dist(rng)));
+  }
 
   cudf::test::fixed_width_column_wrapper<int32_t> gather_map(h_map.begin(), h_map.end());
   auto result = cudf::gather(source_table, gather_map);
 
   std::vector<char const*> h_expected;
   h_expected.reserve(num_gathered_strings);
-  for (auto idx : h_map) { h_expected.push_back(h_ptrs[static_cast<size_t>(idx)]); }
+  for (auto idx : h_map) {
+    h_expected.push_back(h_ptrs[static_cast<size_t>(idx)]);
+  }
   cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view().column(0), expected);
