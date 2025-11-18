@@ -150,13 +150,14 @@ TEST_F(GatherTestStr, GatherZeroSizeStringsColumn)
 
 TEST_F(GatherTestStr, GatherRandomStringsColumn)
 {
-  constexpr int num_total_strings    = 512;  // strings
-  constexpr int num_gathered_strings = 128;  // strings to gather
+  constexpr int num_total_strings    = 512;
+  constexpr int num_gathered_strings = 128;
 
   std::mt19937 rng(12345);
   std::uniform_int_distribution<int> len_dist(0, 20);
   std::uniform_int_distribution<int> ch_dist(97, 122);  // 'a'..'z'
 
+  // Generate random strings
   std::vector<std::string> host_strings;
   host_strings.reserve(num_total_strings);
   for (int i = 0; i < num_total_strings; ++i) {
@@ -178,6 +179,7 @@ TEST_F(GatherTestStr, GatherRandomStringsColumn)
   cudf::test::strings_column_wrapper strings(h_ptrs.begin(), h_ptrs.end());
   cudf::table_view source_table({strings});
 
+  // Generate random string indices to gather
   std::uniform_int_distribution<int> idx_dist(0, num_total_strings - 1);
   std::vector<int32_t> h_map;
   h_map.reserve(num_gathered_strings);
@@ -185,6 +187,7 @@ TEST_F(GatherTestStr, GatherRandomStringsColumn)
     h_map.push_back(static_cast<int32_t>(idx_dist(rng)));
   }
 
+  // Gather strings
   cudf::test::fixed_width_column_wrapper<int32_t> gather_map(h_map.begin(), h_map.end());
   auto result = cudf::gather(source_table, gather_map);
 
