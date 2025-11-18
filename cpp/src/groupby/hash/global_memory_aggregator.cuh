@@ -64,9 +64,7 @@ struct update_target_element_gmem<Source, cudf::aggregation::MAX> {
 };
 
 template <typename Source>
-  requires(cudf::is_fixed_width<Source>() &&
-           cudf::has_atomic_support<device_storage_type_t<Source>>() &&
-           !cudf::is_timestamp<Source>())
+  requires(cudf::is_fixed_width<Source>() && !cudf::is_timestamp<Source>())
 struct update_target_element_gmem<Source, cudf::aggregation::SUM> {
   __device__ void operator()(cudf::mutable_column_device_view target,
                              cudf::size_type target_index,
