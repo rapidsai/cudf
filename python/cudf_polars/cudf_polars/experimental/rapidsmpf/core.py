@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import warnings
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
@@ -87,6 +88,15 @@ def evaluate_logical_plan(
         config_options.executor.cluster == "distributed"
     ):  # pragma: no cover; block depends on executor type and Distributed cluster
         # Distributed execution: Use client.run
+
+        # Warn loudly that multi-GPU execution is under construction
+        warnings.warn(
+            "UNDER CONSTRUCTION!!!"
+            "The rapidsmpf runtime does NOT support distributed execution. "
+            "Use at your own risk!!!",
+            stacklevel=2,
+        )
+
         client = get_dask_client()
         result = client.run(
             evaluate_pipeline, ir, partition_info, config_options, stats
