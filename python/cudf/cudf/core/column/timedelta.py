@@ -251,7 +251,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
             with acquire_spill_lock():
                 return type(self).from_pylibcudf(  # type: ignore[return-value]
                     plc.strings.convert.convert_durations.from_durations(
-                        self.to_pylibcudf(mode="read"), format
+                        self.plc_column, format
                     )
                 )
 

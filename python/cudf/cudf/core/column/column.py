@@ -23,6 +23,7 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
+from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_categorical_dtype,
     infer_dtype,
@@ -552,6 +553,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             self._offset = other_col.offset
             self._size = other_col.size
             self._dtype = other_col._dtype
+            self.plc_column = other_col.plc_column
             self.set_base_data(other_col.base_data)
             self.set_base_children(other_col.base_children)
             self.set_base_mask(other_col.base_mask)
@@ -695,7 +697,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
 
     @classmethod
-    def from_cuda_array_interface(cls, arbitrary: Any) -> ColumnBase:
+    def from_cuda_array_interface(
+        cls, arbitrary: Any, data_ptr_exposed=no_default
+    ) -> ColumnBase:
         """
         Create a Column from an object implementing the CUDA array interface.
 
@@ -730,9 +734,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             mask = None
 
+        if data_ptr_exposed is no_default:
+            data_ptr_exposed = cudf.get_option("copy_on_write")
         column = ColumnBase.from_pylibcudf(
             plc.Column.from_cuda_array_interface(arbitrary),
-            data_ptr_exposed=cudf.get_option("copy_on_write"),
+            data_ptr_exposed=data_ptr_exposed,
         )
         if mask is not None:
             cai_mask = mask.__cuda_array_interface__
@@ -3011,6 +3017,16 @@ def as_column(
                 arbitrary = np.asarray(arbitrary)
             else:
                 arbitrary = cp.asarray(arbitrary)
+                # Explicitly passing `data_ptr_exposed` to
+                # reuse existing memory created by cupy here
+                column = ColumnBase.from_cuda_array_interface(
+                    arbitrary, data_ptr_exposed=False
+                )
+                if nan_as_null is not False:
+                    column = column.nans_to_nulls()
+                if dtype is not None:
+                    column = column.astype(dtype)
+                return column
             return as_column(
                 arbitrary, nan_as_null=nan_as_null, dtype=dtype, length=length
             )
