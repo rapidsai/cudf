@@ -253,10 +253,10 @@ class UnaryFunction(Expr):
                 # PERF: This invokes four stream synchronisations!
                 has_nulls_first = not plc.copying.get_element(
                     column.obj, 0, stream=df.stream
-                ).is_valid()
+                ).is_valid(df.stream)
                 has_nulls_last = not plc.copying.get_element(
                     column.obj, n - 1, stream=df.stream
-                ).is_valid()
+                ).is_valid(df.stream)
                 if (order == plc.types.Order.DESCENDING and has_nulls_first) or (
                     order == plc.types.Order.ASCENDING and has_nulls_last
                 ):
