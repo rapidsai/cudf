@@ -631,7 +631,8 @@ def test_parquet_reader_select_columns(datadir):
     assert_eq(expect, got)
 
 
-def test_parquet_reader_select_nonexistent_columns():
+@pytest.mark.parametrize("ignore_missing_columns", [True, False])
+def test_parquet_reader_select_nonexistent_columns(ignore_missing_columns):
     df = cudf.DataFrame(
         {
             "a": [1, 2, 3, 4, 5, 6],
@@ -641,34 +642,25 @@ def test_parquet_reader_select_nonexistent_columns():
     )
     buf = BytesIO()
     df.to_parquet(buf)
-    with pytest.raises(
-        ValueError, match="Encountered non-existent column in selected path"
-    ):
-        cudf.read_parquet(
-            buf, columns=["a", "d"], ignore_missing_columns=False
+
+    if ignore_missing_columns:
+        expect = cudf.DataFrame({"a": [1, 2, 3, 4, 5, 6]})
+        got = cudf.read_parquet(
+            buf,
+            columns=["a", "d"],
+            ignore_missing_columns=ignore_missing_columns,
         )
-
-
-def test_parquet_reader_allow_select_nonexistent_column():
-    df = cudf.DataFrame(
-        {
-            "a": [1, 2, 3, 4, 5, 6],
-            "b": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-            "c": ["a", "b", "c", "d", "e", "f"],
-        }
-    )
-    buf = BytesIO()
-    df.to_parquet(buf)
-
-    expect = cudf.DataFrame(
-        {
-            "a": [1, 2, 3, 4, 5, 6],
-        }
-    )
-    got = cudf.read_parquet(
-        buf, columns=["a", "d"], ignore_missing_columns=True
-    )
-    assert_eq(expect, got)
+        assert_eq(expect, got)
+    else:
+        with pytest.raises(
+            ValueError,
+            match="Encountered non-existent column in selected path",
+        ):
+            cudf.read_parquet(
+                buf,
+                columns=["a", "d"],
+                ignore_missing_columns=ignore_missing_columns,
+            )
 
 
 def test_parquet_reader_invalids(tmp_path):
@@ -1178,7 +1170,7 @@ def select_columns_params():
                 {"a": None, "b": None},
                 {"a": 15, "b": None},
             ],
-            [["struct"], ["struct.a"], ["struct.b"]],
+            [["struct"], ["struct.a"], ["struct.b"], ["c"]],
         ),
         # struct-of-list
         (
@@ -1241,10 +1233,7 @@ def test_parquet_reader_struct_select_columns(data, columns):
     pa.parquet.write_table(table, buff)
 
     expect = pq.ParquetFile(buff).read(columns=columns)
-    got = cudf.read_parquet(
-        buff,
-        columns=columns,
-    )
+    got = cudf.read_parquet(buff, columns=columns)
     assert_arrow_table_equal(expect, got.to_arrow())
 
 
