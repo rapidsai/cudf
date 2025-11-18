@@ -1969,7 +1969,7 @@ class Index(SingleColumnFrame):
         New index instance.
         """
         name = self.name if name is None else name
-        col = self._column.copy(deep=True) if deep else self._column
+        col = self._column.copy(deep=deep)
         return type(self)._from_column(col, name=name)
 
     @_performance_tracking
@@ -5580,7 +5580,13 @@ def _as_index(
             )
         return data.copy(deep=copy)
     elif isinstance(data, Index):
-        idx = data.copy(deep=copy).rename(name)
+        if not isinstance(data, cudf.RangeIndex):
+            idx = type(data)._from_column(
+                data._column.copy(deep=copy) if copy else data._column,
+                name=name,
+            )
+        else:
+            idx = data.copy(deep=copy).rename(name)
     elif isinstance(data, ColumnBase):
         raise ValueError("Use cudf.Index._from_column instead.")
     elif isinstance(data, (pd.RangeIndex, range)):

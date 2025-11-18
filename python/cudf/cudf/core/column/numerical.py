@@ -585,7 +585,7 @@ class NumericalColumn(NumericalBaseColumn):
                     # If the dtype is a pandas nullable extension type, we need to
                     # float column doesn't have any NaNs.
                     res = self.nans_to_nulls()
-                    res._dtype = dtype
+                    res._dtype = dtype  # type: ignore[has-type]
                     return res
                 else:
                     self._dtype = dtype
