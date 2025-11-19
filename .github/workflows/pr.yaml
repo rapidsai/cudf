@@ -132,7 +132,6 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@check-version-against-tag
     with:
       enable_check_generated_files: false
-      enable_check_version_against_tag: false
       ignored_pr_jobs: "telemetry-summarize spark-rapids-jni wheel-tests-cudf-polars-with-rapidsmpf"
   conda-cpp-build:
     needs: checks
