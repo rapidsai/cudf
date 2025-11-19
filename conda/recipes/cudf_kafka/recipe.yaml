@@ -50,6 +50,8 @@ build:
       SCCACHE_REGION: ${{ env.get("SCCACHE_REGION", default="") }}
       SCCACHE_S3_KEY_PREFIX: cudf-kafka-${{ env.get("RAPIDS_CONDA_ARCH") }}
       SCCACHE_S3_NO_CREDENTIALS: ${{ env.get("SCCACHE_S3_NO_CREDENTIALS", default="false") }}
+      SCCACHE_S3_PREPROCESSOR_CACHE_KEY_PREFIX: cudf-kafka-${{ env.get("RAPIDS_CONDA_ARCH") }}-cuda${{ cuda_major }}-conda-preprocessor-cache
+      SCCACHE_S3_USE_PREPROCESSOR_CACHE_MODE: ${{ env.get("SCCACHE_S3_USE_PREPROCESSOR_CACHE_MODE", default="true") }}
       SCCACHE_S3_USE_SSL: ${{ env.get("SCCACHE_S3_USE_SSL", default="true") }}
       SCCACHE_SERVER_LOG: ${{ env.get("SCCACHE_SERVER_LOG", default="sccache=debug") }}
 
