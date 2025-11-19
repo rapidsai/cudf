@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "cudf/detail/utilities/vector_factories.hpp"
 #include "cudf/null_mask.hpp"
 
 #include <cudf/column/column_device_view.cuh>
@@ -134,14 +133,6 @@ merge<LargerIterator, SmallerIterator>::matches_per_row(rmm::cuda_stream_view st
                       cudf::detail::row::rhs_iterator(0) + larger_numrows,
                       match_counts_it,
                       comparator);
-#if 0
-  stream.synchronize();
-  std::cout << "upper_bound = ";
-  auto h_upper_bound = cudf::detail::make_std_vector(match_counts, stream);
-  for(auto e : h_upper_bound)
-    std::cout << e << " ";
-  std::cout << std::endl;
-#endif
 
   auto match_counts_update_it =
     thrust::tabulate_output_iterator([match_counts = match_counts.begin()] __device__(
@@ -172,14 +163,6 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
 
   // naive: iterate through larger table and binary search on smaller table
   auto match_counts = matches_per_row(stream, temp_mr);
-
-#if 0
-  std::cout << "matches_per_row = ";
-  auto h_match_counts = cudf::detail::make_std_vector(*match_counts, stream);
-  for(auto e : h_match_counts)
-    std::cout << e << " ";
-  std::cout << std::endl;
-#endif
 
   auto count_matches_it = thrust::transform_iterator(
     match_counts->begin(),
@@ -269,22 +252,6 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
   auto [validity_mask, num_nulls] = cudf::bitmask_and(table, stream, temp_mr);
   if (validity_mask.is_empty())
     validity_mask = create_null_mask(table.num_rows(), mask_state::ALL_VALID, stream, temp_mr);
-
-#if 0
-  auto bitmask_to_host = [&](auto mask, auto mask_size) {
-    auto num_bitmasks      = num_bitmask_words(mask_size);
-    auto bitmask_span = device_span<bitmask_type const>(mask, num_bitmasks);
-    return cudf::detail::make_std_vector(bitmask_span, stream);
-  };
-
-  // Printing mask
-  std::cout << validity_mask.size() << " " << num_nulls << std::endl;
-  auto null_mask_size = validity_mask.size();
-  auto h_validity_mask = bitmask_to_host(static_cast<bitmask_type const*>(validity_mask.data()), null_mask_size);
-  for (int idx = null_mask_size - 1; idx >= 0; idx--) {
-    std::cout << (cudf::bit_is_set(h_validity_mask.data(), idx) ? "1" : "0");
-  }
-#endif
 
   // step 2: identify nulls at non-root levels
   for (size_type col_idx = 0; col_idx < table.num_columns(); col_idx++) {
@@ -421,17 +388,6 @@ sort_merge_join::sort_merge_join(table_view const& right,
     }
   }
   if (is_right_sorted == cudf::sorted::NO) { preprocessed_right.get_sorted_order(stream); }
-
-#if 0
-  if(is_right_sorted == cudf::sorted::NO) {
-    std::cout << "preprocessed_right sorted order = ";
-    auto colspan = device_span<size_type const>(preprocessed_right._null_processed_table_sorted_order.value()->view().begin<size_type>(), preprocessed_right._null_processed_table_sorted_order.value()->view().size());
-    auto h_sorted_order = cudf::detail::make_std_vector(colspan, stream);
-    for(auto e : h_sorted_order)
-      std::cout << e << " ";
-    std::cout << std::endl;
-  }
-#endif
 }
 
 rmm::device_uvector<size_type> sort_merge_join::preprocessed_table::map_table_to_unprocessed(
@@ -561,17 +517,6 @@ sort_merge_join::inner_join(table_view const& left,
     }
   }
   if (is_left_sorted == cudf::sorted::NO) { preprocessed_left.get_sorted_order(stream); }
-
-#if 0
-  if(is_left_sorted == cudf::sorted::NO) {
-    std::cout << "preprocessed_left sorted order = ";
-    auto colspan = device_span<size_type const>(preprocessed_left._null_processed_table_sorted_order.value()->view().begin<size_type>(), preprocessed_left._null_processed_table_sorted_order.value()->view().size());
-    auto h_sorted_order = cudf::detail::make_std_vector(colspan, stream);
-    for(auto e : h_sorted_order)
-      std::cout << e << " ";
-    std::cout << std::endl;
-  }
-#endif
 
   return invoke_merge(
     preprocessed_right._null_processed_table_view,
