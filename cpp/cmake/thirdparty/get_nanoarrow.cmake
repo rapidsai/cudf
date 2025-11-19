@@ -13,8 +13,6 @@ function(find_and_configure_nanoarrow)
     set(_exclude_from_all EXCLUDE_FROM_ALL TRUE)
   endif()
 
-  # Currently we need to always build nanoarrow so we don't pickup a previous installed version
-  set(CPM_DOWNLOAD_nanoarrow ON)
   rapids_cpm_find(
     nanoarrow 0.7.0.dev
     GLOBAL_TARGETS nanoarrow
