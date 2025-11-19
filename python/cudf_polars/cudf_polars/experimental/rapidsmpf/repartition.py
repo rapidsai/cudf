@@ -12,6 +12,7 @@ from rapidsmpf.streaming.core.node import define_py_node
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 from cudf_polars.containers import DataFrame
+from cudf_polars.experimental.rapidsmpf.allgather import GlobalAllGather
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
@@ -24,6 +25,50 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
+
+
+def df_from_chunks(
+    ir: Repartition,
+    chunks: list[TableChunk],
+    ir_context: IRExecutionContext,
+) -> DataFrame:
+    """
+    Create a DataFrame from a list of TableChunks.
+
+    Parameters
+    ----------
+    ir
+        The Repartition IR node.
+    chunks
+        The list of TableChunks.
+    ir_context
+        The execution context for the IR node.
+
+    Returns
+    -------
+    The DataFrame.
+    """
+    return (
+        DataFrame.from_table(
+            chunks[0].table_view(),
+            list(ir.schema.keys()),
+            list(ir.schema.values()),
+            chunks[0].stream,
+        )
+        if len(chunks) == 1
+        else _concat(
+            *(
+                DataFrame.from_table(
+                    chunk.table_view(),
+                    list(ir.schema.keys()),
+                    list(ir.schema.values()),
+                    chunk.stream,
+                )
+                for chunk in chunks
+            ),
+            context=ir_context,
+        )
+    )
 
 
 @define_py_node()
@@ -58,59 +103,79 @@ async def concatenate_node(
     # TODO: Use multiple streams
     max_chunks = max(2, max_chunks) if max_chunks else None
     async with shutdown_on_error(context, ch_in.data, ch_out.data):
-        seq_num = 0
-        while True:
-            chunks: list[TableChunk] = []
-            msg: TableChunk | None = None
-
-            # Collect chunks up to max_chunks or until end of stream
-            while len(chunks) < (max_chunks or float("inf")):
-                msg = await ch_in.data.recv(context)
-                if msg is None:
-                    break
-                chunks.append(
-                    TableChunk.from_message(msg).make_available_and_spill(
-                        context.br(), allow_overbooking=True
+        chunks: list[TableChunk]
+        msg: TableChunk | None
+        if max_chunks is None and context.comm().nranks > 1:
+            # Assume this means "global repartitioning" for now
+            with GlobalAllGather(context) as allgather:
+                chunks = []
+                while (msg := await ch_in.data.recv(context)) is not None:
+                    chunks.append(
+                        TableChunk.from_message(msg).make_available_and_spill(
+                            context.br(), allow_overbooking=True
+                        )
+                    )
+                df = df_from_chunks(ir, chunks, ir_context)
+                allgather.insert_chunk(
+                    TableChunk.from_pylibcudf_table(
+                        df.table, df.stream, exclusive_view=True
                     )
                 )
-
-            # Process collected chunks
-            if chunks:
-                df = (
-                    DataFrame.from_table(
-                        chunks[0].table_view(),
-                        list(ir.schema.keys()),
-                        list(ir.schema.values()),
-                        chunks[0].stream,
-                    )
-                    if len(chunks) == 1
-                    else _concat(
-                        *(
-                            DataFrame.from_table(
-                                chunk.table_view(),
-                                list(ir.schema.keys()),
-                                list(ir.schema.values()),
-                                chunk.stream,
-                            )
-                            for chunk in chunks
-                        ),
-                        context=ir_context,
-                    )
+                df = df_from_chunks(
+                    ir,
+                    [
+                        TableChunk.from_pylibcudf_table(
+                            allgather.extract_concatenated(df.stream),
+                            df.stream,
+                            exclusive_view=True,
+                        )
+                    ],
+                    ir_context,
                 )
                 await ch_out.data.send(
                     context,
                     Message(
-                        seq_num,
+                        0,
                         TableChunk.from_pylibcudf_table(
                             df.table, df.stream, exclusive_view=True
                         ),
                     ),
                 )
-                seq_num += 1
+        else:
+            # Local repartitioning
+            seq_num = 0
+            while True:
+                chunks = []
+                msg = None
 
-            # Break if we reached end of stream
-            if msg is None:
-                break
+                # Collect chunks up to max_chunks or until end of stream
+                while len(chunks) < (max_chunks or float("inf")):
+                    msg = await ch_in.data.recv(context)
+                    if msg is None:
+                        break
+                    chunks.append(
+                        TableChunk.from_message(msg).make_available_and_spill(
+                            context.br(), allow_overbooking=True
+                        )
+                    )
+
+                # Process collected chunks
+                if chunks:
+                    df = df_from_chunks(ir, chunks, ir_context)
+                    await ch_out.data.send(
+                        context,
+                        Message(
+                            seq_num,
+                            TableChunk.from_pylibcudf_table(
+                                df.table, df.stream, exclusive_view=True
+                            ),
+                        ),
+                    )
+                    seq_num += 1
+
+                # Break if we reached end of stream
+                if msg is None:
+                    break
 
         await ch_out.data.drain(context)
 
