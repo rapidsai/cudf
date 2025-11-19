@@ -1247,27 +1247,25 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             self._mimic_inplace(out, inplace=True)
 
     def _all_bools_with_nulls(
-        self, other: ColumnBase, bool_fill_value: bool
+        self, other: ColumnBase | ScalarLike, bool_fill_value: bool
     ) -> ColumnBase:
         # Might be able to remove if we share more of
         # DatetimeColumn._binaryop & TimedeltaColumn._binaryop
-        if self.has_nulls() and (
-            isinstance(other, ColumnBase) and other.has_nulls()
-        ):
-            result_mask = (
-                self._get_mask_as_column() & other._get_mask_as_column()
-            )
-        elif self.has_nulls() and (
-            not isinstance(other, ColumnBase)
-            and other not in {np.nan, None, pd.NaT, float("nan")}
-            and not (isinstance(other, Decimal) and other.is_nan())
-            and not (isinstance(other, float) and np.isnan(other))
-        ):
-            result_mask = self._get_mask_as_column()
+        result_mask = None
+        if self.has_nulls():
+            if isinstance(other, ColumnBase) and other.has_nulls():
+                result_mask = (
+                    self._get_mask_as_column() & other._get_mask_as_column()
+                )
+            elif (
+                not isinstance(other, ColumnBase)
+                and other not in {np.nan, None, pd.NaT, float("nan")}
+                and not (isinstance(other, Decimal) and other.is_nan())
+                and not (isinstance(other, float) and np.isnan(other))
+            ):
+                result_mask = self._get_mask_as_column()
         elif isinstance(other, ColumnBase) and other.has_nulls():
             result_mask = other._get_mask_as_column()
-        else:
-            result_mask = None
 
         result_col = as_column(
             bool_fill_value,
