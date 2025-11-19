@@ -441,6 +441,12 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         """
         return self._apply_agg("count")
 
+    def _nan_on_empty(self, result: DataFrame | Series) -> DataFrame | Series:
+        """Mask windows with zero non-null observations as NaN."""
+        if get_option("mode.pandas_compatible"):
+            result = result.mask(self._apply_agg("count") == 0)
+        return result
+
     def mean(self, *args, **kwargs) -> DataFrame | Series:
         """Calculate the rolling mean.
 
@@ -453,16 +459,38 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             raise NotImplementedError(
                 "Rolling.mean() does not support args or kwargs"
             )
-        result = self._apply_agg("mean")
-        if get_option("mode.pandas_compatible"):
-            count = self._apply_agg("count")
-            result = result.mask(count == 0)
-        return result
+        return self._nan_on_empty(self._apply_agg("mean"))
+
+    def min(self, *args, **kwargs) -> DataFrame | Series:
+        """Calculate the rolling minimum.
+
+        Returns
+        -------
+        Series or DataFrame
+            Return type is the same as the original object.
+        """
+        if args or kwargs:
+            raise NotImplementedError(
+                "Rolling.min() does not support args or kwargs"
+            )
+        return self._nan_on_empty(self._apply_agg("min"))
+
+    def max(self, *args, **kwargs) -> DataFrame | Series:
+        """Calculate the rolling maximum.
+
+        Returns
+        -------
+        Series or DataFrame
+            Return type is the same as the original object.
+        """
+        if args or kwargs:
+            raise NotImplementedError(
+                "Rolling.max() does not support args or kwargs"
+            )
+        return self._nan_on_empty(self._apply_agg("max"))
 
     def median(self, **kwargs):
-        raise NotImplementedError(
-            "groupby().rolling().median() is not yet implemented"
-        )
+        raise NotImplementedError("Rolling.median() is not yet implemented")
 
     def apply(self, func, *args, **kwargs) -> DataFrame | Series:
         """
