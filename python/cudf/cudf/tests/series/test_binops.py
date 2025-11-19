@@ -1152,6 +1152,11 @@ def test_series_compare_scalar(
             and not (
                 numeric_and_temporal_types_as_str == "datetime64[ns]"
                 and comparison_op in {operator.eq, operator.ne}
+            )
+            and not (
+                not PANDAS_GE_210
+                and numeric_and_temporal_types_as_str == "timedelta64[ns]"
+                and comparison_op in {operator.eq, operator.ne}
             ),
             reason=f"Fails with {numeric_and_temporal_types_as_str}",
         )
