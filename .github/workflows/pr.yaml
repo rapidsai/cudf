@@ -65,10 +65,6 @@ jobs:
         uses: rapidsai/shared-actions/check_nightly_success/dispatch@main
         with:
           repo: cudf
-  check-version-against-tag:
-    secrets: inherit
-    needs: telemetry-setup
-    uses: rapidsai/shared-workflows/.github/workflows/check-version-against-tag.yaml@check-version-against-tag
   changed-files:
     secrets: inherit
     needs: telemetry-setup
@@ -134,7 +130,7 @@ jobs:
   checks:
     secrets: inherit
     needs: telemetry-setup
-    uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@release/25.12
+    uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@check-version-against-tag
     with:
       enable_check_generated_files: false
       ignored_pr_jobs: "telemetry-summarize spark-rapids-jni wheel-tests-cudf-polars-with-rapidsmpf"
