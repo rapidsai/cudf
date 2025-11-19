@@ -27,6 +27,7 @@
 #include <cudf/io/parquet.hpp>
 #include <cudf/join/conditional_join.hpp>
 #include <cudf/join/distinct_hash_join.hpp>
+#include <cudf/join/filtered_join.hpp>
 #include <cudf/join/hash_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/join/mixed_join.hpp>
@@ -3513,7 +3514,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftSemiJoinGatherMap(
     j_right_keys,
     compare_nulls_equal,
     [](cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
-      return cudf::left_semi_join(left, right, nulleq);
+      cudf::filtered_join obj(right, nulleq, cudf::set_as_build_table::RIGHT);
+      return obj.semi_join(left);
     });
 }
 
@@ -3610,7 +3612,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftAntiJoinGatherMap(
     j_right_keys,
     compare_nulls_equal,
     [](cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
-      return cudf::left_anti_join(left, right, nulleq);
+      cudf::filtered_join obj(right, nulleq, cudf::set_as_build_table::RIGHT);
+      return obj.anti_join(left);
     });
 }
 
