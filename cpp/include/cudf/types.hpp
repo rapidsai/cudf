@@ -223,21 +223,44 @@ enum class type_id : int32_t {
   NUM_TYPE_IDS  ///< Total number of type ids
 };
 
-/// @brief Indicates whether a function is null-aware or not.
-/// i.e:
-/// The function:
-/// ```void add(int * out, int a, int b);```
-/// is not null-aware as it does not take nullability into account.
-///
-/// The function:
-/// ```void add(optional<int> * out, optional<int> a, optional<int> b);```
-/// is null-aware as it takes nullability into account.
+/**
+ * @brief Indicates whether a function is null-aware or not.
+ * i.e:
+ * The function:
+ * ```void add(int * out, int a, int b);```
+ * is not null-aware as it does not take nullability into account.
+ *
+ * The function:
+ * ```void add(optional<int> * out, optional<int> a, optional<int> b);```
+ * is null-aware as it takes nullability into account.
+ * If either of the row inputs of a non-null-aware function is null, the output is considered null.
+ *
+ */
 enum class null_aware : bool {
   NO  = 0,  ///< The function is not null-aware
   YES = 1   ///< The function is null-aware
 };
 
-/// @brief Indicates the null output policy of a function.
+/**
+ * @brief Indicates the null output policy of a function.
+ *
+ * This policy determines whether a null-mask should be excluded from the output column.
+ *
+ * For example, consider a `null-aware` `IS_NULL` function:
+ *
+ * ```
+ * void is_null(optional<bool> * out, optional<int> a){
+ *   *out = !a.has_value();
+ * }
+ *
+ * ```
+ *
+ * using `null_output::PRESERVE` a null-mask may be produced.
+ * with `null_output::NON_NULLABLE` a null-mask will not be produced and all values are considered
+ * valid because we know it is null-aware but it doesn't produce null values.
+ *
+ *
+ */
 enum class null_output : uint8_t {
   PRESERVE     = 0,  ///< A null-mask may be produced if needed
   NON_NULLABLE = 1   ///< A null-mask is not produced and all values are considered valid even if
