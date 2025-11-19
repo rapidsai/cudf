@@ -261,7 +261,10 @@ class sort_merge_join {
    *         (typically pairs of join indices or match counts)
    */
   template <typename MergeOperation>
-  auto invoke_merge(table_view right_view, table_view left_view, MergeOperation&& op, rmm::cuda_stream_view stream);
+  auto invoke_merge(table_view right_view,
+                    table_view left_view,
+                    MergeOperation&& op,
+                    rmm::cuda_stream_view stream);
 };
 
 /**

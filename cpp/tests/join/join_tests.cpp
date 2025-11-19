@@ -1353,25 +1353,70 @@ TEST_P(JoinParameterizedTest, InnerJoinStructs)
   strcol_wrapper left_str_col({"aaaaaaaaaa"});
   column_wrapper<bool> left_bool_col{{false}};
   auto left_struct_col = cudf::test::structs_column_wrapper{{left_str_col, left_bool_col}};
-  column_wrapper<int32_t> left_val_col{{100}}; // Non-key payload
-  
+  column_wrapper<int32_t> left_val_col{{100}};  // Non-key payload
+
   CVector cols0;
   cols0.push_back(left_struct_col.release());
   cols0.push_back(left_val_col.release());
   Table t0(std::move(cols0));
-  
+
   // Right Table: 17 rows
   // Keys with nulls in the boolean child column
-  strcol_wrapper right_str_col(
-    {"aaaaaaaaaa", "aaa", "aaa", "aaaa", "aaa", "aaaaaaaaaa", "aaaaaaaaaa", "aaa", "aaa",
-     "aaaaaaaaaa", "aaaaaaaaaa", "aaaa", "aaaaaaaaaa", "aaaa", "aaa", "aaa", "aaaaaaaaaa"});
-  column_wrapper<bool> right_bool_col(
-    {{false, true, true, false, true, false, false, true, true, false, false, false, false, false, true, true, true},
-     {true, true, true, false, true, true, true, true, true, true, true, false, true, false, true, true, true}});
+  strcol_wrapper right_str_col({"aaaaaaaaaa",
+                                "aaa",
+                                "aaa",
+                                "aaaa",
+                                "aaa",
+                                "aaaaaaaaaa",
+                                "aaaaaaaaaa",
+                                "aaa",
+                                "aaa",
+                                "aaaaaaaaaa",
+                                "aaaaaaaaaa",
+                                "aaaa",
+                                "aaaaaaaaaa",
+                                "aaaa",
+                                "aaa",
+                                "aaa",
+                                "aaaaaaaaaa"});
+  column_wrapper<bool> right_bool_col({{false,
+                                        true,
+                                        true,
+                                        false,
+                                        true,
+                                        false,
+                                        false,
+                                        true,
+                                        true,
+                                        false,
+                                        false,
+                                        false,
+                                        false,
+                                        false,
+                                        true,
+                                        true,
+                                        true},
+                                       {true,
+                                        true,
+                                        true,
+                                        false,
+                                        true,
+                                        true,
+                                        true,
+                                        true,
+                                        true,
+                                        true,
+                                        true,
+                                        false,
+                                        true,
+                                        false,
+                                        true,
+                                        true,
+                                        true}});
   auto right_struct_col = cudf::test::structs_column_wrapper{{right_str_col, right_bool_col}};
   column_wrapper<int32_t> right_val_col(
-    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}); // Non-key payload
-  
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16});  // Non-key payload
+
   CVector cols1;
   cols1.push_back(right_struct_col.release());
   cols1.push_back(right_val_col.release());
@@ -1390,12 +1435,13 @@ TEST_P(JoinParameterizedTest, InnerJoinStructs)
   // 10: "aaaaaaaaaa", false (Match)
   // 12: "aaaaaaaaaa", false (Match)
   // 16: "aaaaaaaaaa", true  (No match on bool)
-  
+
   auto result            = inner_join(t0, t1, {0}, {0}, cudf::null_equality::EQUAL, algo);
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-  // Expected output is the left row (100) repeated 6 times, combined with matching right rows (0, 5, 6, 9, 10, 12)
+  // Expected output is the left row (100) repeated 6 times, combined with matching right rows (0,
+  // 5, 6, 9, 10, 12)
 
   // Gold Left Columns (Struct + Val)
   auto gold_left_str_col = strcol_wrapper(
@@ -1404,8 +1450,8 @@ TEST_P(JoinParameterizedTest, InnerJoinStructs)
   auto gold_left_struct_col =
     cudf::test::structs_column_wrapper{{gold_left_str_col, gold_left_bool_col}};
   column_wrapper<int32_t> gold_left_val_col(
-    {100, 100, 100, 100, 100, 100}); // Non-key payload from left
-    
+    {100, 100, 100, 100, 100, 100});  // Non-key payload from left
+
   // Gold Right Columns (Struct + Val)
   auto gold_right_str_col = strcol_wrapper(
     {"aaaaaaaaaa", "aaaaaaaaaa", "aaaaaaaaaa", "aaaaaaaaaa", "aaaaaaaaaa", "aaaaaaaaaa"});
@@ -1413,7 +1459,7 @@ TEST_P(JoinParameterizedTest, InnerJoinStructs)
   auto gold_right_struct_col =
     cudf::test::structs_column_wrapper{{gold_right_str_col, gold_right_bool_col}};
   column_wrapper<int32_t> gold_right_val_col(
-    {0, 5, 6, 9, 10, 12}); // Non-key payload from right (indices of matching rows)
+    {0, 5, 6, 9, 10, 12});  // Non-key payload from right (indices of matching rows)
 
   CVector cols_gold;
   cols_gold.push_back(gold_left_struct_col.release());
