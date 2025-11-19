@@ -33,7 +33,7 @@ def test_memory_profiling(rmm_reset):
     # need to set the env variable `CUDF_MEMORY_PROFILING=1` prior to
     # the launch of the Python interpreter if `memory_profiling` is needed.
     result = subprocess.run(
-        ["python", LOCATION / "_rmm_stats_test.py"],
+        ["python", LOCATION / "_rmm_stats_script.py"],
         env=env,
         capture_output=True,
         text=True,
