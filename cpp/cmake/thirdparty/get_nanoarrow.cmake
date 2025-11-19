@@ -23,7 +23,7 @@ function(find_and_configure_nanoarrow)
     OPTIONS "BUILD_SHARED_LIBS OFF" "NANOARROW_NAMESPACE cudf" ${_exclude_from_all}
   )
   if(nanoarrow_ADDED)
-    set_target_properties(nanoarrow PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    set_target_properties(nanoarrow_static PROPERTIES POSITION_INDEPENDENT_CODE ON)
     rapids_export_find_package_root(
       BUILD nanoarrow "${nanoarrow_BINARY_DIR}" EXPORT_SET cudf-exports
     )
