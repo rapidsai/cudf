@@ -1299,7 +1299,7 @@ class DataFrameScan(IR):
         pl_df: pl.DataFrame,
         projection: Sequence[str] | None,
         id_for_hash: int,
-    ) -> DataFrameScan:
+    ) -> DataFrameScan:  # pragma: no cover
         """
         Reconstruct a DataFrameScan from pickled data.
 
@@ -1322,7 +1322,7 @@ class DataFrameScan(IR):
         node._id_for_hash = id_for_hash
         return node
 
-    def __reduce__(self) -> tuple[Any, ...]:
+    def __reduce__(self) -> tuple[Any, ...]:  # pragma: no cover
         """
         Pickle a DataFrameScan object.
 
