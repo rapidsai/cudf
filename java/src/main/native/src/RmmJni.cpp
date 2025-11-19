@@ -419,7 +419,7 @@ class pinned_fallback_host_memory_resource {
    * @return Pointer to the newly allocated memory.
    */
   void* allocate_sync(std::size_t bytes,
-                      [[maybe_unused]] std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
+                      [[maybe_unused]] std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
   {
     try {
       return _pool->allocate_sync(bytes, alignment);
@@ -442,7 +442,7 @@ class pinned_fallback_host_memory_resource {
    */
   void deallocate_sync(void* ptr,
                        std::size_t bytes,
-                       std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT) noexcept
+                       std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
   {
     if (ptr >= pool_begin_ && ptr <= pool_end_) {
       _pool->deallocate_sync(ptr, bytes, alignment);
