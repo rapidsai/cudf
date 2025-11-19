@@ -94,7 +94,7 @@ class fixed_pinned_pool_memory_resource : public rmm::mr::device_memory_resource
     }
   }
 
-  bool do_is_equal(device_memory_resource const& other) const noexcept override
+  [[nodiscard]] bool do_is_equal(device_memory_resource const& other) const noexcept override
   {
     auto const* other_ptr = dynamic_cast<fixed_pinned_pool_memory_resource const*>(&other);
     return other_ptr != nullptr && pool_ == other_ptr->pool_ && stream_ == other_ptr->stream_;
