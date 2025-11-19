@@ -22,6 +22,7 @@
 #include <cuda/functional>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/reduce.h>
+#include <thrust/sequence.h>
 
 #include <numeric>
 
@@ -46,38 +47,22 @@ void decode_dictionary_page_headers(cudf::detail::hostdevice_span<ColumnChunkDes
 {
   CUDF_FUNC_RANGE();
 
-  std::vector<size_t> host_chunk_page_counts(chunks.size() + 1);
-  std::transform(
-    chunks.host_begin(), chunks.host_end(), host_chunk_page_counts.begin(), [](auto const& chunk) {
-      return chunk.num_dict_pages;
-    });
-  host_chunk_page_counts[chunks.size()] = 0;
+  auto chunk_page_offsets = rmm::device_uvector<size_type>(chunks.size() + 1, stream);
+  thrust::sequence(rmm::exec_policy_nosync(stream),
+                   chunk_page_offsets.begin(),
+                   chunk_page_offsets.end(),
+                   size_type{0});
 
-  auto chunk_page_counts = cudf::detail::make_device_uvector_async(
-    host_chunk_page_counts, stream, cudf::get_current_device_resource_ref());
-
-  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
-                         chunk_page_counts.begin(),
-                         chunk_page_counts.end(),
-                         chunk_page_counts.begin(),
-                         size_t{0},
-                         cuda::std::plus<size_t>{});
-
-  rmm::device_uvector<chunk_page_info> d_chunk_page_info(chunks.size(), stream);
-
+  rmm::device_uvector<chunk_page_info> chunk_page_info(chunks.size(), stream);
   thrust::for_each(rmm::exec_policy_nosync(stream),
                    thrust::counting_iterator<cuda::std::size_t>(0),
                    thrust::counting_iterator(chunks.size()),
-                   [cpi               = d_chunk_page_info.begin(),
-                    chunk_page_counts = chunk_page_counts.begin(),
-                    pages             = pages.device_begin()] __device__(size_t i) {
-                     cpi[i].pages = &pages[chunk_page_counts[i]];
-                   });
+                   [cpi = chunk_page_info.begin(), pages = pages.device_begin()] __device__(
+                     auto page_idx) { cpi[page_idx].pages = &pages[page_idx]; });
 
   parquet::kernel_error error_code(stream);
 
-  parquet::detail::decode_page_headers(
-    chunks.device_begin(), d_chunk_page_info.begin(), chunks.size(), error_code.data(), stream);
+  parquet::detail::decode_page_headers(chunks, chunk_page_info.begin(), error_code.data(), stream);
 
   if (auto const error = error_code.value_sync(stream); error != 0) {
     CUDF_FAIL("Parquet header parsing failed with code(s) " +
