@@ -227,11 +227,11 @@ enum class type_id : int32_t {
  * @brief Indicates whether a function is null-aware or not.
  * i.e:
  * The function:
- * ```void add(int * out, int a, int b);```
+ * ```cpp void add(int * out, int a, int b);```
  * is not null-aware as it does not take nullability into account.
  *
  * The function:
- * ```void add(optional<int> * out, optional<int> a, optional<int> b);```
+ * ```cpp void add(optional<int> * out, optional<int> a, optional<int> b);```
  * is null-aware as it takes nullability into account.
  * If either of the row inputs of a non-null-aware function is null, the output is considered null.
  *
@@ -248,7 +248,7 @@ enum class null_aware : bool {
  *
  * For example, consider a `null-aware` `IS_NULL` function:
  *
- * ```
+ * ```cpp
  * void is_null(optional<bool> * out, optional<int> a){
  *   *out = !a.has_value();
  * }
