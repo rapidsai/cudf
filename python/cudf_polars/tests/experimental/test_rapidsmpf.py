@@ -218,9 +218,6 @@ def test_sort_stable_rapidsmpf_warns():
 def test_simple_query_with_distributed_support(tmp_path, source_format) -> None:
     # Test a trivial query that works for both the
     # "tasks" and "rapidsmpf" runtimes in distributed mode.
-    # Note: For "frame" (DataFrameScan), the DataFrameScan class overrides
-    # the base Node.__reduce__ method to serialize the polars DataFrame
-    # from _non_child_args instead of the non-picklable PyDataFrame.
 
     # Check that we have a distributed cluster running.
     # This tests must be run with: --cluster='distributed'
@@ -267,7 +264,7 @@ def test_simple_query_with_distributed_support(tmp_path, source_format) -> None:
     # Simple query: select and filter
     q = lf.select("a", "b").filter(pl.col("a") > 2)
 
-    # Should warn about distributed execution being under construction (if distributed)
+    # Should warn about distributed execution being under construction (if rapidsmpf)
     if DEFAULT_RUNTIME == "rapidsmpf":
         with pytest.warns(UserWarning, match="UNDER CONSTRUCTION"):
             result = q.collect(engine=engine)
