@@ -73,19 +73,19 @@ void generate_depth_remappings(
 /**
  * @brief Return the number of total pages from the given column chunks.
  *
- * @param chunks List of column chunk descriptors
+ * @param chunks Host-device span of column chunk descriptors
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return The total number of pages
  */
-[[nodiscard]] size_t count_page_headers(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks,
+[[nodiscard]] size_t count_page_headers(cudf::detail::hostdevice_span<ColumnChunkDesc> chunks,
                                         rmm::cuda_stream_view stream);
 
 /**
  * @brief Count the total number of pages using page index information.
  */
 [[nodiscard]] size_t count_page_headers_with_pgidx(
-  cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks, rmm::cuda_stream_view stream);
+  cudf::detail::hostdevice_span<ColumnChunkDesc> chunks, rmm::cuda_stream_view stream);
 
 /**
  * @brief Set fields on the pages that can be derived from page indexes.
