@@ -963,7 +963,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocFromPinnedPool(JNIEnv* env,
   {
     cudf::jni::auto_set_device(env);
     auto pool = reinterpret_cast<rmm_pinned_pool_t*>(pool_ptr);
-    void* ret = pool->allocate_sync(size);
+    void* ret = pool->allocate(cudf::get_default_stream(), size);
     return reinterpret_cast<jlong>(ret);
   }
   JNI_CATCH_BEGIN(env, 0)
@@ -981,7 +981,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_freeFromPinnedPool(
     cudf::jni::auto_set_device(env);
     auto pool  = reinterpret_cast<rmm_pinned_pool_t*>(pool_ptr);
     void* cptr = reinterpret_cast<void*>(ptr);
-    pool->deallocate_sync(cptr, size);
+    pool->deallocate(cudf::get_default_stream(), cptr, size);
   }
   JNI_CATCH(env, );
 }
@@ -994,7 +994,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocFromFallbackPinnedPool(JNIE
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    void* ret = cudf::get_pinned_memory_resource().allocate_sync(size);
+    void* ret = cudf::get_pinned_memory_resource().allocate(cudf::get_default_stream(), size);
     return reinterpret_cast<jlong>(ret);
   }
   JNI_CATCH(env, 0);
@@ -1010,7 +1010,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_freeFromFallbackPinnedPool(JNIEnv
   {
     cudf::jni::auto_set_device(env);
     void* cptr = reinterpret_cast<void*>(ptr);
-    cudf::get_pinned_memory_resource().deallocate_sync(cptr, size);
+    cudf::get_pinned_memory_resource().deallocate(cudf::get_default_stream(), cptr, size);
   }
   JNI_CATCH(env, );
 }
