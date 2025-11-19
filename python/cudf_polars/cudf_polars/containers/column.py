@@ -354,7 +354,7 @@ class Column:
                     plc.aggregation.all(),
                     plc.DataType(plc.TypeId.BOOL8),
                     stream=stream,
-                ).to_py():
+                ).to_py(stream=stream):
                     raise InvalidOperationError("Conversion from `str` failed.")
                 return to_floats(self.obj, dtype)
             else:
@@ -364,7 +364,7 @@ class Column:
                     plc.aggregation.all(),
                     plc.DataType(plc.TypeId.BOOL8),
                     stream=stream,
-                ).to_py():
+                ).to_py(stream=stream):
                     raise InvalidOperationError("Conversion from `str` failed.")
                 return to_integers(self.obj, dtype, stream=stream)
 
@@ -487,7 +487,7 @@ class Column:
                 plc.aggregation.sum(),
                 plc.types.SIZE_TYPE,
                 stream=stream,
-            ).to_py()
+            ).to_py(stream=stream)
         else:
             result = 0
         return result

@@ -148,7 +148,7 @@ class distinct_hash_join {
 
   /// Hash table type
   using hash_table_type = cuco::static_set<cuco::pair<hash_value_type, rhs_index_type>,
-                                           cuco::extent<size_type>,
+                                           cuco::extent<std::size_t>,
                                            cuda::thread_scope_device,
                                            always_not_equal,
                                            probing_scheme_type,

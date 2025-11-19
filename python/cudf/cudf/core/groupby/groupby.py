@@ -810,6 +810,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         included_aggregations = []
         column_included = []
         requests = []
+        # For any post-processing needed after pylibcudf aggregations
+        adjustments = []
         result_columns: list[list[ColumnBase]] = []
 
         for i, (col, aggs) in enumerate(
@@ -818,6 +820,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             valid_aggregations = get_valid_aggregation(col.dtype)
             included_aggregations_i = []
             col_aggregations = []
+            adjustments_i = []
             for agg in aggs:
                 str_agg = str(agg)
                 if _is_unsupported_agg_for_type(col.dtype, str_agg):
@@ -831,6 +834,12 @@ class GroupBy(Serializable, Reducible, Scannable):
                 ):
                     included_aggregations_i.append((agg, agg_obj.kind))
                     col_aggregations.append(agg_obj.plc_obj)
+                    if str_agg == "cumcount":
+                        # pandas 0-indexes cumulative count, see
+                        # https://github.com/rapidsai/cudf/issues/10237
+                        adjustments_i.append(lambda col: (col - 1))
+                    else:
+                        adjustments_i.append(lambda col: col)
             included_aggregations.append(included_aggregations_i)
             result_columns.append([])
             if col_aggregations:
@@ -840,6 +849,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     )
                 )
                 column_included.append(i)
+                adjustments.append(adjustments_i)
 
         if not requests and any(len(v) > 0 for v in aggregations):
             raise pd.errors.DataError(
@@ -852,9 +862,14 @@ class GroupBy(Serializable, Reducible, Scannable):
             else self._groupby.plc_groupby.aggregate(requests)
         )
 
-        for i, result in zip(column_included, results, strict=True):
+        for i, result, adjustments_i in zip(
+            column_included, results, adjustments, strict=True
+        ):
             result_columns[i] = [
-                ColumnBase.from_pylibcudf(col) for col in result.columns()
+                adj(ColumnBase.from_pylibcudf(col))
+                for col, adj in zip(
+                    result.columns(), adjustments_i, strict=True
+                )
             ]
 
         return (

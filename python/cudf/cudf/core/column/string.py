@@ -210,7 +210,7 @@ class StringColumn(ColumnBase, Scannable):
 
     @property
     def data(self) -> None | Buffer:
-        if self._data is None:
+        if self._data is None:  # type: ignore[has-type]
             assert self.base_data is not None
             if (
                 self.offset == 0
@@ -219,10 +219,10 @@ class StringColumn(ColumnBase, Scannable):
             ):
                 self._data = self.base_data  # type: ignore[assignment]
             else:
-                self._data = self.base_data[  # type: ignore[assignment]
+                self._data = self.base_data[  # type: ignore[has-type]
                     self.start_offset : self.end_offset
                 ]
-        return self._data
+        return self._data  # type: ignore[has-type]
 
     def all(self, skipna: bool = True) -> bool:
         if skipna and self.null_count == self.size:
@@ -304,7 +304,7 @@ class StringColumn(ColumnBase, Scannable):
         other = [item] if is_scalar(item) else item
         return self.contains(as_column(other, dtype=self.dtype)).any()
 
-    def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
+    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         """
         Copies type metadata from self onto other, returning a new column.
         """
@@ -1347,8 +1347,8 @@ class StringColumn(ColumnBase, Scannable):
     def like(self, pattern: str, escape: str) -> Self:
         plc_column = plc.strings.contains.like(
             self.to_pylibcudf(mode="read"),
-            pa_scalar_to_plc_scalar(pa.scalar(pattern)),
-            pa_scalar_to_plc_scalar(pa.scalar(escape)),
+            pattern,
+            escape,
         )
         return (
             type(self)
