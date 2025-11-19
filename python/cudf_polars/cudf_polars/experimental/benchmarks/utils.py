@@ -1172,6 +1172,45 @@ PDSH_TABLE_NAMES: list[str] = [
 ]
 
 
+def print_duckdb_plan(
+    q_id: int,
+    sql: str,
+    dataset_path: Path,
+    suffix: str,
+    query_set: str,
+    args: argparse.Namespace,
+) -> None:
+    """Print DuckDB query plan using EXPLAIN."""
+    if duckdb is None:
+        raise ImportError(duckdb_err)
+
+    if query_set == "pdsds":
+        tbl_names = PDSDS_TABLE_NAMES
+    else:
+        tbl_names = PDSH_TABLE_NAMES
+
+    with duckdb.connect() as conn:
+        for name in tbl_names:
+            pattern = (Path(dataset_path) / name).as_posix() + suffix
+            conn.execute(
+                f"CREATE OR REPLACE VIEW {name} AS "
+                f"SELECT * FROM parquet_scan('{pattern}');"
+            )
+
+        if args.explain_logical and args.explain:
+            conn.execute("PRAGMA explain_output = 'all';")
+        elif args.explain_logical:
+            conn.execute("PRAGMA explain_output = 'optimized_only';")
+        else:
+            conn.execute("PRAGMA explain_output = 'physical_only';")
+
+        print(f"\nDuckDB Query {q_id} - Plan\n")
+
+        plan_rows = conn.execute(f"EXPLAIN {sql}").fetchall()
+        for _, line in plan_rows:
+            print(line)
+
+
 def execute_duckdb_query(
     query: str,
     dataset_path: Path,
@@ -1212,6 +1251,17 @@ def run_duckdb(
             raise NotImplementedError(f"Query {q_id} not implemented.") from err
 
         sql = get_q(run_config)
+
+        if args.explain or args.explain_logical:
+            print_duckdb_plan(
+                q_id=q_id,
+                sql=sql,
+                dataset_path=run_config.dataset_path,
+                suffix=run_config.suffix,
+                query_set=duckdb_queries_cls.name,
+                args=args,
+            )
+
         print(f"DuckDB Executing: {q_id}")
         records[q_id] = []
 
