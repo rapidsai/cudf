@@ -72,7 +72,7 @@ jobs:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
-      script: ci/build_python.sh
+      script: ci/build_python_noarch.sh
       sha: ${{ inputs.sha }}
       pure-conda: true
   upload-conda:
