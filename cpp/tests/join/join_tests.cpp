@@ -6,7 +6,6 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
@@ -1174,45 +1173,91 @@ TEST_P(JoinParameterizedTest, InnerJoinWithStructsAndNulls)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result = inner_join(t0, t1, {0, 1, 3}, {0, 1, 3}, cudf::null_equality::EQUAL, algo);
-  auto result_sort_order = cudf::sorted_order(result->view());
-  auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
+  // Equal nulls
+  {
+    auto result = inner_join(t0, t1, {0, 1, 3}, {0, 1, 3}, cudf::null_equality::EQUAL, algo);
+    auto result_sort_order = cudf::sorted_order(result->view());
+    auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-  column_wrapper<int32_t> col_gold_0{{3, 2}};
-  strcol_wrapper col_gold_1({"s1", "s0"}, {true, true});
-  column_wrapper<int32_t> col_gold_2{{0, 1}};
-  auto col_gold_3_names_col = strcol_wrapper{"Samuel Vimes", "Angua von Überwald"};
-  auto col_gold_3_ages_col  = column_wrapper<int32_t>{{48, 25}};
+    column_wrapper<int32_t> col_gold_0{{3, 2}};
+    strcol_wrapper col_gold_1({"s1", "s0"}, {true, true});
+    column_wrapper<int32_t> col_gold_2{{0, 1}};
+    auto col_gold_3_names_col = strcol_wrapper{"Samuel Vimes", "Angua von Überwald"};
+    auto col_gold_3_ages_col  = column_wrapper<int32_t>{{48, 25}};
 
-  auto col_gold_3_is_human_col = column_wrapper<bool>{{true, false}, {true, false}};
+    auto col_gold_3_is_human_col = column_wrapper<bool>{{true, false}, {true, false}};
 
-  auto col_gold_3 = cudf::test::structs_column_wrapper{
-    {col_gold_3_names_col, col_gold_3_ages_col, col_gold_3_is_human_col}};
+    auto col_gold_3 = cudf::test::structs_column_wrapper{
+      {col_gold_3_names_col, col_gold_3_ages_col, col_gold_3_is_human_col}};
 
-  column_wrapper<int32_t> col_gold_4{{3, 2}};
-  strcol_wrapper col_gold_5({"s1", "s0"}, {true, true});
-  column_wrapper<int32_t> col_gold_6{{1, -1}, {true, false}};
-  auto col_gold_7_names_col = strcol_wrapper{"Samuel Vimes", "Angua von Überwald"};
-  auto col_gold_7_ages_col  = column_wrapper<int32_t>{{48, 25}};
+    column_wrapper<int32_t> col_gold_4{{3, 2}};
+    strcol_wrapper col_gold_5({"s1", "s0"}, {true, true});
+    column_wrapper<int32_t> col_gold_6{{1, -1}, {true, false}};
+    auto col_gold_7_names_col = strcol_wrapper{"Samuel Vimes", "Angua von Überwald"};
+    auto col_gold_7_ages_col  = column_wrapper<int32_t>{{48, 25}};
 
-  auto col_gold_7_is_human_col = column_wrapper<bool>{{true, false}, {true, false}};
+    auto col_gold_7_is_human_col = column_wrapper<bool>{{true, false}, {true, false}};
 
-  auto col_gold_7 = cudf::test::structs_column_wrapper{
-    {col_gold_7_names_col, col_gold_7_ages_col, col_gold_7_is_human_col}};
-  CVector cols_gold;
-  cols_gold.push_back(col_gold_0.release());
-  cols_gold.push_back(col_gold_1.release());
-  cols_gold.push_back(col_gold_2.release());
-  cols_gold.push_back(col_gold_3.release());
-  cols_gold.push_back(col_gold_4.release());
-  cols_gold.push_back(col_gold_5.release());
-  cols_gold.push_back(col_gold_6.release());
-  cols_gold.push_back(col_gold_7.release());
-  Table gold(std::move(cols_gold));
+    auto col_gold_7 = cudf::test::structs_column_wrapper{
+      {col_gold_7_names_col, col_gold_7_ages_col, col_gold_7_is_human_col}};
+    CVector cols_gold;
+    cols_gold.push_back(col_gold_0.release());
+    cols_gold.push_back(col_gold_1.release());
+    cols_gold.push_back(col_gold_2.release());
+    cols_gold.push_back(col_gold_3.release());
+    cols_gold.push_back(col_gold_4.release());
+    cols_gold.push_back(col_gold_5.release());
+    cols_gold.push_back(col_gold_6.release());
+    cols_gold.push_back(col_gold_7.release());
+    Table gold(std::move(cols_gold));
 
-  auto gold_sort_order = cudf::sorted_order(gold.view());
-  auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+    auto gold_sort_order = cudf::sorted_order(gold.view());
+    auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+  }
+
+  // Unequal nulls
+  {
+    auto result = inner_join(t0, t1, {0, 1, 3}, {0, 1, 3}, cudf::null_equality::UNEQUAL, algo);
+    auto result_sort_order = cudf::sorted_order(result->view());
+    auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
+
+    column_wrapper<int32_t> col_gold_0{{3}};
+    strcol_wrapper col_gold_1({"s1"});
+    column_wrapper<int32_t> col_gold_2{{0}};
+    auto col_gold_3_names_col = strcol_wrapper{"Samuel Vimes"};
+    auto col_gold_3_ages_col  = column_wrapper<int32_t>{{48}};
+
+    auto col_gold_3_is_human_col = column_wrapper<bool>{{true}, {true}};
+
+    auto col_gold_3 = cudf::test::structs_column_wrapper{
+      {col_gold_3_names_col, col_gold_3_ages_col, col_gold_3_is_human_col}};
+
+    column_wrapper<int32_t> col_gold_4{{3}};
+    strcol_wrapper col_gold_5({"s1"});
+    column_wrapper<int32_t> col_gold_6{{1}};
+    auto col_gold_7_names_col = strcol_wrapper{"Samuel Vimes"};
+    auto col_gold_7_ages_col  = column_wrapper<int32_t>{{48}};
+
+    auto col_gold_7_is_human_col = column_wrapper<bool>{{true}, {true}};
+
+    auto col_gold_7 = cudf::test::structs_column_wrapper{
+      {col_gold_7_names_col, col_gold_7_ages_col, col_gold_7_is_human_col}};
+    CVector cols_gold;
+    cols_gold.push_back(col_gold_0.release());
+    cols_gold.push_back(col_gold_1.release());
+    cols_gold.push_back(col_gold_2.release());
+    cols_gold.push_back(col_gold_3.release());
+    cols_gold.push_back(col_gold_4.release());
+    cols_gold.push_back(col_gold_5.release());
+    cols_gold.push_back(col_gold_6.release());
+    cols_gold.push_back(col_gold_7.release());
+    Table gold(std::move(cols_gold));
+
+    auto gold_sort_order = cudf::sorted_order(gold.view());
+    auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+  }
 }
 
 // // Test to check join behavior when join keys are null.
@@ -1299,7 +1344,7 @@ TEST_P(JoinParameterizedTest, InnerJoinOnNulls)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
-TEST_P(JoinParameterizedTest, SortMergeInnerJoinStructsCornerCase)
+TEST_P(JoinParameterizedTest, InnerJoinStructs)
 {
   auto algo = GetParam();
 
@@ -1346,9 +1391,6 @@ TEST_P(JoinParameterizedTest, SortMergeInnerJoinStructsCornerCase)
   // 12: "aaaaaaaaaa", false (Match)
   // 16: "aaaaaaaaaa", true  (No match on bool)
   
-  cudf::test::print(t0.view().column(0));
-  cudf::test::print(t1.view().column(0));
-
   auto result            = inner_join(t0, t1, {0}, {0}, cudf::null_equality::EQUAL, algo);
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);

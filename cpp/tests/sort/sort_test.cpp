@@ -11,8 +11,6 @@
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf_test/debug_utilities.hpp>
-
 #include <cudf/copying.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_view.hpp>
