@@ -33,7 +33,7 @@ template <null_aware is_null_aware,
           typename... In>
 CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
                         cudf::column_device_view_core const* inputs,
-                        bool* null_mask,
+                        bool* intermediate_null_mask,
                         void* user_data)
 {
   // inputs to JITIFY kernels have to be either sized-integral types or pointers. Structs or
@@ -45,10 +45,9 @@ CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
 
   for (auto i = start; i < size; i += stride) {
     if constexpr (is_null_aware == null_aware::NO) {
-      auto const is_valid = (true && ... && In::is_valid(inputs, i));
-      if constexpr (may_evaluate_null) { null_mask[i] = is_valid; }
-
-      if (!is_valid) { continue; }
+      if constexpr (may_evaluate_null) {
+        if (Out::is_null(outputs, i)) { continue; }
+      }
 
       if constexpr (has_user_data) {
         GENERIC_TRANSFORM_OP(user_data, i, &Out::element(outputs, i), In::element(inputs, i)...);
@@ -67,7 +66,7 @@ CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
 
       Out::assign(outputs, i, *result);
 
-      if constexpr (may_evaluate_null) { null_mask[i] = result.has_value(); }
+      if constexpr (may_evaluate_null) { intermediate_null_mask[i] = result.has_value(); }
     }
   }
 }
@@ -79,7 +78,7 @@ template <null_aware is_null_aware,
           typename... In>
 CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const* outputs,
                                     cudf::column_device_view_core const* inputs,
-                                    bool* null_mask,
+                                    bool* intermediate_null_mask,
                                     void* user_data)
 {
   auto const start        = cudf::detail::grid_1d::global_thread_id();
@@ -89,11 +88,9 @@ CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const*
 
   for (auto i = start; i < size; i += stride) {
     if constexpr (is_null_aware == null_aware::NO) {
-      auto const is_valid = (true && ... && In::is_valid(inputs, i));
-
-      if constexpr (may_evaluate_null) { null_mask[i] = is_valid; }
-
-      if (!is_valid) { continue; }
+      if constexpr (may_evaluate_null) {
+        if (Out::is_null(outputs, i)) { continue; }
+      }
 
       typename Out::type result{numeric::scaled_integer<typename Out::type::rep>{0, output_scale}};
 
@@ -117,7 +114,7 @@ CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const*
 
       Out::assign(outputs, i, *result);
 
-      if constexpr (may_evaluate_null) { null_mask[i] = result.has_value(); }
+      if constexpr (may_evaluate_null) { intermediate_null_mask[i] = result.has_value(); }
     }
   }
 }
@@ -129,7 +126,7 @@ template <null_aware is_null_aware,
           typename... In>
 CUDF_KERNEL void span_kernel(cudf::jit::device_optional_span<typename Out::type> const* outputs,
                              cudf::column_device_view_core const* inputs,
-                             bool* null_mask,
+                             bool* intermediate_null_mask,
                              void* user_data)
 {
   auto const start  = cudf::detail::grid_1d::global_thread_id();
@@ -138,11 +135,9 @@ CUDF_KERNEL void span_kernel(cudf::jit::device_optional_span<typename Out::type>
 
   for (auto i = start; i < size; i += stride) {
     if constexpr (is_null_aware == null_aware::NO) {
-      auto const is_valid = (true && ... && In::is_valid(inputs, i));
-
-      if constexpr (may_evaluate_null) { null_mask[i] = is_valid; }
-
-      if (!is_valid) { continue; }
+      if constexpr (may_evaluate_null) {
+        if (Out::is_null(outputs, i)) { continue; }
+      }
 
       if constexpr (has_user_data) {
         GENERIC_TRANSFORM_OP(user_data, i, &Out::element(outputs, i), In::element(inputs, i)...);
@@ -160,7 +155,7 @@ CUDF_KERNEL void span_kernel(cudf::jit::device_optional_span<typename Out::type>
 
       Out::assign(outputs, i, *result);
 
-      if constexpr (may_evaluate_null) { null_mask[i] = result.has_value(); }
+      if constexpr (may_evaluate_null) { intermediate_null_mask[i] = result.has_value(); }
     }
   }
 }
