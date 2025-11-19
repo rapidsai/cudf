@@ -131,13 +131,13 @@ class ChannelManager:
 
 def process_children(
     ir: IR, rec: SubNetGenerator
-) -> tuple[list[Any], dict[IR, ChannelManager]]:
+) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     """
     Process children IR nodes and aggregate their nodes and channels.
 
     This helper function recursively processes all children of an IR node,
-    collects their streaming network nodes into a flat list, and merges
-    their channel dictionaries.
+    collects their streaming network nodes into a dictionary mapping IR nodes
+    to their associated nodes, and merges their channel dictionaries.
 
     Parameters
     ----------
@@ -149,14 +149,14 @@ def process_children(
     Returns
     -------
     nodes
-        Flat list of all streaming network nodes from all children.
+        Dictionary mapping each IR node to its list of streaming network nodes.
     channels
         Dictionary mapping each child IR node to its ChannelManager.
     """
     if not ir.children:
-        return [], {}
+        return {}, {}
 
     _nodes_list, _channels_list = zip(*(rec(c) for c in ir.children), strict=True)
-    nodes: list[Any] = list(reduce(operator.add, _nodes_list, []))
+    nodes: dict[IR, list[Any]] = reduce(operator.or_, _nodes_list)
     channels: dict[IR, ChannelManager] = reduce(operator.or_, _channels_list)
     return nodes, channels

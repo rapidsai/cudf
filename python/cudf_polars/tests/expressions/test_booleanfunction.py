@@ -251,3 +251,16 @@ def test_boolean_is_close(request):
     q = ldf.select(pl.col("a").is_close(1.4, abs_tol=0.1))
 
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.parametrize(
+    "dtype, col",
+    [
+        (pl.Int64(), [1, 0, None, -1, 7]),
+        (pl.UInt8(), [1, 0, None, 255, 2]),
+    ],
+)
+def test_boolean_not_with_integers(dtype, col):
+    ldf = pl.LazyFrame({"a": pl.Series(col, dtype=dtype)})
+    q = ldf.select(~pl.col("a"))
+    assert_gpu_result_equal(q)

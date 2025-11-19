@@ -230,7 +230,6 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit2-0-0-False]": "Aggregating a list literal: cudf#19610",
     "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit2-0-len1-False]": "Aggregating a list literal: cudf#19610",
     "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-0-0-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_top_k.py::test_top_k_non_elementwise_by_24163": "Ternary with scalar predicate does not broadcast mask cudf#20210",
 }
 
 

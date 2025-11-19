@@ -21,8 +21,10 @@ from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 from typing_extensions import Self
 
 import pylibcudf as plc
+from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 import cudf
+from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_categorical_dtype,
     infer_dtype,
@@ -694,7 +696,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
 
     @classmethod
-    def from_cuda_array_interface(cls, arbitrary: Any) -> ColumnBase:
+    def from_cuda_array_interface(
+        cls, arbitrary: Any, data_ptr_exposed=no_default
+    ) -> ColumnBase:
         """
         Create a Column from an object implementing the CUDA array interface.
 
@@ -729,9 +733,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             mask = None
 
+        if data_ptr_exposed is no_default:
+            data_ptr_exposed = cudf.get_option("copy_on_write")
         column = ColumnBase.from_pylibcudf(
             plc.Column.from_cuda_array_interface(arbitrary),
-            data_ptr_exposed=cudf.get_option("copy_on_write"),
+            data_ptr_exposed=data_ptr_exposed,
         )
         if mask is not None:
             cai_mask = mask.__cuda_array_interface__
@@ -1066,7 +1072,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 return self._mimic_inplace(result, inplace=True)
             return result
 
-        if not fill_value.is_valid() and not self.nullable:
+        if not fill_value.is_valid(DEFAULT_STREAM) and not self.nullable:
             mask = as_buffer(
                 plc.null_mask.create_null_mask(
                     self.size, plc.types.MaskState.ALL_VALID
@@ -2197,7 +2203,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def _with_type_metadata(self: ColumnBase, dtype: DtypeObj) -> ColumnBase:
         """
         Copies type metadata from self onto other, returning a new column.
-
         When ``self`` is a nested column, recursively apply this function on
         the children of ``self``.
         """
@@ -2826,6 +2831,11 @@ def as_column(
     * pandas.Categorical objects
     * range objects
     """
+    # Always convert dtype up front so that downstream calls can assume it is a dtype
+    # object rather than a string.
+    if dtype is not None:
+        dtype = cudf.dtype(dtype)
+
     if isinstance(arbitrary, (range, pd.RangeIndex, cudf.RangeIndex)):
         with acquire_spill_lock():
             column = ColumnBase.from_pylibcudf(
@@ -2987,6 +2997,16 @@ def as_column(
                 arbitrary = np.asarray(arbitrary)
             else:
                 arbitrary = cp.asarray(arbitrary)
+                # Explicitly passing `data_ptr_exposed` to
+                # reuse existing memory created by cupy here
+                column = ColumnBase.from_cuda_array_interface(
+                    arbitrary, data_ptr_exposed=False
+                )
+                if nan_as_null is not False:
+                    column = column.nans_to_nulls()
+                if dtype is not None:
+                    column = column.astype(dtype)
+                return column
             return as_column(
                 arbitrary, nan_as_null=nan_as_null, dtype=dtype, length=length
             )
