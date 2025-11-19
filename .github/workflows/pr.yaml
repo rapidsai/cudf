@@ -66,11 +66,9 @@ jobs:
         with:
           repo: cudf
   check-version-against-tag:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Check VERSION file against latest tag
-        uses: rapidsai/shared-actions/check-version-against-tag@check-version-against-tag
+    secrets: inherit
+    needs: telemetry-setup
+    uses: rapidsai/shared-workflows/.github/workflows/check-version-against-tag.yaml@check-version-against-tag
   changed-files:
     secrets: inherit
     needs: telemetry-setup
