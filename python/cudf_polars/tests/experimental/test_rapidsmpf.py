@@ -214,10 +214,13 @@ def test_sort_stable_rapidsmpf_warns():
         assert_gpu_result_equal(q, engine=engine, check_row_order=True)
 
 
-@pytest.mark.parametrize("source_format", ["parquet", "csv"])
+@pytest.mark.parametrize("source_format", ["frame", "parquet", "csv"])
 def test_simple_query_with_distributed_support(tmp_path, source_format) -> None:
     # Test a trivial query that works for both the
     # "tasks" and "rapidsmpf" runtimes in distributed mode.
+    # Note: For "frame" (DataFrameScan), the DataFrameScan class overrides
+    # the base Node.__reduce__ method to serialize the polars DataFrame
+    # from _non_child_args instead of the non-picklable PyDataFrame.
 
     # Check that we have a distributed cluster running.
     # This tests must be run with: --cluster='distributed'
@@ -247,7 +250,7 @@ def test_simple_query_with_distributed_support(tmp_path, source_format) -> None:
         },
     )
 
-    # Create a simple DataFrameå
+    # Create a simple DataFrame
     df = pl.DataFrame(
         {
             "a": [1, 2, 3, 4, 5],
