@@ -325,8 +325,9 @@ TYPED_TEST(FilterExpressionTest, IsNull)
   auto& is_null_expr = tree.push(cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, ref_0));
   auto& filter_expr  = tree.push(cudf::ast::operation(cudf::ast::ast_operator::NOT, is_null_expr));
   auto result        = Executor::filter(filter_expr, this->table);
-  auto expected      = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4, 5, 6, 7};
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->get_column(0).view());
+  auto expected =
+    cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2, 3, 4, 5, 6, 7}, {1, 1, 1, 1, 1, 1, 1}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->get_column(0).view());
 }
 
 TYPED_TEST(FilterExpressionTest, NullEqual)
@@ -341,7 +342,7 @@ TYPED_TEST(FilterExpressionTest, NullEqual)
   auto result = Executor::filter(null_equal_expr, this->table);
   auto expected =
     cudf::test::fixed_width_column_wrapper<int32_t>{{1, 3, 4, 5, 6, 7, 8}, {1, 1, 1, 1, 1, 1, 0}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->get_column(0).view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->get_column(0).view());
 }
 
 TYPED_TEST(FilterExpressionTest, NullLogicalAnd)
@@ -354,8 +355,8 @@ TYPED_TEST(FilterExpressionTest, NullLogicalAnd)
   auto& and_expr =
     tree.push(cudf::ast::operation(cudf::ast::ast_operator::NULL_LOGICAL_AND, ref_2, ref_3));
   auto result   = Executor::filter(and_expr, this->table);
-  auto expected = cudf::test::fixed_width_column_wrapper<int32_t>{4};
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->get_column(0).view());
+  auto expected = cudf::test::fixed_width_column_wrapper<int32_t>{{4}, {1}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->get_column(0).view());
 }
 
 TYPED_TEST(FilterExpressionTest, NullLogicalOr)
@@ -368,8 +369,8 @@ TYPED_TEST(FilterExpressionTest, NullLogicalOr)
   auto& or_expr =
     tree.push(cudf::ast::operation(cudf::ast::ast_operator::NULL_LOGICAL_OR, ref_2, ref_3));
   auto result   = Executor::filter(or_expr, this->table);
-  auto expected = cudf::test::fixed_width_column_wrapper<int32_t>{2, 3, 4, 6};
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->get_column(0).view());
+  auto expected = cudf::test::fixed_width_column_wrapper<int32_t>{{2, 3, 4, 6}, {1, 1, 1, 1}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->get_column(0).view());
 }
 
 }  // namespace filters
