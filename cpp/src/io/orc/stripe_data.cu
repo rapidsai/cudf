@@ -1741,6 +1741,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
             : s->top.data.index.run_pos[CI_DATA];
         numvals =
           min(numvals + run_pos, (s->chunk.type_kind == BOOLEAN) ? blockDim.x * 2 : blockDim.x);
+        num_remaining_rows += run_pos;
       }
       // Decode the primary data stream
       if (s->chunk.type_kind == INT || s->chunk.type_kind == DATE || s->chunk.type_kind == SHORT) {
