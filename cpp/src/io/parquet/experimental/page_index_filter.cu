@@ -542,6 +542,8 @@ struct page_stats_to_row_mask_converter : public page_stats_caster {
     if constexpr (cudf::is_compound<T>() and not cuda::std::is_same_v<T, string_view>) {
       CUDF_FAIL("Compound types other than strings do not have statistics");
     } else {
+      // Compute page row counts, row offsets, column chunk page offsets, min, max and optional
+      // is_null stats host columns
       auto [page_row_counts, page_row_offsets, col_chunk_page_offsets, min, max, is_null] =
         compute_host_data<T>(schema_idx, dtype, stream);
 
@@ -565,6 +567,12 @@ struct page_stats_to_row_mask_converter : public page_stats_caster {
                                                           stream,
                                                           cudf::get_current_device_resource_ref());
 
+      auto const page_indices = compute_page_indices_async(page_row_counts,
+                                                           page_row_offsets,
+                                                           total_rows,
+                                                           stream,
+                                                           cudf::get_current_device_resource_ref());
+
       auto const page_mask_nullmask =
         page_mask->null_count() ? cudf::detail::make_host_vector_async(
                                     cudf::device_span<bitmask_type const>{
@@ -572,12 +580,6 @@ struct page_stats_to_row_mask_converter : public page_stats_caster {
                                       static_cast<size_t>(num_bitmask_words(page_mask->size()))},
                                     stream)
                                 : cudf::detail::make_empty_host_vector<bitmask_type>(0, stream);
-
-      auto const page_indices = compute_page_indices_async(page_row_counts,
-                                                           page_row_offsets,
-                                                           total_rows,
-                                                           stream,
-                                                           cudf::get_current_device_resource_ref());
 
       auto [row_mask_data, row_mask_bitmask] =
         build_data_and_nullmask<bool>(page_mask->mutable_view(),
