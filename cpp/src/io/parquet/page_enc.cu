@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "delta_enc.cuh"
@@ -31,6 +20,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cooperative_groups.h>
 #include <cub/cub.cuh>
 #include <cuda/std/chrono>
 #include <cuda/std/functional>
@@ -2227,7 +2217,8 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   auto const output_ptr = packer.flush();
 
   // now copy the char data
-  memcpy_block<block_size, true>(output_ptr, first_string, string_data_len, t);
+  memcpy_block<block_size, true>(
+    output_ptr, first_string, string_data_len, cooperative_groups::this_thread_block());
 
   finish_page_encode<block_size>(
     s, output_ptr + string_data_len, pages, comp_in, comp_out, comp_results, true);
@@ -3062,6 +3053,8 @@ CUDF_KERNEL void __launch_bounds__(encode_block_size)
 // blockDim(1024, 1, 1)
 CUDF_KERNEL void __launch_bounds__(1024) gpuGatherPages(device_span<EncColumnChunk> chunks)
 {
+  namespace cg = cooperative_groups;
+
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
 
@@ -3089,7 +3082,7 @@ CUDF_KERNEL void __launch_bounds__(1024) gpuGatherPages(device_span<EncColumnChu
     src = ck_g.is_compressed ? page_g.compressed_data : page_g.page_data;
     // Copy page header
     hdr_len = page_g.hdr_size;
-    memcpy_block<1024, true>(dst, src, hdr_len, t);
+    memcpy_block<1024, true>(dst, src, hdr_len, cg::this_thread_block());
     src += page_g.max_hdr_size;
     dst += hdr_len;
     uncompressed_size += hdr_len;
@@ -3097,12 +3090,12 @@ CUDF_KERNEL void __launch_bounds__(1024) gpuGatherPages(device_span<EncColumnChu
     // Copy page data. For V2, the level data and page data are disjoint.
     if (page_g.is_v2()) {
       auto const lvl_len = page_g.level_bytes();
-      memcpy_block<1024, true>(dst, src, lvl_len, t);
+      memcpy_block<1024, true>(dst, src, lvl_len, cg::this_thread_block());
       src += page_g.max_lvl_size;
       dst += lvl_len;
       data_len -= lvl_len;
     }
-    memcpy_block<1024, true>(dst, src, data_len, t);
+    memcpy_block<1024, true>(dst, src, data_len, cg::this_thread_block());
     dst += data_len;
     __syncthreads();
     if (t == 0 && page == 0 && ck_g.use_dictionary) { ck_g.dictionary_size = hdr_len + data_len; }

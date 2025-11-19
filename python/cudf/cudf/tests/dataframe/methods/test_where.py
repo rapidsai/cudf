@@ -1,10 +1,10 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
-from numba import cuda
 
 import cudf
 from cudf.testing import assert_eq
@@ -170,10 +170,8 @@ def test_frame_series_where_other():
         ),
         (
             pd.DataFrame({"p": [-2, 3, -4, -79], "k": [9, 10, 11, 12]}),
-            cuda.to_device(
-                np.array(
-                    [[True, True], [False, True], [True, False], [False, True]]
-                )
+            cp.array(
+                [[True, True], [False, True], [True, False], [False, True]]
             ),
             None,
             None,

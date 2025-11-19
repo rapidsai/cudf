@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
@@ -47,7 +48,7 @@ cpdef Column translate(
     """
     Translates individual characters within each string.
 
-    For details, see :cpp:func:`cudf::strings::translate`.
+    For details, see :cpp:func:`translate`.
 
     Parameters
     ----------
@@ -92,7 +93,7 @@ cpdef Column filter_characters(
     """
     Removes ranges of characters from each string in a strings column.
 
-    For details, see :cpp:func:`cudf::strings::filter_characters`.
+    For details, see :cpp:func:`filter_characters`.
 
     Parameters
     ----------

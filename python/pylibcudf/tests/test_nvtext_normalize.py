@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import pyarrow as pa
 import pytest
@@ -15,7 +16,7 @@ def norm_spaces_input_data():
 
 @pytest.fixture(scope="module")
 def norm_chars_input_data():
-    arr = ["éâîô\teaio", "ĂĆĖÑÜ", "ACENU", "$24.08", "[a,bb]", "[pad]"]
+    arr = ["éâîô\teaio", "ĂĆĖÑÜ", "ACENU", "$24.08", "[a,bb]", "[PAD]"]
     return pa.array(arr)
 
 
@@ -55,7 +56,7 @@ def test_normalizer(norm_chars_input_data, do_lower):
                 "ACENU",
                 " $ 24 . 08",
                 " [ a , bb ] ",
-                " [ pad ] ",
+                " [ PAD ] ",
             ]
         )
     assert_column_eq(expect, got)
@@ -63,7 +64,7 @@ def test_normalizer(norm_chars_input_data, do_lower):
 
 @pytest.mark.parametrize("do_lower", [True, False])
 def test_normalizer_with_special_tokens(norm_chars_input_data, do_lower):
-    special_tokens = pa.array(["[pad]"])
+    special_tokens = pa.array(["[PAD]"])
     got = plc.nvtext.normalize.normalize_characters(
         plc.Column.from_arrow(norm_chars_input_data),
         plc.nvtext.normalize.CharacterNormalizer(
@@ -78,7 +79,7 @@ def test_normalizer_with_special_tokens(norm_chars_input_data, do_lower):
                 "acenu",
                 " $ 24 . 08",
                 " [ a , bb ] ",
-                " [pad] ",
+                " [PAD] ",
             ]
         )
     else:
@@ -89,7 +90,7 @@ def test_normalizer_with_special_tokens(norm_chars_input_data, do_lower):
                 "ACENU",
                 " $ 24 . 08",
                 " [ a , bb ] ",
-                " [pad] ",
+                " [PAD] ",
             ]
         )
     assert_column_eq(expect, got)

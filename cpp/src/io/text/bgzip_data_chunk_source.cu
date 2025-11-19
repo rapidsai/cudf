@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/comp/common.hpp"
@@ -86,6 +75,11 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
       1 << 24;  // 16MB buffer allocation, resized on demand
     static constexpr std::size_t default_offset_alloc =
       1 << 16;  // 64k offset allocation, resized on demand
+
+    decompression_blocks(decompression_blocks const&)            = delete;
+    decompression_blocks& operator=(decompression_blocks const&) = delete;
+    decompression_blocks(decompression_blocks&&)                 = default;
+    decompression_blocks& operator=(decompression_blocks&&)      = default;
 
     cudaEvent_t event;
     cudf::detail::host_vector<char> h_compressed_blocks;

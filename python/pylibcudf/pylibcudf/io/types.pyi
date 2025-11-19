@@ -1,7 +1,8 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import io
 import os
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from enum import IntEnum
 from typing import Any, Literal, Self, TypeAlias, overload
 
@@ -100,7 +101,7 @@ class TableWithMetadata:
     @property
     def child_names(self) -> ChildNameSpec: ...
     @property
-    def per_file_user_data(self) -> list[Mapping[str, str]]: ...
+    def per_file_user_data(self) -> list[Mapping[bytes, bytes]]: ...
     @property
     def num_rows_per_source(self) -> list[int]: ...
     @property
@@ -112,15 +113,20 @@ class TableWithMetadata:
 
 class SourceInfo:
     def __init__(
-        self, sources: list[str] | list[os.PathLike[Any]] | list[Datasource]
+        self,
+        sources: Sequence[str]
+        | Sequence[os.PathLike[Any]]
+        | Sequence[Datasource],
     ) -> None: ...
+    @staticmethod
+    def _is_remote_uri(path: str | os.PathLike[Any]) -> bool: ...
 
 class SinkInfo:
     def __init__(
         self,
-        sinks: list[os.PathLike[Any]]
-        | list[io.StringIO]
-        | list[io.BytesIO]
-        | list[io.TextIOBase]
-        | list[str],
+        sinks: Sequence[os.PathLike[Any]]
+        | Sequence[io.StringIO]
+        | Sequence[io.BytesIO]
+        | Sequence[io.TextIOBase]
+        | Sequence[str],
     ) -> None: ...

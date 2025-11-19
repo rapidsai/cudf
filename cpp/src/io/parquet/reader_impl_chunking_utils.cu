@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/comp/decompression.hpp"
@@ -128,9 +117,8 @@ void codec_stats::add_pages(host_span<ColumnChunkDesc const> chunks,
                             page_selection selection,
                             host_span<bool const> page_mask)
 {
-  // TODO: Use a thrust::counting_transform_iterator instead when we are able to avoid decompressing
-  // the list column page in `compute_page_sizes_kernel`
-  auto page_mask_iter = thrust::make_constant_iterator(true);
+  auto page_mask_iter = cudf::detail::make_counting_transform_iterator(
+    0, [&](size_t page_idx) { return page_mask.empty() ? true : page_mask[page_idx]; });
 
   // Zip iterator for iterating over pages and the page mask
   auto zip_iter = thrust::make_zip_iterator(pages.begin(), page_mask_iter);
@@ -538,8 +526,8 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
                             bool select_dict_pages,
                             size_t& decomp_offset) {
     // Create a page mask iterator that defaults to true if the page_mask is empty
-    auto page_mask_iter =
-      page_mask.empty() ? thrust::make_constant_iterator(true) : page_mask.begin();
+    auto page_mask_iter = cudf::detail::make_counting_transform_iterator(
+      0, [&](size_t page_idx) { return page_mask.empty() ? true : page_mask[page_idx]; });
 
     for (auto page_idx = 0; std::cmp_less(page_idx, pages.size()); ++page_idx) {
       auto& page                = pages[page_idx];
@@ -813,9 +801,9 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
   return d_temp_cost;
 }
 
-void include_decompression_scratch_size(device_span<size_t const> temp_cost,
-                                        device_span<cumulative_page_info> c_info,
-                                        rmm::cuda_stream_view stream)
+void include_scratch_size(device_span<size_t const> temp_cost,
+                          device_span<cumulative_page_info> c_info,
+                          rmm::cuda_stream_view stream)
 {
   auto iter = thrust::make_counting_iterator(size_t{0});
   thrust::for_each(rmm::exec_policy_nosync(stream),
@@ -824,6 +812,68 @@ void include_decompression_scratch_size(device_span<size_t const> temp_cost,
                    [temp_cost = temp_cost.begin(), c_info = c_info.begin()] __device__(size_t i) {
                      c_info[i].size_bytes += temp_cost[i];
                    });
+}
+
+namespace {
+
+/**
+ * @brief Functor to compute the string offset buffer size needed for a page.
+ *
+ * This computes the memory needed to store string offsets (uint32_t per value)
+ * for non-dictionary, non-FLBA string pages.
+ */
+struct compute_page_string_offset_size {
+  device_span<PageInfo const> pages;
+  device_span<ColumnChunkDesc const> chunks;
+
+  __device__ size_t operator()(size_t page_idx) const
+  {
+    // Mask for non-dictionary, non-delta string columns (same as used in decode kernel)
+    constexpr uint32_t STRINGS_MASK_NON_DELTA_NON_DICT =
+      BitOr(decode_kernel_mask::STRING,
+            decode_kernel_mask::STRING_NESTED,
+            decode_kernel_mask::STRING_LIST,
+            decode_kernel_mask::STRING_STREAM_SPLIT,
+            decode_kernel_mask::STRING_STREAM_SPLIT_NESTED,
+            decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
+
+    auto const& page  = pages[page_idx];
+    auto const& chunk = chunks[page.chunk_idx];
+
+    // Check if this page is a non-dictionary string page using kernel mask
+    if (BitAnd(page.kernel_mask, STRINGS_MASK_NON_DELTA_NON_DICT) == 0) { return 0; }
+
+    // Fixed length byte array: Offsets are fixed, no need to allocate offset buffer
+    if (chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY) { return 0; }
+
+    // Estimate number of offsets based on page.num_input_values
+    // This is an upper bound estimate since we compute this before knowing:
+    // - exact batch sizes for list columns after preprocessing
+    // - which rows will be skipped due to subpass boundaries
+    // We add 1 for the final offset
+    auto const num_offsets = page.num_input_values + 1;
+
+    // Return size in bytes (uint32_t per offset)
+    return num_offsets * sizeof(uint32_t);
+  }
+};
+
+}  // anonymous namespace
+
+rmm::device_uvector<size_t> compute_string_offset_sizes(device_span<ColumnChunkDesc const> chunks,
+                                                        device_span<PageInfo const> pages,
+                                                        rmm::cuda_stream_view stream)
+{
+  rmm::device_uvector<size_t> string_offset_sizes(pages.size(), stream);
+
+  auto iter = thrust::make_counting_iterator(size_t{0});
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    iter,
+                    iter + pages.size(),
+                    string_offset_sizes.begin(),
+                    compute_page_string_offset_size{pages, chunks});
+
+  return string_offset_sizes;
 }
 
 }  // namespace cudf::io::parquet::detail

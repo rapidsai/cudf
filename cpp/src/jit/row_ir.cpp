@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "jit/row_ir.hpp"
@@ -518,13 +507,13 @@ filter_args ast_converter::filter(target target_id,
                "Filter expression must return a boolean type.",
                std::invalid_argument);
 
-  std::vector<column_view> columns;
+  std::vector<column_view> predicate_columns;
   std::vector<std::unique_ptr<column>> scalar_columns;
 
   for (auto& input : converter.input_specs_) {
     auto column_view =
       dispatch_input_spec(input, [](auto&... args) { return get_column_view(args...); }, args);
-    columns.push_back(column_view);
+    predicate_columns.push_back(column_view);
 
     // move the scalar broadcast column so the user can make it live long enough
     // to be used in the filter result.
@@ -541,7 +530,7 @@ filter_args ast_converter::filter(target target_id,
                  [](auto const& col) { return col; });
 
   filter_args filter{std::move(scalar_columns),
-                     std::move(columns),
+                     std::move(predicate_columns),
                      std::move(converter.code_),
                      std::move(filter_columns),
                      false,

@@ -1,4 +1,5 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -81,11 +82,11 @@ def _match_join_keys(
         if left_is_categorical:
             if how in {"left", "leftsemi", "leftanti"}:
                 return lcol, rcol.astype(ltype)
-            common_type = ltype.categories.dtype
+            common_type = ltype.categories.dtype  # type: ignore[union-attr]
             if get_option("mode.pandas_compatible"):
                 common_type = get_dtype_of_same_kind(rtype, common_type)
         else:
-            common_type = rtype.categories.dtype
+            common_type = rtype.categories.dtype  # type: ignore[union-attr]
             if get_option("mode.pandas_compatible"):
                 common_type = get_dtype_of_same_kind(ltype, common_type)
         return lcol.astype(common_type), rcol.astype(common_type)

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -111,30 +100,6 @@ void set_null_mask(bitmask_type* bitmask,
                    size_type end_bit,
                    bool valid,
                    rmm::cuda_stream_view stream = cudf::get_default_stream());
-
-/**
- * @brief Sets a vector of non-overlapping pre-allocated bitmask buffers to given states in the
- * corresponding non-aliasing ranges in bulk
- *
- * Sets bit ranges `[begin_bit, end_bit)` of given bitmasks to specified valid states. The bitmask
- * bit ranges must be non-overlapping and non-aliasing. i.e., attempting to concurrently set bits
- * within the same physical word across bitmasks will result in undefined behavior. This utility is
- * optimized for bulk operation on 16 or more bitmasks sized 2^24 bits or less.
- *
- * @deprecated in 25.08 and to be removed in a future release. Use `cudf::set_null_masks_unsafe`
- * instead.
- *
- * @param bitmasks Pointers to bitmasks (e.g. returned by `column_view::null_mask()`)
- * @param begin_bits Indices of the first bits to set (inclusive)
- * @param end_bits Indices of the last bits to set (exclusive)
- * @param valids Booleans indicating if the corresponding bitmasks should be set to valid or null
- * @param stream CUDA stream used for device memory operations and kernel launches
- */
-[[deprecated]] void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
-                                   cudf::host_span<size_type const> begin_bits,
-                                   cudf::host_span<size_type const> end_bits,
-                                   cudf::host_span<bool const> valids,
-                                   rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Sets a vector of non-overlapping pre-allocated bitmask buffers to given states in the

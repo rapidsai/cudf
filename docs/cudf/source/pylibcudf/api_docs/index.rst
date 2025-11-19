@@ -51,6 +51,7 @@ This page provides API documentation for pylibcudf.
     :maxdepth: 2
     :caption: Subpackages
 
+    experimental/index.rst
     io/index.rst
     strings/index.rst
     nvtext/index.rst

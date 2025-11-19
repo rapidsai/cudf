@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import array
 import datetime
 import decimal
@@ -6,7 +7,6 @@ import types
 import zoneinfo
 
 import cupy as cp
-import numba.cuda
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -947,23 +947,16 @@ def test_series_arrow_decimal_types_roundtrip(pa_type):
         assert_eq(pdf, gdf)
 
 
-@pytest.mark.parametrize("module", ["cupy", "numba"])
-def test_cuda_array_interface_interop_in(
-    numeric_and_temporal_types_as_str, module
-):
-    if module == "cupy":
-        module_constructor = cp.array
-        if numeric_and_temporal_types_as_str.startswith(
-            "datetime"
-        ) or numeric_and_temporal_types_as_str.startswith("timedelta"):
-            pytest.skip(
-                f"cupy doesn't support {numeric_and_temporal_types_as_str}"
-            )
-    elif module == "numba":
-        module_constructor = numba.cuda.to_device
+def test_cuda_array_interface_interop_in(numeric_and_temporal_types_as_str):
+    if numeric_and_temporal_types_as_str.startswith(
+        "datetime"
+    ) or numeric_and_temporal_types_as_str.startswith("timedelta"):
+        pytest.skip(
+            f"cupy doesn't support {numeric_and_temporal_types_as_str}"
+        )
 
     np_data = np.arange(10).astype(numeric_and_temporal_types_as_str)
-    module_data = module_constructor(np_data)
+    module_data = cp.array(np_data)
 
     pd_data = pd.Series(np_data)
     # Test using a specific function for __cuda_array_interface__ here
@@ -977,27 +970,13 @@ def test_cuda_array_interface_interop_in(
     assert_eq(pd_data, gdf["test"])
 
 
-@pytest.mark.parametrize("module", ["cupy", "numba"])
-def test_cuda_array_interface_interop_out(
-    numeric_and_temporal_types_as_str, module
-):
-    if module == "cupy":
-        module_constructor = cp.asarray
-
-        def to_host_function(x):
-            return cp.asnumpy(x)
-    elif module == "numba":
-        module_constructor = numba.cuda.as_cuda_array
-
-        def to_host_function(x):
-            return x.copy_to_host()
-
+def test_cuda_array_interface_interop_out(numeric_and_temporal_types_as_str):
     np_data = np.arange(10).astype(numeric_and_temporal_types_as_str)
     cudf_data = cudf.Series(np_data)
     assert isinstance(cudf_data.__cuda_array_interface__, dict)
 
-    module_data = module_constructor(cudf_data)
-    got = to_host_function(module_data)
+    module_data = cp.asarray(cudf_data)
+    got = cp.asnumpy(module_data)
 
     expect = np_data
 
@@ -1048,11 +1027,9 @@ def test_cuda_array_interface_as_column(
 
     if mask_type == "bools":
         if nulls == "some":
-            obj.__cuda_array_interface__["mask"] = numba.cuda.to_device(mask)
+            obj.__cuda_array_interface__["mask"] = cp.asarray(mask)
         elif nulls == "all":
-            obj.__cuda_array_interface__["mask"] = numba.cuda.to_device(
-                [False] * 10
-            )
+            obj.__cuda_array_interface__["mask"] = cp.array([False] * 10)
 
     expect = sr
     got = cudf.Series(obj)
@@ -1198,10 +1175,9 @@ def test_series_from_cupy_scalars():
 def test_to_dense_array():
     rng = np.random.default_rng(seed=0)
     data = rng.random(8)
-    mask = np.asarray([0b11010110]).astype(np.byte)
-    sr = cudf.Series._from_column(
-        as_column(data, dtype=np.float64).set_mask(mask)
-    )
+    mask = rng.choice([True, False], size=len(data))
+    sr = cudf.Series(data)
+    sr.loc[mask] = None
     assert sr.has_nulls
     assert sr.null_count != len(sr)
     filled = sr.to_numpy(na_value=np.nan)
@@ -1603,3 +1579,9 @@ def test_as_column_types():
     gds = cudf.Series(cudf.Index(["1", "18", "9"]), dtype="int")
 
     assert_eq(pds, gds)
+
+
+def test_series_type_invalid_error():
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(ValueError):
+            cudf.Series(["a", "b", "c"], dtype="Int64")

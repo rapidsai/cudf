@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "reader_impl_helpers.hpp"
@@ -22,6 +11,8 @@
 #include "ipc/Message_generated.h"
 #include "ipc/Schema_generated.h"
 
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/host_memory.hpp>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/logger.hpp>
@@ -29,7 +20,9 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 
+#include <cmath>
 #include <functional>
+#include <future>
 #include <numeric>
 #include <optional>
 #include <regex>
@@ -307,7 +300,7 @@ void metadata::sanitize_schema()
   process(0);
 }
 
-metadata::metadata(datasource* source)
+metadata::metadata(datasource* source, bool read_page_indexes)
 {
   constexpr auto header_len = sizeof(file_header_s);
   constexpr auto ender_len  = sizeof(file_ender_s);
@@ -337,7 +330,8 @@ metadata::metadata(datasource* source)
   auto const has_strings = std::any_of(
     schema.begin(), schema.end(), [](auto const& elem) { return elem.type == Type::BYTE_ARRAY; });
 
-  if (has_strings and not row_groups.empty() and not row_groups.front().columns.empty()) {
+  if (read_page_indexes and has_strings and not row_groups.empty() and
+      not row_groups.front().columns.empty()) {
     // column index and offset index are encoded back to back.
     // the first column of the first row group will have the first column index, the last
     // column of the last row group will have the final offset index.
@@ -348,24 +342,76 @@ metadata::metadata(datasource* source)
     if (max_offset > 0) {
       int64_t const length = max_offset - min_offset;
       auto const idx_buf   = source->host_read(min_offset, length);
-
-      // now loop over row groups
+      // Flatten all columns into a single vector for easier task distribution
+      std::vector<std::reference_wrapper<ColumnChunk>> all_column_chunks;
+      all_column_chunks.reserve(row_groups.size() * row_groups.front().columns.size());
       for (auto& rg : row_groups) {
         for (auto& col : rg.columns) {
-          if (col.column_index_length > 0 && col.column_index_offset > 0) {
-            int64_t const offset = col.column_index_offset - min_offset;
-            cp.init(idx_buf->data() + offset, col.column_index_length);
-            ColumnIndex ci;
-            cp.read(&ci);
-            col.column_index = std::move(ci);
-          }
-          if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
-            int64_t const offset = col.offset_index_offset - min_offset;
-            cp.init(idx_buf->data() + offset, col.offset_index_length);
-            OffsetIndex oi;
-            cp.read(&oi);
-            col.offset_index = std::move(oi);
-          }
+          all_column_chunks.emplace_back(std::ref(col));
+        }
+      }
+
+      auto read_column_indexes = [&idx_buf, min_offset](CompactProtocolReader& reader,
+                                                        ColumnChunk& col) {
+        if (col.column_index_length > 0 && col.column_index_offset > 0) {
+          int64_t const offset = col.column_index_offset - min_offset;
+          reader.init(idx_buf->data() + offset, col.column_index_length);
+          col.column_index = ColumnIndex();
+          reader.read(&col.column_index.value());
+        }
+        if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
+          int64_t const offset = col.offset_index_offset - min_offset;
+          reader.init(idx_buf->data() + offset, col.offset_index_length);
+          col.offset_index = OffsetIndex();
+          reader.read(&col.offset_index.value());
+        }
+      };
+
+      // Use parallel processing only if we have enough columns to justify the overhead
+      constexpr std::size_t parallel_threshold = 512;
+      auto const total_column_chunks           = all_column_chunks.size();
+      if (total_column_chunks >= parallel_threshold) {
+        // Dynamically calculate number of tasks based the number or row groups and columns
+        constexpr std::size_t min_tasks = 4;
+        constexpr std::size_t max_tasks = 32;
+        auto const ratio = static_cast<double>(total_column_chunks) / parallel_threshold;
+        // Scale the number of tasks and task size evenly (e.g. quadrupling the number of elements
+        // doubles both the number of tasks and the task size)
+        auto const multiplier = std::size_t(1) << (static_cast<size_t>(std::log2(ratio)) / 2);
+
+        auto const num_tasks = std::clamp(min_tasks * multiplier, min_tasks, max_tasks);
+        auto const column_chunks_per_task = total_column_chunks / num_tasks;
+        auto const remainder              = total_column_chunks % num_tasks;
+
+        std::vector<std::future<void>> tasks;
+        tasks.reserve(num_tasks);
+
+        std::size_t start_idx = 0;
+        for (std::size_t task_id = 0; task_id < num_tasks; ++task_id) {
+          auto const task_size = column_chunks_per_task + (task_id < remainder ? 1 : 0);
+          auto const end_idx   = start_idx + task_size;
+
+          if (start_idx >= total_column_chunks) break;
+
+          tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
+            [&all_column_chunks, &read_column_indexes, start_idx, end_idx]() {
+              CompactProtocolReader local_cp;
+
+              for (size_t i = start_idx; i < end_idx && i < all_column_chunks.size(); ++i) {
+                read_column_indexes(local_cp, all_column_chunks[i].get());
+              }
+            }));
+
+          start_idx = end_idx;
+        }
+
+        for (auto& task : tasks) {
+          task.get();
+        }
+      } else {
+        // For small numbers of columns, use sequential processing to avoid overhead
+        for (auto& col_ref : all_column_chunks) {
+          read_column_indexes(cp, col_ref.get());
         }
       }
     }
@@ -374,17 +420,36 @@ metadata::metadata(datasource* source)
   sanitize_schema();
 }
 
+metadata::~metadata()
+{
+  constexpr auto defer_threshold = 512;
+  if (row_groups.size() > 0 and
+      row_groups.front().columns.size() * row_groups.size() > defer_threshold) {
+    // Defer destruction to the worker pool when there are many vectors to destroy
+    cudf::detail::host_worker_pool().detach_task(
+      [schema_to_destroy        = std::move(schema),
+       row_groups_to_destroy    = std::move(row_groups),
+       key_value_to_destroy     = std::move(key_value_metadata),
+       created_by_to_destroy    = std::move(created_by),
+       column_orders_to_destroy = std::move(column_orders)] {});
+  }
+}
+
 std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
-  host_span<std::unique_ptr<datasource> const> sources)
+  host_span<std::unique_ptr<datasource> const> sources, bool read_page_indexes)
 {
   // Avoid using the thread pool for a single source
-  if (sources.size() == 1) { return {metadata{sources[0].get()}}; }
+  if (sources.size() == 1) {
+    std::vector<metadata> result;
+    result.emplace_back(sources[0].get(), read_page_indexes);
+    return result;
+  }
 
   std::vector<std::future<metadata>> metadata_ctor_tasks;
   metadata_ctor_tasks.reserve(sources.size());
   for (auto const& source : sources) {
     metadata_ctor_tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
-      [source = source.get()] { return metadata{source}; }));
+      [source = source.get(), read_page_indexes] { return metadata{source, read_page_indexes}; }));
   }
   std::vector<metadata> metadatas;
   metadatas.reserve(sources.size());
@@ -607,8 +672,9 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
 aggregate_reader_metadata::aggregate_reader_metadata(
   host_span<std::unique_ptr<datasource> const> sources,
   bool use_arrow_schema,
-  bool has_cols_from_mismatched_srcs)
-  : per_file_metadata(metadatas_from_sources(sources)),
+  bool has_cols_from_mismatched_srcs,
+  bool read_page_indexes)
+  : per_file_metadata(metadatas_from_sources(sources, read_page_indexes)),
     keyval_maps(collect_keyval_metadata()),
     schema_idx_maps(init_schema_idx_maps(has_cols_from_mismatched_srcs)),
     num_rows(calc_num_rows()),
@@ -616,9 +682,14 @@ aggregate_reader_metadata::aggregate_reader_metadata(
 {
   if (per_file_metadata.size() > 1) {
     auto& first_meta = per_file_metadata.front();
-    auto const num_cols =
-      first_meta.row_groups.size() > 0 ? first_meta.row_groups.front().columns.size() : 0;
-    auto& schema = first_meta.schema;
+    auto const first_nonempty_source_iter =
+      std::find_if(per_file_metadata.begin(), per_file_metadata.end(), [&](auto const& pfm) {
+        return pfm.row_groups.size() > 0;
+      });
+    auto const num_cols = first_nonempty_source_iter != per_file_metadata.end()
+                            ? first_nonempty_source_iter->row_groups.front().columns.size()
+                            : 0;
+    auto& schema        = first_meta.schema;
 
     // Validate that all sources have the same schema unless we are reading select columns
     // from mismatched sources, in which case, we will only check the projected columns later.
@@ -626,8 +697,8 @@ aggregate_reader_metadata::aggregate_reader_metadata(
       // Verify that the input files have matching numbers of columns and schema.
       for (auto const& pfm : per_file_metadata) {
         if (pfm.row_groups.size() > 0) {
-          CUDF_EXPECTS(num_cols == pfm.row_groups.front().columns.size(),
-                       "All sources must have the same number of columns");
+          CUDF_EXPECTS(pfm.row_groups.empty() or num_cols == pfm.row_groups.front().columns.size(),
+                       "All non-empty sources must have the same number of columns");
         }
         CUDF_EXPECTS(schema == pfm.schema, "All sources must have the same schema");
       }

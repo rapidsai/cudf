@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
@@ -459,7 +448,7 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_wide_tables, NVBENCH_TYPE_AXES(d_type_list_w
   .set_name("parquet_read_wide_tables")
   .set_min_samples(4)
   .set_type_axes_names({"data_type"})
-  .add_int64_axis("data_size", {1024 << 20, 2048 << 20})
+  .add_int64_axis("data_size", {1024L << 20, 2048L << 20})
   .add_int64_axis("num_cols", {256, 512, 1024})
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});
@@ -467,7 +456,7 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_wide_tables, NVBENCH_TYPE_AXES(d_type_list_w
 NVBENCH_BENCH(BM_parquet_read_wide_tables_mixed)
   .set_name("parquet_read_wide_tables_mixed")
   .set_min_samples(4)
-  .add_int64_axis("data_size", {1024 << 20, 2048 << 20})
+  .add_int64_axis("data_size", {1024L << 20, 2048L << 20})
   .add_int64_axis("num_cols", {256, 512, 1024})
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});

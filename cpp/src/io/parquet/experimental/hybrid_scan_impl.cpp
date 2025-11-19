@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "hybrid_scan_impl.hpp"
@@ -455,7 +444,7 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
     (mask_data_pages == use_data_page_mask::YES)
       ? _extended_metadata->compute_data_page_mask(
           row_mask, row_group_indices, _input_columns, _rows_processed_so_far, stream)
-      : std::vector<std::vector<bool>>{};
+      : thrust::host_vector<bool>{};
 
   prepare_data(
     read_mode::READ_ALL, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
@@ -485,7 +474,7 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
     (mask_data_pages == use_data_page_mask::YES)
       ? _extended_metadata->compute_data_page_mask(
           row_mask, row_group_indices, _input_columns, _rows_processed_so_far, stream)
-      : std::vector<std::vector<bool>>{};
+      : thrust::host_vector<bool>{};
 
   prepare_data(
     read_mode::READ_ALL, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
@@ -524,7 +513,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
     (mask_data_pages == use_data_page_mask::YES)
       ? _extended_metadata->compute_data_page_mask(
           row_mask, row_group_indices, _input_columns, _rows_processed_so_far, _stream)
-      : std::vector<std::vector<bool>>{};
+      : thrust::host_vector<bool>{};
 
   prepare_data(
     read_mode::CHUNKED_READ, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
@@ -575,7 +564,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
     (mask_data_pages == use_data_page_mask::YES)
       ? _extended_metadata->compute_data_page_mask(
           row_mask, row_group_indices, _input_columns, _rows_processed_so_far, _stream)
-      : std::vector<std::vector<bool>>{};
+      : thrust::host_vector<bool>{};
 
   prepare_data(
     read_mode::CHUNKED_READ, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
@@ -618,7 +607,7 @@ void hybrid_scan_reader_impl::reset_internal_state()
   _has_page_index    = false;
   _pass_itm_data.reset();
   _pass_page_mask.clear();
-  _subpass_page_mask.clear();
+  _subpass_page_mask = cudf::detail::hostdevice_vector<bool>(0, _stream);
   _output_metadata.reset();
   _options.timestamp_type = cudf::data_type{};
   _options.num_rows       = std::nullopt;
@@ -656,7 +645,7 @@ void hybrid_scan_reader_impl::prepare_data(
   read_mode mode,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   std::vector<rmm::device_buffer>&& column_chunk_buffers,
-  cudf::host_span<std::vector<bool> const> data_page_mask)
+  cudf::host_span<bool const> data_page_mask)
 {
   // if we have not preprocessed at the whole-file level, do that now
   if (not _file_preprocessed) {
@@ -714,6 +703,25 @@ table_with_metadata hybrid_scan_reader_impl::read_chunk_internal(
   auto& subpass         = *pass.subpass;
   auto const& read_info = subpass.output_chunk_read_info[subpass.current_output_chunk];
 
+  // computes:
+  // PageNestingInfo::batch_size for each level of nesting, for each page, taking row bounds into
+  // account. PageInfo::skipped_values, which tells us where to start decoding in the input to
+  // respect the user bounds. It is only necessary to do this second pass if uses_custom_row_bounds
+  // is set (if the user has specified artificial bounds).
+  if (uses_custom_row_bounds(mode)) {
+    compute_page_sizes(subpass.pages,
+                       pass.chunks,
+                       _subpass_page_mask,
+                       read_info.skip_rows,
+                       read_info.num_rows,
+                       false,  // num_rows is already computed
+                       pass.level_type_size,
+                       _stream);
+  }
+
+  // preprocess strings
+  preprocess_chunk_strings(mode, read_info);
+
   // Allocate memory buffers for the output columns.
   allocate_columns(mode, read_info.skip_rows, read_info.num_rows);
 
@@ -741,23 +749,6 @@ table_with_metadata hybrid_scan_reader_impl::read_chunk_internal(
       out_columns.emplace_back(make_column(_output_buffers[i], &col_name, metadata, _stream));
     } else {
       out_columns.emplace_back(make_column(_output_buffers[i], nullptr, metadata, _stream));
-    }
-  }
-
-  out_columns =
-    cudf::structs::detail::enforce_null_consistency(std::move(out_columns), _stream, _mr);
-
-  // Check if number of rows per source should be included in output metadata.
-  if (include_output_num_rows_per_source()) {
-    // For chunked reading, compute the output number of rows per source
-    if (mode == read_mode::CHUNKED_READ) {
-      out_metadata.num_rows_per_source =
-        calculate_output_num_rows_per_source(read_info.skip_rows, read_info.num_rows);
-    }
-    // Simply move the number of rows per file if reading all at once
-    else {
-      // Move is okay here as we are reading in one go.
-      out_metadata.num_rows_per_source = std::move(_file_itm_data.num_rows_per_source);
     }
   }
 
@@ -866,8 +857,7 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
   }
 }
 
-void hybrid_scan_reader_impl::set_pass_page_mask(
-  cudf::host_span<std::vector<bool> const> data_page_mask)
+void hybrid_scan_reader_impl::set_pass_page_mask(cudf::host_span<bool const> data_page_mask)
 {
   auto const& pass   = _pass_itm_data;
   auto const& chunks = pass->chunks;
@@ -881,13 +871,11 @@ void hybrid_scan_reader_impl::set_pass_page_mask(
     return;
   }
 
+  size_t num_inserted_data_pages = 0;
   std::for_each(
     thrust::counting_iterator<size_t>(0),
     thrust::counting_iterator(_input_columns.size()),
     [&](auto col_idx) {
-      auto const& col_page_mask      = data_page_mask[col_idx];
-      size_t num_inserted_data_pages = 0;
-
       for (size_t chunk_idx = col_idx; chunk_idx < chunks.size(); chunk_idx += num_columns) {
         // Insert a true value for each dictionary page
         if (chunks[chunk_idx].num_dict_pages > 0) { _pass_page_mask.push_back(true); }
@@ -897,21 +885,17 @@ void hybrid_scan_reader_impl::set_pass_page_mask(
 
         // Make sure we have enough page mask for this column chunk
         CUDF_EXPECTS(
-          col_page_mask.size() >= num_inserted_data_pages + num_data_pages_this_col_chunk,
+          data_page_mask.size() >= num_inserted_data_pages + num_data_pages_this_col_chunk,
           "Encountered invalid data page mask size");
 
         // Insert page mask for this column chunk
         _pass_page_mask.insert(
           _pass_page_mask.end(),
-          col_page_mask.begin() + num_inserted_data_pages,
-          col_page_mask.begin() + num_inserted_data_pages + num_data_pages_this_col_chunk);
-
+          data_page_mask.begin() + num_inserted_data_pages,
+          data_page_mask.begin() + num_inserted_data_pages + num_data_pages_this_col_chunk);
         // Update the number of inserted data pages
         num_inserted_data_pages += num_data_pages_this_col_chunk;
       }
-      // Make sure we inserted exactly the number of data pages for this column
-      CUDF_EXPECTS(num_inserted_data_pages == col_page_mask.size(),
-                   "Encountered mismatch in number of data pages and page mask size");
     });
 
   // Make sure we inserted exactly the number of pages for this pass

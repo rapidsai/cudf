@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from cython.operator import dereference
 
@@ -107,7 +108,7 @@ cpdef bool is_supported_operation(
 ):
     """Check if an operation is supported for the given data types.
 
-    For details, see :cpp:func::`is_supported_operation`.
+    For details, see :cpp:func:`is_supported_operation`.
 
     Parameters
     ----------

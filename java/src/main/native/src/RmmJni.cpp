@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "cudf_jni_apis.hpp"
@@ -20,16 +9,17 @@
 #include <cudf/utilities/pinned_memory.hpp>
 
 #include <rmm/aligned.hpp>
-#include <rmm/mr/device/aligned_resource_adaptor.hpp>
-#include <rmm/mr/device/arena_memory_resource.hpp>
-#include <rmm/mr/device/cuda_async_memory_resource.hpp>
-#include <rmm/mr/device/cuda_memory_resource.hpp>
-#include <rmm/mr/device/limiting_resource_adaptor.hpp>
-#include <rmm/mr/device/logging_resource_adaptor.hpp>
-#include <rmm/mr/device/managed_memory_resource.hpp>
-#include <rmm/mr/device/owning_wrapper.hpp>
-#include <rmm/mr/device/pool_memory_resource.hpp>
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/aligned_resource_adaptor.hpp>
+#include <rmm/mr/arena_memory_resource.hpp>
+#include <rmm/mr/cuda_async_memory_resource.hpp>
+#include <rmm/mr/cuda_memory_resource.hpp>
+#include <rmm/mr/limiting_resource_adaptor.hpp>
+#include <rmm/mr/logging_resource_adaptor.hpp>
+#include <rmm/mr/managed_memory_resource.hpp>
+#include <rmm/mr/owning_wrapper.hpp>
 #include <rmm/mr/pinned_host_memory_resource.hpp>
+#include <rmm/mr/pool_memory_resource.hpp>
 
 #include <atomic>
 #include <ctime>
@@ -140,7 +130,7 @@ class tracking_resource_adaptor final : public base_tracking_resource_adaptor {
     return result;
   }
 
-  void do_deallocate(void* p, std::size_t size, rmm::cuda_stream_view stream) override
+  void do_deallocate(void* p, std::size_t size, rmm::cuda_stream_view stream) noexcept override
   {
     size = (size + size_align - 1) / size_align * size_align;
 
@@ -268,12 +258,9 @@ class java_event_handler_memory_resource : public device_memory_resource {
       auto it = std::find_if(thresholds.begin(), thresholds.end(), [=](std::size_t t) -> bool {
         return low < t && high >= t;
       });
-      if (it != thresholds.end()) {
+      if (it != thresholds.end()) {  // throw Java exception, but not C++ exception
         JNIEnv* env = cudf::jni::get_jni_env(jvm);
         env->CallVoidMethod(handler_obj, callback_method, current_total);
-        if (env->ExceptionCheck()) {
-          throw std::runtime_error("onAllocThreshold handler threw an exception");
-        }
       }
     }
   }
@@ -317,7 +304,7 @@ class java_event_handler_memory_resource : public device_memory_resource {
     return result;
   }
 
-  void do_deallocate(void* p, std::size_t size, rmm::cuda_stream_view stream) override
+  void do_deallocate(void* p, std::size_t size, rmm::cuda_stream_view stream) noexcept override
   {
     auto total_before = tracker->get_total_allocated();
     resource->deallocate(p, size, stream);
@@ -380,7 +367,7 @@ class java_debug_event_handler_memory_resource final : public java_event_handler
     return result;
   }
 
-  void do_deallocate(void* p, std::size_t size, rmm::cuda_stream_view stream) override
+  void do_deallocate(void* p, std::size_t size, rmm::cuda_stream_view stream) noexcept override
   {
     java_event_handler_memory_resource::do_deallocate(p, size, stream);
     on_deallocated_callback(p, size, stream);
@@ -548,6 +535,75 @@ class pinned_fallback_host_memory_resource {
   // NOLINTEND(bugprone-easily-swappable-parameters)
 
   /**
+   * @brief Allocates pinned host memory of size at least \p bytes bytes.
+   *
+   * @throws rmm::out_of_memory if the requested allocation could not be fulfilled due to to a
+   * CUDA out of memory error.
+   * @throws rmm::bad_alloc if the requested allocation could not be fulfilled due to any other
+   * reason.
+   *
+   * @param bytes The size, in bytes, of the allocation.
+   * @param alignment Alignment in bytes. Default alignment is used if unspecified.
+   *
+   * @return Pointer to the newly allocated memory.
+   */
+  void* allocate_sync(std::size_t bytes, std::size_t alignment)
+  {
+    return allocate(bytes, alignment);
+  }
+
+  /**
+   * @brief Deallocate memory pointed to by \p ptr of size \p bytes bytes.
+   *
+   * @param ptr Pointer to be deallocated.
+   * @param bytes Size of the allocation.
+   * @param alignment Alignment in bytes. Default alignment is used if unspecified.
+   */
+  void deallocate_sync(void* ptr, std::size_t bytes, std::size_t alignment) noexcept
+  {
+    return deallocate(ptr, bytes, alignment);
+  }
+
+  /**
+   * @brief Allocates pinned host memory of size at least \p bytes bytes and alignment \p alignment.
+   *
+   * @note Stream argument is ignored and behavior is identical to allocate.
+   *
+   * @throws rmm::out_of_memory if the requested allocation could not be fulfilled due to to a
+   * CUDA out of memory error.
+   * @throws rmm::bad_alloc if the requested allocation could not be fulfilled due to any other
+   * error.
+   *
+   * @param stream CUDA stream on which to perform the allocation (ignored).
+   * @param bytes The size, in bytes, of the allocation.
+   * @param alignment Alignment in bytes.
+   * @return Pointer to the newly allocated memory.
+   */
+  void* allocate(rmm::cuda_stream_view stream, std::size_t bytes, std::size_t alignment)
+  {
+    return allocate_async(bytes, alignment, stream);
+  }
+
+  /**
+   * @brief Deallocate memory pointed to by \p ptr of size \p bytes bytes and alignment \p
+   * alignment bytes.
+   *
+   * @note Stream argument is ignored and behavior is identical to deallocate.
+   *
+   * @param stream CUDA stream on which to perform the deallocation (ignored).
+   * @param ptr Pointer to be deallocated.
+   * @param bytes Size of the allocation.
+   * @param alignment Alignment in bytes.
+   */
+  void deallocate(rmm::cuda_stream_view stream,
+                  void* ptr,
+                  std::size_t bytes,
+                  std::size_t alignment) noexcept
+  {
+    return deallocate_async(ptr, bytes, alignment, stream);
+  }
+
+  /**
    * @briefreturn{true if the specified resource is the same type as this resource.}
    */
   bool operator==(pinned_fallback_host_memory_resource const&) const { return true; }
@@ -580,9 +636,9 @@ class pinned_fallback_host_memory_resource {
 };
 
 // carryover from RMM pinned_host_memory_resource
-static_assert(cuda::mr::async_resource_with<pinned_fallback_host_memory_resource,
-                                            cuda::mr::device_accessible,
-                                            cuda::mr::host_accessible>);
+static_assert(cuda::mr::resource_with<pinned_fallback_host_memory_resource,
+                                      cuda::mr::device_accessible,
+                                      cuda::mr::host_accessible>);
 
 // we set this to our fallback resource if we have set it.
 std::unique_ptr<pinned_fallback_host_memory_resource> pinned_fallback_mr;
@@ -619,7 +675,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocInternal(JNIEnv* env,
     cudf::jni::auto_set_device(env);
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
     auto c_stream = rmm::cuda_stream_view(reinterpret_cast<cudaStream_t>(stream));
-    void* ret     = mr.allocate_async(size, rmm::CUDA_ALLOCATION_ALIGNMENT, c_stream);
+    void* ret     = mr.allocate(c_stream, size, rmm::CUDA_ALLOCATION_ALIGNMENT);
     return reinterpret_cast<jlong>(ret);
   }
   JNI_CATCH(env, 0);
@@ -634,7 +690,7 @@ Java_ai_rapids_cudf_Rmm_free(JNIEnv* env, jclass clazz, jlong ptr, jlong size, j
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
     void* cptr                        = reinterpret_cast<void*>(ptr);
     auto c_stream = rmm::cuda_stream_view(reinterpret_cast<cudaStream_t>(stream));
-    mr.deallocate_async(cptr, size, rmm::CUDA_ALLOCATION_ALIGNMENT, c_stream);
+    mr.deallocate(c_stream, cptr, size, rmm::CUDA_ALLOCATION_ALIGNMENT);
   }
   JNI_CATCH(env, );
 }
@@ -1145,9 +1201,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_freeFromFallbackPinnedPool(JNIEnv
   JNI_CATCH(env, );
 }
 
-JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Rmm_configureDefaultCudfPinnedPoolSize(JNIEnv* env,
-                                                                                      jclass clazz,
-                                                                                      jlong size)
+JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Rmm_configureDefaultCudfPinnedPoolSizeImpl(
+  JNIEnv* env, jclass clazz, jlong size)
 {
   JNI_TRY
   {

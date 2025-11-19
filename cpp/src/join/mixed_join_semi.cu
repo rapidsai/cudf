@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "join_common_utils.cuh"
@@ -20,12 +9,12 @@
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
-#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/join/mixed_join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -153,15 +142,15 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   auto const equality_build_conditional =
     row_comparator_conditional_build.equal_to<false>(build_nulls, compare_nulls);
 
-  hash_set_type row_set{
-    {compute_hash_table_size(build.num_rows())},
-    cuco::empty_key{JoinNoneValue},
-    {equality_build_equality, equality_build_conditional},
-    {row_hash_build.device_hasher(build_nulls)},
-    {},
-    {},
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-    {stream.value()}};
+  hash_set_type row_set{{static_cast<std::size_t>(build.num_rows())},
+                        cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
+                        cuco::empty_key{JoinNoMatch},
+                        {equality_build_equality, equality_build_conditional},
+                        {row_hash_build.device_hasher(build_nulls)},
+                        {},
+                        {},
+                        rmm::mr::polymorphic_allocator<char>{},
+                        {stream.value()}};
 
   auto iter = thrust::make_counting_iterator(0);
 

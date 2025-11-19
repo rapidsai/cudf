@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -27,6 +16,13 @@ namespace cudf::io::parquet::detail {
  * all passes/chunks in the file.
  */
 struct file_intermediate_data {
+  file_intermediate_data() = default;
+
+  file_intermediate_data(file_intermediate_data const&)            = delete;
+  file_intermediate_data& operator=(file_intermediate_data const&) = delete;
+  file_intermediate_data(file_intermediate_data&&)                 = default;
+  file_intermediate_data& operator=(file_intermediate_data&&)      = default;
+
   // all row groups to read
   std::vector<row_group_info> row_groups{};
 
@@ -77,6 +73,13 @@ struct row_range {
  * @brief Passes are broken down into subpasses based on temporary memory constraints.
  */
 struct subpass_intermediate_data {
+  subpass_intermediate_data() = default;
+
+  subpass_intermediate_data(subpass_intermediate_data const&)            = delete;
+  subpass_intermediate_data& operator=(subpass_intermediate_data const&) = delete;
+  subpass_intermediate_data(subpass_intermediate_data&&)                 = default;
+  subpass_intermediate_data& operator=(subpass_intermediate_data&&)      = default;
+
   rmm::device_buffer decomp_page_data;
 
   rmm::device_buffer level_decode_data{};
@@ -100,6 +103,12 @@ struct subpass_intermediate_data {
   std::vector<row_range> output_chunk_read_info;
   std::size_t current_output_chunk{0};
 
+  // temporary space for DELTA_BYTE_ARRAY decoding. this only needs to live until
+  // gpu::DecodeDeltaByteArray returns.
+  rmm::device_uvector<uint8_t> delta_temp_buf{0, cudf::get_default_stream()};
+
+  uint32_t kernel_mask{0};
+
   // skip_rows and num_rows values for this particular subpass. in absolute row indices.
   size_t skip_rows;
   size_t num_rows;
@@ -112,6 +121,13 @@ struct subpass_intermediate_data {
  * rowgroups may represent less than all of the rowgroups to be read for the file.
  */
 struct pass_intermediate_data {
+  pass_intermediate_data() = default;
+
+  pass_intermediate_data(pass_intermediate_data const&)            = delete;
+  pass_intermediate_data& operator=(pass_intermediate_data const&) = delete;
+  pass_intermediate_data(pass_intermediate_data&&)                 = default;
+  pass_intermediate_data& operator=(pass_intermediate_data&&)      = default;
+
   std::vector<rmm::device_buffer> raw_page_data;
 
   // rowgroup, chunk and page information for the current pass.
@@ -134,6 +150,7 @@ struct pass_intermediate_data {
 
   rmm::device_buffer decomp_dict_data{0, cudf::get_default_stream()};
   rmm::device_uvector<size_t> decomp_scratch_sizes{0, cudf::get_default_stream()};
+  rmm::device_uvector<size_t> string_offset_sizes{0, cudf::get_default_stream()};
   rmm::device_uvector<string_index_pair> str_dict_index{0, cudf::get_default_stream()};
 
   int level_type_size{0};

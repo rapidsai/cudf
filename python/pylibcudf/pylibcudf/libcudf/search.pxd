@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 cimport pylibcudf.libcudf.types as libcudf_types
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector

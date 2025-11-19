@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "hybrid_scan_helpers.hpp"
@@ -87,7 +76,7 @@ aggregate_reader_metadata::aggregate_reader_metadata(FileMetaData const& parquet
   : aggregate_reader_metadata_base({}, false, false)
 {
   // Just copy over the FileMetaData struct to the internal metadata struct
-  per_file_metadata = std::vector<metadata_base>{metadata{parquet_metadata}.get_file_metadata()};
+  per_file_metadata.emplace_back(metadata{parquet_metadata}.get_file_metadata());
   initialize_internals(use_arrow_schema, has_cols_from_mismatched_srcs);
 }
 
@@ -97,7 +86,7 @@ aggregate_reader_metadata::aggregate_reader_metadata(cudf::host_span<uint8_t con
   : aggregate_reader_metadata_base({}, false, false)
 {
   // Re-initialize internal variables here as base class was initialized without a source
-  per_file_metadata = std::vector<metadata_base>{metadata{footer_bytes}.get_file_metadata()};
+  per_file_metadata.emplace_back(metadata{footer_bytes}.get_file_metadata());
   initialize_internals(use_arrow_schema, has_cols_from_mismatched_srcs);
 }
 
@@ -373,14 +362,11 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
     dictionary_literals_collector{filter.get(), static_cast<cudf::size_type>(output_dtypes.size())}
       .get_literals();
 
-  auto iter = thrust::make_zip_iterator(thrust::counting_iterator<cudf::size_type>(0),
-                                        output_column_schemas.begin());
-
   // Collect schema indices of columns with equality predicate(s)
-  std::vector<thrust::tuple<cudf::size_type, cudf::size_type>> dictionary_col_schemas;
+  std::vector<cudf::size_type> dictionary_col_schemas;
   thrust::copy_if(thrust::host,
-                  iter,
-                  iter + output_column_schemas.size(),
+                  output_column_schemas.begin(),
+                  output_column_schemas.end(),
                   literals.begin(),
                   std::back_inserter(dictionary_col_schemas),
                   [](auto& dict_literals) { return not dict_literals.empty(); });
@@ -408,24 +394,60 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
     [&](auto const src_index) {
       // Get all row group indices in the data source
       auto const& rg_indices = row_group_indices[src_index];
+      std::optional<size_type> colchunk_iter_offset{};
       // For all row groups
       std::for_each(rg_indices.cbegin(), rg_indices.cend(), [&](auto const rg_index) {
-        auto const& rg = per_file_metadata[0].row_groups[rg_index];
+        auto const& row_group = per_file_metadata[src_index].row_groups[rg_index];
         // For all column chunks
         std::for_each(
           dictionary_col_schemas.begin(),
           dictionary_col_schemas.end(),
-          [&](auto const& schema_col_idx_pair) {
-            auto const [input_col_idx, schema_idx] = schema_col_idx_pair;
-            auto& col_meta        = get_column_metadata(rg_index, src_index, schema_idx);
-            auto const& col_chunk = rg.columns[input_col_idx];
+          [&](auto const& schema_idx) {
+            // Get the column chunk iterator
+            if (not colchunk_iter_offset.has_value() or
+                row_group.columns[colchunk_iter_offset.value()].schema_idx != schema_idx) {
+              auto const& colchunk_iter = std::find_if(
+                row_group.columns.begin(), row_group.columns.end(), [schema_idx](auto const& col) {
+                  return col.schema_idx == schema_idx;
+                });
+              CUDF_EXPECTS(colchunk_iter != row_group.columns.end(),
+                           "Column chunk with schema index " + std::to_string(schema_idx) +
+                             " not found in row group",
+                           std::invalid_argument);
+              colchunk_iter_offset = std::distance(row_group.columns.begin(), colchunk_iter);
+            }
+            auto const colchunk_iter = row_group.columns.begin() + colchunk_iter_offset.value();
+            auto const& col_chunk    = *colchunk_iter;
+            auto const& col_meta     = col_chunk.meta_data;
+
+            // Make sure that we have page index and the column chunk doesn't have any
+            // non-dictionary encoded pages
+            auto const has_page_index_and_only_dict_encoded_pages = [&]() {
+              auto const has_page_index =
+                col_chunk.offset_index.has_value() and col_chunk.column_index.has_value();
+
+              if (has_page_index and not col_meta.encoding_stats.has_value()) {
+                CUDF_LOG_WARN(
+                  "Skipping the column chunk because it does not have encoding stats "
+                  "needed to determine if all pages are dictionary encoded");
+                return false;
+              }
+
+              return has_page_index and
+                     std::all_of(
+                       col_meta.encoding_stats.value().cbegin(),
+                       col_meta.encoding_stats.value().cend(),
+                       [](auto const& page_encoding_stats) {
+                         return page_encoding_stats.page_type == PageType::DICTIONARY_PAGE or
+                                page_encoding_stats.encoding == Encoding::PLAIN_DICTIONARY or
+                                page_encoding_stats.encoding == Encoding::RLE_DICTIONARY;
+                       });
+            }();
 
             auto dictionary_offset = int64_t{0};
             auto dictionary_size   = int64_t{0};
 
-            // If any columns lack the page indexes then just return without modifying the
-            // row_group_info.
-            if (col_chunk.offset_index.has_value() and col_chunk.column_index.has_value()) {
+            if (has_page_index_and_only_dict_encoded_pages) {
               auto const& offset_index = col_chunk.offset_index.value();
               auto const num_pages     = offset_index.page_locations.size();
 

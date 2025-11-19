@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -20,7 +21,8 @@ cpdef Column to_durations(
     Column input,
     DataType duration_type,
     str format,
-    Stream stream=None, DeviceMemoryResource mr=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None
 ):
     """
     Returns a new duration column converting a strings column into
@@ -66,7 +68,8 @@ cpdef Column to_durations(
 cpdef Column from_durations(
     Column durations,
     str format=None,
-    Stream stream=None, DeviceMemoryResource mr=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None
 ):
     """
     Returns a new strings column converting a duration column into

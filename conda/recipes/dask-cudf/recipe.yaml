@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 schema_version: 1
 
 context:
@@ -7,8 +8,6 @@ context:
   cuda_version: ${{ (env.get("RAPIDS_CUDA_VERSION") | split("."))[:2] | join(".") }}
   cuda_major: '${{ (env.get("RAPIDS_CUDA_VERSION") | split("."))[0] }}'
   date_string: '${{ env.get("RAPIDS_DATE_STRING") }}'
-  py_version: ${{ env.get("RAPIDS_PY_VERSION") }}
-  py_buildstring: ${{ py_version | version_to_buildstring }}
   head_rev: '${{ git.head_rev(".")[:8] }}'
 
 package:
@@ -19,14 +18,15 @@ source:
   path: ../../..
 
 build:
-  string: cuda${{ cuda_major }}_py${{ py_buildstring }}_${{ date_string }}_${{ head_rev }}
+  noarch: python
+  string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
   script:
     content: |
       ./build.sh dask_cudf
 
 requirements:
   host:
-    - python =${{ py_version }}
+    - python >=3.10
     - pip
     - rapids-build-backend >=0.4.0,<0.5.0.dev0
     - setuptools

@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -29,30 +30,27 @@ from cudf.utils.scalar import (
 from cudf.utils.utils import _is_null_host_scalar
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
     from typing_extensions import Self
 
-    from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype
-    from cudf.core.buffer import Buffer
+    from cudf._typing import ColumnBinaryOperand, ColumnLike, DtypeObj
     from cudf.core.column.string import StringColumn
 
 
 class ListColumn(ColumnBase):
     _VALID_BINARY_OPERATIONS = {"__add__", "__radd__"}
+    _VALID_PLC_TYPES = {plc.TypeId.LIST}
 
     def __init__(
         self,
-        data: None,
+        plc_column: plc.Column,
         size: int,
         dtype: ListDtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple[NumericalColumn, ColumnBase] = (),  # type: ignore[assignment]
-    ):
-        if data is not None:
-            raise ValueError("data must be None")
+        offset: int,
+        null_count: int,
+        exposed: bool,
+    ) -> None:
         if (
             not cudf.get_option("mode.pandas_compatible")
             and not isinstance(dtype, ListDtype)
@@ -61,24 +59,27 @@ class ListColumn(ColumnBase):
             and not is_dtype_obj_list(dtype)
         ):
             raise ValueError("dtype must be a cudf.ListDtype")
-        if not (
-            len(children) == 2
-            and isinstance(children[0], NumericalColumn)
-            # TODO: Enforce int32_t (size_type) used in libcudf?
-            and children[0].dtype.kind == "i"
-            and isinstance(children[1], ColumnBase)
-        ):
-            raise ValueError(
-                "children must a tuple of 2 columns of (signed integer offsets, list values)"
-            )
         super().__init__(
-            data=data,
+            plc_column=plc_column,
             size=size,
             dtype=dtype,
-            mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
+            exposed=exposed,
+        )
+
+    def _get_children_from_pylibcudf_column(
+        self,
+        plc_column: plc.Column,
+        dtype: ListDtype,  # type: ignore[override]
+        exposed: bool,
+    ) -> tuple[ColumnBase, ColumnBase]:
+        children = super()._get_children_from_pylibcudf_column(
+            plc_column, dtype, exposed
+        )
+        return (
+            children[0],
+            children[1]._with_type_metadata(dtype.element_type),
         )
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
@@ -127,17 +128,17 @@ class ListColumn(ColumnBase):
         result = super().element_indexing(index)
         if isinstance(result, pa.Scalar):
             py_element = maybe_nested_pa_scalar_to_py(result)
-            return self.dtype._recursively_replace_fields(py_element)
+            return self.dtype._recursively_replace_fields(py_element)  # type: ignore[union-attr]
         return result
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar:
         if isinstance(value, list) or value is None:
             return pa_scalar_to_plc_scalar(
-                pa.scalar(value, type=self.dtype.to_arrow())
+                pa.scalar(value, type=self.dtype.to_arrow())  # type: ignore[union-attr]
             )
         elif value is NA or value is None:
             return pa_scalar_to_plc_scalar(
-                pa.scalar(None, type=self.dtype.to_arrow())
+                pa.scalar(None, type=self.dtype.to_arrow())  # type: ignore[union-attr]
             )
         else:
             raise ValueError(f"Can not set {value} into ListColumn")
@@ -156,7 +157,7 @@ class ListColumn(ColumnBase):
             return NotImplemented
         if isinstance(other.dtype, ListDtype):
             if op == "__add__":
-                return self.concatenate_rows([other])  # type: ignore[list-item]
+                return self.concatenate_rows([other])
             else:
                 raise NotImplementedError(
                     "Lists concatenation for this operation is not yet"
@@ -202,38 +203,37 @@ class ListColumn(ColumnBase):
             children=[elements],
         )
 
-    def set_base_data(self, value):
-        if value is not None:
-            raise RuntimeError(
-                "ListColumn's do not use data attribute of Column, use "
-                "`set_base_children` instead"
-            )
-        else:
-            super().set_base_data(value)
-
-    def set_base_children(self, value: tuple[NumericalColumn, ColumnBase]):  # type: ignore[override]
-        super().set_base_children(value)
-        self._dtype = cudf.ListDtype(element_type=value[1].dtype)
-
     @property
-    def __cuda_array_interface__(self):
+    def __cuda_array_interface__(self) -> Mapping[str, Any]:
         raise NotImplementedError(
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
 
-    def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
+    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, ListDtype):
             elements = self.base_children[1]._with_type_metadata(
                 dtype.element_type
             )
+            new_children = [
+                self.plc_column.children()[0],
+                elements.to_pylibcudf(mode="read"),
+            ]
+            new_plc_column = plc.Column(
+                plc.DataType(plc.TypeId.LIST),
+                self.plc_column.size(),
+                self.plc_column.data(),
+                self.plc_column.null_mask(),
+                self.plc_column.null_count(),
+                self.plc_column.offset(),
+                new_children,
+            )
             return type(self)(
-                data=None,
-                dtype=dtype,
-                mask=self.base_mask,
+                plc_column=new_plc_column,
                 size=self.size,
+                dtype=dtype,
                 offset=self.offset,
                 null_count=self.null_count,
-                children=(self.base_children[0], elements),  # type: ignore[arg-type]
+                exposed=False,
             )
         # For pandas dtypes, store them directly in the column's dtype property
         elif isinstance(dtype, pd.ArrowDtype) and isinstance(
@@ -248,7 +248,7 @@ class ListColumn(ColumnBase):
         # the underlying device data and mask.
         return super().copy(deep=False)
 
-    def leaves(self):
+    def leaves(self) -> ColumnBase:
         if isinstance(self.elements, ListColumn):
             return self.elements.leaves()
         else:
@@ -278,7 +278,7 @@ class ListColumn(ColumnBase):
         offset_col = plc.Column.from_iterable_of_py(
             offset_vals, dtype=plc.types.SIZE_TYPE
         )
-        data_col = data_col.to_pylibcudf(mode="read")
+        data_plc_col = data_col.to_pylibcudf(mode="read")
         mask, null_count = plc.transform.bools_to_mask(
             plc.Column.from_iterable_of_py(mask_bools)
         )
@@ -289,11 +289,18 @@ class ListColumn(ColumnBase):
             mask,
             null_count,
             0,
-            [offset_col, data_col],
+            [offset_col, data_plc_col],
         )
-        return cls.from_pylibcudf(plc_column)  # type: ignore[return-value]
+        return cls.from_pylibcudf(plc_column)
 
-    def as_string_column(self, dtype) -> StringColumn:
+    @cached_property
+    def _string_separators(self) -> plc.Column:
+        # Separator strings to match the Python format
+        return plc.Column.from_iterable_of_py(
+            [", ", "[", "]"], dtype=plc.DataType(plc.TypeId.STRING)
+        )
+
+    def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         """
         Create a strings column from a list column
         """
@@ -302,49 +309,50 @@ class ListColumn(ColumnBase):
                 raise TypeError(
                     f"Cannot cast a list from {self.dtype} to {dtype}"
                 )
-        lc = self._transform_leaves(lambda col: col.as_string_column(dtype))
-
-        # Separator strings to match the Python format
-        separators = as_column([", ", "[", "]"])
+        lc = self._transform_leaves(
+            lambda col, dtype: col.as_string_column(dtype), dtype
+        )
 
         with acquire_spill_lock():
             plc_column = plc.strings.convert.convert_lists.format_list_column(
                 lc.to_pylibcudf(mode="read"),
                 pa_scalar_to_plc_scalar(pa.scalar("None")),
-                separators.to_pylibcudf(mode="read"),
+                self._string_separators,
             )
             return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
-    def _transform_leaves(self, func, *args, **kwargs) -> Self:
-        # return a new list column with the same nested structure
-        # as ``self``, but with the leaf column transformed
-        # by applying ``func`` to it
+    def _transform_leaves(
+        self, func: Callable[[ColumnBase, DtypeObj], ColumnBase], *args: Any
+    ) -> Self:
+        """
+        Return a new column like Self but with func applied to the last leaf column.
+        """
+        leaf_queue: list[ListColumn] = []
+        curr_col: ColumnBase = self
 
-        cc: list[ListColumn] = []
-        c: ColumnBase = self
+        while isinstance(curr_col, ListColumn):
+            leaf_queue.append(curr_col)
+            curr_col = curr_col.children[1]
 
-        while isinstance(c, ListColumn):
-            cc.insert(0, c)
-            c = c.children[1]
-
-        lc = func(c, *args, **kwargs)
+        plc_leaf_col = func(curr_col, *args).to_pylibcudf(mode="read")
 
         # Rebuild the list column replacing just the leaf child
-        for c in cc:
-            o = c.children[0]
-            lc = ListColumn(  # type: ignore
-                data=None,
-                size=c.size,
-                dtype=cudf.ListDtype(lc.dtype),
-                mask=c.mask,
-                offset=c.offset,
-                null_count=c.null_count,
-                children=(o, lc),  # type: ignore[arg-type]
+        while leaf_queue:
+            col = leaf_queue.pop()
+            offsets = col.children[0].to_pylibcudf(mode="read")
+            plc_leaf_col = plc.Column(
+                plc.DataType(plc.TypeId.LIST),
+                col.size,
+                None,
+                plc.gpumemoryview(col.mask) if col.mask is not None else None,
+                col.null_count,
+                col.offset,
+                [offsets, plc_leaf_col],
             )
-        return lc
+        return type(self).from_pylibcudf(plc_leaf_col)
 
     @property
-    def element_type(self) -> Dtype:
+    def element_type(self) -> DtypeObj:
         """
         Returns the element type of the list column.
         """
@@ -353,7 +361,7 @@ class ListColumn(ColumnBase):
         else:
             return get_dtype_of_same_kind(
                 self.dtype,
-                self.dtype.pyarrow_dtype.value_type.to_pandas_dtype(),
+                self.dtype.pyarrow_dtype.value_type.to_pandas_dtype(),  # type: ignore[union-attr]
             )
 
     def to_pandas(
@@ -503,7 +511,9 @@ class ListColumn(ColumnBase):
         string_na_rep: str,
     ) -> StringColumn:
         if isinstance(separator, str):
-            sep = pa_scalar_to_plc_scalar(pa.scalar(separator))
+            sep: plc.Scalar | plc.Column = pa_scalar_to_plc_scalar(
+                pa.scalar(separator)
+            )
         else:
             sep = separator.to_pylibcudf(mode="read")
         plc_column = plc.strings.combine.join_list_elements(
@@ -520,11 +530,18 @@ class ListColumn(ColumnBase):
     def minhash_ngrams(
         self,
         width: int,
-        seed: np.uint32,
+        seed: int | np.uint32,
         a: NumericalColumn,
         b: NumericalColumn,
     ) -> Self:
-        return type(self).from_pylibcudf(  # type: ignore[return-value]
+        # Convert int to np.uint32 with validation
+        if isinstance(seed, int):
+            if seed < 0 or seed > np.iinfo(np.uint32).max:
+                raise ValueError(
+                    f"seed must be in range [0, {np.iinfo(np.uint32).max}]"
+                )
+            seed = np.uint32(seed)
+        return type(self).from_pylibcudf(
             plc.nvtext.minhash.minhash_ngrams(
                 self.to_pylibcudf(mode="read"),
                 width,
@@ -538,11 +555,18 @@ class ListColumn(ColumnBase):
     def minhash64_ngrams(
         self,
         width: int,
-        seed: np.uint64,
+        seed: int | np.uint64,
         a: NumericalColumn,
         b: NumericalColumn,
     ) -> Self:
-        return type(self).from_pylibcudf(  # type: ignore[return-value]
+        # Convert int to np.uint64 with validation
+        if isinstance(seed, int):
+            if seed < 0 or seed > np.iinfo(np.uint64).max:
+                raise ValueError(
+                    f"seed must be in range [0, {np.iinfo(np.uint64).max}]"
+                )
+            seed = np.uint64(seed)
+        return type(self).from_pylibcudf(
             plc.nvtext.minhash.minhash64_ngrams(
                 self.to_pylibcudf(mode="read"),
                 width,

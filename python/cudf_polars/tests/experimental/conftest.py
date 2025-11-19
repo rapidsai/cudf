@@ -7,10 +7,12 @@ import os
 import pytest
 
 
-@pytest.fixture(autouse=True)
+# scope="session" is important to not cause singificant slowdowns in CI
+# https://github.com/rapidsai/cudf/pull/20137
+@pytest.fixture(autouse=True, scope="session")
 def dask_cluster(pytestconfig, worker_id):
     if (
-        pytestconfig.getoption("--scheduler") == "distributed"
+        pytestconfig.getoption("--cluster") == "distributed"
         and pytestconfig.getoption("--executor") == "streaming"
     ):
         worker_count = int(os.environ.get("PYTEST_XDIST_WORKER_COUNT", "0"))

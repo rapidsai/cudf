@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -56,7 +57,6 @@ from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
-    StringColumn,
     as_column,
     column_empty,
     concat_columns,
@@ -71,6 +71,7 @@ from cudf.core.dtypes import (
     IntervalDtype,
     ListDtype,
     StructDtype,
+    recursively_update_struct_names,
 )
 from cudf.core.groupby.groupby import DataFrameGroupBy, groupby_doc_template
 from cudf.core.index import (
@@ -98,8 +99,7 @@ from cudf.core.series import Series
 from cudf.core.udf.row_function import DataFrameApplyKernel
 from cudf.errors import MixedTypeError
 from cudf.options import get_option
-from cudf.utils import applyutils, docutils, ioutils, queryutils
-from cudf.utils.docutils import copy_docstring
+from cudf.utils import docutils, ioutils, queryutils
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
@@ -125,7 +125,13 @@ from cudf.utils.utils import (
 )
 
 if TYPE_CHECKING:
-    from cudf._typing import ColumnLike, Dtype, NotImplementedType
+    from cudf._typing import (
+        Axis,
+        ColumnLike,
+        Dtype,
+        NotImplementedType,
+        ScalarLike,
+    )
 
 _cupy_nan_methods_map = {
     "min": "nanmin",
@@ -146,29 +152,6 @@ def _shape_mismatch_error(x, y):
         f"could not be broadcast to indexing result of "
         f"shape {y}"
     )
-
-
-def _recursively_update_struct_names(
-    col: ColumnBase, child_names: dict
-) -> ColumnBase:
-    """Update a Column with struct names from pylibcudf.io.TableWithMetadata.child_names"""
-    if col.children:
-        if not child_names:
-            assert isinstance(col, StringColumn), (
-                "Only string columns can have unnamed children"
-            )
-        else:
-            children = list(col.children)
-            for i, (child, names) in enumerate(
-                zip(children, child_names.values(), strict=True)
-            ):
-                children[i] = _recursively_update_struct_names(child, names)
-            col.set_base_children(tuple(children))
-
-    if isinstance(col.dtype, StructDtype):
-        col = col._rename_fields(child_names.keys())  # type: ignore[attr-defined]
-
-    return col
 
 
 class _DataFrameIndexer(_FrameIndexer):
@@ -1595,7 +1578,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 else:
                     # disc. with pandas here
                     # pandas raises key error here
-                    self.insert(self._num_columns, arg, value)
+                    self._insert(
+                        loc=self._num_columns,
+                        name=arg,
+                        value=value,
+                        ignore_index=False,
+                    )
 
         elif can_convert_to_column(arg):
             mask = arg
@@ -1651,7 +1639,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         self._drop_column(name)
 
     @_performance_tracking
-    def memory_usage(self, index: bool = True, deep: bool = False) -> Series:  # type: ignore[override]
+    def memory_usage(self, index: bool = True, deep: bool = False) -> Series:
         """
         Return the memory usage of the DataFrame.
 
@@ -2618,7 +2606,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             # Special case needed to avoid converting
             # Series objects into pd.Series
             if not inspect.isclass(into):
-                cons = type(into)  # type: ignore[assignment]
+                cons = type(into)
                 if isinstance(into, defaultdict):
                     cons = functools.partial(cons, into.default_factory)
             elif issubclass(into, Mapping):
@@ -2864,7 +2852,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         """
         return _DataFrameAtIndexer(self)
 
-    @property  # type: ignore
+    @property
     @_external_only_api(
         "Use _column_names instead, or _data.to_pandas_index if a pandas "
         "index is absolutely necessary. For checking if the columns are a "
@@ -2875,7 +2863,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         """Returns a tuple of columns"""
         return self._data.to_pandas_index
 
-    @columns.setter  # type: ignore
+    @columns.setter
     @_performance_tracking
     def columns(self, columns):
         multiindex = False
@@ -3222,7 +3210,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             # label-like
             if is_scalar(col) or isinstance(col, tuple):
                 if col in self._column_names:
-                    data_to_add.append(self[col]._column)
+                    if drop and inplace:
+                        data_to_add.append(self[col]._column)
+                    else:
+                        data_to_add.append(self[col]._column.copy(deep=True))
                     names.append(col)
                     if drop:
                         to_drop.append(col)
@@ -3455,6 +3446,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             inplace=inplace,
         )
 
+    @_external_only_api(
+        "Use ._insert with ignore_index=True to avoid expensive index "
+        "equality checking and reindexing when the data is already aligned."
+    )
     @_performance_tracking
     def insert(
         self,
@@ -3568,7 +3563,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         value = as_column(value, nan_as_null=nan_as_null)
         self._data.insert(name, value, loc=loc)
 
-    @property  # type:ignore
+    @property
     @_performance_tracking
     def axes(self):
         """
@@ -3893,7 +3888,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             else:
                 to_replace = list(index.keys())
                 vals = list(index.values())
-                is_all_na = vals.count(None) == len(vals)
+                is_all_na = all(val is None for val in vals)
 
                 try:
                     out_index = _index_from_data(
@@ -5080,80 +5075,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         return DataFrame._from_data(result, index=self.index, attrs=self.attrs)
 
     @_performance_tracking
-    @applyutils.doc_applychunks()
-    def apply_chunks(
-        self,
-        func,
-        incols,
-        outcols,
-        kwargs=None,
-        pessimistic_nulls=True,
-        chunks=None,
-        blkct=None,
-        tpb=None,
-    ):
-        """
-        Transform user-specified chunks using the user-provided function.
-
-        Parameters
-        ----------
-        {params}
-
-        Examples
-        --------
-        For ``tpb > 1``, ``func`` is executed by ``tpb`` number of threads
-        concurrently.  To access the thread id and count,
-        use ``numba.cuda.threadIdx.x`` and ``numba.cuda.blockDim.x``,
-        respectively (See `numba CUDA kernel documentation`_).
-
-        .. _numba CUDA kernel documentation:\
-        https://numba.readthedocs.io/en/stable/cuda/kernels.html
-
-        In the example below, the *kernel* is invoked concurrently on each
-        specified chunk. The *kernel* computes the corresponding output
-        for the chunk.
-
-        By looping over the range
-        ``range(cuda.threadIdx.x, in1.size, cuda.blockDim.x)``, the *kernel*
-        function can be used with any *tpb* in an efficient manner.
-
-        >>> from numba import cuda
-        >>> @cuda.jit
-        ... def kernel(in1, in2, in3, out1):
-        ...      for i in range(cuda.threadIdx.x, in1.size, cuda.blockDim.x):
-        ...          x = in1[i]
-        ...          y = in2[i]
-        ...          z = in3[i]
-        ...          out1[i] = x * y + z
-
-        See Also
-        --------
-        DataFrame.apply
-        """
-        warnings.warn(
-            "DataFrame.apply_chunks is deprecated and will be "
-            "removed in a future release. Please use `apply` "
-            "or use a custom numba kernel instead or refer "
-            "to the UDF guidelines for more information "
-            "https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html",
-            FutureWarning,
-        )
-        if kwargs is None:
-            kwargs = {}
-        if chunks is None:
-            raise ValueError("*chunks* must be defined")
-        return applyutils.apply_chunks(
-            self,
-            func,
-            incols,
-            outcols,
-            kwargs,
-            pessimistic_nulls,
-            chunks,
-            tpb=tpb,
-        )
-
-    @_performance_tracking
     def partition_by_hash(
         self, columns: Sequence[Hashable], nparts: int, keep_index: bool = True
     ) -> list[Self]:
@@ -5995,7 +5916,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
         if nrows is not None:
             raise NotImplementedError("nrows is currently not supported.")
-
+        if not isinstance(data, (np.ndarray, cupy.ndarray)):
+            raise TypeError("data must be a numpy ndarray or cupy ndarray")
         if data.ndim != 1 and data.ndim != 2:
             raise ValueError(
                 f"records dimension expected 1 or 2 but found {data.ndim}"
@@ -6414,7 +6336,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         # https://github.com/rapidsai/cudf/issues/7556
 
         def make_false_column_like_self():
-            return as_column(False, length=len(self), dtype="bool")
+            return as_column(False, length=len(self), dtype=np.dtype("bool"))
 
         # Preprocess different input types into a mapping from column names to
         # a list of values to check.
@@ -6615,11 +6537,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     @_performance_tracking
     def _reduce(
         self,
-        op,
+        op: str,
         axis=None,
-        numeric_only=False,
+        numeric_only: bool = False,
         **kwargs,
-    ):
+    ) -> ScalarLike:
         source = self
 
         if axis is None:
@@ -6695,13 +6617,15 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )(**kwargs)
             else:
                 source_dtypes = [dtype for _, dtype in source._dtypes]
+                # TODO: What happens if common_dtype is None?
                 common_dtype = find_common_type(source_dtypes)
                 if (
                     common_dtype == CUDF_STRING_DTYPE
                     and any(
                         dtype != CUDF_STRING_DTYPE for dtype in source_dtypes
                     )
-                    or common_dtype.kind != "b"
+                    or common_dtype is not None
+                    and common_dtype.kind != "b"
                     and any(dtype.kind == "b" for dtype in source_dtypes)
                 ):
                     raise TypeError(
@@ -6710,6 +6634,17 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     )
                 pd_index = source._data.to_pandas_index
                 idx = from_pandas(pd_index)
+                if (
+                    op == "std"
+                    and common_dtype is not None
+                    and common_dtype.kind == "M"
+                ):
+                    # TODO: Columns should probably signal the result type of their scalar
+                    # Especially for this case where NaT could be datetime or timedelta
+                    unit = np.datetime_data(common_dtype)[0]
+                    axis_0_results = pd.Index(
+                        axis_0_results, dtype=f"m8[{unit}]"
+                    )
                 res = as_column(
                     axis_0_results,
                     nan_as_null=not cudf.get_option("mode.pandas_compatible"),
@@ -6720,7 +6655,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     if res.isnull().all():
                         if cudf.api.types.is_numeric_dtype(common_dtype):
                             if op in {"sum", "product"}:
-                                if common_dtype.kind == "f":
+                                if (
+                                    common_dtype is not None
+                                    and common_dtype.kind == "f"
+                                ):
                                     res_dtype = (
                                         np.dtype("float64")
                                         if isinstance(
@@ -6728,7 +6666,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                                         )
                                         else common_dtype
                                     )
-                                elif common_dtype.kind == "u":
+                                elif (
+                                    common_dtype is not None
+                                    and common_dtype.kind == "u"
+                                ):
                                     res_dtype = np.dtype("uint64")
                                 else:
                                     res_dtype = np.dtype("int64")
@@ -6743,7 +6684,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                                 "skew",
                                 "median",
                             }:
-                                if common_dtype.kind == "f":
+                                if (
+                                    common_dtype is not None
+                                    and common_dtype.kind == "f"
+                                ):
                                     res_dtype = (
                                         np.dtype("float64")
                                         if isinstance(
@@ -6766,19 +6710,22 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     @_performance_tracking
     def _scan(
         self,
-        op,
-        axis=None,
+        op: str,
+        axis: Axis | None = None,
+        skipna: bool = True,
         *args,
         **kwargs,
-    ):
+    ) -> Self:
         if axis is None:
             axis = 0
         axis = self._get_axis_from_axis_arg(axis)
 
         if axis == 0:
-            return super()._scan(op, axis=axis, *args, **kwargs)
+            return super()._scan(op, axis=axis, skipna=skipna, *args, **kwargs)
         elif axis == 1:
-            return self._apply_cupy_method_axis_1(op, **kwargs)
+            return self._apply_cupy_method_axis_1(op, skipna=skipna, **kwargs)
+        else:
+            raise ValueError(f"{axis=} should be None, 0 or 1")
 
     @_performance_tracking
     def mode(self, axis=0, numeric_only=False, dropna=True):
@@ -6888,25 +6835,37 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         return df
 
     @_performance_tracking
-    def all(self, axis=0, bool_only=None, skipna=True, **kwargs):
+    def all(
+        self,
+        axis: Axis = 0,
+        bool_only: bool = False,
+        skipna: bool = True,
+        **kwargs,
+    ):
         obj = (
             self.select_dtypes(include=np.dtype(np.bool_))
             if bool_only
             else self
         )
-        return super(DataFrame, obj).all(axis, skipna, **kwargs)
+        return super(DataFrame, obj).all(axis, skipna, **kwargs)  # type: ignore[misc]
 
     @_performance_tracking
-    def any(self, axis=0, bool_only=None, skipna=True, **kwargs):
+    def any(
+        self,
+        axis: Axis = 0,
+        bool_only: bool = False,
+        skipna: bool = True,
+        **kwargs,
+    ):
         obj = (
             self.select_dtypes(include=np.dtype(np.bool_))
             if bool_only
             else self
         )
-        return super(DataFrame, obj).any(axis, skipna, **kwargs)
+        return super(DataFrame, obj).any(axis, skipna, **kwargs)  # type: ignore[misc]
 
     @_performance_tracking
-    def _apply_cupy_method_axis_1(self, method, *args, **kwargs):
+    def _apply_cupy_method_axis_1(self, method: str, *args, **kwargs):
         # This method uses cupy to perform scans and reductions along rows of a
         # DataFrame. Since cuDF is designed around columnar storage and
         # operations, we convert DataFrames to 2D cupy arrays for these ops.
@@ -7911,12 +7870,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         )
 
     @_performance_tracking
-    @copy_docstring(reshape.pivot)
+    @docutils.copy_docstring(reshape.pivot)
     def pivot(self, *, columns, index=no_default, values=no_default):
         return reshape.pivot(self, index=index, columns=columns, values=values)
 
     @_performance_tracking
-    @copy_docstring(reshape.pivot_table)
+    @docutils.copy_docstring(reshape.pivot_table)
     def pivot_table(
         self,
         values=None,
@@ -7945,7 +7904,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         )
 
     @_performance_tracking
-    @copy_docstring(reshape.unstack)
+    @docutils.copy_docstring(reshape.unstack)
     def unstack(self, level=-1, fill_value=None, sort: bool = True):
         return reshape.unstack(
             self, level=level, fill_value=fill_value, sort=sort
@@ -8546,7 +8505,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         # We only have child names if the source is a pylibcudf.io.TableWithMetadata.
         if child_names is not None:
             cudf_cols = (
-                _recursively_update_struct_names(col, cn)
+                col._with_type_metadata(
+                    recursively_update_struct_names(col.dtype, cn)
+                )
                 for col, cn in zip(
                     cudf_cols, child_names.values(), strict=True
                 )
@@ -8919,24 +8880,6 @@ def _setitem_with_dataframe(
                     name=col_1,
                     value=replace_df[col_2],
                 )
-
-
-def extract_col(df, col):
-    """
-    Extract column from dataframe `df` with their name `col`.
-    If `col` is index and there are no columns with name `index`,
-    then this will return index column.
-    """
-    try:
-        return df._data[col]
-    except KeyError:
-        if (
-            col == "index"
-            and col not in df.index._data
-            and not isinstance(df.index, MultiIndex)
-        ):
-            return df.index._column
-        return df.index._data[col]
 
 
 def _index_from_listlike_of_series(

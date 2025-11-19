@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import math
@@ -317,7 +318,7 @@ def to_datetime(
         elif errors == "ignore":
             pass
         elif errors == "coerce":
-            return np.datetime64("nat", "ns" if unit is None else unit)
+            return np.datetime64("nat", "ns" if unit is None else unit)  # type: ignore[call-overload]
         return arg
 
 
@@ -663,7 +664,7 @@ class DateOffset:
                     with acquire_spill_lock():
                         datetime_col = type(datetime_col).from_pylibcudf(
                             plc.datetime.add_calendrical_months(
-                                datetime_col.to_pylibcudf(mode="read"),
+                                datetime_col.plc_column,
                                 pa_scalar_to_plc_scalar(pa.scalar(value)),
                             )
                         )
@@ -849,7 +850,7 @@ def date_range(
             FutureWarning,
         )
 
-    dtype = np.dtype("datetime64[ns]")
+    dtype: np.dtype = np.dtype("datetime64[ns]")
     unit, _ = np.datetime_data(dtype)
 
     if freq is None:

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -28,6 +17,8 @@
 namespace cudf::io::parquet::detail {
 
 namespace cg = cooperative_groups;
+
+enum class copy_mode : bool { INDIRECT, DIRECT };
 
 struct page_state_s {
   CUDF_HOST_DEVICE constexpr page_state_s() noexcept {}
@@ -850,7 +841,7 @@ __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_input_value
           // the validity bit for thread t might actually represent output value t-6. the correct
           // position for thread t's bit is thread_value_count. for cuda 11 we could use
           // __reduce_or_sync(), but until then we have to do a warp reduce.
-          WarpReduceOr32(is_valid << thread_value_count);
+          warp_reduce_or<cudf::detail::warp_size>(is_valid << thread_value_count);
 
       thread_valid_count = __popc(warp_valid_mask & ((1 << thread_value_count) - 1));
       warp_valid_count   = __popc(warp_valid_mask);
@@ -1174,10 +1165,11 @@ inline __device__ bool setup_local_page_info(page_state_s* const s,
     // NOTE: s->page.num_rows, s->col.chunk_row, s->first_row and s->num_rows will be
     // invalid/bogus during first pass of the preprocess step for nested types. this is ok
     // because we ignore these values in that stage.
-    auto const max_row = min_row + num_rows;
+    auto const end_row = min_row + num_rows;
 
     // if we are totally outside the range of the input, do nothing
-    if ((page_start_row > max_row) || (page_start_row + s->page.num_rows < min_row)) {
+    auto const page_end_row = page_start_row + s->page.num_rows;
+    if ((page_start_row >= end_row) || (page_end_row <= min_row)) {
       s->first_row = 0;
       s->num_rows  = 0;
     }
@@ -1185,12 +1177,11 @@ inline __device__ bool setup_local_page_info(page_state_s* const s,
     else {
       s->first_row             = page_start_row >= min_row ? 0 : min_row - page_start_row;
       auto const max_page_rows = s->page.num_rows - s->first_row;
-      s->num_rows              = (page_start_row + s->first_row) + max_page_rows <= max_row
+      s->num_rows              = (page_start_row + s->first_row) + max_page_rows <= end_row
                                    ? max_page_rows
-                                   : max_row - (page_start_row + s->first_row);
+                                   : end_row - (page_start_row + s->first_row);
     }
   }
-
   __syncthreads();
 
   // zero counts
@@ -1461,6 +1452,7 @@ inline __device__ bool setup_local_page_info(page_state_s* const s,
       s->input_row_count          = 0;
       s->input_leaf_count         = 0;
 
+      // The fixed-width decode kernel ASSUMES this is always -1 for non-lists!
       s->row_index_lower_bound = -1;
     }
     // for nested hierarchies, we have run a preprocess that lets us skip directly to the values

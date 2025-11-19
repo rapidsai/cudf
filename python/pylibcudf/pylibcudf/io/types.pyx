@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
 
@@ -29,9 +30,9 @@ from pylibcudf.libcudf.io.types cimport (
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.libcudf.utilities.span cimport host_span, device_span
 
-from pylibcudf.utils cimport _get_stream
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 import codecs
 import errno
@@ -393,12 +394,15 @@ cdef class TableWithMetadata:
 
     @staticmethod
     cdef TableWithMetadata from_libcudf(
-        table_with_metadata& tbl_with_meta, Stream stream = None
+        table_with_metadata& tbl_with_meta,
+        Stream stream,
+        DeviceMemoryResource mr
     ):
         """Create a Python TableWithMetadata from a libcudf table_with_metadata"""
+        assert stream is not None, "stream cannot be None"
+        assert mr is not None, "mr cannot be None"
         cdef TableWithMetadata out = TableWithMetadata.__new__(TableWithMetadata)
-        stream = _get_stream(stream)
-        out.tbl = Table.from_libcudf(move(tbl_with_meta.tbl), stream)
+        out.tbl = Table.from_libcudf(move(tbl_with_meta.tbl), stream, mr)
         out.metadata = tbl_with_meta.metadata
         return out
 
@@ -467,11 +471,13 @@ cdef class SourceInfo:
     ]]
         A homogeneous list of sources to read from. Mixing
         different types of sources will raise a `ValueError`.
+        If an empty list, constructs an empty SourceInfo.
     """
 
-    def __init__(self, list sources):
+    def __init__(self, sources):
         if not sources:
-            raise ValueError("Need to pass at least one source")
+            self.c_obj = move(source_info())
+            return
 
         cdef vector[string] c_files
         cdef vector[datasource*] c_datasources

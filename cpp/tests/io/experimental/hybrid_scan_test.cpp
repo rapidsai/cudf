@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "hybrid_scan_common.hpp"
@@ -33,336 +22,156 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/aligned.hpp>
-#include <rmm/mr/device/aligned_resource_adaptor.hpp>
-
-auto constexpr bloom_filter_alignment = rmm::CUDA_ALLOCATION_ALIGNMENT;
+#include <rmm/mr/aligned_resource_adaptor.hpp>
 
 namespace {
 
 /**
- * @brief Concatenate a vector of tables and return the resultant table
+ * @brief Helper to construct a random list<str> column
  *
- * @param tables Vector of tables to concatenate
- * @param stream CUDA stream to use
+ * @param gen Random engine
+ * @param is_str_nullable Whether the string column should be nullable
+ * @param is_list_nullable Whether the list column should be nullable
  *
- * @return Unique pointer to the resultant concatenated table.
+ * @return Unique pointer to the constructed list<str> column
  */
-std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf::table>> tables,
-                                                rmm::cuda_stream_view stream)
+auto make_list_str_column(std::mt19937& gen, bool is_str_nullable, bool is_list_nullable)
 {
-  if (tables.size() == 1) { return std::move(tables[0]); }
+  auto constexpr num_rows        = num_ordered_rows;
+  auto constexpr string_per_row  = 3;
+  auto constexpr num_string_rows = num_rows * string_per_row;
 
-  std::vector<cudf::table_view> table_views;
-  table_views.reserve(tables.size());
-  std::transform(
-    tables.begin(), tables.end(), std::back_inserter(table_views), [&](auto const& tbl) {
-      return tbl->view();
-    });
-  // Construct the final table
-  return cudf::concatenate(table_views, stream);
+  // str and list<str> helpers
+  std::vector<std::string> strings{
+    "abc", "x", "bananas", "gpu", "minty", "backspace", "", "cayenne", "turbine", "soft"};
+  std::uniform_int_distribution<int> uni(0, strings.size() - 1);
+  auto string_iter = cudf::detail::make_counting_transform_iterator(
+    0, [&](cudf::size_type idx) { return strings[uni(gen)]; });
+
+  std::bernoulli_distribution bn(0.7f);
+  auto string_valids = cudf::detail::make_counting_transform_iterator(
+    0, [&](int index) { return is_str_nullable ? bn(gen) : true; });
+  cudf::test::strings_column_wrapper string_col{
+    string_iter, string_iter + num_string_rows, string_valids};
+
+  auto offset_iter = cudf::detail::make_counting_transform_iterator(
+    0, [](cudf::size_type idx) { return idx * string_per_row; });
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets(offset_iter,
+                                                                  offset_iter + num_rows + 1);
+
+  auto list_valids =
+    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 100; });
+  auto [null_mask, null_count] = [&]() {
+    if (is_list_nullable) {
+      return cudf::test::detail::make_null_mask(list_valids, list_valids + num_rows);
+    } else {
+      return std::make_pair(rmm::device_buffer{}, 0);
+    }
+  }();
+  return cudf::make_lists_column(
+    num_rows, offsets.release(), string_col.release(), null_count, std::move(null_mask));
 }
 
 /**
- * @brief Apply parquet filters to the file buffer
+ * @brief Helper to test the hybrid scan reader
  *
- * @param file_buffer_span Input file buffer span
- * @param options Reader options
- * @param stream CUDA stream
- * @param mr Device memory resource
+ * Concatenates the input table and writes it to parquet. Then reads it back using the regular and
+ * the chunked hybrid scan readers. The filter expression used is as follows: table[0] >= 100. The
+ * output filter and payload tables from both readers are compared with the expected table (read via
+ * the mainline parquet reader) for equivalence (as nullability may be different for the read
+ * tables).
  *
- * @return A tuple of the reader, filtered row group indices, and row mask and data page mask from
- * data page pruning
+ *
+ * @note The first column in the input table must be constructed with
+ * `cudf::test::ascending<uint32_t>()`
+ *
+ * @tparam num_concat Number of times to concatenate the table before writing to parquet
+ * @tparam num_rows Number of rows in the input table
+ *
+ * @param columns List of column views in the input table
  */
-auto apply_parquet_filters(cudf::host_span<uint8_t const> file_buffer_span,
-                           cudf::io::parquet_reader_options const& options,
-                           rmm::cuda_stream_view stream,
-                           rmm::device_async_resource_ref mr)
+template <int num_concat = 2, int num_rows = num_ordered_rows>
+void test_hybrid_scan(std::vector<cudf::column_view> const& columns)
 {
-  // Fetch footer and page index bytes from the buffer.
-  auto const footer_buffer = fetch_footer_bytes(file_buffer_span);
+  // Input table
+  auto table    = cudf::table_view{columns};
+  auto expected = cudf::concatenate(std::vector<table_view>(num_concat, table));
+  table         = expected->view();
+  cudf::io::table_input_metadata expected_metadata(table);
+  expected_metadata.column_metadata[0].set_name("col0");
 
-  // Create hybrid scan reader with footer bytes
-  auto reader =
-    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
-
-  // Get page index byte range from the reader
-  auto const page_index_byte_range = reader->page_index_byte_range();
-
-  // Fetch page index bytes from the input buffer
-  auto const page_index_buffer = fetch_page_index_bytes(file_buffer_span, page_index_byte_range);
-
-  // Setup page index
-  reader->setup_page_index(page_index_buffer);
-
-  // Get all row groups from the reader
-  auto input_row_group_indices = reader->all_row_groups(options);
-
-  // Span to track current row group indices
-  auto current_row_group_indices = cudf::host_span<cudf::size_type>(input_row_group_indices);
-
-  // Filter row groups with stats
-  auto stats_filtered_row_group_indices =
-    reader->filter_row_groups_with_stats(current_row_group_indices, options, stream);
-
-  // Update current row group indices
-  current_row_group_indices = stats_filtered_row_group_indices;
-
-  // Get bloom filter and dictionary page byte ranges from the reader
-  auto [bloom_filter_byte_ranges, dict_page_byte_ranges] =
-    reader->secondary_filters_byte_ranges(current_row_group_indices, options);
-
-  // If we have dictionary page byte ranges, filter row groups with dictionary pages
-  std::vector<cudf::size_type> dictionary_page_filtered_row_group_indices;
-  dictionary_page_filtered_row_group_indices.reserve(current_row_group_indices.size());
-  if (dict_page_byte_ranges.size()) {
-    // Fetch dictionary page buffers from the input file buffer
-    std::vector<rmm::device_buffer> dictionary_page_buffers =
-      fetch_byte_ranges(file_buffer_span, dict_page_byte_ranges, stream, mr);
-
-    // NOT YET IMPLEMENTED - Filter row groups with dictionary pages
-    dictionary_page_filtered_row_group_indices = reader->filter_row_groups_with_dictionary_pages(
-      dictionary_page_buffers, current_row_group_indices, options, stream);
-
-    // Update current row group indices
-    current_row_group_indices = dictionary_page_filtered_row_group_indices;
+  // Parquet buffer
+  std::vector<char> parquet_buffer;
+  {
+    cudf::io::parquet_writer_options out_opts =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&parquet_buffer}, table)
+        .metadata(std::move(expected_metadata))
+        .row_group_size_rows(num_rows)
+        .max_page_size_rows(page_size_for_ordered_tests)
+        .compression(cudf::io::compression_type::AUTO)
+        .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
+        .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN);
+    cudf::io::write_parquet(out_opts);
   }
 
-  // If we have bloom filter byte ranges, filter row groups with bloom filters
-  std::vector<cudf::size_type> bloom_filtered_row_group_indices;
-  bloom_filtered_row_group_indices.reserve(current_row_group_indices.size());
-  if (bloom_filter_byte_ranges.size()) {
-    // Fetch 32 byte aligned bloom filter data buffers from the input file buffer
-    auto aligned_mr = rmm::mr::aligned_resource_adaptor(cudf::get_current_device_resource(),
-                                                        bloom_filter_alignment);
+  // Filtering AST - table[0] >= 100
+  auto constexpr num_filter_columns = 1;
+  auto literal_value                = cudf::numeric_scalar<uint32_t>(100);
+  auto literal                      = cudf::ast::literal(literal_value);
+  auto col_ref_0                    = cudf::ast::column_name_reference("col0");
+  auto filter_expression =
+    cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref_0, literal);
 
-    std::vector<rmm::device_buffer> bloom_filter_data =
-      fetch_byte_ranges(file_buffer_span, bloom_filter_byte_ranges, stream, aligned_mr);
+  auto stream     = cudf::get_default_stream();
+  auto mr         = cudf::get_current_device_resource_ref();
+  auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
+    cudf::get_current_device_resource_ref(), bloom_filter_alignment);
 
-    // Filter row groups with bloom filters
-    bloom_filtered_row_group_indices = reader->filter_row_groups_with_bloom_filters(
-      bloom_filter_data, current_row_group_indices, options, stream);
+  // Read parquet using the hybrid scan reader
+  auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
+    hybrid_scan(parquet_buffer, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
 
-    // Update current row group indices
-    current_row_group_indices = bloom_filtered_row_group_indices;
-  }
+  // Read parquet using the chunked hybrid scan reader
+  auto [read_filter_table_chunked,
+        read_payload_table_chunked,
+        read_filter_meta_chunked,
+        read_payload_meta_chunked,
+        row_mask_chunked] =
+    chunked_hybrid_scan(
+      parquet_buffer, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
 
-  // Build row mask using page index stats
-  auto row_mask =
-    reader->build_row_mask_with_page_index_stats(current_row_group_indices, options, stream, mr);
+  CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
+               "Filter and payload tables must have the same number of rows");
+  CUDF_EXPECTS(read_filter_table_chunked->num_rows() == read_payload_table_chunked->num_rows(),
+               "Chunked filter and payload tables must have the same number of rows");
+  CUDF_EXPECTS(read_filter_table->num_rows() == read_filter_table_chunked->num_rows(),
+               "Tables from the chunked and non-chunked hybrid scan readers must have the same "
+               "number of rows");
 
-  std::vector<cudf::size_type> final_row_group_indices(current_row_group_indices.begin(),
-                                                       current_row_group_indices.end());
+  // Check equivalence (equal without checking nullability) with the parquet file read with the
+  // original reader
+  auto const options =
+    cudf::io::parquet_reader_options::builder(
+      cudf::io::source_info(cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size())))
+      .filter(filter_expression)
+      .build();
+  auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
 
-  return std::tuple{std::move(reader), std::move(final_row_group_indices), std::move(row_mask)};
-}
-/**
- * @brief Read parquet file with the hybrid scan reader
- *
- * @param buffer Buffer containing the parquet file
- * @param filter_expression Filter expression
- * @param num_filter_columns Number of filter columns
- * @param payload_column_names List of paths of select payload column names, if any
- * @param stream CUDA stream for hybrid scan reader
- * @param mr Device memory resource
- *
- * @return Tuple of filter table, payload table, filter metadata, payload metadata, and the final
- *         row validity column
- */
-auto hybrid_scan(std::vector<char>& buffer,
-                 cudf::ast::operation const& filter_expression,
-                 cudf::size_type num_filter_columns,
-                 std::optional<std::vector<std::string>> const& payload_column_names,
-                 rmm::cuda_stream_view stream,
-                 rmm::device_async_resource_ref mr,
-                 rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr)
-{
-  // Create reader options with empty source info
-  cudf::io::parquet_reader_options options =
-    cudf::io::parquet_reader_options::builder().filter(filter_expression);
+  CUDF_EXPECTS(
+    expected_tbl->num_rows() == read_filter_table->num_rows(),
+    "Tables read by the mainline and hybrid scan readers must have the same number of rows");
 
-  // Set payload column names if provided
-  if (payload_column_names.has_value()) { options.set_columns(payload_column_names.value()); }
+  // Check equivalence for the filter column
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table_chunked->view());
 
-  // Input file buffer span
-  auto const file_buffer_span =
-    cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(buffer.data()), buffer.size());
+  // Check equivalence for the payload columns: [num_filter_columns, num_columns)
+  auto payload_column_indices = std::vector<cudf::size_type>(columns.size() - num_filter_columns);
+  std::iota(payload_column_indices.begin(), payload_column_indices.end(), num_filter_columns);
+  auto const expected_payload_table = expected_tbl->select(payload_column_indices);
 
-  auto [reader, filtered_row_group_indices, row_mask] =
-    apply_parquet_filters(file_buffer_span, options, stream, mr);
-
-  auto current_row_group_indices = cudf::host_span<cudf::size_type>(filtered_row_group_indices);
-
-  // Get column chunk byte ranges from the reader
-  auto const filter_column_chunk_byte_ranges =
-    reader->filter_column_chunks_byte_ranges(current_row_group_indices, options);
-
-  // Fetch column chunk device buffers from the input buffer
-  auto filter_column_chunk_buffers =
-    fetch_byte_ranges(file_buffer_span, filter_column_chunk_byte_ranges, stream, mr);
-
-  // Materialize the table with only the filter columns
-  auto row_mask_mutable_view = row_mask->mutable_view();
-  auto [filter_table, filter_metadata] =
-    reader->materialize_filter_columns(current_row_group_indices,
-                                       std::move(filter_column_chunk_buffers),
-                                       row_mask_mutable_view,
-                                       cudf::io::parquet::experimental::use_data_page_mask::YES,
-                                       options,
-                                       stream);
-
-  // Get column chunk byte ranges from the reader
-  auto const payload_column_chunk_byte_ranges =
-    reader->payload_column_chunks_byte_ranges(current_row_group_indices, options);
-
-  // Fetch column chunk device buffers from the input buffer
-  auto payload_column_chunk_buffers =
-    fetch_byte_ranges(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
-
-  // Materialize the table with only the payload columns
-  auto [payload_table, payload_metadata] =
-    reader->materialize_payload_columns(current_row_group_indices,
-                                        std::move(payload_column_chunk_buffers),
-                                        row_mask->view(),
-                                        cudf::io::parquet::experimental::use_data_page_mask::YES,
-                                        options,
-                                        stream);
-
-  return std::tuple{std::move(filter_table),
-                    std::move(payload_table),
-                    std::move(filter_metadata),
-                    std::move(payload_metadata),
-                    std::move(row_mask)};
-}
-
-/**
- * @brief Read parquet file with the hybrid scan reader
- *
- * @param buffer Buffer containing the parquet file
- * @param filter_expression Filter expression
- * @param num_filter_columns Number of filter columns
- * @param payload_column_names List of paths of select payload column names, if any
- * @param stream CUDA stream for hybrid scan reader
- * @param mr Device memory resource
- *
- * @return Tuple of filter table, payload table, filter metadata, payload metadata, and the final
- *         row validity column
- */
-auto chunked_hybrid_scan(
-  std::vector<char> const& buffer,
-  cudf::ast::operation const& filter_expression,
-  cudf::size_type num_filter_columns,
-  std::optional<std::vector<std::string>> const& payload_column_names,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr,
-  rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr)
-{
-  // Create reader options with empty source info
-  cudf::io::parquet_reader_options options =
-    cudf::io::parquet_reader_options::builder().filter(filter_expression);
-
-  // Set payload column names if provided
-  if (payload_column_names.has_value()) { options.set_columns(payload_column_names.value()); }
-
-  // Input file buffer span
-  auto const file_buffer_span =
-    cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(buffer.data()), buffer.size());
-
-  auto [reader, filtered_row_group_indices, row_mask] =
-    apply_parquet_filters(file_buffer_span, options, stream, mr);
-
-  auto current_row_group_indices = cudf::host_span<cudf::size_type>(filtered_row_group_indices);
-
-  // Helper to split the materialization of filter columns into chunks
-  auto tables          = std::vector<std::unique_ptr<cudf::table>>{};
-  auto filter_metadata = cudf::io::table_metadata{};
-  auto const materialize_filter_columns =
-    [&](cudf::host_span<cudf::size_type const> row_group_indices) {
-      // Get column chunk byte ranges from the reader and fetch device buffers
-      auto const filter_column_chunk_byte_ranges =
-        reader->filter_column_chunks_byte_ranges(row_group_indices, options);
-      auto filter_column_chunk_buffers =
-        fetch_byte_ranges(file_buffer_span, filter_column_chunk_byte_ranges, stream, mr);
-
-      // Setup chunking for filter columns and materialize the columns
-      reader->setup_chunking_for_filter_columns(
-        1024,
-        1024,
-        row_group_indices,
-        row_mask->view(),
-        cudf::io::parquet::experimental::use_data_page_mask::YES,
-        std::move(filter_column_chunk_buffers),
-        options,
-        stream);
-
-      auto row_mask_mutable_view = row_mask->mutable_view();
-      while (reader->has_next_table_chunk()) {
-        auto chunk = reader->materialize_filter_columns_chunk(row_mask_mutable_view, stream);
-        tables.push_back(std::move(chunk.tbl));
-        filter_metadata = std::move(chunk.metadata);
-      }
-    };
-
-  if (current_row_group_indices.size() > 1) {
-    auto const row_group_split = current_row_group_indices.size() / 2;
-    materialize_filter_columns(
-      cudf::host_span<cudf::size_type const>{current_row_group_indices.begin(), row_group_split});
-    materialize_filter_columns(
-      cudf::host_span<cudf::size_type const>{current_row_group_indices.begin() + row_group_split,
-                                             current_row_group_indices.size() - row_group_split});
-  } else {
-    materialize_filter_columns(current_row_group_indices);
-  }
-
-  auto filter_table = concatenate_tables(std::move(tables), stream);
-
-  // Helper to split the materialization of payload columns into chunks
-  tables.clear();
-  auto payload_metadata = cudf::io::table_metadata{};
-  auto const materialize_payload_columns =
-    [&](cudf::host_span<cudf::size_type const> row_group_indices) {
-      // Get column chunk byte ranges from the reader and fetch device buffers
-      auto const payload_column_chunk_byte_ranges =
-        reader->payload_column_chunks_byte_ranges(row_group_indices, options);
-      auto payload_column_chunk_buffers =
-        fetch_byte_ranges(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
-
-      // Setup chunking for payload columns and materialize the table
-      reader->setup_chunking_for_payload_columns(
-        1024,
-        1024,
-        row_group_indices,
-        row_mask->view(),
-        cudf::io::parquet::experimental::use_data_page_mask::YES,
-        std::move(payload_column_chunk_buffers),
-        options,
-        stream);
-
-      while (reader->has_next_table_chunk()) {
-        auto chunk = reader->materialize_payload_columns_chunk(row_mask->view(), stream);
-        tables.push_back(std::move(chunk.tbl));
-        payload_metadata = std::move(chunk.metadata);
-      }
-    };
-
-  if (current_row_group_indices.size() > 1) {
-    auto const row_group_split = current_row_group_indices.size() / 2;
-    materialize_payload_columns(
-      cudf::host_span<cudf::size_type const>{current_row_group_indices.begin(), row_group_split});
-    materialize_payload_columns(
-      cudf::host_span<cudf::size_type const>{current_row_group_indices.begin() + row_group_split,
-                                             current_row_group_indices.size() - row_group_split});
-  } else {
-    materialize_payload_columns(current_row_group_indices);
-  }
-
-  auto payload_table = concatenate_tables(std::move(tables), stream);
-
-  // Return the filter table and metadata, payload table and metadata, and the final row mask
-  return std::tuple{std::move(filter_table),
-                    std::move(payload_table),
-                    std::move(filter_metadata),
-                    std::move(payload_metadata),
-                    std::move(row_mask)};
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_payload_table, read_payload_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_payload_table, read_payload_table_chunked->view());
 }
 
 }  // namespace
@@ -390,7 +199,7 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanAllColumns)
   auto stream     = cudf::get_default_stream();
   auto mr         = cudf::get_current_device_resource_ref();
   auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-    cudf::get_current_device_resource(), bloom_filter_alignment);
+    cudf::get_current_device_resource_ref(), bloom_filter_alignment);
 
   // Read parquet using the hybrid scan reader
   auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
@@ -447,7 +256,7 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanSelectColumns)
   auto stream     = cudf::get_default_stream();
   auto mr         = cudf::get_current_device_resource_ref();
   auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-    cudf::get_current_device_resource(), bloom_filter_alignment);
+    cudf::get_current_device_resource_ref(), bloom_filter_alignment);
 
   {
     auto const payload_column_names = std::vector<std::string>{"col0", "col2"};
@@ -536,7 +345,7 @@ TEST_F(HybridScanTest, PruneDataPagesOnlyAndScanAllColumns)
   auto stream     = cudf::get_default_stream();
   auto mr         = cudf::get_current_device_resource_ref();
   auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-    cudf::get_current_device_resource(), bloom_filter_alignment);
+    cudf::get_current_device_resource_ref(), bloom_filter_alignment);
 
   // Read parquet using the hybrid scan reader
   auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
@@ -588,212 +397,338 @@ TEST_F(HybridScanTest, PruneDataPagesOnlyAndScanAllColumns)
   }
 }
 
+TEST_F(HybridScanTest, MaterializeStrings)
+{
+  std::mt19937 gen(0xbee);
+
+  auto const num_concat   = 2;
+  auto constexpr num_rows = num_ordered_rows;
+
+  // uint32_t(non-nullable)
+  auto col0 = testdata::ascending<uint32_t>();
+
+  // str(non-nullable)
+  auto col1 = testdata::ascending<cudf::string_view>();
+
+  // str(nullable)
+  std::vector<std::string> strings{
+    "abc", "x", "bananas", "gpu", "minty", "backspace", "", "cayenne", "turbine", "soft"};
+  std::uniform_int_distribution<int> uni(0, strings.size() - 1);
+  auto string_iter = cudf::detail::make_counting_transform_iterator(
+    0, [&](cudf::size_type idx) { return strings[uni(gen)]; });
+  std::bernoulli_distribution bn(0.7f);
+  auto string_valids =
+    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
+  auto col2 =
+    cudf::test::strings_column_wrapper{string_iter, string_iter + num_rows, string_valids};
+
+  test_hybrid_scan<num_concat, num_rows>({col0, col1, col2});
+}
+
+TEST_F(HybridScanTest, MaterializeLists)
+{
+  std::mt19937 gen(0xadd);
+
+  auto const num_concat            = 2;
+  auto constexpr num_rows          = num_ordered_rows;
+  auto constexpr lists_per_row     = 2;
+  auto constexpr max_vals_per_list = 3;
+
+  // uint32_t(non-nullable)
+  auto col0 = testdata::ascending<uint32_t>();
+
+  // list<int32_t(nullable)>(nullable)
+  auto col1 = make_parquet_list_col<int32_t>(gen, num_rows, max_vals_per_list, true);
+
+  // list<list<int32_t(nullable)>(nullable)>(nullable)
+  auto col2 =
+    make_parquet_list_list_col<int32_t>(0, num_rows, lists_per_row, max_vals_per_list, true);
+
+  // list<int32_t(non-nullable)>(non-nullable)
+  auto col3 = make_parquet_list_col<int32_t>(gen, num_rows, max_vals_per_list, false);
+
+  // list<list<int32_t(non-nullable)>(non-nullable)>(non-nullable)
+  auto col4 =
+    make_parquet_list_list_col<int32_t>(0, num_rows, lists_per_row, max_vals_per_list, false);
+
+  // list<list<bool(nullable)>(nullable)>(nullable)
+  auto col5 = make_parquet_list_list_col<bool>(0, num_rows, lists_per_row, max_vals_per_list, true);
+
+  test_hybrid_scan<num_concat, num_rows>({col0, *col1, *col2, *col3, *col4, *col5});
+}
+
+TEST_F(HybridScanTest, MaterializeListsOfStrings)
+{
+  std::mt19937 gen(0xc0c0a);
+
+  // uint32_t(non-nullable)
+  auto col0 = testdata::ascending<uint32_t>();
+
+  // list<str(non-nullable)>(non-nullable)
+  auto col1 = make_list_str_column(gen, false, false);
+
+  // list<str(non-nullable)>(nullable)
+  auto col2 = make_list_str_column(gen, false, true);
+
+  // list<str(nullable)>(non-nullable)
+  auto col3 = make_list_str_column(gen, true, false);
+
+  // list<list<str(nullable)>>(nullable)
+  auto col4 = make_list_str_column(gen, true, true);
+
+  test_hybrid_scan({col0, *col1, *col2, *col3, *col4});
+}
+
+TEST_F(HybridScanTest, MaterializeStructs)
+{
+  std::mt19937 gen(0xbaLL);
+
+  auto const num_concat   = 2;
+  auto constexpr num_rows = num_ordered_rows;
+
+  // uint32_t(non-nullable)
+  auto col0 = testdata::ascending<uint32_t>();
+
+  // Validity helpers
+  std::bernoulli_distribution bn(0.7f);
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
+  auto struct_valids_iter =
+    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 121; });
+  std::vector<bool> struct_valids(num_rows);
+  std::copy(struct_valids_iter, struct_valids_iter + num_rows, struct_valids.begin());
+
+  // strings helpers
+  std::vector<std::string> strings{
+    "abc", "x", "bananas", "gpu", "minty", "backspace", "", "cayenne", "turbine", "soft"};
+  std::uniform_int_distribution<int> uni(0, strings.size() - 1);
+  auto string_iter = cudf::detail::make_counting_transform_iterator(
+    0, [&](cudf::size_type idx) { return strings[uni(gen)]; });
+
+  // struct<list<str(nullable)>(nullable), int(nullable), float(non-nullable)>(nullable)
+  auto values    = thrust::make_counting_iterator(0);
+  auto col1_list = make_list_str_column(gen, true, true);
+  cudf::test::fixed_width_column_wrapper<int> col1_ints(values, values + num_rows, valids);
+  cudf::test::fixed_width_column_wrapper<float> col1_floats(values, values + num_rows);
+  std::vector<std::unique_ptr<cudf::column>> col1_children;
+  col1_children.push_back(std::move(col1_list));
+  col1_children.push_back(col1_ints.release());
+  col1_children.push_back(col1_floats.release());
+  cudf::test::structs_column_wrapper _col1(std::move(col1_children), struct_valids);
+  auto col1 = cudf::purge_nonempty_nulls(_col1);
+
+  // struct<str(nullable), str(non-nullable), bool(nullable)>(nullable)
+  auto col2_str = cudf::test::strings_column_wrapper{string_iter, string_iter + num_rows, valids};
+  auto col2_str_non_nullable =
+    cudf::test::strings_column_wrapper{string_iter, string_iter + num_rows};
+  auto col2_bool = cudf::test::fixed_width_column_wrapper<bool>(values, values + num_rows, valids);
+  std::vector<std::unique_ptr<cudf::column>> col2_children;
+  col2_children.push_back(col2_str.release());
+  col2_children.push_back(col2_str_non_nullable.release());
+  col2_children.push_back(col2_bool.release());
+  cudf::test::structs_column_wrapper _col2(std::move(col2_children));
+  auto col2 = cudf::purge_nonempty_nulls(_col2);
+
+  test_hybrid_scan<num_concat, num_rows>({col0, *col1, *col2});
+}
+
+TEST_F(HybridScanTest, MaterializeListsOfStructs)
+{
+  std::mt19937 gen(0xcaLL);
+
+  auto constexpr num_concat = 2;
+  auto constexpr num_rows   = num_ordered_rows;
+
+  // uint32_t(non-nullable)
+  auto col0 = testdata::ascending<uint32_t>();
+
+  // Validity helpers
+  std::bernoulli_distribution bn(0.7f);
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
+  auto list_valids =
+    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 100; });
+  auto struct_valids_iter =
+    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 150; });
+  std::vector<bool> struct_valids(num_rows);
+  std::copy(struct_valids_iter, struct_valids_iter + num_rows, struct_valids.begin());
+
+  // list<struct<list<str(nullable)>(nullable), int(nullable),
+  // float(non-nullable)>(nullable)>(nullable)
+  auto struct1_list = make_list_str_column(gen, true, true);
+  auto values       = thrust::make_counting_iterator(0);
+  cudf::test::fixed_width_column_wrapper<float> struct1_floats(values, values + num_rows, valids);
+  std::vector<std::unique_ptr<cudf::column>> struct1_children;
+  struct1_children.push_back(std::move(struct1_list));
+  struct1_children.push_back(struct1_floats.release());
+  cudf::test::structs_column_wrapper _struct1(std::move(struct1_children), struct_valids);
+  auto struct1 = cudf::purge_nonempty_nulls(_struct1);
+
+  auto col1_offsets_iter = thrust::counting_iterator<int32_t>(0);
+  auto col1_offsets_col  = cudf::test::fixed_width_column_wrapper<int32_t>(
+    col1_offsets_iter, col1_offsets_iter + num_rows + 1);
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(list_valids, list_valids + num_rows);
+  auto col1 = cudf::make_lists_column(
+    num_rows, col1_offsets_col.release(), std::move(struct1), null_count, std::move(null_mask));
+
+  // strings helpers
+  std::vector<std::string> strings{
+    "abc", "x", "bananas", "gpu", "minty", "backspace", "", "cayenne", "turbine", "soft"};
+  std::uniform_int_distribution<int> uni(0, strings.size() - 1);
+  auto string_iter = cudf::detail::make_counting_transform_iterator(
+    0, [&](cudf::size_type idx) { return strings[uni(gen)]; });
+
+  // list<struct<str(nullable), str(non-nullable), bool(nullable)>(non-nullable)>(nullable)
+  auto struct2_str =
+    cudf::test::strings_column_wrapper{string_iter, string_iter + num_rows, valids};
+  auto struct2_str_non_nullable =
+    cudf::test::strings_column_wrapper{string_iter, string_iter + num_rows};
+  auto struct2_bool =
+    cudf::test::fixed_width_column_wrapper<bool>(values, values + num_rows, valids);
+  std::vector<std::unique_ptr<cudf::column>> struct2_children;
+  struct2_children.push_back(struct2_str.release());
+  struct2_children.push_back(struct2_str_non_nullable.release());
+  struct2_children.push_back(struct2_bool.release());
+  cudf::test::structs_column_wrapper _struct2(std::move(struct2_children));
+  auto struct2 = cudf::purge_nonempty_nulls(_struct2);
+
+  auto col2_offsets_iter = thrust::counting_iterator<int32_t>(0);
+  auto col2_offsets_col  = cudf::test::fixed_width_column_wrapper<int32_t>(
+    col2_offsets_iter, col2_offsets_iter + num_rows + 1);
+  std::tie(null_mask, null_count) =
+    cudf::test::detail::make_null_mask(list_valids, list_valids + num_rows);
+  auto col2 = cudf::make_lists_column(
+    num_rows, col2_offsets_col.release(), std::move(struct2), null_count, std::move(null_mask));
+
+  test_hybrid_scan<num_concat, num_rows>({col0, *col1, *col2});
+}
+
 TEST_F(HybridScanTest, MaterializeMixedPayloadColumns)
 {
   std::mt19937 gen(0xcaffe);
 
-  // Parquet buffer
-  std::vector<char> parquet_buffer;
-  {
-    auto constexpr num_rows = num_ordered_rows;
+  auto constexpr num_rows = num_ordered_rows;
 
-    // Validity helpers
-    std::bernoulli_distribution bn(0.7f);
-    auto valids =
-      cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
-    auto list_valids =
-      cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 100; });
-    auto struct_valids_iter =
-      cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 121; });
-    std::vector<bool> struct_valids(num_rows);
-    std::copy(struct_valids_iter, struct_valids_iter + num_rows, struct_valids.begin());
+  // uint32_t(non-nullable)
+  auto col0 = testdata::ascending<uint32_t>();
+  // str(non-nullable)
+  auto col1 = testdata::ascending<cudf::string_view>();
 
-    // str and list<str> helpers
-    std::vector<std::string> strings{
-      "abc", "x", "bananas", "gpu", "minty", "backspace", "", "cayenne", "turbine", "soft"};
-    std::uniform_int_distribution<int> uni(0, strings.size() - 1);
-    auto string_iter = cudf::detail::make_counting_transform_iterator(
-      0, [&](cudf::size_type idx) { return strings[uni(gen)]; });
+  // Validity helpers
+  std::bernoulli_distribution bn(0.7f);
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
+  auto list_valids =
+    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 100; });
+  auto struct_valids_iter =
+    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 121; });
+  std::vector<bool> struct_valids(num_rows);
+  std::copy(struct_valids_iter, struct_valids_iter + num_rows, struct_valids.begin());
 
-    // uint32_t(non-nullable)
-    auto col0 = testdata::ascending<uint32_t>();
-    // str(non-nullable)
-    auto col1 = testdata::ascending<cudf::string_view>();
+  // str and list<str> helpers
+  std::vector<std::string> strings{
+    "abc", "x", "bananas", "gpu", "minty", "backspace", "", "cayenne", "turbine", "soft"};
+  std::uniform_int_distribution<int> uni(0, strings.size() - 1);
+  auto string_iter = cudf::detail::make_counting_transform_iterator(
+    0, [&](cudf::size_type idx) { return strings[uni(gen)]; });
 
-    // list<bool(nullable)>(nullable)
-    auto bools_iter =
-      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-    auto bools_col =
-      cudf::test::fixed_width_column_wrapper<bool>(bools_iter, bools_iter + num_rows, valids);
-    auto offsets_iter = thrust::counting_iterator<int32_t>(0);
-    auto offsets_col =
-      cudf::test::fixed_width_column_wrapper<int32_t>(offsets_iter, offsets_iter + num_rows + 1);
-    auto [null_mask, null_count] =
-      cudf::test::detail::make_null_mask(list_valids, list_valids + num_rows);
-    auto _col2 = cudf::make_lists_column(
-      num_rows, offsets_col.release(), bools_col.release(), null_count, std::move(null_mask));
-    auto col2 = cudf::purge_nonempty_nulls(*_col2);
+  // list<bool(nullable)>(nullable)
+  auto bools_iter = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  auto bools_col =
+    cudf::test::fixed_width_column_wrapper<bool>(bools_iter, bools_iter + num_rows, valids);
+  auto offsets_iter = thrust::counting_iterator<int32_t>(0);
+  auto offsets_col =
+    cudf::test::fixed_width_column_wrapper<int32_t>(offsets_iter, offsets_iter + num_rows + 1);
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(list_valids, list_valids + num_rows);
+  auto col2 = cudf::make_lists_column(
+    num_rows, offsets_col.release(), bools_col.release(), null_count, std::move(null_mask));
+  // list<list<bool(nullable)>(nullable)>(nullable)
+  auto col3 = make_parquet_list_list_col<bool>(0, num_rows, 5, 8, true);
 
-    // list<list<bool(nullable)>(nullable)>(nullable)
-    auto col3 = make_parquet_list_list_col<bool>(0, num_rows, 5, 8, true);
-
-    // list<str(nullable)>(must be non-nullable)
-    auto const make_list_str_column = [&](bool is_nullable) {
-      constexpr int string_per_row  = 3;
-      constexpr int num_string_rows = num_rows * string_per_row;
-      cudf::test::strings_column_wrapper string_col{
-        string_iter, string_iter + num_string_rows, valids};
-      auto offset_iter = cudf::detail::make_counting_transform_iterator(
-        0, [](cudf::size_type idx) { return idx * string_per_row; });
-      cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets(offset_iter,
-                                                                      offset_iter + num_rows + 1);
-      auto [null_mask, null_count] = [&]() {
-        if (is_nullable) {
-          return cudf::test::detail::make_null_mask(valids, valids + num_rows);
-        } else {
-          return std::make_pair(rmm::device_buffer{}, 0);
-        }
-      }();
-      return cudf::make_lists_column(
-        num_rows, offsets.release(), string_col.release(), null_count, std::move(null_mask));
-    };
-
-    // str(nullable)
-    auto col4 = cudf::test::strings_column_wrapper{string_iter, string_iter + num_rows, valids};
-
-    // list<str(nullable)>(non-nullable)
-    auto col5 = make_list_str_column(false);
-
-    // list<str(nullable)>(nullable)
-    auto col6 = make_list_str_column(true);
-
-    // struct<list<str(nullable)>(nullable), int(nullable), float(nullable)>(nullable)
-    auto values    = thrust::make_counting_iterator(0);
-    auto col7_list = make_list_str_column(true);
-    cudf::test::fixed_width_column_wrapper<int> col7_ints(values, values + num_rows, valids);
-    cudf::test::fixed_width_column_wrapper<float> col7_floats(values, values + num_rows, valids);
-    std::vector<std::unique_ptr<cudf::column>> col7_children;
-    col7_children.push_back(std::move(col7_list));
-    col7_children.push_back(col7_ints.release());
-    col7_children.push_back(col7_floats.release());
-    cudf::test::structs_column_wrapper _col7(std::move(col7_children), struct_valids);
-    auto col7 = cudf::purge_nonempty_nulls(_col7);
-
-    // struct<str(nullable), bool(nullable)>(nullable)
-    auto col8_str = cudf::test::strings_column_wrapper{string_iter, string_iter + num_rows, valids};
-    cudf::test::fixed_width_column_wrapper<bool> col8_bools(values, values + num_rows, valids);
-    std::vector<std::unique_ptr<cudf::column>> col8_children;
-    col8_children.push_back(col8_str.release());
-    col8_children.push_back(col8_bools.release());
-    cudf::test::structs_column_wrapper _col8(std::move(col8_children), struct_valids);
-    auto col8 = cudf::purge_nonempty_nulls(_col8);
-
-    // list<list<str(nullable)>(nullable)>(nullable)
+  // list<str(nullable)>(must be non-nullable)
+  auto const make_list_str_column = [&](bool is_nullable) {
     constexpr int string_per_row  = 3;
-    constexpr int lists_per_list  = 2;
-    constexpr int num_string_rows = num_rows * string_per_row * lists_per_list;
+    constexpr int num_string_rows = num_rows * string_per_row;
     cudf::test::strings_column_wrapper string_col{
       string_iter, string_iter + num_string_rows, valids};
     auto offset_iter = cudf::detail::make_counting_transform_iterator(
       0, [](cudf::size_type idx) { return idx * string_per_row; });
-    cudf::test::fixed_width_column_wrapper<cudf::size_type> list_offsets(
-      offset_iter, offset_iter + (num_rows * lists_per_list) + 1);
-    std::tie(null_mask, null_count) =
-      cudf::test::detail::make_null_mask(list_valids, list_valids + (num_rows * lists_per_list));
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets(offset_iter,
+                                                                    offset_iter + num_rows + 1);
+    auto [null_mask, null_count] = [&]() {
+      if (is_nullable) {
+        return cudf::test::detail::make_null_mask(list_valids, list_valids + num_rows);
+      } else {
+        return std::make_pair(rmm::device_buffer{}, 0);
+      }
+    }();
+    return cudf::make_lists_column(
+      num_rows, offsets.release(), string_col.release(), null_count, std::move(null_mask));
+  };
 
-    auto _list_col = cudf::make_lists_column(num_rows * lists_per_list,
-                                             list_offsets.release(),
-                                             string_col.release(),
-                                             null_count,
-                                             std::move(null_mask));
-    auto list_col  = cudf::purge_nonempty_nulls(*_list_col);
+  // str(nullable)
+  auto col4 = cudf::test::strings_column_wrapper{string_iter, string_iter + num_rows, valids};
 
-    auto list_list_offsets_iter = cudf::detail::make_counting_transform_iterator(
-      0, [](cudf::size_type idx) { return idx * lists_per_list; });
-    cudf::test::fixed_width_column_wrapper<cudf::size_type> list_list_offsets(
-      list_list_offsets_iter, list_list_offsets_iter + num_rows + 1);
-    auto list_list_valids =
-      cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 80; });
-    std::tie(null_mask, null_count) =
-      cudf::test::detail::make_null_mask(list_list_valids, list_list_valids + num_rows);
+  // list<str(nullable)>(non-nullable)
+  auto col5 = make_list_str_column(false);
 
-    auto _col9 = cudf::make_lists_column(
-      num_rows, list_list_offsets.release(), std::move(list_col), null_count, std::move(null_mask));
+  // list<str(nullable)>(nullable)
+  auto col6 = make_list_str_column(true);
 
-    auto col9 = cudf::purge_nonempty_nulls(*_col9);
+  // struct<list<str(nullable)>(nullable), int(nullable), float(nullable)>(nullable)
+  auto values    = thrust::make_counting_iterator(0);
+  auto col7_list = make_list_str_column(true);
+  cudf::test::fixed_width_column_wrapper<int> col7_ints(values, values + num_rows, valids);
+  cudf::test::fixed_width_column_wrapper<float> col7_floats(values, values + num_rows, valids);
+  std::vector<std::unique_ptr<cudf::column>> col7_children;
+  col7_children.push_back(std::move(col7_list));
+  col7_children.push_back(col7_ints.release());
+  col7_children.push_back(col7_floats.release());
+  cudf::test::structs_column_wrapper _col7(std::move(col7_children), struct_valids);
+  auto col7 = cudf::purge_nonempty_nulls(_col7);
 
-    // Input table
-    auto constexpr num_concat = 3;
-    auto table =
-      cudf::table_view{{col0, col1, *col2, *col3, col4, *col5, *col6, *col7, *col8, *col9}};
-    auto expected = cudf::concatenate(std::vector<table_view>(num_concat, table));
-    table         = expected->view();
-    cudf::io::table_input_metadata expected_metadata(table);
-    expected_metadata.column_metadata[0].set_name("col0");
-    expected_metadata.column_metadata[1].set_name("col1");
-    expected_metadata.column_metadata[2].set_name("col2");
-    expected_metadata.column_metadata[3].set_name("col3");
-    expected_metadata.column_metadata[4].set_name("col4");
-    expected_metadata.column_metadata[5].set_name("col5");
-    expected_metadata.column_metadata[6].set_name("col6");
-    expected_metadata.column_metadata[7].set_name("col7");
-    expected_metadata.column_metadata[8].set_name("col8");
-    expected_metadata.column_metadata[9].set_name("col9");
-    // Write to parquet buffer
-    cudf::io::parquet_writer_options out_opts =
-      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&parquet_buffer}, table)
-        .metadata(std::move(expected_metadata))
-        .row_group_size_rows(num_rows)
-        .max_page_size_rows(page_size_for_ordered_tests)
-        .compression(cudf::io::compression_type::AUTO)
-        .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
-        .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN);
-    cudf::io::write_parquet(out_opts);
-  }
+  // struct<str(nullable), bool(nullable)>(nullable)
+  auto col8_str = cudf::test::strings_column_wrapper{string_iter, string_iter + num_rows, valids};
+  cudf::test::fixed_width_column_wrapper<bool> col8_bools(values, values + num_rows, valids);
+  std::vector<std::unique_ptr<cudf::column>> col8_children;
+  col8_children.push_back(col8_str.release());
+  col8_children.push_back(col8_bools.release());
+  cudf::test::structs_column_wrapper _col8(std::move(col8_children), struct_valids);
+  auto col8 = cudf::purge_nonempty_nulls(_col8);
 
-  // Filtering AST - table[0] >= 100
-  auto constexpr num_filter_columns = 1;
-  auto literal_value                = cudf::numeric_scalar<uint32_t>(100);
-  auto literal                      = cudf::ast::literal(literal_value);
-  auto col_ref_0                    = cudf::ast::column_name_reference("col0");
-  auto filter_expression =
-    cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref_0, literal);
+  // list<list<str(nullable)>(nullable)>(nullable)
+  constexpr int string_per_row  = 3;
+  constexpr int lists_per_list  = 2;
+  constexpr int num_string_rows = num_rows * string_per_row * lists_per_list;
+  cudf::test::strings_column_wrapper string_col{string_iter, string_iter + num_string_rows, valids};
+  auto offset_iter = cudf::detail::make_counting_transform_iterator(
+    0, [](cudf::size_type idx) { return idx * string_per_row; });
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> list_offsets(
+    offset_iter, offset_iter + (num_rows * lists_per_list) + 1);
+  std::tie(null_mask, null_count) =
+    cudf::test::detail::make_null_mask(list_valids, list_valids + (num_rows * lists_per_list));
 
-  auto stream     = cudf::get_default_stream();
-  auto mr         = cudf::get_current_device_resource_ref();
-  auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-    cudf::get_current_device_resource(), bloom_filter_alignment);
+  auto list_col = cudf::make_lists_column(num_rows * lists_per_list,
+                                          list_offsets.release(),
+                                          string_col.release(),
+                                          null_count,
+                                          std::move(null_mask));
 
-  // Read parquet using the hybrid scan reader
-  auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
-    hybrid_scan(parquet_buffer, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
+  auto list_list_offsets_iter = cudf::detail::make_counting_transform_iterator(
+    0, [](cudf::size_type idx) { return idx * lists_per_list; });
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> list_list_offsets(
+    list_list_offsets_iter, list_list_offsets_iter + num_rows + 1);
+  auto list_list_valids =
+    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 80; });
+  std::tie(null_mask, null_count) =
+    cudf::test::detail::make_null_mask(list_list_valids, list_list_valids + num_rows);
 
-  // Read parquet using the chunked hybrid scan reader
-  auto [read_filter_table_chunked,
-        read_payload_table_chunked,
-        read_filter_meta_chunked,
-        read_payload_meta_chunked,
-        row_mask_chunked] =
-    chunked_hybrid_scan(
-      parquet_buffer, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
+  auto col9 = cudf::make_lists_column(
+    num_rows, list_list_offsets.release(), std::move(list_col), null_count, std::move(null_mask));
 
-  CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
-               "Filter and payload tables should have the same number of rows");
-
-  // Check equivalence (equal without checking nullability) with the parquet file read with the
-  // original reader
-  {
-    cudf::io::parquet_reader_options const options =
-      cudf::io::parquet_reader_options::builder(
-        cudf::io::source_info(cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size())))
-        .filter(filter_expression);
-    auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}),
-                                       read_filter_table_chunked->view());
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2, 3, 4, 5, 6, 7, 8, 9}),
-                                       read_payload_table->view());
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2, 3, 4, 5, 6, 7, 8, 9}),
-                                       read_payload_table_chunked->view());
-  }
+  auto constexpr num_concat = 3;
+  test_hybrid_scan<num_concat, num_rows>(
+    {col0, col1, *col2, *col3, col4, *col5, *col6, *col7, *col8, *col9});
 }

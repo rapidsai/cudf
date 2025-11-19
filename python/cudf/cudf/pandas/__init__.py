@@ -1,5 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import os
@@ -78,7 +77,7 @@ def install():
             initial_pool_size=free_memory,
         )
     elif rmm_mode == "async":
-        new_mr = rmm.mr.CudaAsyncMemoryResource(initial_pool_size=free_memory)
+        new_mr = rmm.mr.CudaAsyncMemoryResource()
     elif "managed" in rmm_mode:
         if not managed_memory_is_supported:
             raise ValueError(

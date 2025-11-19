@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import itertools
 import math
@@ -480,9 +481,14 @@ for name in dir(np):
             np.bitwise_or,
             np.bitwise_xor,
         }:
-            marks = pytest.mark.filterwarnings(
-                "ignore:Operation between non boolean Series:FutureWarning"
-            )
+            marks = [
+                pytest.mark.filterwarnings(
+                    "ignore:Operation between non boolean Series:FutureWarning"
+                ),
+                pytest.mark.filterwarnings(
+                    "ignore:Operation between Series with different indexes that are not of numpy boolean:FutureWarning"
+                ),
+            ]
             numpy_ufuncs.append(pytest.param(func, marks=marks))
         else:
             numpy_ufuncs.append(func)

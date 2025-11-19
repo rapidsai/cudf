@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -25,7 +14,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
 
 #include <memory>
 #include <optional>
@@ -281,17 +270,21 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * Compute a vector of boolean vectors indicating which data pages need to be decoded to
    * construct each input column based on the row mask, one vector per column
    *
+   * @tparam ColumnView Type of the row mask column view - cudf::mutable_column_view for filter
+   * columns and cudf::column_view for payload columns
+   *
    * @param row_mask Boolean column indicating which rows need to be read after page-pruning
    * @param row_group_indices Input row groups indices
    * @param input_columns Input column information
    * @param row_mask_offset Offset into the row mask column for the current pass
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @return A vector of boolean vectors indicating which data pages need to be decoded to produce
-   *         the output table based on the input row mask, one per input column
+   * @return Boolean vector indicating which data pages need to be decoded to produce
+   *         the output table based on the input row mask across all input columns
    */
-  [[nodiscard]] std::vector<std::vector<bool>> compute_data_page_mask(
-    cudf::column_view row_mask,
+  template <typename ColumnView>
+  [[nodiscard]] thrust::host_vector<bool> compute_data_page_mask(
+    ColumnView const& row_mask,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::host_span<input_column_info const> input_columns,
     cudf::size_type row_mask_offset,

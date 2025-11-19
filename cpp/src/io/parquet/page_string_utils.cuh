@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -170,9 +159,11 @@ __device__ void update_string_offsets_for_pruned_pages(
 
   // Initial string offset
   auto const initial_value = page.str_offset;
-  // We must use the batch size from the nesting info (the size of the page for this batch)
-  auto value_count = page.nesting[state->col.max_nesting_depth - 1].batch_size;
-  auto const tid   = cg::this_thread_block().thread_rank();
+  // The value count is either the leaf-level batch size in case of lists or the number of
+  // effective rows being read by this page
+  auto const value_count =
+    has_lists ? page.nesting[state->col.max_nesting_depth - 1].batch_size : state->num_rows;
+  auto const tid = cg::this_thread_block().thread_rank();
 
   // Offsets pointer contains string sizes in case of large strings and actual offsets
   // otherwise
@@ -190,10 +181,6 @@ __device__ void update_string_offsets_for_pruned_pages(
     auto const input_col_idx       = page.chunk_idx % chunks_per_rowgroup;
     compute_initial_large_strings_offset<has_lists>(state, initial_str_offsets[input_col_idx]);
   } else {
-    // if no repetition we haven't calculated start/end bounds and instead just skipped
-    // values until we reach first_row. account for that here.
-    if constexpr (not has_lists) { value_count -= state->first_row; }
-
     // Write the initial offset at all positions to indicate zero sized strings
     for (int idx = tid; idx < value_count; idx += block_size) {
       offptr[idx] = initial_value;
@@ -246,9 +233,19 @@ __device__ inline int calc_threads_per_string_log2(int avg_string_length)  // re
  * @param t The current thread's index
  * @param string_output_offset Starting offset into the output column data for writing
  */
-template <int block_size, bool has_lists_t, bool split_decode_t, typename state_buf>
-__device__ size_t decode_strings(
-  page_state_s* s, state_buf* const sb, int start, int end, int t, size_t string_output_offset)
+template <int block_size,
+          bool has_dict_t,
+          bool has_lists_t,
+          bool split_decode_t,
+          copy_mode copy_mode_t,
+          typename state_buf>
+__device__ size_t decode_strings(page_state_s* s,
+                                 state_buf* const sb,
+                                 int start,
+                                 int end,
+                                 int t,
+                                 uint32_t* str_offsets,
+                                 size_t string_output_offset)
 {
   // nesting level that is storing actual leaf values
   int const leaf_level_index    = s->col.max_nesting_depth - 1;
@@ -266,9 +263,13 @@ __device__ size_t decode_strings(
 
     // Index from value buffer (doesn't include nulls) to final array (has gaps for nulls)
     int const dst_pos = [&]() {
-      int dst_pos = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(thread_pos)];
-      if constexpr (!has_lists_t) { dst_pos -= s->first_row; }
-      return dst_pos;
+      if constexpr (copy_mode_t == copy_mode::DIRECT) {
+        return thread_pos - s->first_row;
+      } else {
+        int dst_pos = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(thread_pos)];
+        if constexpr (!has_lists_t) { dst_pos -= s->first_row; }
+        return dst_pos;
+      }
     }();
 
     // src_pos represents the logical row position we want to read from. But in the case of
@@ -281,18 +282,43 @@ __device__ size_t decode_strings(
     }();
 
     // lookup input string pointer & length. store length.
-    bool const in_range                       = (thread_pos < target_pos) && (dst_pos >= 0);
-    auto [thread_input_string, string_length] = [&]() {
+    bool const in_range                             = (thread_pos < target_pos) && (dst_pos >= 0);
+    auto const [thread_input_string, string_length] = [&]() {
       // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
       // before first_row) in the flat hierarchy case.
       if (!in_range) { return string_index_pair{nullptr, 0}; }
-      string_index_pair string_pair = gpuGetStringData(s, sb, src_pos);
-      int32_t* str_len_ptr          = reinterpret_cast<int32_t*>(ni.data_out) + dst_pos;
-      *str_len_ptr                  = string_pair.second;
-      return string_pair;
+      if constexpr (has_dict_t) {
+        return gpuGetStringData(s, sb, src_pos);
+      } else {
+        int input_thread_string_offset;
+        int string_length;
+        if (s->col.physical_type == Type::FIXED_LEN_BYTE_ARRAY) {
+          input_thread_string_offset = (thread_pos + skipped_leaf_values) * s->dtype_len_in;
+          string_length              = s->dtype_len_in;
+        } else {
+          input_thread_string_offset = str_offsets[thread_pos];
+          int const next_offset      = str_offsets[thread_pos + 1];
+          // The memory is laid out as: 4-byte length, string, 4-byte length, string, ...
+          // String length = subtract the offsets and the stored length of the next string
+          // Except at the end of the dictionary, where the last string offset is repeated.
+          string_length = (next_offset == input_thread_string_offset)
+                            ? 0
+                            : next_offset - input_thread_string_offset - sizeof(int32_t);
+        }
+        if (input_thread_string_offset >= static_cast<uint32_t>(s->dict_size)) {
+          return string_index_pair{nullptr, 0};
+        }
+        auto const thread_input_string =
+          reinterpret_cast<char const*>(s->data_start + input_thread_string_offset);
+        return string_index_pair{thread_input_string, string_length};
+      }
     }();
+    if (in_range) {
+      int32_t* str_len_ptr = reinterpret_cast<int32_t*>(ni.data_out) + dst_pos;
+      *str_len_ptr         = string_length;
+    }
 
-    // compute string offsets
+    // compute output string offsets
     size_t thread_string_offset, block_total_string_length;
     {
       using scanner = cub::BlockScan<size_t, block_size>;

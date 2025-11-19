@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import itertools
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from cudf_polars.dsl.ir import IR
@@ -15,6 +16,7 @@ from cudf_polars.experimental.utils import _concat
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
+    from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.parallel import PartitionInfo
     from cudf_polars.typing import Schema
 
@@ -44,7 +46,9 @@ class Repartition(IR):
 
 @generate_ir_tasks.register(Repartition)
 def _(
-    ir: Repartition, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: Repartition,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     # Repartition an IR node.
     # Only supports rapartitioning to fewer (for now).
@@ -64,6 +68,9 @@ def _(
     offsets = [0, *itertools.accumulate(n + (i < remainder) for i in range(count_out))]
     child_keys = tuple(partition_info[child].keys(child))
     return {
-        (key_name, i): (_concat, *child_keys[offsets[i] : offsets[i + 1]])
+        (key_name, i): (
+            partial(_concat, context=context),
+            *child_keys[offsets[i] : offsets[i + 1]],
+        )
         for i in range(count_out)
     }

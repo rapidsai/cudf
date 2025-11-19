@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/detail/aggregation/aggregation.cuh>
@@ -96,17 +85,15 @@ struct identity_initializer {
     requires(is_supported<T, k>())
   {
     if constexpr (k == aggregation::SUM_WITH_OVERFLOW) {
-      // SUM_WITH_OVERFLOW uses a struct with sum (int64_t) and overflow (bool) children
-      // Initialize sum child to 0 and overflow child to false
+      // SUM_WITH_OVERFLOW uses a struct with sum and overflow children
       auto sum_col      = col.child(0);
       auto overflow_col = col.child(1);
 
-      auto zip_begin = thrust::make_zip_iterator(
-        thrust::make_tuple(sum_col.begin<int64_t>(), overflow_col.begin<bool>()));
-      thrust::fill(rmm::exec_policy_nosync(stream),
-                   zip_begin,
-                   zip_begin + col.size(),
-                   thrust::make_tuple(int64_t{0}, false));
+      // Initialize sum column using standard SUM aggregation dispatch
+      dispatch_type_and_aggregation(
+        sum_col.type(), aggregation::SUM, identity_initializer{}, sum_col, stream);
+      thrust::uninitialized_fill_n(
+        rmm::exec_policy_nosync(stream), overflow_col.begin<bool>(), col.size(), false);
     } else if constexpr (std::is_same_v<T, cudf::struct_view>) {
       // This should only happen for SUM_WITH_OVERFLOW, but handle it just in case
       CUDF_FAIL("Struct columns are only supported for SUM_WITH_OVERFLOW aggregation");
@@ -128,7 +115,7 @@ struct identity_initializer {
 };
 }  // namespace
 
-void initialize_with_identity(mutable_table_view& table,
+void initialize_with_identity(mutable_table_view const& table,
                               host_span<cudf::aggregation::Kind const> aggs,
                               rmm::cuda_stream_view stream)
 {

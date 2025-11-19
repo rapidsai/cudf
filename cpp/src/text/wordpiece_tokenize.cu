@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
@@ -93,7 +82,7 @@ using vocabulary_map_type = cuco::static_map<cudf::size_type,
                                              cuda::thread_scope_thread,
                                              vocab_equal,
                                              probe_scheme,
-                                             cudf::detail::cuco_allocator<char>,
+                                             rmm::mr::polymorphic_allocator<char>,
                                              cuco_storage>;
 
 /**
@@ -137,7 +126,7 @@ using sub_vocabulary_map_type = cuco::static_map<cudf::size_type,
                                                  cuda::thread_scope_thread,
                                                  sub_vocab_equal,
                                                  sub_probe_scheme,
-                                                 cudf::detail::cuco_allocator<char>,
+                                                 rmm::mr::polymorphic_allocator<char>,
                                                  cuco_storage>;
 }  // namespace
 }  // namespace detail
@@ -238,7 +227,7 @@ wordpiece_vocabulary::wordpiece_vocabulary(cudf::strings_column_view const& inpu
     detail::probe_scheme{detail::vocab_hasher{*d_vocabulary}},
     cuco::thread_scope_thread,
     detail::cuco_storage{},
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+    rmm::mr::polymorphic_allocator<char>{},
     stream.value());
   // the row index is the token id (data value for each key in the map)
   auto iter = cudf::detail::make_counting_transform_iterator(0, key_pair{});
@@ -264,7 +253,7 @@ wordpiece_vocabulary::wordpiece_vocabulary(cudf::strings_column_view const& inpu
     detail::sub_probe_scheme{detail::sub_vocab_hasher{*d_vocabulary}},
     cuco::thread_scope_thread,
     detail::cuco_storage{},
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+    rmm::mr::polymorphic_allocator<char>{},
     stream.value());
   // insert them without the '##' prefix since that is how they will be looked up
   auto iter_sub = thrust::make_transform_iterator(sub_map_indices.begin(), key_pair{});
@@ -663,6 +652,7 @@ CUDF_KERNEL void find_words_kernel(cudf::column_device_view const d_strings,
       }
       itr += tile_size;
     }
+    tile.sync();
     // keep track of how much of start_words/end_words we used
     last_idx = cg::reduce(tile, last_idx, cg::greater<cudf::size_type>{}) + 1;
 
@@ -677,6 +667,7 @@ CUDF_KERNEL void find_words_kernel(cudf::column_device_view const d_strings,
       first_word   = (count > words_found) ? start_words[words_found] : no_word;
       output_count = cuda::std::min(words_found, max_words - word_count);
     }
+    tile.sync();
 
     // copy results to the output
     auto out_starts = d_start_words + word_count;

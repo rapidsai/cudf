@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "hybrid_scan_common.hpp"
@@ -727,11 +716,14 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterFewLiteralsTyped)
   srand(0xace);
   using T = TypeParam;
 
-  auto constexpr num_concat = 1;
+  auto constexpr num_concat          = 1;
+  auto constexpr is_constant_strings = true;
+  auto constexpr is_nullable         = true;
 
   // Specifying ZSTD compression to explicitly test decompression of dictionary pages
   auto const buffer =
-    std::get<1>(create_parquet_with_stats<T, num_concat>(100, cudf::io::compression_type::ZSTD));
+    std::get<1>(create_parquet_with_stats<T, num_concat, is_constant_strings, is_nullable>(
+      100, cudf::io::compression_type::ZSTD));
 
   // For string tests use `col2` containing constant "0100" and for temporal types use `col1`
   // containing low cardinality descending values. For all other types use `col0`
@@ -833,10 +825,14 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterManyLiteralsTyped)
   srand(0xcabab);
   using T = TypeParam;
 
-  auto constexpr num_concat = 1;
+  auto constexpr num_concat          = 1;
+  auto constexpr is_constant_strings = true;
+  auto constexpr is_nullable         = false;
+
   // Specifying no compression to explicitly test uncompressed dictionary pages
   auto const buffer =
-    std::get<1>(create_parquet_with_stats<T, num_concat>(100, cudf::io::compression_type::NONE));
+    std::get<1>(create_parquet_with_stats<T, num_concat, is_constant_strings, is_nullable>(
+      100, cudf::io::compression_type::NONE));
 
   // For string tests use `col2` containing constant "0100" and for temporal types use `col1`
   // containing low cardinality descending values. For all other types use `col0`

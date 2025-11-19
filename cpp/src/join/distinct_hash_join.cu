@@ -1,27 +1,18 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #include "join_common_utils.cuh"
 
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/join/distinct_hash_join.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/row_operator/equality.cuh>
+#include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/row_operator/primitive_row_operators.cuh>
-#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/join/distinct_hash_join.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -129,7 +120,7 @@ void find_matches_in_hash_table(HashTableType const& hash_table,
 {
   auto const probe_table_num_rows = probe.num_rows();
   // If `idx` is within the range `[0, probe_table_num_rows)` and `found_indices[idx]` is not
-  // equal to `JoinNoneValue`, then `idx` has a match in the hash set.
+  // equal to `cudf::JoinNoMatch`, then `idx` has a match in the hash set.
   if (nulls_equal == cudf::null_equality::EQUAL or (not cudf::nullable(probe))) {
     hash_table.find_async(
       iter, iter + probe_table_num_rows, d_equal, hasher, found_begin, stream.value());
@@ -168,15 +159,15 @@ distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
     _nulls_equal{compare_nulls},
     _build{build},
     _preprocessed_build{cudf::detail::row::equality::preprocessed_table::create(_build, stream)},
-    _hash_table{build.num_rows(),
+    _hash_table{cuco::extent{static_cast<std::size_t>(build.num_rows())},
                 load_factor,
                 cuco::empty_key{cuco::pair{std::numeric_limits<hash_value_type>::max(),
-                                           rhs_index_type{JoinNoneValue}}},
+                                           rhs_index_type{cudf::JoinNoMatch}}},
                 always_not_equal{},
                 {},
                 cuco::thread_scope_device,
                 cuco_storage_type{},
-                cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+                rmm::mr::polymorphic_allocator<char>{},
                 stream.value()}
 {
   CUDF_FUNC_RANGE();
@@ -315,7 +306,7 @@ distinct_hash_join::inner_join(cudf::table_view const& probe,
                     found_indices.begin(),
                     output_begin,
                     cuda::proclaim_return_type<bool>(
-                      [] __device__(size_type idx) { return idx != JoinNoneValue; }));
+                      [] __device__(size_type idx) { return idx != cudf::JoinNoMatch; }));
   auto const actual_size = std::distance(output_begin, output_end);
 
   build_indices->resize(actual_size, stream);
@@ -368,7 +359,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
       thrust::fill(rmm::exec_policy_nosync(stream),
                    build_indices->begin(),
                    build_indices->end(),
-                   JoinNoneValue);
+                   cudf::JoinNoMatch);
     } else {
       auto const two_table_equal =
         cudf::detail::row::equality::two_table_comparator(preprocessed_probe, _preprocessed_build);

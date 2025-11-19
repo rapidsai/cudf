@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.optional cimport optional
@@ -20,19 +21,23 @@ from rmm.librmm.memory_resource cimport device_memory_resource
 
 cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
     cdef pair[unique_ptr[device_buffer], size_type] bools_to_mask (
-        column_view input,
-        cuda_stream_view stream
+        const column_view& input,
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] mask_to_bools (
-        bitmask_type* bitmask, size_type begin_bit, size_type end_bit,
+        const bitmask_type* bitmask,
+        size_type begin_bit,
+        size_type end_bit,
         cuda_stream_view stream,
         device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef pair[unique_ptr[device_buffer], size_type] nans_to_nulls(
-        column_view input,
-        cuda_stream_view stream
+        const column_view& input,
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] compute_column(

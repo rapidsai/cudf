@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import random
 import string
@@ -985,12 +986,12 @@ def test_jaccard_index():
 
 
 def _make_list_of_strings_of_random_length(
-    num_strings, min_length, max_length
+    num_strings, min_length, max_length, rng
 ):
     return [
         "".join(
-            random.choice(string.ascii_lowercase)
-            for _ in range(random.randint(min_length, max_length))
+            rng.choice(string.ascii_lowercase)
+            for _ in range(rng.randint(min_length, max_length))
         )
         for _ in range(num_strings)
     ]
@@ -998,17 +999,17 @@ def _make_list_of_strings_of_random_length(
 
 def test_jaccard_index_random_strings():
     # Seed the rng before random string generation.
-    random.seed(42)
+    rng = random.Random(42)
     num_strings = 100
     jaccard_width = 5
     common_strings = _make_list_of_strings_of_random_length(
-        num_strings, jaccard_width, 50
+        num_strings, jaccard_width, 50, rng
     )
     uncommon_strings1 = _make_list_of_strings_of_random_length(
-        num_strings, jaccard_width, 10
+        num_strings, jaccard_width, 10, rng
     )
     uncommon_strings2 = _make_list_of_strings_of_random_length(
-        num_strings, jaccard_width, 20
+        num_strings, jaccard_width, 20, rng
     )
     str1 = cudf.Series(uncommon_strings1).str.cat(cudf.Series(common_strings))
     str2 = cudf.Series(uncommon_strings2).str.cat(cudf.Series(common_strings))

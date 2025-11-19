@@ -1,18 +1,7 @@
 /*
  *
- *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ *  SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ *  SPDX-License-Identifier: Apache-2.0
  *
  */
 
@@ -154,6 +143,9 @@ public final class MemoryCleaner {
 
   private static class CleanerWeakReference<T> extends WeakReference<T> {
 
+    // For avoiding double closes
+    private volatile boolean isCleaned = false;
+
     private final Cleaner cleaner;
     final boolean isRmmBlocker;
 
@@ -163,7 +155,12 @@ public final class MemoryCleaner {
       this.isRmmBlocker = isRmmBlocker;
     }
 
-    public void clean() {
+    public synchronized void clean() {
+      if (isCleaned) {
+        return;
+      }
+      isCleaned = true;
+
       if (cleaner.clean(true)) {
         leakCount.incrementAndGet();
       }
@@ -182,65 +179,134 @@ public final class MemoryCleaner {
     defaultGpu = defaultGpuId;
   }
 
-  private static final Thread t = new Thread(() -> {
-    try {
+  private static class CleanerThread extends Thread {
+    private volatile boolean stopFlag = false;
+    private volatile boolean stopped = false;
+
+    CleanerThread() {
+      super("Cleaner Thread");
+    }
+
+    void cleanCollected() {
       int currentGpuId = -1;
       while (true) {
-        CleanerWeakReference next = (CleanerWeakReference)collected.remove(100);
-        if (next != null) {
-          try {
-            if (currentGpuId != defaultGpu) {
-              Cuda.setDevice(defaultGpu);
-              currentGpuId = defaultGpu;
-            }
-          } catch (Throwable t) {
-            log.error("ERROR TRYING TO SET GPU ID TO " + defaultGpu, t);
+        CleanerWeakReference next = null;
+        try {
+          next = (CleanerWeakReference)collected.remove(100);
+        } catch (InterruptedException e)  {
+          // ignore
+        }
+
+        if (next == null) {
+          // queue is empty, stop this loop
+          return;
+        }
+
+        try {
+          if (currentGpuId != defaultGpu) {
+            Cuda.setDevice(defaultGpu);
+            currentGpuId = defaultGpu;
           }
-          try {
-            next.clean();
-          } catch (Throwable t) {
-            log.error("CAUGHT EXCEPTION WHILE TRYING TO CLEAN " + next, t);
-          }
-          all.remove(next.cleaner.id);
+        } catch (Throwable t) {
+          log.error("ERROR TRYING TO SET GPU ID TO " + defaultGpu, t);
+        }
+        try {
+          next.clean();
+        } catch (Throwable t) {
+          log.error("CAUGHT EXCEPTION WHILE TRYING TO CLEAN " + next, t);
+        }
+        all.remove(next.cleaner.id);
+      }
+    }
+
+    @Override
+    public void run() {
+      try {
+        while (!stopFlag) {
+          cleanCollected();
+        }
+      } finally {
+        stopped = true;
+      }
+    }
+
+    void stopGracefully() {
+      stopFlag = true;
+      while (!stopped) {
+        try {
+          Thread.sleep(10);
+        } catch (InterruptedException e) {
+          // Ignored
         }
       }
-    } catch (InterruptedException e) {
-      // Ignored just exit
     }
-  }, "Cleaner Thread");
+  }
 
   /**
-   * Default shutdown runnable used to be added to Java default shutdown hook.
-   * It checks the leaks at shutdown time.
+   * This is used to close all Rmm resources to check leaks.
+   * Should invoke this before closing Rmm.
    */
-  private static final Runnable DEFAULT_SHUTDOWN_RUNNABLE = () -> {
-    // If we are debugging things do a best effort to check for leaks at the end
-
-    System.gc();
-    // Avoid issues on shutdown with the cleaner thread.
-    t.interrupt();
-    try {
-      t.join(1000);
-    } catch (InterruptedException e) {
-      // Ignored
-    }
+  public static void cleanAllRmmBlockers() {
+    // set the device for the current thread
     if (defaultGpu >= 0) {
       Cuda.setDevice(defaultGpu);
     }
 
-    for (CleanerWeakReference cwr : all.values()) {
-      cwr.clean();
+    for (CleanerWeakReference cwr : MemoryCleaner.all.values()) {
+      if (cwr.isRmmBlocker) {
+        cwr.clean();
+      }
     }
-  };
+  }
 
-  private static final Thread DEFAULT_SHUTDOWN_THREAD = new Thread(DEFAULT_SHUTDOWN_RUNNABLE);
+  private static final CleanerThread t = new CleanerThread();
+
+  /**
+   * Default shutdown runnable used to be added to Spark shutdown hook.
+   * Spark-Rapids get this hook and register it into Spark shutdown hooks.
+   * Note: `cleanAllRmmBlocker` should be called to clean up RMM resources.
+   * It checks the leaks at shutdown time for non-RMM resources.
+   */
+  static class ShutdownHookThread implements Runnable {
+
+    CleanerThread ct;
+
+    ShutdownHookThread() {
+      this.ct = t;
+    }
+
+    public void cleanAtShutdown() {
+      // stop cleaner thread first
+      ct.stopGracefully();
+
+      // set the device for the current thread
+      if (defaultGpu >= 0) {
+        Cuda.setDevice(defaultGpu);
+      }
+
+      // force gc
+      System.gc();
+
+      // clean up anything that got collected
+      ct.cleanCollected();
+
+      // Check the remaining references. Here only closes non-RMM resources
+      // MUST call `cleanAllRmmBlockers` first to close RMM resources, or
+      // core dump occurs.
+      for (CleanerWeakReference cwr : MemoryCleaner.all.values()) {
+        cwr.clean();
+      }
+    }
+
+    @Override
+    public void run() {
+      cleanAtShutdown();
+    }
+  }
 
   static {
     t.setDaemon(true);
     t.start();
-    if (REF_COUNT_DEBUG) {
-      Runtime.getRuntime().addShutdownHook(DEFAULT_SHUTDOWN_THREAD);
-    }
   }
 
   /**
@@ -252,8 +318,7 @@ public final class MemoryCleaner {
    * @return the default shutdown runnable
    */
   public static Runnable removeDefaultShutdownHook() {
-    Runtime.getRuntime().removeShutdownHook(DEFAULT_SHUTDOWN_THREAD);
-    return DEFAULT_SHUTDOWN_RUNNABLE;
+    return new ShutdownHookThread();
   }
 
   static void register(ColumnVector vec, Cleaner cleaner) {

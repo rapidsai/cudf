@@ -1,4 +1,5 @@
-# Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -247,7 +248,6 @@ class SpillableBufferOwner(BufferOwner):
 
         This also unspills the buffer (unspillable buffers cannot be spilled!).
         """
-
         self._manager.spill_to_device_limit()
         with self.lock:
             if not self.exposed:

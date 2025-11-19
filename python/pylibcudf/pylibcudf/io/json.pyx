@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.memory cimport unique_ptr
@@ -333,6 +334,21 @@ cdef class JsonReaderOptions:
             if isinstance(val, str):
                 vec.push_back(val.encode())
         self.c_obj.set_na_values(vec)
+
+    cpdef void set_source(self, SourceInfo src):
+        """
+        Set a new source info location.
+
+        Parameters
+        ----------
+        src : SourceInfo
+            New source information, replacing existing information.
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_source(src.c_obj)
 
 
 cdef class JsonReaderOptionsBuilder:
@@ -689,6 +705,7 @@ cpdef tuple chunked_read_json(
     JsonReaderOptions options,
     int chunk_size=100_000_000,
     Stream stream = None,
+    DeviceMemoryResource mr = None,
 ):
     """
     Reads chunks of a JSON file into a :py:class:`~.types.TableWithMetadata`.
@@ -718,6 +735,7 @@ cpdef tuple chunked_read_json(
     child_names = None
     i = 0
     cdef Stream s = _get_stream(stream)
+    mr = _get_memory_resource(mr)
     while True:
         options.enable_lines(True)
         options.set_byte_range_offset(c_range_size * i)
@@ -725,7 +743,7 @@ cpdef tuple chunked_read_json(
 
         try:
             with nogil:
-                c_result = move(cpp_read_json(options.c_obj, s.view()))
+                c_result = move(cpp_read_json(options.c_obj, s.view(), mr.get_mr()))
         except (ValueError, OverflowError):
             break
         if meta_names is None:
@@ -736,7 +754,7 @@ cpdef tuple chunked_read_json(
             )
         new_chunk = [
             col for col in TableWithMetadata.from_libcudf(
-                c_result, s).columns
+                c_result, s, mr).columns
         ]
 
         if len(final_columns) == 0:
@@ -754,7 +772,8 @@ cpdef tuple chunked_read_json(
 
 cpdef TableWithMetadata read_json(
     JsonReaderOptions options,
-    Stream stream = None
+    Stream stream = None,
+    DeviceMemoryResource mr = None
 ):
     """
     Read from JSON format.
@@ -778,10 +797,11 @@ cpdef TableWithMetadata read_json(
     """
     cdef table_with_metadata c_result
     cdef Stream s = _get_stream(stream)
+    mr = _get_memory_resource(mr)
     with nogil:
-        c_result = move(cpp_read_json(options.c_obj, s.view()))
+        c_result = move(cpp_read_json(options.c_obj, s.view(), mr.get_mr()))
 
-    return TableWithMetadata.from_libcudf(c_result, s)
+    return TableWithMetadata.from_libcudf(c_result, s, mr)
 
 cpdef TableWithMetadata read_json_from_string_column(
     Column input,
@@ -850,7 +870,7 @@ cpdef TableWithMetadata read_json_from_string_column(
 
     # Create a new source from the joined string data
     cdef SourceInfo joined_source = SourceInfo(
-            [DeviceBuffer.c_from_unique_ptr(move(c_contents.data), stream)])
+            [DeviceBuffer.c_from_unique_ptr(move(c_contents.data), stream, mr)])
 
     # Create new options using the joined string as source
     cdef JsonReaderOptions options = (
@@ -866,9 +886,9 @@ cpdef TableWithMetadata read_json_from_string_column(
 
     # Read JSON from the joined string
     with nogil:
-        c_result = move(cpp_read_json(options.c_obj, stream.view()))
+        c_result = move(cpp_read_json(options.c_obj, stream.view(), mr.get_mr()))
 
-    return TableWithMetadata.from_libcudf(c_result, stream)
+    return TableWithMetadata.from_libcudf(c_result, stream, mr)
 
 cdef class JsonWriterOptions:
     """

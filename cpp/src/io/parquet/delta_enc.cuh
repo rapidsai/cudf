@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -19,10 +8,10 @@
 #include "parquet_gpu.hpp"
 
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <cub/cub.cuh>
+#include <cuda/functional>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
@@ -242,7 +231,7 @@ class delta_binary_packer {
                                             : cuda::std::numeric_limits<T>::max();
 
     // Find min delta for the block.
-    auto const min_delta = block_reduce(*_block_tmp).Reduce(delta, cudf::detail::minimum{});
+    auto const min_delta = block_reduce(*_block_tmp).Reduce(delta, cuda::minimum{});
 
     if (t == 0) { block_min = min_delta; }
     __syncthreads();
@@ -252,7 +241,7 @@ class delta_binary_packer {
 
     // Get max normalized delta for each warp, and use that to determine how many bits to use
     // for the bitpacking of this warp.
-    U const warp_max = warp_reduce(_warp_tmp[warp_id]).Reduce(norm_delta, cudf::detail::maximum{});
+    U const warp_max = warp_reduce(_warp_tmp[warp_id]).Reduce(norm_delta, cuda::maximum{});
     __syncwarp();
 
     if (lane_id == 0) { _mb_bits[warp_id] = sizeof(long long) * 8 - __clzll(warp_max); }

@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -127,6 +128,8 @@ def expand_key(
     if isinstance(key, tuple):
         # Key potentially indexes rows and columns, slice-expand to
         # shape of frame
+        if len(key) > 1 and sum(k is Ellipsis for k in key) > 1:
+            raise IndexError("indexer may only contain one '...' entry")
         indexers = key + (slice(None),) * (dim - len(key))
         if len(indexers) > dim:
             raise IndexError(

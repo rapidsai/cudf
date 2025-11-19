@@ -1,5 +1,6 @@
 #!/bin/bash
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
 
@@ -71,6 +72,8 @@ for version in "${VERSIONS[@]}"; do
 
     ./ci/run_cudf_polars_pytests.sh \
         "${COVERAGE_ARGS[@]}" \
+        --numprocesses=8 \
+        --dist=worksteal \
         --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-${version}.xml"
 
     if [ $? -ne 0 ]; then

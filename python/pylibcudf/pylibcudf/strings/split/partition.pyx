@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.column cimport Column
@@ -28,7 +29,7 @@ cpdef Table partition(
     Returns a set of 3 columns by splitting each string using the
     specified delimiter.
 
-    For details, see :cpp:func:`cudf::strings::partition`.
+    For details, see :cpp:func:`partition`.
 
     Parameters
     ----------
@@ -50,7 +51,7 @@ cpdef Table partition(
 
     if delimiter is None:
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view())
+            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
         )
 
     cdef const string_scalar* c_delimiter = <const string_scalar*>(
@@ -77,7 +78,7 @@ cpdef Table rpartition(
     Returns a set of 3 columns by splitting each string using the
     specified delimiter starting from the end of each string.
 
-    For details, see :cpp:func:`cudf::strings::rpartition`.
+    For details, see :cpp:func:`rpartition`.
 
     Parameters
     ----------
@@ -99,7 +100,7 @@ cpdef Table rpartition(
 
     if delimiter is None:
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view())
+            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
         )
 
     cdef const string_scalar* c_delimiter = <const string_scalar*>(

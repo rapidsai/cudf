@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "delta_binary.cuh"
@@ -44,152 +33,6 @@ constexpr int rle_run_buffer_size = rle_stream_required_run_buffer_size<preproce
 constexpr int rolling_buf_size = LEVEL_DECODE_BUF_SIZE;
 
 using unused_state_buf = page_state_buffers_s<0, 0, 0>;
-
-/**
- * @brief Calculate string bytes for DELTA_LENGTH_BYTE_ARRAY encoded pages
- *
- * Operates at thread block level. Result is valid only on thread 0.
- *
- * @param s The local page info
- * @param block Thread block cooperative group
- */
-__device__ size_type delta_length_page_string_size(page_state_s* s, cg::thread_block const& block)
-{
-  if (block.thread_rank() == 0) {
-    // find the beginning of char data
-    delta_binary_decoder string_lengths;
-    auto const* string_start = string_lengths.find_end_of_block(s->data_start, s->data_end);
-    // distance is size of string data
-    return static_cast<size_type>(cuda::std::distance(string_start, s->data_end));
-  }
-  return 0;
-}
-
-/**
- * @brief Calculate string bytes for DELTA_BYTE_ARRAY encoded pages
- *
- * Operates at thread block level of size preprocess_block_size.
- *
- * @param s The local page info
- * @param block Thread block cooperative group
- */
-__device__ size_type delta_page_string_size(page_state_s* s, cg::thread_block const& block)
-{
-  using WarpReduce = cub::WarpReduce<uleb128_t>;
-  __shared__ typename WarpReduce::TempStorage temp_storage[2];
-
-  __shared__ __align__(16) delta_binary_decoder prefixes;
-  __shared__ __align__(16) delta_binary_decoder suffixes;
-
-  auto const warp = cg::tiled_partition<cudf::detail::warp_size>(block);
-
-  if (block.thread_rank() == 0) {
-    auto const* suffix_start = prefixes.find_end_of_block(s->data_start, s->data_end);
-    suffixes.init_binary_block(suffix_start, s->data_end);
-  }
-  block.sync();
-
-  // two warps will traverse the prefixes and suffixes and sum them up
-  auto const db = warp.meta_group_rank() == 0   ? &prefixes
-                  : warp.meta_group_rank() == 1 ? &suffixes
-                                                : nullptr;
-
-  size_t total_bytes = 0;
-  if (db != nullptr) {
-    // initialize with first value (which is stored in last_value)
-    if (warp.thread_rank() == 0) { total_bytes = db->last_value; }
-
-    uleb128_t lane_sum = 0;
-    while (db->current_value_idx < db->num_encoded_values(true)) {
-      // calculate values for current mini-block
-      db->calc_mini_block_values(warp.thread_rank());
-
-      // get per lane sum for mini-block
-      for (uint32_t i = 0; i < db->values_per_mb; i += warp.size()) {
-        uint32_t const idx = db->current_value_idx + i + warp.thread_rank();
-        if (idx < db->value_count) {
-          lane_sum += db->value[rolling_index<delta_rolling_buf_size>(idx)];
-        }
-      }
-
-      if (warp.thread_rank() == 0) { db->setup_next_mini_block(true); }
-      warp.sync();
-    }
-
-    // get sum for warp.
-    // note: warp_sum will only be valid on lane 0.
-    auto const warp_sum = WarpReduce(temp_storage[warp.meta_group_rank()]).Sum(lane_sum);
-
-    if (warp.thread_rank() == 0) { total_bytes += warp_sum; }
-  }
-  block.sync();
-
-  // now sum up total_bytes from the two warps. result is only valid on thread 0.
-  auto const final_bytes =
-    cudf::detail::single_lane_block_sum_reduce<preprocess_block_size, 0>(total_bytes);
-
-  return static_cast<size_type>(final_bytes);
-}
-
-/**
- * @brief Calculate the number of string bytes in the page.
- *
- * This function expects the dictionary position to be at 0 and will traverse
- * the entire thing (for plain and dictionary encoding).
- *
- * Operates at thread block level of size preprocess_block_size. Result is only
- * valid on thread 0.
- *
- * @param s The local page info
- * @param block Thread block cooperative group
- *
- * @return The number of string bytes in the page
- */
-__device__ size_type decode_total_page_string_size(page_state_s* s, cg::thread_block const& block)
-{
-  auto const warp      = cg::tiled_partition<cudf::detail::warp_size>(block);
-  size_type target_pos = s->num_input_values;
-  size_type str_len    = 0;
-  switch (s->page.encoding) {
-    case Encoding::PLAIN_DICTIONARY:
-    case Encoding::RLE_DICTIONARY:
-      // Use warp 0 to decode dictionary indices and return the new target position
-      if (warp.meta_group_rank() == 0 && s->dict_base) {
-        auto const [new_target_pos, len] =
-          decode_dictionary_indices<is_calc_sizes_only::YES, unused_state_buf>(
-            s, nullptr, target_pos, warp);
-        target_pos = new_target_pos;
-        str_len    = len;
-      }
-      break;
-
-    case Encoding::PLAIN:
-      // For V2 headers, we know how many values are present, so can skip an expensive scan.
-      if ((s->page.flags & PAGEINFO_FLAGS_V2) != 0) {
-        auto const num_values = s->page.num_input_values - s->page.num_nulls;
-        str_len               = s->dict_size - sizeof(int) * num_values;
-      }
-      // For V1, the choice is an overestimate (s->dict_size), or an exact number that's
-      // expensive to compute. For now we're going with the latter.
-      else {
-        str_len = initialize_string_descriptors<is_calc_sizes_only::YES, unused_state_buf>(
-          s, nullptr, target_pos, block);
-      }
-      break;
-
-    case Encoding::DELTA_LENGTH_BYTE_ARRAY:
-      str_len = delta_length_page_string_size(s, block);
-      break;
-
-    case Encoding::DELTA_BYTE_ARRAY: str_len = delta_page_string_size(s, block); break;
-
-    default:
-      // not a valid string encoding, so just return 0
-      break;
-  }
-  if (!block.thread_rank()) { s->dict_pos = target_pos; }
-  return str_len;
-}
 
 /**
  * @brief Update output column sizes for every nesting level based on a batch
@@ -318,6 +161,70 @@ __device__ void update_page_sizes(page_state_s* s,
 }
 
 /**
+ * @brief Updates size information for a pruned page across all nesting levels
+ *
+ * @param[in,out] page The page to compute sizes for
+ * @param[in] state The local page info
+ * @param[in] has_repetition Whether the page has repetition
+ * @param[in] is_base_pass Whether this is the base pass
+ * @param[in] block The current thread block cooperative group
+ */
+__device__ void compute_page_sizes_for_pruned_pages(PageInfo* page,
+                                                    page_state_s* const state,
+                                                    bool has_repetition,
+                                                    bool is_base_pass,
+                                                    cg::thread_block const& block)
+{
+  auto const max_depth = page->num_output_nesting_levels;
+  // Return early if no repetition and max depth is 1
+  if (not has_repetition and max_depth == 1) {
+    if (!block.thread_rank()) {
+      if (is_base_pass) { page->nesting[0].size = page->num_rows; }
+      page->nesting[0].batch_size = state->num_rows;
+    }
+    return;
+  }
+
+  // Use warp 0 to set nesting size information for all depths
+  auto const warp = cg::tiled_partition<cudf::detail::warp_size>(block);
+  if (warp.meta_group_rank() == 0) {
+    auto list_depth = 0;
+    // Find the depth of the first list
+    if (has_repetition) {
+      auto depth = 0;
+      while (depth < max_depth) {
+        auto const thread_depth = depth + warp.thread_rank();
+        auto const is_list =
+          thread_depth < max_depth and page->nesting[thread_depth].type == type_id::LIST;
+        uint32_t const list_mask = warp.ballot(is_list);
+        if (list_mask != 0) {
+          auto const first_list_lane = cuda::std::countr_zero(list_mask);
+          list_depth                 = warp.shfl(thread_depth, first_list_lane);
+          break;
+        }
+        depth += warp.size();
+      }
+      // Zero out size information for all depths beyond the first list depth
+      for (auto depth = list_depth + 1 + warp.thread_rank(); depth < max_depth;
+           depth += warp.size()) {
+        if (is_base_pass) { page->nesting[depth].size = 0; }
+        page->nesting[depth].batch_size = 0;
+      }
+    }
+    // Write size information for all depths up to the list depth
+    for (auto depth = warp.thread_rank(); depth < list_depth; depth += warp.size()) {
+      if (is_base_pass) { page->nesting[depth].size = page->num_rows; }
+      page->nesting[depth].batch_size = state->num_rows;
+    }
+    // Write size information at the list depth (zero if no list)
+    if (warp.thread_rank() == 0) {
+      if (is_base_pass) { page->nesting[list_depth].size = page->num_rows; }
+      page->nesting[list_depth].batch_size = state->num_rows;
+    }
+  }
+}
+
+/**
  * @brief Kernel for computing per-page column size information for all nesting levels.
  *
  * This function will write out the size field for each level of nesting.
@@ -336,10 +243,10 @@ template <typename level_t>
 CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   compute_page_sizes_kernel(PageInfo* pages,
                             device_span<ColumnChunkDesc const> chunks,
+                            device_span<bool const> page_mask,
                             size_t min_row,
                             size_t num_rows,
-                            bool is_base_pass,
-                            bool compute_string_sizes)
+                            bool is_base_pass)
 {
   __shared__ __align__(16) page_state_s state_g;
 
@@ -364,6 +271,11 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
     return;
   }
 
+  // Return early if this page is pruned
+  if (not page_mask.empty() and not page_mask[page_idx]) {
+    return compute_page_sizes_for_pruned_pages(pp, s, has_repetition, is_base_pass, block);
+  }
+
   // initialize the stream decoders (requires values computed in setup_local_page_info)
   // the size of the rolling batch buffer
   level_t* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
@@ -385,10 +297,8 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   if (!t) {
     s->page.skipped_values      = -1;
     s->page.skipped_leaf_values = 0;
-    // str_bytes_from_index will be 0 if no page stats are present
-    s->page.str_bytes    = s->page.str_bytes_from_index;
-    s->input_row_count   = 0;
-    s->input_value_count = 0;
+    s->input_row_count          = 0;
+    s->input_value_count        = 0;
 
     // in the base pass, we're computing the number of rows, make sure we visit absolutely
     // everything
@@ -399,17 +309,12 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
     }
   }
 
-  // we only need to preprocess hierarchies with repetition in them (ie, hierarchies
-  // containing lists anywhere within).
-  compute_string_sizes =
-    compute_string_sizes && s->col.physical_type == Type::BYTE_ARRAY && !s->col.is_strings_to_cat;
-
   // early out optimizations:
 
-  // - if this is a flat hierarchy (no lists) and is not a string column. in this case we don't need
+  // - if this is a flat hierarchy (no lists), we don't need
   // to do the expensive work of traversing the level data to determine sizes.  we can just compute
   // it directly.
-  if (!has_repetition && !compute_string_sizes) {
+  if (!has_repetition) {
     int depth = 0;
     while (depth < s->page.num_output_nesting_levels) {
       auto const thread_depth = depth + t;
@@ -417,7 +322,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
         if (is_base_pass) { pp->nesting[thread_depth].size = pp->num_input_values; }
         pp->nesting[thread_depth].batch_size = pp->num_input_values;
       }
-      depth += blockDim.x;
+      depth += block.size();
     }
     return;
   }
@@ -436,7 +341,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
             ? 0
             : pp->nesting[thread_depth].size;
       }
-      depth += blockDim.x;
+      depth += block.size();
     }
     return;
   }
@@ -472,12 +377,6 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
     block.sync();
   }
 
-  // retrieve total string size.
-  if (compute_string_sizes && !pp->has_page_index) {
-    auto const str_bytes = decode_total_page_string_size(s, block);
-    if (t == 0) { s->page.str_bytes = str_bytes; }
-  }
-
   // update output results:
   // - real number of rows for the whole page
   // - nesting sizes for the whole page
@@ -494,14 +393,13 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
       if (thread_depth < s->page.num_output_nesting_levels) {
         pp->nesting[thread_depth].size = pp->nesting[thread_depth].batch_size;
       }
-      depth += blockDim.x;
+      depth += block.size();
     }
   }
 
   if (!t) {
     pp->skipped_values      = s->page.skipped_values;
     pp->skipped_leaf_values = s->page.skipped_leaf_values;
-    pp->str_bytes           = s->page.str_bytes;
   }
 }
 
@@ -512,10 +410,10 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
  */
 void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
                         cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                        cudf::device_span<bool const> page_mask,
                         size_t min_row,
                         size_t num_rows,
                         bool compute_num_rows,
-                        bool compute_string_sizes,
                         int level_type_size,
                         rmm::cuda_stream_view stream)
 {
@@ -531,10 +429,10 @@ void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
   // the starting and ending read values to account for these bounds.
   if (level_type_size == 1) {
     compute_page_sizes_kernel<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, compute_num_rows, compute_string_sizes);
+      pages.device_ptr(), chunks, page_mask, min_row, num_rows, compute_num_rows);
   } else {
     compute_page_sizes_kernel<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, compute_num_rows, compute_string_sizes);
+      pages.device_ptr(), chunks, page_mask, min_row, num_rows, compute_num_rows);
   }
 }
 

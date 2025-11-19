@@ -1,3 +1,6 @@
+REM SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+REM SPDX-License-Identifier: Apache-2.0
+
 @ECHO OFF
 
 pushd %~dp0

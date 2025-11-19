@@ -34,7 +34,10 @@ if TYPE_CHECKING:
 
 
 def explain_query(
-    q: pl.LazyFrame, engine: pl.GPUEngine, *, physical: bool = True
+    q: pl.LazyFrame,
+    engine: pl.GPUEngine,
+    *,
+    physical: bool = True,
 ) -> str:
     """
     Return a formatted string representation of the IR plan.
@@ -58,7 +61,17 @@ def explain_query(
     ir = Translator(q._ldf.visit(), engine).translate_ir()
 
     if physical:
-        lowered_ir, partition_info = lower_ir_graph(ir, config)
+        if (
+            config.executor.name == "streaming"
+            and config.executor.runtime == "rapidsmpf"
+        ):  # pragma: no cover; rapidsmpf runtime not tested in CI yet
+            from cudf_polars.experimental.rapidsmpf.core import (
+                lower_ir_graph as rapidsmpf_lower_ir_graph,
+            )
+
+            lowered_ir, partition_info, _ = rapidsmpf_lower_ir_graph(ir, config)
+        else:
+            lowered_ir, partition_info = lower_ir_graph(ir, config)
         return _repr_ir_tree(lowered_ir, partition_info)
     else:
         if config.executor.name == "streaming":

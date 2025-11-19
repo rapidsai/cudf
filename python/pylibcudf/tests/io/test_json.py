@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import io
 
 import pandas as pd
@@ -154,8 +155,14 @@ def test_write_json_bool_opts(true_value, false_value):
 
 @pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("lines", [True, False])
+@pytest.mark.parametrize("source_strategy", ["inline", "set_source"])
 def test_read_json_basic(
-    table_data, source_or_sink, lines, text_compression_type, stream
+    table_data,
+    source_or_sink,
+    lines,
+    text_compression_type,
+    stream,
+    source_strategy,
 ):
     compression_type = text_compression_type
 
@@ -176,15 +183,22 @@ def test_read_json_basic(
     if isinstance(source, io.IOBase):
         source.seek(0)
 
-    res = plc.io.json.read_json(
-        (
-            plc.io.json.JsonReaderOptions.builder(plc.io.SourceInfo([source]))
-            .compression(compression_type)
-            .lines(lines)
-            .build()
-        ),
-        stream,
+    source_info = plc.io.SourceInfo([source])
+    options = (
+        plc.io.json.JsonReaderOptions.builder(
+            source_info
+            if source_strategy == "inline"
+            else plc.io.SourceInfo([])
+        )
+        .compression(compression_type)
+        .lines(lines)
+        .build()
     )
+
+    if source_strategy == "set_source":
+        options.set_source(source_info)
+
+    res = plc.io.json.read_json(options, stream)
 
     # Adjustments to correct for the fact orient=records is lossy
     #  and doesn't
