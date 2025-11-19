@@ -216,7 +216,7 @@ async def dataframescan_node(
 @generate_ir_sub_network.register(DataFrameScan)
 def _(
     ir: DataFrameScan, rec: SubNetGenerator
-) -> tuple[list[Any], dict[IR, ChannelManager]]:
+) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     config_options = rec.state["config_options"]
     assert config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'generate_ir_sub_network'"
@@ -227,16 +227,18 @@ def _(
     context = rec.state["context"]
     ir_context = rec.state["ir_context"]
     channels: dict[IR, ChannelManager] = {ir: ChannelManager(rec.state["context"])}
-    nodes: list[Any] = [
-        dataframescan_node(
-            context,
-            ir,
-            ir_context,
-            channels[ir].reserve_input_slot(),
-            num_producers=num_producers,
-            rows_per_partition=rows_per_partition,
-        )
-    ]
+    nodes: dict[IR, list[Any]] = {
+        ir: [
+            dataframescan_node(
+                context,
+                ir,
+                ir_context,
+                channels[ir].reserve_input_slot(),
+                num_producers=num_producers,
+                rows_per_partition=rows_per_partition,
+            )
+        ]
+    }
 
     return nodes, channels
 
@@ -548,7 +550,9 @@ def make_rapidsmpf_read_parquet_node(
 
 
 @generate_ir_sub_network.register(Scan)
-def _(ir: Scan, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]]:
+def _(
+    ir: Scan, rec: SubNetGenerator
+) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     config_options = rec.state["config_options"]
     assert config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'generate_ir_sub_network'"
@@ -560,7 +564,7 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
 
     # Use rapidsmpf native read_parquet for multi-partition Parquet scans.
     ch_pair = channels[ir].reserve_input_slot()
-    nodes: list[Any]
+    nodes: dict[IR, list[Any]] = {}
     native_node: Any = None
     if (
         partition_info.count > 1
@@ -580,7 +584,7 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
         )
 
     if native_node is not None:
-        nodes = [native_node]
+        nodes[ir] = [native_node]
     else:
         # Fall back to scan_node (predicate not convertible, or other constraint)
         assert partition_info.io_plan is not None, (
@@ -590,7 +594,7 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
         if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
             parquet_options = dataclasses.replace(parquet_options, chunked=False)
 
-        nodes = [
+        nodes[ir] = [
             scan_node(
                 rec.state["context"],
                 ir,

@@ -87,7 +87,7 @@ class GenState(TypedDict):
 
 
 SubNetGenerator: TypeAlias = GenericTransformer[
-    "IR", "tuple[list[Any], dict[IR, ChannelManager]]", GenState
+    "IR", "tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]", GenState
 ]
 """Protocol for Generating a streaming sub-network."""
 
@@ -128,7 +128,7 @@ def lower_ir_node(
 @singledispatch
 def generate_ir_sub_network(
     ir: IR, rec: SubNetGenerator
-) -> tuple[list[Any], dict[IR, ChannelManager]]:
+) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     """
     Generate a sub-network for the RapidsMPF streaming runtime.
 
@@ -142,7 +142,7 @@ def generate_ir_sub_network(
     Returns
     -------
     nodes
-        List of streaming-network node(s).
+        Dictionary mapping each IR node to its list of streaming-network node(s).
     channels
         Dictionary mapping between each IR node and its
         corresponding output ChannelManager object.
