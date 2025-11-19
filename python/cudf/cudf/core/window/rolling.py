@@ -441,6 +441,24 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         """
         return self._apply_agg("count")
 
+    def mean(self, *args, **kwargs) -> DataFrame | Series:
+        """Calculate the rolling mean.
+
+        Returns
+        -------
+        Series or DataFrame
+            Return type is the same as the original object.
+        """
+        if args or kwargs:
+            raise NotImplementedError(
+                "Rolling.mean() does not support args or kwargs"
+            )
+        result = self._apply_agg("mean")
+        if get_option("mode.pandas_compatible"):
+            count = self._apply_agg("count")
+            result = result.mask(count == 0)
+        return result
+
     def median(self, **kwargs):
         raise NotImplementedError(
             "groupby().rolling().median() is not yet implemented"
