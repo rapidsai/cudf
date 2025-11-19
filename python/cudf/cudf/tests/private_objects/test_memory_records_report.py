@@ -3,6 +3,7 @@
 
 
 import os
+import subprocess
 
 import pytest
 
@@ -22,9 +23,8 @@ def rmm_reset():
 
 
 def test_memory_profiling(rmm_reset):
-    import subprocess
-    import sys
-
+    env = os.environ.copy()
+    env["CUDF_MEMORY_PROFILING"] = "true"
     # abc
     test_code = """
 import rmm.mr
@@ -55,8 +55,8 @@ assert "DataFrame.merge" in out.getvalue()
     # need to set the env variable `CUDF_MEMORY_PROFILING=1` prior to
     # the launch of the Python interpreter if `memory_profiling` is needed.
     result = subprocess.run(
-        [sys.executable, "-c", test_code],
-        env={**os.environ, "CUDF_MEMORY_PROFILING": "true"},
+        ["python", "-c", test_code],
+        env=env,
         capture_output=True,
         text=True,
     )
