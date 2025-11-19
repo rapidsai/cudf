@@ -5,6 +5,7 @@
 
 #include "cudf_jni_apis.hpp"
 
+#include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
 
@@ -376,130 +377,56 @@ inline auto& prior_cudf_pinned_mr()
 }
 
 /**
- * This is a pinned fallback memory resource that will try to allocate `pool`
- * and if that fails, attempt to allocate from the prior resource used by cuDF
- * `prior_cudf_pinned_mr`.
+ * This is a pinned fallback memory resource that will try to allocate from the provided
+ * `pool` resource if the requested size is less than or equal to the pool size, otherwise it
+ * will fall back to the prior resource used by cuDF `prior_cudf_pinned_mr`.
  *
  * We detect whether a pointer to free is inside of the pool by checking its address (see
- * constructor)
+ * constructor).
  *
  * Most of this comes directly from `pinned_host_memory_resource` in RMM.
  */
-class pinned_fallback_host_memory_resource {
+class pinned_fallback_host_memory_resource : public rmm::mr::device_memory_resource {
  private:
-  rmm_pinned_pool_t* _pool;
-  void* pool_begin_;
-  void* pool_end_;
+  rmm_pinned_pool_t* pool;
+  void* pool_begin;
+  void* pool_end;
 
  public:
-  pinned_fallback_host_memory_resource(rmm_pinned_pool_t* pool) : _pool(pool)
+  pinned_fallback_host_memory_resource(rmm_pinned_pool_t* pool_) : pool{pool_}
   {
-    // allocate from the pinned pool the full size to figure out
-    // our beginning and end address.
     auto pool_size = pool->pool_size();
-    pool_begin_    = pool->allocate_sync(pool_size);
-    pool_end_      = static_cast<void*>(static_cast<uint8_t*>(pool_begin_) + pool_size);
-    pool->deallocate_sync(pool_begin_, pool_size);
+    pool_begin     = pool->allocate_sync(pool_size);
+    pool_end       = static_cast<void*>(static_cast<uint8_t*>(pool_begin) + pool_size);
+    pool->deallocate_sync(pool_begin, pool_size);
   }
 
-  // Disable clang-tidy complaining about the easily swappable size and alignment parameters
-  // of allocate and deallocate
-  // NOLINTBEGIN(bugprone-easily-swappable-parameters)
-
-  /**
-   * @brief Allocates pinned host memory of size at least \p bytes bytes from either the
-   *        _pool argument provided, or prior_cudf_pinned_mr.
-   *
-   * @throws rmm::bad_alloc if the requested allocation could not be fulfilled due to any other
-   * reason.
-   *
-   * @param bytes The size, in bytes, of the allocation.
-   * @param alignment Alignment in bytes. Default alignment is used if unspecified.
-   *
-   * @return Pointer to the newly allocated memory.
-   */
-  void* allocate_sync(std::size_t bytes,
-                      [[maybe_unused]] std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
+  [[nodiscard]] void* do_allocate(std::size_t bytes, rmm::cuda_stream_view stream) override
   {
-    try {
-      return _pool->allocate_sync(bytes, alignment);
-    } catch (std::exception const& unused) {
-      // try to allocate using the underlying pinned resource
-      return prior_cudf_pinned_mr().allocate_sync(bytes, alignment);
+    if (bytes <= pool->pool_size()) {
+      try {
+        return pool->allocate(stream, bytes);
+      } catch (...) {
+        // If the pool is exhausted, fall back to the upstream memory resource
+      }
     }
-    // we should not reached here
-    return nullptr;
+    return prior_cudf_pinned_mr().allocate(stream, bytes);
   }
 
-  /**
-   * @brief Deallocate memory pointed to by \p ptr of size \p bytes bytes. We attempt
-   *        to deallocate from _pool, if ptr is detected to be in the pool address range,
-   *        otherwise we deallocate from `prior_cudf_pinned_mr`.
-   *
-   * @param ptr Pointer to be deallocated.
-   * @param bytes Size of the allocation.
-   * @param alignment Alignment in bytes. Default alignment is used if unspecified.
-   */
-  void deallocate_sync(void* ptr,
-                       std::size_t bytes,
-                       std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
+  void do_deallocate(void* ptr, std::size_t bytes, rmm::cuda_stream_view stream) noexcept override
   {
-    if (ptr >= pool_begin_ && ptr <= pool_end_) {
-      _pool->deallocate_sync(ptr, bytes, alignment);
+    if (bytes <= pool->pool_size() && ptr >= pool_begin && ptr < pool_end) {
+      pool->deallocate(stream, ptr, bytes);
     } else {
-      prior_cudf_pinned_mr().deallocate_sync(ptr, bytes, alignment);
+      prior_cudf_pinned_mr().deallocate(stream, ptr, bytes);
     }
   }
 
-  /**
-   * @brief Allocates pinned host memory of size at least \p bytes bytes and alignment \p alignment.
-   *
-   * @note Stream argument is ignored and behavior is identical to allocate_sync.
-   *
-   * @throws rmm::out_of_memory if the requested allocation could not be fulfilled due to to a
-   * CUDA out of memory error.
-   * @throws rmm::bad_alloc if the requested allocation could not be fulfilled due to any other
-   * error.
-   *
-   * @param stream CUDA stream on which to perform the allocation (ignored).
-   * @param bytes The size, in bytes, of the allocation.
-   * @param alignment Alignment in bytes.
-   * @return Pointer to the newly allocated memory.
-   */
-  void* allocate(rmm::cuda_stream_view, std::size_t bytes, std::size_t alignment)
+  [[nodiscard]] bool do_is_equal(device_memory_resource const& other) const noexcept override
   {
-    return allocate_sync(bytes, alignment);
+    auto const* other_ptr = dynamic_cast<pinned_fallback_host_memory_resource const*>(&other);
+    return other_ptr != nullptr && pool == other_ptr->pool;
   }
-
-  /**
-   * @brief Deallocate memory pointed to by \p ptr of size \p bytes bytes and alignment \p
-   * alignment bytes.
-   *
-   * @note Stream argument is ignored and behavior is identical to deallocate_sync.
-   *
-   * @param stream CUDA stream on which to perform the deallocation (ignored).
-   * @param ptr Pointer to be deallocated.
-   * @param bytes Size of the allocation.
-   * @param alignment Alignment in bytes.
-   */
-  void deallocate(rmm::cuda_stream_view,
-                  void* ptr,
-                  std::size_t bytes,
-                  std::size_t alignment) noexcept
-  {
-    return deallocate_sync(ptr, bytes, alignment);
-  }
-
-  /**
-   * @briefreturn{true if the specified resource is the same type as this resource.}
-   */
-  bool operator==(pinned_fallback_host_memory_resource const&) const { return true; }
-
-  /**
-   * @briefreturn{true if the specified resource is not the same type as this resource, otherwise
-   * false.}
-   */
-  bool operator!=(pinned_fallback_host_memory_resource const&) const { return false; }
 
   /**
    * @brief Enables the `cuda::mr::device_accessible` property
