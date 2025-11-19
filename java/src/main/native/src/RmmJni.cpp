@@ -387,11 +387,6 @@ inline auto& prior_cudf_pinned_mr()
  * Most of this comes directly from `pinned_host_memory_resource` in RMM.
  */
 class pinned_fallback_host_memory_resource : public rmm::mr::device_memory_resource {
- private:
-  rmm_pinned_pool_t* pool;
-  void* pool_begin;
-  void* pool_end;
-
  public:
   pinned_fallback_host_memory_resource(rmm_pinned_pool_t* pool_) : pool{pool_}
   {
@@ -401,7 +396,12 @@ class pinned_fallback_host_memory_resource : public rmm::mr::device_memory_resou
     pool->deallocate_sync(pool_begin, pool_size);
   }
 
-  [[nodiscard]] void* do_allocate(std::size_t bytes, rmm::cuda_stream_view stream) override
+ private:
+  rmm_pinned_pool_t* pool;
+  void* pool_begin;
+  void* pool_end;
+
+  void* do_allocate(std::size_t bytes, rmm::cuda_stream_view stream) override
   {
     if (bytes <= pool->pool_size()) {
       try {
