@@ -279,6 +279,105 @@ struct page_stats_caster : public stats_caster_base {
   }
 
   /**
+   * @brief Computes host side data including page row counts, row offsets, column chunk page
+   * offsets, and host columns containing page-level min, max and (optional) is_null statistics for
+   * a column
+   *
+   * @param schema_idx Column schema index
+   * @param dtype Column data type
+   * @param stream CUDA stream
+   * @return A tuple of page row counts, row offsets, column chunk page offsets, and host columns
+   * containing page-level min, max and (optional) is_null statistics
+   */
+  template <typename T>
+  [[nodiscard]] auto compute_host_data(cudf::size_type schema_idx,
+                                       cudf::data_type dtype,
+                                       rmm::cuda_stream_view stream) const
+  {
+    // Compute column chunk level page count offsets, and page level row counts and row offsets.
+    auto const [page_row_counts, page_row_offsets, col_chunk_page_offsets] =
+      compute_page_row_counts_and_offsets(per_file_metadata, row_group_indices, schema_idx, stream);
+
+    CUDF_EXPECTS(page_row_offsets.back() == total_rows,
+                 "The number of rows must be equal across row groups and pages within row groups");
+
+    auto const total_pages = col_chunk_page_offsets.back();
+
+    // Create host columns with page-level min, max and optionally is_null statistics
+    host_column<T> min(total_pages, stream);
+    host_column<T> max(total_pages, stream);
+    std::optional<host_column<bool>> is_null;
+    if (has_is_null_operator) { is_null = host_column<bool>(total_pages, stream); }
+
+    // Populate the host columns with page-level min, max statistics from the page index
+    auto page_offset_idx = 0;
+    // For all row data sources
+    std::for_each(
+      thrust::counting_iterator<size_t>(0),
+      thrust::counting_iterator(row_group_indices.size()),
+      [&](auto src_idx) {
+        // For all column chunks in this source
+        auto const& rg_indices = row_group_indices[src_idx];
+        std::for_each(rg_indices.cbegin(), rg_indices.cend(), [&](auto rg_idx) {
+          auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
+          // Find colchunk_iter in row_group.columns. Guaranteed to be found as already verified
+          // in compute_page_row_counts_and_offsets()
+          auto colchunk_iter = std::find_if(
+            row_group.columns.begin(),
+            row_group.columns.end(),
+            [schema_idx](ColumnChunk const& col) { return col.schema_idx == schema_idx; });
+
+          auto const& colchunk               = *colchunk_iter;
+          auto const& column_index           = colchunk.column_index.value();
+          auto const num_pages_in_colchunk   = column_index.min_values.size();
+          auto const page_offset_in_colchunk = col_chunk_page_offsets[page_offset_idx++];
+
+          // For all pages in this column chunk
+          std::for_each(thrust::counting_iterator<size_t>(0),
+                        thrust::counting_iterator(num_pages_in_colchunk),
+                        [&](auto page_idx) {
+                          auto const& min_value      = column_index.min_values[page_idx];
+                          auto const& max_value      = column_index.max_values[page_idx];
+                          auto const column_page_idx = page_offset_in_colchunk + page_idx;
+                          // Translate binary data to Type then to <T>
+                          min.set_index(column_page_idx, min_value, colchunk.meta_data.type);
+                          max.set_index(column_page_idx, max_value, colchunk.meta_data.type);
+                          if (has_is_null_operator) {
+                            // Check if the page is completely null
+                            if (column_index.null_pages[page_idx]) {
+                              is_null->val[column_page_idx] = true;
+                              return;
+                            }
+                            // Check if the page doesn't have a null count
+                            if (not column_index.null_counts.has_value()) {
+                              is_null->set_index(column_page_idx, std::nullopt, {});
+                              return;
+                            }
+                            // Use the null count to determine if the page is completely null
+                            auto const page_row_count = page_row_offsets[column_page_idx + 1] -
+                                                        page_row_offsets[column_page_idx];
+                            auto const& null_count = column_index.null_counts.value()[page_idx];
+                            if (null_count == page_row_count) {
+                              is_null->val[column_page_idx] = false;
+                            } else if (null_count > 0 and null_count < page_row_count) {
+                              is_null->set_index(column_page_idx, std::nullopt, {});
+                            } else {
+                              CUDF_FAIL("Invalid null count");
+                            }
+                          }
+                        });
+        });
+      });
+
+    return std::tuple{std::move(page_row_counts),
+                      std::move(page_row_offsets),
+                      std::move(col_chunk_page_offsets),
+                      std::move(min),
+                      std::move(max),
+                      std::move(is_null)};
+  }
+
+  /**
    * @brief Builds three device columns storing the corresponding page-level statistics
    *        (min, max, is_null) respectively of a column at each row index
    *
@@ -292,7 +391,7 @@ struct page_stats_caster : public stats_caster_base {
    * statistics for each row
    */
   template <typename T>
-  std::
+  [[nodiscard]] std::
     tuple<std::unique_ptr<column>, std::unique_ptr<column>, std::optional<std::unique_ptr<column>>>
     operator()(cudf::size_type schema_idx,
                cudf::data_type dtype,
@@ -303,83 +402,10 @@ struct page_stats_caster : public stats_caster_base {
     if constexpr (cudf::is_compound<T>() and not cuda::std::is_same_v<T, string_view>) {
       CUDF_FAIL("Compound types other than strings do not have statistics");
     } else {
-      // Compute column chunk level page count offsets, and page level row counts and row offsets.
-      auto const [page_row_counts, page_row_offsets, col_chunk_page_offsets] =
-        compute_page_row_counts_and_offsets(
-          per_file_metadata, row_group_indices, schema_idx, stream);
-
-      CUDF_EXPECTS(
-        page_row_offsets.back() == total_rows,
-        "The number of rows must be equal across row groups and pages within row groups");
-
-      auto const total_pages = col_chunk_page_offsets.back();
-
-      // Create host columns with page-level min, max and optionally is_null statistics
-      host_column<T> min(total_pages, stream);
-      host_column<T> max(total_pages, stream);
-      std::optional<host_column<bool>> is_null;
-      if (has_is_null_operator) { is_null = host_column<bool>(total_pages, stream); }
-
-      // Populate the host columns with page-level min, max statistics from the page index
-      auto page_offset_idx = 0;
-      // For all row data sources
-      std::for_each(
-        thrust::counting_iterator<size_t>(0),
-        thrust::counting_iterator(row_group_indices.size()),
-        [&](auto src_idx) {
-          // For all column chunks in this source
-          auto const& rg_indices = row_group_indices[src_idx];
-          std::optional<size_type> colchunk_iter_offset{};
-          std::for_each(rg_indices.cbegin(), rg_indices.cend(), [&](auto rg_idx) {
-            auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
-            // Find colchunk_iter in row_group.columns. Guaranteed to be found as already verified
-            // in compute_page_row_counts_and_offsets()
-            if (not colchunk_iter_offset.has_value() or
-                row_group.columns[colchunk_iter_offset.value()].schema_idx != schema_idx) {
-              colchunk_iter_offset = find_colchunk_iter_offset(row_group, schema_idx);
-            }
-            auto const& colchunk_iter = row_group.columns.begin() + colchunk_iter_offset.value();
-            auto const& colchunk      = *colchunk_iter;
-            auto const& column_index  = colchunk.column_index.value();
-            auto const num_pages_in_colchunk   = column_index.min_values.size();
-            auto const page_offset_in_colchunk = col_chunk_page_offsets[page_offset_idx++];
-
-            // For all pages in this column chunk
-            std::for_each(thrust::counting_iterator<size_t>(0),
-                          thrust::counting_iterator(num_pages_in_colchunk),
-                          [&](auto page_idx) {
-                            auto const& min_value      = column_index.min_values[page_idx];
-                            auto const& max_value      = column_index.max_values[page_idx];
-                            auto const column_page_idx = page_offset_in_colchunk + page_idx;
-                            // Translate binary data to Type then to <T>
-                            min.set_index(column_page_idx, min_value, colchunk.meta_data.type);
-                            max.set_index(column_page_idx, max_value, colchunk.meta_data.type);
-                            if (has_is_null_operator) {
-                              // Check if the page is completely null
-                              if (column_index.null_pages[page_idx]) {
-                                is_null->val[column_page_idx] = true;
-                                return;
-                              }
-                              // Check if the page doesn't have a null count
-                              if (not column_index.null_counts.has_value()) {
-                                is_null->set_index(column_page_idx, std::nullopt, {});
-                                return;
-                              }
-                              // Use the null count to determine if the page is completely null
-                              auto const page_row_count = page_row_offsets[column_page_idx + 1] -
-                                                          page_row_offsets[column_page_idx];
-                              auto const& null_count = column_index.null_counts.value()[page_idx];
-                              if (null_count == page_row_count) {
-                                is_null->val[column_page_idx] = false;
-                              } else if (null_count > 0 and null_count < page_row_count) {
-                                is_null->set_index(column_page_idx, std::nullopt, {});
-                              } else {
-                                CUDF_FAIL("Invalid null count");
-                              }
-                            }
-                          });
-          });
-        });
+      // Compute page row counts, row offsets, column chunk page offsets, min, max and optional
+      // is_null stats host columns
+      auto [page_row_counts, page_row_offsets, col_chunk_page_offsets, min, max, is_null] =
+        compute_host_data<T>(schema_idx, dtype, stream);
 
       // Construct a row indices mapping based on page row counts and offsets
       auto const page_indices = compute_page_indices_async(page_row_counts,
@@ -490,6 +516,91 @@ struct page_stats_caster : public stats_caster_base {
 };
 
 /**
+ * @brief Converts page-level statistics of single column to a surviving row mask device column
+ */
+struct page_stats_to_row_mask_converter : public page_stats_caster {
+  page_stats_to_row_mask_converter(cudf::size_type total_rows,
+                                   cudf::host_span<metadata_base const> per_file_metadata,
+                                   cudf::host_span<std::vector<size_type> const> row_group_indices,
+                                   bool has_is_null_operator)
+    : page_stats_caster{.total_rows           = total_rows,
+                        .per_file_metadata    = per_file_metadata,
+                        .row_group_indices    = row_group_indices,
+                        .has_is_null_operator = has_is_null_operator}
+  {
+  }
+
+  template <typename T>
+  [[nodiscard]] std::unique_ptr<cudf::column> operator()(
+    cudf::size_type schema_idx,
+    cudf::data_type dtype,
+    std::reference_wrapper<ast::expression const> filter,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const
+  {
+    // List, Struct, Dictionary types are not supported
+    if constexpr (cudf::is_compound<T>() and not cuda::std::is_same_v<T, string_view>) {
+      CUDF_FAIL("Compound types other than strings do not have statistics");
+    } else {
+      auto [page_row_counts, page_row_offsets, col_chunk_page_offsets, min, max, is_null] =
+        compute_host_data<T>(schema_idx, dtype, stream);
+
+      std::vector<std::unique_ptr<column>> columns;
+      columns.emplace_back(min.to_device(dtype, stream, cudf::get_current_device_resource_ref()));
+      columns.emplace_back(max.to_device(dtype, stream, cudf::get_current_device_resource_ref()));
+      if (has_is_null_operator) {
+        columns.emplace_back(is_null->to_device(
+          cudf::data_type{cudf::type_id::BOOL8}, stream, cudf::get_current_device_resource_ref()));
+      }
+
+      auto page_stats_table = cudf::table(std::move(columns));
+      // Converts AST to StatsAST with reference to min, max columns in above `stats_table`.
+      auto constexpr num_columns = 1;
+      parquet::detail::stats_expression_converter const stats_expr{
+        filter.get(), num_columns, has_is_null_operator, stream};
+
+      // Filter the input table using AST expression and return the (BOOL8) predicate column.
+      auto const page_mask = cudf::detail::compute_column(page_stats_table,
+                                                          stats_expr.get_stats_expr().get(),
+                                                          stream,
+                                                          cudf::get_current_device_resource_ref());
+
+      auto const page_mask_nullmask =
+        page_mask->null_count() ? cudf::detail::make_host_vector_async(
+                                    cudf::device_span<bitmask_type const>{
+                                      page_mask->view().null_mask(),
+                                      static_cast<size_t>(num_bitmask_words(page_mask->size()))},
+                                    stream)
+                                : cudf::detail::make_empty_host_vector<bitmask_type>(0, stream);
+
+      auto const page_indices = compute_page_indices_async(page_row_counts,
+                                                           page_row_offsets,
+                                                           total_rows,
+                                                           stream,
+                                                           cudf::get_current_device_resource_ref());
+
+      auto [row_mask_data, row_mask_bitmask] =
+        build_data_and_nullmask<bool>(page_mask->mutable_view(),
+                                      page_mask_nullmask.data(),
+                                      page_indices,
+                                      page_row_offsets,
+                                      cudf::data_type{cudf::type_id::BOOL8},
+                                      stream,
+                                      mr);
+
+      auto const row_mask_nullcount = cudf::detail::null_count(
+        reinterpret_cast<bitmask_type*>(row_mask_bitmask.data()), 0, total_rows, stream);
+
+      return std::make_unique<column>(cudf::data_type{cudf::type_id::BOOL8},
+                                      total_rows,
+                                      std::move(row_mask_data),
+                                      std::move(row_mask_bitmask),
+                                      row_mask_nullcount);
+    }
+  }
+};
+
+/*
  * @brief Functor to build a Fenwick tree level from the previous level data
  *
  * @param tree_level_ptrs Pointers to the start of Fenwick tree level data
@@ -559,8 +670,8 @@ struct search_fenwick_tree_functor {
   }
 
   /**
-   * @brief Finds the smallest power of two in the range [start, end). If no power of two is found,
-   * returns a zero.
+   * @brief Finds the smallest power of two in the range [start, end). If no power of two is
+   * found, returns a zero.
    *
    * @param start Range start
    * @param end Range end
@@ -657,8 +768,8 @@ struct search_fenwick_tree_functor {
    *
    * Algorithm: While `start` < `end`, align `start` UP and `end` DOWN to the next power-of-two
    * searchable tree block. For the two aligned blocks, query the fenwick tree at corresponding
-   * levels for a `true` value (larger block first). If found, return. Else, move the boundaries to
-   * their alignments.
+   * levels for a `true` value (larger block first). If found, return. Else, move the boundaries
+   * to their alignments.
    *
    * @param range_idx Index of the range to search
    * @return Boolean indicating if a `true` value is found in the range
@@ -769,6 +880,21 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
   if (stats_columns_mask.empty()) {
     auto const scalar_true = cudf::numeric_scalar<bool>(true, true, stream);
     return cudf::make_column_from_scalar(scalar_true, total_rows, stream, mr);
+  }
+
+  // Optimization for single column filter: Directly build the row mask from page statistics
+  if (num_columns == 1) {
+    page_stats_to_row_mask_converter const stats_col{static_cast<size_type>(total_rows),
+                                                     per_file_metadata,
+                                                     row_group_indices,
+                                                     has_is_null_operator};
+    return cudf::type_dispatcher<dispatch_storage_type>(output_dtypes.front(),
+                                                        stats_col,
+                                                        output_column_schemas.front(),
+                                                        output_dtypes.front(),
+                                                        filter,
+                                                        stream,
+                                                        mr);
   }
 
   // Convert page statistics to a table
