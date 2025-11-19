@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "cudf/detail/utilities/vector_factories.hpp"
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
@@ -17,6 +18,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <rmm/cuda_stream.hpp>
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/iterator>
@@ -72,51 +75,16 @@ class merge {
   SmallerIterator sorted_smaller_order_end;
   LargerIterator sorted_larger_order_begin;
   LargerIterator sorted_larger_order_end;
+  detail::row::lexicographic::two_table_comparator tt_comparator;
 
  public:
-  enum class bound_type { UPPER, LOWER };
-
-  struct row_comparator {
-    row_comparator(table_device_view const& lhs,
-                   table_device_view const& rhs,
-                   device_span<detail::dremel_device_view const> lhs_dremel,
-                   device_span<detail::dremel_device_view const> rhs_dremel,
-                   bound_type* d_ptr)
-      : _d_ptr{d_ptr},
-        _lhs{lhs},
-        _rhs{rhs},
-        _lhs_dremel{lhs_dremel},
-        _rhs_dremel{rhs_dremel},
-        ub_comparator{true, _lhs, _rhs, _lhs_dremel, _rhs_dremel},
-        lb_comparator{true, _rhs, _lhs, _rhs_dremel, _lhs_dremel}
-    {
-    }
-
-    __device__ bool operator()(size_type lhs_index, size_type rhs_index) const noexcept
-    {
-      if (*_d_ptr == bound_type::UPPER) {
-        return ub_comparator(lhs_index, rhs_index) == cudf::detail::weak_ordering::LESS;
-      }
-      return lb_comparator(lhs_index, rhs_index) == cudf::detail::weak_ordering::LESS;
-    }
-
-    bound_type* _d_ptr;
-
-   private:
-    table_device_view _lhs;
-    table_device_view _rhs;
-    device_span<detail::dremel_device_view const> _lhs_dremel;
-    device_span<detail::dremel_device_view const> _rhs_dremel;
-    cudf::detail::row::lexicographic::device_row_comparator<true, bool> ub_comparator;
-    cudf::detail::row::lexicographic::device_row_comparator<true, bool> lb_comparator;
-  };
-
   merge(table_view const& smaller,
         SmallerIterator sorted_smaller_order_begin,
         SmallerIterator sorted_smaller_order_end,
         table_view const& larger,
         LargerIterator sorted_larger_order_begin,
-        LargerIterator sorted_larger_order_end)
+        LargerIterator sorted_larger_order_end,
+        rmm::cuda_stream_view stream)
     : smaller{smaller},
       sorted_smaller_order_begin{sorted_smaller_order_begin},
       sorted_smaller_order_end{sorted_smaller_order_end},
@@ -124,6 +92,12 @@ class merge {
       sorted_larger_order_begin{sorted_larger_order_begin},
       sorted_larger_order_end{sorted_larger_order_end}
   {
+    std::vector<cudf::order> column_order(smaller.num_columns(),
+                                          cudf::order::ASCENDING);
+    std::vector<cudf::null_order> null_precedence(smaller.num_columns(),
+                                                  cudf::null_order::BEFORE);
+    tt_comparator = cudf::detail::row::lexicographic::two_table_comparator(
+      smaller, larger, column_order, null_precedence, stream);
   }
 
   std::unique_ptr<rmm::device_uvector<size_type>> matches_per_row(
@@ -140,57 +114,44 @@ merge<LargerIterator, SmallerIterator>::matches_per_row(rmm::cuda_stream_view st
                                                         rmm::device_async_resource_ref mr)
 {
   auto temp_mr             = cudf::get_current_device_resource_ref();
-  auto smaller_dv_ptr      = cudf::table_device_view::create(smaller, stream);
-  auto larger_dv_ptr       = cudf::table_device_view::create(larger, stream);
-  auto list_lex_preprocess = [stream](table_view const& table) {
-    std::vector<detail::dremel_data> dremel_data;
-    auto const num_list_columns = std::count_if(
-      table.begin(), table.end(), [](auto const& col) { return col.type().id() == type_id::LIST; });
-    auto dremel_device_views =
-      detail::make_empty_host_vector<detail::dremel_device_view>(num_list_columns, stream);
-    for (auto const& col : table) {
-      if (col.type().id() == type_id::LIST) {
-        dremel_data.push_back(detail::get_comparator_data(col, {}, false, stream));
-        dremel_device_views.push_back(dremel_data.back());
-      }
-    }
-    auto d_dremel_device_views = detail::make_device_uvector(
-      dremel_device_views, stream, cudf::get_current_device_resource_ref());
-    return std::pair(std::move(dremel_data), std::move(d_dremel_device_views));
-  };
-  auto [smaller_dremel, smaller_dremel_dv] = list_lex_preprocess(smaller);
-  auto [larger_dremel, larger_dremel_dv]   = list_lex_preprocess(larger);
-
   // naive: iterate through larger table and binary search on smaller table
+  auto const has_nulls = has_nested_nulls(smaller) or has_nested_nulls(larger);
   auto const larger_numrows = larger.num_rows();
-  cudf::detail::device_scalar<bound_type> d_lb_type(bound_type::LOWER, stream, temp_mr);
-  cudf::detail::device_scalar<bound_type> d_ub_type(bound_type::UPPER, stream, temp_mr);
-
+  auto const smaller_numrows = smaller.num_rows();
   auto match_counts =
     cudf::detail::make_zeroed_device_uvector_async<size_type>(larger_numrows + 1, stream, temp_mr);
 
-  row_comparator comp(
-    *larger_dv_ptr, *smaller_dv_ptr, larger_dremel_dv, smaller_dremel_dv, d_ub_type.data());
+  auto const comparator = tt_comparator.less<true>(nullate::DYNAMIC{has_nulls});
   auto match_counts_it = match_counts.begin();
+  auto smaller_it = thrust::transform_iterator(sorted_smaller_order_begin, [] __device__(size_type idx) {
+        return static_cast<detail::row::lhs_index_type>(idx);
+      });
   thrust::upper_bound(rmm::exec_policy_nosync(stream),
-                      sorted_smaller_order_begin,
-                      sorted_smaller_order_end,
-                      thrust::counting_iterator(0),
-                      thrust::counting_iterator(0) + larger_numrows,
+                      smaller_it,
+                      smaller_it + smaller_numrows,
+                      cudf::detail::row::rhs_iterator(0),
+                      cudf::detail::row::rhs_iterator(0) + larger_numrows,
                       match_counts_it,
-                      comp);
+                      comparator);
+#if 1
+  stream.synchronize();
+  std::cout << "upper_bound = ";
+  auto h_upper_bound = cudf::detail::make_std_vector(match_counts, stream);
+  for(auto e : h_upper_bound)
+    std::cout << e << " ";
+  std::cout << std::endl;
+#endif
 
-  comp._d_ptr = d_lb_type.data();
   auto match_counts_update_it =
     thrust::tabulate_output_iterator([match_counts = match_counts.begin()] __device__(
                                        size_type idx, size_type val) { match_counts[idx] -= val; });
   thrust::lower_bound(rmm::exec_policy_nosync(stream),
-                      sorted_smaller_order_begin,
-                      sorted_smaller_order_end,
-                      thrust::counting_iterator(0),
-                      thrust::counting_iterator(0) + larger_numrows,
+                      smaller_it,
+                      smaller_it + smaller_numrows,
+                      cudf::detail::row::rhs_iterator(0),
+                      cudf::detail::row::rhs_iterator(0) + larger_numrows,
                       match_counts_update_it,
-                      comp);
+                      comparator);
 
   stream.synchronize();
 
@@ -204,34 +165,20 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
                                                    rmm::device_async_resource_ref mr)
 {
   auto temp_mr              = cudf::get_current_device_resource_ref();
+  auto const has_nulls = has_nested_nulls(smaller) or has_nested_nulls(larger);
   auto const larger_numrows = larger.num_rows();
-  auto smaller_dv_ptr       = cudf::table_device_view::create(smaller, stream);
-  auto larger_dv_ptr        = cudf::table_device_view::create(larger, stream);
-  auto list_lex_preprocess  = [stream](table_view const& table) {
-    std::vector<detail::dremel_data> dremel_data;
-    auto const num_list_columns = std::count_if(
-      table.begin(), table.end(), [](auto const& col) { return col.type().id() == type_id::LIST; });
-    auto dremel_device_views =
-      detail::make_empty_host_vector<detail::dremel_device_view>(num_list_columns, stream);
-    for (auto const& col : table) {
-      if (col.type().id() == type_id::LIST) {
-        dremel_data.push_back(detail::get_comparator_data(col, {}, false, stream));
-        dremel_device_views.push_back(dremel_data.back());
-      }
-    }
-    auto d_dremel_device_views = detail::make_device_uvector(
-      dremel_device_views, stream, cudf::get_current_device_resource_ref());
-    return std::pair(std::move(dremel_data), std::move(d_dremel_device_views));
-  };
-  auto [smaller_dremel, smaller_dremel_dv] = list_lex_preprocess(smaller);
-  auto [larger_dremel, larger_dremel_dv]   = list_lex_preprocess(larger);
-
-  rmm::device_scalar<bound_type> d_lb_type(bound_type::LOWER, stream, temp_mr);
-  row_comparator lb_comp(
-    *larger_dv_ptr, *smaller_dv_ptr, larger_dremel_dv, smaller_dremel_dv, d_lb_type.data());
+  auto const smaller_numrows = smaller.num_rows();
 
   // naive: iterate through larger table and binary search on smaller table
   auto match_counts = matches_per_row(stream, temp_mr);
+
+#if 1
+  std::cout << "matches_per_row = ";
+  auto h_match_counts = cudf::detail::make_std_vector(*match_counts, stream);
+  for(auto e : h_match_counts)
+    std::cout << e << " ";
+  std::cout << std::endl;
+#endif
 
   auto count_matches_it = thrust::transform_iterator(
     match_counts->begin(),
@@ -270,6 +217,8 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
   rmm::device_uvector<size_type> smaller_indices(total_matches, stream, mr);
   thrust::uninitialized_fill(
     rmm::exec_policy_nosync(stream), smaller_indices.begin(), smaller_indices.end(), 1);
+  auto const comparator = tt_comparator.less<true>(nullate::DYNAMIC{has_nulls});
+
   auto smaller_tabulate_it = thrust::tabulate_output_iterator(
     [nonzero_matches = nonzero_matches.begin(),
      match_counts    = match_counts->begin(),
@@ -278,13 +227,19 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
       auto const pos       = match_counts[lhs_idx];
       smaller_indices[pos] = lb;
     });
+  auto smaller_it = thrust::transform_iterator(sorted_smaller_order_begin, [] __device__(size_type idx) {
+        return static_cast<detail::row::lhs_index_type>(idx);
+      });
+  auto larger_it = thrust::transform_iterator(nonzero_matches.begin(), [] __device__(size_type idx) {
+        return static_cast<detail::row::rhs_index_type>(idx);
+      });
   thrust::lower_bound(rmm::exec_policy_nosync(stream),
-                      sorted_smaller_order_begin,
-                      sorted_smaller_order_end,
-                      nonzero_matches.begin(),
-                      nonzero_matches.end(),
+                      smaller_it,
+                      smaller_it + smaller_numrows,
+                      larger_it,
+                      larger_it + nonzero_matches.size(),
                       smaller_tabulate_it,
-                      lb_comp);
+                      comparator);
   thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
                                 larger_indices.begin(),
                                 larger_indices.end(),
@@ -311,6 +266,24 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
   // remove rows that have nulls at any nesting level
   // step 1: identify nulls at root level
   auto [validity_mask, num_nulls] = cudf::bitmask_and(table, stream, temp_mr);
+
+#if 1
+  auto bitmask_to_host = [&](auto mask, auto mask_size) {
+    auto num_bitmasks      = num_bitmask_words(mask_size);
+    auto bitmask_span = device_span<bitmask_type const>(mask, num_bitmasks);
+    return cudf::detail::make_std_vector(bitmask_span, stream);
+  };
+#endif
+
+#if 1
+  // Printing mask
+  auto null_mask_size = validity_mask.size();
+  auto h_validity_mask = bitmask_to_host(static_cast<bitmask_type const*>(validity_mask.data()), null_mask_size);
+  for (int idx = null_mask_size - 1; idx >= 0; idx--) {
+    std::cout << (cudf::bit_is_set(h_validity_mask.data(), idx) ? "1" : "0");
+  }
+#endif
+
   // step 2: identify nulls at non-root levels
   for (size_type col_idx = 0; col_idx < table.num_columns(); col_idx++) {
     auto col = table.column(col_idx);
@@ -350,6 +323,36 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
                             static_cast<bitmask_type const*>(reduced_validity_mask.data()),
                             child_positions,
                             static_cast<size_type>(subset_offset)});
+    }
+    else if(col.type().id() == type_id::STRUCT) {
+      auto and_bitmasks = [&](auto &&self, bitmask_type *mask, column_view const &colview) -> void {
+        auto const num_rows = colview.size();
+        if (colview.type().id() != cudf::type_id::EMPTY && colview.nullable()) {
+          auto colmask = colview.null_mask();
+          std::vector<bitmask_type const*> masks{reinterpret_cast<bitmask_type const*>(colmask),
+                                                reinterpret_cast<bitmask_type const*>(mask)};
+          std::vector<size_type> begin_bits{0, 0};
+          auto const valid_count = cudf::detail::inplace_bitmask_and(
+            device_span<bitmask_type>(mask, num_bitmask_words(num_rows)),
+            masks,
+            begin_bits,
+            num_rows,
+            stream);
+          CUDF_EXPECTS(std::all_of(colview.child_begin(),
+                                   colview.child_end(),
+                                   [&](auto const& child_col) { return num_rows == child_col.size(); }),
+                       "Child columns must have the same number of rows as the Struct column.");
+          
+          for (auto it = colview.child_begin(); it != colview.child_end(); it++) {
+            auto &child = *it;
+            self(self, mask, child);
+          }
+        }
+      };
+      for (auto it = col.child_begin(); it != col.child_end(); it++) {
+        auto &child = *it;
+        and_bitmasks(and_bitmasks, static_cast<bitmask_type*>(validity_mask.data()), child);
+      }
     }
   }
   this->_num_nulls =
@@ -416,6 +419,17 @@ sort_merge_join::sort_merge_join(table_view const& right,
     }
   }
   if (is_right_sorted == cudf::sorted::NO) { preprocessed_right.get_sorted_order(stream); }
+
+#if 1
+  if(is_right_sorted == cudf::sorted::NO) {
+    std::cout << "preprocessed_right sorted order = ";
+    auto colspan = device_span<size_type const>(preprocessed_right._null_processed_table_sorted_order.value()->view().begin<size_type>(), preprocessed_right._null_processed_table_sorted_order.value()->view().size());
+    auto h_sorted_order = cudf::detail::make_std_vector(colspan, stream);
+    for(auto e : h_sorted_order)
+      std::cout << e << " ";
+    std::cout << std::endl;
+  }
+#endif
 }
 
 rmm::device_uvector<size_type> sort_merge_join::preprocessed_table::map_table_to_unprocessed(
@@ -538,6 +552,17 @@ sort_merge_join::inner_join(table_view const& left,
     }
   }
   if (is_left_sorted == cudf::sorted::NO) { preprocessed_left.get_sorted_order(stream); }
+
+#if 1
+  if(is_left_sorted == cudf::sorted::NO) {
+    std::cout << "preprocessed_left sorted order = ";
+    auto colspan = device_span<size_type const>(preprocessed_left._null_processed_table_sorted_order.value()->view().begin<size_type>(), preprocessed_left._null_processed_table_sorted_order.value()->view().size());
+    auto h_sorted_order = cudf::detail::make_std_vector(colspan, stream);
+    for(auto e : h_sorted_order)
+      std::cout << e << " ";
+    std::cout << std::endl;
+  }
+#endif
 
   return invoke_merge(
     preprocessed_right._null_processed_table_view,

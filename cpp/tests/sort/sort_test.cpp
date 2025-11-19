@@ -11,6 +11,8 @@
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf_test/debug_utilities.hpp>
+
 #include <cudf/copying.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_view.hpp>
@@ -41,6 +43,101 @@ void run_sort_test(cudf::table_view input,
 
 using TestTypes = cudf::test::Concat<cudf::test::NumericTypes,  // include integers, floats and bool
                                      cudf::test::ChronoTypes>;  // include timestamps and durations
+
+struct DebugSort : public cudf::test::BaseFixture {};
+
+TEST_F(DebugSort, DebugWithStructColumnOG)
+{
+  std::initializer_list<std::string> names = {"Samuel Vimes",
+                                              "Carrot Ironfoundersson",
+                                              "Angua von Überwald",
+                                              "Cheery Littlebottom",
+                                              "Detritus",
+                                              "Mr Slant"};
+  auto num_rows{std::distance(names.begin(), names.end())};
+  auto names_col = cudf::test::strings_column_wrapper{names.begin(), names.end()};
+  auto ages_col  = cudf::test::fixed_width_column_wrapper<int32_t, int32_t>{{48, 27, 25, 31, 351, 351}};
+
+  auto is_human_col = cudf::test::fixed_width_column_wrapper<bool>{
+    {true, true, false, false, false, false}, {1, 1, 0, 1, 1, 0}};
+
+  auto struct_col =
+    cudf::test::structs_column_wrapper{{names_col, ages_col, is_human_col}}.release();
+  auto struct_col_view{struct_col->view()};
+
+  EXPECT_EQ(num_rows, struct_col->size());
+
+  cudf::table_view input{{struct_col_view}};
+
+  cudf::test::fixed_width_column_wrapper<int32_t> expected{{2, 1, 3, 4, 5, 0}};
+  std::vector<cudf::order> column_order{cudf::order::ASCENDING};
+
+  auto got = cudf::sorted_order(input, column_order);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
+
+  // Run test for sort and sort_by_key
+  run_sort_test(input, expected, column_order);
+}
+
+TEST_F(DebugSort, DebugWithStructColumn0)
+{
+  // Left Table: 1 row
+  // Key: {"aaaaaaaaaa", false}
+  cudf::test::strings_column_wrapper left_str_col({"aaaaaaaaaa"});
+  cudf::test::fixed_width_column_wrapper<bool> left_bool_col{{false}};
+  auto left_struct_col = cudf::test::structs_column_wrapper{{left_str_col, left_bool_col}};
+  std::vector<std::unique_ptr<cudf::column>> cols0;
+  cols0.push_back(left_struct_col.release());
+  cudf::table input(std::move(cols0));
+  
+  cudf::test::fixed_width_column_wrapper<int32_t> expected{{0}};
+  std::vector<cudf::order> column_order{cudf::order::ASCENDING};
+
+  auto got = cudf::sorted_order(input, column_order);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
+
+  // Run test for sort and sort_by_key
+  run_sort_test(input, expected, column_order);
+}
+
+TEST_F(DebugSort, DebugWithStructColumn1)
+{
+  // Right Table: 17 rows
+  // Keys with nulls in the boolean child column
+  cudf::test::strings_column_wrapper right_str_col(
+    {"aaaaaaaaaa", "aaa", "aaa", "aaaa", "aaa", "aaaaaaaaaa", "aaaaaaaaaa", "aaa", "aaa",
+     "aaaaaaaaaa", "aaaaaaaaaa", "aaaa", "aaaaaaaaaa", "aaaa", "aaa", "aaa", "aaaaaaaaaa"});
+  cudf::test::fixed_width_column_wrapper<bool> right_bool_col(
+    {false, true, true, false, true, false, false, true, true, false, false, false, false, false, true, true, true});
+  cudf::test::fixed_width_column_wrapper<bool> right_bool_col_with_nulls(
+    {{false, true, true, false, true, false, false, true, true, false, false, false, false, false, true, true, true},
+     {true, true, true, false, true, true, true, true, true, true, true, false, true, false, true, true, true}});
+  auto right_struct_col = cudf::test::structs_column_wrapper{{right_str_col, right_bool_col_with_nulls}};
+  std::vector<std::unique_ptr<cudf::column>> cols1;
+  cols1.push_back(right_struct_col.release());
+  cudf::table input(std::move(cols1));
+
+  cudf::test::print(input.view().column(0));
+
+  cudf::test::fixed_width_column_wrapper<int32_t> expected{{10, 0, 1, 7}};
+  std::vector<cudf::order> column_order{cudf::order::ASCENDING};
+
+  auto got = cudf::sorted_order(input, column_order);
+
+  cudf::test::print(got->view());
+
+  auto sortedtbl = cudf::sort(input);
+
+  EXPECT_EQ(sortedtbl->num_columns(), 1);
+  cudf::test::print(sortedtbl->view().column(0));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
+
+  // Run test for sort and sort_by_key
+  run_sort_test(input, expected, column_order);
+}
 
 template <typename T>
 struct Sort : public cudf::test::BaseFixture {};
