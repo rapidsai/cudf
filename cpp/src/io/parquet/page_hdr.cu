@@ -539,6 +539,7 @@ void __launch_bounds__(decode_page_headers_block_size)
   auto const block = cg::this_thread_block();
   auto const warp  = cg::tiled_partition<cudf::detail::warp_size>(block);
 
+  auto const lane_id = warp.thread_rank();
   auto const warp_id = warp.meta_group_rank();
   auto const chunk_idx =
     static_cast<cudf::size_type>((cg::this_grid().block_rank() * num_warps_per_block) + warp_id);
@@ -549,20 +550,20 @@ void __launch_bounds__(decode_page_headers_block_size)
 
   auto const bs = &bs_g[warp_id];
 
-  cg::invoke_one(warp, [&]() {
+  if (lane_id == 0) {
     if (chunk_idx < num_chunks) { bs->ck = chunks[chunk_idx]; }
     error[warp_id] = 0;
-  });
+  }
   block.sync();
 
   if (chunk_idx < num_chunks) {
-    cg::invoke_one(warp, [&]() {
+    if (lane_id == 0) {
       bs->base = bs->cur      = bs->ck.compressed_data;
       bs->end                 = bs->base + bs->ck.compressed_size;
       bs->page.chunk_idx      = chunk_idx;
       bs->page.src_col_schema = bs->ck.src_col_schema;
       zero_out_page_header_info(bs);
-    });
+    }
     size_t const num_values        = bs->ck.num_values;
     size_t values_found            = 0;
     uint32_t data_page_count       = 0;
@@ -575,7 +576,7 @@ void __launch_bounds__(decode_page_headers_block_size)
     while (values_found < num_values and bs->cur < bs->end) {
       int index_out = -1;
 
-      cg::invoke_one(warp, [&]() {
+      if (lane_id == 0) {
         // this computation is only valid for flat schemas. for nested schemas,
         // they will be recomputed in the preprocess step by examining repetition and
         // definition levels
@@ -636,13 +637,11 @@ void __launch_bounds__(decode_page_headers_block_size)
           bs->cur = bs->end;
         }
         if (index_out >= 0 and index_out < max_num_pages) { page_info[index_out] = bs->page; }
-      });
+      }
       values_found = shuffle(values_found);
       warp.sync();
     }
-    cg::invoke_one(warp, [&]() {
-      if (error[warp_id] != 0) { set_error(error[warp_id], error_code); }
-    });
+    if (lane_id == 0 and error[warp_id] != 0) { set_error(error[warp_id], error_code); }
   }
 }
 
@@ -661,6 +660,7 @@ CUDF_KERNEL void __launch_bounds__(count_page_headers_block_size)
   auto const block = cg::this_thread_block();
   auto const warp  = cg::tiled_partition<cudf::detail::warp_size>(block);
 
+  auto const lane_id = warp.thread_rank();
   auto const warp_id = warp.meta_group_rank();
   auto const chunk_idx =
     static_cast<cudf::size_type>((cg::this_grid().block_rank() * num_warps_per_block) + warp_id);
@@ -671,24 +671,24 @@ CUDF_KERNEL void __launch_bounds__(count_page_headers_block_size)
 
   auto const bs = &bs_g[warp_id];
 
-  cg::invoke_one(warp, [&]() {
+  if (lane_id == 0) {
     if (chunk_idx < num_chunks) { bs->ck = chunks[chunk_idx]; }
     error[warp_id] = 0;
-  });
+  }
   block.sync();
 
   if (chunk_idx < num_chunks) {
-    cg::invoke_one(warp, [&]() {
+    if (lane_id == 0) {
       bs->base = bs->cur = bs->ck.compressed_data;
       bs->end            = bs->base + bs->ck.compressed_size;
-    });
+    }
     size_t const num_values        = bs->ck.num_values;
     size_t values_found            = 0;
     uint32_t data_page_count       = 0;
     uint32_t dictionary_page_count = 0;
     warp.sync();
     while (values_found < num_values and bs->cur < bs->end) {
-      cg::invoke_one(warp, [&]() {
+      if (lane_id == 0) {
         if (parse_page_header_fn{}(bs) and bs->page.compressed_page_size >= 0) {
           if (not is_supported_encoding(bs->page.encoding)) {
             error[warp_id] |=
@@ -720,15 +720,15 @@ CUDF_KERNEL void __launch_bounds__(count_page_headers_block_size)
             static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_HEADER);
           bs->cur = bs->end;
         }
-      });
+      }
       values_found = shuffle(values_found);
       warp.sync();
     }
-    cg::invoke_one(warp, [&]() {
+    if (lane_id == 0) {
       chunks[chunk_idx].num_data_pages = data_page_count;
       chunks[chunk_idx].num_dict_pages = dictionary_page_count;
       if (error[warp_id] != 0) { set_error(error[warp_id], error_code); }
-    });
+    }
   }
 }
 
