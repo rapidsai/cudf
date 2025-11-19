@@ -14,7 +14,6 @@ jobs:
   pr-builder:
     needs:
       - check-nightly-ci
-      - check-version-against-tag
       - changed-files
       - checks
       - conda-cpp-build
