@@ -274,7 +274,7 @@ class java_event_handler_memory_resource : public device_memory_resource {
     while (true) {
       try {
         total_before = tracker->get_total_allocated();
-        result       = resource->allocate(stream, num_bytes, rmm::CUDA_ALLOCATION_ALIGNMENT);
+        result       = resource->allocate(stream, num_bytes);
         break;
       } catch (rmm::out_of_memory const& e) {
         if (!on_alloc_fail(num_bytes, retry_count++)) { throw; }
@@ -291,7 +291,7 @@ class java_event_handler_memory_resource : public device_memory_resource {
                                    total_after);
     } catch (std::exception const& e) {
       // Free the allocation as app will think the exception means the memory was not allocated.
-      resource->deallocate(stream, result, num_bytes, rmm::CUDA_ALLOCATION_ALIGNMENT);
+      resource->deallocate(stream, result, num_bytes);
       throw;
     }
 
@@ -301,7 +301,7 @@ class java_event_handler_memory_resource : public device_memory_resource {
   void do_deallocate(void* p, std::size_t size, rmm::cuda_stream_view stream) noexcept override
   {
     auto total_before = tracker->get_total_allocated();
-    resource->deallocate(stream, p, size, rmm::CUDA_ALLOCATION_ALIGNMENT);
+    resource->deallocate(stream, p, size);
     auto total_after = tracker->get_total_allocated();
     check_for_threshold_callback(total_after,
                                  total_before,
@@ -562,7 +562,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocInternal(JNIEnv* env,
     cudf::jni::auto_set_device(env);
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
     auto c_stream = rmm::cuda_stream_view(reinterpret_cast<cudaStream_t>(stream));
-    void* ret     = mr.allocate(c_stream, size, rmm::CUDA_ALLOCATION_ALIGNMENT);
+    void* ret     = mr.allocate(c_stream, size);
     return reinterpret_cast<jlong>(ret);
   }
   JNI_CATCH(env, 0);
@@ -577,7 +577,7 @@ Java_ai_rapids_cudf_Rmm_free(JNIEnv* env, jclass clazz, jlong ptr, jlong size, j
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
     void* cptr                        = reinterpret_cast<void*>(ptr);
     auto c_stream = rmm::cuda_stream_view(reinterpret_cast<cudaStream_t>(stream));
-    mr.deallocate(c_stream, cptr, size, rmm::CUDA_ALLOCATION_ALIGNMENT);
+    mr.deallocate(c_stream, cptr, size);
   }
   JNI_CATCH(env, );
 }
