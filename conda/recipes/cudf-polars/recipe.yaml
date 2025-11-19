@@ -52,7 +52,7 @@ requirements:
     - nvidia-ml-py>=12
     - python
     - pylibcudf =${{ version }}
-    - polars >=1.29,<1.34
+    - polars >=1.29,<1.35
     - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
     - if: python == "3.10"
       then: typing_extensions

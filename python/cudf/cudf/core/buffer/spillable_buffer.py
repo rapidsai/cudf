@@ -248,7 +248,6 @@ class SpillableBufferOwner(BufferOwner):
 
         This also unspills the buffer (unspillable buffers cannot be spilled!).
         """
-
         self._manager.spill_to_device_limit()
         with self.lock:
             if not self.exposed:

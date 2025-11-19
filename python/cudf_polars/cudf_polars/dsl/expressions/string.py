@@ -12,9 +12,8 @@ from datetime import datetime
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
-import polars as pl
+from polars import Struct as pl_Struct, polars  # type: ignore[attr-defined]
 from polars.exceptions import InvalidOperationError
-from polars.polars import dtype_str_repr
 
 import pylibcudf as plc
 
@@ -26,8 +25,6 @@ from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
 if TYPE_CHECKING:
     from typing_extensions import Self
-
-    from polars.polars import _expr_nodes as pl_expr
 
     from cudf_polars.containers import DataFrame, DataType
 
@@ -43,7 +40,7 @@ def _dtypes_for_json_decode(dtype: DataType) -> JsonDecodeType:
         return [
             (field.name, child.plc_type, _dtypes_for_json_decode(child))
             for field, child in zip(
-                cast(pl.Struct, dtype.polars_type).fields,
+                cast(pl_Struct, dtype.polars_type).fields,
                 dtype.children,
                 strict=True,
             )
@@ -102,7 +99,7 @@ class StringFunction(Expr):
         ZFill = auto()
 
         @classmethod
-        def from_polars(cls, obj: pl_expr.StringFunction) -> Self:
+        def from_polars(cls, obj: polars._expr_nodes.StringFunction) -> Self:
             """Convert from polars' `StringFunction`."""
             try:
                 function, name = str(obj).split(".", maxsplit=1)
@@ -284,7 +281,7 @@ class StringFunction(Expr):
                     and width.value is not None
                     and width.value < 0
                 ):  # pragma: no cover
-                    dtypestr = dtype_str_repr(width.dtype.polars_type)
+                    dtypestr = polars.dtype_str_repr(width.dtype.polars_type)
                     raise InvalidOperationError(
                         f"conversion from `{dtypestr}` to `u64` "
                         f"failed in column 'literal' for 1 out of "

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -49,7 +49,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
   if (!value.is_valid(stream)) {
     return make_strings_column(
       size,
-      make_column_from_scalar(numeric_scalar<int32_t>(0), size + 1, stream, mr),
+      make_column_from_scalar(numeric_scalar<int32_t>(0, true, stream), size + 1, stream, mr),
       rmm::device_buffer{},
       size,
       cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr));
