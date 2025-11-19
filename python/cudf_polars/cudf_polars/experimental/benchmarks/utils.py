@@ -228,7 +228,7 @@ class RunConfig:
     suffix: str
     executor: ExecutorType
     runtime: str
-    stream_policy: str
+    stream_policy: str | None
     cluster: str
     scheduler: str  # Deprecated, kept for backward compatibility
     n_workers: int
@@ -274,10 +274,7 @@ class RunConfig:
 
         # Handle "auto" stream policy
         if stream_policy == "auto":
-            # TODO: Use pool by default for rapidsmpf runtime
-            # once stream-ordering bugs are fixed.
-            # See: https://github.com/rapidsai/cudf/issues/20484
-            stream_policy = "default"
+            stream_policy = None
 
         # Deal with deprecated scheduler argument
         # and non-streaming executors
@@ -331,7 +328,15 @@ class RunConfig:
             if scale_factor_int == scale_factor:
                 scale_factor = scale_factor_int
 
-        if "pdsh" in name and args.scale is not None:
+        skip_scale_factor_inference = (
+            "LIBCUDF_IO_REROUTE_LOCAL_DIR_PATTERN" in os.environ
+        ) and ("LIBCUDF_IO_REROUTE_REMOTE_DIR_PATTERN" in os.environ)
+
+        if (
+            "pdsh" in name
+            and args.scale is not None
+            and skip_scale_factor_inference is False
+        ):
             # Validate the user-supplied scale factor
             sf_inf = _infer_scale_factor(name, path, args.suffix)
             rel_error = abs((scale_factor - sf_inf) / sf_inf)
@@ -580,7 +585,7 @@ def execute_query(
                     return evaluate_streaming(
                         ir,
                         translator.config_options,
-                    ).to_polars()
+                    )
                 assert_never(run_config.executor)
             else:
                 return q.collect(engine=engine)
@@ -1158,6 +1163,45 @@ PDSH_TABLE_NAMES: list[str] = [
 ]
 
 
+def print_duckdb_plan(
+    q_id: int,
+    sql: str,
+    dataset_path: Path,
+    suffix: str,
+    query_set: str,
+    args: argparse.Namespace,
+) -> None:
+    """Print DuckDB query plan using EXPLAIN."""
+    if duckdb is None:
+        raise ImportError(duckdb_err)
+
+    if query_set == "pdsds":
+        tbl_names = PDSDS_TABLE_NAMES
+    else:
+        tbl_names = PDSH_TABLE_NAMES
+
+    with duckdb.connect() as conn:
+        for name in tbl_names:
+            pattern = (Path(dataset_path) / name).as_posix() + suffix
+            conn.execute(
+                f"CREATE OR REPLACE VIEW {name} AS "
+                f"SELECT * FROM parquet_scan('{pattern}');"
+            )
+
+        if args.explain_logical and args.explain:
+            conn.execute("PRAGMA explain_output = 'all';")
+        elif args.explain_logical:
+            conn.execute("PRAGMA explain_output = 'optimized_only';")
+        else:
+            conn.execute("PRAGMA explain_output = 'physical_only';")
+
+        print(f"\nDuckDB Query {q_id} - Plan\n")
+
+        plan_rows = conn.execute(f"EXPLAIN {sql}").fetchall()
+        for _, line in plan_rows:
+            print(line)
+
+
 def execute_duckdb_query(
     query: str,
     dataset_path: Path,
@@ -1198,6 +1242,17 @@ def run_duckdb(
             raise NotImplementedError(f"Query {q_id} not implemented.") from err
 
         sql = get_q(run_config)
+
+        if args.explain or args.explain_logical:
+            print_duckdb_plan(
+                q_id=q_id,
+                sql=sql,
+                dataset_path=run_config.dataset_path,
+                suffix=run_config.suffix,
+                query_set=duckdb_queries_cls.name,
+                args=args,
+            )
+
         print(f"DuckDB Executing: {q_id}")
         records[q_id] = []
 

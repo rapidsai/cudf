@@ -57,11 +57,11 @@ def pytest_configure(config: pytest.Config) -> None:
         collect = polars.LazyFrame.collect
         engine = polars.GPUEngine(raise_on_fail=no_fallback)
         # https://github.com/python/mypy/issues/2427
-        polars.LazyFrame.collect = partialmethod(collect, engine=engine)
+        polars.LazyFrame.collect = partialmethod(collect, engine=engine)  # type: ignore[method-assign, assignment]
     elif executor == "in-memory":
         collect = polars.LazyFrame.collect
         engine = polars.GPUEngine(executor=executor)
-        polars.LazyFrame.collect = partialmethod(collect, engine=engine)
+        polars.LazyFrame.collect = partialmethod(collect, engine=engine)  # type: ignore[method-assign, assignment]
     elif executor == "streaming" and blocksize_mode == "small":
         executor_options: dict[str, Any] = {}
         executor_options["max_rows_per_partition"] = 4
@@ -70,7 +70,7 @@ def pytest_configure(config: pytest.Config) -> None:
         executor_options["fallback_mode"] = StreamingFallbackMode.SILENT
         collect = polars.LazyFrame.collect
         engine = polars.GPUEngine(executor=executor, executor_options=executor_options)
-        polars.LazyFrame.collect = partialmethod(collect, engine=engine)
+        polars.LazyFrame.collect = partialmethod(collect, engine=engine)  # type: ignore[method-assign, assignment]
     else:
         # run with streaming executor and default blocksize
         polars.Config.set_engine_affinity("gpu")
@@ -230,7 +230,6 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit2-0-0-False]": "Aggregating a list literal: cudf#19610",
     "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit2-0-len1-False]": "Aggregating a list literal: cudf#19610",
     "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-0-0-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_top_k.py::test_top_k_non_elementwise_by_24163": "Ternary with scalar predicate does not broadcast mask cudf#20210",
 }
 
 

@@ -460,6 +460,7 @@ struct ColumnChunkDesc {
   bitmask_type** valid_map_base{};            // base pointers of valid bit map for this column
   void** column_data_base{};                  // base pointers of column data
   void** column_string_base{};                // base pointers of column string data
+  uint32_t* column_string_offset_base{};      // base pointer of column string offset data
   Compression codec{};                        // compressed codec enum
   std::optional<LogicalType> logical_type{};  // logical type
   int32_t ts_clock_rate{};  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
@@ -933,6 +934,28 @@ void decode_delta_length_byte_array(cudf::detail::hostdevice_span<PageInfo> page
                                     rmm::cuda_stream_view stream);
 
 /**
+ * @brief Launches pre-processing kernel to fill string offsets for non-dictionary columns
+ *
+ * This kernel runs before the main decode kernel to pre-compute string offsets
+ * for columns that use plain encoding without dictionaries.
+ *
+ * @param[in,out] pages All pages to be processed
+ * @param[in] chunks All chunks to be processed
+ * @param[in] page_string_offset_indices Device span of page string offset indices
+ * @param[in] page_mask Boolean vector indicating which pages need to be processed
+ * @param[in] min_row Minimum row index to read
+ * @param[in] num_rows Number of rows to read starting from min_row
+ * @param[in] stream CUDA stream to use
+ */
+void preprocess_string_offsets(cudf::detail::hostdevice_span<PageInfo> pages,
+                               cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                               cudf::device_span<size_t const> page_string_offset_indices,
+                               cudf::device_span<bool const> page_mask,
+                               size_t min_row,
+                               size_t num_rows,
+                               rmm::cuda_stream_view stream);
+
+/**
  * @brief Launches kernel for reading non-dictionary fixed width column data stored in the pages
  *
  * The page data will be written to the output pointed to in the page's
@@ -946,6 +969,7 @@ void decode_delta_length_byte_array(cudf::detail::hostdevice_span<PageInfo> page
  * @param[in] kernel_mask Mask indicating the type of decoding kernel to launch.
  * @param[in] page_mask Boolean vector indicating which pages need to be decoded
  * @param[out] initial_str_offsets Vector to store the initial offsets for large nested string cols
+ * @param[in] page_string_offset_indices Device span of page string offset indices
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
@@ -957,6 +981,7 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
                       decode_kernel_mask kernel_mask,
                       cudf::device_span<bool const> page_mask,
                       cudf::device_span<size_t> initial_str_offsets,
+                      cudf::device_span<size_t const> page_string_offset_indices,
                       kernel_error::pointer error_code,
                       rmm::cuda_stream_view stream);
 

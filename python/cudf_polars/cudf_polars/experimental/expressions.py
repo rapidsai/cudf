@@ -517,8 +517,15 @@ def _decompose(
             *unique_input_irs,
         )
         partition_info[input_ir] = PartitionInfo(count=partition_count)
-    else:
+    elif len(unique_input_irs) == 1:
         input_ir = unique_input_irs[0]
+    else:
+        # All child IRs were Empty. Use an Empty({}) with
+        # count=1 to ensure that scalar expressions still
+        # produce one output partition with a single row
+        # See: https://github.com/rapidsai/cudf/pull/20409
+        input_ir = Empty({})
+        partition_info[input_ir] = PartitionInfo(count=1)
 
     # Call into class-specific logic to decompose ``expr``
     return _decompose_expr_node(
