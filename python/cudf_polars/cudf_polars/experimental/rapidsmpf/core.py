@@ -21,8 +21,6 @@ from rapidsmpf.streaming.core.node import (
 )
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
-import polars as pl
-
 import rmm
 
 import cudf_polars.experimental.rapidsmpf.io
@@ -45,6 +43,8 @@ if TYPE_CHECKING:
 
     from rapidsmpf.communicator.local import Communicator
     from rapidsmpf.streaming.core.leaf_node import DeferredMessages
+
+    import polars as pl
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
@@ -96,40 +96,15 @@ def evaluate_logical_plan(
             "Use at your own risk!!!",
             stacklevel=2,
         )
+        # NOTE: Distributed execution requires Dask for now
+        from cudf_polars.experimental.rapidsmpf.dask import evaluate_pipeline_dask
 
-        client = get_dask_client()
-        result = client.run(
+        return evaluate_pipeline_dask(
             evaluate_pipeline, ir, partition_info, config_options, stats
         )
-        return pl.concat(result.values())
     else:
         # Single-process execution: Run locally
         return evaluate_pipeline(ir, partition_info, config_options, stats)
-
-
-def get_dask_client() -> Any:
-    """Get a distributed Dask client."""
-    from distributed import get_client
-
-    from cudf_polars.experimental.dask_registers import DaskRegisterManager
-
-    client = get_client()
-    DaskRegisterManager.register_once()
-    DaskRegisterManager.run_on_cluster(client)
-    return client
-
-
-def make_context_on_dask_worker(worker: Any, options: Options) -> Context:
-    """Make distributed RapidsMPF context on a Dask worker."""
-    from rapidsmpf.integrations.dask import get_worker_context
-
-    # NOTE: The Dask-CUDA cluster must be bootstrapped
-    # ahead of time using bootstrap_dask_cluster
-    # (rapidsmpf.integrations.dask.bootstrap_dask_cluster).
-    # TODO: Automatically bootstrap the cluster if necessary.
-
-    dask_context = get_worker_context(worker)
-    return Context(dask_context.comm, dask_context.br, options)
 
 
 def evaluate_pipeline(
@@ -137,8 +112,7 @@ def evaluate_pipeline(
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
     stats: StatsCollector,
-    *,
-    dask_worker: Any = None,
+    rmpf_context: Context | None = None,
 ) -> pl.DataFrame:
     """
     Build and evaluate a RapidsMPF streaming pipeline.
@@ -153,10 +127,8 @@ def evaluate_pipeline(
         The configuration options.
     stats
         The statistics collector.
-    dask_worker
-        Dask worker reference.
-        This kwarg is automatically populated by Dask
-        when evaluate_pipeline is called with `client.run`.
+    rmpf_context
+        The RapidsMPF context.
 
     Returns
     -------
@@ -169,14 +141,12 @@ def evaluate_pipeline(
     options = Options(get_environment_variables())
     local_comm = new_communicator(options)
 
-    rmpf_context: Context
-    if dask_worker is not None:
+    if rmpf_context is not None:
         # Using "distributed" mode.
         # We can use the existing rapidsmpf context, but we
         # still need to create an IR execution context. It is
         # too late to configure the stream pool, but we can still
         # use it if "cuda_stream_policy" isn't a CUDAStreamPolicy.
-        rmpf_context = make_context_on_dask_worker(dask_worker, options)
         if isinstance(config_options.cuda_stream_policy, CUDAStreamPolicy):
             ir_context = IRExecutionContext.from_config_options(config_options)
         else:
@@ -222,6 +192,7 @@ def evaluate_pipeline(
             ir_context = IRExecutionContext.from_config_options(config_options)
 
     # Generate network nodes
+    assert rmpf_context is not None, "RapidsMPF context must defined."
     nodes, output = generate_network(
         rmpf_context,
         ir,
