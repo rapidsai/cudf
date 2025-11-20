@@ -6,6 +6,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/random.hpp>
+#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -325,9 +326,10 @@ TYPED_TEST(FilterExpressionTest, IsNull)
   auto& is_null_expr = tree.push(cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, ref_0));
   auto& filter_expr  = tree.push(cudf::ast::operation(cudf::ast::ast_operator::NOT, is_null_expr));
   auto result        = Executor::filter(filter_expr, this->table);
-  auto expected =
-    cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2, 3, 4, 5, 6, 7}, {1, 1, 1, 1, 1, 1, 1}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->get_column(0).view());
+  auto expected_filter =
+    cudf::test::fixed_width_column_wrapper<bool>{{true, true, true, true, true, true, true, false}};
+  auto expected_table = cudf::apply_boolean_mask(this->table, expected_filter);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table->view(), result->view());
 }
 
 TYPED_TEST(FilterExpressionTest, NullEqual)
@@ -340,9 +342,10 @@ TYPED_TEST(FilterExpressionTest, NullEqual)
   auto& null_equal_expr =
     tree.push(cudf::ast::operation(cudf::ast::ast_operator::NULL_EQUAL, ref_0, ref_1));
   auto result = Executor::filter(null_equal_expr, this->table);
-  auto expected =
-    cudf::test::fixed_width_column_wrapper<int32_t>{{1, 3, 4, 5, 6, 7, 8}, {1, 1, 1, 1, 1, 1, 0}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->get_column(0).view());
+  auto expected_filter =
+    cudf::test::fixed_width_column_wrapper<bool>{{true, false, true, true, true, true, true, true}};
+  auto expected_table = cudf::apply_boolean_mask(this->table, expected_filter);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table->view(), result->view());
 }
 
 TYPED_TEST(FilterExpressionTest, NullLogicalAnd)
@@ -354,9 +357,11 @@ TYPED_TEST(FilterExpressionTest, NullLogicalAnd)
   auto& ref_3 = tree.push(cudf::ast::column_reference(3));
   auto& and_expr =
     tree.push(cudf::ast::operation(cudf::ast::ast_operator::NULL_LOGICAL_AND, ref_2, ref_3));
-  auto result   = Executor::filter(and_expr, this->table);
-  auto expected = cudf::test::fixed_width_column_wrapper<int32_t>{{4}, {1}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->get_column(0).view());
+  auto result          = Executor::filter(and_expr, this->table);
+  auto expected_filter = cudf::test::fixed_width_column_wrapper<bool>{
+    {false, false, false, true, false, false, false, false}};
+  auto expected_table = cudf::apply_boolean_mask(this->table, expected_filter);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table->view(), result->view());
 }
 
 TYPED_TEST(FilterExpressionTest, NullLogicalOr)
@@ -368,10 +373,11 @@ TYPED_TEST(FilterExpressionTest, NullLogicalOr)
   auto& ref_3 = tree.push(cudf::ast::column_reference(3));
   auto& or_expr =
     tree.push(cudf::ast::operation(cudf::ast::ast_operator::NULL_LOGICAL_OR, ref_2, ref_3));
-  auto result = Executor::filter(or_expr, this->table);
-  auto expected_filtered =
-    cudf::test::fixed_width_column_wrapper<int32_t>{{2, 3, 4, 6}, {1, 1, 1, 1}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_filtered, result->get_column(0).view());
+  auto result          = Executor::filter(or_expr, this->table);
+  auto expected_filter = cudf::test::fixed_width_column_wrapper<bool>{
+    {false, true, true, true, false, true, false, false}};
+  auto expected_table = cudf::apply_boolean_mask(this->table, expected_filter);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table->view(), result->view());
 }
 
 }  // namespace filters
