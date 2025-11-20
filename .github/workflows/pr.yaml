@@ -73,7 +73,6 @@ jobs:
       files_yaml: |
         test_cpp:
           - '**'
-          - '!.github/**'
           - '!.devcontainer/**'
           - '!CONTRIBUTING.md'
           - '!README.md'
@@ -86,7 +85,6 @@ jobs:
           - '!python/**'
         test_cudf_pandas:
           - '**'
-          - '!.github/**'
           - '!.clang-format'
           - '!.devcontainer/**'
           - '!CONTRIBUTING.md'
@@ -98,7 +96,6 @@ jobs:
           - '!notebooks/**'
         test_java:
           - '**'
-          - '!.github/**'
           - '!.clang-format'
           - '!.devcontainer/**'
           - '!CONTRIBUTING.md'
@@ -111,7 +108,6 @@ jobs:
           - '!python/**'
         test_notebooks:
           - '**'
-          - '!.github/**'
           - '!.clang-format'
           - '!.devcontainer/**'
           - '!CONTRIBUTING.md'
@@ -121,7 +117,6 @@ jobs:
           - '!java/**'
         test_python:
           - '**'
-          - '!.github/**'
           - '!.clang-format'
           - '!.devcontainer/**'
           - '!CONTRIBUTING.md'
