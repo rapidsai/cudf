@@ -11,13 +11,13 @@ from rapidsmpf.integrations.cudf.partition import (
     unpack_and_concat as py_unpack_and_concat,
 )
 from rapidsmpf.memory.packed_data import PackedData
-from rapidsmpf.progress_thread import ProgressThread
 
 from pylibcudf.contiguous_split import pack
 
 if TYPE_CHECKING:
     from types import TracebackType
 
+    from rapidsmpf.progress_thread import ProgressThread
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
@@ -35,20 +35,24 @@ class AllGatherContext:
         The streaming context.
     shuffle_id: int
         Pre-allocated shuffle ID for this operation.
+    progress_thread: ProgressThread
+        Shared ProgressThread for all operations on this rank.
     """
 
-    def __init__(self, context: Context, shuffle_id: int):
+    def __init__(
+        self, context: Context, shuffle_id: int, progress_thread: ProgressThread
+    ):
         self.context = context
         self.op_id = shuffle_id
+        self.progress_thread = progress_thread
         self._insertion_finished = False
 
     def __enter__(self) -> AllGatherContext:
         """Enter the AllGatherContext."""
         statistics = self.context.statistics()
-        progress_thread = ProgressThread(self.context.comm(), statistics)
         self.allgather = AllGather(
             comm=self.context.comm(),
-            progress_thread=progress_thread,
+            progress_thread=self.progress_thread,
             op_id=self.op_id,
             br=self.context.br(),
             statistics=statistics,

@@ -11,7 +11,6 @@ from rapidsmpf.integrations.cudf.partition import (
     partition_and_pack as py_partition_and_pack,
     unpack_and_concat as py_unpack_and_concat,
 )
-from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.shuffler import Shuffler
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.node import define_py_node
@@ -33,6 +32,7 @@ if TYPE_CHECKING:
     from types import TracebackType
 
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.progress_thread import ProgressThread
     from rapidsmpf.streaming.core.context import Context
 
     import pylibcudf as plc
@@ -145,6 +145,8 @@ class ShuffleContext:
         The columns to hash.
     shuffle_id: int
         Pre-allocated shuffle ID for this operation.
+    progress_thread: ProgressThread
+        Shared ProgressThread for all operations on this rank.
     """
 
     def __init__(
@@ -154,6 +156,7 @@ class ShuffleContext:
         num_partitions: int,
         columns_to_hash: tuple[int, ...],
         shuffle_id: int,
+        progress_thread: ProgressThread,
     ):
         self.context = context
         self.local_comm = local_comm
@@ -161,15 +164,15 @@ class ShuffleContext:
         self.num_partitions = num_partitions
         self.columns_to_hash = columns_to_hash
         self.op_id = shuffle_id
+        self.progress_thread = progress_thread
         self._insertion_finished = False
 
     def __enter__(self) -> ShuffleContext:
         """Enter the local shuffle instance context manager."""
         statistics = self.context.statistics()
-        progress_thread = ProgressThread(self.context.comm(), statistics)
         self.shuffler = Shuffler(
             comm=self.context.comm(),
-            progress_thread=progress_thread,
+            progress_thread=self.progress_thread,
             op_id=self.op_id,
             total_num_partitions=self.num_partitions,
             br=self.br,
@@ -247,6 +250,7 @@ async def shuffle_node(
     columns_to_hash: tuple[int, ...],
     num_partitions: int,
     shuffle_id: int,
+    progress_thread: ProgressThread,
 ) -> None:
     """
     Execute a shuffle operation.
@@ -275,6 +279,8 @@ async def shuffle_node(
         Number of partitions to shuffle into.
     shuffle_id
         Pre-allocated shuffle ID for this operation.
+    progress_thread
+        Shared ProgressThread for all operations on this rank.
     """
     async with shutdown_on_error(
         context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
@@ -291,7 +297,12 @@ async def shuffle_node(
 
         # Create ShuffleContext context manager to handle shuffler lifecycle
         with ShuffleContext(
-            context, local_comm, num_partitions, columns_to_hash, shuffle_id
+            context,
+            local_comm,
+            num_partitions,
+            columns_to_hash,
+            shuffle_id,
+            progress_thread,
         ) as local_shuffle:
             # Process input chunks
             while True:
@@ -378,6 +389,7 @@ def _(
             columns_to_hash=columns_to_hash,
             num_partitions=num_partitions,
             shuffle_id=shuffle_id,
+            progress_thread=rec.state["progress_thread"],
         )
     ]
 

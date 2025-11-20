@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from rapidsmpf.communicator.local import Communicator
+    from rapidsmpf.progress_thread import ProgressThread
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
@@ -80,6 +81,8 @@ class GenState(TypedDict):
         The local communicator.
     shuffle_id_map
         Mapping from Shuffle/Repartition/Join IR nodes to reserved shuffle IDs.
+    progress_thread
+        Shared ProgressThread for all shuffle/allgather operations on this rank.
     """
 
     context: Context
@@ -91,6 +94,7 @@ class GenState(TypedDict):
     stats: StatsCollector
     local_comm: Communicator
     shuffle_id_map: dict[IR, int]
+    progress_thread: ProgressThread
 
 
 SubNetGenerator: TypeAlias = GenericTransformer[

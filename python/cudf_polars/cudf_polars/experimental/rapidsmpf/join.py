@@ -29,6 +29,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
+    from rapidsmpf.progress_thread import ProgressThread
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
@@ -88,6 +89,7 @@ async def broadcast_join_node(
     ch_right: ChannelPair,
     broadcast_side: Literal["left", "right"],
     shuffle_id: int,
+    progress_thread: ProgressThread,
 ) -> None:
     """
     Join node for rapidsmpf.
@@ -110,6 +112,8 @@ async def broadcast_join_node(
         The side to broadcast.
     shuffle_id
         Pre-allocated shuffle ID for this operation.
+    progress_thread
+        Shared ProgressThread for all operations on this rank.
     """
     async with shutdown_on_error(
         context,
@@ -159,7 +163,7 @@ async def broadcast_join_node(
         small_dfs = await get_small_table(context, small_child, small_ch)
         if context.comm().nranks > 1:
             # Global all-gather (i.e. broadcast)
-            with AllGatherContext(context, shuffle_id) as allgather:
+            with AllGatherContext(context, shuffle_id, progress_thread) as allgather:
                 for small_df in small_dfs:
                     allgather.insert_chunk(
                         TableChunk.from_pylibcudf_table(
@@ -290,6 +294,7 @@ def _(
                 channels[right].reserve_output_slot(),
                 broadcast_side=broadcast_side,
                 shuffle_id=shuffle_id,
+                progress_thread=rec.state["progress_thread"],
             )
         ]
         return nodes, channels

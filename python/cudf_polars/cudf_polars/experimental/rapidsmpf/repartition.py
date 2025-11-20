@@ -20,6 +20,7 @@ from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
+    from rapidsmpf.progress_thread import ProgressThread
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
@@ -82,6 +83,7 @@ async def concatenate_node(
     max_chunks: int | None,
     output_count: int,
     shuffle_id: int,
+    progress_thread: ProgressThread,
 ) -> None:
     """
     Concatenate node for rapidsmpf.
@@ -105,6 +107,8 @@ async def concatenate_node(
         The expected number of output chunks.
     shuffle_id
         Pre-allocated shuffle ID for this operation.
+    progress_thread
+        Shared ProgressThread for all operations on this rank.
     """
     # TODO: Use multiple streams
     max_chunks = max(2, max_chunks) if max_chunks else None
@@ -133,7 +137,7 @@ async def concatenate_node(
             metadata.duplicated = True
             await ch_out.send_metadata(context, metadata)
 
-            with AllGatherContext(context, shuffle_id) as allgather:
+            with AllGatherContext(context, shuffle_id, progress_thread) as allgather:
                 stream = context.get_stream_from_pool()
                 while (msg := await ch_in.data.recv(context)) is not None:
                     allgather.insert_chunk(TableChunk.from_message(msg))
@@ -227,6 +231,7 @@ def _(
             max_chunks=max_chunks,
             output_count=partition_info[ir].count,
             shuffle_id=shuffle_id,
+            progress_thread=rec.state["progress_thread"],
         )
     ]
     return nodes, channels

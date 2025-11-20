@@ -421,6 +421,11 @@ def generate_network(
     max_io_threads_global = 2
     max_io_threads_local = max(1, max_io_threads_global // max(1, num_io_nodes))
 
+    # Create a single ProgressThread for all shuffle/allgather operations on this rank
+    from rapidsmpf.progress_thread import ProgressThread
+
+    progress_thread = ProgressThread(local_comm, context.statistics())
+
     # Generate the network
     state: GenState = {
         "context": context,
@@ -432,6 +437,7 @@ def generate_network(
         "stats": stats,
         "local_comm": local_comm,
         "shuffle_id_map": shuffle_id_map,
+        "progress_thread": progress_thread,
     }
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state
