@@ -818,7 +818,9 @@ TYPED_TEST(TransformTest, BasicEqualityNulls)
   auto expected = column_wrapper<bool>{{true, false, false, false, true}, {1, 1, 1, 1, 1}};
   auto result   = Executor::compute_column(table, expression);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+  // uses EQUIVALENT because null masks are not generated when not needed in JIT. as is the case
+  // with NULL_EQUAL.
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->view(), verbosity);
 }
 
 TYPED_TEST(TransformTest, UnaryNotNulls)
