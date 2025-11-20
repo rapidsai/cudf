@@ -278,7 +278,7 @@ def _(
             broadcast_side = "left"
 
         # Look up the reserved shuffle ID for this operation
-        shuffle_id = rec.state["shuffle_id_map"].get(ir)
+        shuffle_id = rec.state["shuffle_id_map"][ir]
 
         nodes[ir] = [
             broadcast_join_node(
