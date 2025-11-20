@@ -1948,7 +1948,12 @@ class Index(SingleColumnFrame):
             # Can compare Index to CategoricalIndex or RangeIndex
             # Other comparisons are invalid
             return False
-
+        if self_is_categorical and other_is_categorical:
+            if self.dtype != other.dtype:
+                return False
+            return self._column._get_decategorized_column().equals(
+                other._column._get_decategorized_column()
+            )
         try:
             return self._column.equals(
                 other._column, check_dtypes=check_dtypes
