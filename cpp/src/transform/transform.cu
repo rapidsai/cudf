@@ -224,17 +224,17 @@ std::tuple<rmm::device_buffer, size_type> and_null_mask(column_view base_column,
 bool may_evaluate_null(column_view base_column,
                        std::vector<column_view> const& inputs,
                        null_aware is_null_aware,
-                       null_output null_out)
+                       output_nullability null_out)
 {
   // null-aware UDFs will evaluate nulls unless explicitly marked as not producing nulls
   if (is_null_aware == null_aware::YES) {
-    return null_out != null_output::NON_NULLABLE;
+    return null_out != output_nullability::ALL_VALID;
   } else {
     /// null-unaware UDFs will evaluate nulls if any input is nullable unless explicitly marked
     /// as not producing nulls
     bool any_nullable =
       std::any_of(inputs.begin(), inputs.end(), [](auto const& col) { return col.nullable(); });
-    return any_nullable && null_out == null_output::PRESERVE;
+    return any_nullable && null_out == output_nullability::PRESERVE;
   }
 }
 
@@ -245,7 +245,7 @@ std::unique_ptr<column> transform_operation(column_view base_column,
                                             bool is_ptx,
                                             std::optional<void*> user_data,
                                             null_aware is_null_aware,
-                                            null_output null_policy,
+                                            output_nullability null_policy,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
@@ -308,7 +308,7 @@ std::unique_ptr<column> string_view_operation(column_view base_column,
                                               bool is_ptx,
                                               std::optional<void*> user_data,
                                               null_aware is_null_aware,
-                                              null_output null_policy,
+                                              output_nullability null_policy,
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
 {
@@ -402,7 +402,7 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
                                   bool is_ptx,
                                   std::optional<void*> user_data,
                                   null_aware is_null_aware,
-                                  null_output null_policy,
+                                  output_nullability null_policy,
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr)
 {
@@ -443,7 +443,7 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
                                   bool is_ptx,
                                   std::optional<void*> user_data,
                                   null_aware is_null_aware,
-                                  null_output null_policy,
+                                  output_nullability null_policy,
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr)
 {

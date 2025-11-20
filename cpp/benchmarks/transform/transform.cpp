@@ -91,7 +91,7 @@ static void BM_transform(nvbench::state& state)
                     false,
                     std::nullopt,
                     cudf::null_aware::NO,
-                    cudf::null_output::PRESERVE,
+                    cudf::output_nullability::PRESERVE,
                     launch.get_stream().get_stream());
   });
 }

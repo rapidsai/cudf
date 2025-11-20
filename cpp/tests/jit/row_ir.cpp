@@ -264,7 +264,7 @@ TEST_F(RowIRCudaCodeGenTest, AstConversionBasic)
   ASSERT_EQ(transform_args.scalar_columns[0]->view().size(), 1);
   EXPECT_FALSE(transform_args.is_ptx);
   EXPECT_EQ(transform_args.is_null_aware, null_aware::NO);
-  EXPECT_EQ(transform_args.null_policy, null_output::NON_NULLABLE);
+  EXPECT_EQ(transform_args.null_policy, output_nullability::ALL_VALID);
   EXPECT_EQ(transform_args.output_type, data_type{type_id::INT32});
   ASSERT_EQ(transform_args.columns.size(), 2);
 

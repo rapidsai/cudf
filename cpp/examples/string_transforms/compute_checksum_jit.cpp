@@ -44,7 +44,7 @@ std::tuple<std::unique_ptr<cudf::column>, std::vector<int32_t>> transform(
                                 false,
                                 std::nullopt,
                                 cudf::null_aware::NO,
-                                cudf::null_output::PRESERVE,
+                                cudf::output_nullability::PRESERVE,
                                 stream,
                                 mr);
 

@@ -54,9 +54,9 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         NO
         YES
 
-    cpdef enum class null_output(int8_t):
+    cpdef enum class output_nullability(int8_t):
         PRESERVE
-        NON_NULLABLE
+        ALL_VALID
 
     cpdef enum class nan_equality(bool):
         ALL_EQUAL

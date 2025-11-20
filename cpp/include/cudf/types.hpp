@@ -255,16 +255,17 @@ enum class null_aware : bool {
  *
  * ```
  *
- * using `null_output::PRESERVE` a null-mask may be produced.
- * with `null_output::NON_NULLABLE` a null-mask will not be produced and all values are considered
- * valid. It is undefined behaviour to use `NON_NULLABLE` with a UDF that produces null values.
+ * using `output_nullability::PRESERVE` a null-mask may be produced.
+ * with `output_nullability::ALL_VALID` a null-mask will not be produced and all values are
+ * considered valid. It is undefined behaviour to use `ALL_VALID` with a UDF that produces null
+ * values.
  *
  *
  */
-enum class null_output : uint8_t {
-  PRESERVE     = 0,  ///< A null-mask may be produced if needed
-  NON_NULLABLE = 1   ///< A null-mask is not produced and all values are considered valid even if
-                     ///< null values are produced
+enum class output_nullability : uint8_t {
+  PRESERVE  = 0,  ///< A null-mask may be produced if needed
+  ALL_VALID = 1   ///< A null-mask is not produced and all values are considered valid even if
+                  ///< null values are produced
 };
 
 /**

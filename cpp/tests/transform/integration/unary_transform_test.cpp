@@ -847,7 +847,7 @@ TEST_F(NullTest, IsNull)
                                 false,
                                 std::nullopt,
                                 cudf::null_aware::YES,
-                                cudf::null_output::NON_NULLABLE);
+                                cudf::output_nullability::ALL_VALID);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
 }
@@ -892,7 +892,7 @@ return l - t * l + t * h;
                                      false,
                                      std::nullopt,
                                      cudf::null_aware::YES,
-                                     cudf::null_output::NON_NULLABLE);
+                                     cudf::output_nullability::ALL_VALID);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, *expected);
 }

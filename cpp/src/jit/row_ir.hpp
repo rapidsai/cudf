@@ -418,7 +418,7 @@ struct transform_args {
   bool is_ptx                    = false;           ///< Whether the transform is a PTX kernel
   std::optional<void*> user_data = std::nullopt;    ///< User data to pass to the transform
   null_aware is_null_aware       = null_aware::NO;  ///< Whether the transform is null-aware
-  null_output null_policy        = null_output::PRESERVE;  ///< Null-transformation policy
+  output_nullability null_policy = output_nullability::PRESERVE;  ///< Null-transformation policy
 };
 
 /**
@@ -502,9 +502,9 @@ struct ast_converter {
 
   void add_output_var();
 
-  std::tuple<null_aware, null_output> generate_code(target target,
-                                                    ast::expression const& expr,
-                                                    ast_args const& args);
+  std::tuple<null_aware, output_nullability> generate_code(target target,
+                                                           ast::expression const& expr,
+                                                           ast_args const& args);
 
  public:
   /**
