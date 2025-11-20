@@ -441,6 +441,52 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         """
         return self._apply_agg("count")
 
+    def _nan_on_empty(self, result: DataFrame | Series) -> DataFrame | Series:
+        """Mask windows with zero non-null observations as NaN."""
+        return result.mask(self._apply_agg("count") == 0)
+
+    def mean(self, *args, **kwargs) -> DataFrame | Series:
+        """Calculate the rolling mean.
+
+        Returns
+        -------
+        Series or DataFrame
+            Return type is the same as the original object.
+        """
+        if args or kwargs:
+            raise NotImplementedError(
+                "Rolling.mean() does not support args or kwargs"
+            )
+        return self._nan_on_empty(self._apply_agg("mean"))
+
+    def min(self, *args, **kwargs) -> DataFrame | Series:
+        """Calculate the rolling minimum.
+
+        Returns
+        -------
+        Series or DataFrame
+            Return type is the same as the original object.
+        """
+        if args or kwargs:
+            raise NotImplementedError(
+                "Rolling.min() does not support args or kwargs"
+            )
+        return self._nan_on_empty(self._apply_agg("min"))
+
+    def max(self, *args, **kwargs) -> DataFrame | Series:
+        """Calculate the rolling maximum.
+
+        Returns
+        -------
+        Series or DataFrame
+            Return type is the same as the original object.
+        """
+        if args or kwargs:
+            raise NotImplementedError(
+                "Rolling.max() does not support args or kwargs"
+            )
+        return self._nan_on_empty(self._apply_agg("max"))
+
     def median(self, **kwargs):
         raise NotImplementedError(
             "groupby().rolling().median() is not yet implemented"
