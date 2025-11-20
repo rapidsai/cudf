@@ -195,64 +195,9 @@ inline bool is_operator_null_aware(opcode op)
 
 bool operation::is_null_aware()
 {
-  switch (op_) {
-    case ast::ast_operator::IS_NULL:
-    case ast::ast_operator::NULL_EQUAL:
-    case ast::ast_operator::NULL_LOGICAL_AND:
-    case ast::ast_operator::NULL_LOGICAL_OR: return is_operator_null_aware(op_);
-
-    case ast::ast_operator::ADD:
-    case ast::ast_operator::SUB:
-    case ast::ast_operator::MUL:
-    case ast::ast_operator::DIV:
-    case ast::ast_operator::TRUE_DIV:
-    case ast::ast_operator::FLOOR_DIV:
-    case ast::ast_operator::MOD:
-    case ast::ast_operator::PYMOD:
-    case ast::ast_operator::POW:
-    case ast::ast_operator::NOT_EQUAL:
-    case ast::ast_operator::EQUAL:
-    case ast::ast_operator::LESS:
-    case ast::ast_operator::GREATER:
-    case ast::ast_operator::LESS_EQUAL:
-    case ast::ast_operator::GREATER_EQUAL:
-    case ast::ast_operator::BITWISE_AND:
-    case ast::ast_operator::BITWISE_OR:
-    case ast::ast_operator::BITWISE_XOR:
-    case ast::ast_operator::LOGICAL_AND:
-    case ast::ast_operator::LOGICAL_OR:
-    case ast::ast_operator::IDENTITY:
-    case ast::ast_operator::SIN:
-    case ast::ast_operator::COS:
-    case ast::ast_operator::TAN:
-    case ast::ast_operator::ARCSIN:
-    case ast::ast_operator::ARCCOS:
-    case ast::ast_operator::ARCTAN:
-    case ast::ast_operator::SINH:
-    case ast::ast_operator::COSH:
-    case ast::ast_operator::TANH:
-    case ast::ast_operator::ARCSINH:
-    case ast::ast_operator::ARCCOSH:
-    case ast::ast_operator::ARCTANH:
-    case ast::ast_operator::EXP:
-    case ast::ast_operator::LOG:
-    case ast::ast_operator::SQRT:
-    case ast::ast_operator::CBRT:
-    case ast::ast_operator::CEIL:
-    case ast::ast_operator::FLOOR:
-    case ast::ast_operator::ABS:
-    case ast::ast_operator::RINT:
-    case ast::ast_operator::BIT_INVERT:
-    case ast::ast_operator::NOT:
-    case ast::ast_operator::CAST_TO_INT64:
-    case ast::ast_operator::CAST_TO_UINT64:
-    case ast::ast_operator::CAST_TO_FLOAT64:
-      return is_operator_null_aware(op_) ||
-             std::any_of(
-               operands_.begin(), operands_.end(), [](auto& op) { return op->is_null_aware(); });
-
-    default: CUDF_UNREACHABLE("Unrecognized operator type.");
-  }
+  return is_operator_null_aware(op_) ||
+         std::any_of(
+           operands_.begin(), operands_.end(), [](auto& op) { return op->is_null_aware(); });
 }
 
 inline bool is_operator_always_valid(opcode op)
@@ -316,64 +261,9 @@ inline bool is_operator_always_valid(opcode op)
 
 bool operation::is_always_valid()
 {
-  switch (op_) {
-    case ast::ast_operator::IS_NULL:
-    case ast::ast_operator::NULL_EQUAL: return is_operator_always_valid(op_);
-
-    case ast::ast_operator::NULL_LOGICAL_AND:
-    case ast::ast_operator::NULL_LOGICAL_OR:
-    case ast::ast_operator::ADD:
-    case ast::ast_operator::SUB:
-    case ast::ast_operator::MUL:
-    case ast::ast_operator::DIV:
-    case ast::ast_operator::TRUE_DIV:
-    case ast::ast_operator::FLOOR_DIV:
-    case ast::ast_operator::MOD:
-    case ast::ast_operator::PYMOD:
-    case ast::ast_operator::POW:
-    case ast::ast_operator::NOT_EQUAL:
-    case ast::ast_operator::EQUAL:
-    case ast::ast_operator::LESS:
-    case ast::ast_operator::GREATER:
-    case ast::ast_operator::LESS_EQUAL:
-    case ast::ast_operator::GREATER_EQUAL:
-    case ast::ast_operator::BITWISE_AND:
-    case ast::ast_operator::BITWISE_OR:
-    case ast::ast_operator::BITWISE_XOR:
-    case ast::ast_operator::LOGICAL_AND:
-    case ast::ast_operator::LOGICAL_OR:
-    case ast::ast_operator::IDENTITY:
-    case ast::ast_operator::SIN:
-    case ast::ast_operator::COS:
-    case ast::ast_operator::TAN:
-    case ast::ast_operator::ARCSIN:
-    case ast::ast_operator::ARCCOS:
-    case ast::ast_operator::ARCTAN:
-    case ast::ast_operator::SINH:
-    case ast::ast_operator::COSH:
-    case ast::ast_operator::TANH:
-    case ast::ast_operator::ARCSINH:
-    case ast::ast_operator::ARCCOSH:
-    case ast::ast_operator::ARCTANH:
-    case ast::ast_operator::EXP:
-    case ast::ast_operator::LOG:
-    case ast::ast_operator::SQRT:
-    case ast::ast_operator::CBRT:
-    case ast::ast_operator::CEIL:
-    case ast::ast_operator::FLOOR:
-    case ast::ast_operator::ABS:
-    case ast::ast_operator::RINT:
-    case ast::ast_operator::BIT_INVERT:
-    case ast::ast_operator::NOT:
-    case ast::ast_operator::CAST_TO_INT64:
-    case ast::ast_operator::CAST_TO_UINT64:
-    case ast::ast_operator::CAST_TO_FLOAT64:
-      return is_operator_always_valid(op_) &&
-             std::all_of(
-               operands_.begin(), operands_.end(), [](auto& op) { return op->is_always_valid(); });
-
-    default: CUDF_UNREACHABLE("Unrecognized operator type.");
-  }
+  return is_operator_always_valid(op_) &&
+         std::all_of(
+           operands_.begin(), operands_.end(), [](auto& op) { return op->is_always_valid(); });
 }
 
 opcode operation::get_opcode() const { return op_; }
