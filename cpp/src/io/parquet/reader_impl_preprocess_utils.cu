@@ -30,6 +30,7 @@
 
 #include <bitset>
 #include <iostream>
+#include <numeric>
 
 namespace cudf::io::parquet::detail {
 
@@ -258,14 +259,14 @@ void generate_depth_remappings(
 [[nodiscard]] size_t count_page_headers_with_pgidx(
   cudf::detail::hostdevice_span<ColumnChunkDesc> chunks, rmm::cuda_stream_view stream)
 {
-  size_t total_pages = 0;
-  for (auto chunk = chunks.host_begin(); chunk != chunks.host_end(); chunk++) {
-    CUDF_EXPECTS(chunk->h_chunk_info != nullptr, "Expected non-null column info struct");
-    auto const& chunk_info = *(chunk->h_chunk_info);
-    chunk->num_dict_pages  = static_cast<int32_t>(chunk_info.has_dictionary());
-    chunk->num_data_pages  = chunk_info.pages.size();
-    total_pages += chunk->num_data_pages + chunk->num_dict_pages;
-  }
+  auto const total_pages =
+    std::accumulate(chunks.host_begin(), chunks.host_end(), size_t{0}, [](size_t sum, auto& chunk) {
+      CUDF_EXPECTS(chunk.h_chunk_info != nullptr, "Expected non-null column info struct");
+      auto const& chunk_info = *(chunk.h_chunk_info);
+      chunk.num_dict_pages   = chunk_info.has_dictionary() ? 1 : 0;
+      chunk.num_data_pages   = chunk_info.pages.size();
+      return sum + chunk.num_data_pages + chunk.num_dict_pages;
+    });
 
   // count_page_headers() also pushes chunks to device, so not using thrust here
   chunks.host_to_device_async(stream);
