@@ -1507,7 +1507,7 @@ class StringColumn(ColumnBase, Scannable):
                     pd.StringDtype()
                     if isinstance(self.dtype, pd.StringDtype)
                     else self.dtype,
-                    np.dtype("int64"),
+                    np.dtype("bool"),
                 )
         else:
             new_type = np.dtype("bool")
