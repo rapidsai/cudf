@@ -1531,19 +1531,20 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def notnull(self) -> ColumnBase:
         """Identify non-missing values in a Column."""
         if not self.has_nulls(include_nan=self.dtype.kind == "f"):
-            return as_column(True, length=len(self))._with_type_metadata(
-                get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
-            )
+            result = as_column(True, length=len(self))
+        else:
+            with acquire_spill_lock():
+                result = type(self).from_pylibcudf(
+                    plc.unary.is_valid(self.to_pylibcudf(mode="read"))
+                )
 
-        with acquire_spill_lock():
-            result = type(self).from_pylibcudf(
-                plc.unary.is_valid(self.to_pylibcudf(mode="read"))
-            )
+            if self.dtype.kind == "f":
+                # Need to consider `np.nan` values in case
+                # of a float column
+                result = result & self.notnan()
 
-        if self.dtype.kind == "f":
-            # Need to consider `np.nan` values in case
-            # of a float column
-            result = result & self.notnan()
+        if cudf.get_option("mode.pandas_compatible"):
+            return result
 
         return result._with_type_metadata(
             get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
