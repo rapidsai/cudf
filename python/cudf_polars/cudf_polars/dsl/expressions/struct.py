@@ -20,7 +20,7 @@ from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-    from polars.polars import _expr_nodes as pl_expr
+    from polars import polars  # type: ignore[attr-defined]
 
     from cudf_polars.containers import DataFrame, DataType
 
@@ -44,7 +44,7 @@ class StructFunction(Expr):
         )  # https://github.com/pola-rs/polars/pull/23022#issuecomment-2933910958
 
         @classmethod
-        def from_polars(cls, obj: pl_expr.StructFunction) -> Self:
+        def from_polars(cls, obj: polars._expr_nodes.StructFunction) -> Self:
             """Convert from polars' `StructFunction`."""
             try:
                 function, name = str(obj).split(".", maxsplit=1)

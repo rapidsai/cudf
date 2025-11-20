@@ -310,7 +310,6 @@ class _SeriesLocIndexer(_FrameIndexer):
             arg = self._loc_to_iloc(arg)
         except (TypeError, KeyError, IndexError, ValueError) as err:
             raise KeyError(arg) from err
-
         return self._frame.iloc[arg]
 
     @_performance_tracking
@@ -1313,18 +1312,28 @@ class Series(SingleColumnFrame, IndexedFrame):
         inputs.
         """
         if isinstance(spec, indexing_utils.MapIndexer):
-            return self._gather(spec.key, keep_index=True)
+            result = self._gather(spec.key, keep_index=True)
         elif isinstance(spec, indexing_utils.MaskIndexer):
-            return self._apply_boolean_mask(spec.key, keep_index=True)
+            result = self._apply_boolean_mask(spec.key, keep_index=True)
         elif isinstance(spec, indexing_utils.SliceIndexer):
-            return self._slice(spec.key)
+            result = self._slice(spec.key)
         elif isinstance(spec, indexing_utils.ScalarIndexer):
             return self._gather(
                 spec.key, keep_index=False
             )._column.element_indexing(0)
         elif isinstance(spec, indexing_utils.EmptyIndexer):
             return self._empty_like(keep_index=True)
-        assert_never(spec)
+        else:
+            assert_never(spec)
+
+        if isinstance(result.index, cudf.DatetimeIndex):
+            result.index._freq = (
+                result.index._get_slice_frequency(spec.key)
+                if isinstance(spec, indexing_utils.SliceIndexer)
+                else None
+            )
+
+        return result
 
     @_performance_tracking
     def __getitem__(self, arg):
@@ -1575,7 +1584,14 @@ class Series(SingleColumnFrame, IndexedFrame):
         if len(objs):
             col = col._with_type_metadata(objs[0].dtype)
 
-        return cls._from_column(col, name=name, index=result_index)
+        result = cls._from_column(col, name=name, index=result_index)
+        if cudf.get_option("mode.pandas_compatible"):
+            if isinstance(result.index, DatetimeIndex):
+                try:
+                    result.index._freq = result.index.inferred_freq
+                except NotImplementedError:
+                    result.index._freq = None
+        return result
 
     @property
     @_performance_tracking
