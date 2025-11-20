@@ -79,7 +79,7 @@ class _State(IntEnum):
 
 
 class _BlockState(IntEnum):
-    """Simple enum to track the type of wrapped object of a final proxy"""
+    """Simple enum to track blocking direction of wrapped object of a final proxy"""
 
     TO_SLOW = 0
     TO_FAST = 1
