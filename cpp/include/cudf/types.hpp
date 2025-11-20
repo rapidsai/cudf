@@ -257,7 +257,7 @@ enum class null_aware : bool {
  *
  * using `null_output::PRESERVE` a null-mask may be produced.
  * with `null_output::NON_NULLABLE` a null-mask will not be produced and all values are considered
- * valid because we know it is null-aware but it doesn't produce null values.
+ * valid. It is undefined behaviour to use `NON_NULLABLE` with a UDF that produces null values.
  *
  *
  */
