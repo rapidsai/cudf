@@ -741,6 +741,10 @@ MultiIndex = make_final_proxy_type(
         "__init__": _DELETE,
         "__setattr__": Index__setattr__,
         "names": _FastSlowAttribute("names"),
+        "_lexsort_depth": _FastSlowAttribute("_lexsort_depth", private=True),
+        "_should_fallback_to_positional": _FastSlowAttribute(
+            "_should_fallback_to_positional", private=True
+        ),
         "_engine": _FastSlowAttribute("_engine", private=True),
         "_cache": _FastSlowAttribute("_cache", private=True),
     },
