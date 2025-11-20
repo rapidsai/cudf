@@ -1150,7 +1150,7 @@ class StringColumn(ColumnBase, Scannable):
                     self.dtype,
                     res_col.dtype,
                 )
-            return res_col._with_type_metadata(new_type)
+                return res_col._with_type_metadata(new_type)
         return res_col
 
     def split_record(self, delimiter: plc.Scalar, maxsplit: int) -> Self:
