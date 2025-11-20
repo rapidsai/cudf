@@ -53,15 +53,12 @@ struct pinned_allocator : public std::allocator<T> {
 
   T* allocate(std::size_t n)
   {
-    auto ptr = mr.allocate(stream, n * sizeof(T), rmm::RMM_DEFAULT_HOST_ALIGNMENT);
+    auto ptr = mr.allocate(stream, n * sizeof(T));
     stream.synchronize();
     return static_cast<T*>(ptr);
   }
 
-  void deallocate(T* ptr, std::size_t n)
-  {
-    mr.deallocate(stream, ptr, n * sizeof(T), rmm::RMM_DEFAULT_HOST_ALIGNMENT);
-  }
+  void deallocate(T* ptr, std::size_t n) { mr.deallocate(stream, ptr, n * sizeof(T)); }
 
  private:
   rmm::host_async_resource_ref mr;
