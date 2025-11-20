@@ -166,7 +166,7 @@ class ShuffleContext:
     def __enter__(self) -> ShuffleContext:
         """Enter the local shuffle instance context manager."""
         statistics = self.context.statistics()
-        progress_thread = ProgressThread(self.local_comm, statistics)
+        progress_thread = ProgressThread(self.context.comm(), statistics)
         self.shuffler = Shuffler(
             comm=self.context.comm(),
             progress_thread=progress_thread,
