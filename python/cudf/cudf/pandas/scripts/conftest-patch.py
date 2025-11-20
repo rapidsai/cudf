@@ -8378,7 +8378,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/window/moments/test_moments_consistency_expanding.py::test_expanding_apply_consistency_sum_nans[all_data6-2-sum]",
     "tests/window/moments/test_moments_consistency_expanding.py::test_expanding_apply_consistency_sum_nans[all_data7-0-sum]",
     "tests/window/moments/test_moments_consistency_expanding.py::test_expanding_apply_consistency_sum_nans[all_data7-2-sum]",
-    "tests/window/moments/test_moments_consistency_rolling.py::test_moments_consistency_var[all_data0-rolling_consistency_cases0-True-0]",
     "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_apply_consistency_sum[all_data1-rolling_consistency_cases0-False-<lambda>]",
     "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_apply_consistency_sum[all_data1-rolling_consistency_cases0-False-nansum]",
     "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_apply_consistency_sum[all_data1-rolling_consistency_cases0-True-<lambda>]",
