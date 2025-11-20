@@ -198,9 +198,9 @@ bool operation::is_null_aware()
 bool operation::is_always_valid()
 {
   switch (op_) {
-    case ast::ast_operator::IS_NULL: return true;
+    case ast::ast_operator::IS_NULL:
+    case ast::ast_operator::NULL_EQUAL: return true;
 
-    case ast::ast_operator::NULL_EQUAL:
     case ast::ast_operator::NULL_LOGICAL_AND:
     case ast::ast_operator::NULL_LOGICAL_OR:
     case ast::ast_operator::ADD:
