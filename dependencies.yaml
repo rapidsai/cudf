@@ -912,6 +912,7 @@ dependencies:
         packages:
           - rich
           - pytest-httpserver
+          - pytest-timeout
   test_python_narwhals:
     common:
       - output_types: [conda, requirements, pyproject]

@@ -76,6 +76,7 @@ dependencies:
 - pytest-cov
 - pytest-httpserver
 - pytest-rerunfailures!=16.0.0
+- pytest-timeout
 - pytest-xdist
 - pytest<9.0.0a0
 - python-confluent-kafka>=2.8.0,<2.9.0a0

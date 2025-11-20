@@ -46,6 +46,7 @@ rapids-logger "pytest cudf-polars"
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml" \
   --numprocesses=8 \
   --dist=worksteal \
+    --timeout 300 \
   --cov-config=./pyproject.toml \
   --cov=cudf_polars \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-polars-coverage.xml" \

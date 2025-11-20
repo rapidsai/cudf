@@ -44,6 +44,7 @@ test = [
     "numpy>=1.23,<3.0a0",
     "pytest-cov",
     "pytest-httpserver",
+    "pytest-timeout",
     "pytest-xdist",
     "pytest<9.0.0a0",
     "rich",
