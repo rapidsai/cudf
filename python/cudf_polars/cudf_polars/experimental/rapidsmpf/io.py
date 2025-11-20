@@ -372,6 +372,7 @@ async def scan_node(
             path_count = path_end - path_offset
             local_paths = ir.paths[path_offset : path_offset + path_count]
             sindex = local_offset % plan.factor
+            splits_created = 0
             for path in local_paths:
                 base_scan = Scan(
                     ir.schema,
@@ -387,7 +388,7 @@ async def scan_node(
                     ir.predicate,
                     parquet_options,
                 )
-                while sindex < plan.factor:
+                while sindex < plan.factor and splits_created < local_count:
                     scans.append(
                         SplitScan(
                             ir.schema,
@@ -398,6 +399,7 @@ async def scan_node(
                         )
                     )
                     sindex += 1
+                    splits_created += 1
                 sindex = 0
 
         else:
