@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from rmm.pylibrmm.stream import Stream
 
 
-class GlobalAllGather:
+class AllGatherContext:
     """
     global AllGather context manager.
 
@@ -44,8 +44,8 @@ class GlobalAllGather:
         self.context = context
         self._insertion_finished = False
 
-    def __enter__(self) -> GlobalAllGather:
-        """Enter the GlobalAllGather context manager."""
+    def __enter__(self) -> AllGatherContext:
+        """Enter the AllGatherContext."""
         self.op_id = _get_new_shuffle_id()
         statistics = self.context.statistics()
         progress_thread = ProgressThread(self.context.comm(), statistics)
@@ -64,14 +64,14 @@ class GlobalAllGather:
         exc_val: Exception | None,
         exc_tb: TracebackType | None,
     ) -> Literal[False]:
-        """Exit the GlobalAllGather context manager."""
+        """Exit the AllGatherContext."""
         del self.allgather
         _release_shuffle_id(self.op_id)
         return False
 
     def insert_chunk(self, chunk: TableChunk) -> None:
         """
-        Insert a chunk into the GlobalAllGather instance.
+        Insert a chunk into the AllGatherContext instance.
 
         Parameters
         ----------
@@ -98,7 +98,7 @@ class GlobalAllGather:
 
     def extract_concatenated(self, stream: Stream) -> plc.Table:
         """
-        Extract the concatenated AllGather result.
+        Extract the concatenated result.
 
         Parameters
         ----------

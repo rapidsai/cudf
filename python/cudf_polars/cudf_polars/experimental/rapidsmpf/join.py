@@ -12,6 +12,7 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Join
+from cudf_polars.experimental.rapidsmpf.allgather import AllGatherContext
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
 )
@@ -122,7 +123,24 @@ async def broadcast_join_node(
 
         # Collect small-side chunks
         small_dfs = await get_small_table(context, small_child, small_ch)
-        if ir.options[0] != "Inner":
+        if context.comm().nranks > 1:
+            # Global all-gather (i.e. broadcast)
+            with AllGatherContext(context) as allgather:
+                for small_df in small_dfs:
+                    allgather.insert_chunk(
+                        TableChunk.from_pylibcudf_table(
+                            small_df.table, small_df.stream, exclusive_view=True
+                        )
+                    )
+                small_dfs = [
+                    DataFrame.from_table(
+                        allgather.extract_concatenated(small_df.stream),
+                        list(small_child.schema.keys()),
+                        list(small_child.schema.values()),
+                        small_df.stream,
+                    )
+                ]
+        elif ir.options[0] != "Inner":
             # TODO: Use local repartitioning for non-inner joins
             small_dfs = [_concat(*small_dfs, context=ir_context)]
 

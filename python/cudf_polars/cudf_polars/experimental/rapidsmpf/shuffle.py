@@ -22,7 +22,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
 )
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
-from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
+from cudf_polars.experimental.rapidsmpf.utils import ChannelManager, empty_table_chunk
 from cudf_polars.experimental.shuffle import Shuffle
 
 if TYPE_CHECKING:
@@ -66,7 +66,7 @@ def _release_shuffle_id(op_id: int) -> None:
         _shuffle_id_vacancy.add(op_id)
 
 
-class LocalShuffle:
+class ShuffleContext:
     """
     Local shuffle instance context manager.
 
@@ -96,13 +96,13 @@ class LocalShuffle:
         self.columns_to_hash = columns_to_hash
         self._insertion_finished = False
 
-    def __enter__(self) -> LocalShuffle:
+    def __enter__(self) -> ShuffleContext:
         """Enter the local shuffle instance context manager."""
         self.op_id = _get_new_shuffle_id()
         statistics = self.context.statistics()
         progress_thread = ProgressThread(self.local_comm, statistics)
         self.shuffler = Shuffler(
-            comm=self.local_comm,
+            comm=self.context.comm(),
             progress_thread=progress_thread,
             op_id=self.op_id,
             total_num_partitions=self.num_partitions,
@@ -172,18 +172,18 @@ class LocalShuffle:
 
 
 @define_py_node()
-async def local_shuffle_node(
+async def shuffle_node(
     context: Context,
     ir: Shuffle,
     ir_context: IRExecutionContext,
-    local_comm: Communicator,
+    local_comm: Communicator,  # Not used yet
     ch_in: ChannelPair,
     ch_out: ChannelPair,
     columns_to_hash: tuple[int, ...],
     num_partitions: int,
 ) -> None:
     """
-    Execute a local shuffle pipeline in a single node.
+    Execute a shuffle operation.
 
     This node combines partition_and_pack, shuffler, and unpack_and_concat
     into a single Python node using rapidsmpf.shuffler.Shuffler and utilities
@@ -211,9 +211,8 @@ async def local_shuffle_node(
     async with shutdown_on_error(
         context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
     ):
-        # Create LocalShuffle context manager to handle shuffler lifecycle
-        # TODO: Use ir_context to get the stream (not available yet)
-        with LocalShuffle(
+        # Create ShuffleContext context manager to handle shuffler lifecycle
+        with ShuffleContext(
             context, local_comm, num_partitions, columns_to_hash
         ) as local_shuffle:
             # Process input chunks
@@ -231,9 +230,15 @@ async def local_shuffle_node(
                 local_shuffle.insert_chunk(chunk)
 
             # Extract shuffled partitions and send them out
-            # LocalShuffle.extract_chunk handles insert_finished, wait, extract, and unpack
+            # ShuffleContext.extract_chunk handles insert_finished, wait, extract, and unpack
+            num_partitions_local = 0
             stream = ir_context.get_cuda_stream()
-            for partition_id in range(num_partitions):
+            for partition_id in range(
+                # Round-robin partition assignment
+                context.comm().rank,
+                num_partitions,
+                context.comm().nranks,
+            ):
                 # Create a new TableChunk with the result
                 output_chunk = TableChunk.from_pylibcudf_table(
                     table=local_shuffle.extract_chunk(partition_id, stream),
@@ -243,6 +248,17 @@ async def local_shuffle_node(
 
                 # Send the output chunk
                 await ch_out.data.send(context, Message(partition_id, output_chunk))
+                num_partitions_local += 1
+
+            # Make sure we send at least one chunk
+            if num_partitions_local < 1:
+                await ch_out.data.send(
+                    context,
+                    Message(
+                        0,
+                        empty_table_chunk(ir, context),
+                    ),
+                )
 
         await ch_out.data.drain(context)
 
@@ -270,9 +286,9 @@ def _(
     channels[ir] = ChannelManager(rec.state["context"])
 
     # Complete shuffle pipeline in a single node
-    # LocalShuffle context manager handles shuffle ID lifecycle internally
+    # ShuffleContext context manager handles shuffle ID lifecycle internally
     nodes[ir] = [
-        local_shuffle_node(
+        shuffle_node(
             context,
             ir,
             rec.state["ir_context"],

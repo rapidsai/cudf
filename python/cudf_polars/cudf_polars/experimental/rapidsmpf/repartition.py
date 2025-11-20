@@ -12,7 +12,7 @@ from rapidsmpf.streaming.core.node import define_py_node
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 from cudf_polars.containers import DataFrame
-from cudf_polars.experimental.rapidsmpf.allgather import GlobalAllGather
+from cudf_polars.experimental.rapidsmpf.allgather import AllGatherContext
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
@@ -107,7 +107,7 @@ async def concatenate_node(
         msg: TableChunk | None
         if max_chunks is None and context.comm().nranks > 1:
             # Assume this means "global repartitioning" for now
-            with GlobalAllGather(context) as allgather:
+            with AllGatherContext(context) as allgather:
                 chunks = []
                 while (msg := await ch_in.data.recv(context)) is not None:
                     chunks.append(

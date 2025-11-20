@@ -36,7 +36,7 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
     define_py_node,
     shutdown_on_error,
 )
-from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
+from cudf_polars.experimental.rapidsmpf.utils import ChannelManager, empty_table_chunk
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -186,21 +186,11 @@ async def dataframescan_node(
         # If no slices assigned to this rank, send an empty chunk with correct schema
         if len(ir_slices) == 0:
             # Create an empty table with the correct schema
-            empty_columns = [
-                plc.column_factories.make_empty_column(plc.DataType(dtype.id()))
-                for dtype in ir.schema.values()
-            ]
-            empty_table = plc.Table(empty_columns)
-
             await ch_out.data.send(
                 context,
                 Message(
                     0,
-                    TableChunk.from_pylibcudf_table(
-                        empty_table,
-                        context.get_stream_from_pool(),
-                        exclusive_view=True,
-                    ),
+                    empty_table_chunk(ir, context),
                 ),
             )
             await ch_out.data.drain(context)
