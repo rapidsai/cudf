@@ -131,45 +131,17 @@ async def concatenate_node(
             await ch_out.send_metadata(context, metadata)
 
             with AllGatherContext(context) as allgather:
-                # chunks = []
                 stream = context.get_stream_from_pool()
                 while (msg := await ch_in.data.recv(context)) is not None:
-                    # chunks.append(
-                    #     TableChunk.from_message(msg).make_available_and_spill(
-                    #         context.br(), allow_overbooking=True
-                    #     )
-                    # )
-                    allgather.insert_chunk(
-                        TableChunk.from_message(msg)
-                        # TableChunk.from_message(msg).make_available_and_spill(
-                        #     context.br(), allow_overbooking=True
-                        # )
-                    )
-                # df = df_from_chunks(ir, chunks, ir_context)
-                # print(f"df[A] (rank {context.comm().rank}): {df.to_polars()}")
-                # allgather.insert_chunk(
-                #     TableChunk.from_pylibcudf_table(
-                #         df.table, df.stream, exclusive_view=True
-                #     )
-                # )
-                df = df_from_chunks(
-                    ir,
-                    [
-                        TableChunk.from_pylibcudf_table(
-                            allgather.extract_concatenated(stream),
-                            stream,
-                            exclusive_view=True,
-                        )
-                    ],
-                    ir_context,
-                )
-                # print(f"df[B] (rank {context.comm().rank}): {df.to_polars()}")
+                    allgather.insert_chunk(TableChunk.from_message(msg))
                 await ch_out.data.send(
                     context,
                     Message(
                         0,
                         TableChunk.from_pylibcudf_table(
-                            df.table, df.stream, exclusive_view=True
+                            allgather.extract_concatenated(stream),
+                            stream,
+                            exclusive_view=True,
                         ),
                     ),
                 )
@@ -177,9 +149,6 @@ async def concatenate_node(
             # Send metadata.
             metadata.duplicated = input_metadata.duplicated
             await ch_out.send_metadata(context, metadata)
-            print(
-                f"[{type(ir).__name__}] duplicated: {metadata.duplicated} on rank {context.comm().rank}"
-            )
 
             # Local repartitioning
             seq_num = 0
