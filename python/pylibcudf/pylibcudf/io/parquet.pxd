@@ -56,6 +56,7 @@ cdef class ParquetReaderOptionsBuilder:
     cpdef ParquetReaderOptionsBuilder convert_strings_to_categories(self, bool val)
     cpdef ParquetReaderOptionsBuilder use_pandas_metadata(self, bool val)
     cpdef ParquetReaderOptionsBuilder allow_mismatched_pq_schemas(self, bool val)
+    cpdef ParquetReaderOptionsBuilder ignore_missing_columns(self, bool val)
     cpdef ParquetReaderOptionsBuilder use_arrow_schema(self, bool val)
     cpdef ParquetReaderOptionsBuilder filter(self, Expression filter)
     cpdef ParquetReaderOptionsBuilder columns(self, list col_names)
