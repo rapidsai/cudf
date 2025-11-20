@@ -273,6 +273,9 @@ class CategoricalColumn(column.ColumnBase):
         if isinstance(other, column.ColumnBase):
             if isinstance(other, CategoricalColumn):
                 if self.dtype == other.dtype:
+                    # Dtypes are the same, but ordering may differ
+                    # in which case we need to align them for their codes
+                    # to match.
                     if not self.dtype._internal_eq(other.dtype):
                         other = other.as_categorical_column(self.dtype)
                 else:
