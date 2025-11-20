@@ -42,7 +42,7 @@ data_type get_input::get_type() { return type_; }
 
 bool get_input::is_null_aware() { return false; }
 
-bool get_input::is_always_nonnullable() { return false; }
+bool get_input::is_always_valid() { return false; }
 
 void get_input::instantiate(instance_context& ctx, instance_info const& info)
 {
@@ -77,7 +77,7 @@ data_type set_output::get_type() { return type_; }
 
 bool set_output::is_null_aware() { return source_->is_null_aware(); }
 
-bool set_output::is_always_nonnullable() { return source_->is_always_nonnullable(); }
+bool set_output::is_always_valid() { return source_->is_always_valid(); }
 
 node& set_output::get_source() { return *source_; }
 
@@ -195,7 +195,7 @@ bool operation::is_null_aware()
   }
 }
 
-bool operation::is_always_nonnullable()
+bool operation::is_always_valid()
 {
   switch (op_) {
     case ast::ast_operator::IS_NULL: return true;
@@ -250,7 +250,7 @@ bool operation::is_always_nonnullable()
     case ast::ast_operator::CAST_TO_UINT64:
     case ast::ast_operator::CAST_TO_FLOAT64:
       return std::all_of(
-        operands_.begin(), operands_.end(), [](auto& op) { return op->is_always_nonnullable(); });
+        operands_.begin(), operands_.end(), [](auto& op) { return op->is_always_valid(); });
 
     default: CUDF_UNREACHABLE("Unrecognized operator type.");
   }
@@ -447,10 +447,10 @@ std::tuple<null_aware, null_output> ast_converter::generate_code(target target_i
       ? null_aware::YES
       : null_aware::NO;
 
-  bool output_is_always_non_nullable = std::all_of(
-    output_irs_.cbegin(), output_irs_.cend(), [](auto& ir) { return ir->is_always_nonnullable(); });
+  bool output_is_always_valid = std::all_of(
+    output_irs_.cbegin(), output_irs_.cend(), [](auto& ir) { return ir->is_always_valid(); });
 
-  bool may_evaluate_null = !output_is_always_non_nullable && has_nullable_inputs;
+  bool may_evaluate_null = !output_is_always_valid && has_nullable_inputs;
   auto null_policy       = may_evaluate_null ? null_output::PRESERVE : null_output::NON_NULLABLE;
 
   instance_ctx.set_has_nulls(is_null_aware == null_aware::YES);

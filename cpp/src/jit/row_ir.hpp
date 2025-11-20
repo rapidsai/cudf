@@ -123,11 +123,11 @@ struct node {
   virtual bool is_null_aware() = 0;
 
   /**
-   * @brief Returns `true` if this node always produces a non-nullable output even if its inputs are
-   * nullable, e.g., `IS_NULL` operator produces a non-nullable boolean output regardless of the
+   * @brief Returns `true` if this node always produces a valid output even if its inputs are
+   * nullable, e.g., `IS_NULL` operator produces a valid boolean output regardless of the
    * nullability of its input.
    */
-  virtual bool is_always_nonnullable() = 0;
+  virtual bool is_always_valid() = 0;
 
   /**
    * @brief Instantiate the IR node with the given context and instance information, setting up any
@@ -199,9 +199,9 @@ struct get_input final : node {
   [[nodiscard]] bool is_null_aware() override;
 
   /**
-   * @copydoc node::is_always_nonnullable
+   * @copydoc node::is_always_valid
    */
-  [[nodiscard]] bool is_always_nonnullable() override;
+  [[nodiscard]] bool is_always_valid() override;
 
   /**
    * @copydoc node::instantiate
@@ -261,9 +261,9 @@ struct set_output final : node {
   [[nodiscard]] bool is_null_aware() override;
 
   /**
-   * @copydoc node::is_always_nonnullable
+   * @copydoc node::is_always_valid
    */
-  [[nodiscard]] bool is_always_nonnullable() override;
+  [[nodiscard]] bool is_always_valid() override;
 
   /**
    * @brief Get the source IR node from which the value is taken
@@ -355,9 +355,9 @@ struct operation final : node {
   [[nodiscard]] bool is_null_aware() override;
 
   /**
-   * @copydoc node::is_always_nonnullable
+   * @copydoc node::is_always_valid
    */
-  [[nodiscard]] bool is_always_nonnullable() override;
+  [[nodiscard]] bool is_always_valid() override;
 
   /**
    * @brief Get the operation code of the operation
