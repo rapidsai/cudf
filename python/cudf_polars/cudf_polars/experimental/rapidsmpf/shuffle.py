@@ -84,6 +84,8 @@ class ShuffleContext:
         The number of partitions to shuffle into.
     columns_to_hash: tuple[int, ...]
         The columns to hash.
+    shuffle_id: int
+        Pre-allocated shuffle ID for this operation.
     """
 
     def __init__(
@@ -92,17 +94,18 @@ class ShuffleContext:
         local_comm: Communicator,
         num_partitions: int,
         columns_to_hash: tuple[int, ...],
+        shuffle_id: int,
     ):
         self.context = context
         self.local_comm = local_comm
         self.br = context.br()
         self.num_partitions = num_partitions
         self.columns_to_hash = columns_to_hash
+        self.op_id = shuffle_id
         self._insertion_finished = False
 
     def __enter__(self) -> ShuffleContext:
         """Enter the local shuffle instance context manager."""
-        self.op_id = _get_new_shuffle_id()
         statistics = self.context.statistics()
         progress_thread = ProgressThread(self.local_comm, statistics)
         self.shuffler = Shuffler(
@@ -185,6 +188,7 @@ async def shuffle_node(
     ch_out: ChannelPair,
     columns_to_hash: tuple[int, ...],
     num_partitions: int,
+    shuffle_id: int,
 ) -> None:
     """
     Execute a shuffle operation.
@@ -211,6 +215,8 @@ async def shuffle_node(
         Tuple of column indices to use for hashing.
     num_partitions
         Number of partitions to shuffle into.
+    shuffle_id
+        Pre-allocated shuffle ID for this operation.
     """
     async with shutdown_on_error(
         context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
@@ -227,7 +233,7 @@ async def shuffle_node(
 
         # Create ShuffleContext context manager to handle shuffler lifecycle
         with ShuffleContext(
-            context, local_comm, num_partitions, columns_to_hash
+            context, local_comm, num_partitions, columns_to_hash, shuffle_id
         ) as local_shuffle:
             # Process input chunks
             while True:
@@ -295,12 +301,13 @@ def _(
     context = rec.state["context"]
     columns_to_hash = tuple(column_names.index(k.name) for k in keys)
     num_partitions = rec.state["partition_info"][ir].count
+    shuffle_id = rec.state["shuffle_id_map"][ir]
 
     # Create output ChannelManager
     channels[ir] = ChannelManager(rec.state["context"])
 
     # Complete shuffle pipeline in a single node
-    # ShuffleContext context manager handles shuffle ID lifecycle internally
+    # Pre-allocated shuffle ID is passed from shuffle_id_map
     nodes[ir] = [
         shuffle_node(
             context,
@@ -311,6 +318,7 @@ def _(
             ch_out=channels[ir].reserve_input_slot(),
             columns_to_hash=columns_to_hash,
             num_partitions=num_partitions,
+            shuffle_id=shuffle_id,
         )
     ]
 

@@ -37,6 +37,8 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
     generate_ir_sub_network_wrapper,
     metadata_drain_node,
 )
+from cudf_polars.experimental.repartition import Repartition
+from cudf_polars.experimental.shuffle import Shuffle
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import CUDAStreamPolicy, CUDAStreamPoolConfig
@@ -59,6 +61,60 @@ if TYPE_CHECKING:
         LowerState,
         SubNetGenerator,
     )
+
+
+def allocate_shuffle_ids(
+    ir: IR,
+    config_options: ConfigOptions,
+) -> dict[IR, int]:
+    """
+    Pre-allocate shuffle IDs for all Shuffle and Repartition nodes.
+
+    Parameters
+    ----------
+    ir
+        Root of the IR graph.
+    config_options
+        GPUEngine configuration options.
+
+    Returns
+    -------
+    shuffle_id_map
+        Mapping from IR nodes to pre-allocated shuffle IDs.
+    """
+    from functools import partial
+
+    from rapidsmpf.integrations.core import get_new_shuffle_id
+
+    # Collect all Shuffle, Repartition, and Join nodes
+    # (Join nodes may use AllGatherContext for broadcasting)
+    shuffle_nodes: list[IR] = [
+        node
+        for node in traversal([ir])
+        if isinstance(node, (Shuffle, Repartition, Join))
+    ]
+
+    shuffle_id_map: dict[IR, int] = {}
+
+    if (
+        config_options.executor.name == "streaming"
+        and config_options.executor.cluster == "distributed"
+    ):
+        # Distributed mode: Use Dask client to coordinate ID allocation
+        from distributed import get_client
+        from rapidsmpf.integrations.dask.shuffler import _get_occupied_ids_dask
+
+        client = get_client()
+
+        # Allocate IDs using the proper distributed coordination
+        for node in shuffle_nodes:
+            shuffle_id = get_new_shuffle_id(partial(_get_occupied_ids_dask, client))
+            shuffle_id_map[node] = shuffle_id
+    else:
+        # Single-process mode: Use sequential allocation
+        shuffle_id_map = {node: idx for idx, node in enumerate(shuffle_nodes)}
+
+    return shuffle_id_map
 
 
 def evaluate_logical_plan(
@@ -85,6 +141,9 @@ def evaluate_logical_plan(
     # Lower the IR graph on the client process (for now).
     ir, partition_info, stats = lower_ir_graph(ir, config_options)
 
+    # Pre-allocate shuffle IDs for all Shuffle and Repartition nodes
+    shuffle_id_map = allocate_shuffle_ids(ir, config_options)
+
     # Build and execute the streaming pipeline.
     # This must be done on all worker processes
     # for cluster == "distributed".
@@ -104,11 +163,13 @@ def evaluate_logical_plan(
         from cudf_polars.experimental.rapidsmpf.dask import evaluate_pipeline_dask
 
         return evaluate_pipeline_dask(
-            evaluate_pipeline, ir, partition_info, config_options, stats
+            evaluate_pipeline, ir, partition_info, config_options, stats, shuffle_id_map
         )
     else:
         # Single-process execution: Run locally
-        return evaluate_pipeline(ir, partition_info, config_options, stats)
+        return evaluate_pipeline(
+            ir, partition_info, config_options, stats, shuffle_id_map
+        )
 
 
 def evaluate_pipeline(
@@ -116,6 +177,7 @@ def evaluate_pipeline(
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
     stats: StatsCollector,
+    shuffle_id_map: dict[IR, int],
     rmpf_context: Context | None = None,
 ) -> pl.DataFrame:
     """
@@ -131,6 +193,8 @@ def evaluate_pipeline(
         The configuration options.
     stats
         The statistics collector.
+    shuffle_id_map
+        Mapping from Shuffle/Repartition IR nodes to pre-allocated shuffle IDs.
     rmpf_context
         The RapidsMPF context.
 
@@ -203,6 +267,7 @@ def evaluate_pipeline(
         partition_info,
         config_options,
         stats,
+        shuffle_id_map=shuffle_id_map,
         ir_context=ir_context,
         local_comm=local_comm,
     )
@@ -356,6 +421,7 @@ def generate_network(
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
     stats: StatsCollector,
+    shuffle_id_map: dict[IR, int],
     *,
     ir_context: IRExecutionContext,
     local_comm: Communicator,
@@ -375,6 +441,8 @@ def generate_network(
         The configuration options.
     stats
         Statistics collector.
+    shuffle_id_map
+        Mapping from Shuffle/Repartition IR nodes to pre-allocated shuffle IDs.
     ir_context
         The execution context for the IR node.
     local_comm
@@ -410,6 +478,7 @@ def generate_network(
         "max_io_threads": max_io_threads_local,
         "stats": stats,
         "local_comm": local_comm,
+        "shuffle_id_map": shuffle_id_map,
     }
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state

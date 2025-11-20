@@ -87,6 +87,7 @@ async def broadcast_join_node(
     ch_left: ChannelPair,
     ch_right: ChannelPair,
     broadcast_side: Literal["left", "right"],
+    shuffle_id: int,
 ) -> None:
     """
     Join node for rapidsmpf.
@@ -107,6 +108,8 @@ async def broadcast_join_node(
         The right input ChannelPair.
     broadcast_side
         The side to broadcast.
+    shuffle_id
+        Pre-allocated shuffle ID for this operation.
     """
     async with shutdown_on_error(
         context,
@@ -156,7 +159,7 @@ async def broadcast_join_node(
         small_dfs = await get_small_table(context, small_child, small_ch)
         if context.comm().nranks > 1:
             # Global all-gather (i.e. broadcast)
-            with AllGatherContext(context) as allgather:
+            with AllGatherContext(context, shuffle_id) as allgather:
                 for small_df in small_dfs:
                     allgather.insert_chunk(
                         TableChunk.from_pylibcudf_table(
@@ -274,6 +277,9 @@ def _(
         else:
             broadcast_side = "left"
 
+        # Get pre-allocated shuffle ID
+        shuffle_id = rec.state["shuffle_id_map"][ir]
+
         nodes[ir] = [
             broadcast_join_node(
                 rec.state["context"],
@@ -283,6 +289,7 @@ def _(
                 channels[left].reserve_output_slot(),
                 channels[right].reserve_output_slot(),
                 broadcast_side=broadcast_side,
+                shuffle_id=shuffle_id,
             )
         ]
         return nodes, channels

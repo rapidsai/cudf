@@ -40,6 +40,7 @@ def evaluate_pipeline_dask(
             MutableMapping[IR, PartitionInfo],
             ConfigOptions,
             StatsCollector,
+            dict[IR, int],
             Context | None,
         ],
         pl.DataFrame,
@@ -48,6 +49,7 @@ def evaluate_pipeline_dask(
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
     stats: StatsCollector,
+    shuffle_id_map: dict[IR, int],
 ) -> pl.DataFrame:
     """
     Evaluate a RapidsMPF streaming pipeline on a Dask cluster.
@@ -64,6 +66,8 @@ def evaluate_pipeline_dask(
         The configuration options.
     stats
         The statistics collector.
+    shuffle_id_map
+        Mapping from Shuffle/Repartition IR nodes to pre-allocated shuffle IDs.
 
     Returns
     -------
@@ -77,6 +81,7 @@ def evaluate_pipeline_dask(
         partition_info,
         config_options,
         stats,
+        shuffle_id_map,
     )
     return pl.concat(result.values())
 
@@ -88,6 +93,7 @@ def _evaluate_pipeline_dask(
             MutableMapping[IR, PartitionInfo],
             ConfigOptions,
             StatsCollector,
+            dict[IR, int],
             Context | None,
         ],
         pl.DataFrame,
@@ -96,6 +102,7 @@ def _evaluate_pipeline_dask(
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
     stats: StatsCollector,
+    shuffle_id_map: dict[IR, int],
     dask_worker: Any = None,
 ) -> pl.DataFrame:
     """
@@ -113,6 +120,8 @@ def _evaluate_pipeline_dask(
         The configuration options.
     stats
         The statistics collector.
+    shuffle_id_map
+        Mapping from Shuffle/Repartition IR nodes to pre-allocated shuffle IDs.
     dask_worker
         Dask worker reference.
         This kwarg is automatically populated by Dask
@@ -132,4 +141,6 @@ def _evaluate_pipeline_dask(
 
     dask_context = get_worker_context(dask_worker)
     rmpf_context = Context(dask_context.comm, dask_context.br, options)
-    return callback(ir, partition_info, config_options, stats, rmpf_context)
+    return callback(
+        ir, partition_info, config_options, stats, shuffle_id_map, rmpf_context
+    )

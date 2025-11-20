@@ -78,6 +78,8 @@ class GenState(TypedDict):
         Statistics collector.
     local_comm
         The local communicator.
+    shuffle_id_map
+        Mapping from Shuffle/Repartition IR nodes to pre-allocated shuffle IDs.
     """
 
     context: Context
@@ -88,6 +90,7 @@ class GenState(TypedDict):
     max_io_threads: int
     stats: StatsCollector
     local_comm: Communicator
+    shuffle_id_map: dict[IR, int]
 
 
 SubNetGenerator: TypeAlias = GenericTransformer[

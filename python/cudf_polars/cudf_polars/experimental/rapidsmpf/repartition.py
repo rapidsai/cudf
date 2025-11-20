@@ -81,6 +81,7 @@ async def concatenate_node(
     *,
     max_chunks: int | None,
     output_count: int,
+    shuffle_id: int,
 ) -> None:
     """
     Concatenate node for rapidsmpf.
@@ -102,6 +103,8 @@ async def concatenate_node(
         If `None`, concatenate all input chunks.
     output_count
         The expected number of output chunks.
+    shuffle_id
+        Pre-allocated shuffle ID for this operation.
     """
     # TODO: Use multiple streams
     max_chunks = max(2, max_chunks) if max_chunks else None
@@ -130,7 +133,7 @@ async def concatenate_node(
             metadata.duplicated = True
             await ch_out.send_metadata(context, metadata)
 
-            with AllGatherContext(context) as allgather:
+            with AllGatherContext(context, shuffle_id) as allgather:
                 stream = context.get_stream_from_pool()
                 while (msg := await ch_in.data.recv(context)) is not None:
                     allgather.insert_chunk(TableChunk.from_message(msg))
@@ -210,6 +213,9 @@ def _(
     # Create output ChannelManager
     channels[ir] = ChannelManager(rec.state["context"])
 
+    # Get pre-allocated shuffle ID
+    shuffle_id = rec.state["shuffle_id_map"][ir]
+
     # Add python node
     nodes[ir] = [
         concatenate_node(
@@ -220,6 +226,7 @@ def _(
             channels[ir.children[0]].reserve_output_slot(),
             max_chunks=max_chunks,
             output_count=partition_info[ir].count,
+            shuffle_id=shuffle_id,
         )
     ]
     return nodes, channels
