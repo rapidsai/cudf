@@ -552,6 +552,7 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
                               filter_columns_names,
                               options.is_enabled_use_pandas_metadata(),
                               _strings_to_categorical,
+                              options.is_enabled_ignore_missing_columns(),
                               _options.timestamp_type.id());
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
