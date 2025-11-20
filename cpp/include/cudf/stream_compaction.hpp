@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <cudf/detail/join/join.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/export.hpp>
@@ -525,6 +526,11 @@ std::unique_ptr<table> filter(
  * @param left_indices Device span of row indices in the left table.
  * @param right_indices Device span of row indices in the right table.
  * @param predicate An AST expression that returns a boolean for each pair of rows.
+ * @param join_kind The type of join operation (INNER_JOIN, LEFT_JOIN, or FULL_JOIN).
+ *                  INNER_JOIN: Only pairs that satisfy the predicate and have valid indices.
+ *                  LEFT_JOIN: All left rows preserved, failed predicates nullify right indices.
+ *                  FULL_JOIN: All rows from both sides preserved, failed predicates create separate
+ * pairs.
  * @param stream CUDA stream used for kernel launches and memory operations.
  * @param mr Device memory resource used to allocate output gather map.
  *
@@ -538,6 +544,7 @@ filter_gather_map(cudf::table_view const& left,
                   cudf::device_span<size_type const> left_indices,
                   cudf::device_span<size_type const> right_indices,
                   ast::expression const& predicate,
+                  cudf::detail::join_kind join_kind,
                   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
                   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

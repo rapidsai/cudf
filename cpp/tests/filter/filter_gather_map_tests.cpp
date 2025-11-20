@@ -9,6 +9,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/ast/expressions.hpp>
+#include <cudf/detail/join/join.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/stream_compaction.hpp>
@@ -49,8 +50,12 @@ struct FilterGatherMapTest : public cudf::test::BaseFixture {
             std::vector<cudf::size_type> const& expected_left_indices,
             std::vector<cudf::size_type> const& expected_right_indices)
   {
-    auto result =
-      cudf::filter_gather_map(left_table, right_table, left_indices, right_indices, predicate);
+    auto result = cudf::filter_gather_map(left_table,
+                                          right_table,
+                                          left_indices,
+                                          right_indices,
+                                          predicate,
+                                          cudf::detail::join_kind::INNER_JOIN);
 
     EXPECT_EQ(result.first->size(), expected_left_indices.size());
     EXPECT_EQ(result.second->size(), expected_right_indices.size());
@@ -431,7 +436,8 @@ TEST_F(FilterGatherMapTest, MismatchedSizes)
                             right_table,
                             cudf::device_span<cudf::size_type const>(left_indices_input),
                             cudf::device_span<cudf::size_type const>(right_indices_input),
-                            predicate),
+                            predicate,
+                            cudf::detail::join_kind::INNER_JOIN),
     std::invalid_argument);
 }
 
@@ -467,7 +473,8 @@ TEST_F(FilterGatherMapTest, NullIndices)
                             right_table,
                             cudf::device_span<cudf::size_type const>(left_indices_input),
                             cudf::device_span<cudf::size_type const>(right_indices_input),
-                            predicate);
+                            predicate,
+                            cudf::detail::join_kind::INNER_JOIN);
 
   ASSERT_NE(result.first, nullptr) << "Left result is null";
   ASSERT_NE(result.second, nullptr) << "Right result is null";

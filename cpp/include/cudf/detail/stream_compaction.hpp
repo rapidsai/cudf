@@ -134,6 +134,7 @@ filter_gather_map(cudf::table_view const& left,
                   cudf::device_span<size_type const> left_indices,
                   cudf::device_span<size_type const> right_indices,
                   ast::expression const& predicate,
+                  join_kind join_kind,
                   rmm::cuda_stream_view stream,
                   rmm::device_async_resource_ref mr);
 
