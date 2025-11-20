@@ -13,6 +13,7 @@ from rapidsmpf.communicator.single import new_communicator
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.memory.buffer_resource import BufferResource, LimitAvailableMemory
+from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.leaf_node import pull_from_channel
@@ -421,11 +422,6 @@ def generate_network(
     max_io_threads_global = 2
     max_io_threads_local = max(1, max_io_threads_global // max(1, num_io_nodes))
 
-    # Create a single ProgressThread for all shuffle/allgather operations on this rank
-    from rapidsmpf.progress_thread import ProgressThread
-
-    progress_thread = ProgressThread(local_comm, context.statistics())
-
     # Generate the network
     state: GenState = {
         "context": context,
@@ -437,7 +433,7 @@ def generate_network(
         "stats": stats,
         "local_comm": local_comm,
         "shuffle_id_map": shuffle_id_map,
-        "progress_thread": progress_thread,
+        "progress_thread": ProgressThread(local_comm, context.statistics()),
     }
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state
