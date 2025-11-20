@@ -1115,7 +1115,7 @@ def _fast_slow_function_call(
     from .module_accelerator import disable_module_accelerator
 
     fast = False
-    is_mixed_type_error = False
+    block_transfer_to_fast = False
     try:
         if transfer_block is _State.SLOW:
             raise Exception("Forcing slow path due to transfer blocking")
@@ -1164,7 +1164,7 @@ def _fast_slow_function_call(
                         )
     except Exception as err:
         if type(err) is cudf.errors.MixedTypeError:
-            is_mixed_type_error = True
+            block_transfer_to_fast = True
         with nvtx.annotate(
             "EXECUTE_SLOW",
             color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
@@ -1181,7 +1181,7 @@ def _fast_slow_function_call(
             with disable_module_accelerator():
                 result = func(*slow_args, **slow_kwargs)
     result = _maybe_wrap_result(result, func, *args, **kwargs)
-    if is_mixed_type_error and isinstance(result, _FastSlowProxy):
+    if block_transfer_to_fast and isinstance(result, _FastSlowProxy):
         result.force_state(_State.SLOW)
     return result, fast
 
