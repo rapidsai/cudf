@@ -151,8 +151,9 @@ cdef class Scalar:
         """The type of data in the column."""
         return self._data_type
 
-    cpdef bool is_valid(self, stream: Stream):
+    cpdef bool is_valid(self, Stream stream = None):
         """True if the scalar is valid, false if not"""
+        stream = _get_stream(stream)
         return self.get().is_valid(stream.view())
 
     def to_arrow(

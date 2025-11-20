@@ -1587,6 +1587,7 @@ aggregate_reader_metadata::select_columns(
   std::optional<std::vector<std::string>> const& filter_columns_names,
   bool include_index,
   bool strings_to_categorical,
+  bool ignore_missing_columns,
   type_id timestamp_type_id)
 {
   auto const find_schema_child =
@@ -1849,8 +1850,11 @@ aggregate_reader_metadata::select_columns(
           std::find_if(all_paths.begin(), all_paths.end(), [&](path_info& valid_path) {
             return valid_path.full_path == selected_path;
           });
+        // Ensure that selected path matches a path in all_paths
         if (found_path != all_paths.end()) {
           valid_selected_paths.push_back({selected_path, found_path->schema_idx});
+        } else if (not ignore_missing_columns) {
+          CUDF_FAIL("Encountered non-existent column in selected path", std::invalid_argument);
         }
       }
     }
