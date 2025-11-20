@@ -368,9 +368,10 @@ TYPED_TEST(FilterExpressionTest, NullLogicalOr)
   auto& ref_3 = tree.push(cudf::ast::column_reference(3));
   auto& or_expr =
     tree.push(cudf::ast::operation(cudf::ast::ast_operator::NULL_LOGICAL_OR, ref_2, ref_3));
-  auto result   = Executor::filter(or_expr, this->table);
-  auto expected = cudf::test::fixed_width_column_wrapper<int32_t>{{2, 3, 4, 6}, {1, 1, 1, 1}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->get_column(0).view());
+  auto result = Executor::filter(or_expr, this->table);
+  auto expected_filtered =
+    cudf::test::fixed_width_column_wrapper<int32_t>{{2, 3, 4, 6}, {1, 1, 1, 1}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_filtered, result->get_column(0).view());
 }
 
 }  // namespace filters
