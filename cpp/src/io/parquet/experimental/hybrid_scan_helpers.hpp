@@ -131,6 +131,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param filter_columns_names List of paths of column names present only in filter, if any
    * @param include_index Whether to always include the PANDAS index column(s)
    * @param strings_to_categorical Type conversion parameter
+   * @param ignore_missing_columns Whether to ignore non-existent columns
    * @param timestamp_type_id Type conversion parameter
    *
    * @return input column information, output column buffers, list of output column schema
@@ -142,6 +143,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
                            std::optional<std::vector<std::string>> const& filter_column_names,
                            bool include_index,
                            bool strings_to_categorical,
+                           bool ignore_missing_columns,
                            type_id timestamp_type_id);
 
   /**
