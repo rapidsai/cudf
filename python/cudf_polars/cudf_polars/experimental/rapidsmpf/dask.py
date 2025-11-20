@@ -4,11 +4,14 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from distributed import get_client
 from rapidsmpf.config import Options, get_environment_variables
+from rapidsmpf.integrations.core import get_new_shuffle_id
 from rapidsmpf.integrations.dask import get_worker_context
+from rapidsmpf.integrations.dask.shuffler import _get_occupied_ids_dask
 from rapidsmpf.streaming.core.context import Context
 
 import polars as pl
@@ -31,6 +34,31 @@ def get_dask_client() -> Client:
     DaskRegisterManager.register_once()
     DaskRegisterManager.run_on_cluster(client)
     return client
+
+
+def allocate_shuffle_ids_dask(shuffle_nodes: list[IR]) -> dict[IR, int]:
+    """
+    Allocate shuffle IDs using Dask client coordination.
+
+    Parameters
+    ----------
+    shuffle_nodes
+        List of IR nodes that require shuffle IDs.
+
+    Returns
+    -------
+    shuffle_id_map
+        Mapping from IR nodes to pre-allocated shuffle IDs.
+    """
+    client = get_dask_client()
+    shuffle_id_map: dict[IR, int] = {}
+
+    # Allocate IDs using the proper distributed coordination
+    for node in shuffle_nodes:
+        shuffle_id = get_new_shuffle_id(partial(_get_occupied_ids_dask, client))
+        shuffle_id_map[node] = shuffle_id
+
+    return shuffle_id_map
 
 
 def evaluate_pipeline_dask(

@@ -82,10 +82,6 @@ def allocate_shuffle_ids(
     shuffle_id_map
         Mapping from IR nodes to pre-allocated shuffle IDs.
     """
-    from functools import partial
-
-    from rapidsmpf.integrations.core import get_new_shuffle_id
-
     # Collect all Shuffle, Repartition, and Join nodes
     # (Join nodes may use AllGatherContext for broadcasting)
     shuffle_nodes: list[IR] = [
@@ -94,27 +90,17 @@ def allocate_shuffle_ids(
         if isinstance(node, (Shuffle, Repartition, Join))
     ]
 
-    shuffle_id_map: dict[IR, int] = {}
-
     if (
         config_options.executor.name == "streaming"
         and config_options.executor.cluster == "distributed"
     ):
         # Distributed mode: Use Dask client to coordinate ID allocation
-        from distributed import get_client
-        from rapidsmpf.integrations.dask.shuffler import _get_occupied_ids_dask
+        from cudf_polars.experimental.rapidsmpf.dask import allocate_shuffle_ids_dask
 
-        client = get_client()
-
-        # Allocate IDs using the proper distributed coordination
-        for node in shuffle_nodes:
-            shuffle_id = get_new_shuffle_id(partial(_get_occupied_ids_dask, client))
-            shuffle_id_map[node] = shuffle_id
+        return allocate_shuffle_ids_dask(shuffle_nodes)
     else:
         # Single-process mode: Use sequential allocation
-        shuffle_id_map = {node: idx for idx, node in enumerate(shuffle_nodes)}
-
-    return shuffle_id_map
+        return {node: idx for idx, node in enumerate(shuffle_nodes)}
 
 
 def evaluate_logical_plan(
