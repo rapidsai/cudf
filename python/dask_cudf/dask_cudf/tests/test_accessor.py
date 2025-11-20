@@ -286,7 +286,7 @@ def test_categorical_as_known():
     assert set(expected.compute().cat.categories) == set(
         actual.compute().cat.categories.values_host
     )
-    dd.assert_eq(expected, actual.astype(expected.dtype))
+    dd.assert_eq(expected, actual, check_categorical=False)
 
 
 def test_str_slice():
