@@ -87,7 +87,7 @@ async def broadcast_join_node(
     ch_left: ChannelPair,
     ch_right: ChannelPair,
     broadcast_side: Literal["left", "right"],
-    shuffle_id: int | None = None,
+    shuffle_id: int,
 ) -> None:
     """
     Join node for rapidsmpf.
@@ -109,7 +109,7 @@ async def broadcast_join_node(
     broadcast_side
         The side to broadcast.
     shuffle_id
-        Pre-allocated shuffle ID (distributed mode) or None (single-rank runtime allocation).
+        Pre-allocated shuffle ID for this operation.
     """
     async with shutdown_on_error(
         context,
@@ -277,7 +277,7 @@ def _(
         else:
             broadcast_side = "left"
 
-        # Get pre-allocated ID (distributed) or None (single-rank uses runtime allocation)
+        # Look up the reserved shuffle ID for this operation
         shuffle_id = rec.state["shuffle_id_map"].get(ir)
 
         nodes[ir] = [

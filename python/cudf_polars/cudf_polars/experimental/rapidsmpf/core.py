@@ -37,8 +37,7 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
     generate_ir_sub_network_wrapper,
     metadata_drain_node,
 )
-from cudf_polars.experimental.repartition import Repartition
-from cudf_polars.experimental.shuffle import Shuffle
+from cudf_polars.experimental.rapidsmpf.shuffle import ReserveOpIDs
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import CUDAStreamPolicy, CUDAStreamPoolConfig
@@ -61,46 +60,6 @@ if TYPE_CHECKING:
         LowerState,
         SubNetGenerator,
     )
-
-
-def allocate_shuffle_ids(
-    ir: IR,
-    config_options: ConfigOptions,
-) -> dict[IR, int]:
-    """
-    Pre-allocate shuffle IDs for all Shuffle and Repartition nodes.
-
-    Parameters
-    ----------
-    ir
-        Root of the IR graph.
-    config_options
-        GPUEngine configuration options.
-
-    Returns
-    -------
-    shuffle_id_map
-        Mapping from IR nodes to pre-allocated shuffle IDs.
-    """
-    # Collect all Shuffle, Repartition, and Join nodes
-    # (Join nodes may use AllGatherContext for broadcasting)
-    shuffle_nodes: list[IR] = [
-        node
-        for node in traversal([ir])
-        if isinstance(node, (Shuffle, Repartition, Join))
-    ]
-
-    if (
-        config_options.executor.name == "streaming"
-        and config_options.executor.cluster == "distributed"
-    ):
-        # Distributed mode: Use Dask client to coordinate ID allocation
-        from cudf_polars.experimental.rapidsmpf.dask import allocate_shuffle_ids_dask
-
-        return allocate_shuffle_ids_dask(shuffle_nodes)
-    else:
-        # Single-process mode: Use sequential allocation
-        return {node: idx for idx, node in enumerate(shuffle_nodes)}
 
 
 def evaluate_logical_plan(
@@ -127,35 +86,43 @@ def evaluate_logical_plan(
     # Lower the IR graph on the client process (for now).
     ir, partition_info, stats = lower_ir_graph(ir, config_options)
 
-    # Pre-allocate shuffle IDs for all Shuffle and Repartition nodes
-    shuffle_id_map = allocate_shuffle_ids(ir, config_options)
+    # Reserve shuffle IDs for the entire pipeline execution
+    with ReserveOpIDs(ir) as shuffle_id_map:
+        # Build and execute the streaming pipeline.
+        # This must be done on all worker processes
+        # for cluster == "distributed".
+        if (
+            config_options.executor.cluster == "distributed"
+        ):  # pragma: no cover; block depends on executor type and Distributed cluster
+            # Distributed execution: Use client.run
 
-    # Build and execute the streaming pipeline.
-    # This must be done on all worker processes
-    # for cluster == "distributed".
-    if (
-        config_options.executor.cluster == "distributed"
-    ):  # pragma: no cover; block depends on executor type and Distributed cluster
-        # Distributed execution: Use client.run
+            # Warn loudly that multi-GPU execution is under construction
+            warnings.warn(
+                "UNDER CONSTRUCTION!!!"
+                "The rapidsmpf runtime does NOT support distributed execution. "
+                "Use at your own risk!!!",
+                stacklevel=2,
+            )
+            # NOTE: Distributed execution requires Dask for now
+            from cudf_polars.experimental.rapidsmpf.dask import evaluate_pipeline_dask
 
-        # Warn loudly that multi-GPU execution is under construction
-        warnings.warn(
-            "UNDER CONSTRUCTION!!!"
-            "The rapidsmpf runtime does NOT support distributed execution. "
-            "Use at your own risk!!!",
-            stacklevel=2,
-        )
-        # NOTE: Distributed execution requires Dask for now
-        from cudf_polars.experimental.rapidsmpf.dask import evaluate_pipeline_dask
-
-        return evaluate_pipeline_dask(
-            evaluate_pipeline, ir, partition_info, config_options, stats, shuffle_id_map
-        )
-    else:
-        # Single-process execution: Run locally
-        return evaluate_pipeline(
-            ir, partition_info, config_options, stats, shuffle_id_map
-        )
+            return evaluate_pipeline_dask(
+                evaluate_pipeline,
+                ir,
+                partition_info,
+                config_options,
+                stats,
+                shuffle_id_map,
+            )
+        else:
+            # Single-process execution: Run locally
+            return evaluate_pipeline(
+                ir,
+                partition_info,
+                config_options,
+                stats,
+                shuffle_id_map,
+            )
 
 
 def evaluate_pipeline(
@@ -180,7 +147,7 @@ def evaluate_pipeline(
     stats
         The statistics collector.
     shuffle_id_map
-        Mapping from Shuffle/Repartition IR nodes to pre-allocated shuffle IDs.
+        Mapping from Shuffle/Repartition/Join IR nodes to reserved shuffle IDs.
     rmpf_context
         The RapidsMPF context.
 
@@ -428,7 +395,7 @@ def generate_network(
     stats
         Statistics collector.
     shuffle_id_map
-        Mapping from Shuffle/Repartition IR nodes to pre-allocated shuffle IDs.
+        Mapping from Shuffle/Repartition/Join IR nodes to reserved shuffle IDs.
     ir_context
         The execution context for the IR node.
     local_comm

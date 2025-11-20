@@ -79,7 +79,7 @@ class GenState(TypedDict):
     local_comm
         The local communicator.
     shuffle_id_map
-        Mapping from Shuffle/Repartition IR nodes to pre-allocated shuffle IDs.
+        Mapping from Shuffle/Repartition/Join IR nodes to reserved shuffle IDs.
     """
 
     context: Context
