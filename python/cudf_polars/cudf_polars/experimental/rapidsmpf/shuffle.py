@@ -31,7 +31,6 @@ from cudf_polars.experimental.shuffle import Shuffle
 if TYPE_CHECKING:
     from types import TracebackType
 
-    from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.progress_thread import ProgressThread
     from rapidsmpf.streaming.core.context import Context
 
@@ -137,8 +136,6 @@ class ShuffleContext:
     ----------
     context: Context
         The streaming context.
-    local_comm: Communicator
-        The local communicator.
     num_partitions: int
         The number of partitions to shuffle into.
     columns_to_hash: tuple[int, ...]
@@ -152,14 +149,12 @@ class ShuffleContext:
     def __init__(
         self,
         context: Context,
-        local_comm: Communicator,
         num_partitions: int,
         columns_to_hash: tuple[int, ...],
         shuffle_id: int,
         progress_thread: ProgressThread,
     ):
         self.context = context
-        self.local_comm = local_comm
         self.br = context.br()
         self.num_partitions = num_partitions
         self.columns_to_hash = columns_to_hash
@@ -244,7 +239,6 @@ async def shuffle_node(
     context: Context,
     ir: Shuffle,
     ir_context: IRExecutionContext,
-    local_comm: Communicator,  # Not used yet
     ch_in: ChannelPair,
     ch_out: ChannelPair,
     columns_to_hash: tuple[int, ...],
@@ -267,8 +261,6 @@ async def shuffle_node(
         The Shuffle IR node.
     ir_context
         The execution context for the IR node.
-    local_comm
-        The local communicator.
     ch_in
         Input ChannelPair with metadata and data channels.
     ch_out
@@ -298,7 +290,6 @@ async def shuffle_node(
         # Create ShuffleContext context manager to handle shuffler lifecycle
         with ShuffleContext(
             context,
-            local_comm,
             num_partitions,
             columns_to_hash,
             shuffle_id,
@@ -383,7 +374,6 @@ def _(
             context,
             ir,
             rec.state["ir_context"],
-            rec.state["local_comm"],
             ch_in=channels[child].reserve_output_slot(),
             ch_out=channels[ir].reserve_input_slot(),
             columns_to_hash=columns_to_hash,

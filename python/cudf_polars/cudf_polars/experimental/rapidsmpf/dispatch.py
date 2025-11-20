@@ -12,7 +12,6 @@ from cudf_polars.typing import GenericTransformer
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
-    from rapidsmpf.communicator.local import Communicator
     from rapidsmpf.progress_thread import ProgressThread
     from rapidsmpf.streaming.core.context import Context
 
@@ -77,8 +76,6 @@ class GenState(TypedDict):
         a single IO node.
     stats
         Statistics collector.
-    local_comm
-        The local communicator.
     shuffle_id_map
         Mapping from Shuffle/Repartition/Join IR nodes to reserved shuffle IDs.
     progress_thread
@@ -92,7 +89,6 @@ class GenState(TypedDict):
     ir_context: IRExecutionContext
     max_io_threads: int
     stats: StatsCollector
-    local_comm: Communicator
     shuffle_id_map: dict[IR, int]
     progress_thread: ProgressThread
 

@@ -46,7 +46,6 @@ from cudf_polars.utils.config import CUDAStreamPolicy, CUDAStreamPoolConfig
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
-    from rapidsmpf.communicator.local import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.leaf_node import DeferredMessages
 
@@ -158,11 +157,6 @@ def evaluate_pipeline(
     """
     assert config_options.executor.name == "streaming", "Executor must be streaming"
 
-    # Create a local comm whether or not we are
-    # using "single" or "distributed" mode
-    options = Options(get_environment_variables())
-    local_comm = new_communicator(options)
-
     if rmpf_context is not None:
         # Using "distributed" mode.
         # We can use the existing rapidsmpf context, but we
@@ -199,6 +193,8 @@ def evaluate_pipeline(
         else:
             stream_pool = None
 
+        options = Options(get_environment_variables())
+        local_comm = new_communicator(options)
         br = BufferResource(
             mr, memory_available=memory_available, stream_pool=stream_pool
         )
@@ -223,7 +219,6 @@ def evaluate_pipeline(
         stats,
         shuffle_id_map=shuffle_id_map,
         ir_context=ir_context,
-        local_comm=local_comm,
     )
 
     # Run the network
@@ -378,7 +373,6 @@ def generate_network(
     shuffle_id_map: dict[IR, int],
     *,
     ir_context: IRExecutionContext,
-    local_comm: Communicator,
 ) -> tuple[list[Any], DeferredMessages]:
     """
     Translate the IR graph to a RapidsMPF streaming network.
@@ -399,8 +393,6 @@ def generate_network(
         Mapping from Shuffle/Repartition/Join IR nodes to reserved shuffle IDs.
     ir_context
         The execution context for the IR node.
-    local_comm
-        The local communicator.
 
     Returns
     -------
@@ -431,9 +423,8 @@ def generate_network(
         "ir_context": ir_context,
         "max_io_threads": max_io_threads_local,
         "stats": stats,
-        "local_comm": local_comm,
         "shuffle_id_map": shuffle_id_map,
-        "progress_thread": ProgressThread(local_comm, context.statistics()),
+        "progress_thread": ProgressThread(context.comm(), context.statistics()),
     }
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state
