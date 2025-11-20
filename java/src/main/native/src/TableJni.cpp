@@ -3608,7 +3608,7 @@ Java_ai_rapids_cudf_Table_mixedLeftSemiJoinGatherMap(JNIEnv* env,
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftAntiJoinGatherMap(
   JNIEnv* env, jclass, jlong j_left_keys, jlong j_right_keys, jboolean compare_nulls_equal)
 {
-  double const load_factor = 0.5;
+  double constexpr load_factor = 0.5;
   return cudf::jni::join_gather_single_map(
     env,
     j_left_keys,
