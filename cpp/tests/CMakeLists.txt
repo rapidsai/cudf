@@ -297,7 +297,7 @@ ConfigureTest(
   interop/from_arrow_stream_test.cpp
   interop/dlpack_test.cpp
   EXTRA_LIBS
-  nanoarrow::nanoarrow
+  nanoarrow
   ${ARROW_LIBRARIES}
 )
 
