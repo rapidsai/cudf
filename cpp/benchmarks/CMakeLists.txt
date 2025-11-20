@@ -475,6 +475,11 @@ ConfigureNVBench(
   rolling/range_rolling_sum.cu rolling/rolling_sum.cpp
 )
 
+# ##################################################################################################
+# * dictionary benchmark
+# ---------------------------------------------------------------------------------
+ConfigureNVBench(DICTIONARY_NVBENCH dictionary/encode.cpp)
+
 add_custom_target(
   run_benchmarks
   DEPENDS CUDF_BENCHMARKS
