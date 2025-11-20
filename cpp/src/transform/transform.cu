@@ -285,7 +285,7 @@ std::unique_ptr<column> transform_operation(column_view base_column,
     stream,
     mr);
 
-  if (intermediate_null_mask) {
+  if (intermediate_null_mask.has_value()) {
     auto [null_mask, null_count] = detail::valid_if(
       intermediate_null_mask->begin(),
       intermediate_null_mask->end(),
@@ -294,7 +294,7 @@ std::unique_ptr<column> transform_operation(column_view base_column,
       mr);
 
     output->set_null_mask(std::move(null_mask), null_count);
-  } else if (and_mask) {
+  } else if (and_mask.has_value()) {
     auto& [and_mask_buffer, and_mask_null_count] = *and_mask;
     output->set_null_mask(std::move(and_mask_buffer), and_mask_null_count);
   }
@@ -347,7 +347,7 @@ std::unique_ptr<column> string_view_operation(column_view base_column,
 
   auto output = make_strings_column(string_views, string_view{}, stream, mr);
 
-  if (intermediate_null_mask) {
+  if (intermediate_null_mask.has_value()) {
     auto [null_mask, null_count] = detail::valid_if(
       intermediate_null_mask->begin(),
       intermediate_null_mask->end(),
@@ -356,7 +356,7 @@ std::unique_ptr<column> string_view_operation(column_view base_column,
       mr);
 
     output->set_null_mask(std::move(null_mask), null_count);
-  } else if (and_mask) {
+  } else if (and_mask.has_value()) {
     auto& [and_mask_buffer, and_mask_null_count] = *and_mask;
     output->set_null_mask(std::move(and_mask_buffer), and_mask_null_count);
   }
