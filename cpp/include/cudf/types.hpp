@@ -225,7 +225,7 @@ enum class type_id : int32_t {
 
 /**
  * @brief A function is null-aware if its output value uses the input validity.
- * 
+ *
  * For example, ADD is not null-aware, but IS_NULL and NULL_LOGICAL_AND are null-aware.
  */
 enum class null_aware : bool {
