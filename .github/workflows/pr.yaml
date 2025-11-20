@@ -65,6 +65,15 @@ jobs:
         uses: rapidsai/shared-actions/check_nightly_success/dispatch@main
         with:
           repo: cudf
+  print-changed-files:
+    needs: changed-files
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print changed files
+        env:
+          CHANGED_FILES: ${{ needs.changed-files.outputs.changed_file_groups }}
+        run: |
+          echo "$CHANGED_FILES"
   changed-files:
     secrets: inherit
     needs: telemetry-setup
