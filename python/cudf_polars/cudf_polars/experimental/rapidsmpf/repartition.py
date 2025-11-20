@@ -107,31 +107,41 @@ async def concatenate_node(
         msg: TableChunk | None
         if max_chunks is None and context.comm().nranks > 1:
             # Assume this means "global repartitioning" for now
+            # print("global repartitioning")
             with AllGatherContext(context) as allgather:
-                chunks = []
+                # chunks = []
+                stream = context.get_stream_from_pool()
                 while (msg := await ch_in.data.recv(context)) is not None:
-                    chunks.append(
-                        TableChunk.from_message(msg).make_available_and_spill(
-                            context.br(), allow_overbooking=True
-                        )
+                    # chunks.append(
+                    #     TableChunk.from_message(msg).make_available_and_spill(
+                    #         context.br(), allow_overbooking=True
+                    #     )
+                    # )
+                    allgather.insert_chunk(
+                        TableChunk.from_message(msg)
+                        # TableChunk.from_message(msg).make_available_and_spill(
+                        #     context.br(), allow_overbooking=True
+                        # )
                     )
-                df = df_from_chunks(ir, chunks, ir_context)
-                allgather.insert_chunk(
-                    TableChunk.from_pylibcudf_table(
-                        df.table, df.stream, exclusive_view=True
-                    )
-                )
+                # df = df_from_chunks(ir, chunks, ir_context)
+                # print(f"df[A] (rank {context.comm().rank}): {df.to_polars()}")
+                # allgather.insert_chunk(
+                #     TableChunk.from_pylibcudf_table(
+                #         df.table, df.stream, exclusive_view=True
+                #     )
+                # )
                 df = df_from_chunks(
                     ir,
                     [
                         TableChunk.from_pylibcudf_table(
-                            allgather.extract_concatenated(df.stream),
-                            df.stream,
+                            allgather.extract_concatenated(stream),
+                            stream,
                             exclusive_view=True,
                         )
                     ],
                     ir_context,
                 )
+                # print(f"df[B] (rank {context.comm().rank}): {df.to_polars()}")
                 await ch_out.data.send(
                     context,
                     Message(

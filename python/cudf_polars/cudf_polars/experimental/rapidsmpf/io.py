@@ -368,7 +368,8 @@ async def scan_node(
             local_count = math.ceil(count / context.comm().nranks)
             local_offset = local_count * context.comm().rank
             path_offset = local_offset // plan.factor
-            path_count = math.ceil(local_count / plan.factor)
+            path_end = math.ceil((local_offset + local_count) / plan.factor)
+            path_count = path_end - path_offset
             local_paths = ir.paths[path_offset : path_offset + path_count]
             sindex = local_offset % plan.factor
             for path in local_paths:

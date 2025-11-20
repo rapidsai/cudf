@@ -33,7 +33,13 @@ from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext, Join, Scan, Union
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo, lower_ir_node
-from cudf_polars.experimental.rapidsmpf.nodes import generate_ir_sub_network_wrapper
+from cudf_polars.experimental.rapidsmpf.nodes import (
+    empty_result_node,
+    generate_ir_sub_network_wrapper,
+)
+from cudf_polars.experimental.rapidsmpf.repartition import Repartition
+from cudf_polars.experimental.rapidsmpf.shuffle import Shuffle
+from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import CUDAStreamPolicy, CUDAStreamPoolConfig
@@ -380,17 +386,41 @@ def generate_network(
     -------
     The network nodes and output hook.
     """
+
+    # Find "terminal" IR nodes
+    # (Join, Shuffle, Repartition, and leaf nodes)
+    def _find_terminal_nodes(node: IR) -> set[IR]:
+        if not node.children:
+            return {node}
+        terminal: set[IR] = set()
+        for child in node.children:
+            if isinstance(child, (Join, Shuffle)) or (
+                isinstance(child, Repartition) and partition_info[child].count == 1
+            ):  # Union?
+                terminal.add(child)
+            else:
+                terminal.update(_find_terminal_nodes(child))
+        return terminal
+
+    terminal_ir = ir
+    if context.comm().rank > 0:
+        terminal_nodes = _find_terminal_nodes(ir)
+        if len(terminal_nodes) == 1 and all(
+            isinstance(node, Repartition) for node in terminal_nodes
+        ):
+            terminal_ir = terminal_nodes.pop()
+
     # Count the number of IO nodes and the number of IR dependencies
     num_io_nodes: int = 0
     ir_dep_count: defaultdict[IR, int] = defaultdict(int)
-    for node in traversal([ir]):
+    for node in traversal([terminal_ir]):
         if isinstance(node, (DataFrameScan, Scan)):
             num_io_nodes += 1
         for child in node.children:
             ir_dep_count[child] += 1
 
     # Determine which nodes need fanout
-    fanout_nodes = determine_fanout_nodes(ir, partition_info, ir_dep_count)
+    fanout_nodes = determine_fanout_nodes(terminal_ir, partition_info, ir_dep_count)
 
     # TODO: Make this configurable
     max_io_threads_global = 2
@@ -410,8 +440,21 @@ def generate_network(
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state
     )
-    nodes_dict, channels = mapper(ir)
-    ch_out = channels[ir].reserve_output_slot()
+    nodes_dict, channels = mapper(terminal_ir)
+
+    if terminal_ir != ir:
+        # Add a simple node to return an empty table
+        # with the appropriate schema for ir
+        channels[ir] = ChannelManager(context)
+        nodes_dict[ir] = [
+            empty_result_node(
+                context,
+                ir,
+                ir_context,
+                channels[ir].reserve_input_slot(),
+                channels[terminal_ir].reserve_output_slot(),
+            )
+        ]
 
     # TODO: We will need an additional node here to drain
     # the metadata channel once we start plumbing metadata
@@ -420,6 +463,7 @@ def generate_network(
 
     # Add final node to pull from the output data channel
     # (metadata channel is unused)
+    ch_out = channels[ir].reserve_output_slot()
     output_node, output = pull_from_channel(context, ch_in=ch_out.data)
 
     # Flatten the nodes dictionary into a list for run_streaming_pipeline

@@ -18,6 +18,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    empty_table_chunk,
     process_children,
     shutdown_on_error,
 )
@@ -28,6 +29,41 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
+
+
+@define_py_node()
+async def empty_result_node(
+    context: Context,
+    ir: IR,
+    ir_context: IRExecutionContext,
+    ch_out: ChannelPair,
+    ch_in: ChannelPair,
+) -> None:
+    """
+    Empty node for rapidsmpf - produces a single empty chunk.
+
+    Parameters
+    ----------
+    context
+        The rapidsmpf context.
+    ir
+        The IR node.
+    ir_context
+        The execution context for the IR node.
+    ch_out
+        The output ChannelPair.
+    ch_in
+        The input ChannelPair.
+
+    Notes
+    -----
+    Chunks are processed in the order they are received.
+    """
+    async with shutdown_on_error(context, ch_in.data, ch_out.data):
+        while (_ := await ch_in.data.recv(context)) is not None:
+            pass  # Ignore the input chunk
+        await ch_out.data.send(context, Message(0, empty_table_chunk(ir, context)))
+        await ch_out.data.drain(context)
 
 
 @define_py_node()
