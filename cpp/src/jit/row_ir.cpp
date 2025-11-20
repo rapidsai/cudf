@@ -261,7 +261,7 @@ inline bool is_operator_always_valid(opcode op)
 
 bool operation::is_always_valid()
 {
-  return is_operator_always_valid(op_) &&
+  return is_operator_always_valid(op_) ||
          std::all_of(
            operands_.begin(), operands_.end(), [](auto& op) { return op->is_always_valid(); });
 }
