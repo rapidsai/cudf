@@ -224,17 +224,9 @@ enum class type_id : int32_t {
 };
 
 /**
- * @brief Indicates whether a function is null-aware or not.
- * i.e:
- * The function:
- * ```cpp void add(int * out, int a, int b);```
- * is not null-aware as it does not take nullability into account.
- *
- * The function:
- * ```cpp void add(optional<int> * out, optional<int> a, optional<int> b);```
- * is null-aware as it takes nullability into account.
- * If either of the row inputs of a non-null-aware function is null, the output is considered null.
- *
+ * @brief A function is null-aware if its output value uses the input validity.
+ * 
+ * For example, ADD is not null-aware, but IS_NULL and NULL_LOGICAL_AND are null-aware.
  */
 enum class null_aware : bool {
   NO  = 0,  ///< The function is not null-aware
