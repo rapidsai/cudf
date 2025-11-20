@@ -271,13 +271,17 @@ class CategoricalColumn(column.ColumnBase):
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         if isinstance(other, column.ColumnBase):
-            if (
-                isinstance(other, CategoricalColumn)
-                and other.dtype != self.dtype
-            ):
-                raise TypeError(
-                    "Categoricals can only compare with the same type"
-                )
+            if isinstance(other, CategoricalColumn):
+                if self.dtype == other.dtype:
+                    # Dtypes are the same, but ordering may differ
+                    # in which case we need to align them for their codes
+                    # to match.
+                    if not self.dtype._internal_eq(other.dtype):
+                        other = other.as_categorical_column(self.dtype)
+                else:
+                    raise TypeError(
+                        "Categoricals can only compare with the same type"
+                    )
             # We'll compare self's decategorized values later for non-CategoricalColumn
         else:
             codes = column.as_column(
@@ -641,7 +645,10 @@ class CategoricalColumn(column.ColumnBase):
                 return codes._with_type_metadata(dtype)  # type: ignore[return-value]
 
         return self.set_categories(
-            new_categories=dtype.categories, ordered=bool(dtype.ordered)
+            new_categories=self.dtype.categories
+            if dtype._categories is None
+            else dtype.categories,
+            ordered=bool(dtype.ordered),
         )
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
