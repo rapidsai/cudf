@@ -82,6 +82,7 @@ jobs:
       files_yaml: |
         test_cpp:
           - '**'
+          - '!.github/**'
           - '!.devcontainer/**'
           - '!CONTRIBUTING.md'
           - '!README.md'
