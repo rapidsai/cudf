@@ -15,6 +15,7 @@ import pytest
 import cudf
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_GE_210,
     PANDAS_GE_220,
     PANDAS_VERSION,
 )
@@ -22,6 +23,7 @@ from cudf.testing import assert_eq
 from cudf.testing._utils import (
     _decimal_series,
     assert_exceptions_equal,
+    expect_warning_if,
     gen_rand_series,
 )
 
@@ -1146,7 +1148,16 @@ def test_series_compare_scalar(
     request.applymarker(
         pytest.mark.xfail(
             numeric_and_temporal_types_as_str
-            in {"datetime64[ns]", "timedelta64[ns]"},
+            in {"datetime64[ns]", "timedelta64[ns]"}
+            and not (
+                numeric_and_temporal_types_as_str == "datetime64[ns]"
+                and comparison_op in {operator.eq, operator.ne}
+            )
+            and not (
+                not PANDAS_GE_210
+                and numeric_and_temporal_types_as_str == "timedelta64[ns]"
+                and comparison_op in {operator.eq, operator.ne}
+            ),
             reason=f"Fails with {numeric_and_temporal_types_as_str}",
         )
     )
@@ -1166,8 +1177,15 @@ def test_series_compare_scalar(
         result1 = cudf.Series(result1)
         result2 = cudf.Series(result2)
 
-    np.testing.assert_equal(result1.to_numpy(), comparison_op(arr1, rhs))
-    np.testing.assert_equal(result2.to_numpy(), comparison_op(rhs, arr1))
+    with expect_warning_if(
+        not PANDAS_GE_210
+        and numeric_and_temporal_types_as_str
+        in {"datetime64[ns]", "timedelta64[ns]"}
+        and comparison_op in {operator.eq, operator.ne},
+        DeprecationWarning,
+    ):
+        np.testing.assert_equal(result1.to_numpy(), comparison_op(arr1, rhs))
+        np.testing.assert_equal(result2.to_numpy(), comparison_op(rhs, arr1))
 
 
 @pytest.mark.parametrize("lhs_nulls", ["none", "some"])
@@ -3071,13 +3089,11 @@ def test_cat_non_cat_compare_ops(
 def test_eq_ne_non_comparable_types(
     left_data, right_data, op, expected_data, with_na
 ):
-    if with_na:
-        left_data[0] = None
+    left_data = left_data.copy()
+    expected_data = expected_data.copy()
     left = cudf.Series(left_data)
     right = cudf.Series(right_data)
     result = op(left, right)
-    if with_na:
-        expected_data[0] = None
     expected = cudf.Series(expected_data)
     assert_eq(result, expected)
 
@@ -3108,3 +3124,40 @@ def test_binops_float_scalar_decimal():
     )
     expected = cudf.Series([0.0, -3.5, None], dtype="float64")
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "scalars",
+    [
+        pd.NaT,
+        np.datetime64("NaT"),
+        None,
+        pd.NA,
+        np.nan,
+        np.datetime64("2020-01-01"),
+    ],
+)
+@pytest.mark.parametrize(
+    "comparison_op",
+    [
+        operator.eq,
+        operator.ne,
+    ],
+)
+def test_binops_comparisons_datatime_with_scalars(scalars, comparison_op):
+    with cudf.option_context("mode.pandas_compatible", True):
+        ser = cudf.Series(
+            [
+                np.datetime64("2020-01-01"),
+                np.datetime64("2021-06-15"),
+                np.datetime64("2022-12-31"),
+                None,
+            ]
+        )
+        expect = comparison_op(ser.to_pandas(), scalars)
+        got = comparison_op(ser, scalars)
+        assert_eq(expect, got)
+
+        expect = comparison_op(scalars, ser.to_pandas())
+        got = comparison_op(scalars, ser)
+        assert_eq(expect, got)

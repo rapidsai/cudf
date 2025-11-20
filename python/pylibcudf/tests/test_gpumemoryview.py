@@ -32,9 +32,12 @@ def np_array(request):
     return np.empty((size,), dtype=dtype)
 
 
-def test_cuda_array_interface(np_array):
+@pytest.mark.parametrize("stream", [None, rmm.pylibrmm.stream.Stream()])
+def test_cuda_array_interface(np_array, stream):
     buf = rmm.DeviceBuffer(
-        ptr=np_array.__array_interface__["data"][0], size=np_array.nbytes
+        ptr=np_array.__array_interface__["data"][0],
+        size=np_array.nbytes,
+        stream=plc.utils._get_stream(stream),
     )
     gpumemview = plc.gpumemoryview(buf)
 
@@ -47,9 +50,12 @@ def test_cuda_array_interface(np_array):
     assert cai["typestr"] == ai["typestr"]
 
 
-def test_len(np_array):
+@pytest.mark.parametrize("stream", [None, rmm.pylibrmm.stream.Stream()])
+def test_len(np_array, stream):
     buf = rmm.DeviceBuffer(
-        ptr=np_array.__array_interface__["data"][0], size=np_array.nbytes
+        ptr=np_array.__array_interface__["data"][0],
+        size=np_array.nbytes,
+        stream=plc.utils._get_stream(stream),
     )
     gpumemview = plc.gpumemoryview(buf)
 
