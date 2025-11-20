@@ -2058,6 +2058,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             out.index.name = objs[0].index.name
             out.index.names = objs[0].index.names
 
+        # frequency inference in compat mode only
+        if cudf.get_option("mode.pandas_compatible"):
+            if isinstance(out.index, DatetimeIndex):
+                try:
+                    out.index._freq = out.index.inferred_freq
+                except NotImplementedError:
+                    out.index._freq = None
         return out
 
     def astype(
@@ -3554,7 +3561,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 self._index = RangeIndex(length)
 
         elif isinstance(value, (pd.Series, Series)):
-            value = Series(value, nan_as_null=nan_as_null)
+            value = Series(
+                value, nan_as_null=nan_as_null, copy=isinstance(value, Series)
+            )
             if not ignore_index:
                 value = value._align_to_index(
                     self.index, how="right", sort=False
