@@ -47,12 +47,6 @@ void decode_dictionary_page_headers(cudf::detail::hostdevice_span<ColumnChunkDes
 {
   CUDF_FUNC_RANGE();
 
-  auto chunk_page_offsets = rmm::device_uvector<size_type>(chunks.size() + 1, stream);
-  thrust::sequence(rmm::exec_policy_nosync(stream),
-                   chunk_page_offsets.begin(),
-                   chunk_page_offsets.end(),
-                   size_type{0});
-
   rmm::device_uvector<chunk_page_info> chunk_page_info(chunks.size(), stream);
   thrust::for_each(rmm::exec_policy_nosync(stream),
                    thrust::counting_iterator<cuda::std::size_t>(0),
