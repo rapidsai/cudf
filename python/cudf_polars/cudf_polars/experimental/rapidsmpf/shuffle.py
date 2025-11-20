@@ -84,8 +84,9 @@ class ShuffleContext:
         The number of partitions to shuffle into.
     columns_to_hash: tuple[int, ...]
         The columns to hash.
-    shuffle_id: int
-        Pre-allocated shuffle ID for this operation.
+    shuffle_id: int | None
+        Pre-allocated shuffle ID for this operation (distributed mode).
+        If None, allocate at runtime from the vacancy pool (single-rank mode).
     """
 
     def __init__(
@@ -94,18 +95,25 @@ class ShuffleContext:
         local_comm: Communicator,
         num_partitions: int,
         columns_to_hash: tuple[int, ...],
-        shuffle_id: int,
+        shuffle_id: int | None = None,
     ):
         self.context = context
         self.local_comm = local_comm
         self.br = context.br()
         self.num_partitions = num_partitions
         self.columns_to_hash = columns_to_hash
-        self.op_id = shuffle_id
+        self._shuffle_id = shuffle_id
         self._insertion_finished = False
 
     def __enter__(self) -> ShuffleContext:
         """Enter the local shuffle instance context manager."""
+        # Allocate ID at runtime if not pre-allocated (single-rank mode)
+        if self._shuffle_id is None:
+            self.op_id = _get_new_shuffle_id()
+            self._runtime_allocated = True
+        else:
+            self.op_id = self._shuffle_id
+            self._runtime_allocated = False
         statistics = self.context.statistics()
         progress_thread = ProgressThread(self.local_comm, statistics)
         self.shuffler = Shuffler(
@@ -126,7 +134,9 @@ class ShuffleContext:
     ) -> Literal[False]:
         """Exit the local shuffle instance context manager."""
         self.shuffler.shutdown()
-        _release_shuffle_id(self.op_id)
+        # Only release ID if it was runtime-allocated (single-rank mode)
+        if self._runtime_allocated:
+            _release_shuffle_id(self.op_id)
         return False
 
     def insert_chunk(self, chunk: TableChunk) -> None:
@@ -188,7 +198,7 @@ async def shuffle_node(
     ch_out: ChannelPair,
     columns_to_hash: tuple[int, ...],
     num_partitions: int,
-    shuffle_id: int,
+    shuffle_id: int | None = None,
 ) -> None:
     """
     Execute a shuffle operation.
@@ -216,7 +226,8 @@ async def shuffle_node(
     num_partitions
         Number of partitions to shuffle into.
     shuffle_id
-        Pre-allocated shuffle ID for this operation.
+        Pre-allocated shuffle ID (distributed mode)
+        or None (single-rank runtime allocation).
     """
     async with shutdown_on_error(
         context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
@@ -301,13 +312,16 @@ def _(
     context = rec.state["context"]
     columns_to_hash = tuple(column_names.index(k.name) for k in keys)
     num_partitions = rec.state["partition_info"][ir].count
-    shuffle_id = rec.state["shuffle_id_map"][ir]
+    # Get pre-allocated ID (distributed)
+    # or None (single-rank uses runtime allocation)
+    shuffle_id = rec.state["shuffle_id_map"].get(ir)
 
     # Create output ChannelManager
     channels[ir] = ChannelManager(rec.state["context"])
 
     # Complete shuffle pipeline in a single node
-    # Pre-allocated shuffle ID is passed from shuffle_id_map
+    # shuffle_id: pre-allocated (distributed)
+    # or None (single-rank allocates at runtime)
     nodes[ir] = [
         shuffle_node(
             context,

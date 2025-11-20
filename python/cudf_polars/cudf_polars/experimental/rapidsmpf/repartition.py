@@ -81,7 +81,7 @@ async def concatenate_node(
     *,
     max_chunks: int | None,
     output_count: int,
-    shuffle_id: int,
+    shuffle_id: int | None = None,
 ) -> None:
     """
     Concatenate node for rapidsmpf.
@@ -104,7 +104,7 @@ async def concatenate_node(
     output_count
         The expected number of output chunks.
     shuffle_id
-        Pre-allocated shuffle ID for this operation.
+        Pre-allocated shuffle ID (distributed mode) or None (single-rank runtime allocation).
     """
     # TODO: Use multiple streams
     max_chunks = max(2, max_chunks) if max_chunks else None
@@ -213,8 +213,8 @@ def _(
     # Create output ChannelManager
     channels[ir] = ChannelManager(rec.state["context"])
 
-    # Get pre-allocated shuffle ID
-    shuffle_id = rec.state["shuffle_id_map"][ir]
+    # Get pre-allocated ID (distributed) or None (single-rank uses runtime allocation)
+    shuffle_id = rec.state["shuffle_id_map"].get(ir)
 
     # Add python node
     nodes[ir] = [

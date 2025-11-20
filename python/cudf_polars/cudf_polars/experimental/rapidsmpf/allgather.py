@@ -15,7 +15,10 @@ from rapidsmpf.progress_thread import ProgressThread
 
 from pylibcudf.contiguous_split import pack
 
-from cudf_polars.experimental.rapidsmpf.shuffle import _release_shuffle_id
+from cudf_polars.experimental.rapidsmpf.shuffle import (
+    _get_new_shuffle_id,
+    _release_shuffle_id,
+)
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -35,17 +38,25 @@ class AllGatherContext:
     ----------
     context: Context
         The streaming context.
-    shuffle_id: int
-        Pre-allocated shuffle ID for this operation.
+    shuffle_id: int | None
+        Pre-allocated shuffle ID for this operation (distributed mode).
+        If None, allocate at runtime from the vacancy pool (single-rank mode).
     """
 
-    def __init__(self, context: Context, shuffle_id: int):
+    def __init__(self, context: Context, shuffle_id: int | None = None):
         self.context = context
-        self.op_id = shuffle_id
+        self._shuffle_id = shuffle_id
         self._insertion_finished = False
 
     def __enter__(self) -> AllGatherContext:
         """Enter the AllGatherContext."""
+        # Allocate ID at runtime if not pre-allocated (single-rank mode)
+        if self._shuffle_id is None:
+            self.op_id = _get_new_shuffle_id()
+            self._runtime_allocated = True
+        else:
+            self.op_id = self._shuffle_id
+            self._runtime_allocated = False
         statistics = self.context.statistics()
         progress_thread = ProgressThread(self.context.comm(), statistics)
         self.allgather = AllGather(
@@ -65,7 +76,9 @@ class AllGatherContext:
     ) -> Literal[False]:
         """Exit the AllGatherContext."""
         del self.allgather
-        _release_shuffle_id(self.op_id)
+        # Only release ID if it was runtime-allocated (single-rank mode)
+        if self._runtime_allocated:
+            _release_shuffle_id(self.op_id)
         return False
 
     def insert_chunk(self, chunk: TableChunk) -> None:
