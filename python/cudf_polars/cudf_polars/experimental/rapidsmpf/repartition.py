@@ -15,7 +15,7 @@ from cudf_polars.containers import DataFrame
 from cudf_polars.experimental.rapidsmpf.allgather import AllGatherContext
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
-from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
+from cudf_polars.experimental.rapidsmpf.utils import ChannelManager, Metadata
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import _concat
 
@@ -80,6 +80,7 @@ async def concatenate_node(
     ch_in: ChannelPair,
     *,
     max_chunks: int | None,
+    output_count: int,
 ) -> None:
     """
     Concatenate node for rapidsmpf.
@@ -99,15 +100,36 @@ async def concatenate_node(
     max_chunks
         The maximum number of chunks to concatenate at once.
         If `None`, concatenate all input chunks.
+    output_count
+        The expected number of output chunks.
     """
     # TODO: Use multiple streams
     max_chunks = max(2, max_chunks) if max_chunks else None
-    async with shutdown_on_error(context, ch_in.data, ch_out.data):
+    async with shutdown_on_error(
+        context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
+    ):
+        # Receive metadata.
+        input_metadata = await ch_in.recv_metadata(context)
+        assert isinstance(input_metadata, Metadata), (
+            f"Expected Metadata, got {type(input_metadata)}."
+        )
+        metadata = Metadata(output_count)
+
+        # Check if we need global communication.
+        need_global_repartition = (
+            # Avoid allgather of already-duplicated data
+            not input_metadata.duplicated and max_chunks is None and output_count == 1
+        )
+
         chunks: list[TableChunk]
         msg: TableChunk | None
-        if max_chunks is None and context.comm().nranks > 1:
+        if need_global_repartition:
             # Assume this means "global repartitioning" for now
-            # print("global repartitioning")
+
+            # Send metadata.
+            metadata.duplicated = True
+            await ch_out.send_metadata(context, metadata)
+
             with AllGatherContext(context) as allgather:
                 # chunks = []
                 stream = context.get_stream_from_pool()
@@ -152,6 +174,13 @@ async def concatenate_node(
                     ),
                 )
         else:
+            # Send metadata.
+            metadata.duplicated = input_metadata.duplicated
+            await ch_out.send_metadata(context, metadata)
+            print(
+                f"[{type(ir).__name__}] duplicated: {metadata.duplicated} on rank {context.comm().rank}"
+            )
+
             # Local repartitioning
             seq_num = 0
             while True:
@@ -221,6 +250,7 @@ def _(
             channels[ir].reserve_input_slot(),
             channels[ir.children[0]].reserve_output_slot(),
             max_chunks=max_chunks,
+            output_count=partition_info[ir].count,
         )
     ]
     return nodes, channels

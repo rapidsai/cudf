@@ -34,12 +34,9 @@ from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext, Join, Scan, Un
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo, lower_ir_node
 from cudf_polars.experimental.rapidsmpf.nodes import (
-    empty_result_node,
     generate_ir_sub_network_wrapper,
+    metadata_drain_node,
 )
-from cudf_polars.experimental.rapidsmpf.repartition import Repartition
-from cudf_polars.experimental.rapidsmpf.shuffle import Shuffle
-from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import CUDAStreamPolicy, CUDAStreamPoolConfig
@@ -48,6 +45,7 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from rapidsmpf.communicator.local import Communicator
+    from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.leaf_node import DeferredMessages
 
     import polars as pl
@@ -386,41 +384,17 @@ def generate_network(
     -------
     The network nodes and output hook.
     """
-
-    # Find "terminal" IR nodes
-    # (Join, Shuffle, Repartition, and leaf nodes)
-    def _find_terminal_nodes(node: IR) -> set[IR]:
-        if not node.children:
-            return {node}
-        terminal: set[IR] = set()
-        for child in node.children:
-            if isinstance(child, (Join, Shuffle)) or (
-                isinstance(child, Repartition) and partition_info[child].count == 1
-            ):  # Union?
-                terminal.add(child)
-            else:
-                terminal.update(_find_terminal_nodes(child))
-        return terminal
-
-    terminal_ir = ir
-    if context.comm().rank > 0:
-        terminal_nodes = _find_terminal_nodes(ir)
-        if len(terminal_nodes) == 1 and all(
-            isinstance(node, Repartition) for node in terminal_nodes
-        ):
-            terminal_ir = terminal_nodes.pop()
-
     # Count the number of IO nodes and the number of IR dependencies
     num_io_nodes: int = 0
     ir_dep_count: defaultdict[IR, int] = defaultdict(int)
-    for node in traversal([terminal_ir]):
+    for node in traversal([ir]):
         if isinstance(node, (DataFrameScan, Scan)):
             num_io_nodes += 1
         for child in node.children:
             ir_dep_count[child] += 1
 
     # Determine which nodes need fanout
-    fanout_nodes = determine_fanout_nodes(terminal_ir, partition_info, ir_dep_count)
+    fanout_nodes = determine_fanout_nodes(ir, partition_info, ir_dep_count)
 
     # TODO: Make this configurable
     max_io_threads_global = 2
@@ -440,35 +414,25 @@ def generate_network(
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state
     )
-    nodes_dict, channels = mapper(terminal_ir)
+    nodes_dict, channels = mapper(ir)
+    ch_out = channels[ir].reserve_output_slot()
 
-    if terminal_ir != ir:
-        # Add a simple node to return an empty table
-        # with the appropriate schema for ir
-        channels[ir] = ChannelManager(context)
-        nodes_dict[ir] = [
-            empty_result_node(
-                context,
-                ir,
-                ir_context,
-                channels[ir].reserve_input_slot(),
-                channels[terminal_ir].reserve_output_slot(),
-            )
-        ]
-
-    # TODO: We will need an additional node here to drain
-    # the metadata channel once we start plumbing metadata
-    # through the network. This node could also drop
-    # "duplicated" data on all but rank 0.
+    # Add node to drain metadata channel before pull_from_channel
+    # (since pull_from_channel doesn't accept a ChannelPair)
+    ch_final_data: Channel[TableChunk] = context.create_channel()
+    drain_node = metadata_drain_node(
+        context,
+        ir,
+        ch_out,
+        ch_final_data,
+    )
 
     # Add final node to pull from the output data channel
-    # (metadata channel is unused)
-    ch_out = channels[ir].reserve_output_slot()
-    output_node, output = pull_from_channel(context, ch_in=ch_out.data)
+    output_node, output = pull_from_channel(context, ch_in=ch_final_data)
 
     # Flatten the nodes dictionary into a list for run_streaming_pipeline
     nodes: list[Any] = [node for node_list in nodes_dict.values() for node in node_list]
-    nodes.append(output_node)
+    nodes.extend([drain_node, output_node])
 
     # Return network and output hook
     return nodes, output

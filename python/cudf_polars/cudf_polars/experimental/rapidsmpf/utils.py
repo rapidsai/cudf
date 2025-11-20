@@ -9,8 +9,10 @@ import operator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from functools import reduce
-from typing import TYPE_CHECKING, Any, TypeAlias
+from typing import TYPE_CHECKING, Any
 
+from rapidsmpf.streaming.chunks.arbitrary import ArbitraryChunk
+from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import pylibcudf as plc
@@ -23,10 +25,6 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
-
-
-# Type alias for metadata payloads (placeholder - not used yet)
-MetadataPayload: TypeAlias = Any
 
 
 @asynccontextmanager
@@ -51,6 +49,29 @@ async def shutdown_on_error(
         raise
 
 
+class Metadata:
+    """Metadata payload for an individual ChannelPair."""
+
+    __slots__ = ("count", "duplicated", "partitioned_on")
+    count: int
+    """Chunk-count estimate."""
+    partitioned_on: tuple[str, ...]
+    """Partitioned-on columns."""
+    duplicated: bool
+    """Whether the data is duplicated on all workers."""
+
+    def __init__(
+        self,
+        count: int,
+        *,
+        partitioned_on: tuple[str, ...] = (),
+        duplicated: bool = False,
+    ):
+        self.count = count
+        self.partitioned_on = partitioned_on
+        self.duplicated = duplicated
+
+
 @dataclass
 class ChannelPair:
     """
@@ -73,7 +94,7 @@ class ChannelPair:
     in follow-up work.
     """
 
-    metadata: Channel[MetadataPayload]
+    metadata: Channel[ArbitraryChunk]
     data: Channel[TableChunk]
 
     @classmethod
@@ -83,6 +104,41 @@ class ChannelPair:
             metadata=context.create_channel(),
             data=context.create_channel(),
         )
+
+    async def send_metadata(self, ctx: Context, metadata: Metadata | None) -> None:
+        """
+        Send metadata if present, then drain metadata channel.
+
+        Parameters
+        ----------
+        ctx :
+            The streaming context.
+        metadata :
+            The metadata to send. If None, just drain.
+        """
+        if metadata is not None:
+            msg = Message(0, ArbitraryChunk(metadata))
+            await self.metadata.send(ctx, msg)
+        await self.metadata.drain(ctx)
+
+    async def recv_metadata(self, ctx: Context) -> Metadata | None:
+        """
+        Receive metadata from the metadata channel.
+
+        Parameters
+        ----------
+        ctx :
+            The streaming context.
+
+        Returns
+        -------
+        ChunkMetadata | None
+            The metadata, or None if channel is drained.
+        """
+        msg = await self.metadata.recv(ctx)
+        if msg is None:
+            return None
+        return ArbitraryChunk.from_message(msg).release()
 
 
 class ChannelManager:

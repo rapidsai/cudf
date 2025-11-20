@@ -23,6 +23,7 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    Metadata,
     process_children,
 )
 from cudf_polars.experimental.utils import _concat
@@ -107,19 +108,49 @@ async def broadcast_join_node(
     broadcast_side
         The side to broadcast.
     """
-    async with shutdown_on_error(context, ch_left.data, ch_right.data, ch_out.data):
+    async with shutdown_on_error(
+        context,
+        ch_left.metadata,
+        ch_left.data,
+        ch_right.metadata,
+        ch_right.data,
+        ch_out.metadata,
+        ch_out.data,
+    ):
+        # Receive metadata.
+        left_metadata, right_metadata = await asyncio.gather(
+            ch_left.recv_metadata(context),
+            ch_right.recv_metadata(context),
+        )
+        assert isinstance(left_metadata, Metadata), (
+            f"Expected Metadata, got {type(left_metadata)}."
+        )
+        assert isinstance(right_metadata, Metadata), (
+            f"Expected Metadata, got {type(right_metadata)}."
+        )
+
+        partitioned_on: tuple[str, ...] = ()
         if broadcast_side == "right":
             # Broadcast right, stream left
             small_ch = ch_right
             large_ch = ch_left
             small_child = ir.children[1]
             large_child = ir.children[0]
+            chunk_count = left_metadata.count
+            partitioned_on = left_metadata.partitioned_on
         else:
             # Broadcast left, stream right
             small_ch = ch_left
             large_ch = ch_right
             small_child = ir.children[0]
             large_child = ir.children[1]
+            chunk_count = right_metadata.count
+            if ir.options[0] == "Right":
+                partitioned_on = right_metadata.partitioned_on
+
+        # Send metadata.
+        output_metadata = Metadata(chunk_count, partitioned_on=partitioned_on)
+        await ch_out.send_metadata(context, output_metadata)
 
         # Collect small-side chunks
         small_dfs = await get_small_table(context, small_child, small_ch)
