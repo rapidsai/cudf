@@ -216,7 +216,7 @@ cpdef Column transform(
         If `NO`, the UDF gets non-nullable parameters
         If `YES`, the UDF gets nullable parameters
     null_policy: OutputNullability
-        If `PRESERVE`, null-masks are produced if necessary
+        If `PRESERVE`, null-masks are produced if necessary.
         If `ALL_VALID`, null-masks are not produced.
         `ALL_VALID` has undefined behavior if the UDF can produce nulls.
     stream : Stream | None
