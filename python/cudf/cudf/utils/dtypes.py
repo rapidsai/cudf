@@ -549,16 +549,6 @@ def get_dtype_of_same_kind(source_dtype: DtypeObj, target_dtype: DtypeObj):
             and source_dtype.na_value is np.nan
         ):
             return target_dtype
-        elif (
-            isinstance(source_dtype, pd.StringDtype)
-            and source_dtype.storage == "pyarrow"
-        ):
-            if (
-                isinstance(target_dtype, pd.StringDtype)
-                and source_dtype == target_dtype
-            ):
-                return source_dtype
-            return dtype_to_pandas_arrowdtype(target_dtype)
         return dtype_to_pandas_nullable_extension_type(target_dtype)
     else:
         return target_dtype

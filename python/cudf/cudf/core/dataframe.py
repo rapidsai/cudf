@@ -3561,9 +3561,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 self._index = RangeIndex(length)
 
         elif isinstance(value, (pd.Series, Series)):
-            value = Series(
-                value, nan_as_null=nan_as_null, copy=isinstance(value, Series)
-            )
+            value = Series(value, nan_as_null=nan_as_null)
             if not ignore_index:
                 value = value._align_to_index(
                     self.index, how="right", sort=False
