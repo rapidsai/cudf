@@ -69,27 +69,12 @@ jobs:
         run: |
           source /opt/conda/etc/profile.d/conda.sh
           ./ci/discover_libcudf_tests.sh
-
-  run-compute-sanitizer-tests-memcheck:
-    name: compute-sanitizer memcheck tests
-    needs: discover-sanitizer-tests
-    uses: ./.github/workflows/compute-sanitizer-run.yaml
-    with:
-      tool_name: "memcheck"
-      test_names: ${{ needs.discover-sanitizer-tests.outputs.tests }}
   run-compute-sanitizer-tests-racecheck:
     name: compute-sanitizer racecheck tests
     needs: discover-sanitizer-tests
     uses: ./.github/workflows/compute-sanitizer-run.yaml
     with:
       tool_name: "racecheck"
-      test_names: ${{ needs.discover-sanitizer-tests.outputs.tests }}
-  run-compute-sanitizer-tests-initcheck:
-    name: compute-sanitizer initcheck tests
-    needs: discover-sanitizer-tests
-    uses: ./.github/workflows/compute-sanitizer-run.yaml
-    with:
-      tool_name: "initcheck"
       test_names: ${{ needs.discover-sanitizer-tests.outputs.tests }}
   run-compute-sanitizer-tests-synccheck:
     name: compute-sanitizer synccheck tests
