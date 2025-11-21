@@ -12,7 +12,6 @@ from cudf_polars.typing import GenericTransformer
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
-    from rapidsmpf.progress_thread import ProgressThread
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
@@ -77,9 +76,7 @@ class GenState(TypedDict):
     stats
         Statistics collector.
     shuffle_id_map
-        Mapping from Shuffle/Repartition/Join IR nodes to reserved shuffle IDs.
-    progress_thread
-        Shared ProgressThread for all shuffle/allgather operations on this rank.
+        The mapping of IR nodes to shuffle IDs.
     """
 
     context: Context
@@ -90,7 +87,6 @@ class GenState(TypedDict):
     max_io_threads: int
     stats: StatsCollector
     shuffle_id_map: dict[IR, int]
-    progress_thread: ProgressThread
 
 
 SubNetGenerator: TypeAlias = GenericTransformer[

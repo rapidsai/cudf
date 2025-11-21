@@ -20,7 +20,6 @@ from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
-    from rapidsmpf.progress_thread import ProgressThread
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
@@ -82,8 +81,7 @@ async def concatenate_node(
     *,
     max_chunks: int | None,
     output_count: int,
-    shuffle_id: int,
-    progress_thread: ProgressThread,
+    op_id: int,
 ) -> None:
     """
     Concatenate node for rapidsmpf.
@@ -105,10 +103,8 @@ async def concatenate_node(
         If `None`, concatenate all input chunks.
     output_count
         The expected number of output chunks.
-    shuffle_id
-        Pre-allocated shuffle ID for this operation.
-    progress_thread
-        Shared ProgressThread for all operations on this rank.
+    op_id
+        Pre-allocated operation ID for this operation.
     """
     # TODO: Use multiple streams
     max_chunks = max(2, max_chunks) if max_chunks else None
@@ -137,7 +133,7 @@ async def concatenate_node(
             metadata.duplicated = True
             await ch_out.send_metadata(context, metadata)
 
-            with AllGatherContext(context, shuffle_id, progress_thread) as allgather:
+            with AllGatherContext(context, op_id) as allgather:
                 stream = context.get_stream_from_pool()
                 while (msg := await ch_in.data.recv(context)) is not None:
                     allgather.insert_chunk(TableChunk.from_message(msg))
@@ -146,7 +142,7 @@ async def concatenate_node(
                     Message(
                         0,
                         TableChunk.from_pylibcudf_table(
-                            allgather.extract_concatenated(stream),
+                            await allgather.extract_concatenated(stream),
                             stream,
                             exclusive_view=True,
                         ),
@@ -218,7 +214,7 @@ def _(
     channels[ir] = ChannelManager(rec.state["context"])
 
     # Look up the reserved shuffle ID for this operation
-    shuffle_id = rec.state["shuffle_id_map"][ir]
+    op_id = rec.state["shuffle_id_map"][ir]
 
     # Add python node
     nodes[ir] = [
@@ -230,8 +226,7 @@ def _(
             channels[ir.children[0]].reserve_output_slot(),
             max_chunks=max_chunks,
             output_count=partition_info[ir].count,
-            shuffle_id=shuffle_id,
-            progress_thread=rec.state["progress_thread"],
+            op_id=op_id,
         )
     ]
     return nodes, channels

@@ -6,18 +6,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
-from rapidsmpf.allgather import AllGather
 from rapidsmpf.integrations.cudf.partition import (
     unpack_and_concat as py_unpack_and_concat,
 )
 from rapidsmpf.memory.packed_data import PackedData
+from rapidsmpf.streaming.coll.allgather import AllGather
 
 from pylibcudf.contiguous_split import pack
 
 if TYPE_CHECKING:
     from types import TracebackType
 
-    from rapidsmpf.progress_thread import ProgressThread
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
@@ -27,36 +26,24 @@ if TYPE_CHECKING:
 
 class AllGatherContext:
     """
-    global AllGather context manager.
+    AllGather context manager.
 
     Parameters
     ----------
     context: Context
         The streaming context.
-    shuffle_id: int
-        Pre-allocated shuffle ID for this operation.
-    progress_thread: ProgressThread
-        Shared ProgressThread for all operations on this rank.
+    op_id: int
+        Pre-allocated operation ID for this operation.
     """
 
-    def __init__(
-        self, context: Context, shuffle_id: int, progress_thread: ProgressThread
-    ):
+    def __init__(self, context: Context, op_id: int):
         self.context = context
-        self.op_id = shuffle_id
-        self.progress_thread = progress_thread
+        self.op_id = op_id
         self._insertion_finished = False
 
     def __enter__(self) -> AllGatherContext:
         """Enter the AllGatherContext."""
-        statistics = self.context.statistics()
-        self.allgather = AllGather(
-            comm=self.context.comm(),
-            progress_thread=self.progress_thread,
-            op_id=self.op_id,
-            br=self.context.br(),
-            statistics=statistics,
-        )
+        self.allgather = AllGather(self.context, self.op_id)
         return self
 
     def __exit__(
@@ -71,7 +58,7 @@ class AllGatherContext:
 
     def insert_chunk(self, chunk: TableChunk) -> None:
         """
-        Insert a chunk into the AllGatherContext instance.
+        Insert a chunk into the AllGatherContext.
 
         Parameters
         ----------
@@ -96,7 +83,7 @@ class AllGatherContext:
             self.allgather.insert_finished()
             self._insertion_finished = True
 
-    def extract_concatenated(self, stream: Stream) -> plc.Table:
+    async def extract_concatenated(self, stream: Stream) -> plc.Table:
         """
         Extract the concatenated result.
 
@@ -110,7 +97,7 @@ class AllGatherContext:
         The concatenated AllGather result.
         """
         self.mark_insertion_finished()
-        partition_chunks = self.allgather.wait_and_extract()
+        partition_chunks = await self.allgather.extract_all(self.context, ordered=True)
         return py_unpack_and_concat(
             partitions=partition_chunks,
             stream=stream,

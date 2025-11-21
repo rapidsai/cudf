@@ -13,7 +13,6 @@ from rapidsmpf.communicator.single import new_communicator
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.memory.buffer_resource import BufferResource, LimitAvailableMemory
-from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.leaf_node import pull_from_channel
@@ -370,8 +369,8 @@ def generate_network(
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
     stats: StatsCollector,
-    shuffle_id_map: dict[IR, int],
     *,
+    shuffle_id_map: dict[IR, int],
     ir_context: IRExecutionContext,
 ) -> tuple[list[Any], DeferredMessages]:
     """
@@ -424,7 +423,6 @@ def generate_network(
         "max_io_threads": max_io_threads_local,
         "stats": stats,
         "shuffle_id_map": shuffle_id_map,
-        "progress_thread": ProgressThread(context.comm(), context.statistics()),
     }
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state
