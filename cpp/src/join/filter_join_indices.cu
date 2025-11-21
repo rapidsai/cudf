@@ -28,7 +28,6 @@
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/zip_iterator.h>
-#include <thrust/tuple.h>
 
 #include <memory>
 #include <stdexcept>
@@ -95,8 +94,8 @@ filter_join_indices(cudf::table_view const& left,
   auto const shmem_per_block = parser.shmem_per_thread * config.num_threads_per_block;
 
   // Launch kernel with template dispatch based on nulls and complex types
-  if (has_nulls) {
-    if (has_complex_type) {
+  auto launch_kernel = [&](bool has_nulls, bool has_complex_type) {
+    if (has_nulls && has_complex_type) {
       launch_filter_gather_map_kernel<true, true>(*left_table,
                                                   *right_table,
                                                   left_indices,
@@ -106,7 +105,7 @@ filter_join_indices(cudf::table_view const& left,
                                                   shmem_per_block,
                                                   flags.data(),
                                                   stream);
-    } else {
+    } else if (has_nulls && !has_complex_type) {
       launch_filter_gather_map_kernel<true, false>(*left_table,
                                                    *right_table,
                                                    left_indices,
@@ -116,9 +115,7 @@ filter_join_indices(cudf::table_view const& left,
                                                    shmem_per_block,
                                                    flags.data(),
                                                    stream);
-    }
-  } else {
-    if (has_complex_type) {
+    } else if (!has_nulls && has_complex_type) {
       launch_filter_gather_map_kernel<false, true>(*left_table,
                                                    *right_table,
                                                    left_indices,
@@ -139,7 +136,9 @@ filter_join_indices(cudf::table_view const& left,
                                                     flags.data(),
                                                     stream);
     }
-  }
+  };
+
+  launch_kernel(has_nulls, has_complex_type);
 
   // Check for kernel launch errors
   CUDF_CHECK_CUDA(stream.value());
@@ -161,6 +160,12 @@ filter_join_indices(cudf::table_view const& left,
                      std::make_unique<rmm::device_uvector<size_type>>(size, stream, mr)};
   };
 
+  // Helper to create counting iterator range for full input size
+  auto make_full_range = [&]() {
+    return std::pair{thrust::counting_iterator{size_type{0}},
+                     thrust::counting_iterator{static_cast<size_type>(left_indices.size())}};
+  };
+
   // Handle different join semantics
   if (join_kind == join_kind::INNER_JOIN) {
     // INNER_JOIN: only keep pairs that satisfy the predicate AND have valid indices
@@ -169,11 +174,9 @@ filter_join_indices(cudf::table_view const& left,
       return indices_valid && flags_ptr[i];
     };
 
+    auto [begin_iter, end_iter] = make_full_range();
     auto const num_valid =
-      thrust::count_if(rmm::exec_policy_nosync(stream),
-                       thrust::counting_iterator{size_type{0}},
-                       thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
-                       valid_predicate);
+      thrust::count_if(rmm::exec_policy_nosync(stream), begin_iter, end_iter, valid_predicate);
 
     if (num_valid == 0) { return make_empty_result(); }
 
@@ -217,13 +220,13 @@ filter_join_indices(cudf::table_view const& left,
 
   } else if (join_kind == join_kind::FULL_JOIN) {
     // FULL_JOIN: For matched pairs that fail predicate, generate two pairs to preserve both sides
-    auto failed_matched_count = thrust::count_if(
-      rmm::exec_policy_nosync(stream),
-      thrust::counting_iterator{size_type{0}},
-      thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
-      [=] __device__(size_type i) {
-        return !flags_ptr[i] && left_ptr[i] != JoinNoMatch && right_ptr[i] != JoinNoMatch;
-      });
+    auto is_failed_matched_pair = [=] __device__(size_type i) {
+      return !flags_ptr[i] && left_ptr[i] != JoinNoMatch && right_ptr[i] != JoinNoMatch;
+    };
+
+    auto [begin_iter, end_iter] = make_full_range();
+    auto failed_matched_count   = thrust::count_if(
+      rmm::exec_policy_nosync(stream), begin_iter, end_iter, is_failed_matched_pair);
 
     auto total_pairs = left_indices.size() + failed_matched_count;
     auto [filtered_left_indices, filtered_right_indices] = make_result_vectors(total_pairs);
@@ -278,9 +281,7 @@ filter_join_indices(cudf::table_view const& left,
         thrust::make_zip_iterator(cuda::std::tuple{temp_left.end(), temp_right.end()}),
         thrust::counting_iterator{size_type{0}},
         additional_iter,
-        [=] __device__(size_type i) {
-          return !flags_ptr[i] && left_ptr[i] != JoinNoMatch && right_ptr[i] != JoinNoMatch;
-        });
+        is_failed_matched_pair);
     }
 
     return std::pair{std::move(filtered_left_indices), std::move(filtered_right_indices)};
