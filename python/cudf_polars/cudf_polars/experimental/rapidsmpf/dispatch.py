@@ -75,6 +75,8 @@ class GenState(TypedDict):
         a single IO node.
     stats
         Statistics collector.
+    shuffle_id_map
+        The mapping of IR nodes to shuffle IDs.
     """
 
     context: Context
@@ -84,6 +86,7 @@ class GenState(TypedDict):
     ir_context: IRExecutionContext
     max_io_threads: int
     stats: StatsCollector
+    shuffle_id_map: dict[IR, int]
 
 
 SubNetGenerator: TypeAlias = GenericTransformer[

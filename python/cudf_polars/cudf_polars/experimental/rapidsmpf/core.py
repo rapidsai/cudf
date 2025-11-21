@@ -33,6 +33,7 @@ from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext, Join, Scan, Un
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo, lower_ir_node
 from cudf_polars.experimental.rapidsmpf.nodes import generate_ir_sub_network_wrapper
+from cudf_polars.experimental.rapidsmpf.shuffle import ReserveOpIDs
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import CUDAStreamPoolConfig
@@ -127,48 +128,51 @@ def evaluate_logical_plan(
     else:
         ir_context = IRExecutionContext.from_config_options(config_options)
 
-    # Generate network nodes
-    nodes, output = generate_network(
-        rmpf_context,
-        ir,
-        partition_info,
-        config_options,
-        stats,
-        ir_context=ir_context,
-    )
-
-    # Run the network
-    run_streaming_pipeline(nodes=nodes, py_executor=executor)
-
-    # Extract/return the concatenated result.
-    # Keep chunks alive until after concatenation to prevent
-    # use-after-free with stream-ordered allocations
-    messages = output.release()
-    chunks = [
-        TableChunk.from_message(msg).make_available_and_spill(
-            br, allow_overbooking=True
+    # Reserve shuffle IDs for the entire pipeline execution
+    with ReserveOpIDs(ir) as shuffle_id_map:
+        # Generate network nodes
+        nodes, output = generate_network(
+            rmpf_context,
+            ir,
+            partition_info,
+            config_options,
+            stats,
+            ir_context=ir_context,
+            shuffle_id_map=shuffle_id_map,
         )
-        for msg in messages
-    ]
-    dfs = [
-        DataFrame.from_table(
-            chunk.table_view(),
-            list(ir.schema.keys()),
-            list(ir.schema.values()),
-            chunk.stream,
-        )
-        for chunk in chunks
-    ]
-    df = _concat(*dfs, context=ir_context)
-    # We need to materialize the polars dataframe before we drop the rapidsmpf
-    # context, which keeps the CUDA streams alive.
-    stream = df.stream
-    result = df.to_polars()
-    stream.synchronize()
 
-    # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
-    # before the Context, which ultimately contains the rmm MR, goes out of scope.
-    del nodes, output, messages, chunks, dfs, df
+        # Run the network
+        run_streaming_pipeline(nodes=nodes, py_executor=executor)
+
+        # Extract/return the concatenated result.
+        # Keep chunks alive until after concatenation to prevent
+        # use-after-free with stream-ordered allocations
+        messages = output.release()
+        chunks = [
+            TableChunk.from_message(msg).make_available_and_spill(
+                br, allow_overbooking=True
+            )
+            for msg in messages
+        ]
+        dfs = [
+            DataFrame.from_table(
+                chunk.table_view(),
+                list(ir.schema.keys()),
+                list(ir.schema.values()),
+                chunk.stream,
+            )
+            for chunk in chunks
+        ]
+        df = _concat(*dfs, context=ir_context)
+        # We need to materialize the polars dataframe before we drop the rapidsmpf
+        # context, which keeps the CUDA streams alive.
+        stream = df.stream
+        result = df.to_polars()
+        stream.synchronize()
+
+        # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
+        # before the Context, which ultimately contains the rmm MR, goes out of scope.
+        del nodes, output, messages, chunks, dfs, df
 
     return result
 
@@ -287,6 +291,7 @@ def generate_network(
     stats: StatsCollector,
     *,
     ir_context: IRExecutionContext,
+    shuffle_id_map: dict[IR, int],
 ) -> tuple[list[Any], DeferredMessages]:
     """
     Translate the IR graph to a RapidsMPF streaming network.
@@ -305,6 +310,8 @@ def generate_network(
         Statistics collector.
     ir_context
         The execution context for the IR node.
+    shuffle_id_map
+        The mapping of IR nodes to shuffle IDs.
 
     Returns
     -------
@@ -335,6 +342,7 @@ def generate_network(
         "ir_context": ir_context,
         "max_io_threads": max_io_threads_local,
         "stats": stats,
+        "shuffle_id_map": shuffle_id_map,
     }
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state
