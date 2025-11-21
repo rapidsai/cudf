@@ -171,9 +171,13 @@ def make_spill_function(
     Create a spill function for a list of SpillableMessages containers.
 
     This utility creates a spill function that can be registered with a
-    SpillManager. The spill function will attempt to spill messages from
-    all containers in global FIFO order (oldest messages first across all
-    containers) until the requested amount of memory is freed.
+    SpillManager. The spill function uses a smart spilling strategy that
+    prioritizes:
+    1. Longest queues first (slow consumers that won't need data soon)
+    2. Newest messages first (just arrived, won't be consumed soon)
+
+    This strategy keeps "hot" data (about to be consumed) in fast memory
+    while spilling "cold" data (won't be needed for a while) to slower tiers.
 
     Parameters
     ----------
@@ -189,28 +193,36 @@ def make_spill_function(
 
     Notes
     -----
-    Messages are spilled in global FIFO order across all containers. This
-    ensures that the oldest messages are spilled first, regardless of which
-    container they belong to.
+    The spilling strategy is particularly effective for fanout scenarios
+    where different consumers may process messages at different rates. By
+    prioritizing longest queues and newest messages, we maximize the time
+    data can remain in slower memory before it's needed.
     """
 
     def spill_func(amount: int) -> int:
         """Spill messages from the buffers to free device/host memory."""
         spilled = 0
 
-        # Collect all messages with their container index for global FIFO ordering
-        all_messages: list[tuple[int, int, SpillableMessages]] = []
+        # Collect all messages with metadata for smart spilling
+        # Format: (message_id, container_idx, queue_length, sm)
+        all_messages: list[tuple[int, int, int, SpillableMessages]] = []
         for container_idx, sm in enumerate(spillable_messages_list):
             content_descriptions = sm.get_content_descriptions()
+            queue_length = len(content_descriptions)
             all_messages.extend(
-                (message_id, container_idx, sm) for message_id in content_descriptions
+                (message_id, container_idx, queue_length, sm)
+                for message_id in content_descriptions
             )
 
-        # Sort by message ID to get global FIFO order
-        all_messages.sort(key=lambda x: x[0])
+        # Spill newest messages first from the longest queues
+        # Sort by: (1) queue length descending, (2) message_id descending
+        # This prioritizes:
+        # - Longest queues (slow consumers that won't need data soon)
+        # - Newest messages (just arrived, won't be consumed soon)
+        all_messages.sort(key=lambda x: (-x[2], -x[0]))
 
-        # Spill messages in FIFO order until we've freed enough memory
-        for message_id, _, sm in all_messages:
+        # Spill messages until we've freed enough memory
+        for message_id, _, _, sm in all_messages:
             if spilled >= amount:
                 break
             # Try to spill this message
