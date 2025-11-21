@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import cupy
 import numpy as np
+import pandas as pd
 import pyarrow as pa
 from typing_extensions import Self
 
@@ -1671,10 +1672,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
             (left_column, right_column, reflect, fill_value),
         ) in operands.items():
             output_mask = None
+            left_is_column = isinstance(left_column, ColumnBase)
+            right_is_column = isinstance(right_column, ColumnBase)
             if fill_value is not None:
-                left_is_column = isinstance(left_column, ColumnBase)
-                right_is_column = isinstance(right_column, ColumnBase)
-
                 if left_is_column and right_is_column:
                     # If both columns are nullable, pandas semantics dictate
                     # that nulls that are present in both left_column and
@@ -1707,7 +1707,11 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 if reflect
                 else getattr(operator, fn)(left_column, right_column)
             )
-            if isinstance(outcol, bool) and fn in {"__eq__", "__ne__"}:
+            if (
+                isinstance(outcol, bool)
+                and fn in {"__eq__", "__ne__"}
+                and right_column is not pd.NA
+            ):
                 # Both columns returned NotImplemented, Python compared using is/is not
                 # TODO: A better solution is to ensure each Column._binaryop
                 # implementation accounts for this case.
