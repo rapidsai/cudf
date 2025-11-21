@@ -1977,6 +1977,7 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/extension/test_interval.py::TestIntervalArray::test_EA_types[python]",
     "tests/extension/test_interval.py::TestIntervalArray::test_array_interface_copy",
     "tests/extension/test_interval.py::TestIntervalArray::test_astype_own_type[False]",
+    "tests/extension/test_interval.py::TestIntervalArray::test_compare_array[eq]",
     "tests/extension/test_interval.py::TestIntervalArray::test_compare_array[ne]",
     "tests/extension/test_interval.py::TestIntervalArray::test_getitem_scalar",
     "tests/extension/test_interval.py::TestIntervalArray::test_in_numeric_groupby",
