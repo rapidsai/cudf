@@ -77,12 +77,6 @@ class AllGatherContext:
             ),
         )
 
-    def mark_insertion_finished(self) -> None:
-        """Mark insertion as finished."""
-        if not self._insertion_finished:
-            self.allgather.insert_finished()
-            self._insertion_finished = True
-
     async def extract_concatenated(self, stream: Stream) -> plc.Table:
         """
         Extract the concatenated result.
@@ -96,7 +90,10 @@ class AllGatherContext:
         -------
         The concatenated AllGather result.
         """
-        self.mark_insertion_finished()
+        if not self._insertion_finished:
+            self.allgather.insert_finished()
+            self._insertion_finished = True
+
         partition_chunks = await self.allgather.extract_all(self.context, ordered=True)
         return py_unpack_and_concat(
             partitions=partition_chunks,
