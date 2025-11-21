@@ -7,7 +7,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any, cast
 
-from rapidsmpf.buffer.buffer import MemoryType
+from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.node import define_py_node
 from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
@@ -20,6 +20,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    make_spill_function,
     process_children,
     shutdown_on_error,
 )
@@ -277,33 +278,12 @@ async def fanout_node_unbounded(
         buffer_ids: list[list[int]] = [[] for _ in chs_out]
 
         # Register spill functions for each buffer
-        spill_func_ids: list[int] = []
-        for idx, sm in enumerate(output_buffers):
-
-            def make_spill_func(sm_ref: SpillableMessages, idx_ref: int) -> Any:
-                """Create a spill function for a specific buffer."""
-
-                def spill_func(amount: int) -> int:
-                    """Spill messages from the buffer to free device/host memory."""
-                    spilled = 0
-                    # Get all content descriptions sorted by message ID (FIFO)
-                    descs = sm_ref.get_content_descriptions()
-                    sorted_mids = sorted(descs.keys())
-
-                    for mid in sorted_mids:
-                        if spilled >= amount:
-                            break
-                        # Try to spill this message
-                        spilled += sm_ref.spill(mid=mid, br=context.br())
-                    return spilled
-
-                return spill_func
-
-            func_id = context.br().spill_manager.add_spill_function(
-                make_spill_func(sm, idx),
-                priority=0,
+        spill_func_ids = [
+            context.br().spill_manager.add_spill_function(
+                make_spill_function(sm, context), priority=0
             )
-            spill_func_ids.append(func_id)
+            for sm in output_buffers
+        ]
 
         try:
             # Track active send/drain tasks for each output
@@ -398,12 +378,9 @@ async def fanout_node_unbounded(
                             )
 
                             # Decide target memory:
-                            # - Use device ONLY if message is in device AND we have LOTS of headroom
-                            # - We need significant headroom because:
-                            #   1. Downstream operations (groupby, join) need 2-3x working memory
-                            #   2. Buffered data won't auto-spill unless allocations go through BufferResource
-                            #   3. Most compute operations allocate directly through RMM
-                            # - Be conservative: require 4x the copy cost as headroom
+                            # Use device ONLY if message is in device AND we have sufficient headroom.
+                            # TODO: Use further information about the downstream operations to make
+                            # a more informed decision.
                             required_headroom = total_copy_cost * 4
                             if (
                                 device_size > 0

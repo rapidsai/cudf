@@ -12,10 +12,11 @@ from functools import reduce
 from typing import TYPE_CHECKING, Any, TypeAlias
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncIterator, Callable
 
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
+    from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
     from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
     from cudf_polars.dsl.ir import IR
@@ -160,3 +161,45 @@ def process_children(
     nodes: dict[IR, list[Any]] = reduce(operator.or_, _nodes_list)
     channels: dict[IR, ChannelManager] = reduce(operator.or_, _channels_list)
     return nodes, channels
+
+
+def make_spill_function(
+    spillable_messages: SpillableMessages,
+    context: Context,
+) -> Callable[[int], int]:
+    """
+    Create a spill function for a SpillableMessages container.
+
+    This utility creates a spill function that can be registered with a
+    SpillManager. The spill function will attempt to spill messages from
+    the container in FIFO order (oldest messages first) until the requested
+    amount of memory is freed.
+
+    Parameters
+    ----------
+    spillable_messages
+        The SpillableMessages container to create a spill function for.
+    context
+        The RapidsMPF context to use for accessing the BufferResource.
+
+    Returns
+    -------
+    A spill function that takes an amount (in bytes) and returns the
+    actual amount spilled (in bytes).
+    """
+
+    def spill_func(amount: int) -> int:
+        """Spill messages from the buffer to free device/host memory."""
+        spilled = 0
+        # Get all content descriptions sorted by message ID (FIFO order)
+        content_descriptions = spillable_messages.get_content_descriptions()
+        sorted_message_ids = sorted(content_descriptions.keys())
+
+        for message_id in sorted_message_ids:
+            if spilled >= amount:
+                break
+            # Try to spill this message
+            spilled += spillable_messages.spill(mid=message_id, br=context.br())
+        return spilled
+
+    return spill_func
