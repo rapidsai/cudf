@@ -302,6 +302,11 @@ cdef class Scalar:
         """
         Convert a Scalar to a Python scalar.
 
+        Parameters
+        ----------
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
+
         Returns
         -------
         Python scalar

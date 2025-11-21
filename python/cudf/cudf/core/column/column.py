@@ -22,6 +22,7 @@ from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 from typing_extensions import Self
 
 import pylibcudf as plc
+from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 import cudf
 from cudf.api.extensions import no_default
@@ -1087,7 +1088,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 return self._mimic_inplace(result, inplace=True)
             return result
 
-        if not fill_value.is_valid() and not self.nullable:
+        if not fill_value.is_valid(DEFAULT_STREAM) and not self.nullable:
             mask = as_buffer(
                 plc.null_mask.create_null_mask(
                     self.size, plc.types.MaskState.ALL_VALID

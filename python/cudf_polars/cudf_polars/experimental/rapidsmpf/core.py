@@ -8,10 +8,10 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
-from rapidsmpf.buffer.buffer import MemoryType
-from rapidsmpf.buffer.resource import BufferResource, LimitAvailableMemory
 from rapidsmpf.communicator.single import new_communicator
 from rapidsmpf.config import Options, get_environment_variables
+from rapidsmpf.memory.buffer import MemoryType
+from rapidsmpf.memory.buffer_resource import BufferResource, LimitAvailableMemory
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.leaf_node import pull_from_channel
@@ -339,12 +339,7 @@ def generate_network(
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state
     )
-    nodes, channels = mapper(ir)
-
-    # Deduplicate nodes.
-    # TODO: Remove after https://github.com/rapidsai/cudf/pull/20586
-    nodes = list(set(nodes))
-
+    nodes_dict, channels = mapper(ir)
     ch_out = channels[ir].reserve_output_slot()
 
     # TODO: We will need an additional node here to drain
@@ -355,6 +350,9 @@ def generate_network(
     # Add final node to pull from the output data channel
     # (metadata channel is unused)
     output_node, output = pull_from_channel(context, ch_in=ch_out.data)
+
+    # Flatten the nodes dictionary into a list for run_streaming_pipeline
+    nodes: list[Any] = [node for node_list in nodes_dict.values() for node in node_list]
     nodes.append(output_node)
 
     # Return network and output hook
