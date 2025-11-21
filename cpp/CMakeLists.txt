@@ -582,6 +582,11 @@ add_library(
   src/join/conditional_join.cu
   src/join/cross_join.cu
   src/join/distinct_hash_join.cu
+  src/join/filter_join_indices.cu
+  src/join/filter_join_indices_kernel_complex.cu
+  src/join/filter_join_indices_kernel_null_complex.cu
+  src/join/filter_join_indices_kernel_null_primitive.cu
+  src/join/filter_join_indices_kernel_primitive.cu
   src/join/filtered_join.cu
   src/join/hash_join.cu
   src/join/join.cu
@@ -716,11 +721,6 @@ add_library(
   src/stream_compaction/drop_nans.cu
   src/stream_compaction/drop_nulls.cu
   src/stream_compaction/filter/filter.cu
-  src/stream_compaction/filter/filter_gather_map.cu
-  src/stream_compaction/filter/filter_gather_map_kernel_complex.cu
-  src/stream_compaction/filter/filter_gather_map_kernel_null_complex.cu
-  src/stream_compaction/filter/filter_gather_map_kernel_null_primitive.cu
-  src/stream_compaction/filter/filter_gather_map_kernel_primitive.cu
   src/stream_compaction/stable_distinct.cu
   src/stream_compaction/unique.cu
   src/stream_compaction/unique_count.cu

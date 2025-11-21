@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "filter_gather_map_kernel.hpp"
+#include "filter_join_indices_kernel.cuh"
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
@@ -12,7 +12,6 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/join/join.hpp>
-#include <cudf/stream_compaction.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -39,14 +38,14 @@ namespace detail {
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-filter_gather_map(cudf::table_view const& left,
-                  cudf::table_view const& right,
-                  cudf::device_span<size_type const> left_indices,
-                  cudf::device_span<size_type const> right_indices,
-                  ast::expression const& predicate,
-                  join_kind join_kind,
-                  rmm::cuda_stream_view stream,
-                  rmm::device_async_resource_ref mr)
+filter_join_indices(cudf::table_view const& left,
+                    cudf::table_view const& right,
+                    cudf::device_span<size_type const> left_indices,
+                    cudf::device_span<size_type const> right_indices,
+                    ast::expression const& predicate,
+                    join_kind join_kind,
+                    rmm::cuda_stream_view stream,
+                    rmm::device_async_resource_ref mr)
 {
   // Validate inputs
   CUDF_EXPECTS(left_indices.size() == right_indices.size(),
@@ -328,7 +327,7 @@ filter_gather_map(cudf::table_view const& left,
 
     return std::make_pair(std::move(filtered_left_indices), std::move(filtered_right_indices));
   } else {
-    CUDF_FAIL("Unsupported join kind for filter_gather_map");
+    CUDF_FAIL("Unsupported join kind for filter_join_indices");
   }
 }
 
@@ -337,17 +336,17 @@ filter_gather_map(cudf::table_view const& left,
 // Public API implementation
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-filter_gather_map(cudf::table_view const& left,
-                  cudf::table_view const& right,
-                  cudf::device_span<size_type const> left_indices,
-                  cudf::device_span<size_type const> right_indices,
-                  ast::expression const& predicate,
-                  cudf::detail::join_kind join_kind,
-                  rmm::cuda_stream_view stream,
-                  rmm::device_async_resource_ref mr)
+filter_join_indices(cudf::table_view const& left,
+                    cudf::table_view const& right,
+                    cudf::device_span<size_type const> left_indices,
+                    cudf::device_span<size_type const> right_indices,
+                    ast::expression const& predicate,
+                    cudf::join_kind join_kind,
+                    rmm::cuda_stream_view stream,
+                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::filter_gather_map(
+  return detail::filter_join_indices(
     left, right, left_indices, right_indices, predicate, join_kind, stream, mr);
 }
 

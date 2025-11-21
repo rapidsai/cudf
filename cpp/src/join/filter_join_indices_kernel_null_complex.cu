@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "filter_gather_map_kernel.cuh"
-#include "filter_gather_map_kernel.hpp"
+#include "filter_join_indices_kernel.cuh"
+#include "filter_join_indices_kernel.hpp"
 
 namespace cudf::detail {
-template void launch_filter_gather_map_kernel<false, false>(
+template void launch_filter_gather_map_kernel<true, true>(
   cudf::table_device_view const& left_table,
   cudf::table_device_view const& right_table,
   cudf::device_span<cudf::size_type const> left_indices,

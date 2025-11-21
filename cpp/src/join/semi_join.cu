@@ -11,6 +11,7 @@
 #include <cudf/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/join/filtered_join.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -67,7 +68,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_join(
 {
   CUDF_FUNC_RANGE();
   return detail::left_semi_anti_join(
-    detail::join_kind::LEFT_SEMI_JOIN, left, right, compare_nulls, stream, mr);
+    cudf::join_kind::LEFT_SEMI_JOIN, left, right, compare_nulls, stream, mr);
 }
 
 std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_anti_join(
@@ -79,7 +80,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_anti_join(
 {
   CUDF_FUNC_RANGE();
   return detail::left_semi_anti_join(
-    detail::join_kind::LEFT_ANTI_JOIN, left, right, compare_nulls, stream, mr);
+    cudf::join_kind::LEFT_ANTI_JOIN, left, right, compare_nulls, stream, mr);
 }
 
 }  // namespace cudf

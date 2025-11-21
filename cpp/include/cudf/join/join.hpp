@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <cudf/ast/expressions.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -15,6 +16,8 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/std/limits>
+
+#include <cstdint>
 
 namespace CUDF_EXPORT cudf {
 
@@ -35,6 +38,21 @@ namespace CUDF_EXPORT cudf {
  * distinguishable from valid row indices, which are always non-negative.
  */
 CUDF_HOST_DEVICE constexpr size_type JoinNoMatch = cuda::std::numeric_limits<size_type>::min();
+
+/**
+ * @brief Specifies the type of join operation to perform.
+ *
+ * This enum is used to control the behavior of join operations, particularly
+ * in functions like filter_join_indices() that need to apply different logic
+ * based on the join semantics.
+ */
+enum class join_kind : int32_t {
+  INNER_JOIN     = 0,  ///< Inner join: only matching rows from both tables
+  LEFT_JOIN      = 1,  ///< Left join: all rows from left table, matching rows from right
+  FULL_JOIN      = 2,  ///< Full outer join: all rows from both tables
+  LEFT_SEMI_JOIN = 3,  ///< Left semi join: left rows that have matches in right table
+  LEFT_ANTI_JOIN = 4   ///< Left anti join: left rows that have no matches in right table
+};
 
 /**
  * @brief Holds context information about matches between tables during a join operation.
@@ -285,6 +303,52 @@ std::unique_ptr<cudf::table> cross_join(
   cudf::table_view const& right,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Filters join result indices based on a conditional predicate and join type.
+ *
+ * This function takes the result indices from a hash join operation and applies
+ * a conditional predicate to filter the pairs. The behavior depends on the join type:
+ *
+ * - **INNER_JOIN**: Only pairs that satisfy the predicate and have valid indices are kept.
+ * - **LEFT_JOIN**: All left rows are preserved. Failed predicates nullify right indices.
+ * - **FULL_JOIN**: All rows from both sides are preserved. Failed predicates create separate pairs.
+ *
+ * @code{.pseudo}
+ * Left table:   {0, 1, 2}
+ * Right table:  {1, 2, 3}
+ * Hash join result: left_indices = {0, 1, 2}, right_indices = {0, 1, 2}
+ * Predicate:    left.col0 + right.col0 > 2
+ * INNER_JOIN result: left_indices = {2}, right_indices = {2}
+ * LEFT_JOIN result:  left_indices = {0, 1, 2}, right_indices = {JoinNoMatch, JoinNoMatch, 2}
+ * @endcode
+ *
+ * @param left The left table for predicate evaluation.
+ * @param right The right table for predicate evaluation.
+ * @param left_indices Device span of row indices in the left table from hash join.
+ * @param right_indices Device span of row indices in the right table from hash join.
+ * @param predicate An AST expression that returns a boolean for each pair of rows.
+ * @param join_kind The type of join operation (INNER_JOIN, LEFT_JOIN, or FULL_JOIN).
+ *                  INNER_JOIN: Only pairs that satisfy the predicate and have valid indices.
+ *                  LEFT_JOIN: All left rows preserved, failed predicates nullify right indices.
+ *                  FULL_JOIN: All rows from both sides preserved, failed predicates create separate
+ * pairs.
+ * @param stream CUDA stream used for kernel launches and memory operations.
+ * @param mr Device memory resource used to allocate output indices.
+ *
+ * @return A pair of device vectors [filtered_left_indices, filtered_right_indices]
+ *         corresponding to rows that satisfy the join semantics and predicate.
+ */
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+filter_join_indices(cudf::table_view const& left,
+                    cudf::table_view const& right,
+                    cudf::device_span<size_type const> left_indices,
+                    cudf::device_span<size_type const> right_indices,
+                    cudf::ast::expression const& predicate,
+                    cudf::join_kind join_kind,
+                    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 

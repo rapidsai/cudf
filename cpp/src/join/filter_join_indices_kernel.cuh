@@ -4,7 +4,7 @@
  */
 #pragma once
 
-#include "filter_gather_map_kernel.hpp"
+#include "filter_join_indices_kernel.hpp"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/ast/detail/expression_parser.hpp>
@@ -21,9 +21,9 @@
 namespace cudf::detail {
 
 /**
- * @brief Kernel to evaluate predicate on gather map pairs and mark valid indices
+ * @brief Kernel to evaluate predicate on join index pairs and mark valid indices
  *
- * This kernel evaluates a predicate on matched pairs from the gather map.
+ * This kernel evaluates a predicate on matched pairs from the join indices.
  * Non-match indices from outer joins are always included without predicate evaluation.
  *
  * @tparam max_block_size The size of the thread block, used to set launch bounds
@@ -32,12 +32,12 @@ namespace cudf::detail {
  */
 template <cudf::size_type max_block_size, bool has_nulls, bool has_complex_type>
 __launch_bounds__(max_block_size) __global__
-  void filter_gather_map_kernel(cudf::table_device_view left_table,
-                                cudf::table_device_view right_table,
-                                cudf::device_span<cudf::size_type const> left_indices,
-                                cudf::device_span<cudf::size_type const> right_indices,
-                                cudf::ast::detail::expression_device_view device_expression_data,
-                                bool* output_flags)
+  void filter_join_indices_kernel(cudf::table_device_view left_table,
+                                  cudf::table_device_view right_table,
+                                  cudf::device_span<cudf::size_type const> left_indices,
+                                  cudf::device_span<cudf::size_type const> right_indices,
+                                  cudf::ast::detail::expression_device_view device_expression_data,
+                                  bool* output_flags)
 {
   // Shared memory for intermediate storage
   extern __shared__ char raw_intermediate_storage[];
@@ -94,7 +94,7 @@ void launch_filter_gather_map_kernel(
   bool* output_flags,
   rmm::cuda_stream_view stream)
 {
-  filter_gather_map_kernel<MAX_BLOCK_SIZE, has_nulls, has_complex_type>
+  filter_join_indices_kernel<MAX_BLOCK_SIZE, has_nulls, has_complex_type>
     <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
       left_table, right_table, left_indices, right_indices, device_expression_data, output_flags);
 }

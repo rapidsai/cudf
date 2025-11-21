@@ -14,12 +14,12 @@
 
 namespace cudf::detail {
 /**
- * @brief Maximum number of threads per block for filter gather map kernels
+ * @brief Maximum number of threads per block for filter join indices kernels
  */
 size_type constexpr MAX_BLOCK_SIZE = 256;
 
 /**
- * @brief Launches the appropriate filter gather map kernel based on template parameters
+ * @brief Launches the appropriate filter join indices kernel based on template parameters
  *
  * This function selects and launches the appropriate kernel implementation based on whether
  * the expression may evaluate to null and whether the expression contains complex types.
