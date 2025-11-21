@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/export.hpp>
@@ -279,7 +280,7 @@ parquet_metadata read_parquet_metadata(source_info const& src_info);
  * @return List of FileMetaData objects, one per parquet source
  */
 std::vector<parquet::FileMetaData> read_parquet_metadata(
-  host_span<std::unique_ptr<cudf::io::datasource> const> sources);
+  cudf::host_span<std::unique_ptr<cudf::io::datasource> const> sources);
 
 /** @} */  // end of group
 }  // namespace io
