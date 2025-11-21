@@ -5,7 +5,6 @@
 #pragma once
 
 #include <cudf/detail/join/filtered_join.cuh>
-#include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -14,6 +13,10 @@
 #include <rmm/resource_ref.hpp>
 
 namespace cudf {
+
+// Forward declaration
+enum class join_kind : int32_t;
+
 namespace detail {
 
 /**
