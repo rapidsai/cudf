@@ -346,14 +346,14 @@ target_link_libraries(PARQUET_DELETION_VECTORS_NVBENCH PRIVATE roaring)
 ConfigureNVBench(PARQUET_MULTITHREAD_READER_NVBENCH io/parquet/parquet_reader_multithread.cpp)
 
 # ##################################################################################################
-# * table reader benchmark
+# * cutable reader benchmark
 # --------------------------------------------------------------------------
-ConfigureNVBench(TABLE_READER_NVBENCH io/table/table_reader.cpp)
+ConfigureNVBench(CUTABLE_READER_NVBENCH io/cutable/cutable_reader.cpp)
 
 # ##################################################################################################
-# * table writer benchmark
+# * cutable writer benchmark
 # --------------------------------------------------------------------------
-ConfigureNVBench(TABLE_WRITER_NVBENCH io/table/table_writer.cpp)
+ConfigureNVBench(CUTABLE_WRITER_NVBENCH io/cutable/cutable_writer.cpp)
 
 # ##################################################################################################
 # * orc reader benchmark --------------------------------------------------------------------------

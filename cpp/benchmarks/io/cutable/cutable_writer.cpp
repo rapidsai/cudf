@@ -16,7 +16,7 @@
 
 constexpr cudf::size_type num_cols = 64;
 
-void table_write_common(cudf::table_view const& view, io_type sink_type, nvbench::state& state)
+void cutable_write_common(cudf::table_view const& view, io_type sink_type, nvbench::state& state)
 {
   auto const data_size          = static_cast<size_t>(state.get_int64("data_size"));
   std::size_t encoded_file_size = 0;
@@ -41,7 +41,7 @@ void table_write_common(cudf::table_view const& view, io_type sink_type, nvbench
   state.add_buffer_size(encoded_file_size, "encoded_file_size", "encoded_file_size");
 }
 
-void BM_table_write_data_sizes(nvbench::state& state)
+void BM_cutable_write_data_sizes(nvbench::state& state)
 {
   auto const d_type    = get_type_or_group(static_cast<int32_t>(data_type::INTEGRAL));
   auto const sink_type = retrieve_io_type_enum(state.get_string("io_type"));
@@ -50,13 +50,13 @@ void BM_table_write_data_sizes(nvbench::state& state)
   auto const tbl = create_random_table(cycle_dtypes(d_type, num_cols), table_size_bytes{data_size});
   auto const view = tbl->view();
 
-  table_write_common(view, sink_type, state);
+  cutable_write_common(view, sink_type, state);
 }
 
 template <data_type DataType>
-void BM_table_write_data_common(nvbench::state& state,
-                                data_profile const& profile,
-                                nvbench::type_list<nvbench::enum_type<DataType>>)
+void BM_cutable_write_data_common(nvbench::state& state,
+                                  data_profile const& profile,
+                                  nvbench::type_list<nvbench::enum_type<DataType>>)
 {
   auto const d_type    = get_type_or_group(static_cast<int32_t>(DataType));
   auto const sink_type = retrieve_io_type_enum(state.get_string("io_type"));
@@ -66,19 +66,19 @@ void BM_table_write_data_common(nvbench::state& state,
     create_random_table(cycle_dtypes(d_type, num_cols), table_size_bytes{data_size}, profile);
   auto const view = tbl->view();
 
-  table_write_common(view, sink_type, state);
+  cutable_write_common(view, sink_type, state);
 }
 
 template <data_type DataType>
-void BM_table_write_data_types(nvbench::state& state,
-                               nvbench::type_list<nvbench::enum_type<DataType>> type_list)
+void BM_cutable_write_data_types(nvbench::state& state,
+                                 nvbench::type_list<nvbench::enum_type<DataType>> type_list)
 {
-  BM_table_write_data_common<DataType>(state, data_profile{}, type_list);
+  BM_cutable_write_data_common<DataType>(state, data_profile{}, type_list);
 }
 
 template <data_type DataType>
-void BM_table_write_num_columns(nvbench::state& state,
-                                nvbench::type_list<nvbench::enum_type<DataType>> type_list)
+void BM_cutable_write_num_columns(nvbench::state& state,
+                                  nvbench::type_list<nvbench::enum_type<DataType>> type_list)
 {
   auto const d_type = get_type_or_group(static_cast<int32_t>(DataType));
 
@@ -90,7 +90,7 @@ void BM_table_write_num_columns(nvbench::state& state,
     create_random_table(cycle_dtypes(d_type, n_col), table_size_bytes{data_size_bytes});
   auto const view = tbl->view();
 
-  table_write_common(view, sink_type, state);
+  cutable_write_common(view, sink_type, state);
 }
 
 using d_type_list_reduced = nvbench::enum_type_list<data_type::INTEGRAL,
@@ -102,22 +102,22 @@ using d_type_list_reduced = nvbench::enum_type_list<data_type::INTEGRAL,
                                                     data_type::STRING,
                                                     data_type::LIST,
                                                     data_type::STRUCT>;
-NVBENCH_BENCH_TYPES(BM_table_write_data_types, NVBENCH_TYPE_AXES(d_type_list_reduced))
-  .set_name("table_write_data_types")
+NVBENCH_BENCH_TYPES(BM_cutable_write_data_types, NVBENCH_TYPE_AXES(d_type_list_reduced))
+  .set_name("cutable_write_data_types")
   .set_type_axes_names({"data_type"})
   .add_string_axis("io_type", {"FILEPATH", "HOST_BUFFER", "VOID"})
   .set_min_samples(4)
   .add_int64_axis("data_size", {128 << 20});
 
-NVBENCH_BENCH(BM_table_write_data_sizes)
-  .set_name("table_write_data_sizes")
+NVBENCH_BENCH(BM_cutable_write_data_sizes)
+  .set_name("cutable_write_data_sizes")
   .set_min_samples(4)
   .add_string_axis("io_type", {"FILEPATH", "HOST_BUFFER", "VOID"})
   .add_int64_power_of_two_axis("data_size", nvbench::range(24, 31, 1));  // 16MB to 2GB
 
-NVBENCH_BENCH_TYPES(BM_table_write_num_columns,
+NVBENCH_BENCH_TYPES(BM_cutable_write_num_columns,
                     NVBENCH_TYPE_AXES(nvbench::enum_type_list<data_type::STRING>))
-  .set_name("table_write_num_columns")
+  .set_name("cutable_write_num_columns")
   .set_type_axes_names({"data_type"})
   .add_string_axis("io_type", {"VOID"})
   .set_min_samples(4)
