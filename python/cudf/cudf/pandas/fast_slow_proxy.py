@@ -557,7 +557,7 @@ class _FastSlowProxy:
         # Check for transfer blocking before attempting conversion
         if (
             self._fsproxy_transfer_block is _BlockState.TO_FAST
-            and self._fsproxy_state is _State.FAST  # type: ignore[attr-defined]
+            and self._fsproxy_state is _State.SLOW  # type: ignore[attr-defined]
         ):
             raise RuntimeError("Fast-to-slow transfer is blocked")
 
