@@ -310,7 +310,9 @@ def test_read_csv_from_device_buffers(csv_table_data, stream):
     _, pa_table = csv_table_data
 
     csv_string = pa_table.to_pandas().to_csv(index=False)
-    buf = DeviceBuffer.to_device(csv_string.encode("utf-8"))
+    buf = DeviceBuffer.to_device(
+        csv_string.encode("utf-8"), plc.utils._get_stream(stream)
+    )
 
     options = plc.io.csv.CsvReaderOptions.builder(
         plc.io.SourceInfo([buf])

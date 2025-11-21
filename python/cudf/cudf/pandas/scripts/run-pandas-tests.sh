@@ -172,6 +172,8 @@ IGNORE_TESTS_THAT_TEST_PRIVATE_FUNTIONALITY=("--ignore=tests/test_nanops.py"
                                              "--ignore=tests/frame/test_block_internals.py"
                                              "--ignore=tests/arrays/sparse/test_libsparse.py"
                                              "--ignore=tests/copy_view/test_internals.py"
+                                             "--ignore=tests/indexing/test_chaining_and_caching.py"
+                                             "--ignore=tests/indexing/multiindex/test_chaining_and_caching.py"
 )
 
 

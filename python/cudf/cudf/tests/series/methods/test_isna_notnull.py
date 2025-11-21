@@ -60,3 +60,9 @@ def test_series_notnull_notna(ps, nan_as_null):
 
         assert_eq(ps.notnull(), gs.notnull())
         assert_eq(ps.notna(), gs.notna())
+
+
+def test_notnull_pandas_compat_mode():
+    with cudf.option_context("mode.pandas_compatible", True):
+        gs = cudf.Series([1, None, 3], dtype="Int64")
+        assert_eq(gs.notnull(), gs.to_pandas().notnull())

@@ -17,7 +17,7 @@ from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-    from polars.polars import _expr_nodes as pl_expr
+    from polars import polars  # type: ignore[attr-defined]
 
     from cudf_polars.containers import DataFrame, DataType
 
@@ -75,7 +75,7 @@ class TemporalFunction(Expr):
         Year = auto()
 
         @classmethod
-        def from_polars(cls, obj: pl_expr.TemporalFunction) -> Self:
+        def from_polars(cls, obj: polars._expr_nodes.TemporalFunction) -> Self:
             """Convert from polars' `TemporalFunction`."""
             try:
                 function, name = str(obj).split(".", maxsplit=1)

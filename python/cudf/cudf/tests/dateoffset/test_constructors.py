@@ -2,12 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import re
+import warnings
 
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_230
 
 
 @pytest.mark.parametrize("period", [1.5, 0.5, "string", "1", "1.0"])
@@ -64,3 +66,23 @@ def test_offset_no_fractional_periods(unit, period):
 def test_dateoffset_instance_subclass_check():
     assert not issubclass(pd.DateOffset, cudf.DateOffset)
     assert not isinstance(pd.DateOffset(), cudf.DateOffset)
+
+
+@pytest.mark.parametrize(
+    "freqstr", ["M", "ME", "Y", "YE-DEC"] if PANDAS_GE_230 else ["M", "Y"]
+)
+def test_dateoffset_freq_edgecases(freqstr):
+    def test():
+        expect = pd.tseries.frequencies.to_offset(freqstr)
+        got = cudf.DateOffset._from_freqstr(freqstr)
+        assert got == expect
+
+    if freqstr in {"M", "Y"}:
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            test()
+            assert all(
+                issubclass(warn.category, FutureWarning) for warn in w
+            ), "Expected FutureWarning not raised"
+        return
+    test()

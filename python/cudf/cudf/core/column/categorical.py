@@ -21,6 +21,7 @@ from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     cudf_dtype_to_pa_type,
+    dtype_from_pylibcudf_column,
     find_common_type,
     is_mixed_with_object_dtype,
     min_signed_type,
@@ -169,9 +170,15 @@ class CategoricalColumn(column.ColumnBase):
         if self.offset == 0 and self.size == self.base_size:
             return super().children  # type: ignore[return-value]
         if self._children is None:
-            # Compute children from the column view (children factoring self.size)
-            child = type(self).from_pylibcudf(
-                self.to_pylibcudf(mode="read").copy()
+            # Pass along size, offset, null_count from __init__
+            # which doesn't necessarily match the attributes of plc_column
+            child = cudf.core.column.numerical.NumericalColumn(
+                plc_column=self.plc_column,
+                size=self.size,
+                dtype=dtype_from_pylibcudf_column(self.plc_column),
+                offset=self.offset,
+                null_count=self.null_count,
+                exposed=False,
             )
             self._children = (child,)
         return self._children
@@ -264,13 +271,17 @@ class CategoricalColumn(column.ColumnBase):
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         if isinstance(other, column.ColumnBase):
-            if (
-                isinstance(other, CategoricalColumn)
-                and other.dtype != self.dtype
-            ):
-                raise TypeError(
-                    "Categoricals can only compare with the same type"
-                )
+            if isinstance(other, CategoricalColumn):
+                if self.dtype == other.dtype:
+                    # Dtypes are the same, but ordering may differ
+                    # in which case we need to align them for their codes
+                    # to match.
+                    if not self.dtype._internal_eq(other.dtype):
+                        other = other.as_categorical_column(self.dtype)
+                else:
+                    raise TypeError(
+                        "Categoricals can only compare with the same type"
+                    )
             # We'll compare self's decategorized values later for non-CategoricalColumn
         else:
             codes = column.as_column(
@@ -634,7 +645,10 @@ class CategoricalColumn(column.ColumnBase):
                 return codes._with_type_metadata(dtype)  # type: ignore[return-value]
 
         return self.set_categories(
-            new_categories=dtype.categories, ordered=bool(dtype.ordered)
+            new_categories=self.dtype.categories
+            if dtype._categories is None
+            else dtype.categories,
+            ordered=bool(dtype.ordered),
         )
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:

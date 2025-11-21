@@ -39,7 +39,7 @@ def valid_type(request):
 
 class DataBuffer:
     def __init__(self, obj, dtype):
-        self.obj = rmm.DeviceBuffer.to_device(obj)
+        self.obj = rmm.DeviceBuffer.to_device(obj, plc.utils._get_stream())
         self.dtype = dtype
         self.shape = (int(len(self.obj) / self.dtype.itemsize),)
         self.strides = (self.dtype.itemsize,)
@@ -85,7 +85,9 @@ def test_from_cuda_array_interface(
 def test_from_rmm_buffer():
     result = pa.array([1, 2, 3], type=pa.int32())
     expected = plc.Column.from_rmm_buffer(
-        rmm.DeviceBuffer.to_device(result.buffers()[1].to_pybytes()),
+        rmm.DeviceBuffer.to_device(
+            result.buffers()[1].to_pybytes(), plc.utils._get_stream()
+        ),
         plc.DataType.from_arrow(result.type),
         len(result),
         [],
@@ -94,12 +96,16 @@ def test_from_rmm_buffer():
 
     result = pa.array(["a", "b", "c"], type=pa.string())
     expected = plc.Column.from_rmm_buffer(
-        rmm.DeviceBuffer.to_device(result.buffers()[2].to_pybytes()),
+        rmm.DeviceBuffer.to_device(
+            result.buffers()[2].to_pybytes(), plc.utils._get_stream()
+        ),
         plc.DataType.from_arrow(result.type),
         len(result),
         [
             plc.Column.from_rmm_buffer(
-                rmm.DeviceBuffer.to_device(result.buffers()[1].to_pybytes()),
+                rmm.DeviceBuffer.to_device(
+                    result.buffers()[1].to_pybytes(), plc.utils._get_stream()
+                ),
                 plc.DataType(plc.TypeId.INT32),
                 4,
                 [],
@@ -119,7 +125,7 @@ def test_from_rmm_buffer():
     ],
 )
 def test_from_rmm_buffer_invalid(dtype, children_data):
-    buff = rmm.DeviceBuffer.to_device(b"")
+    buff = rmm.DeviceBuffer.to_device(b"", plc.utils._get_stream())
     children = [
         plc.Column.from_arrow(pa.array(child_data))
         for child_data in children_data

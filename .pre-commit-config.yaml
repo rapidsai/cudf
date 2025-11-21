@@ -81,7 +81,8 @@ repos:
         exclude: |
           (?x)^(
             ^python/cudf/cudf/core/dtypes.py|
-            ^python/cudf/cudf/tests/pytest.ini
+            ^python/cudf/cudf/tests/pytest.ini|
+            ^python/cudf/cudf/tests/series/test_binops.py
           )
       - id: no-programmatic-xfail
         name: no-programmatic-xfail

@@ -209,12 +209,14 @@ aggregate_reader_metadata::select_payload_columns(
   std::optional<std::vector<std::string>> const& filter_column_names,
   bool include_index,
   bool strings_to_categorical,
+  bool ignore_missing_columns,
   type_id timestamp_type_id)
 {
   // If neither payload nor filter columns are specified, select all columns
   if (not payload_column_names.has_value() and not filter_column_names.has_value()) {
     // Call the base `select_columns()` method without specifying any columns
-    return select_columns({}, {}, include_index, strings_to_categorical, timestamp_type_id);
+    return select_columns(
+      {}, {}, include_index, strings_to_categorical, ignore_missing_columns, timestamp_type_id);
   }
 
   std::vector<std::string> valid_payload_columns;
@@ -237,8 +239,12 @@ aggregate_reader_metadata::select_payload_columns(
                                   valid_payload_columns.end());
     }
     // Call the base `select_columns()` method with valid payload columns
-    return select_columns(
-      valid_payload_columns, {}, include_index, strings_to_categorical, timestamp_type_id);
+    return select_columns(valid_payload_columns,
+                          {},
+                          include_index,
+                          strings_to_categorical,
+                          ignore_missing_columns,
+                          timestamp_type_id);
   }
 
   // Else if only filter columns are specified, select all columns that do not appear in the
@@ -265,8 +271,12 @@ aggregate_reader_metadata::select_payload_columns(
   }
 
   // Call the base `select_columns()` method with all but filter columns
-  return select_columns(
-    valid_payload_columns, {}, include_index, strings_to_categorical, timestamp_type_id);
+  return select_columns(valid_payload_columns,
+                        {},
+                        include_index,
+                        strings_to_categorical,
+                        ignore_missing_columns,
+                        timestamp_type_id);
 }
 
 std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_groups_with_stats(

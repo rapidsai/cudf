@@ -590,9 +590,9 @@ class DatetimeColumn(TemporalBaseColumn):
                 lhs_unit = lhs.type.unit
                 other_dtype = cudf_dtype_from_pa_type(lhs.type)
             else:
-                lhs_unit = lhs.time_unit  # type: ignore[attr-defined]
+                lhs_unit = getattr(lhs, "time_unit", None)
                 other_dtype = lhs.dtype
-            rhs_unit = rhs.time_unit
+            rhs_unit = getattr(rhs, "time_unit", None)
         else:
             lhs = self
             rhs = other  # type: ignore[assignment]
@@ -600,9 +600,9 @@ class DatetimeColumn(TemporalBaseColumn):
                 rhs_unit = rhs.type.unit
                 other_dtype = cudf_dtype_from_pa_type(rhs.type)
             else:
-                rhs_unit = rhs.time_unit
+                rhs_unit = getattr(rhs, "time_unit", None)
                 other_dtype = rhs.dtype
-            lhs_unit = lhs.time_unit
+            lhs_unit = getattr(lhs, "time_unit", None)
 
         other_is_timedelta = other_dtype.kind == "m"
         other_is_datetime64 = other_dtype.kind == "M"

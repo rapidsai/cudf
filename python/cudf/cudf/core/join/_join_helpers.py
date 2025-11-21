@@ -141,7 +141,7 @@ def _match_categorical_dtypes_both(
 
     # when both are ordered and both have the same categories,
     # no casting required:
-    if ltype == rtype:
+    if ltype._internal_eq(rtype):
         return lcol, rcol
 
     # Merging categorical variables when only one side is ordered is
@@ -171,7 +171,7 @@ def _match_categorical_dtypes_both(
         )
     elif how in {"left", "leftanti", "leftsemi"}:
         # always cast to left type
-        return lcol, rcol.astype(ltype)
+        return lcol, rcol._get_decategorized_column().astype(ltype)
     else:
         # merge categories
         with warnings.catch_warnings():
@@ -182,7 +182,9 @@ def _match_categorical_dtypes_both(
         common_type = CategoricalDtype(
             categories=merged_categories, ordered=False
         )
-        return lcol.astype(common_type), rcol.astype(common_type)
+        return lcol._get_decategorized_column().astype(
+            common_type
+        ), rcol._get_decategorized_column().astype(common_type)
 
 
 def _coerce_to_tuple(obj):

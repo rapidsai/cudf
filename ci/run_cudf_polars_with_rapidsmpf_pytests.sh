@@ -14,7 +14,7 @@ cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/cudf_polars/
 
 # Run experimental tests with the "single" cluster mode and the "rapidsmpf" runtime
 rapids-logger "Running experimental tests with the 'rapidsmpf' runtime"
-python -m pytest --cache-clear "$@" "tests/experimental" \
+timeout 10m python -m pytest --cache-clear "$@" "tests/experimental" \
     --executor streaming \
     --cluster single \
     --runtime rapidsmpf

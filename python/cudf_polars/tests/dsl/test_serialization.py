@@ -7,7 +7,7 @@ import pickle
 
 import pytest
 
-from polars.polars import _expr_nodes as pl_expr
+from polars import polars  # type: ignore[attr-defined]
 
 from cudf_polars.dsl.expressions.boolean import BooleanFunction
 from cudf_polars.dsl.expressions.datetime import TemporalFunction
@@ -47,7 +47,7 @@ def test_function_name_invalid(function):
 
 def test_from_polars_all_names(function):
     # Test that all valid names of polars expressions are correctly converted
-    polars_function = getattr(pl_expr, function.__name__)
+    polars_function = getattr(polars._expr_nodes, function.__name__)
     polars_names = [name for name in dir(polars_function) if not name.startswith("_")]
     # Check names advertised by polars are the same as we advertise
     polars_names_set = set(polars_names)

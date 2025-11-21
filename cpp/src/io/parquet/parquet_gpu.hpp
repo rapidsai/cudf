@@ -111,6 +111,8 @@ enum class decode_error : kernel_error::value_type {
   INVALID_DICT_WIDTH       = 0x40,
   DELTA_PARAM_MISMATCH     = 0x80,
   DELTA_PARAMS_UNSUPPORTED = 0x100,
+  INVALID_PAGE_TYPE        = 0x200,
+  INVALID_PAGE_HEADER      = 0x400,
 };
 
 /**
@@ -683,19 +685,44 @@ __device__ inline bool is_literal_run(int const run_header) { return (run_header
 __device__ inline bool is_repeated_run(int const run_header) { return !is_literal_run(run_header); }
 
 /**
- * @brief Launches kernel for parsing the page headers in the column chunks
+ * @brief Launches kernel for counting page headers from column chunk data buffers
  *
- * @param[in] chunks List of column chunks
- * @param[in] chunk_pages List of pages associated with the chunks, in chunk-sorted order
- * @param[in] num_chunks Number of column chunks
+ * @param[in] chunks Device span of column chunks
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
-void decode_page_headers(ColumnChunkDesc* chunks,
+void count_page_headers(cudf::detail::hostdevice_span<ColumnChunkDesc> chunks,
+                        kernel_error::pointer error_code,
+                        rmm::cuda_stream_view stream);
+/**
+ * @brief Launches kernel for parsing the page headers in the column chunks
+ *
+ * @param[in] chunks Device span of column chunks
+ * @param[in] chunk_pages List of pages associated with the chunks, in chunk-sorted order
+ * @param[out] error_code Error code for kernel failures
+ * @param[in] stream CUDA stream to use
+ */
+void decode_page_headers(cudf::device_span<ColumnChunkDesc const> chunks,
                          chunk_page_info* chunk_pages,
-                         int32_t num_chunks,
                          kernel_error::pointer error_code,
                          rmm::cuda_stream_view stream);
+
+/**
+ * @brief Decode page headers from specified page locations from the page index
+ *
+ * @param[in] chunks Device span of column chunks
+ * @param[out] pages Device span of pages
+ * @param[in] page_locations List of page locations
+ * @param[in] chunk_page_offsets List of running count of page locations per column chunk
+ * @param[out] error_code Error code for kernel failures
+ * @param[in] stream CUDA stream to use
+ */
+void decode_page_headers_with_pgidx(cudf::device_span<ColumnChunkDesc const> chunks,
+                                    cudf::device_span<PageInfo> pages,
+                                    uint8_t** page_locations,
+                                    size_type* chunk_page_offsets,
+                                    kernel_error::pointer error_code,
+                                    rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for building the dictionary index for the column

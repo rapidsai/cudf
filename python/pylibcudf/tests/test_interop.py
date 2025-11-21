@@ -174,6 +174,9 @@ def test_from_dlpack_error():
         plc.interop.from_dlpack(1)
 
 
+# We can't control the stream nanoarrow uses internally so we must disable the stream
+# testing for these tests.
+@pytest.mark.uses_custom_stream
 def test_device_interop_column():
     pa_arr = pa.array([{"a": [1, None]}, None, {"b": [None, 4]}])
     plc_col = plc.Column.from_arrow(pa_arr)
@@ -183,6 +186,7 @@ def test_device_interop_column():
     assert_column_eq(pa_arr, new_col)
 
 
+@pytest.mark.uses_custom_stream
 def test_device_interop_table():
     # Have to manually construct the schema to ensure that names match. pyarrow will
     # assign names to nested types automatically otherwise.

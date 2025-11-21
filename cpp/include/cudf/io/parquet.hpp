@@ -13,7 +13,6 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <iostream>
 #include <memory>
 #include <optional>
 #include <string>
@@ -93,6 +92,8 @@ class parquet_reader_options {
   bool _use_arrow_schema = true;
   // Whether to allow reading matching select columns from mismatched Parquet files.
   bool _allow_mismatched_pq_schemas = false;
+  // Whether to ignore non-existent projected columns
+  bool _ignore_missing_columns = true;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
   // Whether to use JIT compilation for filtering
@@ -169,6 +170,15 @@ class parquet_reader_options {
   {
     return _allow_mismatched_pq_schemas;
   }
+
+  /**
+   * @brief Returns boolean depending on whether to ignore non-existent projected columns while
+   * reading.
+   *
+   * @return `true` if non-existent projected columns will be ignored while reading.
+   *
+   */
+  [[nodiscard]] bool is_enabled_ignore_missing_columns() const { return _ignore_missing_columns; }
 
   /**
    * @brief Returns optional tree of metadata.
@@ -356,6 +366,14 @@ class parquet_reader_options {
   void enable_allow_mismatched_pq_schemas(bool val) { _allow_mismatched_pq_schemas = val; }
 
   /**
+   * @brief Sets to enable/disable ignoring of non-existent projected columns while reading.
+   *
+   * @param val Boolean indicating whether to ignore non-existent projected columns while reading.
+   *
+   */
+  void enable_ignore_missing_columns(bool val) { _ignore_missing_columns = val; }
+
+  /**
    * @brief Sets reader column schema.
    *
    * @param val Tree of schema nodes to enable/disable conversion of binary to string columns.
@@ -509,6 +527,19 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& allow_mismatched_pq_schemas(bool val)
   {
     options._allow_mismatched_pq_schemas = val;
+    return *this;
+  }
+
+  /**
+   * @brief Sets to enable/disable ignoring of non-existent projected columns while reading.
+   *
+   * @param val Boolean indicating whether to ignore non-existent projected columns while reading.
+   *
+   * @return this for chaining.
+   */
+  parquet_reader_options_builder& ignore_missing_columns(bool val)
+  {
+    options._ignore_missing_columns = val;
     return *this;
   }
 
