@@ -1927,12 +1927,19 @@ class Series(SingleColumnFrame, IndexedFrame):
         bool_only: bool | None = None,
         skipna: bool = True,
         **kwargs,
-    ) -> bool:
+    ) -> bool | np.bool_:
         if bool_only not in (None, True):
             raise NotImplementedError(
                 "The bool_only parameter is not supported for Series."
             )
-        return super().all(axis, skipna, **kwargs)
+        result = super().all(axis, skipna, **kwargs)
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and isinstance(result, bool)
+            and not isinstance(self.dtype, pd.ArrowDtype)
+        ):
+            return np.bool_(result)
+        return result
 
     @_performance_tracking
     def any(
@@ -1941,12 +1948,19 @@ class Series(SingleColumnFrame, IndexedFrame):
         bool_only: bool | None = None,
         skipna: bool = True,
         **kwargs,
-    ) -> bool:
+    ) -> bool | np.bool_:
         if bool_only not in (None, True):
             raise NotImplementedError(
                 "The bool_only parameter is not supported for Series."
             )
-        return super().any(axis, skipna, **kwargs)
+        result = super().any(axis, skipna, **kwargs)
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and isinstance(result, bool)
+            and not isinstance(self.dtype, pd.ArrowDtype)
+        ):
+            return np.bool_(result)
+        return result
 
     @_performance_tracking
     def to_pandas(
