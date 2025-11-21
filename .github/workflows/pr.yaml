@@ -127,6 +127,7 @@ jobs:
           - '!java/**'
         test_python:
           - '**'
+          - '!.github/**'
           - '!.clang-format'
           - '!.devcontainer/**'
           - '!CONTRIBUTING.md'
