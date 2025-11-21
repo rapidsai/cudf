@@ -117,7 +117,7 @@ class ReserveOpIDs:
 
 class ShuffleContext:
     """
-    Local shuffle instance context manager.
+    ShufflerAsync context manager.
 
     Parameters
     ----------
