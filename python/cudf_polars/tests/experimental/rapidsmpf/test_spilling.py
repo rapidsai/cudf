@@ -7,8 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import cudf
-import cupy
+import numpy as np
 import pytest
 from rapidsmpf.communicator.single import new_communicator as single_process_comm
 from rapidsmpf.config import Options, get_environment_variables
@@ -19,14 +18,14 @@ from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
-from rapidsmpf.utils.cudf import cudf_to_pylibcudf_table
 
+import pylibcudf as plc
 import rmm.mr
 
 from cudf_polars.experimental.rapidsmpf.utils import make_spill_function
 
 if TYPE_CHECKING:
-    from pylibcudf.table import Table
+    from rmm.pylibrmm.stream import Stream
 
 
 @pytest.fixture
@@ -39,12 +38,14 @@ def context() -> Context:
     return Context(comm, br, options)
 
 
-def create_test_table(nbytes: int) -> Table:
+def create_test_table(nbytes: int, stream: Stream) -> plc.Table:
     """Create a test table with specified size in bytes."""
     assert nbytes % 4 == 0, "nbytes must be divisible by 4 for float32"
-    return cudf_to_pylibcudf_table(
-        cudf.DataFrame({"data": cupy.random.random(nbytes // 4, dtype=cupy.float32)})
-    )
+    # Create a simple table with one column of random float32 data
+    num_elements = nbytes // 4
+    data = np.random.random(num_elements).astype(np.float32)
+    # mypy doesn't recognize pylibcudf's from_array signature correctly
+    return plc.Table([plc.Column.from_array(data, stream=stream)])  # type: ignore[call-arg]
 
 
 def test_make_spill_function(context: Context) -> None:
@@ -68,7 +69,7 @@ def test_make_spill_function(context: Context) -> None:
         message_ids[buffer_idx] = []
         for msg_idx in range(count):
             # Create 1MB messages
-            table = create_test_table(1024 * 1024)
+            table = create_test_table(1024 * 1024, stream)
             chunk = TableChunk.from_pylibcudf_table(table, stream, exclusive_view=True)
             msg = Message(msg_idx, chunk)
             mid = sm.insert(msg)
