@@ -8,8 +8,8 @@
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/io/nvbench_helpers.hpp>
 
+#include <cudf/io/cutable.hpp>
 #include <cudf/io/datasource.hpp>
-#include <cudf/io/table_format.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <nvbench/nvbench.cuh>
@@ -31,7 +31,7 @@ void table_read_common(cudf::size_type num_rows_to_read,
 
       timer.start();
       auto result =
-        cudf::io::read_table(cudf::io::table_reader_options::builder(source_info).build());
+        cudf::io::read_cutable(cudf::io::cutable_reader_options::builder(source_info).build());
       timer.stop();
 
       CUDF_EXPECTS(result.table.num_columns() == num_cols_to_read, "Unexpected number of columns");
@@ -55,8 +55,8 @@ void BM_table_read_data_sizes(nvbench::state& state)
       create_random_table(cycle_dtypes(d_type, num_cols), table_size_bytes{data_size});
     auto const view = tbl->view();
 
-    cudf::io::write_table(
-      cudf::io::table_writer_options::builder(source_sink.make_sink_info(), view).build());
+    cudf::io::write_cutable(
+      cudf::io::cutable_writer_options::builder(source_sink.make_sink_info(), view).build());
     return view.num_rows();
   }();
 
@@ -78,8 +78,8 @@ void BM_table_read_data_common(nvbench::state& state,
       create_random_table(cycle_dtypes(d_type, num_cols), table_size_bytes{data_size}, profile);
     auto const view = tbl->view();
 
-    cudf::io::write_table(
-      cudf::io::table_writer_options::builder(source_sink.make_sink_info(), view).build());
+    cudf::io::write_cutable(
+      cudf::io::cutable_writer_options::builder(source_sink.make_sink_info(), view).build());
     return view.num_rows();
   }();
 
@@ -109,8 +109,8 @@ void BM_table_read_num_columns(nvbench::state& state,
       create_random_table(cycle_dtypes(d_type, n_col), table_size_bytes{data_size_bytes});
     auto const view = tbl->view();
 
-    cudf::io::write_table(
-      cudf::io::table_writer_options::builder(source_sink.make_sink_info(), view).build());
+    cudf::io::write_cutable(
+      cudf::io::cutable_writer_options::builder(source_sink.make_sink_info(), view).build());
     return view.num_rows();
   }();
 

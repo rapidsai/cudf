@@ -8,9 +8,9 @@
 #include <cudf/contiguous_split.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/cutable.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
-#include <cudf/io/table_format.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -26,35 +26,35 @@ namespace io {
 namespace {
 
 /**
- * @brief Validate the table format header
+ * @brief Validate the cutable header
  *
  * @param header The header to validate
  * @throws cudf::logic_error If the header is invalid
  */
-void validate_header(table_format_header const& header)
+void validate_header(cutable_header const& header)
 {
-  CUDF_EXPECTS(header.magic == table_format_header::magic_number,
-               "Invalid magic number in table format header");
-  CUDF_EXPECTS(header.format_version == table_format_header::version,
-               "Unsupported table format version");
+  CUDF_EXPECTS(header.magic == cutable_header::magic_number,
+               "Invalid magic number in cutable header");
+  CUDF_EXPECTS(header.format_version == cutable_header::version,
+               "Unsupported cutable format version");
 }
 
 }  // anonymous namespace
 
-table_writer_options_builder table_writer_options::builder(sink_info const& sink,
-                                                           table_view const& table)
+cutable_writer_options_builder cutable_writer_options::builder(sink_info const& sink,
+                                                               table_view const& table)
 {
-  return table_writer_options_builder(sink, table);
+  return cutable_writer_options_builder(sink, table);
 }
 
-table_reader_options_builder table_reader_options::builder(source_info src)
+cutable_reader_options_builder cutable_reader_options::builder(source_info src)
 {
-  return table_reader_options_builder(std::move(src));
+  return cutable_reader_options_builder(std::move(src));
 }
 
-void write_table(table_writer_options const& options,
-                 rmm::cuda_stream_view stream,
-                 rmm::device_async_resource_ref mr)
+void write_cutable(cutable_writer_options const& options,
+                   rmm::cuda_stream_view stream,
+                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -68,21 +68,21 @@ void write_table(table_writer_options const& options,
     case io_type::HOST_BUFFER: sink = data_sink::create(sink_info.buffers()[0]); break;
     case io_type::VOID: sink = data_sink::create(); break;
     case io_type::USER_IMPLEMENTED: sink = data_sink::create(sink_info.user_sinks()[0]); break;
-    default: CUDF_FAIL("Unsupported sink type for table format");
+    default: CUDF_FAIL("Unsupported sink type for cutable format");
   }
 
   // Pack the table into contiguous memory
   auto const packed = cudf::pack(input, stream, mr);
 
   // Create and populate the header
-  table_format_header header;
-  header.magic           = table_format_header::magic_number;
-  header.format_version  = table_format_header::version;
+  cutable_header header;
+  header.magic           = cutable_header::magic_number;
+  header.format_version  = cutable_header::version;
   header.metadata_length = packed.metadata->size();
   header.data_length     = packed.gpu_data->size();
 
   // Write the header
-  sink->host_write(&header, sizeof(table_format_header));
+  sink->host_write(&header, sizeof(cutable_header));
 
   // Write the metadata
   sink->host_write(packed.metadata->data(), header.metadata_length);
@@ -101,13 +101,13 @@ void write_table(table_writer_options const& options,
   sink->flush();
 }
 
-packed_table read_table(table_reader_options const& options,
-                        rmm::cuda_stream_view stream,
-                        rmm::device_async_resource_ref mr)
+packed_table read_cutable(cutable_reader_options const& options,
+                          rmm::cuda_stream_view stream,
+                          rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   auto const& source_info = options.get_source();
-  CUDF_EXPECTS(source_info.num_sources() == 1, "Table format only supports single source");
+  CUDF_EXPECTS(source_info.num_sources() == 1, "CUTable format only supports single source");
 
   // Create datasource from source_info based on type
   std::unique_ptr<datasource> source;
@@ -120,14 +120,13 @@ packed_table read_table(table_reader_options const& options,
     case io_type::USER_IMPLEMENTED:
       source = datasource::create(source_info.user_sources()[0]);
       break;
-    default: CUDF_FAIL("Unsupported source type for table format");
+    default: CUDF_FAIL("Unsupported source type for cutable format");
   }
 
   // Read the header
-  table_format_header header;
-  auto header_size = sizeof(table_format_header);
-  CUDF_EXPECTS(source->size() >= header_size,
-               "File too small to contain a valid table format header");
+  cutable_header header;
+  auto header_size = sizeof(cutable_header);
+  CUDF_EXPECTS(source->size() >= header_size, "File too small to contain a valid cutable header");
 
   source->host_read(0, header_size, reinterpret_cast<uint8_t*>(&header));
 

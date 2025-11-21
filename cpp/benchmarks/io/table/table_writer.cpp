@@ -8,8 +8,8 @@
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/io/nvbench_helpers.hpp>
 
+#include <cudf/io/cutable.hpp>
 #include <cudf/io/datasource.hpp>
-#include <cudf/io/table_format.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <nvbench/nvbench.cuh>
@@ -29,8 +29,8 @@ void table_write_common(cudf::table_view const& view, io_type sink_type, nvbench
       cuio_source_sink_pair source_sink(sink_type);
 
       timer.start();
-      cudf::io::write_table(
-        cudf::io::table_writer_options::builder(source_sink.make_sink_info(), view).build());
+      cudf::io::write_cutable(
+        cudf::io::cutable_writer_options::builder(source_sink.make_sink_info(), view).build());
       timer.stop();
 
       encoded_file_size = source_sink.size();

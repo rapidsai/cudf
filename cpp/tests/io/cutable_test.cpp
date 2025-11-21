@@ -8,9 +8,9 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 
+#include <cudf/io/cutable.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
-#include <cudf/io/table_format.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 
@@ -22,23 +22,23 @@ cudf::test::TempDirTestEnvironment* const temp_env =
     ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
 /**
- * @brief Base test fixture for table format write/read tests
+ * @brief Base test fixture for cutable write/read tests
  */
-struct TableFormatTest : public cudf::test::BaseFixture {
+struct CutableTest : public cudf::test::BaseFixture {
   /**
    * @brief Test write and read roundtrip using file-based sink/source
    */
   void run_test_file(cudf::table_view const& expected)
   {
-    auto const filepath = temp_env->get_temp_filepath("test.cudf");
+    auto const filepath = temp_env->get_temp_filepath("test.cutable");
 
     // Write table to file
-    cudf::io::write_table(
-      cudf::io::table_writer_options::builder(cudf::io::sink_info{filepath}, expected).build());
+    cudf::io::write_cutable(
+      cudf::io::cutable_writer_options::builder(cudf::io::sink_info{filepath}, expected).build());
 
     // Read table back from file
-    auto result = cudf::io::read_table(
-      cudf::io::table_reader_options::builder(cudf::io::source_info{filepath}).build());
+    auto result = cudf::io::read_cutable(
+      cudf::io::cutable_reader_options::builder(cudf::io::source_info{filepath}).build());
 
     // Verify the tables match
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.table);
@@ -52,14 +52,14 @@ struct TableFormatTest : public cudf::test::BaseFixture {
     std::vector<char> buffer;
 
     // Write to memory buffer
-    cudf::io::write_table(
-      cudf::io::table_writer_options::builder(cudf::io::sink_info{&buffer}, expected).build());
+    cudf::io::write_cutable(
+      cudf::io::cutable_writer_options::builder(cudf::io::sink_info{&buffer}, expected).build());
 
     // Read from memory buffer
     auto host_buffer = cudf::host_span<std::byte const>(
       reinterpret_cast<std::byte const*>(buffer.data()), buffer.size());
-    auto result = cudf::io::read_table(
-      cudf::io::table_reader_options::builder(cudf::io::source_info{host_buffer}).build());
+    auto result = cudf::io::read_cutable(
+      cudf::io::cutable_reader_options::builder(cudf::io::source_info{host_buffer}).build());
 
     // Verify the tables match
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.table);
@@ -79,7 +79,7 @@ struct TableFormatTest : public cudf::test::BaseFixture {
 // Basic data type tests
 // ============================================================================
 
-TEST_F(TableFormatTest, SingleColumnFixedWidth)
+TEST_F(CutableTest, SingleColumnFixedWidth)
 {
   cudf::test::fixed_width_column_wrapper<int64_t> col({1, 2, 3, 4, 5, 6, 7},
                                                       {true, true, true, false, true, false, true});
@@ -88,7 +88,7 @@ TEST_F(TableFormatTest, SingleColumnFixedWidth)
   run_test(expected);
 }
 
-TEST_F(TableFormatTest, SingleColumnFixedWidthNonNullable)
+TEST_F(CutableTest, SingleColumnFixedWidthNonNullable)
 {
   cudf::test::fixed_width_column_wrapper<int64_t> col({1, 2, 3, 4, 5, 6, 7});
 
@@ -96,7 +96,7 @@ TEST_F(TableFormatTest, SingleColumnFixedWidthNonNullable)
   run_test(expected);
 }
 
-TEST_F(TableFormatTest, MultiColumnFixedWidth)
+TEST_F(CutableTest, MultiColumnFixedWidth)
 {
   cudf::test::fixed_width_column_wrapper<int16_t> col1(
     {1, 2, 3, 4, 5, 6, 7}, {true, true, true, false, true, false, true});
@@ -109,7 +109,7 @@ TEST_F(TableFormatTest, MultiColumnFixedWidth)
   run_test(expected);
 }
 
-TEST_F(TableFormatTest, MultiColumnWithStrings)
+TEST_F(CutableTest, MultiColumnWithStrings)
 {
   cudf::test::fixed_width_column_wrapper<int16_t> col1(
     {1, 2, 3, 4, 5, 6, 7}, {true, true, true, false, true, false, true});
@@ -121,7 +121,7 @@ TEST_F(TableFormatTest, MultiColumnWithStrings)
   run_test(expected);
 }
 
-TEST_F(TableFormatTest, EmptyTable)
+TEST_F(CutableTest, EmptyTable)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col({});
 
@@ -129,7 +129,7 @@ TEST_F(TableFormatTest, EmptyTable)
   run_test(expected);
 }
 
-TEST_F(TableFormatTest, SingleRow)
+TEST_F(CutableTest, SingleRow)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col({42});
   cudf::test::strings_column_wrapper str_col({"hello"});
@@ -142,7 +142,7 @@ TEST_F(TableFormatTest, SingleRow)
 // Nested type tests
 // ============================================================================
 
-TEST_F(TableFormatTest, ListsOfIntegers)
+TEST_F(CutableTest, ListsOfIntegers)
 {
   cudf::test::lists_column_wrapper<int32_t> col{{1, 2, 3}, {4, 5}, {}, {6, 7, 8, 9}, {10}};
 
@@ -150,7 +150,7 @@ TEST_F(TableFormatTest, ListsOfIntegers)
   run_test(expected);
 }
 
-TEST_F(TableFormatTest, ListsWithNulls)
+TEST_F(CutableTest, ListsWithNulls)
 {
   // Create a list column with element validity
   auto valids =
@@ -162,7 +162,7 @@ TEST_F(TableFormatTest, ListsWithNulls)
   run_test(expected);
 }
 
-TEST_F(TableFormatTest, StructColumn)
+TEST_F(CutableTest, StructColumn)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col1{1, 2, 3, 4};
   cudf::test::strings_column_wrapper col2{"a", "b", "c", "d"};
@@ -172,7 +172,7 @@ TEST_F(TableFormatTest, StructColumn)
   run_test(expected);
 }
 
-TEST_F(TableFormatTest, StructWithNulls)
+TEST_F(CutableTest, StructWithNulls)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col1{{1, 2, 3, 4}, {true, false, true, true}};
   cudf::test::strings_column_wrapper col2{{"a", "b", "c", "d"}, {true, true, false, true}};
@@ -186,7 +186,7 @@ TEST_F(TableFormatTest, StructWithNulls)
 // Edge case tests
 // ============================================================================
 
-TEST_F(TableFormatTest, LargeTable)
+TEST_F(CutableTest, LargeTable)
 {
   constexpr int num_rows = 100000;
 
@@ -198,7 +198,7 @@ TEST_F(TableFormatTest, LargeTable)
   run_test(expected);
 }
 
-TEST_F(TableFormatTest, AllNullColumn)
+TEST_F(CutableTest, AllNullColumn)
 {
   auto all_nulls = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return false; });
   cudf::test::fixed_width_column_wrapper<int32_t> col({1, 2, 3, 4, 5}, all_nulls);
@@ -207,7 +207,7 @@ TEST_F(TableFormatTest, AllNullColumn)
   run_test(expected);
 }
 
-TEST_F(TableFormatTest, MixedNullability)
+TEST_F(CutableTest, MixedNullability)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> nullable_col({1, 2, 3, 4, 5},
                                                                {true, false, true, false, true});
@@ -223,14 +223,14 @@ TEST_F(TableFormatTest, MixedNullability)
 // Error handling tests
 // ============================================================================
 
-TEST_F(TableFormatTest, InvalidHeaderMagic)
+TEST_F(CutableTest, InvalidHeaderMagic)
 {
   // Create a valid file first
-  auto const filepath = temp_env->get_temp_filepath("invalid.cudf");
+  auto const filepath = temp_env->get_temp_filepath("invalid.cutable");
   cudf::test::fixed_width_column_wrapper<int32_t> col({1, 2, 3});
   auto const expected = cudf::table_view{{col}};
-  cudf::io::write_table(
-    cudf::io::table_writer_options::builder(cudf::io::sink_info{filepath}, expected).build());
+  cudf::io::write_cutable(
+    cudf::io::cutable_writer_options::builder(cudf::io::sink_info{filepath}, expected).build());
 
   // Corrupt the magic number
   std::fstream file(filepath, std::ios::in | std::ios::out | std::ios::binary);
@@ -239,19 +239,20 @@ TEST_F(TableFormatTest, InvalidHeaderMagic)
   file.close();
 
   // Reading should fail
-  EXPECT_THROW(cudf::io::read_table(
-                 cudf::io::table_reader_options::builder(cudf::io::source_info{filepath}).build()),
-               cudf::logic_error);
+  EXPECT_THROW(
+    cudf::io::read_cutable(
+      cudf::io::cutable_reader_options::builder(cudf::io::source_info{filepath}).build()),
+    cudf::logic_error);
 }
 
-TEST_F(TableFormatTest, InvalidHeaderVersion)
+TEST_F(CutableTest, InvalidHeaderVersion)
 {
   // Create a valid file first
-  auto const filepath = temp_env->get_temp_filepath("invalid_version.cudf");
+  auto const filepath = temp_env->get_temp_filepath("invalid_version.cutable");
   cudf::test::fixed_width_column_wrapper<int32_t> col({1, 2, 3});
   auto const expected = cudf::table_view{{col}};
-  cudf::io::write_table(
-    cudf::io::table_writer_options::builder(cudf::io::sink_info{filepath}, expected).build());
+  cudf::io::write_cutable(
+    cudf::io::cutable_writer_options::builder(cudf::io::sink_info{filepath}, expected).build());
 
   // Corrupt the version
   std::fstream file(filepath, std::ios::in | std::ios::out | std::ios::binary);
@@ -261,19 +262,20 @@ TEST_F(TableFormatTest, InvalidHeaderVersion)
   file.close();
 
   // Reading should fail
-  EXPECT_THROW(cudf::io::read_table(
-                 cudf::io::table_reader_options::builder(cudf::io::source_info{filepath}).build()),
-               cudf::logic_error);
+  EXPECT_THROW(
+    cudf::io::read_cutable(
+      cudf::io::cutable_reader_options::builder(cudf::io::source_info{filepath}).build()),
+    cudf::logic_error);
 }
 
-TEST_F(TableFormatTest, TruncatedFile)
+TEST_F(CutableTest, TruncatedFile)
 {
   // Create a valid file first
-  auto const filepath = temp_env->get_temp_filepath("truncated.cudf");
+  auto const filepath = temp_env->get_temp_filepath("truncated.cutable");
   cudf::test::fixed_width_column_wrapper<int32_t> col({1, 2, 3, 4, 5});
   auto const expected = cudf::table_view{{col}};
-  cudf::io::write_table(
-    cudf::io::table_writer_options::builder(cudf::io::sink_info{filepath}, expected).build());
+  cudf::io::write_cutable(
+    cudf::io::cutable_writer_options::builder(cudf::io::sink_info{filepath}, expected).build());
 
   // Truncate the file
   std::ofstream file(filepath, std::ios::binary | std::ios::trunc);
@@ -281,16 +283,17 @@ TEST_F(TableFormatTest, TruncatedFile)
   file.close();
 
   // Reading should fail
-  EXPECT_THROW(cudf::io::read_table(
-                 cudf::io::table_reader_options::builder(cudf::io::source_info{filepath}).build()),
-               cudf::logic_error);
+  EXPECT_THROW(
+    cudf::io::read_cutable(
+      cudf::io::cutable_reader_options::builder(cudf::io::source_info{filepath}).build()),
+    cudf::logic_error);
 }
 
 // ============================================================================
 // Special data types
 // ============================================================================
 
-TEST_F(TableFormatTest, BooleanColumn)
+TEST_F(CutableTest, BooleanColumn)
 {
   cudf::test::fixed_width_column_wrapper<bool> col({true, false, true, false, true});
 
@@ -298,7 +301,7 @@ TEST_F(TableFormatTest, BooleanColumn)
   run_test(expected);
 }
 
-TEST_F(TableFormatTest, TimestampColumn)
+TEST_F(CutableTest, TimestampColumn)
 {
   using namespace cudf::test;
   using namespace cuda::std::chrono;
@@ -312,7 +315,7 @@ TEST_F(TableFormatTest, TimestampColumn)
   run_test(expected);
 }
 
-TEST_F(TableFormatTest, DurationColumn)
+TEST_F(CutableTest, DurationColumn)
 {
   using namespace cudf::test;
   using namespace cuda::std::chrono;

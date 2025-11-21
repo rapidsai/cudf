@@ -21,16 +21,16 @@ namespace CUDF_EXPORT cudf {
 namespace io {
 
 /**
- * @addtogroup io_table
+ * @addtogroup io_cutable
  * @{
  * @file
- * @brief Table binary format APIs for serialization and deserialization
+ * @brief CUTable binary format APIs for serialization and deserialization
  */
 
 /**
- * @brief Simple binary file format header
+ * @brief Simple binary file format header for CUTable
  *
- * The table format stores a table in a simple binary layout:
+ * The CUTable format stores a table in a simple binary layout:
  * - Magic number (4 bytes): "CUDF"
  * - Version (4 bytes): uint32_t format version (currently 1)
  * - Metadata length (8 bytes): uint64_t size of the metadata buffer in bytes
@@ -38,7 +38,7 @@ namespace io {
  * - Metadata (variable): serialized column metadata from pack()
  * - Data (variable): contiguous device data from pack()
  */
-struct table_format_header {
+struct cutable_header {
   static constexpr uint32_t magic_number = 0x46445543;  ///< "CUDF" in little-endian
   static constexpr uint32_t version      = 1;           ///< Format version
 
@@ -48,16 +48,16 @@ struct table_format_header {
   uint64_t data_length;      ///< Length of data buffer in bytes
 };
 
-class table_writer_options_builder;
+class cutable_writer_options_builder;
 
 /**
- * @brief Settings for `write_table()`.
+ * @brief Settings for `write_cutable()`.
  */
-class table_writer_options {
+class cutable_writer_options {
   sink_info _sink;
   table_view _table;
 
-  friend table_writer_options_builder;
+  friend cutable_writer_options_builder;
 
   /**
    * @brief Constructor from sink and table.
@@ -65,7 +65,7 @@ class table_writer_options {
    * @param sink The sink used for writer output
    * @param table Table to be written to output
    */
-  explicit table_writer_options(sink_info sink, table_view table)
+  explicit cutable_writer_options(sink_info sink, table_view table)
     : _sink(std::move(sink)), _table(std::move(table))
   {
   }
@@ -76,17 +76,17 @@ class table_writer_options {
    *
    * This has been added since Cython requires a default constructor to create objects on stack.
    */
-  explicit table_writer_options() = default;
+  explicit cutable_writer_options() = default;
 
   /**
-   * @brief Create builder to create `table_writer_options`.
+   * @brief Create builder to create `cutable_writer_options`.
    *
    * @param sink The sink used for writer output
    * @param table Table to be written to output
    *
-   * @return Builder to build table_writer_options
+   * @return Builder to build cutable_writer_options
    */
-  static table_writer_options_builder builder(sink_info const& sink, table_view const& table);
+  static cutable_writer_options_builder builder(sink_info const& sink, table_view const& table);
 
   /**
    * @brief Returns sink used for writer output.
@@ -111,16 +111,16 @@ class table_writer_options {
 };
 
 /**
- * @brief Class to build `table_writer_options`.
+ * @brief Class to build `cutable_writer_options`.
  */
-class table_writer_options_builder {
+class cutable_writer_options_builder {
  public:
   /**
    * @brief Default constructor.
    *
    * This has been added since Cython requires a default constructor to create objects on stack.
    */
-  explicit table_writer_options_builder() = default;
+  explicit cutable_writer_options_builder() = default;
 
   /**
    * @brief Constructor from sink and table.
@@ -128,38 +128,38 @@ class table_writer_options_builder {
    * @param sink The sink used for writer output
    * @param table Table to be written to output
    */
-  explicit table_writer_options_builder(sink_info const& sink, table_view const& table)
+  explicit cutable_writer_options_builder(sink_info const& sink, table_view const& table)
     : _options(sink, table)
   {
   }
 
   /**
-   * @brief Build `table_writer_options`.
+   * @brief Build `cutable_writer_options`.
    *
-   * @return The constructed `table_writer_options` object
+   * @return The constructed `cutable_writer_options` object
    */
-  [[nodiscard]] table_writer_options build() const { return _options; }
+  [[nodiscard]] cutable_writer_options build() const { return _options; }
 
  private:
-  table_writer_options _options;
+  cutable_writer_options _options;
 };
 
-class table_reader_options_builder;
+class cutable_reader_options_builder;
 
 /**
- * @brief Settings for `read_table()`.
+ * @brief Settings for `read_cutable()`.
  */
-class table_reader_options {
+class cutable_reader_options {
   source_info _source;
 
-  friend table_reader_options_builder;
+  friend cutable_reader_options_builder;
 
   /**
    * @brief Constructor from source info.
    *
-   * @param src source information used to read table file
+   * @param src source information used to read cutable file
    */
-  explicit table_reader_options(source_info src) : _source{std::move(src)} {}
+  explicit cutable_reader_options(source_info src) : _source{std::move(src)} {}
 
  public:
   /**
@@ -167,15 +167,15 @@ class table_reader_options {
    *
    * This has been added since Cython requires a default constructor to create objects on stack.
    */
-  explicit table_reader_options() = default;
+  explicit cutable_reader_options() = default;
 
   /**
-   * @brief Creates a `table_reader_options_builder` to build `table_reader_options`.
+   * @brief Creates a `cutable_reader_options_builder` to build `cutable_reader_options`.
    *
-   * @param src Source information to read table file
+   * @param src Source information to read cutable file
    * @return Builder to build reader options
    */
-  static table_reader_options_builder builder(source_info src = source_info{});
+  static cutable_reader_options_builder builder(source_info src = source_info{});
 
   /**
    * @brief Returns source info.
@@ -193,37 +193,37 @@ class table_reader_options {
 };
 
 /**
- * @brief Class to build `table_reader_options`.
+ * @brief Class to build `cutable_reader_options`.
  */
-class table_reader_options_builder {
+class cutable_reader_options_builder {
  public:
   /**
    * @brief Default constructor.
    *
    * This has been added since Cython requires a default constructor to create objects on stack.
    */
-  explicit table_reader_options_builder() = default;
+  explicit cutable_reader_options_builder() = default;
 
   /**
    * @brief Constructor from source info.
    *
-   * @param src source information used to read table file
+   * @param src source information used to read cutable file
    */
-  explicit table_reader_options_builder(source_info src) : _options(std::move(src)) {}
+  explicit cutable_reader_options_builder(source_info src) : _options(std::move(src)) {}
 
   /**
-   * @brief Build `table_reader_options`.
+   * @brief Build `cutable_reader_options`.
    *
-   * @return The constructed `table_reader_options` object
+   * @return The constructed `cutable_reader_options` object
    */
-  [[nodiscard]] table_reader_options build() const { return _options; }
+  [[nodiscard]] cutable_reader_options build() const { return _options; }
 
  private:
-  table_reader_options _options;
+  cutable_reader_options _options;
 };
 
 /**
- * @brief Write a table using the table binary format.
+ * @brief Write a table using the CUTable binary format.
  *
  * This function uses `cudf::pack` to serialize a table into a contiguous format,
  * then writes it to the specified sink with a simple header containing metadata
@@ -244,12 +244,12 @@ class table_reader_options_builder {
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr An optional memory resource to use for all device allocations
  */
-void write_table(table_writer_options const& options,
-                 rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-                 rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+void write_cutable(cutable_writer_options const& options,
+                   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Read a table in table binary format.
+ * @brief Read a table in CUTable binary format.
  *
  * This function reads the header from the datasource, validates the format,
  * and uses `cudf::unpack` to deserialize the table.
@@ -269,8 +269,8 @@ void write_table(table_writer_options const& options,
  * @param mr An optional memory resource to use for all device allocations
  * @return A packed_table containing the deserialized table view and its backing data
  */
-packed_table read_table(
-  table_reader_options const& options,
+packed_table read_cutable(
+  cutable_reader_options const& options,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
