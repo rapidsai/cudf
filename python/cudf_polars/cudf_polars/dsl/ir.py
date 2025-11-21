@@ -1570,6 +1570,7 @@ class Rolling(IR):
         self.zlice = zlice
         self.children = (df,)
         self._non_child_args = (
+            schema,
             index,
             index_dtype,
             preceding_ordinal,
