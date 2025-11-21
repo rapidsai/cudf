@@ -43,8 +43,14 @@ if ! ls *_TEST 1> /dev/null 2>&1; then
   exit 1
 fi
 
-# Create JSON array of test names
-tests=$(ls -1 *_TEST | jq -R -s -c 'split("\n") | map(select(length > 0))')
+# Create JSON array of test names (excluding STREAM_ tests)
+test_array=()
+for test in *_TEST; do
+  if [[ ! "$test" =~ ^STREAM_ ]]; then
+    test_array+=("$test")
+  fi
+done
+tests=$(printf '%s\n' "${test_array[@]}" | jq -R -s -c 'split("\n") | map(select(length > 0))')
 
 rapids-logger "Found tests:"
 echo "${tests}" | jq .[]
