@@ -879,11 +879,6 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
 
-std::vector<parquet::FileMetaData> reader_impl::parquet_metadatas() const
-{
-  return _metadata->get_parquet_metadatas();
-}
-
 table_with_metadata reader_impl::read()
 {
   CUDF_EXPECTS(_output_chunk_read_limit == 0,

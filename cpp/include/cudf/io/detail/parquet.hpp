@@ -158,11 +158,6 @@ class chunked_reader : private reader {
   ~chunked_reader() override;
 
   /**
-   * @copydoc cudf::io::chunked_parquet_reader::parquet_metadatas
-   */
-  [[nodiscard]] std::vector<parquet::FileMetaData> parquet_metadatas() const;
-
-  /**
    * @copydoc cudf::io::chunked_parquet_reader::has_next
    */
   [[nodiscard]] bool has_next() const;
@@ -265,7 +260,7 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
  * @return List of FileMetaData objects, one per parquet source
  */
 std::vector<parquet::FileMetaData> read_parquet_footers(
-  host_span<std::unique_ptr<datasource> const> sources);
+  host_span<std::unique_ptr<datasource> const> datasources);
 
 }  // namespace parquet::detail
 }  // namespace io

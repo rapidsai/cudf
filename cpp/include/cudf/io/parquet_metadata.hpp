@@ -274,11 +274,12 @@ parquet_metadata read_parquet_metadata(source_info const& src_info);
  *
  * @ingroup io_readers
  *
- * @param src_info Dataset source information
+ * @param datasources Datasources to read from
  *
  * @return List of FileMetaData objects, one per parquet source
  */
-std::vector<parquet::FileMetaData> read_parquet_footers(source_info const& src_info);
+std::vector<parquet::FileMetaData> read_parquet_metadata(
+  host_span<std::unique_ptr<cudf::io::datasource> const> datasources);
 
 /** @} */  // end of group
 }  // namespace io

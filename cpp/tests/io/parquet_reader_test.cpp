@@ -2558,7 +2558,8 @@ TEST_F(ParquetMetadataReaderTest, TestPreMaterializedMetadata)
 
   auto const test_parquet_metadata = [&](int num_sources) {
     auto const source_info = cudf::io::source_info{std::vector<std::string>(num_sources, filepath)};
-    auto const metadatas   = read_parquet_footers(source_info);
+    auto datasources       = cudf::io::make_datasources(source_info);
+    auto metadatas         = cudf::io::read_parquet_metadata(datasources);
     EXPECT_EQ(metadatas.size(), num_sources);
     auto const rows_in_metadatas =
       std::accumulate(metadatas.begin(), metadatas.end(), 0, [](auto acc, auto const& metadata) {
@@ -2566,8 +2567,8 @@ TEST_F(ParquetMetadataReaderTest, TestPreMaterializedMetadata)
       });
     EXPECT_EQ(rows_in_metadatas, num_sources * num_rows);
 
-    auto const options  = cudf::io::parquet_reader_options::builder(source_info).build();
-    auto const read     = cudf::io::read_parquet(metadatas, options);
+    auto const options = cudf::io::parquet_reader_options::builder(source_info).build();
+    auto const read = cudf::io::read_parquet(std::move(datasources), std::move(metadatas), options);
     auto const expected = cudf::io::read_parquet(options);
 
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected.tbl->view(), read.tbl->view());

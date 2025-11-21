@@ -42,11 +42,6 @@ chunked_reader::chunked_reader(std::size_t chunk_read_limit,
 
 chunked_reader::~chunked_reader() = default;
 
-std::vector<parquet::FileMetaData> chunked_reader::parquet_metadatas() const
-{
-  return _impl->parquet_metadatas();
-}
-
 bool chunked_reader::has_next() const { return _impl->has_next(); }
 
 table_with_metadata chunked_reader::read_chunk() const { return _impl->read_chunk(); }

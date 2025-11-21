@@ -151,11 +151,12 @@ chunked_parquet_writer_options_builder chunked_parquet_writer_options::builder(
   return chunked_parquet_writer_options_builder{sink};
 }
 
-namespace {
-
+/**
+ * @copydoc cudf::io::make_datasources
+ */
 std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info const& info,
-                                                                    size_t offset            = 0,
-                                                                    size_t max_size_estimate = 0)
+                                                                    size_t offset,
+                                                                    size_t max_size_estimate)
 {
   switch (info.type()) {
     case io_type::FILEPATH: {
@@ -188,6 +189,8 @@ std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info 
     default: CUDF_FAIL("Unsupported source type");
   }
 }
+
+namespace {
 
 std::vector<std::unique_ptr<data_sink>> make_datasinks(sink_info const& info)
 {
@@ -619,20 +622,16 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
   return reader->read();
 }
 
-table_with_metadata read_parquet(std::vector<parquet::FileMetaData> const& parquet_metadatas,
+table_with_metadata read_parquet(std::vector<std::unique_ptr<cudf::io::datasource>>&& datasources,
+                                 std::vector<parquet::FileMetaData>&& parquet_metadatas,
                                  parquet_reader_options const& options,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
-  auto datasources = make_datasources(options.get_source());
-  auto reader      = std::make_unique<detail_parquet::reader>(
-    std::move(datasources),
-    std::vector<parquet::FileMetaData>{parquet_metadatas.begin(), parquet_metadatas.end()},
-    options,
-    stream,
-    mr);
+  auto reader = std::make_unique<detail_parquet::reader>(
+    std::move(datasources), std::move(parquet_metadatas), options, stream, mr);
 
   return reader->read();
 }
@@ -645,11 +644,10 @@ parquet_metadata read_parquet_metadata(source_info const& src_info)
   return detail_parquet::read_parquet_metadata(datasources);
 }
 
-std::vector<parquet::FileMetaData> read_parquet_footers(source_info const& src_info)
+std::vector<parquet::FileMetaData> read_parquet_metadata(
+  host_span<std::unique_ptr<cudf::io::datasource> const> datasources)
 {
   CUDF_FUNC_RANGE();
-
-  auto datasources = make_datasources(src_info);
   return detail_parquet::read_parquet_footers(datasources);
 }
 /**
@@ -741,18 +739,18 @@ chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
  */
 chunked_parquet_reader::chunked_parquet_reader(
   std::size_t chunk_read_limit,
-  std::vector<parquet::FileMetaData> const& parquet_metadatas,
+  std::vector<std::unique_ptr<cudf::io::datasource>>&& datasources,
+  std::vector<parquet::FileMetaData>&& parquet_metadatas,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
-  : reader{std::make_unique<detail_parquet::chunked_reader>(
-      chunk_read_limit,
-      0,
-      make_datasources(options.get_source()),
-      std::vector<parquet::FileMetaData>{parquet_metadatas.begin(), parquet_metadatas.end()},
-      options,
-      stream,
-      mr)}
+  : reader{std::make_unique<detail_parquet::chunked_reader>(chunk_read_limit,
+                                                            0,
+                                                            std::move(datasources),
+                                                            std::move(parquet_metadatas),
+                                                            options,
+                                                            stream,
+                                                            mr)}
 {
 }
 
@@ -780,18 +778,18 @@ chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
 chunked_parquet_reader::chunked_parquet_reader(
   std::size_t chunk_read_limit,
   std::size_t pass_read_limit,
-  std::vector<parquet::FileMetaData> const& parquet_metadatas,
+  std::vector<std::unique_ptr<cudf::io::datasource>>&& datasources,
+  std::vector<parquet::FileMetaData>&& parquet_metadatas,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
-  : reader{std::make_unique<detail_parquet::chunked_reader>(
-      chunk_read_limit,
-      pass_read_limit,
-      make_datasources(options.get_source()),
-      std::vector<parquet::FileMetaData>{parquet_metadatas.begin(), parquet_metadatas.end()},
-      options,
-      stream,
-      mr)}
+  : reader{std::make_unique<detail_parquet::chunked_reader>(chunk_read_limit,
+                                                            pass_read_limit,
+                                                            std::move(datasources),
+                                                            std::move(parquet_metadatas),
+                                                            options,
+                                                            stream,
+                                                            mr)}
 {
 }
 

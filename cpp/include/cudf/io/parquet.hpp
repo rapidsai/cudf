@@ -686,7 +686,8 @@ table_with_metadata read_parquet(
  * @return The set of columns along with metadata
  */
 table_with_metadata read_parquet(
-  std::vector<parquet::FileMetaData> const& parquet_metadatas,
+  std::vector<std::unique_ptr<cudf::io::datasource>>&& datasources,
+  std::vector<parquet::FileMetaData>&& parquet_metadatas,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
@@ -738,6 +739,7 @@ class chunked_parquet_reader {
    *
    * @param chunk_read_limit Limit on total number of bytes to be returned per read,
    *        or `0` if there is no limit
+   * @param datasources Dataset sources
    * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
    * @param options The options used to read Parquet file
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -745,7 +747,8 @@ class chunked_parquet_reader {
    */
   chunked_parquet_reader(
     std::size_t chunk_read_limit,
-    std::vector<parquet::FileMetaData> const& parquet_metadatas,
+    std::vector<std::unique_ptr<cudf::io::datasource>>&& datasources,
+    std::vector<parquet::FileMetaData>&& parquet_metadatas,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
@@ -799,7 +802,8 @@ class chunked_parquet_reader {
   chunked_parquet_reader(
     std::size_t chunk_read_limit,
     std::size_t pass_read_limit,
-    std::vector<parquet::FileMetaData> const& parquet_metadatas,
+    std::vector<std::unique_ptr<cudf::io::datasource>>&& datasources,
+    std::vector<parquet::FileMetaData>&& parquet_metadatas,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
@@ -812,13 +816,6 @@ class chunked_parquet_reader {
    * declaration.
    */
   ~chunked_parquet_reader();
-
-  /**
-   * @brief Get Parquet file metadata(s)
-   *
-   * @return Parquet file metadata(s)
-   */
-  [[nodiscard]] std::vector<parquet::FileMetaData> parquet_metadatas() const;
 
   /**
    * @brief Check if there is any data in the given file has not yet read.

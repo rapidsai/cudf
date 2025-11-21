@@ -113,11 +113,6 @@ class reader_impl {
   reader_impl& operator=(reader_impl&&)      = delete;
 
   /**
-   * @copydoc cudf::io::chunked_parquet_reader::parquet_metadatas
-   */
-  std::vector<parquet::FileMetaData> parquet_metadatas() const;
-
-  /**
    * @copydoc cudf::io::chunked_parquet_reader::has_next
    */
   bool has_next();
