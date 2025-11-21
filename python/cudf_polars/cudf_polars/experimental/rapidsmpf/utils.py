@@ -164,21 +164,21 @@ def process_children(
 
 
 def make_spill_function(
-    spillable_messages: SpillableMessages,
+    spillable_messages_list: list[SpillableMessages],
     context: Context,
 ) -> Callable[[int], int]:
     """
-    Create a spill function for a SpillableMessages container.
+    Create a spill function for a list of SpillableMessages containers.
 
     This utility creates a spill function that can be registered with a
     SpillManager. The spill function will attempt to spill messages from
-    the container in FIFO order (oldest messages first) until the requested
-    amount of memory is freed.
+    all containers in global FIFO order (oldest messages first across all
+    containers) until the requested amount of memory is freed.
 
     Parameters
     ----------
-    spillable_messages
-        The SpillableMessages container to create a spill function for.
+    spillable_messages_list
+        List of SpillableMessages containers to create a spill function for.
     context
         The RapidsMPF context to use for accessing the BufferResource.
 
@@ -186,20 +186,36 @@ def make_spill_function(
     -------
     A spill function that takes an amount (in bytes) and returns the
     actual amount spilled (in bytes).
+
+    Notes
+    -----
+    Messages are spilled in global FIFO order across all containers. This
+    ensures that the oldest messages are spilled first, regardless of which
+    container they belong to.
     """
 
     def spill_func(amount: int) -> int:
-        """Spill messages from the buffer to free device/host memory."""
+        """Spill messages from the buffers to free device/host memory."""
         spilled = 0
-        # Get all content descriptions sorted by message ID (FIFO order)
-        content_descriptions = spillable_messages.get_content_descriptions()
-        sorted_message_ids = sorted(content_descriptions.keys())
 
-        for message_id in sorted_message_ids:
+        # Collect all messages with their container index for global FIFO ordering
+        all_messages: list[tuple[int, int, SpillableMessages]] = []
+        for container_idx, sm in enumerate(spillable_messages_list):
+            content_descriptions = sm.get_content_descriptions()
+            all_messages.extend(
+                (message_id, container_idx, sm) for message_id in content_descriptions
+            )
+
+        # Sort by message ID to get global FIFO order
+        all_messages.sort(key=lambda x: x[0])
+
+        # Spill messages in FIFO order until we've freed enough memory
+        for message_id, _, sm in all_messages:
             if spilled >= amount:
                 break
             # Try to spill this message
-            spilled += spillable_messages.spill(mid=message_id, br=context.br())
+            spilled += sm.spill(mid=message_id, br=context.br())
+
         return spilled
 
     return spill_func

@@ -277,13 +277,11 @@ async def fanout_node_unbounded(
         # Track message IDs in FIFO order for each output buffer
         buffer_ids: list[list[int]] = [[] for _ in chs_out]
 
-        # Register spill functions for each buffer
-        spill_func_ids = [
-            context.br().spill_manager.add_spill_function(
-                make_spill_function(sm, context), priority=0
-            )
-            for sm in output_buffers
-        ]
+        # Register a single spill function for all buffers
+        # This ensures global FIFO ordering when spilling across all outputs
+        spill_func_id = context.br().spill_manager.add_spill_function(
+            make_spill_function(output_buffers, context), priority=0
+        )
 
         try:
             # Track active send/drain tasks for each output
@@ -425,9 +423,8 @@ async def fanout_node_unbounded(
                                 break
 
         finally:
-            # Clean up spill function registrations
-            for func_id in spill_func_ids:
-                context.br().spill_manager.remove_spill_function(func_id)
+            # Clean up spill function registration
+            context.br().spill_manager.remove_spill_function(spill_func_id)
 
 
 @generate_ir_sub_network.register(IR)
