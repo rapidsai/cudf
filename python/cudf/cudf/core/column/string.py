@@ -315,6 +315,50 @@ class StringColumn(ColumnBase, Scannable):
             self._dtype = dtype
         return self
 
+    def _get_pandas_compatible_dtype(self, target_dtype: np.dtype) -> DtypeObj:
+        """
+        Get the appropriate dtype for pandas-compatible mode.
+
+        For StringDtype with na_value=np.nan, returns get_dtype_of_same_kind(self.dtype, target_dtype).
+        Otherwise, returns get_dtype_of_same_kind(pd.StringDtype() or self.dtype, target_dtype).
+        """
+        if (
+            isinstance(self.dtype, pd.StringDtype)
+            and self.dtype.na_value is np.nan
+        ):
+            return get_dtype_of_same_kind(self.dtype, target_dtype)
+        else:
+            return get_dtype_of_same_kind(
+                pd.StringDtype()
+                if isinstance(self.dtype, pd.StringDtype)
+                else self.dtype,
+                target_dtype,
+            )
+
+    def _apply_pandas_bool_metadata(self, result: ColumnBase) -> ColumnBase:
+        """
+        Apply pandas-compatible boolean metadata to a result column.
+
+        Returns the result with appropriate boolean type metadata based on
+        the source column's dtype and pandas compatibility mode.
+        """
+        if cudf.get_option("mode.pandas_compatible"):
+            new_type = self._get_pandas_compatible_dtype(np.dtype("bool"))
+            return result._with_type_metadata(new_type)
+        return result
+
+    def _apply_pandas_int_metadata(self, result: ColumnBase) -> ColumnBase:
+        """
+        Apply pandas-compatible int64 metadata to a result column.
+
+        Returns the result with appropriate int64 type metadata based on
+        the source column's dtype and pandas compatibility mode.
+        """
+        if cudf.get_option("mode.pandas_compatible"):
+            new_type = self._get_pandas_compatible_dtype(np.dtype("int64"))
+            return result._with_type_metadata(new_type)
+        return result
+
     def _scan(self, op: str):
         return self.scan(op.replace("cum", ""), True)._with_type_metadata(
             self.dtype
@@ -950,11 +994,8 @@ class StringColumn(ColumnBase, Scannable):
         )._with_type_metadata(self.dtype)
 
     def is_title(self) -> Self:
-        return self._modify_characters(
-            plc.strings.capitalize.is_title
-        )._with_type_metadata(
-            get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
-        )
+        res = self._modify_characters(plc.strings.capitalize.is_title)
+        return self._apply_pandas_bool_metadata(res)  # type: ignore[return-value]
 
     @acquire_spill_lock()
     def replace_multiple(self, pattern: Self, replacements: Self) -> Self:
@@ -1103,9 +1144,14 @@ class StringColumn(ColumnBase, Scannable):
             maxsplit,
         )
         res_col = type(self).from_pylibcudf(plc_column)
-        return res_col._with_type_metadata(
-            get_dtype_of_same_kind(self.dtype, res_col.dtype)
-        )
+        if cudf.get_option("mode.pandas_compatible"):
+            if isinstance(self.dtype, pd.ArrowDtype):
+                new_type = get_dtype_of_same_kind(
+                    self.dtype,
+                    res_col.dtype,
+                )
+                return res_col._with_type_metadata(new_type)
+        return res_col
 
     def split_record(self, delimiter: plc.Scalar, maxsplit: int) -> Self:
         return self._split_record(
@@ -1222,13 +1268,8 @@ class StringColumn(ColumnBase, Scannable):
         plc_column = plc.strings.attributes.count_characters(self.plc_column)
         res = type(self).from_pylibcudf(plc_column)
         if cudf.get_option("mode.pandas_compatible"):
-            res = res.astype(  # type: ignore[assignment]
-                get_dtype_of_same_kind(self.dtype, np.dtype("int64"))
-            )
-        else:
-            res = res._with_type_metadata(
-                get_dtype_of_same_kind(self.dtype, res.dtype)
-            )
+            new_type = self._get_pandas_compatible_dtype(np.dtype("int64"))
+            res = res.astype(new_type)  # type: ignore[assignment]
         return res  # type: ignore[return-value]
 
     @acquire_spill_lock()
@@ -1295,13 +1336,8 @@ class StringColumn(ColumnBase, Scannable):
                 plc_flags_from_re_flags(flags),
             ),
         )
-        return (
-            type(self)
-            .from_pylibcudf(plc_column)
-            ._with_type_metadata(
-                get_dtype_of_same_kind(self.dtype, np.dtype("bool"))
-            )
-        )
+        res = type(self).from_pylibcudf(plc_column)
+        return self._apply_pandas_bool_metadata(res)  # type: ignore[return-value]
 
     @acquire_spill_lock()
     def str_contains(self, pattern: str | Self) -> Self:
@@ -1457,13 +1493,25 @@ class StringColumn(ColumnBase, Scannable):
         plc_result = plc.strings.char_types.all_characters_of_type(
             self.plc_column, char_type, case_type
         )
-        return (
-            type(self)  # type: ignore[return-value]
-            .from_pylibcudf(plc_result)
-            ._with_type_metadata(
-                get_dtype_of_same_kind(self.dtype, np.dtype("bool"))
-            )
-        )
+        res = type(self).from_pylibcudf(plc_result)
+
+        if cudf.get_option("mode.pandas_compatible"):
+            if (
+                isinstance(self.dtype, pd.StringDtype)
+                and self.dtype.na_value is np.nan
+            ):
+                res = res.fillna(False)
+                new_type = np.dtype("bool")  # type: ignore[var-annotated]
+            else:
+                new_type = get_dtype_of_same_kind(
+                    pd.StringDtype()
+                    if isinstance(self.dtype, pd.StringDtype)
+                    else self.dtype,
+                    np.dtype("bool"),
+                )
+        else:
+            new_type = np.dtype("bool")
+        return res._with_type_metadata(new_type)  # type: ignore[return-value]
 
     @acquire_spill_lock()
     def filter_characters_of_type(
@@ -1586,16 +1634,11 @@ class StringColumn(ColumnBase, Scannable):
             ),
         )
         res = type(self).from_pylibcudf(plc_result)
-        if is_pandas_nullable_extension_dtype(self.dtype) and not isinstance(
-            self.dtype, pd.ArrowDtype
-        ):
-            res = res.astype(
-                get_dtype_of_same_kind(self.dtype, np.dtype("int64"))
-            )  # type: ignore[assignment]
-        else:
-            res = res._with_type_metadata(
-                get_dtype_of_same_kind(self.dtype, res.dtype)
-            )
+        if cudf.get_option("mode.pandas_compatible"):
+            if not isinstance(self.dtype, pd.ArrowDtype):
+                res = res.astype(np.dtype("int64"))  # type: ignore[assignment]
+            new_type = self._get_pandas_compatible_dtype(res.dtype)
+            res = res._with_type_metadata(new_type)
         return res  # type: ignore[return-value]
 
     @acquire_spill_lock()
@@ -1607,6 +1650,8 @@ class StringColumn(ColumnBase, Scannable):
         pat: str,
         flags: int = 0,
     ) -> Self:
+        if len(self) == 0:
+            return as_column([], dtype=np.dtype("object"))  # type: ignore[return-value]
         plc_result = method(
             self.plc_column,
             plc.strings.regex_program.RegexProgram.create(
@@ -1657,13 +1702,8 @@ class StringColumn(ColumnBase, Scannable):
             raise TypeError(
                 f"expected a str or tuple[str, ...], not {type(pat).__name__}"
             )
-        return (
-            type(self)
-            .from_pylibcudf(plc_result)
-            ._with_type_metadata(
-                get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
-            )
-        )
+        res = type(self).from_pylibcudf(plc_result)
+        return self._apply_pandas_bool_metadata(res)  # type: ignore[return-value]
 
     @acquire_spill_lock()
     def find(
@@ -1680,17 +1720,10 @@ class StringColumn(ColumnBase, Scannable):
             end,
         )
         res = type(self).from_pylibcudf(plc_result)
-        if not is_pandas_nullable_extension_dtype(self.dtype) and (
-            end is None or end == -1
-        ):
-            res = res._with_type_metadata(
-                get_dtype_of_same_kind(self.dtype, res.dtype)
-            )
-        else:
-            res = res.astype(np.dtype("int64"))  # type: ignore[assignment]
-            res = res._with_type_metadata(
-                get_dtype_of_same_kind(self.dtype, np.dtype("int64"))
-            )
+        if cudf.get_option("mode.pandas_compatible"):
+            res = self._apply_pandas_int_metadata(
+                res.astype(np.dtype("int64"))
+            )  # type: ignore[assignment]
         return res
 
     @acquire_spill_lock()
@@ -1701,13 +1734,8 @@ class StringColumn(ColumnBase, Scannable):
                 pattern, plc_flags_from_re_flags(flags)
             ),
         )
-        return (
-            type(self)
-            .from_pylibcudf(plc_result)
-            ._with_type_metadata(
-                get_dtype_of_same_kind(self.dtype, np.dtype("bool"))
-            )
-        )
+        res = type(self).from_pylibcudf(plc_result)
+        return self._apply_pandas_bool_metadata(res)  # type: ignore[return-value]
 
     @acquire_spill_lock()
     def code_points(self) -> Self:
