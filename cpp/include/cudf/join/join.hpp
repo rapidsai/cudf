@@ -28,11 +28,11 @@ namespace CUDF_EXPORT cudf {
  * @brief Enum to specify the type of join operation
  */
 enum class join_kind : int32_t {
-  INNER_JOIN,      ///< Inner join
-  LEFT_JOIN,       ///< Left join
-  FULL_JOIN,       ///< Full outer join
-  LEFT_SEMI_JOIN,  ///< Left semi join
-  LEFT_ANTI_JOIN   ///< Left anti join
+  INNER_JOIN     = 0,  ///< Inner join
+  LEFT_JOIN      = 1,  ///< Left join
+  FULL_JOIN      = 2,  ///< Full outer join
+  LEFT_SEMI_JOIN = 3,  ///< Left semi join
+  LEFT_ANTI_JOIN = 4   ///< Left anti join
 };
 
 /**

@@ -37,7 +37,7 @@ class distinct_filtered_join : public filtered_join {
    */
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_anti_join(
     cudf::table_view const& probe,
-    cudf::join_kind kind,
+    join_kind kind,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr);
 
@@ -61,7 +61,7 @@ class distinct_filtered_join : public filtered_join {
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> query_build_table(
     cudf::table_view const& probe,
     std::shared_ptr<cudf::detail::row::equality::preprocessed_table> preprocessed_probe,
-    cudf::join_kind kind,
+    join_kind kind,
     Ref query_ref,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr);
