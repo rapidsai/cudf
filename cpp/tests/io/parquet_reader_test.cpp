@@ -2504,7 +2504,6 @@ TEST_F(ParquetMetadataReaderTest, TestBasic)
       .metadata(std::move(expected_metadata));
   cudf::io::write_parquet(out_opts);
 
-  // Single file
   auto const test_parquet_metadata = [&](int num_sources) {
     auto meta =
       read_parquet_metadata(cudf::io::source_info{std::vector<std::string>(num_sources, filepath)});
@@ -2534,6 +2533,44 @@ TEST_F(ParquetMetadataReaderTest, TestBasic)
 
     EXPECT_EQ(meta.schema().root().child(0).name(), "int_col");
     EXPECT_EQ(meta.schema().root().child(1).name(), "float_col");
+  };
+
+  // Test with single file
+  test_parquet_metadata(1);
+  // Test with multiple files
+  test_parquet_metadata(3);
+}
+
+TEST_F(ParquetMetadataReaderTest, TestPreMaterializedMetadata)
+{
+  auto const num_rows = 1200;
+
+  auto ints   = random_values<int>(num_rows);
+  auto floats = random_values<float>(num_rows);
+  column_wrapper<int> int_col(ints.begin(), ints.end());
+  column_wrapper<float> float_col(floats.begin(), floats.end());
+
+  table_view input_table({int_col, float_col});
+  auto filepath = temp_env->get_temp_filepath("PreMaterializedMetadata.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, input_table).build();
+  cudf::io::write_parquet(out_opts);
+
+  auto const test_parquet_metadata = [&](int num_sources) {
+    auto const source_info = cudf::io::source_info{std::vector<std::string>(num_sources, filepath)};
+    auto const metadatas   = read_parquet_footers(source_info);
+    EXPECT_EQ(metadatas.size(), num_sources);
+    auto const rows_in_metadatas =
+      std::accumulate(metadatas.begin(), metadatas.end(), 0, [](auto acc, auto const& metadata) {
+        return acc + metadata.num_rows;
+      });
+    EXPECT_EQ(rows_in_metadatas, num_sources * num_rows);
+
+    auto const options  = cudf::io::parquet_reader_options::builder(source_info).build();
+    auto const read     = cudf::io::read_parquet(metadatas, options);
+    auto const expected = cudf::io::read_parquet(options);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected.tbl->view(), read.tbl->view());
   };
 
   // Test with single file

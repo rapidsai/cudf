@@ -18,6 +18,7 @@
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -46,11 +47,13 @@ class reader_impl {
    * entire given file.
    *
    * @param sources Dataset sources
+   * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader_impl(std::vector<std::unique_ptr<datasource>>&& sources,
+                       std::vector<FileMetaData>&& parquet_metadatas,
                        parquet_reader_options const& options,
                        rmm::cuda_stream_view stream,
                        rmm::device_async_resource_ref mr);
@@ -91,6 +94,7 @@ class reader_impl {
    * @param pass_read_limit Limit on memory usage for the purposes of decompression and processing
    * of input, or `0` if there is no limit.
    * @param sources Dataset sources
+   * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
@@ -98,6 +102,7 @@ class reader_impl {
   explicit reader_impl(std::size_t chunk_read_limit,
                        std::size_t pass_read_limit,
                        std::vector<std::unique_ptr<datasource>>&& sources,
+                       std::vector<FileMetaData>&& parquet_metadatas,
                        parquet_reader_options const& options,
                        rmm::cuda_stream_view stream,
                        rmm::device_async_resource_ref mr);
@@ -106,6 +111,11 @@ class reader_impl {
   reader_impl& operator=(reader_impl const&) = delete;
   reader_impl(reader_impl&&)                 = delete;
   reader_impl& operator=(reader_impl&&)      = delete;
+
+  /**
+   * @copydoc cudf::io::chunked_parquet_reader::parquet_metadatas
+   */
+  std::vector<parquet::FileMetaData> parquet_metadatas() const;
 
   /**
    * @copydoc cudf::io::chunked_parquet_reader::has_next

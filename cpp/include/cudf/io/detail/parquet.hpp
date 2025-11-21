@@ -56,6 +56,7 @@ class reader {
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+                  std::vector<FileMetaData>&& parquet_metadatas,
                   parquet_reader_options const& options,
                   rmm::cuda_stream_view stream,
                   rmm::device_async_resource_ref mr);
@@ -134,6 +135,7 @@ class chunked_reader : private reader {
    * @param pass_read_limit Limit on total amount of memory used for temporary computations during
    * loading, or `0` if there is no limit
    * @param sources Input `datasource` objects to read the dataset from
+   * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
@@ -141,6 +143,7 @@ class chunked_reader : private reader {
   explicit chunked_reader(std::size_t chunk_read_limit,
                           std::size_t pass_read_limit,
                           std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+                          std::vector<parquet::FileMetaData>&& parquet_metadatas,
                           parquet_reader_options const& options,
                           rmm::cuda_stream_view stream,
                           rmm::device_async_resource_ref mr);
@@ -153,6 +156,11 @@ class chunked_reader : private reader {
    * declaration.
    */
   ~chunked_reader() override;
+
+  /**
+   * @copydoc cudf::io::chunked_parquet_reader::parquet_metadatas
+   */
+  [[nodiscard]] std::vector<parquet::FileMetaData> parquet_metadatas() const;
 
   /**
    * @copydoc cudf::io::chunked_parquet_reader::has_next
@@ -248,6 +256,17 @@ class writer {
  * metadata.
  */
 parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> const> sources);
+
+/**
+ * @brief Constructs FileMetaData objects from parquet dataset
+ *
+ * @param sources Dataset sources to read from
+ *
+ * @return List of FileMetaData objects, one per parquet source
+ */
+std::vector<parquet::FileMetaData> read_parquet_footers(
+  host_span<std::unique_ptr<datasource> const> sources);
+
 }  // namespace parquet::detail
 }  // namespace io
 }  // namespace CUDF_EXPORT cudf

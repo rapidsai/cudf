@@ -262,12 +262,23 @@ class parquet_metadata {
  *
  * @ingroup io_readers
  *
- * @param src_info Dataset source
+ * @param src_info Dataset source information
  *
  * @return parquet_metadata with parquet schema, number of rows, number of row groups and key-value
  * metadata
  */
 parquet_metadata read_parquet_metadata(source_info const& src_info);
+
+/**
+ * @brief Constructs FileMetaData objects from parquet dataset
+ *
+ * @ingroup io_readers
+ *
+ * @param src_info Dataset source information
+ *
+ * @return List of FileMetaData objects, one per parquet source
+ */
+std::vector<parquet::FileMetaData> read_parquet_footers(source_info const& src_info);
 
 /** @} */  // end of group
 }  // namespace io

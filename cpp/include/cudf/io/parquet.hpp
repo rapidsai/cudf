@@ -668,6 +668,30 @@ table_with_metadata read_parquet(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
+ * @brief Reads a Parquet dataset into a set of columns using pre-populated Parquet file metadatas.
+ *
+ * The following code snippet demonstrates how to read a dataset from a file:
+ * @code
+ *  auto source  = cudf::io::source_info("dataset.parquet");
+ *  auto options = cudf::io::parquet_reader_options::builder(source);
+ *  auto result  = cudf::io::read_parquet(options);
+ * @endcode
+ *
+ * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
+ * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate device memory of the table in the returned
+ * table_with_metadata
+ *
+ * @return The set of columns along with metadata
+ */
+table_with_metadata read_parquet(
+  std::vector<parquet::FileMetaData> const& parquet_metadatas,
+  parquet_reader_options const& options,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
  * @brief The chunked parquet reader class to read Parquet file iteratively in to a series of
  * tables, chunk by chunk.
  *
@@ -709,6 +733,27 @@ class chunked_parquet_reader {
    * @brief Constructor for chunked reader.
    *
    * This constructor requires the same `parquet_reader_option` parameter as in
+   * `cudf::read_parquet()`, and an additional parameter to specify the size byte limit of the
+   * output table for each reading.
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read,
+   *        or `0` if there is no limit
+   * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
+   * @param options The options used to read Parquet file
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  chunked_parquet_reader(
+    std::size_t chunk_read_limit,
+    std::vector<parquet::FileMetaData> const& parquet_metadatas,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
+   * @brief Constructor for chunked reader.
+   *
+   * This constructor requires the same `parquet_reader_option` parameter as in
    * `cudf::read_parquet()`, with additional parameters to specify the size byte limit of the
    * output table for each reading, and a byte limit on the amount of temporary memory to use
    * when reading. pass_read_limit affects how many row groups we can read at a time by limiting
@@ -732,6 +777,34 @@ class chunked_parquet_reader {
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
+   * @brief Constructor for chunked reader.
+   *
+   * This constructor requires the same `parquet_reader_option` parameter as in
+   * `cudf::read_parquet()`, with additional parameters to specify the size byte limit of the
+   * output table for each reading, and a byte limit on the amount of temporary memory to use
+   * when reading. pass_read_limit affects how many row groups we can read at a time by limiting
+   * the amount of memory dedicated to decompression space. pass_read_limit is a hint, not an
+   * absolute limit - if a single row group cannot fit within the limit given, it will still be
+   * loaded.
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read,
+   * or `0` if there is no limit
+   * @param pass_read_limit Limit on the amount of memory used for reading and decompressing data or
+   * `0` if there is no limit
+   * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
+   * @param options The options used to read Parquet file
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  chunked_parquet_reader(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    std::vector<parquet::FileMetaData> const& parquet_metadatas,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
    * @brief Destructor, destroying the internal reader instance.
    *
    * Since the declaration of the internal `reader` object does not exist in this header, this
@@ -739,6 +812,13 @@ class chunked_parquet_reader {
    * declaration.
    */
   ~chunked_parquet_reader();
+
+  /**
+   * @brief Get Parquet file metadata(s)
+   *
+   * @return Parquet file metadata(s)
+   */
+  [[nodiscard]] std::vector<parquet::FileMetaData> parquet_metadatas() const;
 
   /**
    * @brief Check if there is any data in the given file has not yet read.
