@@ -139,8 +139,9 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@release/25.12
     with:
       build_type: pull-request
-      node_type: "cpu16"
+      node_type: cpu16
       script: ci/build_cpp.sh
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   cpp-linters:
     secrets: inherit
     needs: checks
@@ -163,6 +164,7 @@ jobs:
     with:
       build_type: pull-request
       script: ci/test_cpp.sh
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   conda-python-build:
     needs: conda-cpp-build
     secrets: inherit
@@ -178,6 +180,7 @@ jobs:
     with:
       build_type: pull-request
       script: "ci/test_python_cudf.sh"
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   conda-python-other-tests:
     # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
     needs: [conda-python-build, changed-files]
@@ -187,6 +190,7 @@ jobs:
     with:
       build_type: pull-request
       script: "ci/test_python_other.sh"
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   conda-java-tests:
     needs: [conda-cpp-build, changed-files]
     secrets: inherit
@@ -227,28 +231,33 @@ jobs:
       # build for every combination of arch and CUDA version, but only for the latest Python
       matrix_filter: group_by([.ARCH, (.CUDA_VER|split(".")|map(tonumber)|.[0])]) | map(max_by(.PY_VER|split(".")|map(tonumber)))
       build_type: pull-request
-      node_type: "cpu16"
+      node_type: cpu16
       script: "ci/build_wheel_libcudf.sh"
       package-name: libcudf
       package-type: cpp
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-build-pylibcudf:
     needs: [checks, wheel-build-libcudf]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@release/25.12
     with:
       build_type: pull-request
+      node_type: cpu8
       script: "ci/build_wheel_pylibcudf.sh"
       package-name: pylibcudf
       package-type: python
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-build-cudf:
     needs: wheel-build-pylibcudf
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@release/25.12
     with:
       build_type: pull-request
+      node_type: cpu8
       script: "ci/build_wheel_cudf.sh"
       package-name: cudf
       package-type: python
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-tests-cudf:
     needs: [wheel-build-cudf, changed-files]
     secrets: inherit
@@ -257,6 +266,7 @@ jobs:
     with:
       build_type: pull-request
       script: ci/test_wheel_cudf.sh
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-build-cudf-polars:
     needs: wheel-build-pylibcudf
     secrets: inherit
@@ -265,10 +275,12 @@ jobs:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
+      node_type: cpu8
       script: "ci/build_wheel_cudf_polars.sh"
       package-name: cudf_polars
       package-type: python
       pure-wheel: true
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-tests-cudf-polars:
     needs: [wheel-build-cudf-polars, changed-files]
     secrets: inherit
@@ -279,6 +291,7 @@ jobs:
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: "ci/test_wheel_cudf_polars.sh"
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-tests-cudf-polars-with-rapidsmpf:
     needs: [wheel-build-cudf-polars, changed-files]
     secrets: inherit
@@ -290,6 +303,7 @@ jobs:
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: "ci/test_cudf_polars_with_rapidsmpf.sh"
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   cudf-polars-polars-tests:
     needs: [wheel-build-cudf-polars, changed-files]
     secrets: inherit
@@ -300,6 +314,7 @@ jobs:
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: "ci/test_cudf_polars_polars_tests.sh"
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-build-dask-cudf:
     needs: wheel-build-cudf
     secrets: inherit
@@ -308,10 +323,12 @@ jobs:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
+      node_type: cpu8
       script: "ci/build_wheel_dask_cudf.sh"
       package-name: dask_cudf
       package-type: python
       pure-wheel: true
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-tests-dask-cudf:
     needs: [wheel-build-dask-cudf, changed-files]
     secrets: inherit
@@ -322,6 +339,7 @@ jobs:
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: ci/test_wheel_dask_cudf.sh
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   devcontainer:
     secrets: inherit
     needs: telemetry-setup
@@ -350,6 +368,7 @@ jobs:
       matrix_filter: group_by([(.ARCH), (.CUDA_VER|split(".")|map(tonumber)|.[0])]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: ci/cudf_pandas_scripts/run_tests.sh
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   third-party-integration-tests-cudf-pandas:
     needs: [conda-python-build, changed-files]
     secrets: inherit
