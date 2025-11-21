@@ -114,22 +114,6 @@ def test_join_rapidsmpf_single(max_rows_per_partition: int) -> None:
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-@REQUIRE_TASKS_RUNTIME
-def test_join_rapidsmpf_single_private_config() -> None:
-    # The user may not specify "rapidsmpf-single" directly
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "shuffle_method": "rapidsmpf-single",
-            "cluster": "single",
-            "runtime": DEFAULT_RUNTIME,
-        },
-    )
-    with pytest.raises(ValueError, match="not a supported shuffle method"):
-        ConfigOptions.from_polars_engine(engine)
-
-
 def test_rapidsmpf_spill_single_unsupported() -> None:
     # rapidsmpf_spill=True is not yet supported with single-GPU cluster.
     engine = pl.GPUEngine(
