@@ -12,6 +12,7 @@
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/transform.hpp>
+#include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/stream_compaction.hpp>
@@ -21,6 +22,7 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <bitset>
+#include <future>
 #include <limits>
 #include <numeric>
 #include <stdexcept>
@@ -589,11 +591,46 @@ void reader_impl::populate_metadata(table_metadata& out_metadata)
 {
   // Return column names
   out_metadata.schema_info.resize(_output_buffers.size());
-  for (size_t i = 0; i < _output_column_schemas.size(); i++) {
-    auto const& schema               = _metadata->get_schema(_output_column_schemas[i]);
-    out_metadata.schema_info[i].name = schema.name;
-    out_metadata.schema_info[i].is_nullable =
-      schema.repetition_type != FieldRepetitionType::REQUIRED;
+  auto const num_output_cols        = static_cast<cudf::size_type>(_output_column_schemas.size());
+  constexpr auto parallel_threshold = 512;
+
+  if (std::cmp_greater_equal(num_output_cols, parallel_threshold)) {
+    auto const num_tasks = std::min<cudf::size_type>(
+      num_output_cols, cudf::detail::host_worker_pool().get_thread_count() * 2);
+    auto const items_per_task = num_output_cols / num_tasks;
+    auto const remainder      = num_output_cols % num_tasks;
+
+    std::vector<std::future<void>> tasks;
+    tasks.reserve(num_tasks);
+
+    auto curr_col = cudf::size_type{0};
+    for (cudf::size_type task_id = 0; task_id < num_tasks; ++task_id) {
+      auto const task_size = items_per_task + (task_id < remainder ? 1 : 0);
+      auto const start_col = std::min<cudf::size_type>(num_output_cols, curr_col);
+      auto const end_col   = std::min<cudf::size_type>(num_output_cols, start_col + task_size);
+
+      if (start_col >= end_col) { break; }
+
+      tasks.emplace_back(cudf::detail::host_worker_pool().submit_task([&, start_col, end_col]() {
+        for (cudf::size_type i = start_col; i < end_col; i++) {
+          auto const& schema               = _metadata->get_schema(_output_column_schemas[i]);
+          out_metadata.schema_info[i].name = schema.name;
+          out_metadata.schema_info[i].is_nullable =
+            schema.repetition_type != FieldRepetitionType::REQUIRED;
+        }
+      }));
+      curr_col = end_col;
+    }
+    for (auto& task : tasks) {
+      task.get();
+    }
+  } else {
+    for (cudf::size_type i = 0; i < num_output_cols; i++) {
+      auto const& schema               = _metadata->get_schema(_output_column_schemas[i]);
+      out_metadata.schema_info[i].name = schema.name;
+      out_metadata.schema_info[i].is_nullable =
+        schema.repetition_type != FieldRepetitionType::REQUIRED;
+    }
   }
 
   // Return user metadata
