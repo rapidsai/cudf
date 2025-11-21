@@ -30,7 +30,7 @@ struct TableFormatTest : public cudf::test::BaseFixture {
    */
   void run_test_file(cudf::table_view const& expected)
   {
-    auto const filepath = temp_env->get_temp_filepath("test.raw");
+    auto const filepath = temp_env->get_temp_filepath("test.cudf");
 
     // Write table to file
     cudf::io::write_table(
@@ -226,7 +226,7 @@ TEST_F(TableFormatTest, MixedNullability)
 TEST_F(TableFormatTest, InvalidHeaderMagic)
 {
   // Create a valid file first
-  auto const filepath = temp_env->get_temp_filepath("invalid.raw");
+  auto const filepath = temp_env->get_temp_filepath("invalid.cudf");
   cudf::test::fixed_width_column_wrapper<int32_t> col({1, 2, 3});
   auto const expected = cudf::table_view{{col}};
   cudf::io::write_table(
@@ -247,7 +247,7 @@ TEST_F(TableFormatTest, InvalidHeaderMagic)
 TEST_F(TableFormatTest, InvalidHeaderVersion)
 {
   // Create a valid file first
-  auto const filepath = temp_env->get_temp_filepath("invalid_version.raw");
+  auto const filepath = temp_env->get_temp_filepath("invalid_version.cudf");
   cudf::test::fixed_width_column_wrapper<int32_t> col({1, 2, 3});
   auto const expected = cudf::table_view{{col}};
   cudf::io::write_table(
@@ -269,7 +269,7 @@ TEST_F(TableFormatTest, InvalidHeaderVersion)
 TEST_F(TableFormatTest, TruncatedFile)
 {
   // Create a valid file first
-  auto const filepath = temp_env->get_temp_filepath("truncated.raw");
+  auto const filepath = temp_env->get_temp_filepath("truncated.cudf");
   cudf::test::fixed_width_column_wrapper<int32_t> col({1, 2, 3, 4, 5});
   auto const expected = cudf::table_view{{col}};
   cudf::io::write_table(
