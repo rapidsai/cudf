@@ -1073,7 +1073,7 @@ std::vector<parquet::FileMetaData> read_parquet_footers(
   // Read page indexes if needed.
   constexpr auto read_page_indexes = true;
 
-  // Open and parse the source dataset metadata
+  // Parse the source dataset metadata
   return aggregate_reader_metadata(
            sources, use_arrow_schema, has_column_projection, read_page_indexes)
     .get_parquet_metadatas();

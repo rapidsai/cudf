@@ -668,15 +668,18 @@ table_with_metadata read_parquet(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Reads a Parquet dataset into a set of columns using pre-populated Parquet file metadatas.
+ * @brief Reads a Parquet dataset into a set of columns using pre-existing Parquet datasources and
+ * file metadatas.
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
- *  auto source  = cudf::io::source_info("dataset.parquet");
- *  auto options = cudf::io::parquet_reader_options::builder(source);
- *  auto result  = cudf::io::read_parquet(options);
+ *  auto sources = cudf::io::make_datasources(cudf::io::source_info("dataset.parquet"));
+ *  auto metadatas = cudf::io::read_parquet_metadata(sources);
+ *  auto options = cudf::io::parquet_reader_options::builder();
+ *  auto result  = cudf::io::read_parquet(std::move(sources), std::move(metadatas), options);
  * @endcode
  *
+ * @param sources Input `datasource` objects to read the dataset from
  * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
  * @param options Settings for controlling reading behavior
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -686,7 +689,7 @@ table_with_metadata read_parquet(
  * @return The set of columns along with metadata
  */
 table_with_metadata read_parquet(
-  std::vector<std::unique_ptr<cudf::io::datasource>>&& datasources,
+  std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
   std::vector<parquet::FileMetaData>&& parquet_metadatas,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -731,7 +734,8 @@ class chunked_parquet_reader {
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
-   * @brief Constructor for chunked reader.
+   * @brief Constructor for chunked reader using pre-existing Parquet datasources and
+   * file metadatas.
    *
    * This constructor requires the same `parquet_reader_option` parameter as in
    * `cudf::read_parquet()`, and an additional parameter to specify the size byte limit of the
@@ -739,7 +743,7 @@ class chunked_parquet_reader {
    *
    * @param chunk_read_limit Limit on total number of bytes to be returned per read,
    *        or `0` if there is no limit
-   * @param datasources Dataset sources
+   * @param sources Input `datasource` objects to read the dataset from
    * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
    * @param options The options used to read Parquet file
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -747,7 +751,7 @@ class chunked_parquet_reader {
    */
   chunked_parquet_reader(
     std::size_t chunk_read_limit,
-    std::vector<std::unique_ptr<cudf::io::datasource>>&& datasources,
+    std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
     std::vector<parquet::FileMetaData>&& parquet_metadatas,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -780,7 +784,8 @@ class chunked_parquet_reader {
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
-   * @brief Constructor for chunked reader.
+   * @brief Constructor for chunked reader using pre-existing Parquet datasources and
+   * file metadatas.
    *
    * This constructor requires the same `parquet_reader_option` parameter as in
    * `cudf::read_parquet()`, with additional parameters to specify the size byte limit of the
@@ -794,6 +799,7 @@ class chunked_parquet_reader {
    * or `0` if there is no limit
    * @param pass_read_limit Limit on the amount of memory used for reading and decompressing data or
    * `0` if there is no limit
+   * @param sources Input `datasource` objects to read the dataset from
    * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
    * @param options The options used to read Parquet file
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -802,7 +808,7 @@ class chunked_parquet_reader {
   chunked_parquet_reader(
     std::size_t chunk_read_limit,
     std::size_t pass_read_limit,
-    std::vector<std::unique_ptr<cudf::io::datasource>>&& datasources,
+    std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
     std::vector<parquet::FileMetaData>&& parquet_metadatas,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),

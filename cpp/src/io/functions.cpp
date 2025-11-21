@@ -645,11 +645,12 @@ parquet_metadata read_parquet_metadata(source_info const& src_info)
 }
 
 std::vector<parquet::FileMetaData> read_parquet_metadata(
-  host_span<std::unique_ptr<cudf::io::datasource> const> datasources)
+  host_span<std::unique_ptr<cudf::io::datasource> const> sources)
 {
   CUDF_FUNC_RANGE();
-  return detail_parquet::read_parquet_footers(datasources);
+  return detail_parquet::read_parquet_footers(sources);
 }
+
 /**
  * @copydoc cudf::io::merge_row_group_metadata
  */

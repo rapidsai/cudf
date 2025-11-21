@@ -51,6 +51,7 @@ class reader {
    * @brief Constructor from an array of datasources
    *
    * @param sources Input `datasource` objects to read the dataset from
+   * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource to use for device memory allocation
@@ -255,12 +256,12 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
 /**
  * @brief Constructs FileMetaData objects from parquet dataset
  *
- * @param sources Dataset sources to read from
+ * @param sources Input `datasource` objects to read the dataset from
  *
  * @return List of FileMetaData objects, one per parquet source
  */
 std::vector<parquet::FileMetaData> read_parquet_footers(
-  host_span<std::unique_ptr<datasource> const> datasources);
+  host_span<std::unique_ptr<datasource> const> sources);
 
 }  // namespace parquet::detail
 }  // namespace io
