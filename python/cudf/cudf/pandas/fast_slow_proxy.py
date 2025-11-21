@@ -483,7 +483,6 @@ class _FastSlowProxyMeta(type):
     _fsproxy_slow_dir: list
     _fsproxy_slow_type: type
     _fsproxy_fast_type: type
-    _fsproxy_transfer_block: _State | None = None
 
     @property
     def _fsproxy_slow(self) -> type:
@@ -530,7 +529,7 @@ class _FastSlowProxy:
 
     _fsproxy_wrapped: Any
     # Instance-level transfer blocking flag
-    _fsproxy_instance_transfer_block: _BlockState | None = None
+    _fsproxy_transfer_block: _BlockState | None = None
 
     def _fsproxy_fast_to_slow(self) -> Any:
         """
@@ -556,12 +555,8 @@ class _FastSlowProxy:
         returning it.
         """
         # Check for transfer blocking before attempting conversion
-        instance_block = getattr(
-            self, "_fsproxy_instance_transfer_block", None
-        )
-
         if (
-            instance_block is _State.FAST
+            self._fsproxy_transfer_block is _BlockState.TO_FAST
             and self._fsproxy_state is _State.FAST  # type: ignore[attr-defined]
         ):
             raise RuntimeError("Fast-to-slow transfer is blocked")
@@ -588,25 +583,25 @@ class _FastSlowProxy:
         ----------
         transfer_block : _BlockState | None
             None: No blocking (default)
-            _BlockState.TO_FAST: Block fast-to-slow transfers only
-            _BlockState.TO_SLOW: Block slow-to-fast transfers only
+            _BlockState.TO_FAST: Block slow-to-fast transfers.
+            _BlockState.TO_SLOW: Block fast-to-slow transfers.
         """
-        self._fsproxy_instance_transfer_block = transfer_block
+        self._fsproxy_transfer_block = transfer_block
 
     def get_transfer_blocking(self):
         """Get current instance-level transfer blocking flag."""
-        return getattr(self, "_fsproxy_instance_transfer_block", None)
+        return getattr(self, "_fsproxy_transfer_block", None)
 
     def force_state(self, state: _State):
         """Force the proxy to a specific state (FAST or SLOW) and block opposite transfers."""
         if state == _State.FAST:
             # Force to fast state and block fast-to-slow transfers
             self._fsproxy_wrapped = self._fsproxy_slow_to_fast()
-            self.set_transfer_block_state(_BlockState.TO_FAST)
+            self.set_transfer_block_state(_BlockState.TO_SLOW)
         elif state == _State.SLOW:
             # Force to slow state and block slow-to-fast transfers
             self._fsproxy_wrapped = self._fsproxy_fast_to_slow()
-            self.set_transfer_block_state(_BlockState.TO_SLOW)
+            self.set_transfer_block_state(_BlockState.TO_FAST)
         else:
             raise ValueError(
                 f"Invalid state: {state}. Must be _State.FAST or _State.SLOW"
@@ -856,13 +851,11 @@ class _FunctionProxy(_CallableProxyMixin):
         *,
         assigned=None,
         updated=None,
-        _fsproxy_instance_transfer_block: _BlockState | None = None,
+        _fsproxy_transfer_block: _BlockState | None = None,
     ):
         self._fsproxy_fast = fast
         self._fsproxy_slow = slow
-        self._fsproxy_instance_transfer_block = (
-            _fsproxy_instance_transfer_block
-        )
+        self._fsproxy_transfer_block = _fsproxy_transfer_block
         if assigned is None:
             assigned = functools.WRAPPER_ASSIGNMENTS
         if updated is None:
@@ -904,7 +897,7 @@ class _FunctionProxy(_CallableProxyMixin):
 
     def get_transfer_blocking(self):
         """Get current instance-level transfer blocking flag."""
-        return self._fsproxy_instance_transfer_block
+        return self._fsproxy_transfer_block
 
 
 def is_bound_method(obj):
@@ -955,7 +948,7 @@ class _FastSlowAttribute:
                 self._attr = _MethodProxy(
                     fast_attr,
                     slow_attr,
-                    _fsproxy_instance_transfer_block=instance.get_transfer_blocking()
+                    _fsproxy_transfer_block=instance.get_transfer_blocking()
                     if instance is not None
                     else None,
                 )
@@ -997,7 +990,7 @@ class _FastSlowAttribute:
 
 
 class _MethodProxy(_FunctionProxy):
-    def __init__(self, fast, slow, _fsproxy_instance_transfer_block=None):
+    def __init__(self, fast, slow, _fsproxy_transfer_block=None):
         super().__init__(
             fast,
             slow,
@@ -1005,7 +998,7 @@ class _MethodProxy(_FunctionProxy):
             assigned=(
                 tuple(filter(lambda x: x != "__name__", _WRAPPER_ASSIGNMENTS))
             ),
-            _fsproxy_instance_transfer_block=_fsproxy_instance_transfer_block,
+            _fsproxy_transfer_block=_fsproxy_transfer_block,
         )
 
     def __dir__(self):
@@ -1099,7 +1092,7 @@ def _slow_function_call():
 
 def _fast_slow_function_call(
     func: Callable,
-    transfer_block: _State | None = None,
+    transfer_block: _BlockState | None = None,
     /,
     *args,
     **kwargs,
@@ -1117,7 +1110,7 @@ def _fast_slow_function_call(
     fast = False
     block_transfer_to_fast = False
     try:
-        if transfer_block is _State.SLOW:
+        if transfer_block is _BlockState.TO_FAST:
             raise Exception("Forcing slow path due to transfer blocking")
         with nvtx.annotate(
             "EXECUTE_FAST",
