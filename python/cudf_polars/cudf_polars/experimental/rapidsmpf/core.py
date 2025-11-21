@@ -33,7 +33,11 @@ from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext, Join, Scan, Union
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo, lower_ir_node
-from cudf_polars.experimental.rapidsmpf.nodes import generate_ir_sub_network_wrapper
+from cudf_polars.experimental.rapidsmpf.nodes import (
+    generate_ir_sub_network_wrapper,
+    metadata_drain_node,
+)
+from cudf_polars.experimental.rapidsmpf.shuffle import ReserveOpIDs
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import CUDAStreamPolicy, CUDAStreamPoolConfig
@@ -41,7 +45,7 @@ from cudf_polars.utils.config import CUDAStreamPolicy, CUDAStreamPoolConfig
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
-    from rapidsmpf.communicator.local import Communicator
+    from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.leaf_node import DeferredMessages
 
     import polars as pl
@@ -81,30 +85,43 @@ def evaluate_logical_plan(
     # Lower the IR graph on the client process (for now).
     ir, partition_info, stats = lower_ir_graph(ir, config_options)
 
-    # Build and execute the streaming pipeline.
-    # This must be done on all worker processes
-    # for cluster == "distributed".
-    if (
-        config_options.executor.cluster == "distributed"
-    ):  # pragma: no cover; block depends on executor type and Distributed cluster
-        # Distributed execution: Use client.run
+    # Reserve shuffle IDs for the entire pipeline execution
+    with ReserveOpIDs(ir) as shuffle_id_map:
+        # Build and execute the streaming pipeline.
+        # This must be done on all worker processes
+        # for cluster == "distributed".
+        if (
+            config_options.executor.cluster == "distributed"
+        ):  # pragma: no cover; block depends on executor type and Distributed cluster
+            # Distributed execution: Use client.run
 
-        # Warn loudly that multi-GPU execution is under construction
-        warnings.warn(
-            "UNDER CONSTRUCTION!!!"
-            "The rapidsmpf runtime does NOT support distributed execution. "
-            "Use at your own risk!!!",
-            stacklevel=2,
-        )
-        # NOTE: Distributed execution requires Dask for now
-        from cudf_polars.experimental.rapidsmpf.dask import evaluate_pipeline_dask
+            # Warn loudly that multi-GPU execution is under construction
+            warnings.warn(
+                "UNDER CONSTRUCTION!!!"
+                "The rapidsmpf runtime does NOT support distributed execution. "
+                "Use at your own risk!!!",
+                stacklevel=2,
+            )
+            # NOTE: Distributed execution requires Dask for now
+            from cudf_polars.experimental.rapidsmpf.dask import evaluate_pipeline_dask
 
-        return evaluate_pipeline_dask(
-            evaluate_pipeline, ir, partition_info, config_options, stats
-        )
-    else:
-        # Single-process execution: Run locally
-        return evaluate_pipeline(ir, partition_info, config_options, stats)
+            return evaluate_pipeline_dask(
+                evaluate_pipeline,
+                ir,
+                partition_info,
+                config_options,
+                stats,
+                shuffle_id_map,
+            )
+        else:
+            # Single-process execution: Run locally
+            return evaluate_pipeline(
+                ir,
+                partition_info,
+                config_options,
+                stats,
+                shuffle_id_map,
+            )
 
 
 def evaluate_pipeline(
@@ -112,6 +129,7 @@ def evaluate_pipeline(
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
     stats: StatsCollector,
+    shuffle_id_map: dict[IR, int],
     rmpf_context: Context | None = None,
 ) -> pl.DataFrame:
     """
@@ -127,6 +145,8 @@ def evaluate_pipeline(
         The configuration options.
     stats
         The statistics collector.
+    shuffle_id_map
+        Mapping from Shuffle/Repartition/Join IR nodes to reserved shuffle IDs.
     rmpf_context
         The RapidsMPF context.
 
@@ -135,11 +155,6 @@ def evaluate_pipeline(
     The output DataFrame.
     """
     assert config_options.executor.name == "streaming", "Executor must be streaming"
-
-    # Create a local comm whether or not we are
-    # using "single" or "distributed" mode
-    options = Options(get_environment_variables())
-    local_comm = new_communicator(options)
 
     if rmpf_context is not None:
         # Using "distributed" mode.
@@ -177,6 +192,8 @@ def evaluate_pipeline(
         else:
             stream_pool = None
 
+        options = Options(get_environment_variables())
+        local_comm = new_communicator(options)
         br = BufferResource(
             mr, memory_available=memory_available, stream_pool=stream_pool
         )
@@ -199,8 +216,8 @@ def evaluate_pipeline(
         partition_info,
         config_options,
         stats,
+        shuffle_id_map=shuffle_id_map,
         ir_context=ir_context,
-        local_comm=local_comm,
     )
 
     # Run the network
@@ -353,8 +370,8 @@ def generate_network(
     config_options: ConfigOptions,
     stats: StatsCollector,
     *,
+    shuffle_id_map: dict[IR, int],
     ir_context: IRExecutionContext,
-    local_comm: Communicator,
 ) -> tuple[list[Any], DeferredMessages]:
     """
     Translate the IR graph to a RapidsMPF streaming network.
@@ -371,10 +388,10 @@ def generate_network(
         The configuration options.
     stats
         Statistics collector.
+    shuffle_id_map
+        Mapping from Shuffle/Repartition/Join IR nodes to reserved shuffle IDs.
     ir_context
         The execution context for the IR node.
-    local_comm
-        The local communicator.
 
     Returns
     -------
@@ -405,7 +422,7 @@ def generate_network(
         "ir_context": ir_context,
         "max_io_threads": max_io_threads_local,
         "stats": stats,
-        "local_comm": local_comm,
+        "shuffle_id_map": shuffle_id_map,
     }
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state
@@ -413,18 +430,22 @@ def generate_network(
     nodes_dict, channels = mapper(ir)
     ch_out = channels[ir].reserve_output_slot()
 
-    # TODO: We will need an additional node here to drain
-    # the metadata channel once we start plumbing metadata
-    # through the network. This node could also drop
-    # "duplicated" data on all but rank 0.
+    # Add node to drain metadata channel before pull_from_channel
+    # (since pull_from_channel doesn't accept a ChannelPair)
+    ch_final_data: Channel[TableChunk] = context.create_channel()
+    drain_node = metadata_drain_node(
+        context,
+        ir,
+        ch_out,
+        ch_final_data,
+    )
 
     # Add final node to pull from the output data channel
-    # (metadata channel is unused)
-    output_node, output = pull_from_channel(context, ch_in=ch_out.data)
+    output_node, output = pull_from_channel(context, ch_in=ch_final_data)
 
     # Flatten the nodes dictionary into a list for run_streaming_pipeline
     nodes: list[Any] = [node for node_list in nodes_dict.values() for node in node_list]
-    nodes.append(output_node)
+    nodes.extend([drain_node, output_node])
 
     # Return network and output hook
     return nodes, output

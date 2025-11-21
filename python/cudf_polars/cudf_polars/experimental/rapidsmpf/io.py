@@ -36,7 +36,11 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
     define_py_node,
     shutdown_on_error,
 )
-from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
+from cudf_polars.experimental.rapidsmpf.utils import (
+    ChannelManager,
+    Metadata,
+    empty_table_chunk,
+)
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -168,7 +172,10 @@ async def dataframescan_node(
         local_count = math.ceil(global_count / context.comm().nranks)
         local_offset = local_count * context.comm().rank
 
-    async with shutdown_on_error(context, ch_out.data):
+    async with shutdown_on_error(context, ch_out.metadata, ch_out.data):
+        # Send basic metadata
+        await ch_out.send_metadata(context, Metadata(local_count))
+
         # Build list of IR slices to read
         ir_slices = []
         for seq_num in range(local_count):
@@ -186,21 +193,11 @@ async def dataframescan_node(
         # If no slices assigned to this rank, send an empty chunk with correct schema
         if len(ir_slices) == 0:
             # Create an empty table with the correct schema
-            empty_columns = [
-                plc.column_factories.make_empty_column(plc.DataType(dtype.id()))
-                for dtype in ir.schema.values()
-            ]
-            empty_table = plc.Table(empty_columns)
-
             await ch_out.data.send(
                 context,
                 Message(
                     0,
-                    TableChunk.from_pylibcudf_table(
-                        empty_table,
-                        context.get_stream_from_pool(),
-                        exclusive_view=True,
-                    ),
+                    empty_table_chunk(ir, context),
                 ),
             )
             await ch_out.data.drain(context)
@@ -370,7 +367,7 @@ async def scan_node(
     parquet_options
         The Parquet options.
     """
-    async with shutdown_on_error(context, ch_out.data):
+    async with shutdown_on_error(context, ch_out.metadata, ch_out.data):
         # Build a list of local Scan operations
         scans: list[Scan | SplitScan] = []
         if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
@@ -378,9 +375,11 @@ async def scan_node(
             local_count = math.ceil(count / context.comm().nranks)
             local_offset = local_count * context.comm().rank
             path_offset = local_offset // plan.factor
-            path_count = math.ceil(local_count / plan.factor)
+            path_end = math.ceil((local_offset + local_count) / plan.factor)
+            path_count = path_end - path_offset
             local_paths = ir.paths[path_offset : path_offset + path_count]
             sindex = local_offset % plan.factor
+            splits_created = 0
             for path in local_paths:
                 base_scan = Scan(
                     ir.schema,
@@ -396,7 +395,7 @@ async def scan_node(
                     ir.predicate,
                     parquet_options,
                 )
-                while sindex < plan.factor:
+                while sindex < plan.factor and splits_created < local_count:
                     scans.append(
                         SplitScan(
                             ir.schema,
@@ -407,6 +406,7 @@ async def scan_node(
                         )
                     )
                     sindex += 1
+                    splits_created += 1
                 sindex = 0
 
         else:
@@ -434,6 +434,9 @@ async def scan_node(
                             parquet_options,
                         )
                     )
+
+        # Send basic metadata
+        await ch_out.send_metadata(context, Metadata(max(1, len(scans))))
 
         # If no scans assigned to this rank, send an empty chunk with correct schema
         if len(scans) == 0:
@@ -596,6 +599,28 @@ def make_rapidsmpf_read_parquet_node(
         ) from e
 
 
+@define_py_node()
+async def metadata_feeder_node(
+    context: Context,
+    channel: ChannelPair,
+    metadata: Metadata,
+) -> None:
+    """
+    Feed metadata to a channel pair.
+
+    Parameters
+    ----------
+    context
+        The rapidsmpf context.
+    channel
+        The channel pair.
+    metadata
+        The metadata to feed.
+    """
+    async with shutdown_on_error(context, channel.metadata, channel.data):
+        await channel.send_metadata(context, metadata)
+
+
 @generate_ir_sub_network.register(Scan)
 def _(
     ir: Scan, rec: SubNetGenerator
@@ -641,7 +666,14 @@ def _(
         native_node = None
 
     if native_node is not None:
-        nodes[ir] = [native_node]
+        # Need metadata node, because the native read_parquet
+        # node does not send metadata.
+        metadata_node = metadata_feeder_node(
+            rec.state["context"],
+            ch_pair,
+            Metadata(partition_info.count),
+        )
+        nodes[ir] = [metadata_node, native_node]
     else:
         # Fall back to scan_node (predicate not convertible, or other constraint)
         parquet_options = dataclasses.replace(parquet_options, chunked=False)
