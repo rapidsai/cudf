@@ -10,11 +10,8 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
-
 #include <memory>
 #include <optional>
-#include <utility>
 #include <vector>
 
 namespace CUDF_EXPORT cudf {

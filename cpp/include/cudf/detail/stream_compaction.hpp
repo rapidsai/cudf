@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,7 +15,6 @@
 #include <rmm/device_uvector.hpp>
 
 namespace CUDF_EXPORT cudf {
-
 namespace detail {
 /**
  * @copydoc cudf::drop_nulls(table_view const&, std::vector<size_type> const&,
