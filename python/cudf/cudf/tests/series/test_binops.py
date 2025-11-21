@@ -3161,3 +3161,16 @@ def test_binops_comparisons_datatime_with_scalars(scalars, comparison_op):
         expect = comparison_op(scalars, ser.to_pandas())
         got = comparison_op(scalars, ser)
         assert_eq(expect, got)
+
+
+def test_timedelta_arrow_backed_comparisions_pandas_compat():
+    s = pd.Series(
+        pd.arrays.ArrowExtensionArray(
+            pa.array([1, None, 3], type=pa.duration("ns"))
+        )
+    )
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        gs = cudf.from_pandas(s)
+        assert_eq(s == s, gs == gs)
+        assert_eq(s != s, gs != gs)
