@@ -32,7 +32,7 @@ jobs:
     name: Run ${{ inputs.tool_name }} on ${{ matrix.test_name }}
     runs-on: linux-amd64-gpu-l4-latest-1
     container:
-      image: rapidsai/ci-conda:25.12-latest
+      image: rapidsai/ci-conda:26.02-latest
       options: --gpus all
     continue-on-error: true
     strategy:

@@ -120,6 +120,7 @@ DEPENDENCIES=(
   librmm
   pylibcudf
   rapids-dask-dependency
+  rapidsmpf
   rmm
 )
 for DEP in "${DEPENDENCIES[@]}"; do
