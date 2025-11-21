@@ -18,17 +18,24 @@ from __future__ import annotations
 import argparse
 import ast
 import sys
+import typing
 
-ErrorRecord = dict[
-    str, str | int
-]  # Keys: "class", "arg", "error", "lineno", "filename"
+
+class ErrorRecord(typing.TypedDict):
+    cls: str
+    arg: str
+    error: str
+    lineno: int
+    filename: str
 
 
 def extract_tuple_from_node(node: ast.AST) -> tuple[str, ...] | None:
     """Extract a tuple of strings from an AST node."""
     if isinstance(node, ast.Tuple):
         return tuple(
-            elt.value for elt in node.elts if isinstance(elt, ast.Constant)
+            str(elt.value)
+            for elt in node.elts
+            if isinstance(elt, ast.Constant)
         )
     return None
 
@@ -55,6 +62,36 @@ def get_do_evaluate_node(class_node: ast.ClassDef) -> ast.FunctionDef | None:
     for item in class_node.body:
         if isinstance(item, ast.FunctionDef) and item.name == "do_evaluate":
             return item
+    return None
+
+
+def get_init_node(class_node: ast.ClassDef) -> ast.FunctionDef | None:
+    """Get the __init__ method node from a class definition."""
+    for item in class_node.body:
+        if isinstance(item, ast.FunctionDef) and item.name == "__init__":
+            return item
+    return None
+
+
+def get_non_child_args_length(init_node: ast.FunctionDef) -> int | None:
+    """
+    Get the length of the tuple assigned to self._non_child_args in __init__.
+    Returns None if the assignment is not found or is not a tuple.
+    """
+    for stmt in ast.walk(init_node):
+        # Look for assignments: self._non_child_args = (...)
+        if isinstance(stmt, ast.Assign):
+            # Check if target is self._non_child_args
+            for target in stmt.targets:
+                if (
+                    isinstance(target, ast.Attribute)
+                    and isinstance(target.value, ast.Name)
+                    and target.value.id == "self"
+                    and target.attr == "_non_child_args"
+                ):
+                    # Check if the value is a tuple
+                    if isinstance(stmt.value, ast.Tuple):
+                        return len(stmt.value.elts)
     return None
 
 
@@ -124,7 +161,7 @@ def analyze_content(content: str, filename: str) -> list[ErrorRecord]:
                 if nc not in do_evaluate_params:
                     records.append(
                         {
-                            "class": class_name,
+                            "cls": class_name,
                             "arg": nc,
                             "error": "Missing",
                             "lineno": method_node.lineno,
@@ -134,7 +171,7 @@ def analyze_content(content: str, filename: str) -> list[ErrorRecord]:
                 elif do_evaluate_params.index(nc) != i:
                     records.append(
                         {
-                            "class": class_name,
+                            "cls": class_name,
                             "arg": nc,
                             "error": "Wrong position",
                             "lineno": method_node.lineno,
@@ -156,7 +193,7 @@ def analyze_content(content: str, filename: str) -> list[ErrorRecord]:
                 if type_name != "DataFrame":
                     records.append(
                         {
-                            "class": class_name,
+                            "cls": class_name,
                             "arg": arg.arg,
                             "error": f"Wrong type annotation '{type_name}' (expected 'DataFrame')",
                             "lineno": method_node.lineno,
@@ -169,7 +206,7 @@ def analyze_content(content: str, filename: str) -> list[ErrorRecord]:
             if len(kwonly_args) != 1:
                 records.append(
                     {
-                        "class": class_name,
+                        "cls": class_name,
                         "arg": "kwonly",
                         "error": f"Expected 1 keyword-only argument, found {len(kwonly_args)}",
                         "lineno": method_node.lineno,
@@ -179,7 +216,7 @@ def analyze_content(content: str, filename: str) -> list[ErrorRecord]:
             elif kwonly_args[0].arg != "context":
                 records.append(
                     {
-                        "class": class_name,
+                        "cls": class_name,
                         "arg": kwonly_args[0].arg,
                         "error": "Keyword-only argument should be named 'context'",
                         "lineno": method_node.lineno,
@@ -192,13 +229,29 @@ def analyze_content(content: str, filename: str) -> list[ErrorRecord]:
                 if type_name != "IRExecutionContext":
                     records.append(
                         {
-                            "class": class_name,
+                            "cls": class_name,
                             "arg": "context",
                             "error": f"Wrong type annotation '{type_name}' (expected 'IRExecutionContext')",
                             "lineno": method_node.lineno,
                             "filename": filename,
                         }
                     )
+
+            # Check that __init__ assigns self._non_child_args with matching length
+            init_node = get_init_node(node)
+            if init_node is not None:
+                non_child_args_length = get_non_child_args_length(init_node)
+                if non_child_args_length is not None:
+                    if non_child_args_length != len(non_child):
+                        records.append(
+                            {
+                                "cls": class_name,
+                                "arg": "_non_child_args",
+                                "error": "Mismatch between 'self._non_child_args' and 'cls._non_child'",
+                                "lineno": init_node.lineno,
+                                "filename": filename,
+                            }
+                        )
 
     return records
 
@@ -236,7 +289,7 @@ def main() -> int:
         for record in all_records:
             filename = record["filename"]
             lineno = record["lineno"]
-            class_name = record["class"]
+            class_name = record["cls"]
             error = record["error"]
             arg = record["arg"]
             print(
