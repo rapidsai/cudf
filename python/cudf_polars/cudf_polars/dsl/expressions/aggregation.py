@@ -158,7 +158,10 @@ class Agg(Expr):
         self, column: Column, *, request: plc.aggregation.Aggregation, stream: Stream
     ) -> Column:
         if (
-            self.name in {"mean", "median"}
+            # For sum, this condition can only pass
+            # after expression decomposition in the streaming
+            # engine
+            self.name in {"sum", "mean", "median"}
             and plc.traits.is_fixed_point(column.dtype.plc_type)
             and self.dtype.plc_type.id() in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
         ):
@@ -191,16 +194,19 @@ class Agg(Expr):
 
     def _sum(self, column: Column, stream: Stream) -> Column:
         if column.size == 0 or column.null_count == column.size:
-            if self.dtype.id() == plc.TypeId.DECIMAL128:
-                zero = plc.Scalar.from_py(
-                    Decimal(0).scaleb(self.dtype.scale()),
-                    plc.DataType(plc.TypeId.DECIMAL128),
-                    stream=stream,
-                )
-            else:
-                zero = plc.Scalar.from_py(0, self.dtype.plc_type, stream=stream)
+            dtype = self.dtype.plc_type
             return Column(
-                plc.Column.from_scalar(zero, 1, stream=stream),
+                plc.Column.from_scalar(
+                    plc.Scalar.from_py(
+                        Decimal(0).scaleb(dtype.scale())
+                        if plc.traits.is_fixed_point(dtype)
+                        else 0,
+                        dtype,
+                        stream=stream,
+                    ),
+                    1,
+                    stream=stream,
+                ),
                 name=column.name,
                 dtype=self.dtype,
             )

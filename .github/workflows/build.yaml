@@ -64,8 +64,19 @@ jobs:
       date: ${{ inputs.date }}
       script: ci/build_python.sh
       sha: ${{ inputs.sha }}
+  python-build-noarch:
+    needs: [telemetry-setup, cpp-build, python-build]
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@main
+    with:
+      build_type: ${{ inputs.build_type || 'branch' }}
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      script: ci/build_python_noarch.sh
+      sha: ${{ inputs.sha }}
+      pure-conda: cuda_major
   upload-conda:
-    needs: [cpp-build, python-build]
+    needs: [cpp-build, python-build, python-build-noarch]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-upload-packages.yaml@main
     with:
@@ -75,14 +86,14 @@ jobs:
       sha: ${{ inputs.sha }}
   docs-build:
     if: github.ref_type == 'branch'
-    needs: python-build
+    needs: [python-build, python-build-noarch]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     with:
       arch: "amd64"
       branch: ${{ inputs.branch }}
       build_type: ${{ inputs.build_type || 'branch' }}
-      container_image: "rapidsai/ci-conda:25.12-latest"
+      container_image: "rapidsai/ci-conda:26.02-latest"
       date: ${{ inputs.date }}
       node_type: "gpu-l4-latest-1"
       script: "ci/build_docs.sh"
