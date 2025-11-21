@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cudf/detail/join/filtered_join.cuh>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -36,7 +37,7 @@ class distinct_filtered_join : public filtered_join {
    */
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_anti_join(
     cudf::table_view const& probe,
-    join_kind kind,
+    cudf::join_kind kind,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr);
 
@@ -60,7 +61,7 @@ class distinct_filtered_join : public filtered_join {
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> query_build_table(
     cudf::table_view const& probe,
     std::shared_ptr<cudf::detail::row::equality::preprocessed_table> preprocessed_probe,
-    join_kind kind,
+    cudf::join_kind kind,
     Ref query_ref,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr);
