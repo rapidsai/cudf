@@ -30,7 +30,7 @@ rapids-logger "Prepending channels ${CPP_CHANNEL} and ${PYTHON_CHANNEL} to RATTL
 
 RATTLER_CHANNELS=("--channel" "${CPP_CHANNEL}" "--channel" "${PYTHON_CHANNEL}" "${RATTLER_CHANNELS[@]}")
 
-sccache --zero-stats
+sccache --stop-server 2>/dev/null || true
 
 # --no-build-id allows for caching with `sccache`
 # more info is available at
@@ -43,7 +43,7 @@ rapids-telemetry-record build-dask-cudf.log \
                     "${RATTLER_CHANNELS[@]}"
 
 rapids-telemetry-record sccache-stats-dask-cudf.txt sccache --show-adv-stats
-sccache --zero-stats
+sccache --stop-server >/dev/null 2>&1 || true
 
 rapids-logger "Building cudf-polars"
 
@@ -53,7 +53,7 @@ rapids-telemetry-record build-cudf-polars.log \
                     "${RATTLER_CHANNELS[@]}"
 
 rapids-telemetry-record sccache-stats-cudf-polars.txt sccache --show-adv-stats
-sccache --zero-stats
+sccache --stop-server >/dev/null 2>&1 || true
 
 rapids-logger "Building custreamz"
 
@@ -63,8 +63,10 @@ rapids-telemetry-record build-custreamz.log \
                     "${RATTLER_CHANNELS[@]}"
 
 rapids-telemetry-record sccache-stats-custreamz.txt sccache --show-adv-stats
+sccache --stop-server >/dev/null 2>&1 || true
+
 # remove build_cache directory
 rm -rf "$RAPIDS_CONDA_BLD_OUTPUT_DIR"/build_cache
 
-RAPIDS_PACKAGE_NAME="$(rapids-package-name conda_python cudf-noarch --pure)"
+RAPIDS_PACKAGE_NAME="$(rapids-package-name conda_python cudf-noarch --pure --cuda "${RAPIDS_CUDA_VERSION}")"
 export RAPIDS_PACKAGE_NAME
