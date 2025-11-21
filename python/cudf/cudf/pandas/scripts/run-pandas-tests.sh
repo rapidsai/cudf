@@ -177,12 +177,16 @@ IGNORE_TESTS_THAT_TEST_PRIVATE_FUNTIONALITY=("--ignore=tests/test_nanops.py"
 )
 
 
-PANDAS_CI="1" python -m pytest -p cudf.pandas \
-    --import-mode=importlib \
-    -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and $TEST_THAT_NEED_REASON_TO_SKIP and $TEST_THAT_USE_STRING_DTYPE_GROUPBY and $TEST_THAT_USE_WEAKREFS" \
-    "${IGNORE_TESTS_THAT_CRASH_PYTEST_COLLECTION[@]}" \
-    "${IGNORE_TESTS_THAT_TEST_PRIVATE_FUNTIONALITY[@]}" \
-    "$@"
+for testfile in tests/*; do
+    PANDAS_CI="1" python -m pytest -p cudf.pandas \
+        --import-mode=importlib \
+        -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and $TEST_THAT_NEED_REASON_TO_SKIP and $TEST_THAT_USE_STRING_DTYPE_GROUPBY and $TEST_THAT_USE_WEAKREFS" \
+        "${IGNORE_TESTS_THAT_CRASH_PYTEST_COLLECTION[@]}" \
+        "${IGNORE_TESTS_THAT_TEST_PRIVATE_FUNTIONALITY[@]}" \
+        "$@" \
+        "${testfile}"
+    echo "The exit code for test file/dir ${testfile} was: $?"
+done
 
 mv ./*.json ..
 cd ..
