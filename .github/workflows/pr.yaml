@@ -16,6 +16,7 @@ jobs:
       - check-nightly-ci
       - changed-files
       - checks
+      - print-changed-files
       - conda-cpp-build
       - cpp-linters
       - conda-cpp-checks
@@ -65,14 +66,24 @@ jobs:
         uses: rapidsai/shared-actions/check_nightly_success/dispatch@main
         with:
           repo: cudf
+  print-changed-files:
+    needs: changed-files
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print changed files
+        env:
+          CHANGED_FILES: ${{ needs.changed-files.outputs.changed_file_groups }}
+        run: |
+          echo "$CHANGED_FILES"
   changed-files:
     secrets: inherit
     needs: telemetry-setup
-    uses: rapidsai/shared-workflows/.github/workflows/changed-files.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/changed-files.yaml@changed-files-action
     with:
       files_yaml: |
         test_cpp:
           - '**'
+          - '!.github/**'
           - '!.devcontainer/**'
           - '!CONTRIBUTING.md'
           - '!README.md'
@@ -117,6 +128,7 @@ jobs:
           - '!java/**'
         test_python:
           - '**'
+          - '!.github/**'
           - '!.clang-format'
           - '!.devcontainer/**'
           - '!CONTRIBUTING.md'
@@ -130,7 +142,7 @@ jobs:
   checks:
     secrets: inherit
     needs: telemetry-setup
-    uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@changed-files-action
     with:
       enable_check_generated_files: false
       ignored_pr_jobs: "telemetry-summarize spark-rapids-jni wheel-tests-cudf-polars-with-rapidsmpf"
