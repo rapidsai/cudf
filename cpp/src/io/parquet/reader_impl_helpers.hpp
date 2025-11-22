@@ -11,6 +11,7 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/types.hpp>
 
 #include <list>
@@ -104,6 +105,7 @@ struct row_group_info {
 struct metadata : public FileMetaData {
   metadata() = default;
   explicit metadata(datasource* source, bool read_page_indexes = true);
+  explicit metadata(FileMetaData&& other);
   metadata(metadata const& other)            = delete;
   metadata(metadata&& other)                 = default;
   metadata& operator=(metadata const& other) = delete;
@@ -320,11 +322,20 @@ class aggregate_reader_metadata {
     std::reference_wrapper<ast::expression const> filter,
     rmm::cuda_stream_view stream) const;
 
+  /**
+   * @brief Initialize the internal variables
+   */
+  void initialize_internals(bool use_arrow_schema, bool has_cols_from_mismatched_srcs);
+
  public:
   aggregate_reader_metadata(host_span<std::unique_ptr<datasource> const> sources,
                             bool use_arrow_schema,
                             bool has_cols_from_mismatched_srcs,
                             bool read_page_indexes = true);
+
+  aggregate_reader_metadata(std::vector<FileMetaData>&& parquet_metadatas,
+                            bool use_arrow_schema,
+                            bool has_cols_from_mismatched_srcs);
 
   aggregate_reader_metadata(aggregate_reader_metadata const&)            = delete;
   aggregate_reader_metadata& operator=(aggregate_reader_metadata const&) = delete;
@@ -332,6 +343,16 @@ class aggregate_reader_metadata {
   aggregate_reader_metadata& operator=(aggregate_reader_metadata&&)      = delete;
 
   [[nodiscard]] RowGroup const& get_row_group(size_type row_group_index, size_type src_idx) const;
+
+  /**
+   * @brief Get Parquet file metadatas
+   *
+   * @return Parquet file metadatas
+   */
+  [[nodiscard]] std::vector<FileMetaData> get_parquet_metadatas() const
+  {
+    return std::vector<FileMetaData>{per_file_metadata.begin(), per_file_metadata.end()};
+  }
 
   /**
    * @brief Extracts the schema_idx'th column chunk metadata from row_group_index'th row group of
