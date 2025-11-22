@@ -12332,6 +12332,7 @@ NODEIDS_THAT_FAIL_WITH_COW = {
     "tests/indexing/test_floats.py::TestFloatIndexers::test_slice_float[Series-loc-idx0]",
     "tests/indexing/test_floats.py::TestFloatIndexers::test_slice_float[Series-loc-idx1]",
     "tests/indexing/test_floats.py::TestFloatIndexers::test_slice_float[Series-loc-idx2]",
+    "tests/indexing/test_floats.py::TestFloatIndexers::test_slice_non_numeric[Series-iloc-idx0-index1]",
     "tests/indexing/test_iloc.py::TestILocErrors::est_iloc_float_raises[bool-dtype-DataFrame]",
     "tests/indexing/test_iloc.py::TestILocErrors::est_iloc_float_raises[bool-dtype-Series]",
     "tests/indexing/test_iloc.py::TestILocErrors::est_iloc_float_raises[bool-object-DataFrame]",
