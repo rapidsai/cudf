@@ -10176,8 +10176,6 @@ NODEIDS_TO_ALWAYS_SKIP = {
 }
 
 NODEIDS_THAT_FAIL_WITH_COW = {
-    "tests/indexes/categorical/test_equals.py::TestEquals::test_equals_categorical",
-    "tests/series/indexing/test_datetime.py::test_indexing_with_duplicate_datetimeindex",
     "tests/apply/test_frame_apply.py::test_apply_empty_infer_type[numba-0-False-mean-columns]",
     "tests/apply/test_frame_apply.py::test_apply_empty_infer_type[numba-0-False-mean-index]",
     "tests/apply/test_frame_apply.py::test_apply_empty_infer_type[numba-0-True-mean-columns]",
@@ -10628,6 +10626,7 @@ NODEIDS_THAT_FAIL_WITH_COW = {
     "tests/extension/test_interval.py::TestIntervalArray::test_in_numeric_groupby",
     "tests/extension/test_interval.py::TestIntervalArray::test_setitem_frame_2d_values",
     "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_setitem_mask_aligned[float-None-True]",
+    "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_setitem_mask_aligned[float-loc-False]"
     "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_where_series[float-False]",
     "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_where_series[float-True]",
     "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_where_series[object-False]",
@@ -12281,6 +12280,7 @@ NODEIDS_THAT_FAIL_WITH_COW = {
     "tests/groupby/test_reductions.py::test_series_groupby_nunique[keys1-True-True-False-True]",
     "tests/groupby/test_reductions.py::test_series_groupby_nunique[keys1-True-True-True-False]",
     "tests/groupby/test_reductions.py::test_series_groupby_nunique[keys1-True-True-True-True]",
+    "tests/indexes/categorical/test_equals.py::TestEquals::test_equals_categorical",
     "tests/indexes/interval/test_astype.py::TestDatetimelikeSubtype::test_subtype_float[index0]",
     "tests/indexes/interval/test_astype.py::TestDatetimelikeSubtype::test_subtype_float[index1]",
     "tests/indexes/interval/test_astype.py::TestDatetimelikeSubtype::test_subtype_float[index3]",
@@ -12537,6 +12537,7 @@ NODEIDS_THAT_FAIL_WITH_COW = {
     "tests/reshape/test_pivot.py::TestPivotTable::test_pivot_string_func_vs_func[std-std]",
     "tests/reshape/test_pivot_multilevel.py::test_pivot_list_like_index[input_index0-lev3-values-expected_values0-expected_columns0-expected_index0]",
     "tests/reshape/test_pivot_multilevel.py::test_pivot_list_like_index[input_index1-lev3-_NoDefault.no_default-expected_values1-expected_columns1-expected_index1]",
+    "tests/series/indexing/test_datetime.py::test_indexing_with_duplicate_datetimeindex",
     "tests/series/indexing/test_indexing.py::test_underlying_data_conversion",
     "tests/series/indexing/test_setitem.py::TestCoercionBool::test_int_key[iloc-(1+1j)-object-FutureWarning]",
     "tests/series/indexing/test_setitem.py::TestCoercionBool::test_int_key[iloc-1-object-FutureWarning]",
