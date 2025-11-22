@@ -10966,7 +10966,7 @@ NODEIDS_THAT_FAIL_WITH_COW = {
     "tests/computation/test_eval.py::TestAlignment::test_medium_complex_frame_alignment[python-python-s-s-s-s1]",
     "tests/copy_view/test_indexing.py::test_series_subset_set_with_indexer[numpy-setitem-array]",
     "tests/copy_view/test_interp_fillna.py::test_interpolate_chained_assignment[interpolate]",
-    "tests/copy_view/test_setitem.py::test_setitem_series_no_copy"
+    "tests/copy_view/test_setitem.py::test_setitem_series_no_copy",
     "tests/extension/test_categorical.py::TestCategorical::test_setitem_mask_aligned[None-False]",
     "tests/extension/test_categorical.py::TestCategorical::test_setitem_mask_boolean_array_with_na[True]",
     "tests/extension/test_interval.py::TestIntervalArray::test_in_numeric_groupby",
