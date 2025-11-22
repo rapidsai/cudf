@@ -20,6 +20,12 @@ def compute_column(
     stream: Stream | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
+def compute_column_jit(
+    input: Table,
+    expr: Expression,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
 def bools_to_mask(
     input: Column,
     stream: Stream | None = None,

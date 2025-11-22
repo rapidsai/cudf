@@ -39,6 +39,7 @@ jobs:
       date: ${{ inputs.date }}
       script: ci/test_cpp.sh
       sha: ${{ inputs.sha }}
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   conda-cpp-memcheck-tests:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
@@ -70,6 +71,7 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       script: "ci/test_python_cudf.sh"
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   conda-python-other-tests:
     # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
     secrets: inherit
@@ -80,6 +82,7 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       script: "ci/test_python_other.sh"
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   conda-java-tests:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
@@ -113,6 +116,7 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       script: ci/test_wheel_cudf.sh
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-tests-dask-cudf:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
@@ -122,6 +126,7 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       script: ci/test_wheel_dask_cudf.sh
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   unit-tests-cudf-pandas:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
@@ -131,6 +136,7 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       script: ci/cudf_pandas_scripts/run_tests.sh
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   third-party-integration-tests-cudf-pandas:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
@@ -153,6 +159,7 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       script: "ci/test_wheel_cudf_polars.sh"
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-tests-cudf-polars-with-rapidsmpf:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
@@ -165,6 +172,7 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       script: "ci/test_cudf_polars_with_rapidsmpf.sh"
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
       continue-on-error: true
   cudf-polars-polars-tests:
     secrets: inherit
@@ -175,6 +183,7 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       script: "ci/test_cudf_polars_polars_tests.sh"
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   narwhals-tests:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main

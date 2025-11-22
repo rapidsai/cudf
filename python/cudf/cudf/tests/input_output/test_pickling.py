@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf import DataFrame, Index, RangeIndex, Series
+from cudf import DataFrame, Index, RangeIndex, Series, date_range
 from cudf.core.buffer import as_buffer
 from cudf.testing import assert_eq
 
@@ -163,3 +163,9 @@ def test_pickle_roundtrip_multiindex(names):
     local_file.seek(0)
     actual_df = pickle.load(local_file)
     assert_eq(expected_df, actual_df)
+
+
+def test_pickle_dataframe_with_datetime_index():
+    idx = date_range(start="1/1/2018", end="1/08/2018")
+    df = DataFrame({"a": range(len(idx))}, index=idx)
+    assert_eq(df, pickle.loads(pickle.dumps(df)))

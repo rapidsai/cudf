@@ -43,7 +43,7 @@ class HybridScanReader:
         self,
         row_group_indices: list[int],
         options: ParquetReaderOptions,
-        stream: Stream = None,
+        stream: Stream | None = None,
     ) -> list[int]: ...
     def secondary_filters_byte_ranges(
         self, row_group_indices: list[int], options: ParquetReaderOptions
@@ -53,20 +53,20 @@ class HybridScanReader:
         dictionary_page_data: list[DeviceBuffer],
         row_group_indices: list[int],
         options: ParquetReaderOptions,
-        stream: Stream = None,
+        stream: Stream | None = None,
     ) -> list[int]: ...
     def filter_row_groups_with_bloom_filters(
         self,
         bloom_filter_data: list[DeviceBuffer],
         row_group_indices: list[int],
         options: ParquetReaderOptions,
-        stream: Stream = None,
+        stream: Stream | None = None,
     ) -> list[int]: ...
     def build_row_mask_with_page_index_stats(
         self,
         row_group_indices: list[int],
         options: ParquetReaderOptions,
-        stream: Stream = None,
+        stream: Stream | None = None,
         mr: DeviceMemoryResource = None,
     ) -> Column: ...
     def filter_column_chunks_byte_ranges(
@@ -79,7 +79,7 @@ class HybridScanReader:
         row_mask: Column,
         mask_data_pages: UseDataPageMask,
         options: ParquetReaderOptions,
-        stream: Stream = None,
+        stream: Stream | None = None,
     ) -> TableWithMetadata: ...
     def payload_column_chunks_byte_ranges(
         self, row_group_indices: list[int], options: ParquetReaderOptions
@@ -91,7 +91,7 @@ class HybridScanReader:
         row_mask: Column,
         mask_data_pages: UseDataPageMask,
         options: ParquetReaderOptions,
-        stream: Stream = None,
+        stream: Stream | None = None,
     ) -> TableWithMetadata: ...
     def setup_chunking_for_filter_columns(
         self,
@@ -102,10 +102,10 @@ class HybridScanReader:
         mask_data_pages: UseDataPageMask,
         column_chunk_buffers: list[DeviceBuffer],
         options: ParquetReaderOptions,
-        stream: Stream = None,
+        stream: Stream | None = None,
     ) -> None: ...
     def materialize_filter_columns_chunk(
-        self, row_mask: Column, stream: Stream = None
+        self, row_mask: Column, stream: Stream | None = None
     ) -> TableWithMetadata: ...
     def setup_chunking_for_payload_columns(
         self,
@@ -116,9 +116,9 @@ class HybridScanReader:
         mask_data_pages: UseDataPageMask,
         column_chunk_buffers: list[DeviceBuffer],
         options: ParquetReaderOptions,
-        stream: Stream = None,
+        stream: Stream | None = None,
     ) -> None: ...
     def materialize_payload_columns_chunk(
-        self, row_mask: Column, stream: Stream = None
+        self, row_mask: Column, stream: Stream | None = None
     ) -> TableWithMetadata: ...
     def has_next_table_chunk(self) -> bool: ...
