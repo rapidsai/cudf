@@ -13,6 +13,7 @@
 #include <cudf/detail/row_operator/primitive_row_operators.cuh>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/join/hash_join.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/prefetch.hpp>
@@ -272,7 +273,7 @@ probe_join_hash_table(
 {
   // Use the output size directly if provided. Otherwise, compute the exact output size
   auto const probe_join_type =
-    (join == cudf::detail::join_kind::FULL_JOIN) ? cudf::detail::join_kind::LEFT_JOIN : join;
+    (join == cudf::join_kind::FULL_JOIN) ? cudf::join_kind::LEFT_JOIN : join;
 
   std::size_t const join_size = output_size ? *output_size
                                             : compute_join_output_size(build_table,
@@ -304,7 +305,7 @@ probe_join_hash_table(
 
   // Common function to handle retrieval for both primitive and non-primitive cases
   auto retrieve_results = [&](auto equality, auto iter) {
-    if (join == cudf::detail::join_kind::FULL_JOIN || join == cudf::detail::join_kind::LEFT_JOIN) {
+    if (join == cudf::join_kind::FULL_JOIN || join == cudf::join_kind::LEFT_JOIN) {
       [[maybe_unused]] auto out_probe_end = hash_table
                                               .retrieve_outer(iter,
                                                               iter + probe_table_num_rows,
@@ -315,7 +316,7 @@ probe_join_hash_table(
                                                               stream.value())
                                               .first;
 
-      if (join == cudf::detail::join_kind::FULL_JOIN) {
+      if (join == cudf::join_kind::FULL_JOIN) {
         auto const actual_size = cuda::std::distance(out_probe_begin, out_probe_end);
         left_indices->resize(actual_size, stream);
         right_indices->resize(actual_size, stream);
@@ -396,7 +397,7 @@ std::size_t get_full_join_size(
                                                    preprocessed_build,
                                                    preprocessed_probe,
                                                    hash_table,
-                                                   cudf::detail::join_kind::LEFT_JOIN,
+                                                   cudf::join_kind::LEFT_JOIN,
                                                    has_nulls,
                                                    compare_nulls,
                                                    stream);
@@ -545,7 +546,7 @@ hash_join<Hasher>::inner_join(cudf::table_view const& probe,
                               rmm::device_async_resource_ref mr) const
 {
   CUDF_FUNC_RANGE();
-  return compute_hash_join(probe, cudf::detail::join_kind::INNER_JOIN, output_size, stream, mr);
+  return compute_hash_join(probe, cudf::join_kind::INNER_JOIN, output_size, stream, mr);
 }
 
 template <typename Hasher>
@@ -557,7 +558,7 @@ hash_join<Hasher>::left_join(cudf::table_view const& probe,
                              rmm::device_async_resource_ref mr) const
 {
   CUDF_FUNC_RANGE();
-  return compute_hash_join(probe, cudf::detail::join_kind::LEFT_JOIN, output_size, stream, mr);
+  return compute_hash_join(probe, cudf::join_kind::LEFT_JOIN, output_size, stream, mr);
 }
 
 template <typename Hasher>
@@ -569,7 +570,7 @@ hash_join<Hasher>::full_join(cudf::table_view const& probe,
                              rmm::device_async_resource_ref mr) const
 {
   CUDF_FUNC_RANGE();
-  return compute_hash_join(probe, cudf::detail::join_kind::FULL_JOIN, output_size, stream, mr);
+  return compute_hash_join(probe, cudf::join_kind::FULL_JOIN, output_size, stream, mr);
 }
 
 template <typename Hasher>
@@ -593,7 +594,7 @@ std::size_t hash_join<Hasher>::inner_join_size(cudf::table_view const& probe,
                                                 _preprocessed_build,
                                                 preprocessed_probe,
                                                 _hash_table,
-                                                cudf::detail::join_kind::INNER_JOIN,
+                                                cudf::join_kind::INNER_JOIN,
                                                 _has_nulls,
                                                 _nulls_equal,
                                                 stream);
@@ -620,7 +621,7 @@ std::size_t hash_join<Hasher>::left_join_size(cudf::table_view const& probe,
                                                 _preprocessed_build,
                                                 preprocessed_probe,
                                                 _hash_table,
-                                                cudf::detail::join_kind::LEFT_JOIN,
+                                                cudf::join_kind::LEFT_JOIN,
                                                 _has_nulls,
                                                 _nulls_equal,
                                                 stream);
@@ -764,13 +765,13 @@ template <typename Hasher>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 hash_join<Hasher>::probe_join_indices(cudf::table_view const& probe_table,
-                                      cudf::detail::join_kind join,
+                                      cudf::join_kind join,
                                       std::optional<std::size_t> output_size,
                                       rmm::cuda_stream_view stream,
                                       rmm::device_async_resource_ref mr) const
 {
   // Trivial left join case - exit early
-  if (_is_empty and join != cudf::detail::join_kind::INNER_JOIN) {
+  if (_is_empty and join != cudf::join_kind::INNER_JOIN) {
     return get_trivial_left_join_indices(probe_table, stream, mr);
   }
 
@@ -794,7 +795,7 @@ hash_join<Hasher>::probe_join_indices(cudf::table_view const& probe_table,
                                                           stream,
                                                           mr);
 
-  if (join == cudf::detail::join_kind::FULL_JOIN) {
+  if (join == cudf::join_kind::FULL_JOIN) {
     auto complement_indices = detail::get_left_join_indices_complement(
       join_indices.second, probe_table.num_rows(), _build.num_rows(), stream, mr);
     join_indices = detail::concatenate_vector_pairs(join_indices, complement_indices, stream);
@@ -806,7 +807,7 @@ template <typename Hasher>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 hash_join<Hasher>::compute_hash_join(cudf::table_view const& probe,
-                                     cudf::detail::join_kind join,
+                                     cudf::join_kind join,
                                      std::optional<std::size_t> output_size,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr) const
