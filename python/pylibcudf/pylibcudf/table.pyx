@@ -75,7 +75,7 @@ cdef class Table:
     def to_arrow(
         self,
         metadata: list[ColumnMetadata | str] | None = None,
-        stream: Stream = None,
+        stream: Stream | None = None,
     ) -> ArrowLike:
         """Create a pyarrow table from a pylibcudf table.
 
