@@ -209,12 +209,14 @@ aggregate_reader_metadata::select_payload_columns(
   std::optional<std::vector<std::string>> const& filter_column_names,
   bool include_index,
   bool strings_to_categorical,
+  bool ignore_missing_columns,
   type_id timestamp_type_id)
 {
   // If neither payload nor filter columns are specified, select all columns
   if (not payload_column_names.has_value() and not filter_column_names.has_value()) {
     // Call the base `select_columns()` method without specifying any columns
-    return select_columns({}, {}, include_index, strings_to_categorical, timestamp_type_id);
+    return select_columns(
+      {}, {}, include_index, strings_to_categorical, ignore_missing_columns, timestamp_type_id);
   }
 
   std::vector<std::string> valid_payload_columns;
@@ -237,8 +239,12 @@ aggregate_reader_metadata::select_payload_columns(
                                   valid_payload_columns.end());
     }
     // Call the base `select_columns()` method with valid payload columns
-    return select_columns(
-      valid_payload_columns, {}, include_index, strings_to_categorical, timestamp_type_id);
+    return select_columns(valid_payload_columns,
+                          {},
+                          include_index,
+                          strings_to_categorical,
+                          ignore_missing_columns,
+                          timestamp_type_id);
   }
 
   // Else if only filter columns are specified, select all columns that do not appear in the
@@ -265,8 +271,12 @@ aggregate_reader_metadata::select_payload_columns(
   }
 
   // Call the base `select_columns()` method with all but filter columns
-  return select_columns(
-    valid_payload_columns, {}, include_index, strings_to_categorical, timestamp_type_id);
+  return select_columns(valid_payload_columns,
+                        {},
+                        include_index,
+                        strings_to_categorical,
+                        ignore_missing_columns,
+                        timestamp_type_id);
 }
 
 std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_groups_with_stats(
@@ -362,14 +372,11 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
     dictionary_literals_collector{filter.get(), static_cast<cudf::size_type>(output_dtypes.size())}
       .get_literals();
 
-  auto iter = thrust::make_zip_iterator(thrust::counting_iterator<cudf::size_type>(0),
-                                        output_column_schemas.begin());
-
   // Collect schema indices of columns with equality predicate(s)
-  std::vector<thrust::tuple<cudf::size_type, cudf::size_type>> dictionary_col_schemas;
+  std::vector<cudf::size_type> dictionary_col_schemas;
   thrust::copy_if(thrust::host,
-                  iter,
-                  iter + output_column_schemas.size(),
+                  output_column_schemas.begin(),
+                  output_column_schemas.end(),
                   literals.begin(),
                   std::back_inserter(dictionary_col_schemas),
                   [](auto& dict_literals) { return not dict_literals.empty(); });
@@ -397,30 +404,58 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
     [&](auto const src_index) {
       // Get all row group indices in the data source
       auto const& rg_indices = row_group_indices[src_index];
+      std::optional<size_type> colchunk_iter_offset{};
       // For all row groups
       std::for_each(rg_indices.cbegin(), rg_indices.cend(), [&](auto const rg_index) {
-        auto const& rg = per_file_metadata[0].row_groups[rg_index];
+        auto const& row_group = per_file_metadata[src_index].row_groups[rg_index];
         // For all column chunks
         std::for_each(
           dictionary_col_schemas.begin(),
           dictionary_col_schemas.end(),
-          [&](auto const& schema_col_idx_pair) {
-            auto const [input_col_idx, schema_idx] = schema_col_idx_pair;
-            auto& col_meta        = get_column_metadata(rg_index, src_index, schema_idx);
-            auto const& col_chunk = rg.columns[input_col_idx];
-
-            auto dictionary_offset = int64_t{0};
-            auto dictionary_size   = int64_t{0};
+          [&](auto const& schema_idx) {
+            // Get the column chunk iterator
+            if (not colchunk_iter_offset.has_value() or
+                row_group.columns[colchunk_iter_offset.value()].schema_idx != schema_idx) {
+              auto const& colchunk_iter = std::find_if(
+                row_group.columns.begin(), row_group.columns.end(), [schema_idx](auto const& col) {
+                  return col.schema_idx == schema_idx;
+                });
+              CUDF_EXPECTS(colchunk_iter != row_group.columns.end(),
+                           "Column chunk with schema index " + std::to_string(schema_idx) +
+                             " not found in row group",
+                           std::invalid_argument);
+              colchunk_iter_offset = std::distance(row_group.columns.begin(), colchunk_iter);
+            }
+            auto const colchunk_iter = row_group.columns.begin() + colchunk_iter_offset.value();
+            auto const& col_chunk    = *colchunk_iter;
+            auto const& col_meta     = col_chunk.meta_data;
 
             // Make sure that we have page index and the column chunk doesn't have any
             // non-dictionary encoded pages
-            auto const has_page_index_and_only_dict_encoded_pages =
-              col_chunk.offset_index.has_value() and col_chunk.column_index.has_value() and
-              std::all_of(
-                col_meta.encodings.cbegin(), col_meta.encodings.cend(), [](auto const& encoding) {
-                  return encoding == Encoding::PLAIN_DICTIONARY or
-                         encoding == Encoding::RLE_DICTIONARY;
-                });
+            auto const has_page_index_and_only_dict_encoded_pages = [&]() {
+              auto const has_page_index =
+                col_chunk.offset_index.has_value() and col_chunk.column_index.has_value();
+
+              if (has_page_index and not col_meta.encoding_stats.has_value()) {
+                CUDF_LOG_WARN(
+                  "Skipping the column chunk because it does not have encoding stats "
+                  "needed to determine if all pages are dictionary encoded");
+                return false;
+              }
+
+              return has_page_index and
+                     std::all_of(
+                       col_meta.encoding_stats.value().cbegin(),
+                       col_meta.encoding_stats.value().cend(),
+                       [](auto const& page_encoding_stats) {
+                         return page_encoding_stats.page_type == PageType::DICTIONARY_PAGE or
+                                page_encoding_stats.encoding == Encoding::PLAIN_DICTIONARY or
+                                page_encoding_stats.encoding == Encoding::RLE_DICTIONARY;
+                       });
+            }();
+
+            auto dictionary_offset = int64_t{0};
+            auto dictionary_size   = int64_t{0};
 
             if (has_page_index_and_only_dict_encoded_pages) {
               auto const& offset_index = col_chunk.offset_index.value();

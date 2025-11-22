@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 import io
 import itertools
+import json
 import math
 import operator
 import shutil
@@ -39,11 +40,6 @@ from cudf.core.reshape import concat
 from cudf.options import get_option
 from cudf.utils import ioutils
 from cudf.utils.performance_tracking import _performance_tracking
-
-try:
-    import ujson as json  # type: ignore[import-untyped]
-except ImportError:
-    import json
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Sequence
@@ -926,6 +922,7 @@ def read_parquet(
     nrows=None,
     skip_rows=None,
     allow_mismatched_pq_schemas=False,
+    ignore_missing_columns=True,
     *args,
     **kwargs,
 ):
@@ -1088,6 +1085,7 @@ def read_parquet(
         nrows=nrows,
         skip_rows=skip_rows,
         allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
+        ignore_missing_columns=ignore_missing_columns,
         filters=ast_filter,
         **kwargs,
     )
@@ -1320,6 +1318,7 @@ def _read_parquet(
     nrows: int | None = None,
     skip_rows: int | None = None,
     allow_mismatched_pq_schemas: bool = False,
+    ignore_missing_columns: bool = True,
     filters: plc_expr.Expression | None = None,
     *args,
     **kwargs,
@@ -1356,6 +1355,7 @@ def _read_parquet(
                 )
                 .use_pandas_metadata(use_pandas_metadata)
                 .allow_mismatched_pq_schemas(allow_mismatched_pq_schemas)
+                .ignore_missing_columns(ignore_missing_columns)
                 .build()
             )
             if row_groups is not None:
@@ -1423,6 +1423,7 @@ def _read_parquet(
                 )
                 .use_pandas_metadata(use_pandas_metadata)
                 .allow_mismatched_pq_schemas(allow_mismatched_pq_schemas)
+                .ignore_missing_columns(ignore_missing_columns)
                 .build()
             )
             if row_groups is not None:

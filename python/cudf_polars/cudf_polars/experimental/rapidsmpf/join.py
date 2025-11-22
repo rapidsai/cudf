@@ -58,7 +58,11 @@ async def get_small_table(
     """
     small_chunks = []
     while (msg := await ch_small.data.recv(context)) is not None:
-        small_chunks.append(TableChunk.from_message(msg))
+        small_chunks.append(
+            TableChunk.from_message(msg).make_available_and_spill(
+                context.br(), allow_overbooking=True
+            )
+        )
     assert small_chunks, "Empty small side"
 
     return [
@@ -124,7 +128,9 @@ async def broadcast_join_node(
 
         # Stream through large side, joining with the small-side
         while (msg := await large_ch.data.recv(context)) is not None:
-            large_chunk = TableChunk.from_message(msg)
+            large_chunk = TableChunk.from_message(msg).make_available_and_spill(
+                context.br(), allow_overbooking=True
+            )
             seq_num = msg.sequence_number
             large_df = DataFrame.from_table(
                 large_chunk.table_view(),
@@ -168,7 +174,9 @@ async def broadcast_join_node(
 
 
 @generate_ir_sub_network.register(Join)
-def _(ir: Join, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]]:
+def _(
+    ir: Join, rec: SubNetGenerator
+) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     # Join operation.
     left, right = ir.children
     partition_info = rec.state["partition_info"]
@@ -194,7 +202,7 @@ def _(ir: Join, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
 
     if pwise_join:
         # Partition-wise join (use default_node_multi)
-        nodes.append(
+        nodes[ir] = [
             default_node_multi(
                 rec.state["context"],
                 ir,
@@ -205,7 +213,7 @@ def _(ir: Join, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
                     channels[right].reserve_output_slot(),
                 ),
             )
-        )
+        ]
         return nodes, channels
 
     else:
@@ -217,7 +225,7 @@ def _(ir: Join, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
         else:
             broadcast_side = "left"
 
-        nodes.append(
+        nodes[ir] = [
             broadcast_join_node(
                 rec.state["context"],
                 ir,
@@ -227,5 +235,5 @@ def _(ir: Join, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
                 channels[right].reserve_output_slot(),
                 broadcast_side=broadcast_side,
             )
-        )
+        ]
         return nodes, channels

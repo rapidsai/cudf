@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import re
 import warnings
+from functools import lru_cache
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
@@ -418,6 +419,23 @@ def get_units(value):
     return value
 
 
+# for pandas compatibility
+class MonthEnd:
+    def _maybe_as_fast_pandas_offset(self):
+        return pd._libs.tslibs.offsets.MonthEnd()
+
+    def __eq__(self, other):
+        return self._maybe_as_fast_pandas_offset() == other
+
+
+class YearEnd:
+    def _maybe_as_fast_pandas_offset(self):
+        return pd._libs.tslibs.offsets.YearEnd(month=12)
+
+    def __eq__(self, other):
+        return self._maybe_as_fast_pandas_offset() == other
+
+
 class DateOffset:
     """
     An object used for binary ops where calendrical arithmetic
@@ -526,6 +544,13 @@ class DateOffset:
     }
 
     _FREQSTR_REGEX = re.compile("([-+]?[0-9]*)([a-zA-Z]+)")
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self._maybe_as_fast_pandas_offset() == other
+        if not isinstance(other, DateOffset):
+            return NotImplemented
+        return self.kwds == other.kwds
 
     def __init__(self, n=1, normalize=False, **kwds):
         if normalize:
@@ -664,7 +689,7 @@ class DateOffset:
                     with acquire_spill_lock():
                         datetime_col = type(datetime_col).from_pylibcudf(
                             plc.datetime.add_calendrical_months(
-                                datetime_col.to_pylibcudf(mode="read"),
+                                datetime_col.plc_column,
                                 pa_scalar_to_plc_scalar(pa.scalar(value)),
                             )
                         )
@@ -698,7 +723,8 @@ class DateOffset:
         return repr_str
 
     @classmethod
-    def _from_freqstr(cls, freqstr: str) -> Self:
+    @lru_cache(maxsize=128)
+    def _from_freqstr(cls, freqstr: str) -> Self | MonthEnd | YearEnd:
         """
         Parse a string and return a DateOffset object
         expects strings of the form 3D, 25W, 10ms, 42ns, etc.
@@ -712,6 +738,13 @@ class DateOffset:
         if numeric_part == "":
             numeric_part = "1"
         freq_part = match.group(2)
+
+        # Certain frequency strings are deprecated in pandas
+        # and automatically swapped on construction
+        if freq_part in ("M", "ME"):
+            return MonthEnd()
+        elif freq_part in ("Y", "YE"):
+            return YearEnd()
 
         if freq_part not in cls._CODES_TO_UNITS:
             raise ValueError(f"Cannot interpret frequency str: {freqstr}")

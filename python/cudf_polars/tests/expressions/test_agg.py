@@ -186,6 +186,8 @@ def test_decimal_aggs(decimal_df: pl.LazyFrame) -> None:
         max=pl.col("a").max(),
         mean=pl.col("a").mean(),
         median=pl.col("a").median(),
+        mean_f32=pl.col("a").mean().cast(pl.Float32),
+        median_f32=pl.col("a").median().cast(pl.Float32),
     )
     assert_gpu_result_equal(q)
 
@@ -194,3 +196,9 @@ def test_invalid_agg():
     df = pl.LazyFrame({"s": pl.Series(["a", "b", "c"], dtype=pl.String())})
     q = df.select(pl.col("s").sum())
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_sum_all_null_decimal_dtype():
+    df = pl.LazyFrame({"foo": pl.Series([None], dtype=pl.Decimal(9, 2))})
+    q = df.select(pl.col("foo").sum())
+    assert_gpu_result_equal(q)

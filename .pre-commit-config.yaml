@@ -34,7 +34,7 @@ repos:
     rev: 'v1.13.0'
     hooks:
       - id: mypy
-        additional_dependencies: [types-cachetools, pyarrow-stubs, numpy]
+        additional_dependencies: [numpy, polars, pyarrow-stubs, pytest, types-cachetools]
         args: ["--config-file=pyproject.toml",
                "python/cudf/cudf",
                "python/pylibcudf/pylibcudf",
@@ -81,7 +81,8 @@ repos:
         exclude: |
           (?x)^(
             ^python/cudf/cudf/core/dtypes.py|
-            ^python/cudf/cudf/tests/pytest.ini
+            ^python/cudf/cudf/tests/pytest.ini|
+            ^python/cudf/cudf/tests/series/test_binops.py
           )
       - id: no-programmatic-xfail
         name: no-programmatic-xfail

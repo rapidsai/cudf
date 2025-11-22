@@ -311,6 +311,15 @@ def test_scan_csv_skip_initial_empty_rows(tmp_path):
     assert_gpu_result_equal(q)
 
 
+def test_scan_csv_slice_end_none(tmp_path):
+    with (tmp_path / "test.csv").open("w") as f:
+        f.write("""c0\ntrue\nfalse""")
+
+    q = pl.scan_csv(tmp_path / "test.csv").slice(10, None)
+
+    assert_gpu_result_equal(q)
+
+
 @pytest.mark.parametrize(
     "schema",
     [
