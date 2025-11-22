@@ -280,12 +280,15 @@ def lower_ir_graph(
         Root of the graph to rewrite.
     config_options
         GPUEngine configuration options.
+    stats
+        The statistics collector.
 
     Returns
     -------
     new_ir, partition_info, stats
-        The rewritten graph, and a mapping from unique nodes
-        in the new graph to associated partitioning information.
+        The rewritten graph, a mapping from unique nodes
+        in the new graph to associated partitioning information,
+        and the statistics collector.
 
     Notes
     -----
