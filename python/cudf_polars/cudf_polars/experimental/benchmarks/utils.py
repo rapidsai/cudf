@@ -452,8 +452,13 @@ def get_executor_options(
             executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
         if run_config.cluster == "distributed":
             executor_options["cluster"] = "distributed"
-        if run_config.stats_planning:
-            executor_options["stats_planning"] = {"use_reduction_planning": True}
+        executor_options["stats_planning"] = {
+            "use_reduction_planning": run_config.stats_planning,
+            "use_sampling": (
+                # Always allow row-group sampling for rapidsmpf runtime
+                run_config.stats_planning or run_config.runtime == "rapidsmpf"
+            ),
+        }
         executor_options["client_device_threshold"] = run_config.spill_device
         executor_options["runtime"] = run_config.runtime
         executor_options["max_io_threads"] = run_config.max_io_threads
