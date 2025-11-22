@@ -13,6 +13,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/join/join.hpp>
 #include <cudf/join/mixed_join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -574,7 +575,7 @@ mixed_inner_join(
                             right_conditional,
                             binary_predicate,
                             compare_nulls,
-                            detail::join_kind::INNER_JOIN,
+                            join_kind::INNER_JOIN,
                             output_size_data,
                             stream,
                             mr);
@@ -597,7 +598,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_in
                                                 right_conditional,
                                                 binary_predicate,
                                                 compare_nulls,
-                                                detail::join_kind::INNER_JOIN,
+                                                join_kind::INNER_JOIN,
                                                 stream,
                                                 mr);
 }
@@ -621,7 +622,7 @@ mixed_left_join(table_view const& left_equality,
                             right_conditional,
                             binary_predicate,
                             compare_nulls,
-                            detail::join_kind::LEFT_JOIN,
+                            join_kind::LEFT_JOIN,
                             output_size_data,
                             stream,
                             mr);
@@ -644,7 +645,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
                                                 right_conditional,
                                                 binary_predicate,
                                                 compare_nulls,
-                                                detail::join_kind::LEFT_JOIN,
+                                                join_kind::LEFT_JOIN,
                                                 stream,
                                                 mr);
 }
@@ -668,7 +669,7 @@ mixed_full_join(table_view const& left_equality,
                             right_conditional,
                             binary_predicate,
                             compare_nulls,
-                            detail::join_kind::FULL_JOIN,
+                            join_kind::FULL_JOIN,
                             output_size_data,
                             stream,
                             mr);

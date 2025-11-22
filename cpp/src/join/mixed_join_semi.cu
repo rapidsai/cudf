@@ -15,6 +15,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/join/join.hpp>
 #include <cudf/join/mixed_join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -204,7 +205,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
                     left_table_keep_mask.begin(),
                     gather_map->begin(),
                     [join_type] __device__(bool keep_row) {
-                      return keep_row == (join_type == detail::join_kind::LEFT_SEMI_JOIN);
+                      return keep_row == (join_type == join_kind::LEFT_SEMI_JOIN);
                     });
 
   gather_map->resize(cuda::std::distance(gather_map->begin(), gather_map_end), stream);
@@ -230,7 +231,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
                                  right_conditional,
                                  binary_predicate,
                                  compare_nulls,
-                                 detail::join_kind::LEFT_SEMI_JOIN,
+                                 join_kind::LEFT_SEMI_JOIN,
                                  stream,
                                  mr);
 }
@@ -252,7 +253,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
                                  right_conditional,
                                  binary_predicate,
                                  compare_nulls,
-                                 detail::join_kind::LEFT_ANTI_JOIN,
+                                 join_kind::LEFT_ANTI_JOIN,
                                  stream,
                                  mr);
 }

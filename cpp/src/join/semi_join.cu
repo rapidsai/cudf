@@ -68,7 +68,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_join(
 {
   CUDF_FUNC_RANGE();
   return detail::left_semi_anti_join(
-    detail::join_kind::LEFT_SEMI_JOIN, left, right, compare_nulls, stream, mr);
+    join_kind::LEFT_SEMI_JOIN, left, right, compare_nulls, stream, mr);
 }
 
 std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_anti_join(
@@ -80,7 +80,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_anti_join(
 {
   CUDF_FUNC_RANGE();
   return detail::left_semi_anti_join(
-    detail::join_kind::LEFT_ANTI_JOIN, left, right, compare_nulls, stream, mr);
+    join_kind::LEFT_ANTI_JOIN, left, right, compare_nulls, stream, mr);
 }
 
 }  // namespace cudf
