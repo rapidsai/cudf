@@ -66,7 +66,7 @@ def test_target_partition_size(tmp_path, df, blocksize, n_files):
 
     # Check partitioning
     qir = Translator(q._ldf.visit(), engine).translate_ir()
-    ir, info = lower_ir_graph(qir, ConfigOptions.from_polars_engine(engine))
+    ir, info, _ = lower_ir_graph(qir, ConfigOptions.from_polars_engine(engine))
     count = info[ir].count
     if blocksize <= 12_000:
         assert count > n_files
