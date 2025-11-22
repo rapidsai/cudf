@@ -11,12 +11,15 @@ from dataclasses import dataclass
 from functools import reduce
 from typing import TYPE_CHECKING, Any, TypeAlias
 
+from rapidsmpf.streaming.cudf.table_chunk import TableChunk
+
+import pylibcudf as plc
+
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
-    from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
@@ -160,3 +163,32 @@ def process_children(
     nodes: dict[IR, list[Any]] = reduce(operator.or_, _nodes_list)
     channels: dict[IR, ChannelManager] = reduce(operator.or_, _channels_list)
     return nodes, channels
+
+
+def empty_table_chunk(ir: IR, context: Context) -> TableChunk:
+    """
+    Make an empty table chunk.
+
+    Parameters
+    ----------
+    ir
+        The IR node to use for the schema.
+    context
+        The rapidsmpf context.
+
+    Returns
+    -------
+    The empty table chunk.
+    """
+    # Create an empty table with the correct schema
+    empty_columns = [
+        plc.column_factories.make_empty_column(plc.DataType(dtype.id()))
+        for dtype in ir.schema.values()
+    ]
+    empty_table = plc.Table(empty_columns)
+
+    return TableChunk.from_pylibcudf_table(
+        empty_table,
+        context.get_stream_from_pool(),
+        exclusive_view=True,
+    )
