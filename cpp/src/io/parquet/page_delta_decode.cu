@@ -427,12 +427,14 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
     block.sync();
   }
 
-  // Zero-fill null positions after decoding valid values
-  auto const& ni = s->nesting_info[s->col.max_nesting_depth - 1];
-  if (ni.valid_map != nullptr) {
-    int const num_values = ni.valid_map_offset - init_valid_map_offset;
-    zero_fill_null_positions_shared<decode_block_size>(
-      s, s->dtype_len, init_valid_map_offset, num_values, static_cast<int>(block.thread_rank()));
+  if (has_repetition) {
+    // Zero-fill null positions after decoding valid values
+    auto const& ni = s->nesting_info[s->col.max_nesting_depth - 1];
+    if (ni.valid_map != nullptr) {
+      int const num_values = ni.valid_map_offset - init_valid_map_offset;
+      zero_fill_null_positions_shared<decode_block_size>(
+        s, s->dtype_len, init_valid_map_offset, num_values, static_cast<int>(block.thread_rank()));
+    }
   }
 
   if (block.thread_rank() == 0 and s->error != 0) { set_error(s->error, error_code); }
