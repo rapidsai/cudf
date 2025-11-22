@@ -36,6 +36,7 @@
 #include <thrust/copy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/pair.h>
 #include <thrust/transform.h>
 
 #include <cstdint>
