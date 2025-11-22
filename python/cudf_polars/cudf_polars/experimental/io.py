@@ -45,7 +45,6 @@ if TYPE_CHECKING:
     from collections.abc import Hashable, MutableMapping
 
     from cudf_polars.containers import DataFrame
-    from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.base import StatsCollector
     from cudf_polars.experimental.dispatch import LowerIRTransformer
@@ -172,9 +171,11 @@ class SplitScan(IR):
         self.split_index = split_index
         self.total_splits = total_splits
         self._non_child_args = (
+            schema,
+            base_scan,
             split_index,
             total_splits,
-            *base_scan._non_child_args,
+            parquet_options,
         )
         self.parquet_options = parquet_options
         self.children = ()
@@ -186,23 +187,25 @@ class SplitScan(IR):
     @classmethod
     def do_evaluate(
         cls,
+        schema: Schema,
+        base_scan: Scan,
         split_index: int,
         total_splits: int,
-        schema: Schema,
-        typ: str,
-        reader_options: dict[str, Any],
-        paths: list[str],
-        with_columns: list[str] | None,
-        skip_rows: int,
-        n_rows: int,
-        row_index: tuple[str, int] | None,
-        include_file_paths: str | None,
-        predicate: NamedExpr | None,
         parquet_options: ParquetOptions,
         *,
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
+        # Extract parameters from base_scan
+        typ = base_scan.typ
+        reader_options = base_scan.reader_options
+        cloud_options = base_scan.cloud_options
+        paths = base_scan.paths
+        with_columns = base_scan.with_columns
+        row_index = base_scan.row_index
+        include_file_paths = base_scan.include_file_paths
+        predicate = base_scan.predicate
+
         if typ not in ("parquet",):  # pragma: no cover
             raise NotImplementedError(f"Unhandled Scan type for file splitting: {typ}")
 
@@ -253,6 +256,7 @@ class SplitScan(IR):
             schema,
             typ,
             reader_options,
+            cloud_options,
             paths,
             with_columns,
             skip_rows,
@@ -413,13 +417,14 @@ def _sink_to_directory(
     path: str,
     parquet_options: ParquetOptions,
     options: dict[str, Any],
+    cloud_options: dict[str, Any] | None,
     df: DataFrame,
     ready: None,
     context: IRExecutionContext,
 ) -> DataFrame:
     """Sink a partition to a new file."""
     return Sink.do_evaluate(
-        schema, kind, path, parquet_options, options, df, context=context
+        schema, kind, path, parquet_options, options, cloud_options, df, context=context
     )
 
 
@@ -562,6 +567,7 @@ def _directory_sink_graph(
             f"{sink.path}/part.{str(i).zfill(width)}.{suffix}",
             sink.parquet_options,
             sink.options,
+            sink.cloud_options,
             (child_name, i),
             setup_name,
             context,
