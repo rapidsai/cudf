@@ -161,7 +161,7 @@ void run_test(std::string const& input, bool enable_lines = true)
                                                      options.is_enabled_lines(),
                                                      false,
                                                      stream,
-                                                     rmm::mr::get_current_device_resource());
+                                                     cudf::get_current_device_resource_ref());
   auto& gpu_col_id      = std::get<0>(tup);
   auto& gpu_row_offsets = std::get<1>(tup);
 

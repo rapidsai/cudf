@@ -368,7 +368,7 @@ TEST_F(NvcompConfigTest, Decompression)
 void roundtrip_test(cudf::io::compression_type compression)
 {
   auto const stream = cudf::get_default_stream();
-  auto const mr     = rmm::mr::get_current_device_resource();
+  auto const mr     = cudf::get_current_device_resource_ref();
   std::vector<uint8_t> expected;
   expected.reserve(8 * (8 << 20));
   for (size_t size = 1; size < 8 << 20; size *= 2) {

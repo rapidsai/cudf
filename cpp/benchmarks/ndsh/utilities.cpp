@@ -401,20 +401,12 @@ void generate_parquet_data_sources(double scale_factor,
   CUDF_BENCHMARK_RANGE();
 
   // Set the memory resource to the managed pool
-  auto* old_mr = rmm::mr::get_current_device_resource();
-  // if already managed pool or managed, don't create new one.
-  using managed_pool_mr_t = decltype(make_managed_pool());
-  managed_pool_mr_t managed_pool_mr;
-  bool const is_managed =
-    dynamic_cast<rmm::mr::pool_memory_resource<rmm::mr::managed_memory_resource>*>(old_mr) or
-    dynamic_cast<rmm::mr::managed_memory_resource*>(old_mr);
-  if (!is_managed) {
-    std::cout << "Creating managed pool just for data generation\n";
-    managed_pool_mr = make_managed_pool();
-    cudf::set_current_device_resource(managed_pool_mr.get());
-    // drawback: if already pool takes 50% of free memory, we are left with 50% of 50% of free
-    // memory.
-  }
+  auto old_mr = cudf::get_current_device_resource_ref();
+  // TODO: if old_mr is already managed pool or managed, don't create new one.
+  using managed_pool_mr_t           = decltype(make_managed_pool());
+  managed_pool_mr_t managed_pool_mr = make_managed_pool();
+  cudf::set_current_device_resource_ref(managed_pool_mr.get());
+  // drawback: if already pool takes 50% of free memory, we are left with 50% of 50% of free memory
 
   std::unordered_set<std::string> const requested_table_names = [&table_names]() {
     if (table_names.empty()) {
@@ -477,5 +469,5 @@ void generate_parquet_data_sources(double scale_factor,
   }
 
   // Restore the original memory resource
-  if (!is_managed) { cudf::set_current_device_resource(old_mr); }
+  cudf::set_current_device_resource_ref(old_mr);
 }
