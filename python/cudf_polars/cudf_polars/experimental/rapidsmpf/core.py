@@ -192,7 +192,17 @@ def evaluate_pipeline(
         else:
             stream_pool = None
 
-        options = Options(get_environment_variables())
+        options = Options(
+            {
+                # By default, set the number of streaming threads to the max
+                # number of IO threads. The user may override this with an
+                # environment variable (i.e. RAPIDSMPF_NUM_STREAMING_THREADS)
+                "num_streaming_threads": str(
+                    max(config_options.executor.max_io_threads, 1)
+                )
+            }
+            | get_environment_variables()
+        )
         local_comm = new_communicator(options)
         br = BufferResource(
             mr, memory_available=memory_available, stream_pool=stream_pool
@@ -409,8 +419,9 @@ def generate_network(
     # Determine which nodes need fanout
     fanout_nodes = determine_fanout_nodes(ir, partition_info, ir_dep_count)
 
-    # TODO: Make this configurable
-    max_io_threads_global = 2
+    # Get max_io_threads from config (default: 2)
+    assert config_options.executor.name == "streaming", "Executor must be streaming"
+    max_io_threads_global = config_options.executor.max_io_threads
     max_io_threads_local = max(1, max_io_threads_global // max(1, num_io_nodes))
 
     # Generate the network
