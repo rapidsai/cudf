@@ -48,6 +48,7 @@ rapids-logger "Running cudf_polars tests with rapidsmpf"
     --no-cov \
     --numprocesses=8 \
     --dist=worksteal \
+    --timeout 300 \
     -v \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-rapidsmpf.xml"
 
