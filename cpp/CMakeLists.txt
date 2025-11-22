@@ -819,7 +819,7 @@ add_library(
   src/transform/nans_to_nulls.cu
   src/transform/one_hot_encode.cu
   src/transform/row_bit_count.cu
-  src/transform/transform.cpp
+  src/transform/transform.cu
   src/transpose/transpose.cu
   src/unary/cast_ops.cu
   src/unary/math_ops.cu
@@ -849,7 +849,7 @@ set_source_files_properties(
   src/rolling/detail/rolling_variable_window.cu
   src/rolling/grouped_rolling.cu
   src/rolling/rolling.cu
-  src/transform/transform.cpp
+  src/transform/transform.cu
   PROPERTIES COMPILE_DEFINITIONS "_FILE_OFFSET_BITS=64"
 )
 
