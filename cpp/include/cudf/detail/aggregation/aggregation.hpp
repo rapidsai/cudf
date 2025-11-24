@@ -158,7 +158,19 @@ class sum_aggregation final : public rolling_aggregation,
                               public scan_aggregation,
                               public segmented_reduce_aggregation {
  public:
-  sum_aggregation() : aggregation(SUM) {}
+  explicit sum_aggregation(nullable_output nullable_) : aggregation(SUM), nullable(nullable_) {}
+
+  nullable_output nullable;  ///<  whether the output will have nulls and a nullmask
+
+  [[nodiscard]] bool is_equal(aggregation const& _other) const override
+  {
+    if (!this->aggregation::is_equal(_other)) { return false; }
+    return nullable == dynamic_cast<sum_aggregation const&>(_other).nullable;
+  }
+  [[nodiscard]] size_t do_hash() const override
+  {
+    return this->aggregation::do_hash() ^ static_cast<std::size_t>(nullable);
+  }
 
   [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
