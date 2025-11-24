@@ -5,8 +5,6 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/detail/valid_if.cuh>
-#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -104,7 +102,7 @@ std::unique_ptr<column> merge_m2(column_view const& values,
 }  // namespace
 
 std::unique_ptr<column> group_merge_m2(column_view const& values,
-                                       cudf::device_span<size_type const> group_offsets,
+                                       device_span<size_type const> group_offsets,
                                        size_type num_groups,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
