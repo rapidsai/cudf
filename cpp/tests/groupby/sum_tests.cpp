@@ -87,13 +87,28 @@ TYPED_TEST(groupby_sum_test, zero_valid_values)
   cudf::test::fixed_width_column_wrapper<V> vals({3, 4, 5}, cudf::test::iterators::all_nulls());
 
   cudf::test::fixed_width_column_wrapper<K> expect_keys{1};
-  cudf::test::fixed_width_column_wrapper<R> expect_vals({0}, cudf::test::iterators::all_nulls());
 
-  auto agg = cudf::make_sum_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  {
+    cudf::test::fixed_width_column_wrapper<R> expect_vals({0}, cudf::test::iterators::all_nulls());
 
-  auto agg2 = cudf::make_sum_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
+    auto agg = cudf::make_sum_aggregation<cudf::groupby_aggregation>();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+
+    auto agg2 = cudf::make_sum_aggregation<cudf::groupby_aggregation>();
+    test_single_agg(
+      keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
+  }
+
+  {
+    cudf::test::fixed_width_column_wrapper<R> expect_vals{0};
+
+    auto agg = cudf::make_sum_aggregation<cudf::groupby_aggregation>(cudf::nullable_output::NO);
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+
+    auto agg2 = cudf::make_sum_aggregation<cudf::groupby_aggregation>();
+    test_single_agg(
+      keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
+  }
 }
 
 TYPED_TEST(groupby_sum_test, null_keys_and_values)
