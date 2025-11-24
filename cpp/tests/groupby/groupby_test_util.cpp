@@ -33,8 +33,7 @@ void test_single_agg(char const* file,
                      std::vector<null_order> const& null_precedence,
                      sorted reference_keys_are_sorted)
 {
-  SCOPED_TRACE("Original line of failure: " + std::to_string(line) +
-               ", file: " + std::string{file});
+  SCOPED_TRACE("Original failure location: " + std::string{file} + ":" + std::to_string(line));
 
   auto const [sorted_expect_keys, sorted_expect_vals] = [&]() {
     if (reference_keys_are_sorted == sorted::NO) {
@@ -120,8 +119,7 @@ void test_single_scan(char const* file,
                       std::vector<order> const& column_order,
                       std::vector<null_order> const& null_precedence)
 {
-  SCOPED_TRACE("Original line of failure: " + std::to_string(line) +
-               ", file: " + std::string{file});
+  SCOPED_TRACE("Original failure location: " + std::string{file} + ":" + std::to_string(line));
 
   std::vector<groupby::scan_request> requests;
   requests.emplace_back();
