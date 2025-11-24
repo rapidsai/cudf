@@ -3644,6 +3644,19 @@ class DatetimeIndex(Index):
                     raise ValueError("No unique frequency found")
 
     @_performance_tracking
+    def serialize(self):
+        header, frames = super().serialize()
+        header["freq"] = self.freq
+        return header, frames
+
+    @classmethod
+    @_performance_tracking
+    def deserialize(cls, header, frames):
+        obj = super().deserialize(header, frames)
+        obj._freq = _validate_freq(header["freq"])
+        return obj
+
+    @_performance_tracking
     def _copy_type_metadata(self: Self, other: Self) -> Self:
         super()._copy_type_metadata(other)
         self._freq = _validate_freq(other._freq)
