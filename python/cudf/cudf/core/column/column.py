@@ -142,6 +142,29 @@ class MaskCAIWrapper:
         return cai
 
 
+class ROCAIWrapper:
+    # A wrapper that exposes the __cuda_array_interface__ of a buffer as read-only to
+    # avoid copy-on-write issues.
+    def __init__(self, buffer: Buffer) -> None:
+        self._buffer = buffer
+
+    @property
+    def owner(self) -> Buffer:
+        # This property is how get_buffer_owner in buffer/utils.py knows to access the
+        # owner transitively, which is needed for correctness with copy-on-write
+        return self._buffer
+
+    @property
+    def __cuda_array_interface__(self) -> Mapping:
+        return {
+            "data": (self._buffer.get_ptr(mode="write"), False),
+            "shape": (self._buffer.size,),
+            "strides": None,
+            "typestr": "|u1",
+            "version": 0,
+        }
+
+
 class spillable_gpumemoryview(plc.gpumemoryview):
     """
     HACK: Prevent automatic unspilling of `SpillableBuffer` objects
@@ -624,31 +647,22 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         data = None
         if col.base_data is not None:
-            if use_base:
-                data_buff = col.base_data
-            else:
-                data_buff = col.data  # type: ignore[assignment]
-            cai = cuda_array_interface_wrapper(
-                ptr=data_buff.get_ptr(mode=mode),
-                size=data_buff.size,
-                owner=data_buff,
-            )
-            data = plc.gpumemoryview(cai)
+            data_buff = col.base_data
+            if not use_base:
+                assert col.data is not None
+                data_buff = col.data
+            data = plc.gpumemoryview(ROCAIWrapper(data_buff))
 
         mask = None
         if self.nullable:
             # TODO: Are we intentionally use self's mask instead of col's?
             # Where is the mask stored for categoricals?
-            if use_base:
-                mask_buff = self.base_mask
-            else:
+            assert self.base_mask is not None
+            mask_buff = self.base_mask
+            if not use_base:
+                assert self.mask is not None
                 mask_buff = self.mask
-            cai = cuda_array_interface_wrapper(
-                ptr=mask_buff.get_ptr(mode=mode),  # type: ignore[union-attr]
-                size=mask_buff.size,  # type: ignore[union-attr]
-                owner=mask_buff,
-            )
-            mask = plc.gpumemoryview(cai)
+            mask = plc.gpumemoryview(ROCAIWrapper(mask_buff))
 
         children = []
         if col.base_children:
