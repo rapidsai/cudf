@@ -3646,14 +3646,24 @@ class DatetimeIndex(Index):
     @_performance_tracking
     def serialize(self):
         header, frames = super().serialize()
-        header["freq"] = self.freq
+        if self.freq is not None:
+            header["freq"] = {
+                "kwds": self.freq.kwds,
+            }
+        else:
+            header["freq"] = None
         return header, frames
 
     @classmethod
     @_performance_tracking
     def deserialize(cls, header, frames):
         obj = super().deserialize(header, frames)
-        obj._freq = _validate_freq(header["freq"])
+        if (header_payload := header.get("freq")) is not None:
+            freq = cudf.DateOffset(**header_payload["kwds"])
+        else:
+            freq = None
+
+        obj._freq = _validate_freq(freq)
         return obj
 
     @_performance_tracking
