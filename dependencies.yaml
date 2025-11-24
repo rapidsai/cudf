@@ -457,8 +457,8 @@ files:
       - depends_on_cudf_polars
       - depends_on_narwhals
 channels:
-  - rapidsai
   - rapidsai-nightly
+  - rapidsai
   - conda-forge
 dependencies:
   build_base:
@@ -735,7 +735,7 @@ dependencies:
           # 'nvidia-ml-py' provides the 'pynvml' module
           - &nvidia_ml_py nvidia-ml-py>=12
           - packaging
-          - polars>=1.29,<1.34
+          - polars>=1.29,<1.35
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -793,8 +793,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          # pin pytest to avoid https://github.com/rapidsai/cudf/issues/20570
-          - pytest<9.0.0a0
+          - pytest
           - pytest-cov
           - pytest-xdist
   test_python_cudf_common:

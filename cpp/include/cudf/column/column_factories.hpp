@@ -13,6 +13,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/pair.h>
+
 namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup column_factories

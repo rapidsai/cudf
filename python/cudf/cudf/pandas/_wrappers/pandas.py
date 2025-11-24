@@ -469,6 +469,8 @@ Index = make_final_proxy_type(
         "_accessors": set(),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_engine": _FastSlowAttribute("_engine", private=True),
+        "_cache": _FastSlowAttribute("_cache", private=True),
         "name": _FastSlowAttribute("name"),
         "nbytes": _FastSlowAttribute("nbytes", private=True),
         "array": _FastSlowAttribute("array", private=True),
@@ -492,6 +494,8 @@ RangeIndex = make_final_proxy_type(
         "nbytes": _FastSlowAttribute("nbytes", private=True),
         "array": _FastSlowAttribute("array", private=True),
         "_range": _FastSlowAttribute("_range"),
+        "_engine": _FastSlowAttribute("_engine", private=True),
+        "_cache": _FastSlowAttribute("_cache", private=True),
     },
 )
 
@@ -543,6 +547,8 @@ CategoricalIndex = make_final_proxy_type(
         "name": _FastSlowAttribute("name"),
         "nbytes": _FastSlowAttribute("nbytes", private=True),
         "array": _FastSlowAttribute("array", private=True),
+        "_engine": _FastSlowAttribute("_engine", private=True),
+        "_cache": _FastSlowAttribute("_cache", private=True),
     },
 )
 
@@ -577,6 +583,8 @@ DatetimeIndex = make_final_proxy_type(
         "__setattr__": Index__setattr__,
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_engine": _FastSlowAttribute("_engine", private=True),
+        "_cache": _FastSlowAttribute("_cache", private=True),
         "name": _FastSlowAttribute("name"),
         "nbytes": _FastSlowAttribute("nbytes", private=True),
         "array": _FastSlowAttribute("array", private=True),
@@ -618,6 +626,8 @@ TimedeltaIndex = make_final_proxy_type(
         "__setattr__": Index__setattr__,
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_engine": _FastSlowAttribute("_engine", private=True),
+        "_cache": _FastSlowAttribute("_cache", private=True),
         "name": _FastSlowAttribute("name"),
         "nbytes": _FastSlowAttribute("nbytes", private=True),
         "array": _FastSlowAttribute("array", private=True),
@@ -678,6 +688,8 @@ PeriodIndex = make_final_proxy_type(
         "__setattr__": Index__setattr__,
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_engine": _FastSlowAttribute("_engine", private=True),
+        "_cache": _FastSlowAttribute("_cache", private=True),
         "name": _FastSlowAttribute("name"),
     },
 )
@@ -729,6 +741,12 @@ MultiIndex = make_final_proxy_type(
         "__init__": _DELETE,
         "__setattr__": Index__setattr__,
         "names": _FastSlowAttribute("names"),
+        "_lexsort_depth": _FastSlowAttribute("_lexsort_depth", private=True),
+        "_should_fallback_to_positional": _FastSlowAttribute(
+            "_should_fallback_to_positional", private=True
+        ),
+        "_engine": _FastSlowAttribute("_engine", private=True),
+        "_cache": _FastSlowAttribute("_cache", private=True),
     },
 )
 
@@ -973,6 +991,8 @@ IntervalIndex = make_final_proxy_type(
         "__setattr__": Index__setattr__,
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_engine": _FastSlowAttribute("_engine", private=True),
+        "_cache": _FastSlowAttribute("_cache", private=True),
         "name": _FastSlowAttribute("name"),
     },
 )
@@ -2127,6 +2147,8 @@ NDArrayBackedExtensionIndex = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
+        "_cache": _FastSlowAttribute("_cache", private=True),
+        "_engine": _FastSlowAttribute("_engine", private=True),
         "__array__": array_method,
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },

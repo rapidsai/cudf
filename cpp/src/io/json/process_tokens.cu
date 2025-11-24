@@ -17,6 +17,7 @@
 
 #include <cuda/functional>
 #include <thrust/iterator/tabulate_output_iterator.h>
+#include <thrust/pair.h>
 #include <thrust/transform_scan.h>
 
 namespace cudf::io::json {

@@ -1331,11 +1331,11 @@ void compact_orc_data_streams(device_2dspan<stripe_stream> strm_desc,
   auto const num_stripes   = strm_desc.size().first;
   auto const num_chunks    = num_rowgroups * num_streams;
   auto srcs                = cudf::detail::make_zeroed_device_uvector_async<uint8_t*>(
-    num_chunks, stream, rmm::mr::get_current_device_resource());
+    num_chunks, stream, cudf::get_current_device_resource_ref());
   auto dsts = cudf::detail::make_zeroed_device_uvector_async<uint8_t*>(
-    num_chunks, stream, rmm::mr::get_current_device_resource());
+    num_chunks, stream, cudf::get_current_device_resource_ref());
   auto lengths = cudf::detail::make_zeroed_device_uvector_async<size_t>(
-    num_chunks, stream, rmm::mr::get_current_device_resource());
+    num_chunks, stream, cudf::get_current_device_resource_ref());
 
   auto const num_blocks =
     cudf::util::div_rounding_up_unsafe(num_stripes, compact_streams_block_size) *
