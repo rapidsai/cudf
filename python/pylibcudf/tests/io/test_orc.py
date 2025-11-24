@@ -103,7 +103,9 @@ def test_read_orc_from_device_buffers(
 
     source = make_source(binary_source_or_sink, pa_table, format="orc")
 
-    buf = DeviceBuffer.to_device(get_bytes_from_source(source))
+    buf = DeviceBuffer.to_device(
+        get_bytes_from_source(source), plc.utils._get_stream(stream)
+    )
 
     options = plc.io.orc.OrcReaderOptions.builder(
         plc.io.types.SourceInfo([buf] * num_buffers)
