@@ -26,6 +26,7 @@
 
 #include <cuda/functional>
 #include <cuda/std/functional>
+#include <cuda/std/tuple>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
@@ -33,11 +34,9 @@
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/iterator_categories.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
 
 #include <cstddef>
 #include <numeric>
@@ -991,8 +990,8 @@ struct size_of_helper {
  * structs) return 0.
  */
 struct num_batches_func {
-  thrust::pair<std::size_t, std::size_t> const* const batches;
-  __device__ std::size_t operator()(size_type i) const { return thrust::get<0>(batches[i]); }
+  cuda::std::pair<std::size_t, std::size_t> const* const batches;
+  __device__ std::size_t operator()(size_type i) const { return cuda::std::get<0>(batches[i]); }
 };
 
 /**
@@ -1407,7 +1406,7 @@ struct chunk_iteration_state {
   }
 
   static std::unique_ptr<chunk_iteration_state> create(
-    rmm::device_uvector<thrust::pair<std::size_t, std::size_t>> const& batches,
+    rmm::device_uvector<cuda::std::pair<std::size_t, std::size_t>> const& batches,
     int num_bufs,
     dst_buf_info* d_orig_dst_buf_info,
     std::size_t const* const h_buf_sizes,
@@ -1467,7 +1466,7 @@ struct chunk_iteration_state {
 };
 
 std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
-  rmm::device_uvector<thrust::pair<std::size_t, std::size_t>> const& batches,
+  rmm::device_uvector<cuda::std::pair<std::size_t, std::size_t>> const& batches,
   int num_bufs,
   dst_buf_info* d_orig_dst_buf_info,
   std::size_t const* const h_buf_sizes,
@@ -1514,7 +1513,7 @@ std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
      out_to_in_index] __device__(size_type i) {
       size_type const in_buf_index = out_to_in_index(i);
       size_type const batch_index  = i - d_batch_offsets[in_buf_index];
-      auto const batch_size        = thrust::get<1>(batches[in_buf_index]);
+      auto const batch_size        = cuda::std::get<1>(batches[in_buf_index]);
       dst_buf_info const& in       = d_orig_dst_buf_info[in_buf_index];
 
       // adjust info
@@ -1688,15 +1687,15 @@ std::unique_ptr<chunk_iteration_state> compute_batches(int num_bufs,
   // so we will take the actual set of outgoing source/destination buffers and further partition
   // them into much smaller batches in order to drive up the number of blocks and overall
   // occupancy.
-  rmm::device_uvector<thrust::pair<std::size_t, std::size_t>> batches(num_bufs, stream, temp_mr);
+  rmm::device_uvector<cuda::std::pair<std::size_t, std::size_t>> batches(num_bufs, stream, temp_mr);
   thrust::transform(
     rmm::exec_policy(stream, temp_mr),
     d_dst_buf_info,
     d_dst_buf_info + num_bufs,
     batches.begin(),
-    cuda::proclaim_return_type<thrust::pair<std::size_t, std::size_t>>(
+    cuda::proclaim_return_type<cuda::std::pair<std::size_t, std::size_t>>(
       [desired_batch_size = desired_batch_size] __device__(
-        dst_buf_info const& buf) -> thrust::pair<std::size_t, std::size_t> {
+        dst_buf_info const& buf) -> cuda::std::pair<std::size_t, std::size_t> {
         // Total bytes for this incoming partition
         std::size_t const bytes = buf.num_elements * static_cast<std::size_t>(buf.element_size);
 

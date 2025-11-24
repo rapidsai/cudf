@@ -12,9 +12,9 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <cuda/std/optional>
+#include <cuda/std/tuple>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/pair.h>
 
 namespace cudf {
 namespace detail {
@@ -298,7 +298,7 @@ struct indexalator_factory {
       iter = make_input_iterator(col);
     }
 
-    __device__ thrust::pair<size_type, bool> operator()(size_type i) const
+    __device__ cuda::std::pair<size_type, bool> operator()(size_type i) const
     {
       return {iter[i], (has_nulls ? bit_is_set(null_mask, i + offset) : true)};
     }
@@ -321,7 +321,7 @@ struct indexalator_factory {
       iter = indexalator_factory::make_input_iterator(input);
     }
 
-    __device__ thrust::pair<size_type, bool> operator()(size_type) const
+    __device__ cuda::std::pair<size_type, bool> operator()(size_type) const
     {
       return {*iter, is_null};
     }

@@ -22,18 +22,17 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/tuple>
 #include <cuda/std/type_traits>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
 
 namespace cudf {
 namespace detail {
@@ -231,7 +230,7 @@ void rank_average(cudf::device_span<size_type const> group_keys,
   // Calculate Min of ranks and Count of equal values
   // algorithm: reduce_by_key(dense_rank, 1, n, min_count)
   //            transform(min+(count-1)/2), scatter
-  using MinCount = thrust::pair<size_type, size_type>;
+  using MinCount = cuda::std::pair<size_type, size_type>;
   tie_break_ranks_transform<MinCount>(
     group_keys,
     // Use device functor with return type. Cannot use device lambda due to limitation.
@@ -244,8 +243,8 @@ void rank_average(cudf::device_span<size_type const> group_keys,
                       rank_count1.second + rank_count2.second};
     }),
     cuda::proclaim_return_type<double>([] __device__(MinCount minrank_count) {  // min+(count-1)/2
-      return static_cast<double>(thrust::get<0>(minrank_count)) +
-             (static_cast<double>(thrust::get<1>(minrank_count)) - 1) / 2.0;
+      return static_cast<double>(cuda::std::get<0>(minrank_count)) +
+             (static_cast<double>(cuda::std::get<1>(minrank_count)) - 1) / 2.0;
     }),
     stream);
 }

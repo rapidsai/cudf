@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,10 +11,10 @@
 #include <cudf/detail/indexalator.cuh>
 
 #include <cuda/std/optional>
+#include <cuda/std/tuple>
 #include <thrust/binary_search.h>
 #include <thrust/gather.h>
 #include <thrust/host_vector.h>
-#include <thrust/pair.h>
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
 
@@ -53,12 +53,13 @@ TYPED_TEST(IndexalatorTest, pair_iterator)
     host_values.begin(), host_values.end(), validity.begin());
 
   auto expected_values =
-    thrust::host_vector<thrust::pair<cudf::size_type, bool>>(host_values.size());
-  std::transform(host_values.begin(),
-                 host_values.end(),
-                 validity.begin(),
-                 expected_values.begin(),
-                 [](T v, bool b) { return thrust::make_pair(static_cast<cudf::size_type>(v), b); });
+    thrust::host_vector<cuda::std::pair<cudf::size_type, bool>>(host_values.size());
+  std::transform(
+    host_values.begin(),
+    host_values.end(),
+    validity.begin(),
+    expected_values.begin(),
+    [](T v, bool b) { return cuda::std::make_pair(static_cast<cudf::size_type>(v), b); });
 
   auto it_dev = cudf::detail::indexalator_factory::make_input_pair_iterator(d_col);
   this->iterator_test_thrust(expected_values, it_dev, host_values.size());

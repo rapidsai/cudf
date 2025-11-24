@@ -16,9 +16,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/pair.h>
 
 #include <functional>
 
@@ -357,7 +357,7 @@ class alignas(16) column_device_view : public column_device_view_core {
   /**
    * @brief Return a pair iterator to the first element of the column.
    *
-   * Dereferencing the returned iterator returns a `thrust::pair<T, bool>`.
+   * Dereferencing the returned iterator returns a `cuda::std::pair<T, bool>`.
    *
    * If an element at position `i` is valid (or `has_nulls == false`), then
    * for `p = *(iter + i)`, `p.first` contains the value of the element at `i`
@@ -387,7 +387,7 @@ class alignas(16) column_device_view : public column_device_view_core {
   /**
    * @brief Return a pair iterator to the first element of the column.
    *
-   * Dereferencing the returned iterator returns a `thrust::pair<rep_type, bool>`,
+   * Dereferencing the returned iterator returns a `cuda::std::pair<rep_type, bool>`,
    * where `rep_type` is `device_storage_type<T>`, the type used to store
    * the value on the device.
    *
@@ -912,7 +912,7 @@ struct pair_accessor {
    * @param[in] i index of the element
    * @return pair(element, validity)
    */
-  __device__ inline thrust::pair<T, bool> operator()(cudf::size_type i) const
+  __device__ inline cuda::std::pair<T, bool> operator()(cudf::size_type i) const
   {
     return {col.element<T>(i), (has_nulls ? col.is_valid_nocheck(i) : true)};
   }
@@ -960,7 +960,7 @@ struct pair_rep_accessor {
    * @param[in] i index of element to access
    * @return pair of element and validity
    */
-  __device__ inline thrust::pair<rep_type, bool> operator()(cudf::size_type i) const
+  __device__ inline cuda::std::pair<rep_type, bool> operator()(cudf::size_type i) const
   {
     return {get_rep<T>(i), (has_nulls ? col.is_valid_nocheck(i) : true)};
   }

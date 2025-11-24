@@ -19,9 +19,9 @@
 
 #include <cuco/static_map.cuh>
 #include <cuda/std/iterator>
+#include <cuda/std/tuple>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
-#include <thrust/pair.h>
 
 #include <cstdint>
 #include <type_traits>
@@ -31,7 +31,7 @@ namespace detail {
 
 using string_hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>;
 using hash_value_type    = string_hasher_type::result_type;
-using merge_pair_type    = thrust::pair<cudf::string_view, cudf::string_view>;
+using merge_pair_type    = cuda::std::pair<cudf::string_view, cudf::string_view>;
 using cuco_storage       = cuco::storage<1>;
 
 /**

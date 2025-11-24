@@ -21,10 +21,10 @@
 
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
+#include <cuda/std/tuple>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/transform_reduce.h>
 
 #include <type_traits>
@@ -115,13 +115,13 @@ struct create_minmax {
 };
 
 /**
- * @brief Functor that takes a thrust::pair<T, bool> and produces a minmax_pair
+ * @brief Functor that takes a cuda::std::pair<T, bool> and produces a minmax_pair
  * that is <T, T> for minimum and maximum or <cudf::DeviceMin::identity<T>(),
  * cudf::DeviceMax::identity<T>()>
  */
 template <typename T>
 struct create_minmax_with_nulls {
-  __device__ minmax_pair<T> operator()(thrust::pair<T, bool> i)
+  __device__ minmax_pair<T> operator()(cuda::std::pair<T, bool> i)
   {
     return i.second ? minmax_pair<T>{i.first} : minmax_pair<T>{};
   }

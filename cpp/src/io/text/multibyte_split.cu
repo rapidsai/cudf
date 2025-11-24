@@ -33,10 +33,10 @@
 #include <cub/block/block_load.cuh>
 #include <cub/block/block_scan.cuh>
 #include <cuda/functional>
+#include <cuda/std/tuple>
 #include <thrust/copy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/transform.h>
 
 #include <cstdint>
@@ -537,7 +537,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   if (strip_delimiters) {
     auto it = cudf::detail::make_counting_transform_iterator(
       0,
-      cuda::proclaim_return_type<thrust::pair<char*, int32_t>>(
+      cuda::proclaim_return_type<cuda::std::pair<char*, int32_t>>(
         [ofs        = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view()),
          chars      = chars.data(),
          delim_size = static_cast<size_type>(delimiter.size()),
@@ -546,9 +546,10 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
           auto const begin = ofs[row];
           auto const len   = static_cast<size_type>(ofs[row + 1] - begin);
           if (row == last_row && insert_end) {
-            return thrust::make_pair(chars + begin, len);
+            return cuda::std::make_pair(chars + begin, len);
           } else {
-            return thrust::make_pair(chars + begin, cuda::std::max<size_type>(0, len - delim_size));
+            return cuda::std::make_pair(chars + begin,
+                                        cuda::std::max<size_type>(0, len - delim_size));
           };
         }));
     return cudf::strings::detail::make_strings_column(it, it + string_count, stream, mr);

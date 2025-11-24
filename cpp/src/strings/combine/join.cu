@@ -24,9 +24,9 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/pair.h>
 
 namespace cudf {
 namespace strings {
@@ -51,7 +51,7 @@ struct join_base_fn {
   string_view d_separator;
   string_scalar_device_view d_narep;
 
-  __device__ thrust::pair<string_view, string_view> process_string(size_type idx) const
+  __device__ cuda::std::pair<string_view, string_view> process_string(size_type idx) const
   {
     string_view d_str{};
     string_view d_sep = (idx + 1 < d_strings.size()) ? d_separator : d_str;

@@ -17,8 +17,8 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/tuple.h>
 
 // for use with groupby and reduction aggregation tests.
 
@@ -33,16 +33,16 @@ void tdigest_sample_compare(cudf::tdigest::tdigest_column_view const& tdv,
 
   auto h_expected_src = std::vector<size_type>(h_expected.size());
   std::transform(h_expected.begin(), h_expected.end(), h_expected_src.begin(), [](auto const& ex) {
-    return thrust::get<0>(ex);
+    return cuda::std::get<0>(ex);
   });
   auto h_expected_mean = std::vector<double>(h_expected.size());
   std::transform(h_expected.begin(), h_expected.end(), h_expected_mean.begin(), [](auto const& ex) {
-    return thrust::get<1>(ex);
+    return cuda::std::get<1>(ex);
   });
   auto h_expected_weight = std::vector<double>(h_expected.size());
   std::transform(
     h_expected.begin(), h_expected.end(), h_expected_weight.begin(), [](auto const& ex) {
-      return thrust::get<2>(ex);
+      return cuda::std::get<2>(ex);
     });
 
   auto d_expected_src = cudf::detail::make_device_uvector_async(

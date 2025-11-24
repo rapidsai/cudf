@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -8,7 +8,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 
-#include <thrust/pair.h>
+#include <cuda/std/tuple>
 
 namespace cudf {
 namespace dictionary {
@@ -70,7 +70,7 @@ struct dictionary_access_pair_fn {
     if (has_nulls) { CUDF_EXPECTS(d_dictionary.nullable(), "unexpected non-nullable column"); }
   }
 
-  __device__ thrust::pair<KeyType, bool> operator()(size_type idx) const
+  __device__ cuda::std::pair<KeyType, bool> operator()(size_type idx) const
   {
     if (has_nulls && d_dictionary.is_null(idx)) return {KeyType{}, false};
     auto keys = d_dictionary.child(dictionary_column_view::keys_column_index);

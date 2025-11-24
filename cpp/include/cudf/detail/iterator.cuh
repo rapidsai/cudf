@@ -27,12 +27,12 @@
 #include <cudf/scalar/scalar_device_view.cuh>
 
 #include <cuda/std/optional>
+#include <cuda/std/tuple>
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/pair.h>
 
 namespace cudf {
 namespace detail {
@@ -245,7 +245,7 @@ auto make_optional_iterator(column_device_view const& column, Nullate has_nulls)
 /**
  * @brief Constructs a pair iterator over a column's values and its validity.
  *
- * Dereferencing the returned iterator returns a `thrust::pair<Element, bool>`.
+ * Dereferencing the returned iterator returns a `cuda::std::pair<Element, bool>`.
  *
  * If an element at position `i` is valid (or `has_nulls == false`), then for `p = *(iter + i)`,
  * `p.first` contains the value of the element at `i` and `p.second == true`.
@@ -272,7 +272,7 @@ auto make_pair_iterator(column_device_view const& column)
 /**
  * @brief Constructs a pair rep iterator over a column's representative values and its validity.
  *
- * Dereferencing the returned iterator returns a `thrust::pair<rep_type, bool>`,
+ * Dereferencing the returned iterator returns a `cuda::std::pair<rep_type, bool>`,
  * where `rep_type` is `device_storage_type<T>`, the type used to store
  * the value on the device.
  *
@@ -451,7 +451,7 @@ struct scalar_optional_accessor : public scalar_value_accessor<Element> {
 template <typename Element>
 struct scalar_pair_accessor : public scalar_value_accessor<Element> {
   using super_t    = scalar_value_accessor<Element>;
-  using value_type = thrust::pair<Element, bool>;
+  using value_type = cuda::std::pair<Element, bool>;
   scalar_pair_accessor(scalar const& scalar_value) : scalar_value_accessor<Element>(scalar_value) {}
 
   __device__ inline value_type const operator()(size_type) const
@@ -488,7 +488,7 @@ template <typename Element>
 struct scalar_representation_pair_accessor : public scalar_value_accessor<Element> {
   using base       = scalar_value_accessor<Element>;
   using rep_type   = device_storage_type_t<Element>;
-  using value_type = thrust::pair<rep_type, bool>;
+  using value_type = cuda::std::pair<rep_type, bool>;
 
   scalar_representation_pair_accessor(scalar const& scalar_value) : base(scalar_value) {}
 
@@ -587,7 +587,7 @@ auto inline make_optional_iterator(scalar const& scalar_value, Nullate has_nulls
 /**
  * @brief Constructs a constant device pair iterator over a scalar's value and its validity.
  *
- * Dereferencing the returned iterator returns a `thrust::pair<Element, bool>`.
+ * Dereferencing the returned iterator returns a `cuda::std::pair<Element, bool>`.
  *
  * If scalar is valid, then for `p = *(iter + i)`, `p.first` contains
  * the value of the scalar and `p.second == true`.
@@ -618,8 +618,8 @@ auto inline make_pair_iterator(scalar const& scalar_value)
  * @brief Constructs a constant device pair iterator over a scalar's representative value
  *        and its validity.
  *
- * Dereferencing the returned iterator returns a `thrust::pair<Element::rep, bool>`.
- * E.g. For a valid `decimal32` row, a `thrust::pair<int32_t, bool>` is returned,
+ * Dereferencing the returned iterator returns a `cuda::std::pair<Element::rep, bool>`.
+ * E.g. For a valid `decimal32` row, a `cuda::std::pair<int32_t, bool>` is returned,
  * with the value set to the `int32_t` representative value of the decimal,
  * and validity `true`, indicating that the row is valid.
  *

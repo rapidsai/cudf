@@ -24,13 +24,13 @@
 
 #include <cuda/atomic>
 #include <cuda/functional>
+#include <cuda/std/tuple>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/gather.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/reduce.h>
 #include <thrust/transform.h>
 #include <thrust/unique.h>
@@ -323,7 +323,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
     case json_col_t::StringColumn: {
       // move string_offsets to GPU and transform to string column
       auto const col_size      = json_col.string_offsets.size();
-      using char_length_pair_t = thrust::pair<char const*, size_type>;
+      using char_length_pair_t = cuda::std::pair<char const*, size_type>;
       CUDF_EXPECTS(json_col.string_offsets.size() == json_col.string_lengths.size(),
                    "string offset, string length mismatch");
       rmm::device_uvector<char_length_pair_t> d_string_data(col_size, stream);

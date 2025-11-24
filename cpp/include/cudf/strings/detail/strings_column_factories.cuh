@@ -18,15 +18,14 @@
 
 #include <cuda/functional>
 #include <cuda/std/iterator>
+#include <cuda/std/tuple>
 #include <thrust/copy.h>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
 
 namespace cudf {
 namespace strings {
@@ -36,7 +35,7 @@ namespace detail {
  * @brief Basic type expected for iterators passed to `make_strings_column` that represent string
  * data in device memory.
  */
-using string_index_pair = thrust::pair<char const*, size_type>;
+using string_index_pair = cuda::std::pair<char const*, size_type>;
 
 /**
  * @brief Create a strings-type column from iterators of pointer/size pairs

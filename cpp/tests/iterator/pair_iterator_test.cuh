@@ -6,8 +6,8 @@
 
 #include <tests/iterator/iterator_tests.cuh>
 
+#include <cuda/std/tuple>
 #include <thrust/host_vector.h>
-#include <thrust/pair.h>
 
 template <typename T>
 void nonull_pair_iterator(IteratorTest<T>& testFixture)
@@ -22,9 +22,9 @@ void nonull_pair_iterator(IteratorTest<T>& testFixture)
   auto d_col = cudf::column_device_view::create(w_col);
 
   // calculate the expected value by CPU.
-  thrust::host_vector<thrust::pair<T, bool>> replaced_array(host_values.size());
+  thrust::host_vector<cuda::std::pair<T, bool>> replaced_array(host_values.size());
   std::transform(host_values.begin(), host_values.end(), replaced_array.begin(), [](auto s) {
-    return thrust::make_pair(s, true);
+    return cuda::std::make_pair(s, true);
   });
 
   // GPU test
@@ -45,18 +45,18 @@ void null_pair_iterator(IteratorTest<T>& testFixture)
   auto d_col = cudf::column_device_view::create(w_col);
 
   // calculate the expected value by CPU.
-  thrust::host_vector<thrust::pair<T, bool>> value_and_validity(host_values.size());
+  thrust::host_vector<cuda::std::pair<T, bool>> value_and_validity(host_values.size());
   std::transform(host_values.begin(),
                  host_values.end(),
                  host_bools.begin(),
                  value_and_validity.begin(),
-                 [](auto s, auto b) { return thrust::pair<T, bool>{s, b}; });
-  thrust::host_vector<thrust::pair<T, bool>> value_all_valid(host_values.size());
+                 [](auto s, auto b) { return cuda::std::pair<T, bool>{s, b}; });
+  thrust::host_vector<cuda::std::pair<T, bool>> value_all_valid(host_values.size());
   std::transform(host_values.begin(),
                  host_values.end(),
                  host_bools.begin(),
                  value_all_valid.begin(),
-                 [](auto s, auto b) { return thrust::pair<T, bool>{s, true}; });
+                 [](auto s, auto b) { return cuda::std::pair<T, bool>{s, true}; });
 
   // GPU test
   auto it_dev = d_col->pair_begin<T, true>();

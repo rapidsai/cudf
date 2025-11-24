@@ -13,8 +13,8 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/std/optional>
+#include <cuda/std/tuple>
 #include <cuda_runtime.h>
-#include <thrust/pair.h>
 
 #include <functional>
 #include <memory>
@@ -34,7 +34,7 @@ enum class positional : int8_t {
 template <positional P>
 struct reljunk;
 
-using match_pair   = thrust::pair<cudf::size_type, cudf::size_type>;
+using match_pair   = cuda::std::pair<cudf::size_type, cudf::size_type>;
 using match_result = cuda::std::optional<match_pair>;
 
 constexpr int32_t MAX_SHARED_MEM      = 2048;  ///< Memory size for storing prog instruction data

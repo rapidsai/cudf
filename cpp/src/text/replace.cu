@@ -26,17 +26,17 @@
 #include <cuda/atomic>
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
+#include <cuda/std/tuple>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
-#include <thrust/pair.h>
 #include <thrust/remove.h>
 
 namespace nvtext {
 namespace detail {
 namespace {
 
-using replace_result = thrust::pair<bool, cudf::string_view>;
+using replace_result = cuda::std::pair<bool, cudf::string_view>;
 
 struct base_token_replacer_fn {
   cudf::column_device_view d_strings;          ///< strings to tokenize

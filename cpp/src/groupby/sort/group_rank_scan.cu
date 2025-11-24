@@ -20,9 +20,9 @@
 
 #include <cuda/std/functional>
 #include <cuda/std/limits>
+#include <cuda/std/tuple>
 #include <thrust/functional.h>
 #include <thrust/iterator/reverse_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
@@ -124,10 +124,10 @@ std::unique_ptr<column> rank_generator(column_view const& grouped_values,
 
   auto [group_labels_begin, mutable_rank_begin] = [&]() {
     if constexpr (forward) {
-      return thrust::pair{group_labels.begin(), mutable_ranks.begin<size_type>()};
+      return cuda::std::pair{group_labels.begin(), mutable_ranks.begin<size_type>()};
     } else {
-      return thrust::pair{thrust::reverse_iterator(group_labels.end()),
-                          thrust::reverse_iterator(mutable_ranks.end<size_type>())};
+      return cuda::std::pair{cuda::std::reverse_iterator(group_labels.end()),
+                             thrust::reverse_iterator(mutable_ranks.end<size_type>())};
     }
   }();
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
