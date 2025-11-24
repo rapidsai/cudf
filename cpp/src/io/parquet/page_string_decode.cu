@@ -15,6 +15,7 @@
 
 #include <cuda/functional>
 #include <thrust/logical.h>
+#include <thrust/pair.h>
 #include <thrust/transform_scan.h>
 
 #include <bitset>
