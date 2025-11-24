@@ -45,7 +45,6 @@ from cudf.core.buffer import (
     Buffer,
     acquire_spill_lock,
     as_buffer,
-    cuda_array_interface_wrapper,
 )
 from cudf.core.buffer.spillable_buffer import SpillableBuffer
 from cudf.core.copy_types import GatherMap
@@ -2005,11 +2004,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             # some of the attributes from the numba device array
             mask = self.mask
             assert mask is not None
-            output["mask"] = cuda_array_interface_wrapper(
-                ptr=self.mask_ptr,
-                size=mask.size,
-                owner=mask,
-            )
+            # Directly access the mask pointer to trigger copy-on-write handling
+            # TODO: We should find a cleaner way to handle this
+            self.mask_ptr
+            output["mask"] = mask
         return output
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
