@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -10,7 +10,6 @@ from typing import Any
 from cudf.core.buffer.buffer import (
     Buffer,
     BufferOwner,
-    cuda_array_interface_wrapper,
     get_ptr_and_size,
 )
 from cudf.core.buffer.exposure_tracked_buffer import ExposureTrackedBuffer
@@ -48,7 +47,7 @@ def get_buffer_owner(data: Any) -> BufferOwner | None:
 
 
 def as_buffer(
-    data: int | Any,
+    data: Any,
     *,
     size: int | None = None,
     owner: object | None = None,
@@ -56,13 +55,12 @@ def as_buffer(
 ) -> Buffer:
     """Factory function to wrap `data` in a Buffer object.
 
-    If `data` isn't a buffer already, a new buffer that points to the memory of
-    `data` is created. If `data` represents host memory, it is copied to a new
-    `rmm.DeviceBuffer` device allocation. Otherwise, the memory of `data` is
-    **not** copied, instead the new buffer keeps a reference to `data` in order
-    to retain its lifetime.
-
-    If `data` is an integer, it is assumed to point to device memory.
+    If `data` isn't a buffer already, a new buffer that points to the memory of `data`
+    is created. `data` must either be convertible to a numpy array (for host memory) or
+    satisfy the CUDA Array Interface for device memory. If `data` represents host
+    memory, it is copied to a new `rmm.DeviceBuffer` device allocation. Otherwise, the
+    memory of `data` is **not** copied, instead the new buffer keeps a reference to
+    `data` in order to retain its lifetime.
 
     Raises ValueError if `data` isn't C-contiguous.
 
@@ -78,10 +76,8 @@ def as_buffer(
 
     Parameters
     ----------
-    data : int or buffer-like or array-like
-        An integer representing a pointer to device memory or a buffer-like
-        or array-like object. When not an integer, `size` and `owner` must
-        be None.
+    data : buffer-like or array-like
+        A buffer-like or array-like object.
     size : int, optional
         Size of device memory in bytes. Must be specified if `data` is an
         integer.
@@ -101,16 +97,6 @@ def as_buffer(
 
     if isinstance(data, Buffer):
         return data
-
-    # We handle the integer argument in the factory function by wrapping
-    # the pointer in a `__cuda_array_interface__` exposing object so that
-    # the Buffer (and its sub-classes) do not have to.
-    if isinstance(data, int):
-        if size is None:
-            raise ValueError(
-                "size must be specified when `data` is an integer"
-            )
-        data = cuda_array_interface_wrapper(ptr=data, size=size, owner=owner)
     elif size is not None or owner is not None:
         raise ValueError(
             "`size` and `owner` must be None when "

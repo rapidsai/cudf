@@ -1978,10 +1978,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             # Create a simple Python object that exposes the
             # `__cuda_array_interface__` attribute here since we need to modify
             # some of the attributes from the numba device array
+            mask = self.mask
+            assert mask is not None
             output["mask"] = cuda_array_interface_wrapper(
                 ptr=self.mask_ptr,
-                size=len(self),
-                owner=self.mask,
+                size=mask.size,
+                owner=mask,
             )
         return output
 

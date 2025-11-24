@@ -79,6 +79,8 @@ def cuda_array_interface_wrapper(
 
     if size < 0:
         raise ValueError("size cannot be negative")
+    if size != owner.size:  # type: ignore[union-attr]
+        raise ValueError("size must match owner.size")
 
     return SimpleNamespace(
         __cuda_array_interface__={
