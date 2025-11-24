@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -38,7 +38,7 @@ TYPED_TEST(groupby_min_scan_test, basic)
   // clang-format on
 
   auto agg = cudf::make_min_aggregation<cudf::groupby_scan_aggregation>();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_SCAN(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_min_scan_test, pre_sorted)
@@ -55,13 +55,13 @@ TYPED_TEST(groupby_min_scan_test, pre_sorted)
   // clang-format on
 
   auto agg = cudf::make_min_aggregation<cudf::groupby_scan_aggregation>();
-  test_single_scan(keys,
-                   vals,
-                   expect_keys,
-                   expect_vals,
-                   std::move(agg),
-                   cudf::null_policy::EXCLUDE,
-                   cudf::sorted::YES);
+  CUDF_TEST_SINGLE_SCAN(keys,
+                        vals,
+                        expect_keys,
+                        expect_vals,
+                        std::move(agg),
+                        cudf::null_policy::EXCLUDE,
+                        cudf::sorted::YES);
 }
 
 TYPED_TEST(groupby_min_scan_test, empty_cols)
@@ -75,7 +75,7 @@ TYPED_TEST(groupby_min_scan_test, empty_cols)
   result_wrapper expect_vals{};
 
   auto agg = cudf::make_min_aggregation<cudf::groupby_scan_aggregation>();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_SCAN(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_min_scan_test, zero_valid_keys)
@@ -89,7 +89,7 @@ TYPED_TEST(groupby_min_scan_test, zero_valid_keys)
   result_wrapper expect_vals{};
 
   auto agg = cudf::make_min_aggregation<cudf::groupby_scan_aggregation>();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_SCAN(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_min_scan_test, zero_valid_values)
@@ -103,7 +103,7 @@ TYPED_TEST(groupby_min_scan_test, zero_valid_values)
   result_wrapper expect_vals({-1, -1, -1}, cudf::test::iterators::all_nulls());
 
   auto agg = cudf::make_min_aggregation<cudf::groupby_scan_aggregation>();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_SCAN(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_min_scan_test, null_keys_and_values)
@@ -123,7 +123,7 @@ TYPED_TEST(groupby_min_scan_test, null_keys_and_values)
   // clang-format on
 
   auto agg = cudf::make_min_aggregation<cudf::groupby_scan_aggregation>();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_SCAN(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 struct groupby_min_scan_string_test : public cudf::test::BaseFixture {};
@@ -139,7 +139,7 @@ TEST_F(groupby_min_scan_string_test, basic)
     {"año", "aaa", "aaa", "bit", "bit", "bat", "bat", "₹1", "$1", "$1"});
 
   auto agg = cudf::make_min_aggregation<cudf::groupby_scan_aggregation>();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_SCAN(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 template <typename T>
@@ -167,7 +167,7 @@ TYPED_TEST(GroupByMinScanFixedPointTest, GroupBySortMinScanDecimalAsValue)
     // clang-format on
 
     auto agg = cudf::make_min_aggregation<cudf::groupby_scan_aggregation>();
-    test_single_scan(keys, vals, expect_keys, expect_vals_min, std::move(agg));
+    CUDF_TEST_SINGLE_SCAN(keys, vals, expect_keys, expect_vals_min, std::move(agg));
   }
 }
 
@@ -192,7 +192,7 @@ TEST_F(groupby_min_scan_struct_test, basic)
   }();
 
   auto agg = cudf::make_min_aggregation<cudf::groupby_scan_aggregation>();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_SCAN(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TEST_F(groupby_min_scan_struct_test, slice_input)
@@ -229,7 +229,7 @@ TEST_F(groupby_min_scan_struct_test, slice_input)
   }();
 
   auto agg = cudf::make_min_aggregation<cudf::groupby_scan_aggregation>();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_SCAN(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TEST_F(groupby_min_scan_struct_test, null_keys_and_values)
@@ -258,5 +258,5 @@ TEST_F(groupby_min_scan_struct_test, null_keys_and_values)
   }();
 
   auto agg = cudf::make_min_aggregation<cudf::groupby_scan_aggregation>();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_SCAN(keys, vals, expect_keys, expect_vals, std::move(agg));
 }

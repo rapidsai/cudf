@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,7 +17,9 @@
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 
-void test_single_agg(cudf::column_view const& keys,
+void test_single_agg(char const* file,
+                     int line,
+                     cudf::column_view const& keys,
                      cudf::column_view const& values,
                      cudf::column_view const& expect_keys,
                      cudf::column_view const& expect_vals,
@@ -29,6 +31,9 @@ void test_single_agg(cudf::column_view const& keys,
                      std::vector<cudf::null_order> const& null_precedence,
                      cudf::sorted reference_keys_are_sorted)
 {
+  SCOPED_TRACE("Original line of failure: " + std::to_string(line) +
+               ", file: " + std::string{file});
+
   auto const [sorted_expect_keys, sorted_expect_vals] = [&]() {
     if (reference_keys_are_sorted == cudf::sorted::NO) {
       auto const sort_expect_order =
@@ -83,13 +88,17 @@ void test_single_agg(cudf::column_view const& keys,
   }
 }
 
-void test_sum_agg(cudf::column_view const& keys,
+void test_sum_agg(char const* file,
+                  int line,
+                  cudf::column_view const& keys,
                   cudf::column_view const& values,
                   cudf::column_view const& expected_keys,
                   cudf::column_view const& expected_values)
 {
   auto const do_test = [&](auto const use_sort_option) {
-    test_single_agg(keys,
+    test_single_agg(file,
+                    line,
+                    keys,
                     values,
                     expected_keys,
                     expected_values,
@@ -101,7 +110,9 @@ void test_sum_agg(cudf::column_view const& keys,
   do_test(force_use_sort_impl::NO);
 }
 
-void test_single_scan(cudf::column_view const& keys,
+void test_single_scan(char const* file,
+                      int line,
+                      cudf::column_view const& keys,
                       cudf::column_view const& values,
                       cudf::column_view const& expect_keys,
                       cudf::column_view const& expect_vals,
@@ -111,10 +122,12 @@ void test_single_scan(cudf::column_view const& keys,
                       std::vector<cudf::order> const& column_order,
                       std::vector<cudf::null_order> const& null_precedence)
 {
+  SCOPED_TRACE("Original line of failure: " + std::to_string(line) +
+               ", file: " + std::string{file});
+
   std::vector<cudf::groupby::scan_request> requests;
   requests.emplace_back();
   requests[0].values = values;
-
   requests[0].aggregations.push_back(std::move(agg));
 
   cudf::groupby::groupby gb_obj(

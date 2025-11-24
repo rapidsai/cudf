@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -42,7 +42,7 @@ TYPED_TEST(groupby_sum_scan_test, basic)
   result_wrapper expect_vals{0, 3, 9, 1, 5, 10, 19, 2, 9, 17};
   // clang-format on
   auto agg = cudf::make_sum_aggregation<cudf::groupby_scan_aggregation>();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_SCAN(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_sum_scan_test, pre_sorted)
@@ -59,13 +59,13 @@ TYPED_TEST(groupby_sum_scan_test, pre_sorted)
   // clang-format on
 
   auto agg = cudf::make_sum_aggregation<cudf::groupby_scan_aggregation>();
-  test_single_scan(keys,
-                   vals,
-                   expect_keys,
-                   expect_vals,
-                   std::move(agg),
-                   cudf::null_policy::EXCLUDE,
-                   cudf::sorted::YES);
+  CUDF_TEST_SINGLE_SCAN(keys,
+                        vals,
+                        expect_keys,
+                        expect_vals,
+                        std::move(agg),
+                        cudf::null_policy::EXCLUDE,
+                        cudf::sorted::YES);
 }
 
 TYPED_TEST(groupby_sum_scan_test, empty_cols)
@@ -82,7 +82,7 @@ TYPED_TEST(groupby_sum_scan_test, empty_cols)
   // clang-format on
 
   auto agg = cudf::make_sum_aggregation<cudf::groupby_scan_aggregation>();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_SCAN(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_sum_scan_test, zero_valid_keys)
@@ -96,7 +96,7 @@ TYPED_TEST(groupby_sum_scan_test, zero_valid_keys)
   result_wrapper expect_vals{};
 
   auto agg = cudf::make_sum_aggregation<cudf::groupby_scan_aggregation>();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_SCAN(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_sum_scan_test, zero_valid_values)
@@ -110,7 +110,7 @@ TYPED_TEST(groupby_sum_scan_test, zero_valid_values)
   result_wrapper expect_vals({3, 4, 5}, cudf::test::iterators::all_nulls());
 
   auto agg = cudf::make_sum_aggregation<cudf::groupby_scan_aggregation>();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_SCAN(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_sum_scan_test, null_keys_and_values)
@@ -130,7 +130,7 @@ TYPED_TEST(groupby_sum_scan_test, null_keys_and_values)
   // clang-format on
 
   auto agg = cudf::make_sum_aggregation<cudf::groupby_scan_aggregation>();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_SCAN(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 template <typename T>
@@ -156,6 +156,6 @@ TYPED_TEST(GroupBySumScanFixedPointTest, GroupBySortSumScanDecimalAsValue)
     // clang-format on
 
     auto agg2 = cudf::make_sum_aggregation<cudf::groupby_scan_aggregation>();
-    test_single_scan(keys, vals, expect_keys, expect_vals_sum, std::move(agg2));
+    CUDF_TEST_SINGLE_SCAN(keys, vals, expect_keys, expect_vals_sum, std::move(agg2));
   }
 }
