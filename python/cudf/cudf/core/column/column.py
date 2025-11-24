@@ -133,7 +133,7 @@ class MaskCAIWrapper:
         self._mask = mask
 
     @property
-    def __cuda_array_interface__(self) -> dict:
+    def __cuda_array_interface__(self) -> Mapping:
         cai = self._mask.__cuda_array_interface__.copy()
         cai["shape"] = (
             plc.null_mask.bitmask_allocation_size_bytes(cai["shape"][0]),
