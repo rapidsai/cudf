@@ -126,6 +126,22 @@ def _can_values_be_equal(left: DtypeObj, right: DtypeObj) -> bool:
     return False
 
 
+class MaskCAIWrapper:
+    # A wrapper that exposes the __cuda_array_interface__ of a mask that accounts for
+    # the mask being a bitmask in the mask size calculation.
+
+    def __init__(self, mask: Any) -> None:
+        self._mask = mask
+
+    @property
+    def __cuda_array_interface__(self) -> dict:
+        cai = self._mask.__cuda_array_interface__.copy()
+        cai["shape"] = (
+            plc.null_mask.bitmask_allocation_size_bytes(cai["shape"][0]),
+        )
+        return cai
+
+
 class spillable_gpumemoryview(plc.gpumemoryview):
     """
     HACK: Prevent automatic unspilling of `SpillableBuffer` objects
@@ -745,12 +761,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if mask is not None:
             cai_mask = mask.__cuda_array_interface__
             if cai_mask["typestr"][1] == "t":
-                mask_size = plc.null_mask.bitmask_allocation_size_bytes(
-                    cai_mask["shape"][0]
-                )
-                mask_buff = as_buffer(
-                    data=cai_mask["data"][0], size=mask_size, owner=mask
-                )
+                mask_buff = as_buffer(MaskCAIWrapper(mask))
             elif cai_mask["typestr"][1] == "b":
                 mask_buff = ColumnBase.from_cuda_array_interface(
                     mask,
