@@ -49,9 +49,10 @@ class fixed_pinned_pool_memory_resource : public rmm::mr::device_memory_resource
 
     // Allocate full size from the pinned pool to figure out the beginning and end address
     auto stream{cudf::detail::global_cuda_stream_pool().get_stream().value()};
-    pool_begin_ = pool_->allocate_sync(stream, pool_size_);
+    pool_begin_ = pool_->allocate_async(stream, pool_size_);
     pool_end_   = static_cast<void*>(static_cast<uint8_t*>(pool_begin_) + pool_size_);
-    pool_->deallocate_sync(stream, pool_begin_, pool_size_);
+    pool_->deallocate_async(stream, pool_begin_, pool_size_);
+    stream.synchronize();
   }
 
   // clang-tidy will complain about this function because it is completely
