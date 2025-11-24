@@ -40,7 +40,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   auto const [values, agg_kinds, aggs, has_compound_aggs] =
     extract_single_pass_aggs(requests, stream);
   auto const d_agg_kinds = cudf::detail::make_device_uvector_async(
-    agg_kinds, stream, rmm::mr::get_current_device_resource());
+    agg_kinds, stream, cudf::get_current_device_resource_ref());
   auto const num_rows = values.num_rows();
 
   // Performs naive global memory aggregations when the workload is not compatible with shared
