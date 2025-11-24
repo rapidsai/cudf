@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from collections.abc import Mapping
 from typing import TypeAlias
@@ -75,7 +75,7 @@ class JsonReaderOptionsBuilder:
 
 def read_json(
     options: JsonReaderOptions,
-    stream: Stream = None,
+    stream: Stream | None = None,
     mr: DeviceMemoryResource = None,
 ) -> TableWithMetadata: ...
 def read_json_from_string_column(
@@ -85,7 +85,7 @@ def read_json_from_string_column(
     dtypes: list | None = None,
     compression: CompressionType = CompressionType.NONE,
     recovery_mode: JSONRecoveryMode = JSONRecoveryMode.RECOVER_WITH_NULL,
-    stream: Stream = None,
+    stream: Stream | None = None,
     mr: DeviceMemoryResource = None,
 ) -> TableWithMetadata: ...
 
@@ -106,11 +106,13 @@ class JsonWriterOptionsBuilder:
     def utf8_escaped(self, val: bool) -> Self: ...
     def build(self) -> JsonWriterOptions: ...
 
-def write_json(options: JsonWriterOptions, stream: Stream = None) -> None: ...
+def write_json(
+    options: JsonWriterOptions, stream: Stream | None = None
+) -> None: ...
 def chunked_read_json(
     options: JsonReaderOptions,
     chunk_size: int = 100_000_000,
-    stream: Stream = None,
+    stream: Stream | None = None,
     mr: DeviceMemoryResource = None,
 ) -> tuple[list[Column], list[str], ChildNameToTypeMap]: ...
 def is_supported_write_json(type: DataType) -> bool: ...
