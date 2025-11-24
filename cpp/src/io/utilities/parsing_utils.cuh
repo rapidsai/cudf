@@ -28,6 +28,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/mismatch.h>
+#include <thrust/pair.h>
 
 using cudf::device_span;
 

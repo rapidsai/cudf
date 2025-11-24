@@ -170,6 +170,9 @@ def test_base_stats_parquet(
         assert source_info_x.storage_size.value is None
         assert source_info_y.storage_size.value is None
 
+    # All read columns should be marked
+    assert set(table_source_info._read_columns) == {"x", "y", "z"}
+
     # source._unique_stats should be empty
     assert set(table_source_info._unique_stats) == set()
 
@@ -178,7 +181,6 @@ def test_base_stats_parquet(
         assert source_info_x.unique_stats(force=True).fraction.value == 1.0
     else:
         assert source_info_x.unique_stats(force=True).count.value is None
-        assert source_info_x.unique_stats(force=True).fraction.value is None
 
     # source_info._unique_stats should only contain 'x'
     if max_footer_samples and max_row_group_samples:

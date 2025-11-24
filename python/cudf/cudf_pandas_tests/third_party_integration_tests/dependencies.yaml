@@ -195,7 +195,7 @@ dependencies:
         packages:
           - cudf==26.2.*,>=0.0.0a0
           - pandas
-          - pytest<9.0.0a0
+          - pytest
           - pytest-xdist
   test_dask:
     common:
