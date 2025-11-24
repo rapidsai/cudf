@@ -46,8 +46,6 @@ def cuda_array_interface_wrapper(
     ptr: int,
     size: int,
     owner: object | None = None,
-    readonly=False,
-    typestr="|u1",
     version=0,
 ):
     """Wrap device pointer in an object that exposes `__cuda_array_interface__`
@@ -84,10 +82,12 @@ def cuda_array_interface_wrapper(
 
     return SimpleNamespace(
         __cuda_array_interface__={
-            "data": (ptr, readonly),
+            # We never really take advantage of the readonly flag AFAIK, so setting it
+            # to False always should be OK
+            "data": (ptr, False),
             "shape": (size,),
             "strides": None,
-            "typestr": typestr,
+            "typestr": "|u1",
             "version": version,
         },
         owner=owner,

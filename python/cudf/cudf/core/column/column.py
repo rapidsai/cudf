@@ -1982,8 +1982,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 ptr=self.mask_ptr,
                 size=len(self),
                 owner=self.mask,
-                readonly=True,
-                typestr="<t1",
             )
         return output
 
