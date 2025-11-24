@@ -49,8 +49,6 @@ def get_buffer_owner(data: Any) -> BufferOwner | None:
 def as_buffer(
     data: Any,
     *,
-    size: int | None = None,
-    owner: object | None = None,
     exposed: bool = False,
 ) -> Buffer:
     """Factory function to wrap `data` in a Buffer object.
@@ -78,12 +76,6 @@ def as_buffer(
     ----------
     data : buffer-like or array-like
         A buffer-like or array-like object.
-    size : int, optional
-        Size of device memory in bytes. Must be specified if `data` is an
-        integer.
-    owner : object, optional
-        Python object to which the lifetime of the memory allocation is tied.
-        A reference to this object is kept in the returned Buffer.
     exposed : bool, optional
         Mark the buffer as permanently exposed. This is used by
         ExposureTrackedBuffer to determine when a deep copy is required and
@@ -97,11 +89,6 @@ def as_buffer(
 
     if isinstance(data, Buffer):
         return data
-    elif size is not None or owner is not None:
-        raise ValueError(
-            "`size` and `owner` must be None when "
-            "`data` is a buffer-like or array-like object"
-        )
 
     # Find the buffer types to return based on the current config
     owner_class: type[BufferOwner]
