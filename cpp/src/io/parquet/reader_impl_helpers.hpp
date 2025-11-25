@@ -268,7 +268,7 @@ class aggregate_reader_metadata {
    * @param input_row_group_indices Lists of input row groups, one per source
    * @param bytes_to_skip Bytes to skip before selecting row groups
    * @param bytes_to_read Optional bytes to select row groups from after skipping. All row groups
-   * until the end of the file are selected if not provided
+   * until the end of the file are selected if not provided.
    *
    * @return A vector of surviving row group indices
    */
