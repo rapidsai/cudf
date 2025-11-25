@@ -21,6 +21,8 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
+    from rmm.pylibrmm.stream import Stream
+
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
 
@@ -165,7 +167,7 @@ def process_children(
     return nodes, channels
 
 
-def empty_table_chunk(ir: IR, context: Context) -> TableChunk:
+def empty_table_chunk(ir: IR, context: Context, stream: Stream) -> TableChunk:
     """
     Make an empty table chunk.
 
@@ -175,6 +177,8 @@ def empty_table_chunk(ir: IR, context: Context) -> TableChunk:
         The IR node to use for the schema.
     context
         The rapidsmpf context.
+    stream
+        The stream to use for the table chunk.
 
     Returns
     -------
@@ -182,13 +186,16 @@ def empty_table_chunk(ir: IR, context: Context) -> TableChunk:
     """
     # Create an empty table with the correct schema
     empty_columns = [
-        plc.column_factories.make_empty_column(plc.DataType(dtype.id()))
+        plc.column_factories.make_empty_column(
+            plc.DataType(dtype.id()),
+            stream=stream,
+        )
         for dtype in ir.schema.values()
     ]
     empty_table = plc.Table(empty_columns)
 
     return TableChunk.from_pylibcudf_table(
         empty_table,
-        context.get_stream_from_pool(),
+        stream,
         exclusive_view=True,
     )

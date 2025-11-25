@@ -39,31 +39,31 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
 
 
-# Set of available shuffle IDs
-_shuffle_id_vacancy: set[int] = set(range(Shuffler.max_concurrent_shuffles))
-_shuffle_id_vacancy_lock: threading.Lock = threading.Lock()
+# Set of available collective IDs
+_collective_id_vacancy: set[int] = set(range(Shuffler.max_concurrent_shuffles))
+_collective_id_vacancy_lock: threading.Lock = threading.Lock()
 
 
-def _get_new_shuffle_id() -> int:
-    with _shuffle_id_vacancy_lock:
-        if not _shuffle_id_vacancy:
+def _get_new_collective_id() -> int:
+    with _collective_id_vacancy_lock:
+        if not _collective_id_vacancy:
             raise ValueError(
                 f"Cannot shuffle more than {Shuffler.max_concurrent_shuffles} "
                 "times in a single query."
             )
 
-        return _shuffle_id_vacancy.pop()
+        return _collective_id_vacancy.pop()
 
 
-def _release_shuffle_id(op_id: int) -> None:
-    """Release a shuffle ID back to the vacancy set."""
-    with _shuffle_id_vacancy_lock:
-        _shuffle_id_vacancy.add(op_id)
+def _release_collective_id(collective_id: int) -> None:
+    """Release a collective ID back to the vacancy set."""
+    with _collective_id_vacancy_lock:
+        _collective_id_vacancy.add(collective_id)
 
 
 class ReserveOpIDs:
     """
-    Context manager to reserve shuffle IDs for pipeline execution.
+    Context manager to reserve collective IDs for pipeline execution.
 
     Parameters
     ----------
@@ -74,7 +74,7 @@ class ReserveOpIDs:
     -----
     This context manager:
     1. Identifies all Shuffle nodes in the IR
-    2. Reserves shuffle IDs from the vacancy pool
+    2. Reserves collective IDs from the vacancy pool
     3. Creates a mapping from IR nodes to their reserved IDs
     4. Releases all IDs back to the pool on __exit__
     """
@@ -83,25 +83,25 @@ class ReserveOpIDs:
         # Collect all Shuffle nodes.
         # NOTE: We will also need to collect Repartition,
         # and Join nodes to support multi-GPU execution.
-        self.shuffle_nodes: list[IR] = [
+        self.collective_nodes: list[IR] = [
             node for node in traversal([ir]) if isinstance(node, Shuffle)
         ]
-        self.shuffle_id_map: dict[IR, int] = {}
+        self.collective_id_map: dict[IR, int] = {}
 
     def __enter__(self) -> dict[IR, int]:
         """
-        Reserve shuffle IDs and return the mapping.
+        Reserve collective IDs and return the mapping.
 
         Returns
         -------
-        shuffle_id_map : dict[IR, int]
-            Mapping from IR nodes to their reserved shuffle IDs.
+        collective_id_map : dict[IR, int]
+            Mapping from IR nodes to their reserved collective IDs.
         """
         # Reserve IDs and map nodes directly to their IDs
-        for node in self.shuffle_nodes:
-            self.shuffle_id_map[node] = _get_new_shuffle_id()
+        for node in self.collective_nodes:
+            self.collective_id_map[node] = _get_new_collective_id()
 
-        return self.shuffle_id_map
+        return self.collective_id_map
 
     def __exit__(
         self,
@@ -109,9 +109,9 @@ class ReserveOpIDs:
         exc_val: Exception | None,
         exc_tb: TracebackType | None,
     ) -> Literal[False]:
-        """Release all reserved shuffle IDs back to the vacancy pool."""
-        for op_id in self.shuffle_id_map.values():
-            _release_shuffle_id(op_id)
+        """Release all reserved collective IDs back to the vacancy pool."""
+        for collective_id in self.collective_id_map.values():
+            _release_collective_id(collective_id)
         return False
 
 
@@ -127,8 +127,8 @@ class ShuffleContext:
         The number of partitions to shuffle into.
     columns_to_hash: tuple[int, ...]
         The columns to hash.
-    op_id: int
-        The shuffle operation ID.
+    collective_id: int
+        The collective ID.
     """
 
     def __init__(
@@ -136,19 +136,19 @@ class ShuffleContext:
         context: Context,
         num_partitions: int,
         columns_to_hash: tuple[int, ...],
-        op_id: int,
+        collective_id: int,
     ):
         self.context = context
         self.num_partitions = num_partitions
         self.columns_to_hash = columns_to_hash
-        self.op_id = op_id
+        self.collective_id = collective_id
         self._insertion_finished = False
 
     def __enter__(self) -> ShuffleContext:
         """Enter the local shuffle instance context manager."""
         self.shuffler = ShufflerAsync(
             self.context,
-            self.op_id,
+            self.collective_id,
             self.num_partitions,
         )
         return self
@@ -158,10 +158,9 @@ class ShuffleContext:
         exc_type: type | None,
         exc_val: Exception | None,
         exc_tb: TracebackType | None,
-    ) -> Literal[False]:
+    ) -> None:
         """Exit the ShuffleContext manager."""
         del self.shuffler
-        return False
 
     def insert_chunk(self, chunk: TableChunk) -> None:
         """
@@ -222,7 +221,7 @@ async def shuffle_node(
     ch_out: ChannelPair,
     columns_to_hash: tuple[int, ...],
     num_partitions: int,
-    op_id: int,
+    collective_id: int,
 ) -> None:
     """
     Execute a local shuffle pipeline in a single node.
@@ -247,14 +246,16 @@ async def shuffle_node(
         Tuple of column indices to use for hashing.
     num_partitions
         Number of partitions to shuffle into.
-    op_id
-        The shuffle operation ID.
+    collective_id
+        The collective ID.
     """
     async with shutdown_on_error(
         context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
     ):
         # Create ShuffleContext context manager to handle shuffler lifecycle
-        with ShuffleContext(context, num_partitions, columns_to_hash, op_id) as shuffle:
+        with ShuffleContext(
+            context, num_partitions, columns_to_hash, collective_id
+        ) as shuffle:
             # Process input chunks
             while True:
                 msg = await ch_in.data.recv(context)
@@ -289,14 +290,15 @@ async def shuffle_node(
                 await ch_out.data.send(context, Message(partition_id, output_chunk))
                 num_partitions_local += 1
 
-            # Make sure we send at least one chunk.
-            # This can happen during multi-GPU execution.
+            # Make sure we send at least one chunk for now.
+            # TODO: A robust pipeline should be able to shut
+            # down the channel without sending any data.
             if num_partitions_local < 1:
                 await ch_out.data.send(
                     context,
                     Message(
                         num_partitions + 1,
-                        empty_table_chunk(ir, context),
+                        empty_table_chunk(ir, context, stream),
                     ),
                 )
 
@@ -307,8 +309,6 @@ async def shuffle_node(
 def _(
     ir: Shuffle, rec: SubNetGenerator
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
-    # Local shuffle operation.
-
     # Process children
     (child,) = ir.children
     nodes, channels = rec(child)
@@ -322,13 +322,13 @@ def _(
     columns_to_hash = tuple(column_names.index(k.name) for k in keys)
     num_partitions = rec.state["partition_info"][ir].count
 
-    # Look up the reserved shuffle ID for this operation
-    op_id = rec.state["shuffle_id_map"][ir]
+    # Look up the reserved collective ID for this operation
+    collective_id = rec.state["collective_id_map"][ir]
 
     # Create output ChannelManager
     channels[ir] = ChannelManager(rec.state["context"])
 
-    # Complete shuffle node
+    # Add the shuffle node to the network
     nodes[ir] = [
         shuffle_node(
             context,
@@ -338,7 +338,7 @@ def _(
             ch_out=channels[ir].reserve_input_slot(),
             columns_to_hash=columns_to_hash,
             num_partitions=num_partitions,
-            op_id=op_id,
+            collective_id=collective_id,
         )
     ]
 

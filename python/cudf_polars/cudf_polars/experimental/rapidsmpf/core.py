@@ -136,8 +136,8 @@ def evaluate_logical_plan(
     else:
         ir_context = IRExecutionContext.from_config_options(config_options)
 
-    # Reserve shuffle IDs for the entire pipeline execution
-    with ReserveOpIDs(ir) as shuffle_id_map:
+    # Reserve collective IDs for the entire pipeline execution
+    with ReserveOpIDs(ir) as collective_id_map:
         # Generate network nodes
         nodes, output = generate_network(
             rmpf_context,
@@ -146,7 +146,7 @@ def evaluate_logical_plan(
             config_options,
             stats,
             ir_context=ir_context,
-            shuffle_id_map=shuffle_id_map,
+            collective_id_map=collective_id_map,
         )
 
         # Run the network
@@ -299,7 +299,7 @@ def generate_network(
     stats: StatsCollector,
     *,
     ir_context: IRExecutionContext,
-    shuffle_id_map: dict[IR, int],
+    collective_id_map: dict[IR, int],
 ) -> tuple[list[Any], DeferredMessages]:
     """
     Translate the IR graph to a RapidsMPF streaming network.
@@ -318,8 +318,8 @@ def generate_network(
         Statistics collector.
     ir_context
         The execution context for the IR node.
-    shuffle_id_map
-        The mapping of IR nodes to shuffle IDs.
+    collective_id_map
+        The mapping of IR nodes to collective IDs.
 
     Returns
     -------
@@ -351,7 +351,7 @@ def generate_network(
         "ir_context": ir_context,
         "max_io_threads": max_io_threads_local,
         "stats": stats,
-        "shuffle_id_map": shuffle_id_map,
+        "collective_id_map": collective_id_map,
     }
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state
