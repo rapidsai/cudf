@@ -62,7 +62,6 @@ class ReserveOpIDs:
 
     def __init__(self, ir: IR):
         # Find all collective IR nodes.
-        # TODO: Is Union collective?
         self.collective_nodes: list[IR] = [
             node
             for node in traversal([ir])
