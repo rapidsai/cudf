@@ -1343,6 +1343,17 @@ class DataFrameScan(IR):
             self.projection,
         )
 
+    def is_equal(self, other: Self) -> bool:
+        """Equality of DataFrameScan nodes."""
+        return self is other or (
+            self._id_for_hash == other._id_for_hash
+            and self.schema == other.schema
+            and self.projection == other.projection
+            and pl.DataFrame._from_pydf(self.df).equals(
+                pl.DataFrame._from_pydf(other.df)
+            )
+        )
+
     @classmethod
     @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="DataFrameScan")

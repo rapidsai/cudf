@@ -451,12 +451,7 @@ def test_dataframescan_stats_pickle(engine):
 
     # Verify the unpickled stats are equivalent
     assert type(unpickled_stats) is type(stats)
-    # Get the IR key from the unpickled stats (identity changed after pickle)
-    unpickled_ir = next(iter(unpickled_stats.column_stats.keys()))
-    assert (
-        unpickled_stats.column_stats[unpickled_ir]["x"].source_info.row_count.value
-        == 100
-    )
+    assert unpickled_stats.column_stats[ir]["x"].source_info.row_count.value == 100
 
 
 @pytest.mark.parametrize("use_io_partitioning", [True, False])
