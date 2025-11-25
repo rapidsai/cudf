@@ -127,7 +127,7 @@ std::unique_ptr<column> rank_generator(column_view const& grouped_values,
       return cuda::std::pair{group_labels.begin(), mutable_ranks.begin<size_type>()};
     } else {
       return cuda::std::pair{cuda::std::reverse_iterator(group_labels.end()),
-                             thrust::reverse_iterator(mutable_ranks.end<size_type>())};
+                             cuda::std::reverse_iterator(mutable_ranks.end<size_type>())};
     }
   }();
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
