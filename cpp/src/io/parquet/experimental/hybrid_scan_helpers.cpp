@@ -76,7 +76,7 @@ aggregate_reader_metadata::aggregate_reader_metadata(FileMetaData const& parquet
   : aggregate_reader_metadata_base({}, false, false)
 {
   // Just copy over the FileMetaData struct to the internal metadata struct
-  per_file_metadata.emplace_back(metadata{parquet_metadata}.get_file_metadata());
+  per_file_metadata.emplace_back(metadata{parquet_metadata});
   initialize_internals(use_arrow_schema, has_cols_from_mismatched_srcs);
 }
 
@@ -86,7 +86,7 @@ aggregate_reader_metadata::aggregate_reader_metadata(cudf::host_span<uint8_t con
   : aggregate_reader_metadata_base({}, false, false)
 {
   // Re-initialize internal variables here as base class was initialized without a source
-  per_file_metadata.emplace_back(metadata{footer_bytes}.get_file_metadata());
+  per_file_metadata.emplace_back(metadata{footer_bytes});
   initialize_internals(use_arrow_schema, has_cols_from_mismatched_srcs);
 }
 

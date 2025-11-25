@@ -112,6 +112,7 @@ struct metadata : public FileMetaData {
 
   void setup_page_index(cudf::host_span<uint8_t const> page_index_bytes, int64_t min_offset);
 
+ protected:
   void sanitize_schema();
 };
 
