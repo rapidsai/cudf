@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.5
 
-ARG BASE=rapidsai/devcontainers:26.02-cpp-mambaforge
+ARG BASE
 ARG PYTHON_PACKAGE_MANAGER=conda
 
 FROM ${BASE} as pip-base
