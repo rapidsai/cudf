@@ -7,6 +7,7 @@
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/join/join.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -52,10 +53,12 @@ filter_join_indices(cudf::table_view const& left,
                "Left and right index arrays must have the same size",
                std::invalid_argument);
 
-  if (left_indices.empty()) {
+  auto make_empty_result = [&]() {
     return std::pair{std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
                      std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr)};
-  }
+  };
+
+  if (left_indices.empty()) { return make_empty_result(); }
 
   // Check if predicate may evaluate to null
   auto const has_nulls = predicate.may_evaluate_null(left, right, stream);
@@ -94,9 +97,38 @@ filter_join_indices(cudf::table_view const& left,
   auto const shmem_per_block = parser.shmem_per_thread * config.num_threads_per_block;
 
   // Launch kernel with template dispatch based on nulls and complex types
-  auto launch_kernel = [&](bool has_nulls, bool has_complex_type) {
-    if (has_nulls && has_complex_type) {
-      launch_filter_gather_map_kernel<true, true>(*left_table,
+  if (has_nulls && has_complex_type) {
+    launch_filter_gather_map_kernel<true, true>(*left_table,
+                                                *right_table,
+                                                left_indices,
+                                                right_indices,
+                                                parser.device_expression_data,
+                                                config,
+                                                shmem_per_block,
+                                                predicate_results.data(),
+                                                stream);
+  } else if (has_nulls && !has_complex_type) {
+    launch_filter_gather_map_kernel<true, false>(*left_table,
+                                                 *right_table,
+                                                 left_indices,
+                                                 right_indices,
+                                                 parser.device_expression_data,
+                                                 config,
+                                                 shmem_per_block,
+                                                 predicate_results.data(),
+                                                 stream);
+  } else if (!has_nulls && has_complex_type) {
+    launch_filter_gather_map_kernel<false, true>(*left_table,
+                                                 *right_table,
+                                                 left_indices,
+                                                 right_indices,
+                                                 parser.device_expression_data,
+                                                 config,
+                                                 shmem_per_block,
+                                                 predicate_results.data(),
+                                                 stream);
+  } else {
+    launch_filter_gather_map_kernel<false, false>(*left_table,
                                                   *right_table,
                                                   left_indices,
                                                   right_indices,
@@ -105,49 +137,11 @@ filter_join_indices(cudf::table_view const& left,
                                                   shmem_per_block,
                                                   predicate_results.data(),
                                                   stream);
-    } else if (has_nulls && !has_complex_type) {
-      launch_filter_gather_map_kernel<true, false>(*left_table,
-                                                   *right_table,
-                                                   left_indices,
-                                                   right_indices,
-                                                   parser.device_expression_data,
-                                                   config,
-                                                   shmem_per_block,
-                                                   predicate_results.data(),
-                                                   stream);
-    } else if (!has_nulls && has_complex_type) {
-      launch_filter_gather_map_kernel<false, true>(*left_table,
-                                                   *right_table,
-                                                   left_indices,
-                                                   right_indices,
-                                                   parser.device_expression_data,
-                                                   config,
-                                                   shmem_per_block,
-                                                   predicate_results.data(),
-                                                   stream);
-    } else {
-      launch_filter_gather_map_kernel<false, false>(*left_table,
-                                                    *right_table,
-                                                    left_indices,
-                                                    right_indices,
-                                                    parser.device_expression_data,
-                                                    config,
-                                                    shmem_per_block,
-                                                    predicate_results.data(),
-                                                    stream);
-    }
-  };
-
-  launch_kernel(has_nulls, has_complex_type);
+  }
 
   auto predicate_results_ptr = predicate_results.data();
   auto left_ptr              = left_indices.data();
   auto right_ptr             = right_indices.data();
-
-  auto make_empty_result = [&]() {
-    return std::pair{std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
-                     std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr)};
-  };
 
   auto make_result_vectors = [&](size_t size) {
     return std::pair{std::make_unique<rmm::device_uvector<size_type>>(size, stream, mr),
