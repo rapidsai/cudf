@@ -308,23 +308,50 @@ std::unique_ptr<cudf::table> cross_join(
  * @brief Filters join result indices based on a conditional predicate and join type.
  *
  * This function takes the result indices from a hash/sort join operation and applies
- * a conditional predicate to filter the pairs. The behavior depends on the join type:
+ * a conditional predicate to filter the pairs. It enables implementing mixed joins
+ * as a two-step process: equality-based join followed by conditional filtering.
  *
+ * The behavior depends on the join type:
  * - **INNER_JOIN**: Only pairs that satisfy the predicate and have valid indices are kept.
  * - **LEFT_JOIN**: All left rows are preserved. Failed predicates nullify right indices.
  * - **FULL_JOIN**: All rows from both sides are preserved. Failed predicates create separate pairs.
  *
- * @code{.pseudo}
- * Left table:   {0, 1, 2}
- * Right table:  {1, 2, 3}
- * Hash join result: left_indices = {0, 1, 2}, right_indices = {0, 1, 2}
- * Predicate:    left.col0 + right.col0 > 2
- * INNER_JOIN result: left_indices = {2}, right_indices = {2}
- * LEFT_JOIN result:  left_indices = {0, 1, 2}, right_indices = {JoinNoMatch, JoinNoMatch, 2}
+ * ## Usage Pattern
+ *
+ * Typical usage involves performing an equality-based hash join first, then filtering
+ * the results with a conditional predicate:
+ *
+ * @code{.cpp}
+ * // Step 1: Perform equality-based hash join
+ * auto hash_joiner = cudf::hash_join(right_equality_table, null_equality::EQUAL);
+ * auto [left_indices, right_indices] = hash_joiner.inner_join(left_equality_table);
+ *
+ * // Step 2: Apply conditional filter on conditional columns
+ * auto [filtered_left, filtered_right] = cudf::filter_join_indices(
+ *   left_conditional_table,   // Table with columns referenced by predicate
+ *   right_conditional_table,  // Table with columns referenced by predicate
+ *   *left_indices,           // Indices from hash join
+ *   *right_indices,          // Indices from hash join
+ *   predicate,               // AST expression: e.g., left.col0 > right.col0
+ *   cudf::join_kind::INNER_JOIN);
  * @endcode
  *
- * @param left The left table for predicate evaluation.
- * @param right The right table for predicate evaluation.
+ * ## Example
+ * @code{.pseudo}
+ * Left equality:    {id: [1, 2, 3]}
+ * Right equality:   {id: [1, 2, 3]}
+ * Left conditional: {val: [10, 20, 30]}
+ * Right conditional:{val: [15, 15, 25]}
+ *
+ * Hash join (id == id): left_indices = {0, 1, 2}, right_indices = {0, 1, 2}
+ * Predicate: left.val > right.val
+ *
+ * INNER_JOIN result: left_indices = {1, 2}, right_indices = {1, 2}  // 20>15, 30>25
+ * LEFT_JOIN result:  left_indices = {0, 1, 2}, right_indices = {JoinNoMatch, 1, 2}
+ * @endcode
+ *
+ * @param left The left table for predicate evaluation (conditional columns only).
+ * @param right The right table for predicate evaluation (conditional columns only).
  * @param left_indices Device span of row indices in the left table from hash join.
  * @param right_indices Device span of row indices in the right table from hash join.
  * @param predicate An AST expression that returns a boolean for each pair of rows.
