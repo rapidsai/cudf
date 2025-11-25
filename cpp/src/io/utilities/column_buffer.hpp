@@ -19,7 +19,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 
 #include <optional>
 

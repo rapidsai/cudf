@@ -23,7 +23,6 @@
 #include <cuda/std/iterator>
 #include <cuda/std/limits>
 #include <cuda/std/optional>
-#include <cuda/std/tuple>
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
 #include <thrust/execution_policy.h>

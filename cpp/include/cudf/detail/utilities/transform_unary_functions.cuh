@@ -15,7 +15,7 @@
 
 #pragma once
 
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {

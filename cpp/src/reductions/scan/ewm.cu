@@ -16,7 +16,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <thrust/scan.h>
 #include <thrust/transform_scan.h>
 

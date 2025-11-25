@@ -11,7 +11,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <thrust/tabulate.h>
 
 #include <nvbench/nvbench.cuh>

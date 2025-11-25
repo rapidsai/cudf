@@ -8,7 +8,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 
 namespace cudf {
 namespace dictionary {

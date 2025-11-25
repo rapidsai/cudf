@@ -26,7 +26,7 @@
 
 #include <cuda/functional>
 #include <cuda/std/functional>
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>

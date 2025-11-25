@@ -24,7 +24,7 @@
 
 #include <cuda/atomic>
 #include <cuda/functional>
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/gather.h>

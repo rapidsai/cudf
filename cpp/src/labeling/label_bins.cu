@@ -25,7 +25,7 @@
 #include <rmm/mr/device_memory_resource.hpp>
 
 #include <cuda/std/iterator>
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>

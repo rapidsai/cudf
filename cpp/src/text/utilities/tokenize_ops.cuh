@@ -9,7 +9,7 @@
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/string_view.cuh>
 
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/logical.h>

@@ -38,7 +38,7 @@
 #include <cuda/std/climits>
 #include <cuda/std/limits>
 #include <cuda/std/optional>
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/extrema.h>
 #include <thrust/for_each.h>

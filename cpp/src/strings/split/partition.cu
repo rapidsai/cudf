@@ -18,7 +18,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 

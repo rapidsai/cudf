@@ -12,7 +12,7 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <cuda/std/optional>
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 

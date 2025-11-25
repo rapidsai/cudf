@@ -13,7 +13,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/std/optional>
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <cuda_runtime.h>
 
 #include <functional>

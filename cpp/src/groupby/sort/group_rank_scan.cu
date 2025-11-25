@@ -20,7 +20,7 @@
 
 #include <cuda/std/functional>
 #include <cuda/std/limits>
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <thrust/functional.h>
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/scan.h>

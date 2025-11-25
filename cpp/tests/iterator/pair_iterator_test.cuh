@@ -6,7 +6,7 @@
 
 #include <tests/iterator/iterator_tests.cuh>
 
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <thrust/host_vector.h>
 
 template <typename T>

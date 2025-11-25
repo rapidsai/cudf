@@ -27,7 +27,6 @@
 #include <cudf/scalar/scalar_device_view.cuh>
 
 #include <cuda/std/optional>
-#include <cuda/std/tuple>
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
 #include <thrust/iterator/constant_iterator.h>

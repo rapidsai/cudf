@@ -14,7 +14,7 @@
 #include <cudf/strings/detail/gather.cuh>
 
 #include <cuda/functional>
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <thrust/logical.h>
 #include <thrust/transform_scan.h>
 

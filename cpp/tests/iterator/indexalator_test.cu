@@ -11,7 +11,7 @@
 #include <cudf/detail/indexalator.cuh>
 
 #include <cuda/std/optional>
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/gather.h>
 #include <thrust/host_vector.h>

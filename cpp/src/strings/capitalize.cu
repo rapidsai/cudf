@@ -18,7 +18,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>

@@ -10,7 +10,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 

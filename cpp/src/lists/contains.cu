@@ -25,7 +25,7 @@
 
 #include <cuda/functional>
 #include <cuda/std/iterator>
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>

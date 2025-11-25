@@ -6,7 +6,7 @@
 
 #include <cudf_test/random.hpp>
 
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <thrust/host_vector.h>
 
 using TestingTypes = cudf::test::FixedWidthTypesWithoutFixedPoint;

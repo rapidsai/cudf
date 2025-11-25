@@ -11,7 +11,7 @@
 
 #include <rmm/device_uvector.hpp>
 
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 
 #include <string>
 #include <vector>

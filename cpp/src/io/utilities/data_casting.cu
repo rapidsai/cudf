@@ -26,7 +26,7 @@
 #include <cub/cub.cuh>
 #include <cuda/functional>
 #include <cuda/std/iterator>
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <thrust/copy.h>
 #include <thrust/functional.h>
 #include <thrust/transform_reduce.h>

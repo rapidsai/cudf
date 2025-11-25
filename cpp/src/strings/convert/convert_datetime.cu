@@ -26,7 +26,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/std/optional>
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>

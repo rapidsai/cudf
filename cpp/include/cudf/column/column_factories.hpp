@@ -13,7 +13,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 
 namespace CUDF_EXPORT cudf {
 /**

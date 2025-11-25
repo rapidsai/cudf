@@ -8,8 +8,8 @@
 
 #include <cuda/std/limits>
 #include <cuda/std/optional>
-#include <cuda/std/tuple>
 #include <cuda/std/type_traits>
+#include <cuda/std/utility>
 
 namespace cudf {
 namespace strings {

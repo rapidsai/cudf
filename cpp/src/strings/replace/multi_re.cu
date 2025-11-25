@@ -23,7 +23,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/std/iterator>
-#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 #include <thrust/find.h>
