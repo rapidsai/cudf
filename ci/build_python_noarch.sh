@@ -4,8 +4,6 @@
 
 set -euo pipefail
 
-source rapids-configure-sccache
-
 source rapids-date-string
 
 export CMAKE_GENERATOR=Ninja
@@ -30,20 +28,12 @@ rapids-logger "Prepending channels ${CPP_CHANNEL} and ${PYTHON_CHANNEL} to RATTL
 
 RATTLER_CHANNELS=("--channel" "${CPP_CHANNEL}" "--channel" "${PYTHON_CHANNEL}" "${RATTLER_CHANNELS[@]}")
 
-sccache --zero-stats
-
-# --no-build-id allows for caching with `sccache`
-# more info is available at
-# https://rattler.build/latest/tips_and_tricks/#using-sccache-or-ccache-with-rattler-build
 rapids-logger "Building dask-cudf"
 
 rapids-telemetry-record build-dask-cudf.log \
     rattler-build build --recipe conda/recipes/dask-cudf \
                     "${RATTLER_ARGS[@]}" \
                     "${RATTLER_CHANNELS[@]}"
-
-rapids-telemetry-record sccache-stats-dask-cudf.txt sccache --show-adv-stats
-sccache --zero-stats
 
 rapids-logger "Building cudf-polars"
 
@@ -52,9 +42,6 @@ rapids-telemetry-record build-cudf-polars.log \
                     "${RATTLER_ARGS[@]}" \
                     "${RATTLER_CHANNELS[@]}"
 
-rapids-telemetry-record sccache-stats-cudf-polars.txt sccache --show-adv-stats
-sccache --zero-stats
-
 rapids-logger "Building custreamz"
 
 rapids-telemetry-record build-custreamz.log \
@@ -62,9 +49,8 @@ rapids-telemetry-record build-custreamz.log \
                     "${RATTLER_ARGS[@]}" \
                     "${RATTLER_CHANNELS[@]}"
 
-rapids-telemetry-record sccache-stats-custreamz.txt sccache --show-adv-stats
 # remove build_cache directory
 rm -rf "$RAPIDS_CONDA_BLD_OUTPUT_DIR"/build_cache
 
-RAPIDS_PACKAGE_NAME="$(rapids-package-name conda_python cudf-noarch --pure)"
+RAPIDS_PACKAGE_NAME="$(rapids-package-name conda_python cudf-noarch --pure --cuda "${RAPIDS_CUDA_VERSION}")"
 export RAPIDS_PACKAGE_NAME

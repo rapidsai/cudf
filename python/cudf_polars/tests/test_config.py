@@ -250,6 +250,20 @@ def test_validate_streaming_executor_shuffle_method(
             ConfigOptions.from_polars_engine(engine)
 
 
+def test_join_rapidsmpf_single_private_config() -> None:
+    # The user may not specify "rapidsmpf-single" directly
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "shuffle_method": "rapidsmpf-single",
+            "runtime": "tasks",
+        },
+    )
+    with pytest.raises(ValueError, match="not a supported shuffle method"):
+        ConfigOptions.from_polars_engine(engine)
+
+
 @pytest.mark.parametrize("executor", ["in-memory", "streaming"])
 def test_hashable(executor: str) -> None:
     config = ConfigOptions.from_polars_engine(
@@ -382,9 +396,10 @@ def test_validate_shuffle_method_defaults(
         "rapidsmpf_spill",
         "sink_to_directory",
         "client_device_threshold",
+        "max_io_threads",
     ],
 )
-def test_validate_max_rows_per_partition(option: str) -> None:
+def test_validate_streaming_executor_options(option: str) -> None:
     with pytest.raises(TypeError, match=f"{option} must be"):
         ConfigOptions.from_polars_engine(
             pl.GPUEngine(
