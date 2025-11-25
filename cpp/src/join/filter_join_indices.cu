@@ -212,68 +212,59 @@ filter_join_indices(cudf::table_view const& left,
     return std::pair{std::move(filtered_left_indices), std::move(filtered_right_indices)};
 
   } else if (join_kind == join_kind::FULL_JOIN) {
-    // FULL_JOIN: For matched pairs that fail predicate, generate two pairs to preserve both sides
-    auto is_failed_matched_pair = [=] __device__(size_type i) {
+    // FULL_JOIN: Optimized implementation using stream compaction
+    // Strategy: Use a single scan to identify failed matches, then use stream compaction
+
+    // First, identify failed matched pairs
+    auto is_failed_matched_pair = [=] __device__(size_type i) -> bool {
       return !predicate_results_ptr[i] && left_ptr[i] != JoinNoMatch && right_ptr[i] != JoinNoMatch;
     };
 
+    // Count failed matches for output sizing
     auto [begin_iter, end_iter]     = make_full_range();
     auto const failed_matched_count = thrust::count_if(
       rmm::exec_policy_nosync(stream), begin_iter, end_iter, is_failed_matched_pair);
-    auto const total_pairs = left_indices.size() + failed_matched_count;
-    auto [filtered_left_indices, filtered_right_indices] = make_result_vectors(total_pairs);
+    auto const output_size = left_indices.size() + failed_matched_count;
 
-    // First pass: handle all original pairs
-    auto transform_op = [=] __device__(size_type i) -> cuda::std::tuple<size_type, size_type> {
-      auto left_idx  = left_ptr[i];
-      auto right_idx = right_ptr[i];
+    if (output_size == 0) { return make_empty_result(); }
 
-      if (predicate_results_ptr[i]) { return cuda::std::tuple{left_idx, right_idx}; }
+    auto [filtered_left_indices, filtered_right_indices] = make_result_vectors(output_size);
 
-      // Handle failed predicate cases
-      if (left_idx == JoinNoMatch) {
-        return cuda::std::tuple{JoinNoMatch, right_idx};  // Unmatched right row
-      } else if (right_idx == JoinNoMatch) {
-        return cuda::std::tuple{left_idx, JoinNoMatch};  // Unmatched left row
-      } else {
-        return cuda::std::tuple{left_idx, JoinNoMatch};  // Matched pair that failed predicate
-      }
-    };
-
-    auto output_iter = thrust::make_zip_iterator(
-      cuda::std::tuple{filtered_left_indices->begin(), filtered_right_indices->begin()});
-
+    // Use two-step approach with optimized memory management
+    // Step 1: Handle primary pairs
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::counting_iterator{size_type{0}},
+                      thrust::counting_iterator{0},
                       thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
-                      output_iter,
-                      transform_op);
+                      thrust::make_zip_iterator(cuda::std::tuple{filtered_left_indices->begin(),
+                                                                 filtered_right_indices->begin()}),
+                      [=] __device__(size_type i) -> cuda::std::tuple<size_type, size_type> {
+                        auto const left_idx  = left_ptr[i];
+                        auto const right_idx = right_ptr[i];
+                        // For FULL JOIN: preserve original unmatched rows, nullify right side of
+                        // failed matches
+                        auto const output_right_idx =
+                          (predicate_results_ptr[i] || left_idx == JoinNoMatch) ? right_idx
+                                                                                : JoinNoMatch;
 
-    // Second pass: add additional (JoinNoMatch, right_idx) pairs for failed matches
+                        return cuda::std::tuple{left_idx, output_right_idx};
+                      });
+
+    // Step 2: Add secondary pairs for failed matches using stream compaction
     if (failed_matched_count > 0) {
-      rmm::device_uvector<size_type> temp_left(left_indices.size(), stream, mr);
-      rmm::device_uvector<size_type> temp_right(left_indices.size(), stream, mr);
-
-      thrust::transform(
-        rmm::exec_policy_nosync(stream),
-        thrust::counting_iterator{size_type{0}},
-        thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
-        thrust::make_zip_iterator(cuda::std::tuple{temp_left.begin(), temp_right.begin()}),
-        [=] __device__(size_type i) -> cuda::std::tuple<size_type, size_type> {
-          return cuda::std::tuple{JoinNoMatch, right_ptr[i]};
-        });
-
-      auto additional_iter = thrust::make_zip_iterator(
+      auto secondary_iter = thrust::make_zip_iterator(
         cuda::std::tuple{filtered_left_indices->begin() + left_indices.size(),
                          filtered_right_indices->begin() + left_indices.size()});
 
-      thrust::copy_if(
-        rmm::exec_policy_nosync(stream),
-        thrust::make_zip_iterator(cuda::std::tuple{temp_left.begin(), temp_right.begin()}),
-        thrust::make_zip_iterator(cuda::std::tuple{temp_left.end(), temp_right.end()}),
-        thrust::counting_iterator{size_type{0}},
-        additional_iter,
-        is_failed_matched_pair);
+      auto failed_match_iter = cudf::detail::make_counting_transform_iterator(
+        0, [=] __device__(size_type i) -> cuda::std::tuple<size_type, size_type> {
+          return cuda::std::tuple{JoinNoMatch, right_ptr[i]};
+        });
+      thrust::copy_if(rmm::exec_policy_nosync(stream),
+                      failed_match_iter,
+                      failed_match_iter + left_indices.size(),
+                      thrust::counting_iterator{0},
+                      secondary_iter,
+                      is_failed_matched_pair);
     }
 
     return std::pair{std::move(filtered_left_indices), std::move(filtered_right_indices)};
