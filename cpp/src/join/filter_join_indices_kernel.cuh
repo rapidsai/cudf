@@ -21,7 +21,7 @@
 namespace cudf::detail {
 
 /**
- * @brief Kernel to evaluate predicate on join index pairs and mark valid indices
+ * @brief Kernel to evaluate predicate on join index pairs and store results
  *
  * This kernel evaluates a predicate on matched pairs from the join indices.
  * Non-match indices from outer joins are always included without predicate evaluation.
@@ -37,7 +37,7 @@ __launch_bounds__(max_block_size) __global__
                                   cudf::device_span<cudf::size_type const> left_indices,
                                   cudf::device_span<cudf::size_type const> right_indices,
                                   cudf::ast::detail::expression_device_view device_expression_data,
-                                  bool* output_flags)
+                                  bool* predicate_results)
 {
   // Shared memory for intermediate storage
   extern __shared__ char raw_intermediate_storage[];
@@ -66,15 +66,15 @@ __launch_bounds__(max_block_size) __global__
     // Mixed join behavior: preserve unmatched rows, filter only matched rows
     if (has_non_match) {
       // Always include unmatched rows (non-match indices) without predicate evaluation
-      output_flags[i] = true;
+      predicate_results[i] = true;
     } else if (left_row_index >= 0 && left_row_index < left_table.num_rows() &&
                right_row_index >= 0 && right_row_index < right_table.num_rows()) {
       // Valid matched pair - evaluate predicate
       evaluator.evaluate(result, left_row_index, right_row_index, 0, thread_intermediate_storage);
-      output_flags[i] = result.is_valid() && result.value();
+      predicate_results[i] = result.is_valid() && result.value();
     } else {
       // Invalid indices (out of bounds - shouldn't happen in normal mixed join workflow)
-      output_flags[i] = false;
+      predicate_results[i] = false;
     }
   }
 }
@@ -91,12 +91,17 @@ void launch_filter_gather_map_kernel(
   cudf::ast::detail::expression_device_view device_expression_data,
   cudf::detail::grid_1d const& config,
   std::size_t shmem_per_block,
-  bool* output_flags,
+  bool* predicate_results,
   rmm::cuda_stream_view stream)
 {
   filter_join_indices_kernel<MAX_BLOCK_SIZE, has_nulls, has_complex_type>
     <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
-      left_table, right_table, left_indices, right_indices, device_expression_data, output_flags);
+      left_table,
+      right_table,
+      left_indices,
+      right_indices,
+      device_expression_data,
+      predicate_results);
 }
 
 }  // namespace cudf::detail

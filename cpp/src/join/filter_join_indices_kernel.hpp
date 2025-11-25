@@ -28,15 +28,15 @@ size_type constexpr MAX_BLOCK_SIZE = 256;
  * @tparam has_nulls Indicates whether the expression may evaluate to null
  * @tparam has_complex_type Indicates whether the expression may contain complex types
  *
- * @param left_table Device view of the left table
- * @param right_table Device view of the right table
- * @param left_indices Device span of left table indices
- * @param right_indices Device span of right table indices
- * @param device_expression_data Device data required to evaluate the expression
- * @param config Grid configuration for kernel launch
- * @param shmem_per_block Amount of shared memory to allocate per block
- * @param output_flags Output array to mark valid index pairs
- * @param stream CUDA stream on which to launch the kernel
+ * @param[in] left_table Device view of the left table
+ * @param[in] right_table Device view of the right table
+ * @param[in] left_indices Device span of left table indices
+ * @param[in] right_indices Device span of right table indices
+ * @param[in] device_expression_data Device data required to evaluate the expression
+ * @param[in] config Grid configuration for kernel launch
+ * @param[in] shmem_per_block Amount of shared memory to allocate per block
+ * @param[out] output_flags Device array to mark valid index pairs
+ * @param[in] stream CUDA stream on which to launch the kernel
  */
 template <bool has_nulls, bool has_complex_type>
 void launch_filter_gather_map_kernel(
