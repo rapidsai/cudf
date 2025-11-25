@@ -741,7 +741,7 @@ TEST_F(TDigestMergeTest, AllValuesAreNull)
   auto const expected_computed_vals =
     cudf::tdigest::detail::make_empty_tdigests_column(expected_computed_keys_view.size(),
                                                       cudf::get_default_stream(),
-                                                      rmm::mr::get_current_device_resource());
+                                                      cudf::get_current_device_resource_ref());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_computed_keys_view, compute_result->get_column(0).view());
   // The computed values are nullable even though the input values are not.
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_computed_vals->view(),
@@ -758,7 +758,7 @@ TEST_F(TDigestMergeTest, AllValuesAreNull)
   auto const expected_merged_vals =
     cudf::tdigest::detail::make_empty_tdigests_column(expected_merged_keys_view.size(),
                                                       cudf::get_default_stream(),
-                                                      rmm::mr::get_current_device_resource());
+                                                      cudf::get_current_device_resource_ref());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_merged_keys_view, merge_result->get_column(0).view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_merged_vals->view(), merge_result->get_column(1).view());
 }
@@ -791,7 +791,7 @@ TEST_F(TDigestMergeTest, AllValuesInOneGroupIsNull)
                                                std::make_unique<cudf::column>(expected_mins),
                                                std::make_unique<cudf::column>(expected_maxes),
                                                cudf::get_default_stream(),
-                                               rmm::mr::get_current_device_resource());
+                                               cudf::get_current_device_resource_ref());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(cudf::column_view{expected_keys},
                                  compute_result->get_column(0).view());
   // The computed values are nullable even though the input values are not.
