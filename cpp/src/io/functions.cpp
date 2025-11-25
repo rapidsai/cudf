@@ -821,7 +821,7 @@ void parquet_reader_options::set_num_rows(int64_t val)
 
 void parquet_reader_options::set_skip_bytes(size_t val)
 {
-  CUDF_EXPECTS(val == 0 or std::cmp_equal(_source.num_sources(), 1),
+  CUDF_EXPECTS(val == 0 or std::cmp_less_equal(_source.num_sources(), 1),
                "skip_bytes can only be set for single parquet source case");
   CUDF_EXPECTS(val == 0 or (not _num_rows.has_value() and _skip_rows == 0),
                "skip_bytes cannot be set along with skip_rows and num_rows");
@@ -833,7 +833,7 @@ void parquet_reader_options::set_skip_bytes(size_t val)
 
 void parquet_reader_options::set_num_bytes(size_t val)
 {
-  CUDF_EXPECTS(std::cmp_equal(_source.num_sources(), 1),
+  CUDF_EXPECTS(std::cmp_less_equal(_source.num_sources(), 1),
                "num_bytes can only be set for single parquet source case");
   CUDF_EXPECTS(not _num_rows.has_value() and _skip_rows == 0,
                "num_bytes cannot be set along with skip_rows and num_rows");

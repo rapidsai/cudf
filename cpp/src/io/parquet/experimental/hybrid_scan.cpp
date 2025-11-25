@@ -75,9 +75,7 @@ size_type hybrid_scan_reader::total_rows_in_row_groups(
 }
 
 std::vector<cudf::size_type> hybrid_scan_reader::filter_row_groups_with_byte_range(
-  cudf::host_span<size_type const> row_group_indices,
-  size_t bytes_to_skip,
-  std::optional<size_t> bytes_to_read) const
+  cudf::host_span<size_type const> row_group_indices, parquet_reader_options const& options) const
 {
   CUDF_FUNC_RANGE();
 
@@ -85,9 +83,7 @@ std::vector<cudf::size_type> hybrid_scan_reader::filter_row_groups_with_byte_ran
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
 
-  return _impl
-    ->filter_row_groups_with_byte_range(input_row_group_indices, bytes_to_skip, bytes_to_read)
-    .front();
+  return _impl->filter_row_groups_with_byte_range(input_row_group_indices, options).front();
 }
 
 std::vector<cudf::size_type> hybrid_scan_reader::filter_row_groups_with_stats(

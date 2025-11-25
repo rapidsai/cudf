@@ -247,7 +247,7 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithByteRanges)
   auto const footer_buffer = fetch_footer_bytes(file_buffer_span);
 
   // Create hybrid scan reader with footer bytes
-  auto const options = cudf::io::parquet_reader_options::builder().build();
+  auto options = cudf::io::parquet_reader_options::builder().build();
   auto const reader =
     std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
 
@@ -261,8 +261,9 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithByteRanges)
     // Start with all row groups and only read row group 0 as only it will start in [0, 1000) byte
     // range
     auto constexpr num_bytes = 1000;
+    options.set_num_bytes(num_bytes);
     auto const filtered_row_group_indices =
-      reader->filter_row_groups_with_byte_range(input_row_group_indices, 0, num_bytes);
+      reader->filter_row_groups_with_byte_range(input_row_group_indices, options);
     auto const expected_row_group_indices = std::vector<cudf::size_type>{0};
     EXPECT_EQ(filtered_row_group_indices, expected_row_group_indices);
   }
@@ -270,8 +271,10 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithByteRanges)
   {
     // Start with all row groups and skip row group 0 as it won't start in [1000, inf) byte range
     auto skip_bytes = 1000;
+    options.set_skip_bytes(skip_bytes);
+    options.set_num_bytes(std::numeric_limits<size_t>::max());
     auto filtered_row_group_indices =
-      reader->filter_row_groups_with_byte_range(input_row_group_indices, skip_bytes, {});
+      reader->filter_row_groups_with_byte_range(input_row_group_indices, options);
     auto expected_row_group_indices = std::vector<cudf::size_type>{1, 2, 3};
     EXPECT_EQ(filtered_row_group_indices, expected_row_group_indices);
 
@@ -279,8 +282,10 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithByteRanges)
     // 100000) byte range
     skip_bytes               = 50000;
     auto constexpr num_bytes = 50000;
+    options.set_skip_bytes(skip_bytes);
+    options.set_num_bytes(num_bytes);
     filtered_row_group_indices =
-      reader->filter_row_groups_with_byte_range(filtered_row_group_indices, skip_bytes, num_bytes);
+      reader->filter_row_groups_with_byte_range(filtered_row_group_indices, options);
     expected_row_group_indices = std::vector<cudf::size_type>{1};
     EXPECT_EQ(filtered_row_group_indices, expected_row_group_indices);
   }

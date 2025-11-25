@@ -90,8 +90,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    */
   [[nodiscard]] std::vector<std::vector<cudf::size_type>> filter_row_groups_with_byte_range(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
-    size_t bytes_to_skip,
-    std::optional<size_t> const& bytes_to_read) const;
+    parquet_reader_options const& options) const;
 
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::filter_row_groups_with_stats

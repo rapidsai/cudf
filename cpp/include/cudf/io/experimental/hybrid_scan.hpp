@@ -350,15 +350,12 @@ class hybrid_scan_reader {
    * selected. Note that the last selected row group may end beyond the byte range.
    *
    * @param row_group_indices Input row groups indices
-   * @param bytes_to_skip Bytes to skip before selecting row groups
-   * @param bytes_to_read Optional bytes to select row groups from after skipping. All row groups
-   * until the end of the file are selected if not provided
+   * @param options Parquet reader options
    * @return Filtered row group indices
    */
   [[nodiscard]] std::vector<size_type> filter_row_groups_with_byte_range(
     cudf::host_span<size_type const> row_group_indices,
-    size_t bytes_to_skip,
-    std::optional<size_t> bytes_to_read) const;
+    parquet_reader_options const& options) const;
 
   /**
    * @brief Filter the input row groups using column chunk statistics
