@@ -14,6 +14,7 @@
 #include <cudf/detail/row_operator/primitive_row_operators.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/join/filtered_join.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
 
