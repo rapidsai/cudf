@@ -33,7 +33,7 @@ using parquet::detail::row_group_info;
 /**
  * @brief Class for parsing dataset metadata
  */
-struct metadata : private metadata_base {
+struct metadata : public metadata_base {
   explicit metadata(cudf::host_span<uint8_t const> footer_bytes);
   explicit metadata(FileMetaData const& other) { static_cast<FileMetaData&>(*this) = other; }
   metadata(metadata const& other)            = delete;
@@ -42,8 +42,6 @@ struct metadata : private metadata_base {
   metadata& operator=(metadata&& other)      = default;
 
   ~metadata() = default;
-
-  metadata_base get_base_metadata() && { return std::move(*this); }
 };
 
 class aggregate_reader_metadata : public aggregate_reader_metadata_base {

@@ -30,6 +30,7 @@
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
+#include <thrust/pair.h>
 #include <thrust/reduce.h>
 #include <thrust/transform.h>
 #include <thrust/unique.h>
