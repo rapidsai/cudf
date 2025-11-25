@@ -144,8 +144,9 @@ class MaskCAIWrapper:
 class ROCAIWrapper:
     # A wrapper that exposes the __cuda_array_interface__ of a buffer as read-only to
     # avoid copy-on-write issues.
-    def __init__(self, buffer: Buffer) -> None:
+    def __init__(self, buffer: Buffer, mode: Literal["read", "write"]) -> None:
         self._buffer = buffer
+        self._mode = mode
 
     @property
     def owner(self) -> Buffer:
@@ -156,7 +157,7 @@ class ROCAIWrapper:
     @property
     def __cuda_array_interface__(self) -> Mapping:
         return {
-            "data": (self._buffer.get_ptr(mode="write"), False),
+            "data": (self._buffer.get_ptr(mode=self._mode), False),
             "shape": (self._buffer.size,),
             "strides": None,
             "typestr": "|u1",
@@ -650,7 +651,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             if not use_base:
                 assert col.data is not None
                 data_buff = col.data
-            data = plc.gpumemoryview(ROCAIWrapper(data_buff))
+            data = plc.gpumemoryview(ROCAIWrapper(data_buff, mode))
 
         mask = None
         if self.nullable:
@@ -661,7 +662,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             if not use_base:
                 assert self.mask is not None
                 mask_buff = self.mask
-            mask = plc.gpumemoryview(ROCAIWrapper(mask_buff))
+            mask = plc.gpumemoryview(ROCAIWrapper(mask_buff, mode))
 
         children = []
         if col.base_children:
