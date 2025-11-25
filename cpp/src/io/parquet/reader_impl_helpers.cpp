@@ -1431,9 +1431,8 @@ aggregate_reader_metadata::select_row_groups(
   }
 
   // Flag to check if the row groups will be filtered using byte bounds
-  bool const is_byte_bounded_row_groups = row_group_indices.empty() and
-
-                                          (skip_bytes_opt > 0 or byte_count_opt.has_value());
+  bool const is_byte_bounded_row_groups =
+    row_group_indices.empty() and (skip_bytes_opt > 0 or byte_count_opt.has_value());
 
   // We can't filter with both row bounds and byte bounds
   CUDF_EXPECTS(not(is_row_bounded_row_groups and is_byte_bounded_row_groups),

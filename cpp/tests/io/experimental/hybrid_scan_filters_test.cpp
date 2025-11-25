@@ -18,6 +18,9 @@
 
 #include <src/io/parquet/parquet_gpu.hpp>
 
+#include <filesystem>
+#include <fstream>
+
 namespace {
 
 /**
@@ -223,6 +226,64 @@ TEST_F(HybridScanFiltersTest, TestExternalMetadata)
 
   auto constexpr rows_per_row_group = page_size_for_ordered_tests;
   EXPECT_EQ(reader->total_rows_in_row_groups(input_row_group_indices), 2 * rows_per_row_group);
+}
+
+TEST_F(HybridScanFiltersTest, FilterRowGroupsWithByteRanges)
+{
+  using T                      = cudf::string_view;
+  auto const [table, filepath] = create_parquet_typed_with_stats<T>("ByteBounds.parquet");
+
+  auto const file_size = std::filesystem::file_size(filepath);
+  std::vector<char> file_buffer(file_size);
+  std::ifstream file{filepath, std::ifstream::binary};
+  file.read(file_buffer.data(), file_size);
+  file.close();
+
+  // Input file buffer span
+  auto const file_buffer_span = cudf::host_span<uint8_t const>(
+    reinterpret_cast<uint8_t const*>(file_buffer.data()), file_buffer.size());
+
+  // Fetch footer and page index bytes from the buffer.
+  auto const footer_buffer = fetch_footer_bytes(file_buffer_span);
+
+  // Create hybrid scan reader with footer bytes
+  auto const options = cudf::io::parquet_reader_options::builder().build();
+  auto const reader =
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
+
+  auto const input_row_group_indices = reader->all_row_groups(options);
+
+  // @note: In the above parquet file, the row groups start at the following byte offsets: 4, 75224,
+  // 150332, 225561. The `skip_bytes` and `num_bytes` have been chosen to have enough cushion but
+  // may need to be adjusted in the future if this test suddenly starts failing.
+
+  {
+    // Start with all row groups and only read row group 0 as only it will start in [0, 1000) byte
+    // range
+    auto constexpr num_bytes = 1000;
+    auto const filtered_row_group_indices =
+      reader->filter_row_groups_with_byte_range(input_row_group_indices, 0, num_bytes);
+    auto const expected_row_group_indices = std::vector<cudf::size_type>{0};
+    EXPECT_EQ(filtered_row_group_indices, expected_row_group_indices);
+  }
+
+  {
+    // Start with all row groups and skip row group 0 as it won't start in [1000, inf) byte range
+    auto skip_bytes = 1000;
+    auto filtered_row_group_indices =
+      reader->filter_row_groups_with_byte_range(input_row_group_indices, skip_bytes, {});
+    auto expected_row_group_indices = std::vector<cudf::size_type>{1, 2, 3};
+    EXPECT_EQ(filtered_row_group_indices, expected_row_group_indices);
+
+    // Now start with filtered row groups and only read row group 1 as only it starts in [50000,
+    // 100000) byte range
+    skip_bytes               = 50000;
+    auto constexpr num_bytes = 50000;
+    filtered_row_group_indices =
+      reader->filter_row_groups_with_byte_range(filtered_row_group_indices, skip_bytes, num_bytes);
+    expected_row_group_indices = std::vector<cudf::size_type>{1};
+    EXPECT_EQ(filtered_row_group_indices, expected_row_group_indices);
+  }
 }
 
 TEST_F(HybridScanFiltersTest, FilterRowGroupsWithStats)

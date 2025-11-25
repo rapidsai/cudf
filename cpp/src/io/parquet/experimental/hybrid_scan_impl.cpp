@@ -168,6 +168,23 @@ size_type hybrid_scan_reader_impl::total_rows_in_row_groups(
   return _extended_metadata->total_rows_in_row_groups(row_group_indices);
 }
 
+std::vector<std::vector<cudf::size_type>>
+hybrid_scan_reader_impl::filter_row_groups_with_byte_range(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  size_t bytes_to_skip,
+  std::optional<size_t> const& bytes_to_read) const
+{
+  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+
+  if (bytes_to_skip == 0 and not bytes_to_read.has_value()) {
+    return std::vector<std::vector<cudf::size_type>>{row_group_indices.begin(),
+                                                     row_group_indices.end()};
+  }
+
+  return _extended_metadata->filter_row_groups_with_byte_range(
+    row_group_indices, bytes_to_skip, bytes_to_read);
+}
+
 std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_with_stats(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options,
