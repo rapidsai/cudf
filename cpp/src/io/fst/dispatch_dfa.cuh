@@ -219,8 +219,8 @@ struct DispatchFSM : DeviceFSMPolicy {
     cudaError_t error;
 
     // Get PTX version
-    int ptx_version;
-    error = cub::PtxVersion(ptx_version);
+    int ptx_version = 0;
+    error           = cub::PtxVersion(ptx_version);
     if (error != cudaSuccess) return error;
 
     // Create dispatch functor
