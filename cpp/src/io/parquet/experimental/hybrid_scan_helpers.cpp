@@ -282,8 +282,8 @@ aggregate_reader_metadata::select_payload_columns(
 std::vector<std::vector<cudf::size_type>>
 aggregate_reader_metadata::filter_row_groups_with_byte_range(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  size_t bytes_to_skip,
-  std::optional<size_t> const& bytes_to_read) const
+  std::size_t bytes_to_skip,
+  std::optional<std::size_t> const& bytes_to_read) const
 {
   return apply_byte_bounds_filter(row_group_indices, bytes_to_skip, bytes_to_read);
 }

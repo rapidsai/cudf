@@ -74,7 +74,7 @@ size_type hybrid_scan_reader::total_rows_in_row_groups(
   return _impl->total_rows_in_row_groups(input_row_group_indices);
 }
 
-std::vector<cudf::size_type> hybrid_scan_reader::filter_row_groups_with_byte_range(
+std::vector<size_type> hybrid_scan_reader::filter_row_groups_with_byte_range(
   cudf::host_span<size_type const> row_group_indices, parquet_reader_options const& options) const
 {
   CUDF_FUNC_RANGE();
