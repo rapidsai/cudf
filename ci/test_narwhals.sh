@@ -38,7 +38,7 @@ test_fill_null_series_limit_as_none[cudf] \
 "
 
 rapids-logger "Run narwhals tests for cuDF"
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
+timeout 15m PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
     --cache-clear \
     -p xdist \
     -p env \
@@ -61,7 +61,7 @@ test_to_datetime_tz_aware[polars[lazy]-None] \
 "
 
 rapids-logger "Run narwhals tests for cuDF Polars"
-CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE=805306368 \
+timeout 15m CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE=805306368 \
 CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
 NARWHALS_POLARS_GPU=1 \
@@ -124,7 +124,7 @@ test_explode_multiple_cols or \
 (test_get_dtype_backend and pyarrow and (pandas or modin)) \
 "
 
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
+timeout 15m PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
     -p cudf.pandas \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-pandas-narwhals.xml" \
