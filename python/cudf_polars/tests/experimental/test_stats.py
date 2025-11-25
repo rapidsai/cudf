@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import math
+import pickle
 
 import pytest
 
@@ -436,6 +437,21 @@ def test_base_stats_join_key_info(engine):
     )
     assert local_unique_count == source_unique_count
     assert stats.row_count[ir].value == q.collect().height
+
+
+def test_dataframescan_stats_pickle(engine):
+    df = pl.DataFrame({"x": range(100), "y": [1, 2] * 50})
+    q = pl.LazyFrame(df)
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    stats = collect_base_stats(ir, ConfigOptions.from_polars_engine(engine))
+
+    # Pickle and unpickle the stats collector
+    pickled = pickle.dumps(stats)
+    unpickled_stats = pickle.loads(pickled)
+
+    # Verify the unpickled stats are equivalent
+    assert type(unpickled_stats) is type(stats)
+    assert unpickled_stats.column_stats[ir]["x"].source_info.row_count.value == 100
 
 
 @pytest.mark.parametrize("use_io_partitioning", [True, False])
