@@ -909,10 +909,10 @@ class DataFrameSourceInfo(DataSourceInfo):
 
     def __init__(
         self,
-        df: Any,
+        df: pl.DataFrame,
         stats_planning: StatsPlanningOptions,
     ):
-        self._df = df
+        self._pdf = df
         self._stats_planning = stats_planning
         self._key_columns: set[str] = set()
         self._unique_stats_columns = set()
@@ -921,17 +921,19 @@ class DataFrameSourceInfo(DataSourceInfo):
     @functools.cached_property
     def row_count(self) -> ColumnStat[int]:
         """Data source row-count estimate."""
-        return ColumnStat[int](value=self._df.height(), exact=True)
+        return ColumnStat[int](value=self._pdf.height, exact=True)
 
     def _update_unique_stats(self, column: str) -> None:
         if column not in self._unique_stats and self._stats_planning.use_sampling:
             row_count = self.row_count.value
             try:
                 unique_count = (
-                    self._df.get_column(column).approx_n_unique() if row_count else 0
+                    self._pdf._df.get_column(column).approx_n_unique()
+                    if row_count
+                    else 0
                 )
             except pl.exceptions.InvalidOperationError:  # pragma: no cover
-                unique_count = self._df.get_column(column).n_unique()
+                unique_count = self._pdf._df.get_column(column).n_unique()
             unique_fraction = min((unique_count / row_count), 1.0) if row_count else 1.0
             self._unique_stats[column] = UniqueStats(
                 ColumnStat[int](value=unique_count),
@@ -952,7 +954,7 @@ def _extract_dataframescan_stats(
         "Only streaming executor is supported in _extract_dataframescan_stats"
     )
     table_source_info = DataFrameSourceInfo(
-        ir.df,
+        pl.DataFrame._from_pydf(ir.df),
         config_options.executor.stats_planning,
     )
     return {

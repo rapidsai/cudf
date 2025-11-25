@@ -1291,6 +1291,42 @@ class DataFrameScan(IR):
         self.children = ()
         self._id_for_hash = random.randint(0, 2**64 - 1)
 
+    @staticmethod
+    def _reconstruct(
+        schema: Schema,
+        pl_df: pl.DataFrame,
+        projection: Sequence[str] | None,
+        id_for_hash: int,
+    ) -> DataFrameScan:  # pragma: no cover
+        """
+        Reconstruct a DataFrameScan from pickled data.
+
+        Parameters
+        ----------
+        schema: Schema
+            The schema of the DataFrameScan.
+        pl_df: pl.DataFrame
+            The underlying polars DataFrame.
+        projection: Sequence[str] | None
+            The projection of the DataFrameScan.
+        id_for_hash: int
+            The id for hash of the DataFrameScan.
+
+        Returns
+        -------
+        The reconstructed DataFrameScan.
+        """
+        node = DataFrameScan(schema, pl_df._df, projection)
+        node._id_for_hash = id_for_hash
+        return node
+
+    def __reduce__(self) -> tuple[Any, ...]:  # pragma: no cover
+        """Pickle a DataFrameScan object."""
+        return (
+            self._reconstruct,
+            (*self._non_child_args, self._id_for_hash),
+        )
+
     def get_hashable(self) -> Hashable:
         """
         Hashable representation of the node.
