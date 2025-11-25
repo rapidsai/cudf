@@ -60,7 +60,6 @@ NVBENCH_BENCH(bench_copy)
   .set_name("copy")
   .add_int64_axis("min_width", {0})
   .add_int64_axis("max_width", {32, 64, 128, 256})
-  .add_int64_axis(
-    "num_rows",
-    {131072, 262144, 524288, 1048576, 2097152, 4194304, 8388608, 16777216, 33554432})
+  .add_int64_axis("num_rows",
+                  {131072, 262144, 524288, 1048576, 2097152, 4194304, 8388608, 16777216, 33554432})
   .add_string_axis("api", {"gather", "scatter"});
