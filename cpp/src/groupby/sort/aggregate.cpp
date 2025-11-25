@@ -132,22 +132,11 @@ void aggregate_result_functor::operator()<aggregation::SUM>(aggregation const& a
 {
   if (cache.has_result(values, agg)) return;
 
-  auto const grouped_values = [&] {
-    auto const values = get_grouped_values();
-    if (auto const& sum_agg = dynamic_cast<cudf::detail::sum_aggregation const&>(agg);
-        sum_agg.nullable == cudf::nullable_output::YES) {
-      return values;
-    }
-    // If the output is not allowed to have nulls, we just strip out the null mask which effectively
-    // results in a `0` sum for the all-null groups.
-    return column_view{values.type(), values.size(), values.head(), nullptr, 0, values.offset()};
-  }();
-
   cache.add_result(
     values,
     agg,
     detail::group_sum(
-      grouped_values, helper.num_groups(stream), helper.group_labels(stream), stream, mr));
+      get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr));
 }
 
 template <>
