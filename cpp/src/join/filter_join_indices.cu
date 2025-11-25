@@ -154,11 +154,6 @@ filter_join_indices(cudf::table_view const& left,
                      std::make_unique<rmm::device_uvector<size_type>>(size, stream, mr)};
   };
 
-  auto make_full_range = [&]() {
-    return std::pair{thrust::counting_iterator{size_type{0}},
-                     thrust::counting_iterator{static_cast<size_type>(left_indices.size())}};
-  };
-
   // Handle different join semantics
   if (join_kind == join_kind::INNER_JOIN) {
     // INNER_JOIN: only keep pairs that satisfy the predicate AND have valid indices
@@ -167,9 +162,11 @@ filter_join_indices(cudf::table_view const& left,
       return indices_valid && predicate_results_ptr[i];
     };
 
-    auto [begin_iter, end_iter] = make_full_range();
     auto const num_valid =
-      thrust::count_if(rmm::exec_policy_nosync(stream), begin_iter, end_iter, valid_predicate);
+      thrust::count_if(rmm::exec_policy_nosync(stream),
+                       thrust::counting_iterator{0},
+                       thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
+                       valid_predicate);
 
     if (num_valid == 0) { return make_empty_result(); }
 
@@ -221,9 +218,11 @@ filter_join_indices(cudf::table_view const& left,
     };
 
     // Count failed matches for output sizing
-    auto [begin_iter, end_iter]     = make_full_range();
-    auto const failed_matched_count = thrust::count_if(
-      rmm::exec_policy_nosync(stream), begin_iter, end_iter, is_failed_matched_pair);
+    auto const failed_matched_count =
+      thrust::count_if(rmm::exec_policy_nosync(stream),
+                       thrust::counting_iterator{0},
+                       thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
+                       is_failed_matched_pair);
     auto const output_size = left_indices.size() + failed_matched_count;
 
     if (output_size == 0) { return make_empty_result(); }
