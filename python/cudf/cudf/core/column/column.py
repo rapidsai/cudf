@@ -387,6 +387,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             # This happens both when the buffer object is replaced and when
             # ExposureTrackedBuffer.make_single_owner_inplace() is called
             if cudf.get_option("copy_on_write") and (ptr != original_ptr):
+                # The offset must be reset to 0 because we have migrated to a new copied
+                # buffer starting at the old offset.
+                self._offset = 0
                 # Update base_data to match the new data buffer
                 self.set_base_data(self.data)
 
