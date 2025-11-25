@@ -8,10 +8,10 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
-from rapidsmpf.buffer.buffer import MemoryType
-from rapidsmpf.buffer.resource import BufferResource, LimitAvailableMemory
 from rapidsmpf.communicator.single import new_communicator
 from rapidsmpf.config import Options, get_environment_variables
+from rapidsmpf.memory.buffer import MemoryType
+from rapidsmpf.memory.buffer_resource import BufferResource, LimitAvailableMemory
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.leaf_node import pull_from_channel
@@ -91,7 +91,15 @@ def evaluate_logical_plan(
     # TODO: Multi-GPU version will be different. The rest of this function
     #       will be executed on each rank independently.
     # TODO: Need a way to configure options specific to the rapidmspf engine.
-    options = Options(get_environment_variables())
+    options = Options(
+        {
+            # By default, set the number of streaming threads to the max
+            # number of IO threads. The user may override this with an
+            # environment variable (i.e. RAPIDSMPF_NUM_STREAMING_THREADS)
+            "num_streaming_threads": str(max(config_options.executor.max_io_threads, 1))
+        }
+        | get_environment_variables()
+    )
     comm = new_communicator(options)
     mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
     rmm.mr.set_current_device_resource(mr)
@@ -186,12 +194,15 @@ def lower_ir_graph(
         Root of the graph to rewrite.
     config_options
         GPUEngine configuration options.
+    stats
+        The statistics collector.
 
     Returns
     -------
     new_ir, partition_info, stats
-        The rewritten graph, and a mapping from unique nodes
-        in the new graph to associated partitioning information.
+        The rewritten graph, a mapping from unique nodes
+        in the new graph to associated partitioning information,
+        and the statistics collector.
 
     Notes
     -----
@@ -322,8 +333,9 @@ def generate_network(
     # Determine which nodes need fanout
     fanout_nodes = determine_fanout_nodes(ir, partition_info, ir_dep_count)
 
-    # TODO: Make this configurable
-    max_io_threads_global = 2
+    # Get max_io_threads from config (default: 2)
+    assert config_options.executor.name == "streaming", "Executor must be streaming"
+    max_io_threads_global = config_options.executor.max_io_threads
     max_io_threads_local = max(1, max_io_threads_global // max(1, num_io_nodes))
 
     # Generate the network

@@ -10,6 +10,7 @@
 
 #include <cuda/functional>
 #include <thrust/iterator/zip_iterator.h>
+#include <thrust/pair.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
