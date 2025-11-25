@@ -442,30 +442,21 @@ std::vector<std::unique_ptr<aggregation>> aggregation::get_simple_aggregations(
 
 /// Factory to create a SUM aggregation
 template <typename Base>
-std::unique_ptr<Base> make_sum_aggregation(nullable_output nullable)
+std::unique_ptr<Base> make_sum_aggregation()
 {
-  if constexpr (!std::is_same_v<Base, aggregation> && !std::is_same_v<Base, groupby_aggregation>) {
-    // The base `aggregation` class is instantiated only for cache lookup purposes, thus
-    // we only enforce nullable output for derived aggregation classes other than groupby.
-    CUDF_EXPECTS(nullable == nullable_output::YES,
-                 "Non-nullable SUM aggregation is only supported for groupby operations.");
-  }
-  return std::make_unique<detail::sum_aggregation>(nullable);
+  return std::make_unique<detail::sum_aggregation>();
 }
-template CUDF_EXPORT std::unique_ptr<aggregation> make_sum_aggregation<aggregation>(
-  nullable_output);
-template CUDF_EXPORT std::unique_ptr<rolling_aggregation> make_sum_aggregation<rolling_aggregation>(
-  nullable_output);
-template CUDF_EXPORT std::unique_ptr<groupby_aggregation> make_sum_aggregation<groupby_aggregation>(
-  nullable_output);
+template CUDF_EXPORT std::unique_ptr<aggregation> make_sum_aggregation<aggregation>();
+template CUDF_EXPORT std::unique_ptr<rolling_aggregation>
+make_sum_aggregation<rolling_aggregation>();
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_sum_aggregation<groupby_aggregation>();
 template CUDF_EXPORT std::unique_ptr<groupby_scan_aggregation>
-  make_sum_aggregation<groupby_scan_aggregation>(nullable_output);
-template CUDF_EXPORT std::unique_ptr<reduce_aggregation> make_sum_aggregation<reduce_aggregation>(
-  nullable_output);
-template CUDF_EXPORT std::unique_ptr<scan_aggregation> make_sum_aggregation<scan_aggregation>(
-  nullable_output);
+make_sum_aggregation<groupby_scan_aggregation>();
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation> make_sum_aggregation<reduce_aggregation>();
+template CUDF_EXPORT std::unique_ptr<scan_aggregation> make_sum_aggregation<scan_aggregation>();
 template CUDF_EXPORT std::unique_ptr<segmented_reduce_aggregation>
-  make_sum_aggregation<segmented_reduce_aggregation>(nullable_output);
+make_sum_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a SUM_WITH_OVERFLOW aggregation
 template <typename Base>

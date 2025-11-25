@@ -69,15 +69,6 @@ enum class bitwise_op : int32_t {
 };
 
 /**
- * @brief Define the behavior of the aggregation output, allowing to apply optimization to bypass
- * launching the kernel computing null count and null mask in some aggregations.
- */
-enum class nullable_output : int32_t {
-  YES,  ///< The output may have nulls
-  NO    ///< The output will never have nulls
-};
-
-/**
  * @brief Abstract base class for specifying the desired aggregation in an
  * `aggregation_request`.
  *
@@ -268,7 +259,7 @@ enum class ewm_history : int32_t { INFINITE, FINITE };
 /// Factory to create a SUM aggregation
 /// @return A SUM aggregation object
 template <typename Base = aggregation>
-std::unique_ptr<Base> make_sum_aggregation(nullable_output nullable = nullable_output::YES);
+std::unique_ptr<Base> make_sum_aggregation();
 
 /// Factory to create a SUM_WITH_OVERFLOW aggregation
 /// @return A SUM_WITH_OVERFLOW aggregation object
