@@ -22,10 +22,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
-#include <thrust/pair.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -39,7 +39,7 @@ namespace {
  */
 template <typename IntegerType>
 struct string_to_integer_check_fn {
-  __device__ bool operator()(thrust::pair<string_view, bool> const& p) const
+  __device__ bool operator()(cuda::std::pair<string_view, bool> const& p) const
   {
     if (!p.second || p.first.empty()) { return false; }
 
