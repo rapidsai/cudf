@@ -24,8 +24,6 @@ from cudf_polars.experimental.rapidsmpf.utils import ChannelManager, empty_table
 from cudf_polars.experimental.shuffle import Shuffle
 
 if TYPE_CHECKING:
-    from types import TracebackType
-
     from rapidsmpf.streaming.core.context import Context
 
     import pylibcudf as plc
@@ -36,9 +34,9 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
 
 
-class ShuffleContext:
+class ShuffleManager:
     """
-    ShufflerAsync context manager.
+    ShufflerAsync manager.
 
     Parameters
     ----------
@@ -62,26 +60,11 @@ class ShuffleContext:
         self.context = context
         self.num_partitions = num_partitions
         self.columns_to_hash = columns_to_hash
-        self.collective_id = collective_id
-        self._insertion_finished = False
-
-    def __enter__(self) -> ShuffleContext:
-        """Enter the local shuffle instance context manager."""
         self.shuffler = ShufflerAsync(
-            self.context,
-            self.collective_id,
-            self.num_partitions,
+            context,
+            collective_id,
+            num_partitions,
         )
-        return self
-
-    def __exit__(
-        self,
-        exc_type: type | None,
-        exc_val: Exception | None,
-        exc_tb: TracebackType | None,
-    ) -> None:
-        """Exit the ShuffleContext manager."""
-        del self.shuffler
 
     def insert_chunk(self, chunk: TableChunk) -> None:
         """
@@ -104,9 +87,13 @@ class ShuffleContext:
         # Insert into shuffler
         self.shuffler.insert(partitioned_chunks)
 
+    async def insert_finished(self) -> None:
+        """Insert finished into the ShuffleManager."""
+        await self.shuffler.insert_finished(self.context)
+
     async def extract_chunk(self, sequence_number: int, stream: Stream) -> plc.Table:
         """
-        Extract a chunk from the ShuffleContext.
+        Extract a chunk from the ShuffleManager.
 
         Parameters
         ----------
@@ -119,10 +106,6 @@ class ShuffleContext:
         -------
         The extracted table.
         """
-        if not self._insertion_finished:
-            await self.shuffler.insert_finished(self.context)
-            self._insertion_finished = True
-
         partition_chunks = await self.shuffler.extract_async(
             self.context, sequence_number
         )
@@ -173,54 +156,56 @@ async def shuffle_node(
     async with shutdown_on_error(
         context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
     ):
-        # Create ShuffleContext context manager to handle shuffler lifecycle
-        with ShuffleContext(
+        # Create ShuffleManager instance
+        shuffle = ShuffleManager(
             context, num_partitions, columns_to_hash, collective_id
-        ) as shuffle:
-            # Process input chunks
-            while True:
-                msg = await ch_in.data.recv(context)
-                if msg is None:
-                    break
+        )
 
-                # Extract TableChunk from message
-                chunk = TableChunk.from_message(msg).make_available_and_spill(
-                    context.br(), allow_overbooking=True
-                )
+        # Process input chunks
+        while (msg := await ch_in.data.recv(context)) is not None:
+            # Extract TableChunk from message
+            chunk = TableChunk.from_message(msg).make_available_and_spill(
+                context.br(), allow_overbooking=True
+            )
 
-                # Get the table view and insert into shuffler
-                shuffle.insert_chunk(chunk)
+            # Get the table view and insert into shuffler
+            shuffle.insert_chunk(chunk)
 
-            # Extract shuffled partitions and send them out
-            num_partitions_local = 0
-            stream = ir_context.get_cuda_stream()
-            for partition_id in range(
-                # Round-robin partition assignment
-                context.comm().rank,
-                num_partitions,
-                context.comm().nranks,
-            ):
-                # Create a new TableChunk with the result
-                output_chunk = TableChunk.from_pylibcudf_table(
-                    table=await shuffle.extract_chunk(partition_id, stream),
-                    stream=stream,
-                    exclusive_view=True,
-                )
+        # Insert finished
+        await shuffle.insert_finished()
 
-                # Send the output chunk
-                await ch_out.data.send(context, Message(partition_id, output_chunk))
-                num_partitions_local += 1
+        # Extract shuffled partitions and send them out
+        num_partitions_local = 0
+        stream = ir_context.get_cuda_stream()
+        for partition_id in range(
+            # Round-robin partition assignment
+            context.comm().rank,
+            num_partitions,
+            context.comm().nranks,
+        ):
+            # Create a new TableChunk with the result
+            output_chunk = TableChunk.from_pylibcudf_table(
+                table=await shuffle.extract_chunk(partition_id, stream),
+                stream=stream,
+                exclusive_view=True,
+            )
 
-            # Make sure we send at least one chunk.
-            # This can happen during multi-GPU execution.
-            if num_partitions_local < 1:
-                await ch_out.data.send(
-                    context,
-                    Message(
-                        num_partitions + 1,
-                        empty_table_chunk(ir, context, stream),
-                    ),
-                )
+            # Send the output chunk
+            await ch_out.data.send(context, Message(partition_id, output_chunk))
+            num_partitions_local += 1
+
+        # Make sure we send at least one chunk.
+        # This can happen during multi-GPU execution.
+        # TODO: Investigate and address the underlying issue(s)
+        # with skipping this empty-table message.
+        if num_partitions_local < 1:
+            await ch_out.data.send(
+                context,
+                Message(
+                    num_partitions + 1,
+                    empty_table_chunk(ir, context, stream),
+                ),
+            )
 
         await ch_out.data.drain(context)
 
