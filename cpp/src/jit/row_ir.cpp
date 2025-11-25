@@ -117,7 +117,8 @@ std::string set_output::generate_code(instance_context& ctx,
 operation::operation(opcode op, std::unique_ptr<node>* move_begin, std::unique_ptr<node>* move_end)
   : id_(), op_(op), operands_(), type_()
 {
-  std::move(move_begin, move_end, std::back_inserter(operands_));
+  operands_.insert(
+    operands_.begin(), std::make_move_iterator(move_begin), std::make_move_iterator(move_end));
   CUDF_EXPECTS(static_cast<size_type>(operands_.size()) == ast::detail::ast_operator_arity(op),
                "Invalid number of arguments for operator.",
                std::invalid_argument);
