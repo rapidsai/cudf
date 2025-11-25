@@ -127,7 +127,7 @@ enum class use_data_page_mask : bool {
  *
  * // Optional: Prune row group indices to the ones that start within the byte range
  * auto byte_range_filtered_row_group_indices = reader->filter_row_groups_with_byte_range(
- *   current_row_group_indices, bytes_to_skip, bytes_to_read);
+ *   current_row_group_indices, options);
  *
  * // Update current row group indices to byte range filtered row group indices
  * current_row_group_indices = byte_range_filtered_row_group_indices;
