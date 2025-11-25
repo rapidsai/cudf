@@ -85,7 +85,10 @@ main() {
         trap "EXITCODE=1" ERR
         set +e
 
-        timeout 45m TEST_DIR=${TEST_DIR} NUM_PROCESSES=${NUM_PROCESSES} ci/cudf_pandas_scripts/third-party-integration/run-library-tests.sh "${lib}"
+        TEST_DIR=${TEST_DIR} \
+        NUM_PROCESSES=${NUM_PROCESSES} \
+            timeout 45m \
+            ci/cudf_pandas_scripts/third-party-integration/run-library-tests.sh "${lib}"
 
         set -e
         rapids-logger "Test script exiting with value: ${EXITCODE}"
