@@ -318,7 +318,7 @@ std::unique_ptr<cudf::table> cross_join(
 /**
  * @brief Filters join result indices based on a conditional predicate and join type.
  *
- * This function takes the result indices from a hash join operation and applies
+ * This function takes the result indices from a hash/sort join operation and applies
  * a conditional predicate to filter the pairs. The behavior depends on the join type:
  *
  * - **INNER_JOIN**: Only pairs that satisfy the predicate and have valid indices are kept.
@@ -340,10 +340,6 @@ std::unique_ptr<cudf::table> cross_join(
  * @param right_indices Device span of row indices in the right table from hash join.
  * @param predicate An AST expression that returns a boolean for each pair of rows.
  * @param join_kind The type of join operation (INNER_JOIN, LEFT_JOIN, or FULL_JOIN).
- *                  INNER_JOIN: Only pairs that satisfy the predicate and have valid indices.
- *                  LEFT_JOIN: All left rows preserved, failed predicates nullify right indices.
- *                  FULL_JOIN: All rows from both sides preserved, failed predicates create separate
- * pairs.
  * @param stream CUDA stream used for kernel launches and memory operations.
  * @param mr Device memory resource used to allocate output indices.
  *
