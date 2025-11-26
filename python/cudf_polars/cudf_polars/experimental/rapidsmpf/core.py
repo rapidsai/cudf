@@ -33,7 +33,10 @@ from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext, Join, Scan, Un
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.rapidsmpf.collectives import ReserveOpIDs
 from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo, lower_ir_node
-from cudf_polars.experimental.rapidsmpf.nodes import generate_ir_sub_network_wrapper
+from cudf_polars.experimental.rapidsmpf.nodes import (
+    generate_ir_sub_network_wrapper,
+    metadata_drain_node,
+)
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import CUDAStreamPoolConfig
@@ -41,6 +44,7 @@ from cudf_polars.utils.config import CUDAStreamPoolConfig
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
+    from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.leaf_node import DeferredMessages
 
     import polars as pl
@@ -362,18 +366,23 @@ def generate_network(
     nodes_dict, channels = mapper(ir)
     ch_out = channels[ir].reserve_output_slot()
 
-    # TODO: We will need an additional node here to drain
-    # the metadata channel once we start plumbing metadata
-    # through the network. This node could also drop
-    # "duplicated" data on all but rank 0.
+    # Add node to drain metadata channel before pull_from_channel
+    # (since pull_from_channel doesn't accept a ChannelPair)
+    ch_final_data: Channel[TableChunk] = context.create_channel()
+    drain_node = metadata_drain_node(
+        context,
+        ir,
+        ir_context,
+        ch_out,
+        ch_final_data,
+    )
 
     # Add final node to pull from the output data channel
-    # (metadata channel is unused)
-    output_node, output = pull_from_channel(context, ch_in=ch_out.data)
+    output_node, output = pull_from_channel(context, ch_in=ch_final_data)
 
     # Flatten the nodes dictionary into a list for run_streaming_pipeline
     nodes: list[Any] = [node for node_list in nodes_dict.values() for node in node_list]
-    nodes.append(output_node)
+    nodes.extend([drain_node, output_node])
 
     # Return network and output hook
     return nodes, output
