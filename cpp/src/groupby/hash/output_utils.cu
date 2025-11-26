@@ -52,9 +52,8 @@ struct result_column_creator {
   {
     auto const col_type =
       is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
-    auto const nullable = force_non_nullable ? false
-                                             : agg != aggregation::COUNT_VALID &&
-                                                 agg != aggregation::COUNT_ALL && col.has_nulls();
+    auto const nullable = !force_non_nullable && agg != aggregation::COUNT_VALID &&
+                          agg != aggregation::COUNT_ALL && col.has_nulls();
     // TODO: Remove adjusted buffer size workaround once https://github.com/NVIDIA/cccl/issues/6430
     // is fixed. Use adjusted buffer size for small data types to ensure atomic operation safety.
     auto const make_uninitialized_column = [&](data_type d_type, size_type size, mask_state state) {
