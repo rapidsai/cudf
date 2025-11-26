@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 from distributed import get_client
 from rapidsmpf.config import Options, get_environment_variables
@@ -16,13 +16,32 @@ import polars as pl
 from cudf_polars.experimental.dask_registers import DaskRegisterManager
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, MutableMapping
+    from collections.abc import MutableMapping
 
     from distributed import Client
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
+    from cudf_polars.experimental.rapidsmpf.utils import Metadata
+
+
+class EvaluatePipelineCallback(Protocol):
+    """Protocol for the evaluate_pipeline callback."""
+
+    def __call__(
+        self,
+        ir: IR,
+        partition_info: MutableMapping[IR, PartitionInfo],
+        config_options: ConfigOptions,
+        stats: StatsCollector,
+        collective_id_map: dict[IR, int],
+        rmpf_context: Context | None = None,
+        *,
+        collect_metadata: bool = False,
+    ) -> tuple[pl.DataFrame, list[Metadata] | None]:
+        """Evaluate a pipeline and return the result DataFrame and metadata."""
+        ...
 
 
 def get_dask_client() -> Client:
@@ -34,23 +53,15 @@ def get_dask_client() -> Client:
 
 
 def evaluate_pipeline_dask(
-    callback: Callable[
-        [
-            IR,
-            MutableMapping[IR, PartitionInfo],
-            ConfigOptions,
-            StatsCollector,
-            dict[IR, int],
-            Context | None,
-        ],
-        pl.DataFrame,
-    ],
+    callback: EvaluatePipelineCallback,
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
     stats: StatsCollector,
     shuffle_id_map: dict[IR, int],
-) -> pl.DataFrame:
+    *,
+    collect_metadata: bool = False,
+) -> tuple[pl.DataFrame, list[Metadata] | None]:
     """
     Evaluate a RapidsMPF streaming pipeline on a Dask cluster.
 
@@ -68,10 +79,12 @@ def evaluate_pipeline_dask(
         The statistics collector.
     shuffle_id_map
         Mapping from Shuffle/Repartition/Join IR nodes to reserved shuffle IDs.
+    collect_metadata
+        Whether to collect metadata.
 
     Returns
     -------
-    The output DataFrame.
+    The output DataFrame and metadata collector.
     """
     client = get_dask_client()
     result = client.run(
@@ -82,29 +95,29 @@ def evaluate_pipeline_dask(
         config_options,
         stats,
         shuffle_id_map,
+        collect_metadata=collect_metadata,
     )
-    return pl.concat(result.values())
+    dfs: list[pl.DataFrame] = []
+    metadata_collector: list[Metadata] = []
+    for df, md in result.values():
+        dfs.append(df)
+        if md is not None:
+            metadata_collector.extend(md)
+
+    return pl.concat(dfs), metadata_collector or None
 
 
 def _evaluate_pipeline_dask(
-    callback: Callable[
-        [
-            IR,
-            MutableMapping[IR, PartitionInfo],
-            ConfigOptions,
-            StatsCollector,
-            dict[IR, int],
-            Context | None,
-        ],
-        pl.DataFrame,
-    ],
+    callback: EvaluatePipelineCallback,
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
     stats: StatsCollector,
     shuffle_id_map: dict[IR, int],
     dask_worker: Any = None,
-) -> pl.DataFrame:
+    *,
+    collect_metadata: bool = False,
+) -> tuple[pl.DataFrame, list[Metadata] | None]:
     """
     Build and evaluate a RapidsMPF streaming pipeline.
 
@@ -126,10 +139,12 @@ def _evaluate_pipeline_dask(
         Dask worker reference.
         This kwarg is automatically populated by Dask
         when evaluate_pipeline is called with `client.run`.
+    collect_metadata
+        Whether to collect metadata.
 
     Returns
     -------
-    The output DataFrame.
+    The output DataFrame and metadata collector.
     """
     options = Options(get_environment_variables())
 
@@ -144,5 +159,11 @@ def _evaluate_pipeline_dask(
 
     # IDs are already reserved by the caller, just pass them through
     return callback(
-        ir, partition_info, config_options, stats, shuffle_id_map, rmpf_context
+        ir,
+        partition_info,
+        config_options,
+        stats,
+        shuffle_id_map,
+        rmpf_context,
+        collect_metadata=collect_metadata,
     )

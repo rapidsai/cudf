@@ -630,6 +630,13 @@ def _(
             partition_info,
         )
 
+    # Native node cannot split large files in distributed mode yet
+    if (
+        config_options.executor.cluster == "distributed"
+        and plan.flavor == IOPartitionFlavor.SPLIT_FILES
+    ):
+        native_node = None
+
     if native_node is not None:
         # Need metadata node, because the native read_parquet
         # node does not send metadata.
