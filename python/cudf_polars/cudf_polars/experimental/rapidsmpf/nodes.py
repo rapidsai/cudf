@@ -14,12 +14,14 @@ from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.ir import IR, Empty
+from cudf_polars.dsl.ir import IR, Cache, Empty, Filter, Projection
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    Metadata,
+    empty_table_chunk,
     make_spill_function,
     process_children,
     shutdown_on_error,
@@ -40,6 +42,8 @@ async def default_node_single(
     ir_context: IRExecutionContext,
     ch_out: ChannelPair,
     ch_in: ChannelPair,
+    *,
+    preserve_partitioning: bool = False,
 ) -> None:
     """
     Single-channel default node for rapidsmpf.
@@ -56,12 +60,26 @@ async def default_node_single(
         The output ChannelPair.
     ch_in
         The input ChannelPair.
+    preserve_partitioning
+        Whether to preserve the partitioning metadata of the input chunks.
 
     Notes
     -----
     Chunks are processed in the order they are received.
     """
-    async with shutdown_on_error(context, ch_in.data, ch_out.data):
+    async with shutdown_on_error(
+        context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
+    ):
+        # Recv/send metadata.
+        metadata_in = await ch_in.recv_metadata(context)
+        metadata_out = Metadata(
+            metadata_in.count,
+            partitioned_on=metadata_in.partitioned_on if preserve_partitioning else (),
+            duplicated=metadata_in.duplicated,
+        )
+        await ch_out.send_metadata(context, metadata_out)
+
+        # Recv/send data.
         while (msg := await ch_in.data.recv(context)) is not None:
             chunk = TableChunk.from_message(msg).make_available_and_spill(
                 context.br(), allow_overbooking=True
@@ -93,6 +111,8 @@ async def default_node_multi(
     ir_context: IRExecutionContext,
     ch_out: ChannelPair,
     chs_in: tuple[ChannelPair, ...],
+    *,
+    partitioning_index: int | None = None,
 ) -> None:
     """
     Pointwise node for rapidsmpf.
@@ -106,17 +126,30 @@ async def default_node_multi(
     ir_context
         The execution context for the IR node.
     ch_out
-        The output ChannelPair (metadata already sent).
+        The output ChannelPair.
     chs_in
-        Tuple of input ChannelPairs (metadata already received).
-
-    Notes
-    -----
-    Input chunks must be aligned for evaluation. Messages from each input
-    channel are assumed to arrive in sequence number order, so we only need
-    to hold one chunk per channel at a time.
+        Tuple of input ChannelPairs.
+    partitioning_index
+        Index of the input channel to preserve partitioning information for.
+        If None, no partitioning information is preserved.
     """
-    async with shutdown_on_error(context, *[ch.data for ch in chs_in], ch_out.data):
+    async with shutdown_on_error(
+        context,
+        *[ch.metadata for ch in chs_in],
+        ch_out.metadata,
+        *[ch.data for ch in chs_in],
+        ch_out.data,
+    ):
+        # Merge and forward basic metadata.
+        metadata = Metadata(1)
+        for idx, ch_in in enumerate(chs_in):
+            md_child = await ch_in.recv_metadata(context)
+            metadata.count = max(md_child.count, metadata.count)
+            metadata.duplicated = metadata.duplicated and md_child.duplicated
+            if idx == partitioning_index:
+                metadata.partitioned_on = md_child.partitioned_on
+        await ch_out.send_metadata(context, metadata)
+
         seq_num = 0
         n_children = len(chs_in)
         finished_channels: set[int] = set()
@@ -125,6 +158,7 @@ async def default_node_multi(
         ready_chunks: list[TableChunk | None] = [None] * n_children
         chunk_count: list[int] = [0] * n_children
 
+        # Recv/send data.
         while True:
             # Receive from all non-finished channels
             for ch_idx, (ch_in, _child) in enumerate(
@@ -216,7 +250,17 @@ async def fanout_node_bounded(
     """
     # TODO: Use rapidsmpf fanout node once available.
     # See: https://github.com/rapidsai/rapidsmpf/issues/560
-    async with shutdown_on_error(context, ch_in.data, *[ch.data for ch in chs_out]):
+    async with shutdown_on_error(
+        context,
+        ch_in.metadata,
+        ch_in.data,
+        *[ch.metadata for ch in chs_out],
+        *[ch.data for ch in chs_out],
+    ):
+        # Forward metadata to all outputs.
+        metadata = await ch_in.recv_metadata(context)
+        await asyncio.gather(*(ch.send_metadata(context, metadata) for ch in chs_out))
+
         while (msg := await ch_in.data.recv(context)) is not None:
             table_chunk = TableChunk.from_message(msg).make_available_and_spill(
                 context.br(), allow_overbooking=True
@@ -269,7 +313,17 @@ async def fanout_node_unbounded(
     """
     # TODO: Use rapidsmpf fanout node once available.
     # See: https://github.com/rapidsai/rapidsmpf/issues/560
-    async with shutdown_on_error(context, ch_in.data, *[ch.data for ch in chs_out]):
+    async with shutdown_on_error(
+        context,
+        ch_in.metadata,
+        ch_in.data,
+        *[ch.metadata for ch in chs_out],
+        *[ch.data for ch in chs_out],
+    ):
+        # Forward metadata to all outputs.
+        metadata = await ch_in.recv_metadata(context)
+        await asyncio.gather(*(ch.send_metadata(context, metadata) for ch in chs_out))
+
         # Spillable FIFO buffer for each output channel
         output_buffers: list[SpillableMessages] = [SpillableMessages() for _ in chs_out]
         num_outputs = len(chs_out)
@@ -442,6 +496,14 @@ def _(
 
     if len(ir.children) == 1:
         # Single-channel default node
+        preserve_partitioning = isinstance(
+            # TODO: We don't need to worry about
+            # non-pointwise Filter operations here,
+            # because the lowering stage would have
+            # collapsed to one partition anyway.
+            ir,
+            (Cache, Projection, Filter),
+        )
         nodes[ir] = [
             default_node_single(
                 rec.state["context"],
@@ -449,6 +511,7 @@ def _(
                 rec.state["ir_context"],
                 channels[ir].reserve_input_slot(),
                 channels[ir.children[0]].reserve_output_slot(),
+                preserve_partitioning=preserve_partitioning,
             )
         ]
     else:
@@ -487,7 +550,10 @@ async def empty_node(
     ch_out
         The output ChannelPair.
     """
-    async with shutdown_on_error(context, ch_out.data):
+    async with shutdown_on_error(context, ch_out.metadata, ch_out.data):
+        # Send metadata indicating a single empty chunk
+        await ch_out.send_metadata(context, Metadata(1, duplicated=True))
+
         # Evaluate the IR node to create an empty DataFrame
         df: DataFrame = ir.do_evaluate(*ir._non_child_args, context=ir_context)
 
@@ -557,3 +623,76 @@ def generate_ir_sub_network_wrapper(
         nodes[ir].append(fanout_node)
         channels[ir] = manager
     return nodes, channels
+
+
+@define_py_node()
+async def metadata_feeder_node(
+    context: Context,
+    channel: ChannelPair,
+    metadata: Metadata,
+) -> None:
+    """
+    Feed metadata to a channel pair.
+
+    Parameters
+    ----------
+    context
+        The rapidsmpf context.
+    channel
+        The channel pair.
+    metadata
+        The metadata to feed.
+    """
+    async with shutdown_on_error(context, channel.metadata, channel.data):
+        await channel.send_metadata(context, metadata)
+
+
+@define_py_node()
+async def metadata_drain_node(
+    context: Context,
+    ir: IR,
+    ir_context: IRExecutionContext,
+    ch_in: ChannelPair,
+    ch_out: Any,
+    metadata_collector: list[Metadata] | None,
+) -> None:
+    """
+    Drain metadata and forward data to a single channel.
+
+    Parameters
+    ----------
+    context
+        The rapidsmpf context.
+    ir
+        The IR node.
+    ir_context
+        The execution context for the IR node.
+    ch_in
+        The input ChannelPair (with metadata and data channels).
+    ch_out
+        The output data channel.
+    metadata_collector
+        The list to collect the final metadata.
+        This list will be mutated when the network is executed.
+        If None, metadata will not be collected.
+    """
+    async with shutdown_on_error(context, ch_in.metadata, ch_in.data, ch_out):
+        # Drain metadata channel (we don't need it after this point)
+        metadata = await ch_in.recv_metadata(context)
+        send_empty = metadata.duplicated and context.comm().rank != 0
+        if metadata_collector is not None:
+            metadata_collector.append(metadata)
+
+        # Forward non-duplicated data messages
+        while (msg := await ch_in.data.recv(context)) is not None:
+            if not send_empty:
+                await ch_out.send(context, msg)
+
+        # Send empty data if needed
+        if send_empty:
+            stream = ir_context.get_cuda_stream()
+            await ch_out.send(
+                context, Message(0, empty_table_chunk(ir, context, stream))
+            )
+
+        await ch_out.drain(context)
