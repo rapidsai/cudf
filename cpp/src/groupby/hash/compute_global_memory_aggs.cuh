@@ -95,7 +95,7 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_d
                                           force_non_nullable,
                                           stream,
                                           mr);
-  auto d_results_ptr = mutable_table_device_view::create(*agg_results, stream);
+  auto d_results_ptr  = mutable_table_device_view::create(*agg_results, stream);
 
   thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator(int64_t{0}),
@@ -129,7 +129,7 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_s
   auto const d_values = table_device_view::create(values, stream);
   auto agg_results =
     create_results_table(num_rows, values, h_agg_kinds, force_non_nullable, stream, mr);
-  auto d_results_ptr  = mutable_table_device_view::create(*agg_results, stream);
+  auto d_results_ptr = mutable_table_device_view::create(*agg_results, stream);
 
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),

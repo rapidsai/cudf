@@ -155,7 +155,7 @@ void hash_compound_agg_finalizer::visit(cudf::detail::std_aggregation const& agg
 {
   if (cache->has_result(col, agg)) { return; }
 
-  auto const m2_agg    = make_m2_aggregation();
+  auto const m2_agg = make_m2_aggregation();
   // Since M2 is a compound aggregation, we need to "finalize" it using aggregation finalizer's
   // "visit" method.
   this->visit(*dynamic_cast<cudf::detail::m2_aggregation*>(m2_agg.get()));
