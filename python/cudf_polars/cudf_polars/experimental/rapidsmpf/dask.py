@@ -146,14 +146,17 @@ def _evaluate_pipeline_dask(
     -------
     The output DataFrame and metadata collector.
     """
-    options = Options(get_environment_variables())
-
     assert dask_worker is not None, "Dask worker must be provided"
+    assert config_options.executor.name == "streaming", "Executor must be streaming"
+
     # NOTE: The Dask-CUDA cluster must be bootstrapped
     # ahead of time using bootstrap_dask_cluster
     # (rapidsmpf.integrations.dask.bootstrap_dask_cluster).
     # TODO: Automatically bootstrap the cluster if necessary.
-
+    options = Options(
+        {"num_streaming_threads": str(max(config_options.executor.max_io_threads, 1))}
+        | get_environment_variables()
+    )
     dask_context = get_worker_context(dask_worker)
     rmpf_context = Context(dask_context.comm, dask_context.br, options)
 
