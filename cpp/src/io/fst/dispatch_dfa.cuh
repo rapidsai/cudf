@@ -38,7 +38,7 @@ template <int ALLOCATIONS>
 cudaError_t AliasTemporaries(void* d_temp_storage,
                              size_t& temp_storage_bytes,
                              void* (&allocations)[ALLOCATIONS],
-                             const size_t (&allocation_sizes)[ALLOCATIONS])
+                             size_t const (&allocation_sizes)[ALLOCATIONS])
 {
   constexpr size_t ALIGN_BYTES = 256;
   constexpr size_t ALIGN_MASK  = ~(ALIGN_BYTES - 1);
@@ -47,7 +47,7 @@ cudaError_t AliasTemporaries(void* d_temp_storage,
   size_t allocation_offsets[ALLOCATIONS];
   size_t bytes_needed = 0;
   for (int i = 0; i < ALLOCATIONS; ++i) {
-    const size_t allocation_bytes = (allocation_sizes[i] + ALIGN_BYTES - 1) & ALIGN_MASK;
+    size_t const allocation_bytes = (allocation_sizes[i] + ALIGN_BYTES - 1) & ALIGN_MASK;
     allocation_offsets[i]         = bytes_needed;
     bytes_needed += allocation_bytes;
   }
