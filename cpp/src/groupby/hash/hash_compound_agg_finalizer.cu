@@ -124,12 +124,9 @@ void hash_compound_agg_finalizer::visit(cudf::detail::m2_aggregation const& agg)
 {
   if (cache->has_result(col, agg)) { return; }
 
-  auto const sum_sqr_agg = make_sum_of_squares_aggregation();
-  auto const sum_agg     = make_sum_aggregation();
-  auto const count_agg   = make_count_aggregation();
-  this->visit(*sum_sqr_agg);
-  this->visit(*sum_agg);
-  this->visit(*count_agg);
+  auto const sum_sqr_agg    = make_sum_of_squares_aggregation();
+  auto const sum_agg        = make_sum_aggregation();
+  auto const count_agg      = make_count_aggregation();
   auto const sum_sqr_result = cache->get_result(col, *sum_sqr_agg);
   auto const sum_result     = cache->get_result(col, *sum_agg);
   auto const count_result   = cache->get_result(col, *count_agg);
@@ -142,10 +139,11 @@ void hash_compound_agg_finalizer::visit(cudf::detail::var_aggregation const& agg
 {
   if (cache->has_result(col, agg)) { return; }
 
-  auto const m2_agg    = make_m2_aggregation();
-  auto const count_agg = make_count_aggregation();
+  auto const m2_agg = make_m2_aggregation();
+  // Since M2 is a compound aggregation, we need to "finalize" it using aggregation finalizer's
+  // "visit" method.
   this->visit(*dynamic_cast<cudf::detail::m2_aggregation*>(m2_agg.get()));
-  this->visit(*count_agg);
+  auto const count_agg    = make_count_aggregation();
   auto const m2_result    = cache->get_result(col, *m2_agg);
   auto const count_result = cache->get_result(col, *count_agg);
 
@@ -158,9 +156,10 @@ void hash_compound_agg_finalizer::visit(cudf::detail::std_aggregation const& agg
   if (cache->has_result(col, agg)) { return; }
 
   auto const m2_agg    = make_m2_aggregation();
-  auto const count_agg = make_count_aggregation();
+  // Since M2 is a compound aggregation, we need to "finalize" it using aggregation finalizer's
+  // "visit" method.
   this->visit(*dynamic_cast<cudf::detail::m2_aggregation*>(m2_agg.get()));
-  this->visit(*count_agg);
+  auto const count_agg    = make_count_aggregation();
   auto const m2_result    = cache->get_result(col, *m2_agg);
   auto const count_result = cache->get_result(col, *count_agg);
 
