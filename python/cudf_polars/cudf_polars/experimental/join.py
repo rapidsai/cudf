@@ -144,7 +144,6 @@ def _make_bcast_join(
     left: IR,
     right: IR,
     shuffle_method: ShuffleMethod,
-    *,
     streaming_runtime: str,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     if ir.options[0] != "Inner":
@@ -291,7 +290,7 @@ def _(
             left,
             right,
             config_options.executor.shuffle_method,
-            streaming_runtime=config_options.executor.runtime,
+            config_options.executor.runtime,
         )
     else:
         # Create a hash join
