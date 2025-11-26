@@ -24,12 +24,13 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/iterator>
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/logical.h>
-#include <thrust/pair.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
 
@@ -94,9 +95,10 @@ __device__ auto element_index_pair_iter(size_type const size)
   auto const end   = thrust::make_counting_iterator(size);
 
   if constexpr (forward) {
-    return thrust::pair{begin, end};
+    return cuda::std::pair{begin, end};
   } else {
-    return thrust::pair{thrust::make_reverse_iterator(end), thrust::make_reverse_iterator(begin)};
+    return cuda::std::pair{cuda::std::make_reverse_iterator(end),
+                           cuda::std::make_reverse_iterator(begin)};
   }
 }
 

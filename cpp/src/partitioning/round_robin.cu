@@ -30,7 +30,6 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/sequence.h>
-#include <thrust/tuple.h>
 
 #include <algorithm>
 #include <cmath>  // for std::ceil()
