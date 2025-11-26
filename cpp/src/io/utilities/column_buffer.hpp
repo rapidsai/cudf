@@ -19,7 +19,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <thrust/pair.h>
+#include <cuda/std/utility>
 
 #include <optional>
 
@@ -58,7 +58,7 @@ inline rmm::device_buffer create_data(data_type type,
   return create_data(type, size, true, stream, mr);
 }
 
-using string_index_pair = thrust::pair<char const*, size_type>;
+using string_index_pair = cuda::std::pair<char const*, size_type>;
 
 // forward declare friend functions
 template <typename string_policy>

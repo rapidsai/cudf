@@ -25,13 +25,13 @@
 
 #include <cuda/functional>
 #include <cuda/std/iterator>
+#include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
@@ -49,7 +49,7 @@ namespace {
  * The first value is the keys offsets and the second values is the indices offsets.
  * These are offsets to the beginning of each input column after concatenating.
  */
-using offsets_pair = thrust::pair<size_type, size_type>;
+using offsets_pair = cuda::std::pair<size_type, size_type>;
 
 /**
  * @brief Utility for calculating the offsets for the concatenated child columns
