@@ -3059,7 +3059,7 @@ def as_column(
                 "empty",
                 "boolean",
             ):
-                raise TypeError(
+                raise MixedTypeError(
                     f"Cannot convert a {inferred_dtype} of object type"
                 )
             elif inferred_dtype == "boolean":
