@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import pickle
+
 import pytest
 
 import polars as pl
@@ -64,3 +66,25 @@ def test_dataframescan_concat(df):
     )
     df2 = pl.concat([df, df])
     assert_gpu_result_equal(df2, engine=engine)
+
+
+def test_dataframescan_pickle(df):
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 1_000,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+        },
+    )
+    qir = Translator(df._ldf.visit(), engine).translate_ir()
+    ir, _, _ = lower_ir_graph(qir, ConfigOptions.from_polars_engine(engine))
+
+    # Pickle and unpickle the IR (which contains DataFrameScan)
+    pickled = pickle.dumps(ir)
+    unpickled_ir = pickle.loads(pickled)
+
+    # Verify the unpickled IR is equivalent
+    assert type(unpickled_ir) is type(ir)
+    assert unpickled_ir.schema == ir.schema
