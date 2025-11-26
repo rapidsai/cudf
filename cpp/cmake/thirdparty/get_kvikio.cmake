@@ -12,8 +12,8 @@ function(find_and_configure_kvikio VERSION)
     kvikio ${VERSION}
     GLOBAL_TARGETS kvikio::kvikio
     CPM_ARGS
-    GIT_REPOSITORY https://github.com/rapidsai/kvikio.git
-    GIT_TAG main
+    GIT_REPOSITORY https://github.com/kingcrimsontianyu/kvikio.git
+    GIT_TAG per-file-pool
     GIT_SHALLOW TRUE SOURCE_SUBDIR cpp
     OPTIONS "KvikIO_BUILD_EXAMPLES OFF" "KvikIO_REMOTE_SUPPORT ${CUDF_KVIKIO_REMOTE_IO}"
   )
