@@ -2077,6 +2077,15 @@ NamedAgg = make_final_proxy_type(
     },
 )
 
+
+def _arrow_extension_array_astype(self, dtype=None, copy: bool = False):
+    if copy is False and cudf.api.types.is_dtype_equal(self.dtype, dtype):
+        return self
+    return _maybe_wrap_result(
+        self._fsproxy_wrapped.astype(dtype=dtype, copy=copy), self
+    )
+
+
 ArrowExtensionArray = make_final_proxy_type(
     "ArrowExtensionArray",
     _Unusable,
@@ -2093,6 +2102,7 @@ ArrowExtensionArray = make_final_proxy_type(
         "__contains__": _FastSlowAttribute("__contains__"),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "__arrow_array__": arrow_array_method,
+        "astype": _arrow_extension_array_astype,
     },
 )
 
