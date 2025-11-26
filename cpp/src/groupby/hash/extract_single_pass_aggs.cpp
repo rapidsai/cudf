@@ -92,47 +92,53 @@ class groupby_simple_aggregations_collector final
 
     return aggs;
   }
-
-  std::vector<std::unique_ptr<aggregation>> visit(
-    data_type, cudf::detail::correlation_aggregation const&) override
-  {
-    std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(make_sum_aggregation());
-    // COUNT_VALID
-    aggs.push_back(make_count_aggregation());
-
-    return aggs;
-  }
 };
 
 std::tuple<table_view,
            cudf::detail::host_vector<aggregation::Kind>,
            std::vector<std::unique_ptr<aggregation>>,
+           std::vector<bool>,
            bool>
 extract_single_pass_aggs(host_span<aggregation_request const> requests,
                          rmm::cuda_stream_view stream)
 {
   std::vector<column_view> columns;
   std::vector<std::unique_ptr<aggregation>> aggs;
+  std::vector<bool> force_non_nullable;
   auto agg_kinds = cudf::detail::make_empty_host_vector<aggregation::Kind>(requests.size(), stream);
 
   bool has_compound_aggs = false;
   for (auto const& request : requests) {
-    auto const& agg_v = request.aggregations;
+    auto const& input_aggs = request.aggregations;
 
+    // The set of input aggregations.
+    std::unordered_set<aggregation::Kind> input_agg_kinds_set;
+    for (auto const& agg : input_aggs) {
+      input_agg_kinds_set.insert(agg->kind);
+    }
+
+    // The aggregations extracted from the input request, including the original single-pass
+    // aggregations and the intermediate single-pass aggregations replacing compound
+    // aggregations.
     std::unordered_set<aggregation::Kind> agg_kinds_set;
+
     auto insert_agg = [&](column_view const& request_values, std::unique_ptr<aggregation>&& agg) {
       if (agg_kinds_set.insert(agg->kind).second) {
+        // Check if the inserted aggregation is an input aggregation or a replacement aggregation.
+        // If it is not an input aggregation, we can force its output to be non-nullable.
+        auto const is_input_agg = input_agg_kinds_set.contains(agg->kind);
+        force_non_nullable.push_back(!is_input_agg);
+
         agg_kinds.push_back(agg->kind);
         aggs.push_back(std::move(agg));
         columns.push_back(request_values);
       }
     };
 
-    auto values_type = cudf::is_dictionary(request.values.type())
-                         ? cudf::dictionary_column_view(request.values).keys().type()
-                         : request.values.type();
-    for (auto const& agg : agg_v) {
+    auto const values_type = cudf::is_dictionary(request.values.type())
+                               ? cudf::dictionary_column_view(request.values).keys().type()
+                               : request.values.type();
+    for (auto const& agg : input_aggs) {
       groupby_simple_aggregations_collector collector;
       auto spass_aggs = agg->get_simple_aggregations(values_type, collector);
       if (spass_aggs.size() > 1 || !spass_aggs.front()->is_equal(*agg)) {
@@ -145,7 +151,11 @@ extract_single_pass_aggs(host_span<aggregation_request const> requests,
     }
   }
 
-  return {table_view(columns), std::move(agg_kinds), std::move(aggs), has_compound_aggs};
+  return {table_view(columns),
+          std::move(agg_kinds),
+          std::move(aggs),
+          std::move(force_non_nullable),
+          has_compound_aggs};
 }
 
 std::vector<aggregation::Kind> get_simple_aggregations(groupby_aggregation const& agg,

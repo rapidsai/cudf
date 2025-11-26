@@ -38,7 +38,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
 {
   // Collect the single-pass aggregations that can be processed in this function.
   // The compound aggregations that require multiple passes will be handled separately later on.
-  auto const [values, agg_kinds, aggs, has_compound_aggs] =
+  auto const [values, agg_kinds, aggs, force_non_nullable, has_compound_aggs] =
     extract_single_pass_aggs(requests, stream);
   auto const d_agg_kinds = cudf::detail::make_device_uvector_async(
     agg_kinds, stream, cudf::get_current_device_resource_ref());
