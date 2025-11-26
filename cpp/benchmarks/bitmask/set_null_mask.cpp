@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
