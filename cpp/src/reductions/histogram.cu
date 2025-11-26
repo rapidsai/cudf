@@ -19,9 +19,9 @@
 #include <cuco/static_set.cuh>
 #include <cuda/atomic>
 #include <cuda/functional>
+#include <cuda/std/tuple>
 #include <thrust/copy.h>
 #include <thrust/iterator/zip_iterator.h>
-#include <thrust/tuple.h>
 #include <thrust/uninitialized_fill.h>
 
 #include <optional>
@@ -43,7 +43,7 @@ struct is_not_zero {
   template <typename Pair>
   __device__ bool operator()(Pair const input) const
   {
-    return thrust::get<1>(input) != 0;
+    return cuda::std::get<1>(input) != 0;
   }
 };
 
@@ -179,8 +179,8 @@ compute_row_frequencies(table_view const& input,
 
   // Copy row indices and counts to the output if counts are non-zero
   auto const input_it = thrust::make_zip_iterator(
-    thrust::make_tuple(thrust::make_counting_iterator(0), reduction_results.begin()));
-  auto const output_it = thrust::make_zip_iterator(thrust::make_tuple(
+    cuda::std::make_tuple(thrust::make_counting_iterator(0), reduction_results.begin()));
+  auto const output_it = thrust::make_zip_iterator(cuda::std::make_tuple(
     distinct_indices->begin(), distinct_counts->mutable_view().begin<histogram_count_type>()));
 
   // Reduction results above are either group sizes of equal rows, or `0`.
