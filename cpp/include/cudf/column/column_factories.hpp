@@ -13,7 +13,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/pair.h>
+#include <cuda/std/utility>
 
 namespace CUDF_EXPORT cudf {
 /**
@@ -363,7 +363,7 @@ std::unique_ptr<column> make_fixed_width_column(
  * @return Constructed strings column
  */
 std::unique_ptr<column> make_strings_column(
-  cudf::device_span<thrust::pair<char const*, size_type> const> strings,
+  cudf::device_span<cuda::std::pair<char const*, size_type> const> strings,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -383,7 +383,7 @@ std::unique_ptr<column> make_strings_column(
  * @return Array of constructed strings columns
  */
 std::vector<std::unique_ptr<column>> make_strings_column_batch(
-  std::vector<cudf::device_span<thrust::pair<char const*, size_type> const>> const& input,
+  std::vector<cudf::device_span<cuda::std::pair<char const*, size_type> const>> const& input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
