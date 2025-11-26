@@ -51,7 +51,7 @@ static void bench_upper_bound_column(nvbench::state& state)
       2L * cudf::bitmask_allocation_size_bytes(column_size));
   }
 
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
     auto result = cudf::upper_bound(data_table->view(),
                                     cudf::table_view({*values}),
                                     {cudf::order::ASCENDING},

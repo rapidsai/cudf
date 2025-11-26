@@ -33,7 +33,7 @@ static void bench_hash_partition(nvbench::state& state)
   auto stream = cudf::get_default_stream();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
     auto output = cudf::hash_partition(input, columns_to_hash, num_partitions);
   });
 
