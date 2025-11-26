@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -41,7 +41,7 @@ TYPED_TEST(groupby_product_scan_test, basic)
   result_wrapper expect_vals{0, 0, 0, 1, 4, 20, 180, 2, 14, 112};
   // clang-format on
   auto agg = cudf::make_product_aggregation<cudf::groupby_scan_aggregation>();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_SCAN(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_product_scan_test, pre_sorted)
@@ -58,13 +58,13 @@ TYPED_TEST(groupby_product_scan_test, pre_sorted)
   // clang-format on
 
   auto agg = cudf::make_product_aggregation<cudf::groupby_scan_aggregation>();
-  test_single_scan(keys,
-                   vals,
-                   expect_keys,
-                   expect_vals,
-                   std::move(agg),
-                   cudf::null_policy::EXCLUDE,
-                   cudf::sorted::YES);
+  CUDF_TEST_SINGLE_SCAN(keys,
+                        vals,
+                        expect_keys,
+                        expect_vals,
+                        std::move(agg),
+                        cudf::null_policy::EXCLUDE,
+                        cudf::sorted::YES);
 }
 
 TYPED_TEST(groupby_product_scan_test, empty_cols)
@@ -79,7 +79,7 @@ TYPED_TEST(groupby_product_scan_test, empty_cols)
   result_wrapper expect_vals{};
 
   auto agg = cudf::make_product_aggregation<cudf::groupby_scan_aggregation>();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_SCAN(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_product_scan_test, zero_valid_keys)
@@ -93,7 +93,7 @@ TYPED_TEST(groupby_product_scan_test, zero_valid_keys)
   result_wrapper expect_vals{};
 
   auto agg = cudf::make_product_aggregation<cudf::groupby_scan_aggregation>();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_SCAN(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_product_scan_test, zero_valid_values)
@@ -107,7 +107,7 @@ TYPED_TEST(groupby_product_scan_test, zero_valid_values)
   result_wrapper expect_vals({3, 4, 5}, cudf::test::iterators::all_nulls());
 
   auto agg = cudf::make_product_aggregation<cudf::groupby_scan_aggregation>();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_SCAN(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_product_scan_test, null_keys_and_values)
@@ -127,5 +127,5 @@ TYPED_TEST(groupby_product_scan_test, null_keys_and_values)
   // clang-format on
 
   auto agg = cudf::make_product_aggregation<cudf::groupby_scan_aggregation>();
-  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_SCAN(keys, vals, expect_keys, expect_vals, std::move(agg));
 }

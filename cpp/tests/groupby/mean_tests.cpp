@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -51,7 +51,7 @@ TYPED_TEST(groupby_mean_test, basic)
   // clang-format on
 
   auto agg = cudf::make_mean_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_mean_test, empty_cols)
@@ -66,7 +66,7 @@ TYPED_TEST(groupby_mean_test, empty_cols)
   cudf::test::fixed_width_column_wrapper<R> expect_vals{};
 
   auto agg = cudf::make_mean_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_mean_test, zero_valid_keys)
@@ -81,7 +81,7 @@ TYPED_TEST(groupby_mean_test, zero_valid_keys)
   cudf::test::fixed_width_column_wrapper<R> expect_vals{};
 
   auto agg = cudf::make_mean_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_mean_test, zero_valid_values)
@@ -96,7 +96,7 @@ TYPED_TEST(groupby_mean_test, zero_valid_values)
   cudf::test::fixed_width_column_wrapper<R> expect_vals({0}, all_nulls());
 
   auto agg = cudf::make_mean_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_mean_test, null_keys_and_values)
@@ -121,7 +121,7 @@ TYPED_TEST(groupby_mean_test, null_keys_and_values)
     expect_v.cbegin(), expect_v.cend(), {1, 1, 1, 0});
 
   auto agg = cudf::make_mean_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 // clang-format on
 
@@ -140,7 +140,7 @@ TEST_F(groupby_dictionary_mean_test, basic)
   cudf::test::fixed_width_column_wrapper<R, double> expect_vals({9. / 3, 19. / 4, 17. / 3});
   // clang-format on
 
-  test_single_agg(
+  CUDF_TEST_SINGLE_AGG(
     keys, vals, expect_keys, expect_vals, cudf::make_mean_aggregation<cudf::groupby_aggregation>());
 }
 
@@ -167,7 +167,7 @@ TYPED_TEST(FixedPointTestBothReps, GroupBySortMeanDecimalAsValue)
     auto const expect_vals_min = fp_wrapper{{3, 4, 5}, scale};
 
     auto agg = cudf::make_mean_aggregation<cudf::groupby_aggregation>();
-    test_single_agg(
+    CUDF_TEST_SINGLE_AGG(
       keys, vals, expect_keys, expect_vals_min, std::move(agg), force_use_sort_impl::YES);
   }
 }
@@ -191,6 +191,6 @@ TYPED_TEST(FixedPointTestBothReps, GroupByHashMeanDecimalAsValue)
     auto const expect_vals_min = fp_wrapper{{3, 4, 5}, scale};
 
     auto agg = cudf::make_mean_aggregation<cudf::groupby_aggregation>();
-    test_single_agg(keys, vals, expect_keys, expect_vals_min, std::move(agg));
+    CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals_min, std::move(agg));
   }
 }

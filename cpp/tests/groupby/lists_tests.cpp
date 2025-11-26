@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -49,7 +49,7 @@ TYPED_TEST(groupby_lists_test, basic)
   auto expected_values = fwcw<agg_result_t>{    3,     5,     2  };
   // clang-format on
 
-  test_sum_agg(keys, values, expected_keys, expected_values);
+  CUDF_TEST_SUM_AGG(keys, values, expected_keys, expected_values);
 }
 
 TYPED_TEST(groupby_lists_test, all_null_input)
@@ -62,7 +62,7 @@ TYPED_TEST(groupby_lists_test, all_null_input)
   auto expected_values = fwcw<agg_result_t>{          10 };
   // clang-format on
 
-  test_sum_agg(keys, values, expected_keys, expected_values);
+  CUDF_TEST_SUM_AGG(keys, values, expected_keys, expected_values);
 }
 
 TYPED_TEST(groupby_lists_test, lists_with_nulls)
@@ -75,7 +75,7 @@ TYPED_TEST(groupby_lists_test, lists_with_nulls)
   auto expected_values = fwcw<agg_result_t>{           7,     3 };
   // clang-format on
 
-  test_sum_agg(keys, values, expected_keys, expected_values);
+  CUDF_TEST_SUM_AGG(keys, values, expected_keys, expected_values);
 }
 
 TYPED_TEST(groupby_lists_test, lists_with_null_elements)
@@ -92,5 +92,5 @@ TYPED_TEST(groupby_lists_test, lists_with_null_elements)
     {{}, lcw<TypeParam>{{{1, 2, 3}, {}, {4, 5}, {}, {6, 0}}, nulls_at({1, 3})}}, null_at(0)};
   auto expected_values = fwcw<agg_result_t>{9, 3};
 
-  test_sum_agg(keys, values, expected_keys, expected_values);
+  CUDF_TEST_SUM_AGG(keys, values, expected_keys, expected_values);
 }

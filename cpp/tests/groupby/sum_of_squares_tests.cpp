@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -36,7 +36,7 @@ TYPED_TEST(groupby_sum_of_squares_test, basic)
   cudf::test::fixed_width_column_wrapper<R> expect_vals({45., 123., 117.}, no_nulls());
 
   auto agg = cudf::make_sum_of_squares_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_sum_of_squares_test, empty_cols)
@@ -52,7 +52,7 @@ TYPED_TEST(groupby_sum_of_squares_test, empty_cols)
   cudf::test::fixed_width_column_wrapper<R> expect_vals{};
 
   auto agg = cudf::make_sum_of_squares_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_sum_of_squares_test, zero_valid_keys)
@@ -68,7 +68,7 @@ TYPED_TEST(groupby_sum_of_squares_test, zero_valid_keys)
   cudf::test::fixed_width_column_wrapper<R> expect_vals{};
 
   auto agg = cudf::make_sum_of_squares_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_sum_of_squares_test, zero_valid_values)
@@ -84,7 +84,7 @@ TYPED_TEST(groupby_sum_of_squares_test, zero_valid_values)
   cudf::test::fixed_width_column_wrapper<R> expect_vals({0}, all_nulls());
 
   auto agg = cudf::make_sum_of_squares_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_sum_of_squares_test, null_keys_and_values)
@@ -105,7 +105,7 @@ TYPED_TEST(groupby_sum_of_squares_test, null_keys_and_values)
   cudf::test::fixed_width_column_wrapper<R> expect_vals({45., 98., 68., 9.}, {1, 1, 1, 0});
 
   auto agg = cudf::make_sum_of_squares_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_sum_of_squares_test, dictionary)
@@ -124,9 +124,9 @@ TYPED_TEST(groupby_sum_of_squares_test, dictionary)
   cudf::test::fixed_width_column_wrapper<R> expect_vals({45.,       123.,       117.   }, no_nulls());
   // clang-format on
 
-  test_single_agg(keys,
-                  vals,
-                  expect_keys,
-                  expect_vals,
-                  cudf::make_sum_of_squares_aggregation<cudf::groupby_aggregation>());
+  CUDF_TEST_SINGLE_AGG(keys,
+                       vals,
+                       expect_keys,
+                       expect_vals,
+                       cudf::make_sum_of_squares_aggregation<cudf::groupby_aggregation>());
 }

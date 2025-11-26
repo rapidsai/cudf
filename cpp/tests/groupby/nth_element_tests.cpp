@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -37,15 +37,15 @@ TYPED_TEST(groupby_nth_element_test, basic)
   //groupby.first()
   auto agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(0);
   cudf::test::fixed_width_column_wrapper<R, int32_t> expect_vals0({0, 1, 2});
-  test_single_agg(keys, vals, expect_keys, expect_vals0, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals0, std::move(agg));
 
   agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(1);
   cudf::test::fixed_width_column_wrapper<R, int32_t> expect_vals1({3, 4, 7});
-  test_single_agg(keys, vals, expect_keys, expect_vals1, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals1, std::move(agg));
 
   agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(2);
   cudf::test::fixed_width_column_wrapper<R, int32_t> expect_vals2({6, 5, 8});
-  test_single_agg(keys, vals, expect_keys, expect_vals2, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals2, std::move(agg));
 }
 
 TYPED_TEST(groupby_nth_element_test, empty_cols)
@@ -61,7 +61,7 @@ TYPED_TEST(groupby_nth_element_test, empty_cols)
   cudf::test::fixed_width_column_wrapper<R> expect_vals{};
 
   auto agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(0);
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_nth_element_test, basic_out_of_bounds)
@@ -77,7 +77,7 @@ TYPED_TEST(groupby_nth_element_test, basic_out_of_bounds)
 
   auto agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(3);
   cudf::test::fixed_width_column_wrapper<R, int32_t> expect_vals({0, 9, 0}, {0, 1, 0});
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_nth_element_test, negative)
@@ -96,15 +96,15 @@ TYPED_TEST(groupby_nth_element_test, negative)
   //groupby.last()
   auto agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(-1);
   cudf::test::fixed_width_column_wrapper<R, int32_t> expect_vals0({6, 9, 8});
-  test_single_agg(keys, vals, expect_keys, expect_vals0, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals0, std::move(agg));
 
   agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(-2);
   cudf::test::fixed_width_column_wrapper<R, int32_t> expect_vals1({3, 5, 7});
-  test_single_agg(keys, vals, expect_keys, expect_vals1, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals1, std::move(agg));
 
   agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(-3);
   cudf::test::fixed_width_column_wrapper<R, int32_t> expect_vals2({0, 4, 2});
-  test_single_agg(keys, vals, expect_keys, expect_vals2, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals2, std::move(agg));
 }
 
 TYPED_TEST(groupby_nth_element_test, negative_out_of_bounds)
@@ -120,7 +120,7 @@ TYPED_TEST(groupby_nth_element_test, negative_out_of_bounds)
 
   auto agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(-4);
   cudf::test::fixed_width_column_wrapper<R, int32_t> expect_vals({0, 1, 0}, {0, 1, 0});
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_nth_element_test, zero_valid_keys)
@@ -136,7 +136,7 @@ TYPED_TEST(groupby_nth_element_test, zero_valid_keys)
   cudf::test::fixed_width_column_wrapper<R> expect_vals{};
 
   auto agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(0);
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_nth_element_test, zero_valid_values)
@@ -152,7 +152,7 @@ TYPED_TEST(groupby_nth_element_test, zero_valid_values)
   cudf::test::fixed_width_column_wrapper<R, int32_t> expect_vals({3}, all_nulls());
 
   auto agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(0);
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_nth_element_test, null_keys_and_values)
@@ -172,7 +172,7 @@ TYPED_TEST(groupby_nth_element_test, null_keys_and_values)
   cudf::test::fixed_width_column_wrapper<R, int32_t> expect_vals({-1, 1, 2, -1}, {0, 1, 1, 0});
 
   auto agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(0);
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_nth_element_test, null_keys_and_values_out_of_bounds)
@@ -192,7 +192,7 @@ TYPED_TEST(groupby_nth_element_test, null_keys_and_values_out_of_bounds)
   cudf::test::fixed_width_column_wrapper<R, int32_t> expect_vals({6, -1, -1, -1}, {1, 0, 0, 0});
 
   auto agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(2);
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_nth_element_test, exclude_nulls)
@@ -223,18 +223,18 @@ TYPED_TEST(groupby_nth_element_test, exclude_nulls)
   cudf::test::fixed_width_column_wrapper<R, int32_t> expect_vals2({-1, 9, 8, -1}, {0, 1, 1, 0});
 
   auto agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(0, cudf::null_policy::INCLUDE);
-  test_single_agg(keys, vals, expect_keys, expect_nuls0, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_nuls0, std::move(agg));
   agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(1, cudf::null_policy::INCLUDE);
-  test_single_agg(keys, vals, expect_keys, expect_nuls1, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_nuls1, std::move(agg));
   agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(2, cudf::null_policy::INCLUDE);
-  test_single_agg(keys, vals, expect_keys, expect_nuls2, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_nuls2, std::move(agg));
 
   agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(0, cudf::null_policy::EXCLUDE);
-  test_single_agg(keys, vals, expect_keys, expect_vals0, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals0, std::move(agg));
   agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(1, cudf::null_policy::EXCLUDE);
-  test_single_agg(keys, vals, expect_keys, expect_vals1, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals1, std::move(agg));
   agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(2, cudf::null_policy::EXCLUDE);
-  test_single_agg(keys, vals, expect_keys, expect_vals2, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals2, std::move(agg));
 }
 
 TYPED_TEST(groupby_nth_element_test, exclude_nulls_negative_index)
@@ -268,18 +268,18 @@ TYPED_TEST(groupby_nth_element_test, exclude_nulls_negative_index)
   cudf::test::fixed_width_column_wrapper<R, int32_t> expect_vals2({-1, 1, 2, -1}, {0, 1, 1, 0});
 
   auto agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(-1, cudf::null_policy::INCLUDE);
-  test_single_agg(keys, vals, expect_keys, expect_nuls0, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_nuls0, std::move(agg));
   agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(-2, cudf::null_policy::INCLUDE);
-  test_single_agg(keys, vals, expect_keys, expect_nuls1, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_nuls1, std::move(agg));
   agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(-3, cudf::null_policy::INCLUDE);
-  test_single_agg(keys, vals, expect_keys, expect_nuls2, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_nuls2, std::move(agg));
 
   agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(-1, cudf::null_policy::EXCLUDE);
-  test_single_agg(keys, vals, expect_keys, expect_vals0, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals0, std::move(agg));
   agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(-2, cudf::null_policy::EXCLUDE);
-  test_single_agg(keys, vals, expect_keys, expect_vals1, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals1, std::move(agg));
   agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(-3, cudf::null_policy::EXCLUDE);
-  test_single_agg(keys, vals, expect_keys, expect_vals2, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals2, std::move(agg));
 }
 
 struct groupby_nth_element_string_test : public cudf::test::BaseFixture {
@@ -297,38 +297,38 @@ TEST_F(groupby_nth_element_string_test, basic_string)
   //groupby.first()
   auto agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(0);
   cudf::test::strings_column_wrapper expect_vals0{"ABCD", "1", "2"};
-  test_single_agg(keys, vals, expect_keys, expect_vals0, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals0, std::move(agg));
 
   agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(1);
   cudf::test::strings_column_wrapper expect_vals1{"3", "4", "7"};
-  test_single_agg(keys, vals, expect_keys, expect_vals1, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals1, std::move(agg));
 
   agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(2);
   cudf::test::strings_column_wrapper expect_vals2{"6", "5", "8"};
-  test_single_agg(keys, vals, expect_keys, expect_vals2, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals2, std::move(agg));
 
   //+ve out of bounds
   agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(3);
   cudf::test::strings_column_wrapper expect_vals3{{"", "9", ""}, {false, true, false}};
-  test_single_agg(keys, vals, expect_keys, expect_vals3, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals3, std::move(agg));
 
   //groupby.last()
   agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(-1);
   cudf::test::strings_column_wrapper expect_vals4{"6", "9", "8"};
-  test_single_agg(keys, vals, expect_keys, expect_vals4, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals4, std::move(agg));
 
   agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(-2);
   cudf::test::strings_column_wrapper expect_vals5{"3", "5", "7"};
-  test_single_agg(keys, vals, expect_keys, expect_vals5, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals5, std::move(agg));
 
   agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(-3);
   cudf::test::strings_column_wrapper expect_vals6{"ABCD", "4", "2"};
-  test_single_agg(keys, vals, expect_keys, expect_vals6, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals6, std::move(agg));
 
   //-ve out of bounds
   agg = cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(-4);
   cudf::test::strings_column_wrapper expect_vals7{{"", "1", ""}, {false, true, false}};
-  test_single_agg(keys, vals, expect_keys, expect_vals7, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals7, std::move(agg));
 }
 // clang-format on
 
@@ -344,11 +344,11 @@ TEST_F(groupby_nth_element_string_test, dictionary)
 
   auto expect_vals = cudf::dictionary::set_keys(expect_vals_w, vals.keys());
 
-  test_single_agg(keys,
-                  vals,
-                  expect_keys,
-                  expect_vals->view(),
-                  cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(2));
+  CUDF_TEST_SINGLE_AGG(keys,
+                       vals,
+                       expect_keys,
+                       expect_vals->view(),
+                       cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(2));
 }
 
 template <typename T>
@@ -369,11 +369,11 @@ TYPED_TEST(groupby_nth_element_lists_test, Basics)
   auto expected_keys   = cudf::test::fixed_width_column_wrapper<K, int32_t>{1, 2, 3};
   auto expected_values = lists{{1, 2}, {5, 6, 7}, {9, 10}};
 
-  test_single_agg(keys,
-                  values,
-                  expected_keys,
-                  expected_values,
-                  cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(0));
+  CUDF_TEST_SINGLE_AGG(keys,
+                       values,
+                       expected_keys,
+                       expected_values,
+                       cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(0));
 }
 
 TYPED_TEST(groupby_nth_element_lists_test, EmptyInput)
@@ -389,11 +389,11 @@ TYPED_TEST(groupby_nth_element_lists_test, EmptyInput)
   auto expected_keys   = cudf::test::fixed_width_column_wrapper<K, int32_t>{};
   auto expected_values = lists{};
 
-  test_single_agg(keys,
-                  values,
-                  expected_keys,
-                  expected_values,
-                  cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(2));
+  CUDF_TEST_SINGLE_AGG(keys,
+                       values,
+                       expected_keys,
+                       expected_values,
+                       cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(2));
 }
 
 struct groupby_nth_element_structs_test : cudf::test::BaseFixture {};
@@ -418,18 +418,18 @@ TEST_F(groupby_nth_element_structs_test, Basics)
   auto expected_ch2  = strings{"a", "d", "g", ""};
   auto expected_values =
     structs{{expected_ch0, expected_ch1, expected_ch2}, {false, true, true, false}};
-  test_single_agg(keys,
-                  values,
-                  expected_keys,
-                  expected_values,
-                  cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(1));
+  CUDF_TEST_SINGLE_AGG(keys,
+                       values,
+                       expected_keys,
+                       expected_values,
+                       cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(1));
 
   expected_keys   = ints{0, 1, 2, 3};
   expected_ch0    = ints{0, 4, 6, 9};
   expected_ch1    = doubles{0.1, 4.51, 6.3231, 9.999};
   expected_ch2    = strings{"", "d", "f", "JJJ"};
   expected_values = structs{{expected_ch0, expected_ch1, expected_ch2}, {true, true, true, true}};
-  test_single_agg(
+  CUDF_TEST_SINGLE_AGG(
     keys,
     values,
     expected_keys,
@@ -461,11 +461,11 @@ TEST_F(groupby_nth_element_structs_test, NestedStructs)
   auto expected_ch2        = lists{{1, 2, 3}, {5, 6}, {7}, {}};
   auto expected_values =
     structs{{expected_ch0, expected_ch1, expected_ch2}, {false, true, true, false}};
-  test_single_agg(keys,
-                  values,
-                  expected_keys,
-                  expected_values,
-                  cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(1));
+  CUDF_TEST_SINGLE_AGG(keys,
+                       values,
+                       expected_keys,
+                       expected_values,
+                       cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(1));
 
   expected_keys       = ints{0, 1, 2, 3};
   expected_ch0        = ints{0, 4, 6, 9};
@@ -474,7 +474,7 @@ TEST_F(groupby_nth_element_structs_test, NestedStructs)
   expected_ch1        = structs{expected_ch0_of_ch1, expected_ch1_of_ch1};
   expected_ch2        = lists{{0}, {5, 6}, {}, {}};
   expected_values = structs{{expected_ch0, expected_ch1, expected_ch2}, {true, true, true, true}};
-  test_single_agg(
+  CUDF_TEST_SINGLE_AGG(
     keys,
     values,
     expected_keys,
@@ -500,9 +500,9 @@ TEST_F(groupby_nth_element_structs_test, EmptyInput)
   auto expected_ch1    = doubles{};
   auto expected_ch2    = strings{};
   auto expected_values = structs{{expected_ch0, expected_ch1, expected_ch2}};
-  test_single_agg(keys,
-                  values,
-                  expected_keys,
-                  expected_values,
-                  cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(0));
+  CUDF_TEST_SINGLE_AGG(keys,
+                       values,
+                       expected_keys,
+                       expected_values,
+                       cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(0));
 }

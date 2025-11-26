@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -38,7 +38,7 @@ TYPED_TEST(groupby_keys_test, basic)
   // clang-format on
 
   auto agg = cudf::make_count_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_keys_test, zero_valid_keys)
@@ -56,7 +56,7 @@ TYPED_TEST(groupby_keys_test, zero_valid_keys)
   // clang-format on
 
   auto agg = cudf::make_count_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_keys_test, some_null_keys)
@@ -77,7 +77,7 @@ TYPED_TEST(groupby_keys_test, some_null_keys)
   // clang-format on
 
   auto agg = cudf::make_count_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_keys_test, include_null_keys)
@@ -99,13 +99,13 @@ TYPED_TEST(groupby_keys_test, include_null_keys)
   // clang-format on
 
   auto agg = cudf::make_sum_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys,
-                  vals,
-                  expect_keys,
-                  expect_vals,
-                  std::move(agg),
-                  force_use_sort_impl::NO,
-                  cudf::null_policy::INCLUDE);
+  CUDF_TEST_SINGLE_AGG(keys,
+                       vals,
+                       expect_keys,
+                       expect_vals,
+                       std::move(agg),
+                       force_use_sort_impl::NO,
+                       cudf::null_policy::INCLUDE);
 }
 
 TYPED_TEST(groupby_keys_test, pre_sorted_keys)
@@ -123,14 +123,14 @@ TYPED_TEST(groupby_keys_test, pre_sorted_keys)
   // clang-format on
 
   auto agg = cudf::make_sum_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys,
-                  vals,
-                  expect_keys,
-                  expect_vals,
-                  std::move(agg),
-                  force_use_sort_impl::YES,
-                  cudf::null_policy::EXCLUDE,
-                  cudf::sorted::YES);
+  CUDF_TEST_SINGLE_AGG(keys,
+                       vals,
+                       expect_keys,
+                       expect_vals,
+                       std::move(agg),
+                       force_use_sort_impl::YES,
+                       cudf::null_policy::EXCLUDE,
+                       cudf::sorted::YES);
 }
 
 TYPED_TEST(groupby_keys_test, pre_sorted_keys_descending)
@@ -148,15 +148,15 @@ TYPED_TEST(groupby_keys_test, pre_sorted_keys_descending)
   // clang-format on
 
   auto agg = cudf::make_sum_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys,
-                  vals,
-                  expect_keys,
-                  expect_vals,
-                  std::move(agg),
-                  force_use_sort_impl::YES,
-                  cudf::null_policy::EXCLUDE,
-                  cudf::sorted::YES,
-                  {cudf::order::DESCENDING});
+  CUDF_TEST_SINGLE_AGG(keys,
+                       vals,
+                       expect_keys,
+                       expect_vals,
+                       std::move(agg),
+                       force_use_sort_impl::YES,
+                       cudf::null_policy::EXCLUDE,
+                       cudf::sorted::YES,
+                       {cudf::order::DESCENDING});
 }
 
 TYPED_TEST(groupby_keys_test, pre_sorted_keys_nullable)
@@ -175,14 +175,14 @@ TYPED_TEST(groupby_keys_test, pre_sorted_keys_nullable)
   // clang-format on
 
   auto agg = cudf::make_sum_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys,
-                  vals,
-                  expect_keys,
-                  expect_vals,
-                  std::move(agg),
-                  force_use_sort_impl::YES,
-                  cudf::null_policy::EXCLUDE,
-                  cudf::sorted::YES);
+  CUDF_TEST_SINGLE_AGG(keys,
+                       vals,
+                       expect_keys,
+                       expect_vals,
+                       std::move(agg),
+                       force_use_sort_impl::YES,
+                       cudf::null_policy::EXCLUDE,
+                       cudf::sorted::YES);
 }
 
 TYPED_TEST(groupby_keys_test, pre_sorted_keys_nulls_before_include_nulls)
@@ -203,14 +203,14 @@ TYPED_TEST(groupby_keys_test, pre_sorted_keys_nulls_before_include_nulls)
   // clang-format on
 
   auto agg = cudf::make_sum_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys,
-                  vals,
-                  expect_keys,
-                  expect_vals,
-                  std::move(agg),
-                  force_use_sort_impl::YES,
-                  cudf::null_policy::INCLUDE,
-                  cudf::sorted::YES);
+  CUDF_TEST_SINGLE_AGG(keys,
+                       vals,
+                       expect_keys,
+                       expect_vals,
+                       std::move(agg),
+                       force_use_sort_impl::YES,
+                       cudf::null_policy::INCLUDE,
+                       cudf::sorted::YES);
 }
 
 TYPED_TEST(groupby_keys_test, mismatch_num_rows)
@@ -223,9 +223,9 @@ TYPED_TEST(groupby_keys_test, mismatch_num_rows)
 
   // Verify that scan throws an error when given data of mismatched sizes.
   auto agg = cudf::make_count_aggregation<cudf::groupby_aggregation>();
-  EXPECT_THROW(test_single_agg(keys, vals, keys, vals, std::move(agg)), cudf::logic_error);
+  EXPECT_THROW(CUDF_TEST_SINGLE_AGG(keys, vals, keys, vals, std::move(agg)), cudf::logic_error);
   auto agg2 = cudf::make_count_aggregation<cudf::groupby_scan_aggregation>();
-  EXPECT_THROW(test_single_scan(keys, vals, keys, vals, std::move(agg2)), cudf::logic_error);
+  EXPECT_THROW(CUDF_TEST_SINGLE_SCAN(keys, vals, keys, vals, std::move(agg2)), cudf::logic_error);
 }
 
 template <typename T>
@@ -280,7 +280,7 @@ TYPED_TEST(groupby_keys_test, structs)
   auto expect_vals = FWCW<R>{6, 1, 8, 7};
 
   auto agg = cudf::make_argmax_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 template <typename T>
@@ -299,7 +299,7 @@ TYPED_TEST(groupby_keys_test, lists)
   // clang-format on
 
   auto agg = cudf::make_sum_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys, values, expected_keys, expected_values, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, values, expected_keys, expected_values, std::move(agg));
 }
 
 struct groupby_string_keys_test : public cudf::test::BaseFixture {};
@@ -318,7 +318,7 @@ TEST_F(groupby_string_keys_test, basic)
   // clang-format on
 
   auto agg = cudf::make_sum_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 // clang-format on
 
@@ -337,14 +337,14 @@ TEST_F(groupby_dictionary_keys_test, basic)
   cudf::test::fixed_width_column_wrapper<R> expect_vals({     9,    19,   17 });
   // clang-format on
 
-  test_single_agg(
+  CUDF_TEST_SINGLE_AGG(
     keys, vals, expect_keys, expect_vals, cudf::make_sum_aggregation<cudf::groupby_aggregation>());
-  test_single_agg(keys,
-                  vals,
-                  expect_keys,
-                  expect_vals,
-                  cudf::make_sum_aggregation<cudf::groupby_aggregation>(),
-                  force_use_sort_impl::YES);
+  CUDF_TEST_SINGLE_AGG(keys,
+                       vals,
+                       expect_keys,
+                       expect_vals,
+                       cudf::make_sum_aggregation<cudf::groupby_aggregation>(),
+                       force_use_sort_impl::YES);
 }
 
 struct groupby_cache_test : public cudf::test::BaseFixture {};

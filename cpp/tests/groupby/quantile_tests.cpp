@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -39,7 +39,7 @@ TYPED_TEST(groupby_quantile_test, basic)
 
   auto agg =
     cudf::make_quantile_aggregation<cudf::groupby_aggregation>({0.5}, cudf::interpolation::LINEAR);
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_quantile_test, empty_cols)
@@ -55,7 +55,7 @@ TYPED_TEST(groupby_quantile_test, empty_cols)
 
   auto agg =
     cudf::make_quantile_aggregation<cudf::groupby_aggregation>({0.5}, cudf::interpolation::LINEAR);
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_quantile_test, zero_valid_keys)
@@ -71,7 +71,7 @@ TYPED_TEST(groupby_quantile_test, zero_valid_keys)
 
   auto agg =
     cudf::make_quantile_aggregation<cudf::groupby_aggregation>({0.5}, cudf::interpolation::LINEAR);
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_quantile_test, zero_valid_values)
@@ -87,7 +87,7 @@ TYPED_TEST(groupby_quantile_test, zero_valid_values)
 
   auto agg =
     cudf::make_quantile_aggregation<cudf::groupby_aggregation>({0.5}, cudf::interpolation::LINEAR);
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_quantile_test, null_keys_and_values)
@@ -108,7 +108,7 @@ TYPED_TEST(groupby_quantile_test, null_keys_and_values)
 
   auto agg =
     cudf::make_quantile_aggregation<cudf::groupby_aggregation>({0.5}, cudf::interpolation::LINEAR);
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_quantile_test, multiple_quantile)
@@ -128,17 +128,17 @@ TYPED_TEST(groupby_quantile_test, multiple_quantile)
 
   auto agg = cudf::make_quantile_aggregation<cudf::groupby_aggregation>(
     {0.25, 0.75}, cudf::interpolation::LINEAR);
-  test_single_agg(keys,
-                  vals,
-                  expect_keys,
-                  expect_vals,
-                  std::move(agg),
-                  force_use_sort_impl::YES,
-                  cudf::null_policy::EXCLUDE,
-                  cudf::sorted::NO,
-                  {},
-                  {},
-                  cudf::sorted::YES);
+  CUDF_TEST_SINGLE_AGG(keys,
+                       vals,
+                       expect_keys,
+                       expect_vals,
+                       std::move(agg),
+                       force_use_sort_impl::YES,
+                       cudf::null_policy::EXCLUDE,
+                       cudf::sorted::NO,
+                       {},
+                       {},
+                       cudf::sorted::YES);
 }
 
 TYPED_TEST(groupby_quantile_test, interpolation_types)
@@ -156,27 +156,27 @@ TYPED_TEST(groupby_quantile_test, interpolation_types)
   //                                                     {0, 3, 6,  1, 4, 5, 9,  2, 7}
   cudf::test::fixed_width_column_wrapper<R> expect_vals1({2.4,      4.2,         4.}, no_nulls());
   auto agg1 = cudf::make_quantile_aggregation<cudf::groupby_aggregation>({0.4}, cudf::interpolation::LINEAR);
-  test_single_agg(keys, vals, expect_keys, expect_vals1, std::move(agg1));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals1, std::move(agg1));
 
   //                                                     {0, 3, 6,  1, 4, 5, 9,  2, 7}
   cudf::test::fixed_width_column_wrapper<R> expect_vals2({3,        4,           2}, no_nulls());
   auto agg2 = cudf::make_quantile_aggregation<cudf::groupby_aggregation>({0.4}, cudf::interpolation::NEAREST);
-  test_single_agg(keys, vals, expect_keys, expect_vals2, std::move(agg2));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals2, std::move(agg2));
 
   //                                                     {0, 3, 6,  1, 4, 5, 9,  2, 7}
   cudf::test::fixed_width_column_wrapper<R> expect_vals3({0,        4,          2}, no_nulls());
   auto agg3 = cudf::make_quantile_aggregation<cudf::groupby_aggregation>({0.4}, cudf::interpolation::LOWER);
-  test_single_agg(keys, vals, expect_keys, expect_vals3, std::move(agg3));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals3, std::move(agg3));
 
   //                                                     {0, 3, 6,  1, 4, 5, 9,  2, 7}
   cudf::test::fixed_width_column_wrapper<R> expect_vals4({3,        5,           7}, no_nulls());
   auto agg4 = cudf::make_quantile_aggregation<cudf::groupby_aggregation>({0.4}, cudf::interpolation::HIGHER);
-  test_single_agg(keys, vals, expect_keys, expect_vals4, std::move(agg4));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals4, std::move(agg4));
 
   //                                                     {0, 3, 6,  1, 4, 5, 9,  2, 7}
   cudf::test::fixed_width_column_wrapper<R> expect_vals5({1.5,      4.5,         4.5}, no_nulls());
   auto agg5 = cudf::make_quantile_aggregation<cudf::groupby_aggregation>({0.4}, cudf::interpolation::MIDPOINT);
-  test_single_agg(keys, vals, expect_keys, expect_vals5, std::move(agg5));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals5, std::move(agg5));
   // clang-format on
 }
 
@@ -195,7 +195,7 @@ TYPED_TEST(groupby_quantile_test, dictionary)
   cudf::test::fixed_width_column_wrapper<R> expect_vals({3.,      4.5,        7.}, no_nulls());
   // clang-format on
 
-  test_single_agg(
+  CUDF_TEST_SINGLE_AGG(
     keys,
     vals,
     expect_keys,

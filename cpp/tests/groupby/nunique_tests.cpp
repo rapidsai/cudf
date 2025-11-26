@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -35,9 +35,9 @@ TYPED_TEST(groupby_nunique_test, basic)
 
   auto agg = cudf::make_nunique_aggregation<cudf::groupby_aggregation>();
   if (std::is_same<V, bool>())
-    test_single_agg(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
+    CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
   else
-    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+    CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_nunique_test, empty_cols)
@@ -53,7 +53,7 @@ TYPED_TEST(groupby_nunique_test, empty_cols)
   cudf::test::fixed_width_column_wrapper<R> expect_vals{};
 
   auto agg = cudf::make_nunique_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_nunique_test, basic_duplicates)
@@ -71,9 +71,9 @@ TYPED_TEST(groupby_nunique_test, basic_duplicates)
 
   auto agg = cudf::make_nunique_aggregation<cudf::groupby_aggregation>();
   if (std::is_same<V, bool>())
-    test_single_agg(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
+    CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
   else
-    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+    CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_nunique_test, zero_valid_keys)
@@ -89,7 +89,7 @@ TYPED_TEST(groupby_nunique_test, zero_valid_keys)
   cudf::test::fixed_width_column_wrapper<R> expect_vals{};
 
   auto agg = cudf::make_nunique_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_nunique_test, zero_valid_values)
@@ -105,7 +105,7 @@ TYPED_TEST(groupby_nunique_test, zero_valid_values)
   cudf::test::fixed_width_column_wrapper<R> expect_vals{0};
 
   auto agg = cudf::make_nunique_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_nunique_test, null_keys_and_values)
@@ -129,9 +129,9 @@ TYPED_TEST(groupby_nunique_test, null_keys_and_values)
 
   auto agg = cudf::make_nunique_aggregation<cudf::groupby_aggregation>();
   if (std::is_same<V, bool>())
-    test_single_agg(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
+    CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
   else
-    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+    CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_nunique_test, null_keys_and_values_with_duplicates)
@@ -156,9 +156,9 @@ TYPED_TEST(groupby_nunique_test, null_keys_and_values_with_duplicates)
 
   auto agg = cudf::make_nunique_aggregation<cudf::groupby_aggregation>();
   if (std::is_same<V, bool>())
-    test_single_agg(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
+    CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
   else
-    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+    CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_nunique_test, include_nulls)
@@ -183,9 +183,9 @@ TYPED_TEST(groupby_nunique_test, include_nulls)
 
   auto agg = cudf::make_nunique_aggregation<cudf::groupby_aggregation>(cudf::null_policy::INCLUDE);
   if (std::is_same<V, bool>())
-    test_single_agg(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
+    CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
   else
-    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+    CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_nunique_test, dictionary)
@@ -211,7 +211,7 @@ TYPED_TEST(groupby_nunique_test, dictionary)
   cudf::column_view expect_vals = (std::is_same<V, bool>()) ? cudf::column_view{expect_bool_vals}
                                                             : cudf::column_view{expect_fixed_vals};
 
-  test_single_agg(
+  CUDF_TEST_SINGLE_AGG(
     keys,
     vals,
     expect_keys,
