@@ -34,6 +34,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 )
 from cudf_polars.experimental.rapidsmpf.nodes import (
     define_py_node,
+    metadata_feeder_node,
     shutdown_on_error,
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
@@ -161,18 +162,19 @@ async def dataframescan_node(
     rows_per_partition
         The number of rows per partition.
     """
-    nrows = max(ir.df.shape()[0], 1)
-    global_count = math.ceil(nrows / rows_per_partition)
-
-    # For single rank, simplify the logic
-    if context.comm().nranks == 1:
-        local_count = global_count
-        local_offset = 0
-    else:
-        local_count = math.ceil(global_count / context.comm().nranks)
-        local_offset = local_count * context.comm().rank
-
     async with shutdown_on_error(context, ch_out.metadata, ch_out.data):
+        # Find local partition count.
+        nrows = max(ir.df.shape()[0], 1)
+        global_count = math.ceil(nrows / rows_per_partition)
+
+        # For single rank, simplify the logic
+        if context.comm().nranks == 1:
+            local_count = global_count
+            local_offset = 0
+        else:
+            local_count = math.ceil(global_count / context.comm().nranks)
+            local_offset = local_count * context.comm().rank
+
         # Send basic metadata
         await ch_out.send_metadata(context, Metadata(local_count))
 
@@ -190,14 +192,15 @@ async def dataframescan_node(
                 )
             )
 
-        # If no slices assigned to this rank, send an empty chunk with correct schema
+        # If there are no slices, send an empty chunk for now.
+        # TODO: We shouldn't need to do this.
         if len(ir_slices) == 0:
-            # Create an empty table with the correct schema
+            stream = ir_context.get_cuda_stream()
             await ch_out.data.send(
                 context,
                 Message(
                     0,
-                    empty_table_chunk(ir, context),
+                    empty_table_chunk(ir, context, stream),
                 ),
             )
             await ch_out.data.drain(context)
@@ -438,24 +441,15 @@ async def scan_node(
         # Send basic metadata
         await ch_out.send_metadata(context, Metadata(max(1, len(scans))))
 
-        # If no scans assigned to this rank, send an empty chunk with correct schema
+        # If there are no scans, send an empty chunk for now.
+        # TODO: We shouldn't need to do this.
         if len(scans) == 0:
-            # Create an empty table with the correct schema
-            empty_columns = [
-                plc.column_factories.make_empty_column(plc.DataType(dtype.id()))
-                for dtype in ir.schema.values()
-            ]
-            empty_table = plc.Table(empty_columns)
-
+            stream = ir_context.get_cuda_stream()
             await ch_out.data.send(
                 context,
                 Message(
                     0,
-                    TableChunk.from_pylibcudf_table(
-                        empty_table,
-                        context.get_stream_from_pool(),
-                        exclusive_view=True,
-                    ),
+                    empty_table_chunk(ir, context, stream),
                 ),
             )
             await ch_out.data.drain(context)
@@ -599,28 +593,6 @@ def make_rapidsmpf_read_parquet_node(
         ) from e
 
 
-@define_py_node()
-async def metadata_feeder_node(
-    context: Context,
-    channel: ChannelPair,
-    metadata: Metadata,
-) -> None:
-    """
-    Feed metadata to a channel pair.
-
-    Parameters
-    ----------
-    context
-        The rapidsmpf context.
-    channel
-        The channel pair.
-    metadata
-        The metadata to feed.
-    """
-    async with shutdown_on_error(context, channel.metadata, channel.data):
-        await channel.send_metadata(context, metadata)
-
-
 @generate_ir_sub_network.register(Scan)
 def _(
     ir: Scan, rec: SubNetGenerator
@@ -657,13 +629,6 @@ def _(
             rec.state["stats"],
             partition_info,
         )
-
-    # Native node cannot split large files in distributed mode yet
-    if (
-        config_options.executor.cluster == "distributed"
-        and plan.flavor == IOPartitionFlavor.SPLIT_FILES
-    ):
-        native_node = None
 
     if native_node is not None:
         # Need metadata node, because the native read_parquet

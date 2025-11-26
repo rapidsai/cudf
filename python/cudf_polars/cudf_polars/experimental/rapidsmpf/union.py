@@ -60,15 +60,15 @@ async def union_node(
         ch_out.data,
     ):
         # Merge and forward metadata.
-        # TODO: HOW DOES A GLOBAL UNION WORK?
         total_count = 0
+        duplicated = True
         for ch_in in chs_in:
             metadata = await ch_in.recv_metadata(context)
-            assert isinstance(metadata, Metadata), (
-                f"Expected Metadata, got {type(metadata)}."
-            )
             total_count += metadata.count
-        await ch_out.send_metadata(context, Metadata(total_count))
+            duplicated = duplicated and metadata.duplicated
+        await ch_out.send_metadata(
+            context, Metadata(total_count, duplicated=duplicated)
+        )
 
         seq_num_offset = 0
         for ch_in in chs_in:
