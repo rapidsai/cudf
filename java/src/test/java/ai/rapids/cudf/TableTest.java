@@ -7804,7 +7804,7 @@ public class TableTest extends CudfTestBase {
              .onColumn(1));
          Table resultsSorted = results.orderBy(OrderByArg.asc(0));
          Table expected = new Table.TestBuilder().column(1, 2, 3, 4, 5)
-             .column(0.0, 2.0, 8.0, 0.0, null)
+             .column(0.0, 2.0, 8.0, 0.0, 0.0)
              .build()) {
       assertTablesAreEqual(expected, resultsSorted);
     }
