@@ -45,22 +45,12 @@ cudf::size_type approx_distinct_count_impl(table_view const& input,
   // Clamp precision to valid range for HyperLogLog
   precision = std::max(4, std::min(18, precision));
 
-  // For nan_policy::NAN_IS_NULL, we need to use cuDF's distinct_count approach
-  // which properly handles NaN as null conversion. For approximate counting,
-  // we'll delegate to the existing distinct_count for proper null/NaN handling
-  // and then use that as a baseline.
-
-  // The key insight: cuDF's distinct_count already handles null_policy and nan_policy correctly
-  // For approximate counting, we can use the row hasher but need to respect the policies
-
-  // Use cuDF's row operators for proper null/NaN handling
   auto const has_nulls = nullate::DYNAMIC{cudf::has_nested_nulls(input)};
   auto const preprocessed_input =
     cudf::detail::row::hash::preprocessed_table::create(input, stream);
   auto const row_hasher = cudf::detail::row::hash::row_hasher(preprocessed_input);
   auto const hash_key   = row_hasher.device_hasher(has_nulls);
 
-  // Create HyperLogLog estimator for hash values with RMM allocator
   auto hll = cuco::hyperloglog<cudf::hash_value_type,
                                cuda::thread_scope_device,
                                cuco::xxhash_64<cudf::hash_value_type>,
@@ -72,32 +62,21 @@ cudf::size_type approx_distinct_count_impl(table_view const& input,
 
   auto const iter = thrust::counting_iterator<cudf::size_type>(0);
 
-  // Create hash values for all rows using cuDF's row hasher
   rmm::device_uvector<cudf::hash_value_type> hash_values(num_rows, stream);
-  thrust::transform(rmm::exec_policy(stream), iter, iter + num_rows, hash_values.begin(), hash_key);
-
-  // For simplicity and correctness, use cuDF's existing distinct logic for null/NaN handling
-  // This ensures our approximate results are consistent with exact distinct_count behavior
+  thrust::transform(
+    rmm::exec_policy_nosync(stream), iter, iter + num_rows, hash_values.begin(), hash_key);
 
   // Create a temporary table for distinct processing if needed
   if (nan_handling == nan_policy::NAN_IS_NULL || null_handling == null_policy::EXCLUDE) {
-    // Use cuDF's drop_nulls or similar logic to get the right subset
-    // For now, let's use a simpler approach: delegate to distinct_count for small tables
-    // and use approximation for larger ones
-
     if (num_rows < 10000) {
-      // For small tables, just use exact distinct_count for correctness
       if (input.num_columns() == 1) {
         return cudf::distinct_count(input.column(0), null_handling, nan_handling);
       } else {
-        // For tables, we need to handle the null_equality parameter
         return cudf::distinct_count(input, cudf::null_equality::EQUAL);
       }
     }
   }
 
-  // For larger tables or when no special handling is needed, use HyperLogLog
-  // Handle null_policy::EXCLUDE by filtering out null rows
   if (null_handling == null_policy::EXCLUDE && has_nulls) {
     auto const [row_bitmask, null_count] =
       cudf::detail::bitmask_or(input, stream, cudf::get_current_device_resource_ref());
@@ -124,7 +103,6 @@ cudf::size_type approx_distinct_count_impl(table_view const& input,
     }
   }
 
-  // Add all hash values (includes nulls if null_policy::INCLUDE)
   hll.add(hash_values.begin(), hash_values.end(), cuda::stream_ref{stream.value()});
   return static_cast<cudf::size_type>(hll.estimate(cuda::stream_ref{stream.value()}));
 }
