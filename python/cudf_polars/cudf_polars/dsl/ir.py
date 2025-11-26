@@ -1321,13 +1321,7 @@ class DataFrameScan(IR):
         return node
 
     def __reduce__(self) -> tuple[Any, ...]:  # pragma: no cover
-        """
-        Pickle a DataFrameScan object.
-
-        We override the base Node.__reduce__ to pickle the polars DataFrame
-        (from _non_child_args) instead of the PyDataFrame (self.df) because
-        PyDataFrame cannot be pickled.
-        """
+        """Pickle a DataFrameScan object."""
         return (
             self._reconstruct,
             (*self._non_child_args, self._id_for_hash),
@@ -1347,6 +1341,17 @@ class DataFrameScan(IR):
             schema_hash,
             self._id_for_hash,
             self.projection,
+        )
+
+    def is_equal(self, other: Self) -> bool:
+        """Equality of DataFrameScan nodes."""
+        return self is other or (
+            self._id_for_hash == other._id_for_hash
+            and self.schema == other.schema
+            and self.projection == other.projection
+            and pl.DataFrame._from_pydf(self.df).equals(
+                pl.DataFrame._from_pydf(other.df)
+            )
         )
 
     @classmethod

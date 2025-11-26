@@ -12,7 +12,6 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Join
-from cudf_polars.experimental.rapidsmpf.allgather import AllGatherContext
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
 )
@@ -23,7 +22,6 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
-    Metadata,
     process_children,
 )
 from cudf_polars.experimental.utils import _concat
@@ -87,7 +85,6 @@ async def broadcast_join_node(
     ch_left: ChannelPair,
     ch_right: ChannelPair,
     broadcast_side: Literal["left", "right"],
-    shuffle_id: int,
 ) -> None:
     """
     Join node for rapidsmpf.
@@ -108,77 +105,26 @@ async def broadcast_join_node(
         The right input ChannelPair.
     broadcast_side
         The side to broadcast.
-    shuffle_id
-        Pre-allocated shuffle ID for this operation.
-    progress_thread
-        Shared ProgressThread for all operations on this rank.
     """
-    async with shutdown_on_error(
-        context,
-        ch_left.metadata,
-        ch_left.data,
-        ch_right.metadata,
-        ch_right.data,
-        ch_out.metadata,
-        ch_out.data,
-    ):
-        # Receive metadata.
-        left_metadata, right_metadata = await asyncio.gather(
-            ch_left.recv_metadata(context),
-            ch_right.recv_metadata(context),
-        )
-        assert isinstance(left_metadata, Metadata), (
-            f"Expected Metadata, got {type(left_metadata)}."
-        )
-        assert isinstance(right_metadata, Metadata), (
-            f"Expected Metadata, got {type(right_metadata)}."
-        )
-
-        partitioned_on: tuple[str, ...] = ()
+    async with shutdown_on_error(context, ch_left.data, ch_right.data, ch_out.data):
         if broadcast_side == "right":
             # Broadcast right, stream left
             small_ch = ch_right
             large_ch = ch_left
             small_child = ir.children[1]
             large_child = ir.children[0]
-            chunk_count = left_metadata.count
-            partitioned_on = left_metadata.partitioned_on
         else:
             # Broadcast left, stream right
             small_ch = ch_left
             large_ch = ch_right
             small_child = ir.children[0]
             large_child = ir.children[1]
-            chunk_count = right_metadata.count
-            if ir.options[0] == "Right":
-                partitioned_on = right_metadata.partitioned_on
 
-        # Send metadata.
-        output_metadata = Metadata(chunk_count, partitioned_on=partitioned_on)
-        await ch_out.send_metadata(context, output_metadata)
-
-        # Collect small-side chunks
-        small_dfs = await get_small_table(context, small_child, small_ch)
-        if context.comm().nranks > 1:
-            # Global all-gather (i.e. broadcast)
-            with AllGatherContext(context, shuffle_id) as allgather:
-                for small_df in small_dfs:
-                    allgather.insert_chunk(
-                        TableChunk.from_pylibcudf_table(
-                            small_df.table, small_df.stream, exclusive_view=True
-                        )
-                    )
-                small_dfs = [
-                    DataFrame.from_table(
-                        await allgather.extract_concatenated(small_df.stream),
-                        list(small_child.schema.keys()),
-                        list(small_child.schema.values()),
-                        small_df.stream,
-                    )
-                ]
-        elif ir.options[0] != "Inner":
-            # TODO: Use local repartitioning for non-inner joins
-            small_dfs = [_concat(*small_dfs, context=ir_context)]
+        # Collect small-side
+        small_df = _concat(
+            *await get_small_table(context, small_child, small_ch),
+            context=ir_context,
+        )
 
         # Stream through large side, joining with the small-side
         while (msg := await large_ch.data.recv(context)) is not None:
@@ -194,22 +140,14 @@ async def broadcast_join_node(
             )
 
             # Perform the join
-            df = _concat(
-                *[
-                    (
-                        await asyncio.to_thread(
-                            ir.do_evaluate,
-                            *ir._non_child_args,
-                            *(
-                                [large_df, small_df]
-                                if broadcast_side == "right"
-                                else [small_df, large_df]
-                            ),
-                            context=ir_context,
-                        )
-                    )
-                    for small_df in small_dfs
-                ],
+            df = await asyncio.to_thread(
+                ir.do_evaluate,
+                *ir._non_child_args,
+                *(
+                    [large_df, small_df]
+                    if broadcast_side == "right"
+                    else [small_df, large_df]
+                ),
                 context=ir_context,
             )
 
@@ -279,9 +217,6 @@ def _(
         else:
             broadcast_side = "left"
 
-        # Look up the reserved shuffle ID for this operation
-        shuffle_id = rec.state["shuffle_id_map"][ir]
-
         nodes[ir] = [
             broadcast_join_node(
                 rec.state["context"],
@@ -291,7 +226,6 @@ def _(
                 channels[left].reserve_output_slot(),
                 channels[right].reserve_output_slot(),
                 broadcast_side=broadcast_side,
-                shuffle_id=shuffle_id,
             )
         ]
         return nodes, channels
