@@ -33,14 +33,14 @@ namespace cudf::groupby::detail::hash {
  *         - A table_view containing the input values columns for the single-pass aggregations,
  *         - A vector of aggregation kinds corresponding to each of these values columns,
  *         - A vector of aggregation objects corresponding to each of these values columns,
- *         - A vector of boolean indicating if the corresponding result will be forced to be
+ *         - A vector of binary values indicating if the corresponding result will be forced to be
  *           non-nullable, and
  *         - A boolean value indicating if there are any multi-pass (compound) aggregations.
  */
 std::tuple<table_view,
            cudf::detail::host_vector<aggregation::Kind>,
            std::vector<std::unique_ptr<aggregation>>,
-           std::vector<bool>,
+           std::vector<int>,
            bool>
 extract_single_pass_aggs(host_span<aggregation_request const> requests,
                          rmm::cuda_stream_view stream);

@@ -12,6 +12,8 @@
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/binaryop.hpp>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/valid_if.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/types.hpp>
 
@@ -81,18 +83,40 @@ void hash_compound_agg_finalizer::visit(cudf::detail::mean_aggregation const& ag
 {
   if (cache->has_result(col, agg)) { return; }
 
-  auto const sum_agg      = make_sum_aggregation();
-  auto const count_agg    = make_count_aggregation();
-  auto const sum_result   = cache->get_result(col, *sum_agg);
-  auto const count_result = cache->get_result(col, *count_agg);
+  auto const sum_agg          = make_sum_aggregation();
+  auto const count_agg        = make_count_aggregation();
+  auto const sum_result       = cache->get_result(col, *sum_agg);
+  auto const count_result     = cache->get_result(col, *count_agg);
+  auto const null_removed_sum = [&] {
+    if (sum_result.null_count() == 0) { return sum_result; }
+    return column_view{
+      sum_result.type(), sum_result.size(), sum_result.head(), nullptr, 0, sum_result.offset()};
+  }();
 
+  // Perform division without any null masks, and generate the null mask for the result later.
+  // This is because the null mask (if exists) is just needed to be copied from the sum result,
+  // and copying is faster than running the `bitmask_and` kernel.
   auto result =
-    cudf::detail::binary_operation(sum_result,
+    cudf::detail::binary_operation(null_removed_sum,
                                    count_result,
                                    binary_operator::DIV,
                                    cudf::detail::target_type(input_type, aggregation::MEAN),
                                    stream,
                                    mr);
+  // SUM result only has nulls if it is an input aggregation, not intermediate-only aggregation.
+  if (sum_result.has_nulls()) {
+    result->set_null_mask(cudf::detail::copy_bitmask(sum_result, stream, mr),
+                          sum_result.null_count());
+  } else if (col.has_nulls()) {  // SUM aggregation is only intermediate result, thus it is forced
+                                 // to be non-nullable
+    auto [null_mask, null_count] = cudf::detail::valid_if(
+      count_result.begin<size_type>(),
+      count_result.end<size_type>(),
+      [] __device__(size_type const count) -> bool { return count > 0; },
+      stream,
+      mr);
+    if (null_count > 0) { result->set_null_mask(std::move(null_mask), null_count); }
+  }
   cache->add_result(col, agg, std::move(result));
 }
 

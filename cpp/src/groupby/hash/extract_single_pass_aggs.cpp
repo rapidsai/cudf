@@ -97,14 +97,14 @@ class groupby_simple_aggregations_collector final
 std::tuple<table_view,
            cudf::detail::host_vector<aggregation::Kind>,
            std::vector<std::unique_ptr<aggregation>>,
-           std::vector<bool>,
+           std::vector<int>,
            bool>
 extract_single_pass_aggs(host_span<aggregation_request const> requests,
                          rmm::cuda_stream_view stream)
 {
   std::vector<column_view> columns;
   std::vector<std::unique_ptr<aggregation>> aggs;
-  std::vector<bool> force_non_nullable;
+  std::vector<int> force_non_nullable;
   auto agg_kinds = cudf::detail::make_empty_host_vector<aggregation::Kind>(requests.size(), stream);
 
   bool has_compound_aggs = false;
@@ -125,9 +125,10 @@ extract_single_pass_aggs(host_span<aggregation_request const> requests,
     auto insert_agg = [&](column_view const& request_values, std::unique_ptr<aggregation>&& agg) {
       if (agg_kinds_set.insert(agg->kind).second) {
         // Check if the inserted aggregation is an input aggregation or a replacement aggregation.
-        // If it is not an input aggregation, we can force its output to be non-nullable.
+        // If it is not an input aggregation, we can force its output to be non-nullable
+        // (by storing `1` value in the `force_non_nullable` vector).
         auto const is_input_agg = input_agg_kinds_set.contains(agg->kind);
-        force_non_nullable.push_back(!is_input_agg);
+        force_non_nullable.push_back(is_input_agg ? 0 : 1);
 
         agg_kinds.push_back(agg->kind);
         aggs.push_back(std::move(agg));

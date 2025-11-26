@@ -46,12 +46,15 @@ struct result_column_creator {
   {
   }
 
-  std::unique_ptr<column> operator()(column_view const& col, aggregation::Kind const& agg) const
+  std::unique_ptr<column> operator()(column_view const& col,
+                                     aggregation::Kind const& agg,
+                                     bool force_non_nullable) const
   {
     auto const col_type =
       is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
-    auto const nullable =
-      agg != aggregation::COUNT_VALID && agg != aggregation::COUNT_ALL && col.has_nulls();
+    auto const nullable = force_non_nullable ? false
+                                             : agg != aggregation::COUNT_VALID &&
+                                                 agg != aggregation::COUNT_ALL && col.has_nulls();
     // TODO: Remove adjusted buffer size workaround once https://github.com/NVIDIA/cccl/issues/6430
     // is fixed. Use adjusted buffer size for small data types to ensure atomic operation safety.
     auto const make_uninitialized_column = [&](data_type d_type, size_type size, mask_state state) {
@@ -97,15 +100,22 @@ struct result_column_creator {
 std::unique_ptr<table> create_results_table(size_type output_size,
                                             table_view const& values,
                                             host_span<aggregation::Kind const> agg_kinds,
+                                            host_span<int const> force_non_nullable,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
+  CUDF_EXPECTS(values.num_columns() == static_cast<size_type>(agg_kinds.size()),
+               "The number of values columns and size of agg_kinds vector must be the same.");
+  CUDF_EXPECTS(
+    values.num_columns() == static_cast<size_type>(force_non_nullable.size()),
+    "The number of values columns and size of force_non_nullable vector must be the same.");
+
+  auto const column_creator = result_column_creator{output_size, stream, mr};
   std::vector<std::unique_ptr<column>> output_cols;
-  std::transform(values.begin(),
-                 values.end(),
-                 agg_kinds.begin(),
-                 std::back_inserter(output_cols),
-                 result_column_creator{output_size, stream, mr});
+  for (size_t i = 0; i < agg_kinds.size(); i++) {
+    output_cols.emplace_back(
+      column_creator(values.column(i), agg_kinds[i], static_cast<bool>(force_non_nullable[i])));
+  }
   auto result_table = std::make_unique<table>(std::move(output_cols));
   cudf::detail::initialize_with_identity(result_table->mutable_view(), agg_kinds, stream);
   return result_table;

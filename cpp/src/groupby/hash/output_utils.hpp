@@ -23,6 +23,8 @@ namespace cudf::groupby::detail::hash {
  * @param output_size Number of rows in the output table
  * @param values The values columns to be aggregated
  * @param agg_kinds The aggregation kinds corresponding to each input column
+ * @param force_non_nullable A binary values vector indicating if the corresponding result
+ *        will be forced to be non-nullable
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return The table containing columns for storing aggregation results
@@ -30,6 +32,7 @@ namespace cudf::groupby::detail::hash {
 std::unique_ptr<table> create_results_table(size_type output_size,
                                             table_view const& values,
                                             host_span<aggregation::Kind const> agg_kinds,
+                                            host_span<int const> force_non_nullable,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr);
 

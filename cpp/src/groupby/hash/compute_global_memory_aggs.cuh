@@ -72,6 +72,7 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_d
   SetType const& key_set,
   host_span<aggregation::Kind const> h_agg_kinds,
   device_span<aggregation::Kind const> d_agg_kinds,
+  host_span<int const> force_non_nullable,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
@@ -88,8 +89,12 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_d
   }();
 
   auto const d_values = table_device_view::create(values, stream);
-  auto agg_results    = create_results_table(
-    static_cast<size_type>(unique_keys.size()), values, h_agg_kinds, stream, mr);
+  auto agg_results    = create_results_table(static_cast<size_type>(unique_keys.size()),
+                                          values,
+                                          h_agg_kinds,
+                                          force_non_nullable,
+                                          stream,
+                                          mr);
   auto d_results_ptr = mutable_table_device_view::create(*agg_results, stream);
 
   thrust::for_each_n(rmm::exec_policy_nosync(stream),
@@ -116,12 +121,14 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_s
   SetType const& key_set,
   host_span<aggregation::Kind const> h_agg_kinds,
   device_span<aggregation::Kind const> d_agg_kinds,
+  host_span<int const> force_non_nullable,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   auto const num_rows = values.num_rows();
   auto const d_values = table_device_view::create(values, stream);
-  auto agg_results    = create_results_table(num_rows, values, h_agg_kinds, stream, mr);
+  auto agg_results =
+    create_results_table(num_rows, values, h_agg_kinds, force_non_nullable, stream, mr);
   auto d_results_ptr  = mutable_table_device_view::create(*agg_results, stream);
 
   thrust::for_each_n(
@@ -153,14 +160,27 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_global
   SetType const& key_set,
   host_span<aggregation::Kind const> h_agg_kinds,
   device_span<aggregation::Kind const> d_agg_kinds,
+  host_span<int const> force_non_nullable,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   return h_agg_kinds.size() > GROUPBY_DENSE_OUTPUT_THRESHOLD
-           ? compute_aggs_dense_output(
-               row_bitmask, values, key_set, h_agg_kinds, d_agg_kinds, stream, mr)
-           : compute_aggs_sparse_output_gather(
-               row_bitmask, values, key_set, h_agg_kinds, d_agg_kinds, stream, mr);
+           ? compute_aggs_dense_output(row_bitmask,
+                                       values,
+                                       key_set,
+                                       h_agg_kinds,
+                                       d_agg_kinds,
+                                       force_non_nullable,
+                                       stream,
+                                       mr)
+           : compute_aggs_sparse_output_gather(row_bitmask,
+                                               values,
+                                               key_set,
+                                               h_agg_kinds,
+                                               d_agg_kinds,
+                                               force_non_nullable,
+                                               stream,
+                                               mr);
 }
 
 }  // namespace cudf::groupby::detail::hash

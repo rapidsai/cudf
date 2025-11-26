@@ -13,6 +13,7 @@ compute_global_memory_aggs<nullable_global_set_t>(bitmask_type const* row_bitmas
                                                   nullable_global_set_t const& key_set,
                                                   host_span<aggregation::Kind const> h_agg_kinds,
                                                   device_span<aggregation::Kind const> d_agg_kinds,
+                                                  host_span<int const> force_non_nullable,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::device_async_resource_ref mr);
 
