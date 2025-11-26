@@ -18,9 +18,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -95,7 +95,7 @@ __constant__ cuda::std::array<uint16_t,13> upper_convert = {
 };
 // clang-format on
 
-using char_info = thrust::pair<uint32_t, detail::character_flags_table_type>;
+using char_info = cuda::std::pair<uint32_t, detail::character_flags_table_type>;
 
 /**
  * @brief Returns the given character's info flags.
