@@ -223,6 +223,7 @@ def _(
 
     if pwise_join:
         # Partition-wise join (use default_node_multi)
+        partitioning_index = 1 if ir.options[0] == "Right" else 0
         nodes[ir] = [
             default_node_multi(
                 rec.state["context"],
@@ -233,6 +234,7 @@ def _(
                     channels[left].reserve_output_slot(),
                     channels[right].reserve_output_slot(),
                 ),
+                partitioning_index=partitioning_index,
             )
         ]
         return nodes, channels

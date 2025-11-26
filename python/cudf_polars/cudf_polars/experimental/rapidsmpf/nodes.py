@@ -14,7 +14,7 @@ from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.ir import IR, Empty
+from cudf_polars.dsl.ir import IR, Cache, Empty, Filter, Projection
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
 )
@@ -42,6 +42,8 @@ async def default_node_single(
     ir_context: IRExecutionContext,
     ch_out: ChannelPair,
     ch_in: ChannelPair,
+    *,
+    preserve_partitioning: bool = False,
 ) -> None:
     """
     Single-channel default node for rapidsmpf.
@@ -58,6 +60,8 @@ async def default_node_single(
         The output ChannelPair.
     ch_in
         The input ChannelPair.
+    preserve_partitioning
+        Whether to preserve the partitioning metadata of the input chunks.
 
     Notes
     -----
@@ -70,7 +74,8 @@ async def default_node_single(
         metadata = await ch_in.recv_metadata(context)
         metadata_out = Metadata(metadata.count)
         metadata_out.duplicated = metadata.duplicated
-        # TODO: Preserve partitioned_on when allowed.
+        if preserve_partitioning:
+            metadata_out.partitioned_on = metadata.partitioned_on
         await ch_out.send_metadata(context, metadata_out)
 
         # Recv/send data.
@@ -105,6 +110,8 @@ async def default_node_multi(
     ir_context: IRExecutionContext,
     ch_out: ChannelPair,
     chs_in: tuple[ChannelPair, ...],
+    *,
+    partitioning_index: int | None = None,
 ) -> None:
     """
     Pointwise node for rapidsmpf.
@@ -121,6 +128,9 @@ async def default_node_multi(
         The output ChannelPair.
     chs_in
         Tuple of input ChannelPairs.
+    partitioning_index
+        Index of the input channel to preserve partitioning information for.
+        If None, no partitioning information is preserved.
     """
     async with shutdown_on_error(
         context,
@@ -130,12 +140,13 @@ async def default_node_multi(
         ch_out.data,
     ):
         # Merge and forward basic metadata.
-        # TODO: Preserve partitioning information when possible.
         metadata = Metadata(1)
-        for ch_in in chs_in:
+        for idx, ch_in in enumerate(chs_in):
             md_child = await ch_in.recv_metadata(context)
             metadata.count = max(md_child.count, metadata.count)
             metadata.duplicated = metadata.duplicated and md_child.duplicated
+            if idx == partitioning_index:
+                metadata.partitioned_on = md_child.partitioned_on
         await ch_out.send_metadata(context, metadata)
 
         seq_num = 0
@@ -484,6 +495,14 @@ def _(
 
     if len(ir.children) == 1:
         # Single-channel default node
+        preserve_partitioning = isinstance(
+            # TODO: We don't need to worry about
+            # non-pointwise Filter operations here,
+            # because the lowering stage would have
+            # collapsed to one partition anyway.
+            ir,
+            (Cache, Projection, Filter),
+        )
         nodes[ir] = [
             default_node_single(
                 rec.state["context"],
@@ -491,6 +510,7 @@ def _(
                 rec.state["ir_context"],
                 channels[ir].reserve_input_slot(),
                 channels[ir.children[0]].reserve_output_slot(),
+                preserve_partitioning=preserve_partitioning,
             )
         ]
     else:
@@ -633,6 +653,7 @@ async def metadata_drain_node(
     ir_context: IRExecutionContext,
     ch_in: ChannelPair,
     ch_out: Any,
+    metadata_collector: list[Metadata] | None,
 ) -> None:
     """
     Drain metadata and forward data to a single channel.
@@ -649,11 +670,15 @@ async def metadata_drain_node(
         The input ChannelPair (with metadata and data channels).
     ch_out
         The output data channel.
+    metadata_collector
+        The list to collect the final metadata.
     """
     async with shutdown_on_error(context, ch_in.metadata, ch_in.data, ch_out):
         # Drain metadata channel (we don't need it after this point)
         metadata = await ch_in.recv_metadata(context)
         send_empty = metadata.duplicated and context.comm().rank != 0
+        if metadata_collector is not None:
+            metadata_collector.append(metadata)
 
         # Forward non-duplicated data messages
         while (msg := await ch_in.data.recv(context)) is not None:

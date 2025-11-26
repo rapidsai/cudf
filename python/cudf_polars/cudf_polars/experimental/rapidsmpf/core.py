@@ -58,12 +58,15 @@ if TYPE_CHECKING:
         LowerState,
         SubNetGenerator,
     )
+    from cudf_polars.experimental.rapidsmpf.utils import Metadata
 
 
 def evaluate_logical_plan(
     ir: IR,
     config_options: ConfigOptions,
-) -> pl.DataFrame:
+    *,
+    collect_metadata: bool = False,
+) -> tuple[pl.DataFrame, list[Metadata]]:
     """
     Evaluate a logical plan with the RapidsMPF streaming runtime.
 
@@ -73,10 +76,12 @@ def evaluate_logical_plan(
         The IR node.
     config_options
         The configuration options.
+    collect_metadata
+        Whether to collect runtime metadata.
 
     Returns
     -------
-    The output DataFrame.
+    The output DataFrame and metadata collector.
     """
     assert config_options.executor.name == "streaming", "Executor must be streaming"
     assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
@@ -91,6 +96,57 @@ def evaluate_logical_plan(
 
     # Lower the IR graph on the client process (for now).
     ir, partition_info, stats = lower_ir_graph(ir, config_options)
+
+    # Reserve collective IDs for the entire pipeline execution
+    with ReserveOpIDs(ir) as collective_id_map:
+        result, metadata_collector = evaluate_pipeline(
+            ir,
+            partition_info,
+            config_options,
+            stats,
+            collective_id_map,
+            collect_metadata=collect_metadata,
+        )
+
+    return result, metadata_collector
+
+
+def evaluate_pipeline(
+    ir: IR,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    config_options: ConfigOptions,
+    stats: StatsCollector,
+    collective_id_map: dict[IR, int],
+    rmpf_context: Context | None = None,
+    *,
+    collect_metadata: bool = False,
+) -> tuple[pl.DataFrame, list[Metadata]]:
+    """
+    Build and evaluate a RapidsMPF streaming pipeline.
+
+    Parameters
+    ----------
+    ir
+        The IR node.
+    partition_info
+        The partition information.
+    config_options
+        The configuration options.
+    stats
+        The statistics collector.
+    collective_id_map
+        The mapping of IR nodes to collective IDs.
+    rmpf_context
+        The RapidsMPF context.
+    collect_metadata
+        Whether to collect runtime metadata.
+
+    Returns
+    -------
+    The output DataFrame and metadata collector.
+    """
+    assert config_options.executor.name == "streaming", "Executor must be streaming"
+    assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
 
     # Configure the context.
     # TODO: Multi-GPU version will be different. The rest of this function
@@ -140,53 +196,53 @@ def evaluate_logical_plan(
     else:
         ir_context = IRExecutionContext.from_config_options(config_options)
 
-    # Reserve collective IDs for the entire pipeline execution
-    with ReserveOpIDs(ir) as collective_id_map:
-        # Generate network nodes
-        nodes, output = generate_network(
-            rmpf_context,
-            ir,
-            partition_info,
-            config_options,
-            stats,
-            ir_context=ir_context,
-            collective_id_map=collective_id_map,
+    # Generate network nodes
+    metadata_collector: list[Metadata] | None = [] if collect_metadata else None
+    nodes, output = generate_network(
+        rmpf_context,
+        ir,
+        partition_info,
+        config_options,
+        stats,
+        ir_context=ir_context,
+        collective_id_map=collective_id_map,
+        metadata_collector=metadata_collector,
+    )
+
+    # Run the network
+    run_streaming_pipeline(nodes=nodes, py_executor=executor)
+
+    # Extract/return the concatenated result.
+    # Keep chunks alive until after concatenation to prevent
+    # use-after-free with stream-ordered allocations
+    messages = output.release()
+    chunks = [
+        TableChunk.from_message(msg).make_available_and_spill(
+            br, allow_overbooking=True
         )
+        for msg in messages
+    ]
+    dfs = [
+        DataFrame.from_table(
+            chunk.table_view(),
+            list(ir.schema.keys()),
+            list(ir.schema.values()),
+            chunk.stream,
+        )
+        for chunk in chunks
+    ]
+    df = _concat(*dfs, context=ir_context)
+    # We need to materialize the polars dataframe before we drop the rapidsmpf
+    # context, which keeps the CUDA streams alive.
+    stream = df.stream
+    result = df.to_polars()
+    stream.synchronize()
 
-        # Run the network
-        run_streaming_pipeline(nodes=nodes, py_executor=executor)
+    # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
+    # before the Context, which ultimately contains the rmm MR, goes out of scope.
+    del nodes, output, messages, chunks, dfs, df
 
-        # Extract/return the concatenated result.
-        # Keep chunks alive until after concatenation to prevent
-        # use-after-free with stream-ordered allocations
-        messages = output.release()
-        chunks = [
-            TableChunk.from_message(msg).make_available_and_spill(
-                br, allow_overbooking=True
-            )
-            for msg in messages
-        ]
-        dfs = [
-            DataFrame.from_table(
-                chunk.table_view(),
-                list(ir.schema.keys()),
-                list(ir.schema.values()),
-                chunk.stream,
-            )
-            for chunk in chunks
-        ]
-        df = _concat(*dfs, context=ir_context)
-        # We need to materialize the polars dataframe before we drop the rapidsmpf
-        # context, which keeps the CUDA streams alive.
-        stream = df.stream
-        result = df.to_polars()
-        stream.synchronize()
-
-        # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
-        # before the Context, which ultimately contains the rmm MR, goes out of scope.
-        del nodes, output, messages, chunks, dfs, df
-
-    return result
+    return result, metadata_collector or []
 
 
 def lower_ir_graph(
@@ -307,6 +363,7 @@ def generate_network(
     *,
     ir_context: IRExecutionContext,
     collective_id_map: dict[IR, int],
+    metadata_collector: list[Metadata] | None,
 ) -> tuple[list[Any], DeferredMessages]:
     """
     Translate the IR graph to a RapidsMPF streaming network.
@@ -327,6 +384,8 @@ def generate_network(
         The execution context for the IR node.
     collective_id_map
         The mapping of IR nodes to collective IDs.
+    metadata_collector
+        The dictionary to collect the final metadata.
 
     Returns
     -------
@@ -375,6 +434,7 @@ def generate_network(
         ir_context,
         ch_out,
         ch_final_data,
+        metadata_collector,
     )
 
     # Add final node to pull from the output data channel
