@@ -97,14 +97,14 @@ class groupby_simple_aggregations_collector final
 std::tuple<table_view,
            cudf::detail::host_vector<aggregation::Kind>,
            std::vector<std::unique_ptr<aggregation>>,
-           std::vector<int>,
+           std::vector<int8_t>,
            bool>
 extract_single_pass_aggs(host_span<aggregation_request const> requests,
                          rmm::cuda_stream_view stream)
 {
   std::vector<column_view> columns;
   std::vector<std::unique_ptr<aggregation>> aggs;
-  std::vector<int> force_non_nullable;
+  std::vector<int8_t> force_non_nullable;
   auto agg_kinds = cudf::detail::make_empty_host_vector<aggregation::Kind>(requests.size(), stream);
 
   bool has_compound_aggs = false;

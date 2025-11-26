@@ -40,7 +40,7 @@ namespace cudf::groupby::detail::hash {
 std::tuple<table_view,
            cudf::detail::host_vector<aggregation::Kind>,
            std::vector<std::unique_ptr<aggregation>>,
-           std::vector<int>,
+           std::vector<int8_t>,
            bool>
 extract_single_pass_aggs(host_span<aggregation_request const> requests,
                          rmm::cuda_stream_view stream);
