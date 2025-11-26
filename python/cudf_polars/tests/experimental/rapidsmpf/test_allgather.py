@@ -6,30 +6,17 @@
 from __future__ import annotations
 
 import asyncio
+from typing import TYPE_CHECKING
 
 import numpy as np
-import pytest
-from rapidsmpf.communicator.single import new_communicator as single_process_comm
-from rapidsmpf.config import Options, get_environment_variables
-from rapidsmpf.memory.buffer_resource import BufferResource
-from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
-from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import pylibcudf as plc
-import rmm.mr
 
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
 
-
-@pytest.fixture
-def local_context() -> Context:
-    """Fixture to create a single-GPU streaming context for testing."""
-    options = Options(get_environment_variables())
-    comm = single_process_comm(options)
-    mr = RmmResourceAdaptor(rmm.mr.CudaMemoryResource())
-    br = BufferResource(mr)
-    return Context(comm, br, options)
+if TYPE_CHECKING:
+    from rapidsmpf.streaming.core.context import Context
 
 
 async def _test_allgather(context: Context) -> None:
