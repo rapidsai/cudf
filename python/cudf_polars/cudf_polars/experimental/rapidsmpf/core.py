@@ -66,7 +66,7 @@ def evaluate_logical_plan(
     config_options: ConfigOptions,
     *,
     collect_metadata: bool = False,
-) -> tuple[pl.DataFrame, list[Metadata]]:
+) -> tuple[pl.DataFrame, list[Metadata] | None]:
     """
     Evaluate a logical plan with the RapidsMPF streaming runtime.
 
@@ -120,7 +120,7 @@ def evaluate_pipeline(
     rmpf_context: Context | None = None,
     *,
     collect_metadata: bool = False,
-) -> tuple[pl.DataFrame, list[Metadata]]:
+) -> tuple[pl.DataFrame, list[Metadata] | None]:
     """
     Build and evaluate a RapidsMPF streaming pipeline.
 
@@ -242,7 +242,7 @@ def evaluate_pipeline(
     # before the Context, which ultimately contains the rmm MR, goes out of scope.
     del nodes, output, messages, chunks, dfs, df
 
-    return result, metadata_collector or []
+    return result, metadata_collector
 
 
 def lower_ir_graph(
@@ -385,7 +385,9 @@ def generate_network(
     collective_id_map
         The mapping of IR nodes to collective IDs.
     metadata_collector
-        The dictionary to collect the final metadata.
+        The list to collect the final metadata.
+        This list will be mutated when the network is executed.
+        If None, metadata will not be collected.
 
     Returns
     -------

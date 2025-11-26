@@ -73,6 +73,7 @@ def test_rapidsmpf_join_metadata(
     metadata_collector = evaluate_logical_plan(
         ir, config_options, collect_metadata=True
     )[1]
+    assert metadata_collector is not None
     assert len(metadata_collector) == 1
     metadata = metadata_collector[0]
     assert metadata.count == left_count

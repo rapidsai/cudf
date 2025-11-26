@@ -71,11 +71,12 @@ async def default_node_single(
         context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
     ):
         # Recv/send metadata.
-        metadata = await ch_in.recv_metadata(context)
-        metadata_out = Metadata(metadata.count)
-        metadata_out.duplicated = metadata.duplicated
-        if preserve_partitioning:
-            metadata_out.partitioned_on = metadata.partitioned_on
+        metadata_in = await ch_in.recv_metadata(context)
+        metadata_out = Metadata(
+            metadata_in.count,
+            partitioned_on=metadata_in.partitioned_on if preserve_partitioning else (),
+            duplicated=metadata_in.duplicated,
+        )
         await ch_out.send_metadata(context, metadata_out)
 
         # Recv/send data.
@@ -672,6 +673,8 @@ async def metadata_drain_node(
         The output data channel.
     metadata_collector
         The list to collect the final metadata.
+        This list will be mutated when the network is executed.
+        If None, metadata will not be collected.
     """
     async with shutdown_on_error(context, ch_in.metadata, ch_in.data, ch_out):
         # Drain metadata channel (we don't need it after this point)
