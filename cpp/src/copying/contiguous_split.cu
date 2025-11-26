@@ -2040,7 +2040,7 @@ struct contiguous_split_state {
   cudf::table_view const input;        ///< The input table_view to operate on
   std::size_t const user_buffer_size;  ///< The size of the user buffer for the chunked_pack case
   rmm::cuda_stream_view const stream;
-  std::optional<rmm::device_async_resource_ref const> mr;  ///< The resource for any data returned
+  std::optional<rmm::device_async_resource_ref> mr;  ///< The resource for any data returned
 
   // this resource defaults to `mr` for the contiguous_split case, but it can be useful for the
   // `chunked_pack` case to allocate scratch/temp memory in a pool

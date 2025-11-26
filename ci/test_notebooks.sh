@@ -58,7 +58,7 @@ for nb in $(find . -name "*.ipynb"); do
         echo "--------------------------------------------------------------------------------"
     else
         nvidia-smi
-        ${NBTEST} "${nbBasename}"
+        timeout 10m ${NBTEST} "${nbBasename}"
     fi
 done
 
