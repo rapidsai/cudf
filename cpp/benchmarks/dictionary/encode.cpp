@@ -39,5 +39,5 @@ static void bench_dictionary_encode(nvbench::state& state)
 
 NVBENCH_BENCH(bench_dictionary_encode)
   .set_name("encode")
-  .add_int64_axis("num_rows", {2097152, 16777216, 67108864})  // 262144
+  .add_int64_axis("num_rows", {262144, 2097152, 16777216, 67108864})
   .add_int64_axis("cardinality", {10});
