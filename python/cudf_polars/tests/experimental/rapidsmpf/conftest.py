@@ -6,6 +6,10 @@
 from __future__ import annotations
 
 import pytest
+
+# Skip all tests in this directory if rapidsmpf is not available
+pytest.importorskip("rapidsmpf")
+
 from rapidsmpf.communicator.single import new_communicator as single_process_comm
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.memory.buffer_resource import BufferResource
@@ -13,9 +17,6 @@ from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.streaming.core.context import Context
 
 import rmm.mr
-
-# Skip all tests in this directory if rapidsmpf is not available
-pytest.importorskip("rapidsmpf")
 
 
 @pytest.fixture
