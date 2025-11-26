@@ -156,7 +156,7 @@ ConfigureNVBench(SET_OPS_NVBENCH lists/set_operations.cpp)
 
 # ##################################################################################################
 # * transpose benchmark ---------------------------------------------------------------------------
-ConfigureBench(TRANSPOSE_BENCH transpose/transpose.cpp)
+ConfigureNVBench(TRANSPOSE_NVBENCH transpose/transpose.cpp)
 
 # ##################################################################################################
 # * nds-h benchmark --------------------------------------------------------------------------------
@@ -192,12 +192,13 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * iterator benchmark ----------------------------------------------------------------------------
-ConfigureBench(ITERATOR_BENCH iterator/iterator.cu)
+ConfigureNVBench(ITERATOR_NVBENCH iterator/iterator.cu)
 
 # ##################################################################################################
 # * search benchmark ------------------------------------------------------------------------------
-ConfigureBench(SEARCH_BENCH search/search.cpp)
-ConfigureNVBench(SEARCH_NVBENCH search/contains_scalar.cpp search/contains_table.cpp)
+ConfigureNVBench(
+  SEARCH_NVBENCH search/contains_scalar.cpp search/contains_table.cpp search/search.cpp
+)
 
 # ##################################################################################################
 # * sort benchmark --------------------------------------------------------------------------------
@@ -232,7 +233,7 @@ ConfigureNVBench(TDIGEST_NVBENCH quantiles/tdigest.cpp)
 
 # ##################################################################################################
 # * type_dispatcher benchmark ---------------------------------------------------------------------
-ConfigureBench(TYPE_DISPATCHER_BENCH type_dispatcher/type_dispatcher.cu)
+ConfigureNVBench(TYPE_DISPATCHER_NVBENCH type_dispatcher/type_dispatcher.cu)
 
 # ##################################################################################################
 # * reduction benchmark ---------------------------------------------------------------------------
@@ -251,8 +252,7 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * replace benchmark ---------------------------------------------------------------------------
-ConfigureBench(REPLACE_BENCH replace/clamp.cpp replace/nans.cpp)
-ConfigureNVBench(REPLACE_NVBENCH replace/nulls.cpp)
+ConfigureNVBench(REPLACE_NVBENCH replace/clamp.cpp replace/nans.cpp replace/nulls.cpp)
 
 # ##################################################################################################
 # * filling benchmark -----------------------------------------------------------------------------
@@ -280,8 +280,7 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * hashing benchmark -----------------------------------------------------------------------------
-ConfigureBench(HASHING_BENCH hashing/partition.cpp)
-ConfigureNVBench(HASHING_NVBENCH hashing/hash.cpp)
+ConfigureNVBench(HASHING_NVBENCH hashing/hash.cpp hashing/partition.cpp)
 
 # ##################################################################################################
 # * interop benchmark ------------------------------------------------------------------------------
@@ -290,9 +289,9 @@ target_link_libraries(INTEROP_NVBENCH PRIVATE nanoarrow)
 
 # ##################################################################################################
 # * merge benchmark -------------------------------------------------------------------------------
-ConfigureBench(MERGE_BENCH merge/merge.cpp)
 ConfigureNVBench(
-  MERGE_NVBENCH merge/merge_lists.cpp merge/merge_structs.cpp merge/merge_strings.cpp
+  MERGE_NVBENCH merge/merge.cpp merge/merge_lists.cpp merge/merge_structs.cpp
+  merge/merge_strings.cpp
 )
 
 # ##################################################################################################
