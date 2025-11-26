@@ -215,6 +215,10 @@ TYPED_TEST(GroupBySumFixedPointTest, GroupByHashSumDecimalAsValue)
     auto agg5 = cudf::make_sum_aggregation<cudf::groupby_aggregation>();
     test_single_agg(keys, vals, expect_keys, expect_vals_sum, std::move(agg5));
 
+    auto agg6 = cudf::make_sum_aggregation<cudf::groupby_aggregation>();
+    test_single_agg(
+      keys, vals, expect_keys, expect_vals_sum, std::move(agg6), force_use_sort_impl::NO);
+
     auto agg8 = cudf::make_product_aggregation<cudf::groupby_aggregation>();
     EXPECT_THROW(test_single_agg(keys, vals, expect_keys, {}, std::move(agg8)), cudf::logic_error);
   }

@@ -17,6 +17,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/limits>
+#include <cuda/std/tuple>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
@@ -128,7 +129,7 @@ struct host_udf_groupby_example : cudf::groupby_host_udf {
       InputType const* group_max;
       InputType const* group_sum;
 
-      thrust::tuple<OutputType, cudf::size_type> __device__ operator()(cudf::size_type idx) const
+      cuda::std::tuple<OutputType, cudf::size_type> __device__ operator()(cudf::size_type idx) const
       {
         auto const start = offsets[idx];
         auto const end   = offsets[idx + 1];

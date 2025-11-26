@@ -1,0 +1,40 @@
+name: Compute Sanitizer Trigger
+
+# This workflow runs all compute-sanitizer tools on all libcudf tests weekly.
+# WARNING: This is very resource intensive and runs hundreds of GPU jobs.
+# For targeted testing, manually trigger compute-sanitizer-run.yaml with specific tool_name and test_names.
+
+on:
+  schedule:
+    - cron: '0 10 * * 6'  # Weekly on Saturday at 10:00 UTC
+  workflow_dispatch:
+
+jobs:
+  discover-sanitizer-tests:
+    runs-on: linux-amd64-cpu4
+    container:
+      image: rapidsai/ci-conda:26.02-latest
+    outputs:
+      tests: ${{ steps.find-tests.outputs.tests }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+      - name: Discover test executables
+        id: find-tests
+        shell: bash
+        run: |
+          ./ci/discover_libcudf_tests.sh
+  run-sanitizer-tests-racecheck:
+    name: compute-sanitizer racecheck tests
+    needs: discover-sanitizer-tests
+    uses: ./.github/workflows/compute-sanitizer-run.yaml
+    with:
+      tool_name: "racecheck"
+      test_names: ${{ needs.discover-sanitizer-tests.outputs.tests }}
+  run-sanitizer-tests-synccheck:
+    name: compute-sanitizer synccheck tests
+    needs: discover-sanitizer-tests
+    uses: ./.github/workflows/compute-sanitizer-run.yaml
+    with:
+      tool_name: "synccheck"
+      test_names: ${{ needs.discover-sanitizer-tests.outputs.tests }}

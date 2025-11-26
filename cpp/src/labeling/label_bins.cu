@@ -22,13 +22,13 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
 
 #include <cuda/std/iterator>
+#include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
-#include <thrust/pair.h>
 #include <thrust/transform.h>
 
 #include <limits>
@@ -65,7 +65,7 @@ struct bin_finder {
   {
   }
 
-  __device__ size_type operator()(thrust::pair<T, bool> input_value) const
+  __device__ size_type operator()(cuda::std::pair<T, bool> input_value) const
   {
     // Immediately return sentinel for null inputs.
     if (!input_value.second) return NULL_VALUE;

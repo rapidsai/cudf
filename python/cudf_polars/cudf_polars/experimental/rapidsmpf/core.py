@@ -8,10 +8,10 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
-from rapidsmpf.buffer.buffer import MemoryType
-from rapidsmpf.buffer.resource import BufferResource, LimitAvailableMemory
 from rapidsmpf.communicator.single import new_communicator
 from rapidsmpf.config import Options, get_environment_variables
+from rapidsmpf.memory.buffer import MemoryType
+from rapidsmpf.memory.buffer_resource import BufferResource, LimitAvailableMemory
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.leaf_node import pull_from_channel
@@ -22,15 +22,16 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import rmm
 
+import cudf_polars.experimental.rapidsmpf.collectives.shuffle
 import cudf_polars.experimental.rapidsmpf.io
 import cudf_polars.experimental.rapidsmpf.join
 import cudf_polars.experimental.rapidsmpf.lower
 import cudf_polars.experimental.rapidsmpf.repartition
-import cudf_polars.experimental.rapidsmpf.shuffle
 import cudf_polars.experimental.rapidsmpf.union  # noqa: F401
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext, Join, Scan, Union
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
+from cudf_polars.experimental.rapidsmpf.collectives import ReserveOpIDs
 from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo, lower_ir_node
 from cudf_polars.experimental.rapidsmpf.nodes import generate_ir_sub_network_wrapper
 from cudf_polars.experimental.statistics import collect_statistics
@@ -45,7 +46,7 @@ if TYPE_CHECKING:
     import polars as pl
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import PartitionInfo
+    from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.dispatch import (
         GenState,
@@ -85,13 +86,21 @@ def evaluate_logical_plan(
         )
 
     # Lower the IR graph on the client process (for now).
-    ir, partition_info = lower_ir_graph(ir, config_options)
+    ir, partition_info, stats = lower_ir_graph(ir, config_options)
 
     # Configure the context.
     # TODO: Multi-GPU version will be different. The rest of this function
     #       will be executed on each rank independently.
     # TODO: Need a way to configure options specific to the rapidmspf engine.
-    options = Options(get_environment_variables())
+    options = Options(
+        {
+            # By default, set the number of streaming threads to the max
+            # number of IO threads. The user may override this with an
+            # environment variable (i.e. RAPIDSMPF_NUM_STREAMING_THREADS)
+            "num_streaming_threads": str(max(config_options.executor.max_io_threads, 1))
+        }
+        | get_environment_variables()
+    )
     comm = new_communicator(options)
     mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
     rmm.mr.set_current_device_resource(mr)
@@ -127,47 +136,51 @@ def evaluate_logical_plan(
     else:
         ir_context = IRExecutionContext.from_config_options(config_options)
 
-    # Generate network nodes
-    nodes, output = generate_network(
-        rmpf_context,
-        ir,
-        partition_info,
-        config_options,
-        ir_context=ir_context,
-    )
-
-    # Run the network
-    run_streaming_pipeline(nodes=nodes, py_executor=executor)
-
-    # Extract/return the concatenated result.
-    # Keep chunks alive until after concatenation to prevent
-    # use-after-free with stream-ordered allocations
-    messages = output.release()
-    chunks = [
-        TableChunk.from_message(msg).make_available_and_spill(
-            br, allow_overbooking=True
+    # Reserve collective IDs for the entire pipeline execution
+    with ReserveOpIDs(ir) as collective_id_map:
+        # Generate network nodes
+        nodes, output = generate_network(
+            rmpf_context,
+            ir,
+            partition_info,
+            config_options,
+            stats,
+            ir_context=ir_context,
+            collective_id_map=collective_id_map,
         )
-        for msg in messages
-    ]
-    dfs = [
-        DataFrame.from_table(
-            chunk.table_view(),
-            list(ir.schema.keys()),
-            list(ir.schema.values()),
-            chunk.stream,
-        )
-        for chunk in chunks
-    ]
-    df = _concat(*dfs, context=ir_context)
-    # We need to materialize the polars dataframe before we drop the rapidsmpf
-    # context, which keeps the CUDA streams alive.
-    stream = df.stream
-    result = df.to_polars()
-    stream.synchronize()
 
-    # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
-    # before the Context, which ultimately contains the rmm MR, goes out of scope.
-    del nodes, output, messages, chunks, dfs, df
+        # Run the network
+        run_streaming_pipeline(nodes=nodes, py_executor=executor)
+
+        # Extract/return the concatenated result.
+        # Keep chunks alive until after concatenation to prevent
+        # use-after-free with stream-ordered allocations
+        messages = output.release()
+        chunks = [
+            TableChunk.from_message(msg).make_available_and_spill(
+                br, allow_overbooking=True
+            )
+            for msg in messages
+        ]
+        dfs = [
+            DataFrame.from_table(
+                chunk.table_view(),
+                list(ir.schema.keys()),
+                list(ir.schema.values()),
+                chunk.stream,
+            )
+            for chunk in chunks
+        ]
+        df = _concat(*dfs, context=ir_context)
+        # We need to materialize the polars dataframe before we drop the rapidsmpf
+        # context, which keeps the CUDA streams alive.
+        stream = df.stream
+        result = df.to_polars()
+        stream.synchronize()
+
+        # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
+        # before the Context, which ultimately contains the rmm MR, goes out of scope.
+        del nodes, output, messages, chunks, dfs, df
 
     return result
 
@@ -175,7 +188,7 @@ def evaluate_logical_plan(
 def lower_ir_graph(
     ir: IR,
     config_options: ConfigOptions,
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[IR, MutableMapping[IR, PartitionInfo], StatsCollector]:
     """
     Rewrite an IR graph and extract partitioning information.
 
@@ -185,12 +198,15 @@ def lower_ir_graph(
         Root of the graph to rewrite.
     config_options
         GPUEngine configuration options.
+    stats
+        The statistics collector.
 
     Returns
     -------
-    new_ir, partition_info
-        The rewritten graph, and a mapping from unique nodes
-        in the new graph to associated partitioning information.
+    new_ir, partition_info, stats
+        The rewritten graph, a mapping from unique nodes
+        in the new graph to associated partitioning information,
+        and the statistics collector.
 
     Notes
     -----
@@ -198,6 +214,7 @@ def lower_ir_graph(
     in the `parallel` module, but with some differences:
     - A distinct `lower_ir_node` function is used.
     - A `Repartition` node is added to ensure a single chunk is produced.
+    - Statistics are returned.
 
     See Also
     --------
@@ -208,7 +225,7 @@ def lower_ir_graph(
         "stats": collect_statistics(ir, config_options),
     }
     mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
-    return mapper(ir)
+    return *mapper(ir), state["stats"]
 
 
 def determine_fanout_nodes(
@@ -282,8 +299,10 @@ def generate_network(
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
+    stats: StatsCollector,
     *,
     ir_context: IRExecutionContext,
+    collective_id_map: dict[IR, int],
 ) -> tuple[list[Any], DeferredMessages]:
     """
     Translate the IR graph to a RapidsMPF streaming network.
@@ -298,8 +317,12 @@ def generate_network(
         The partition information.
     config_options
         The configuration options.
+    stats
+        Statistics collector.
     ir_context
         The execution context for the IR node.
+    collective_id_map
+        The mapping of IR nodes to collective IDs.
 
     Returns
     -------
@@ -317,8 +340,9 @@ def generate_network(
     # Determine which nodes need fanout
     fanout_nodes = determine_fanout_nodes(ir, partition_info, ir_dep_count)
 
-    # TODO: Make this configurable
-    max_io_threads_global = 2
+    # Get max_io_threads from config (default: 2)
+    assert config_options.executor.name == "streaming", "Executor must be streaming"
+    max_io_threads_global = config_options.executor.max_io_threads
     max_io_threads_local = max(1, max_io_threads_global // max(1, num_io_nodes))
 
     # Generate the network
@@ -329,11 +353,13 @@ def generate_network(
         "fanout_nodes": fanout_nodes,
         "ir_context": ir_context,
         "max_io_threads": max_io_threads_local,
+        "stats": stats,
+        "collective_id_map": collective_id_map,
     }
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state
     )
-    nodes, channels = mapper(ir)
+    nodes_dict, channels = mapper(ir)
     ch_out = channels[ir].reserve_output_slot()
 
     # TODO: We will need an additional node here to drain
@@ -344,6 +370,9 @@ def generate_network(
     # Add final node to pull from the output data channel
     # (metadata channel is unused)
     output_node, output = pull_from_channel(context, ch_in=ch_out.data)
+
+    # Flatten the nodes dictionary into a list for run_streaming_pipeline
+    nodes: list[Any] = [node for node_list in nodes_dict.values() for node in node_list]
     nodes.append(output_node)
 
     # Return network and output hook

@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     import polars.type_aliases as pl_types
-    from polars.polars import _expr_nodes as pl_expr
+    from polars import polars  # type: ignore[attr-defined]
 
     from rmm.pylibrmm.stream import Stream
 
@@ -57,7 +57,7 @@ class BooleanFunction(Expr):
         Not = auto()
 
         @classmethod
-        def from_polars(cls, obj: pl_expr.BooleanFunction) -> Self:
+        def from_polars(cls, obj: polars._expr_nodes.BooleanFunction) -> Self:
             """Convert from polars' `BooleanFunction`."""
             try:
                 function, name = str(obj).split(".", maxsplit=1)
@@ -220,7 +220,7 @@ class BooleanFunction(Expr):
                 #
                 # If the input null count was non-zero, we must
                 # post-process the result to insert the correct value.
-                h_result = scalar_result.to_py()
+                h_result = scalar_result.to_py(stream=df.stream)
                 if (is_any and not h_result) or (not is_any and h_result):
                     # Any                     All
                     # False || Null => Null   True && Null => Null
@@ -380,9 +380,16 @@ class BooleanFunction(Expr):
             )
         elif self.name is BooleanFunction.Name.Not:
             (column,) = columns
+            # Polars semantics:
+            #   integer input: NOT => bitwise invert.
+            #   boolean input: NOT => logical NOT.
             return Column(
                 plc.unary.unary_operation(
-                    column.obj, plc.unary.UnaryOperator.NOT, stream=df.stream
+                    column.obj,
+                    plc.unary.UnaryOperator.NOT
+                    if column.obj.type().id() == plc.TypeId.BOOL8
+                    else plc.unary.UnaryOperator.BIT_INVERT,
+                    stream=df.stream,
                 ),
                 dtype=self.dtype,
             )

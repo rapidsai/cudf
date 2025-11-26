@@ -44,7 +44,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
 
 #include <arrow/api.h>
 #include <arrow/c/bridge.h>
@@ -2105,6 +2105,8 @@ Java_ai_rapids_cudf_Table_readParquetFromDataSource(JNIEnv* env,
     cudf::io::parquet_reader_options opts =
       builder.convert_strings_to_categories(false)
         .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
+        // Ignore any missing projected column(s) by default
+        .ignore_missing_columns(true)
         .build();
     return convert_table_for_return(env, cudf::io::read_parquet(opts).tbl);
   }
@@ -2160,6 +2162,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(JNIEnv* env,
     cudf::io::parquet_reader_options opts =
       builder.convert_strings_to_categories(false)
         .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
+        // Ignore any missing projected column(s) by default
+        .ignore_missing_columns(true)
         .build();
     auto tbl = cudf::io::read_parquet(opts).tbl;
     n_col_binary_read.cancel();

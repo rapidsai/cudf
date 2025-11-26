@@ -112,7 +112,7 @@ struct update_target_element<Source, aggregation::SUM> {
 };
 
 template <typename Source>
-  requires(is_fixed_point<Source>() && cudf::has_atomic_support<device_storage_type_t<Source>>())
+  requires(is_fixed_point<Source>())
 struct update_target_element<Source, aggregation::SUM> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,

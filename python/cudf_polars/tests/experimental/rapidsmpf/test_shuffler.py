@@ -44,7 +44,6 @@ def test_join_rapidsmpf(
         pytest.skip(reason="Requires distributed execution.")
 
     # check that we have a rapidsmpf cluster running
-    pytest.importorskip("rapidsmpf")
     try:
         # This will result in a ValueError if the
         # cluster isn't compatible with rapidsmpf.
@@ -93,9 +92,6 @@ def test_join_rapidsmpf(
 @REQUIRE_TASKS_RUNTIME
 @pytest.mark.parametrize("max_rows_per_partition", [1, 5])
 def test_join_rapidsmpf_single(max_rows_per_partition: int) -> None:
-    # check that we have a rapidsmpf cluster running
-    pytest.importorskip("rapidsmpf")
-
     # Setup the GPUEngine config
     engine = pl.GPUEngine(
         raise_on_fail=True,
@@ -128,26 +124,7 @@ def test_join_rapidsmpf_single(max_rows_per_partition: int) -> None:
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-@REQUIRE_TASKS_RUNTIME
-def test_join_rapidsmpf_single_private_config() -> None:
-    # The user may not specify "rapidsmpf-single" directly
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "shuffle_method": "rapidsmpf-single",
-            "cluster": "single",
-            "runtime": DEFAULT_RUNTIME,
-        },
-    )
-    with pytest.raises(ValueError, match="not a supported shuffle method"):
-        ConfigOptions.from_polars_engine(engine)
-
-
 def test_rapidsmpf_spill_single_unsupported() -> None:
-    # check that we have a rapidsmpf cluster running
-    pytest.importorskip("rapidsmpf")
-
     # rapidsmpf_spill=True is not yet supported with single-GPU cluster.
     engine = pl.GPUEngine(
         raise_on_fail=True,
@@ -166,10 +143,6 @@ def test_rapidsmpf_spill_single_unsupported() -> None:
 @REQUIRE_TASKS_RUNTIME
 @pytest.mark.parametrize("max_rows_per_partition", [1, 5])
 def test_sort_rapidsmpf(max_rows_per_partition: int) -> None:
-    # Require rapidsmpf, but don't require a distributed cluster,
-    # because single-worker shuffle can be used.
-    pytest.importorskip("rapidsmpf")
-
     # Setup the GPUEngine config
     engine = pl.GPUEngine(
         raise_on_fail=True,
@@ -196,8 +169,6 @@ def test_sort_rapidsmpf(max_rows_per_partition: int) -> None:
 
 @REQUIRE_TASKS_RUNTIME
 def test_sort_stable_rapidsmpf_warns():
-    pytest.importorskip("rapidsmpf")
-
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
