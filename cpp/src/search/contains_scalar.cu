@@ -23,7 +23,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/count.h>
-#include <thrust/pair.h>
 #include <thrust/transform.h>
 
 namespace cudf {
