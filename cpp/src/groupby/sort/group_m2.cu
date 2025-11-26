@@ -101,12 +101,6 @@ struct m2_functor {
       compute_m2_fn(d_values, values_iter, group_labels, d_means, d_result, stream);
     }
 
-    // M2 column values should have the same bitmask as means's.
-    if (group_means.nullable()) {
-      result->set_null_mask(cudf::detail::copy_bitmask(group_means, stream, mr),
-                            group_means.null_count());
-    }
-
     return result;
   }
 

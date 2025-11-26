@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Literal
 from rapidsmpf.shuffler import Shuffler
 
 from cudf_polars.dsl.traversal import traversal
+from cudf_polars.experimental.join import Join
+from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle
 
 if TYPE_CHECKING:
@@ -59,11 +61,11 @@ class ReserveOpIDs:
     """
 
     def __init__(self, ir: IR):
-        # Collect all Shuffle nodes.
-        # NOTE: We will also need to collect Repartition,
-        # and Join nodes to support multi-GPU execution.
+        # Find all collective IR nodes.
         self.collective_nodes: list[IR] = [
-            node for node in traversal([ir]) if isinstance(node, Shuffle)
+            node
+            for node in traversal([ir])
+            if isinstance(node, (Shuffle, Join, Repartition))
         ]
         self.collective_id_map: dict[IR, int] = {}
 
