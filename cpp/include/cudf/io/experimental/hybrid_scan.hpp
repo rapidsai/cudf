@@ -113,17 +113,24 @@ enum class use_data_page_mask : bool {
  * @endcode
  *
  * Row group pruning (OPTIONAL): Start with either a list of custom or all row group indices in the
- * parquet file and optionally filter it subject to filter expression using column chunk statistics,
- * dictionaries and bloom filters. Byte ranges for column chunk dictionary pages and bloom filters
- * within parquet file may be obtained via `secondary_filters_byte_ranges()` function. The byte
- * ranges may be read into a corresponding vector of device buffers and passed to the corresponding
- * row group filtration function.
+ * parquet file and optionally filter it using a byte range and/or the filter expression using
+ * column chunk statistics, dictionaries and bloom filters. Byte ranges for column chunk dictionary
+ * pages and bloom filters within parquet file may be obtained via `secondary_filters_byte_ranges()`
+ * function. The byte ranges may be read into a corresponding vector of device buffers and passed to
+ * the corresponding row group filtration function.
  * @code{.cpp}
  * // Start with a list of all parquet row group indices from the file footer
  * auto all_row_group_indices = reader->all_row_groups(options);
  *
  * // Span to track the indices of row groups currently at hand
  * auto current_row_group_indices = cudf::host_span<size_type>(all_row_group_indices);
+ *
+ * // Optional: Prune row group indices to the ones that start within the byte range
+ * auto byte_range_filtered_row_group_indices = reader->filter_row_groups_with_byte_range(
+ *   current_row_group_indices, options);
+ *
+ * // Update current row group indices to byte range filtered row group indices
+ * current_row_group_indices = byte_range_filtered_row_group_indices;
  *
  * // Optional: Prune row group indices subject to filter expression using row group statistics
  * auto stats_filtered_row_group_indices =
@@ -334,6 +341,21 @@ class hybrid_scan_reader {
    */
   [[nodiscard]] size_type total_rows_in_row_groups(
     cudf::host_span<size_type const> row_group_indices) const;
+
+  /**
+   * @brief Filter the row groups using the specified byte range specified by [`bytes_to_skip`,
+   * `bytes_to_skip + bytes_to_read`)
+   *
+   * Filters the row groups such that only the row groups that start within the byte range are
+   * selected. Note that the last selected row group may end beyond the byte range.
+   *
+   * @param row_group_indices Input row groups indices
+   * @param options Parquet reader options
+   * @return Filtered row group indices
+   */
+  [[nodiscard]] std::vector<size_type> filter_row_groups_with_byte_range(
+    cudf::host_span<size_type const> row_group_indices,
+    parquet_reader_options const& options) const;
 
   /**
    * @brief Filter the input row groups using column chunk statistics
