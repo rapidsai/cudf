@@ -12,7 +12,6 @@
 #include "extract_single_pass_aggs.hpp"
 #include "helpers.cuh"
 #include "output_utils.hpp"
-#include "single_pass_functors.cuh"
 
 #include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -63,7 +62,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
     // We launch the same grid size for both kernels, thus we need to take the minimum of the two.
     auto const max_blocks    = std::min(max_blocks_mapping, max_blocks_aggs);
     auto const max_grid_size = max_blocks * cudf::detail::num_multiprocessors();
-    auto const num_blocks    = cudf::util::div_rounding_up_safe(num_rows, GROUPBY_BLOCK_SIZE);
+    auto const num_blocks    = util::div_rounding_up_safe(num_rows, GROUPBY_BLOCK_SIZE);
     return std::min(max_grid_size, num_blocks);
   }();
 
@@ -76,181 +75,84 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
 
   if (!can_use_shared_mem_kernel) { return run_aggs_by_global_mem_kernel(); }
 
-  // Maps from the global row index of the input table to its block-wise rank.
-  rmm::device_uvector<size_type> local_mapping_indices(num_rows, stream);
-  // Maps from the block-wise rank to the row index of result table.
-  rmm::device_uvector<size_type> global_mapping_indices(grid_size * GROUPBY_SHM_MAX_ELEMENTS,
-                                                        stream);
-  // Initialize it with a sentinel value, so later we can identify which ones are unused and which
-  // ones need to be updated.
-  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
-                             global_mapping_indices.begin(),
-                             global_mapping_indices.end(),
-                             cudf::detail::CUDF_SIZE_TYPE_SENTINEL);
-  // Compute the cardinality (the number of unique keys) encounter by each thread block.
-  rmm::device_uvector<size_type> block_cardinality(grid_size, stream);
+  // `grid_stride` is the number of rows processed by all blocks at one step (except the last step,
+  // which may have fewer rows). Blocks will process by iterations, each iteration contains at least
+  // one step and at most `num_strides` steps. This iterative approach is necessary to guarantee
+  // that the block will not encounter too many unique keys such that the shared memory hash set
+  // cannot hold.
+  auto const grid_stride = GROUPBY_BLOCK_SIZE * grid_size;
+  auto const num_strides = util::div_rounding_up_safe(num_rows, grid_stride);
 
-  auto set_ref_insert = global_set.ref(cuco::op::insert_and_find);
+  // Maps from the global row index of the input table to its block-wise thread rank.
+  rmm::device_uvector<size_type> local_mapping_indices(num_rows, stream);
+  // Maps from the block-wise thread rank to the row index of the output keys table,
+  // need to store a separate map for each iteration.
+  rmm::device_uvector<size_type> global_mapping_indices(
+    num_strides * grid_size * GROUPBY_SHM_MAX_ELEMENTS, stream);
+
+  // Some positions in `global_mapping_indices` will be unused.
+  // We just initialize them with a sentinel value so later on we know to ignore them.
+  // thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
+  //                            global_mapping_indices.begin(),
+  //                            global_mapping_indices.end(),
+  //                            cudf::detail::CUDF_SIZE_TYPE_SENTINEL);
+
+  // The upper-bound row index for each block to stop processing each iteration.
+  rmm::device_uvector<size_type> block_row_ends(num_strides * grid_size, stream);
+
+  // Compute the cardinality (the number of unique keys) encounter by each thread block.
+  // The cardinality is not allowed to exceed `GROUPBY_SHM_MAX_ELEMENTS`.
+  // Whenever the cardinality exceeds `GROUPBY_CARDINALITY_THRESHOLD` (it is still less than
+  // `GROUPBY_SHM_MAX_ELEMENTS`), we push the upper-bound of the row index processed by the current
+  // block into `block_row_ends` and reset the block's data (including cardinality) to start a new
+  // iteration.
+  rmm::device_uvector<size_type> block_cardinality(num_strides * grid_size, stream);
+
   compute_mapping_indices(grid_size,
                           num_rows,
-                          set_ref_insert,
+                          global_set.ref(cuco::op::insert_and_find),
                           row_bitmask,
                           local_mapping_indices.data(),
                           global_mapping_indices.data(),
                           block_cardinality.data(),
+                          block_row_ends.data(),
                           stream);
 
-  // For the thread blocks that need fallback to the code path using global memory aggregation,
-  // we need to collect these block ids.
-  auto const [num_fallback_blocks, fallback_blocks] =
-    find_fallback_blocks(grid_size, block_cardinality.data(), stream);
-
-  // If all blocks fallback, just run everything using the global memory aggregation code path.
-  if (num_fallback_blocks == grid_size) { return run_aggs_by_global_mem_kernel(); }
-
-  // Maps from each row of the values table to the row index of its corresponding key in the input
-  // keys table. This is only used when there are fallback blocks.
-  auto matching_keys = [&] {
-    if (num_fallback_blocks == 0) { return rmm::device_uvector<size_type>{0, stream}; }
-    auto matching_keys = rmm::device_uvector<size_type>(num_rows, stream);
-    thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
-                               matching_keys.begin(),
-                               matching_keys.end(),
-                               cudf::detail::CUDF_SIZE_TYPE_SENTINEL);
-    return matching_keys;
-  }();
-
-  if (num_fallback_blocks > 0) {
-    auto const full_stride       = GROUPBY_BLOCK_SIZE * grid_size;
-    auto const num_strides       = util::div_rounding_up_safe(num_rows, full_stride);
-    auto const fallback_stride   = GROUPBY_BLOCK_SIZE * num_fallback_blocks;
-    auto const num_fallback_rows = fallback_stride * num_strides;
-
-    // This kernel finds the matching keys for the rows processed by the fallback blocks.
-    // It also inserts all the missing keys (which were not inserted due to short-circuit in the
-    // mapping indices kernel) into the global set, so we can have a complete set of keys for the
-    // final output.
-    //
-    // Because the number of blocks is relatively small, we have to divide the input into
-    // multiple "full" segments such that each thread processes one row for each segment in a
-    // sequential manner. The length of each segment is computed as
-    // `full_stride = grid_size * GROUPBY_BLOCK_SIZE`, and the number of segments is given by
-    // `num_strides = round_up(num_rows / full_stride)`.
-    //
-    // For the fallback blocks, the number of rows processed by them is computed as
-    // `num_fallback_rows = num_fallback_blocks * GROUPBY_BLOCK_SIZE * num_strides`.
-    // This kernel has grid size of `num_fallback_rows`, and we want to map from the range
-    // [0, num_fallback_rows) to the (non-contiguous) ranges of rows processed exactly by these
-    // fallback blocks. In order to do so, we also divide such thread index range into the same
-    // number of segments but with shorter length (computed by `fallback_stride`), referred to as
-    // the "short" segments. It is guaranteed that "short" segments are always mapped one-to-one to
-    // the "full" segments.
-    thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                       thrust::make_counting_iterator(0),
-                       num_fallback_rows,
-                       [num_rows,
-                        full_stride,
-                        fallback_stride,
-                        set_ref_insert,
-                        matching_keys   = matching_keys.begin(),
-                        fallback_blocks = fallback_blocks.begin(),
-                        row_bitmask] __device__(auto const idx) mutable {
-                         // Local index within the corresponding "full" segment.
-                         // Since "short" segments map one-to-one to the "full" segment, here we
-                         // use the "short" segment length `fallback_stride`.
-                         auto const idx_in_stride = idx % fallback_stride;
-
-                         // Rank of the thread within the corresponding fallback block.
-                         auto const thread_rank = idx_in_stride % GROUPBY_BLOCK_SIZE;
-
-                         // The index of the fallback block that the current thread is processing.
-                         auto const block_idx = fallback_blocks[idx_in_stride / GROUPBY_BLOCK_SIZE];
-
-                         // Compute the row index processed by the corresponding fallback block.
-                         // Here, `full_stride * (idx / fallback_stride)` is the start offset of the
-                         // current "full" segment, `GROUPBY_BLOCK_SIZE * block_idx` is the start
-                         // offset of the corresponding fallback block within the "full" segment.
-                         auto const row_idx = full_stride * (idx / fallback_stride) +
-                                              GROUPBY_BLOCK_SIZE * block_idx + thread_rank;
-
-                         if (row_idx >= num_rows) { return; }
-                         if (!row_bitmask || cudf::bit_is_set(row_bitmask, row_idx)) {
-                           matching_keys[row_idx] = *set_ref_insert.insert_and_find(row_idx).first;
-                         }
-                       });
-  }
-
-  auto unique_keys       = extract_populated_keys(global_set, num_rows, stream, mr);
-  auto key_transform_map = compute_key_transform_map(
-    num_rows, unique_keys, stream, cudf::get_current_device_resource_ref());
+  auto unique_keys = extract_populated_keys(global_set, num_rows, stream, mr);
 
   // Now, update the target indices for computing aggregations using the shared memory kernel.
-  thrust::for_each_n(
-    rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator(0),
-    grid_size * GROUPBY_BLOCK_SIZE,
-    [key_transform_map      = key_transform_map.begin(),
-     global_mapping_indices = global_mapping_indices.begin()] __device__(auto const idx) {
-      auto const block_id    = idx / GROUPBY_BLOCK_SIZE;
-      auto const thread_rank = idx % GROUPBY_BLOCK_SIZE;
-      auto const mapping_idx = block_id * GROUPBY_SHM_MAX_ELEMENTS + thread_rank;
-      auto const old_idx     = global_mapping_indices[mapping_idx];
-      if (old_idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
-        global_mapping_indices[mapping_idx] = key_transform_map[old_idx];
-      }
-    });
-  // Find the target indices for computing aggregations using the shared memory kernel.
-  // This is only used when there are fallback blocks.
-  auto const target_indices = [&] {
-    if (num_fallback_blocks == 0) { return rmm::device_uvector<size_type>{0, stream}; }
-    return compute_target_indices(
-      matching_keys, key_transform_map, stream, cudf::get_current_device_resource_ref());
-  }();
-  matching_keys     = rmm::device_uvector<size_type>{0, stream};  // done, free up memory early
-  key_transform_map = rmm::device_uvector<size_type>{0, stream};  // done, free up memory early
+  // {
+  //   auto const transform_map = compute_key_transform_map(
+  //     num_rows, unique_keys, stream, cudf::get_current_device_resource_ref());
+  //   thrust::transform(rmm::exec_policy_nosync(stream),
+  //                     global_mapping_indices.begin(),
+  //                     global_mapping_indices.end(),
+  //                     global_mapping_indices.begin(),
+  //                     [transform_map = transform_map.begin()] __device__(auto const idx) {
+  //                       return idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL ? transform_map[idx]
+  //                                                                           : idx;
+  //                     });
+  // }
 
   auto const d_spass_values = table_device_view::create(values, stream);
   auto agg_results =
     create_results_table(static_cast<size_type>(unique_keys.size()), values, agg_kinds, stream, mr);
   auto d_results_ptr = mutable_table_device_view::create(*agg_results, stream);
 
+  auto const transform_map = compute_key_transform_map(
+    num_rows, unique_keys, stream, cudf::get_current_device_resource_ref());
   compute_shared_memory_aggs(grid_size,
                              available_shmem_size,
                              num_rows,
-                             row_bitmask,
                              local_mapping_indices.data(),
                              global_mapping_indices.data(),
+                             transform_map.data(),
                              block_cardinality.data(),
+                             block_row_ends.data(),
                              *d_spass_values,
                              *d_results_ptr,
                              d_agg_kinds.data(),
                              stream);
-
-  // The shared memory groupby is designed so that each thread block can handle up to 128 unique
-  // keys. When a block reaches this cardinality limit, shared memory becomes insufficient to store
-  // the temporary aggregation results. In these situations, we must fallback to a global memory
-  // aggregator to process the remaining aggregation requests.
-  if (num_fallback_blocks > 0) {
-    // We only execute this kernel for the fallback blocks.
-    auto const fallback_stride   = GROUPBY_BLOCK_SIZE * num_fallback_blocks;
-    auto const full_stride       = GROUPBY_BLOCK_SIZE * grid_size;
-    auto const num_strides       = util::div_rounding_up_safe(num_rows, full_stride);
-    auto const num_fallback_rows = num_fallback_blocks * GROUPBY_BLOCK_SIZE * num_strides;
-
-    thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                       thrust::make_counting_iterator(int64_t{0}),
-                       static_cast<int64_t>(num_fallback_rows) * values.num_columns(),
-                       global_memory_fallback_fn{target_indices.begin(),
-                                                 d_agg_kinds.data(),
-                                                 *d_spass_values,
-                                                 *d_results_ptr,
-                                                 fallback_blocks.data(),
-                                                 fallback_stride,
-                                                 full_stride,
-                                                 num_strides,
-                                                 num_fallback_rows,
-                                                 num_rows});
-  }
 
   finalize_output(values, aggs, agg_results, cache, stream);
   return {std::move(unique_keys), has_compound_aggs};
