@@ -72,7 +72,7 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_d
   SetType const& key_set,
   host_span<aggregation::Kind const> h_agg_kinds,
   device_span<aggregation::Kind const> d_agg_kinds,
-  host_span<int8_t const> force_non_nullable,
+  std::span<int8_t const> force_non_nullable,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
@@ -121,7 +121,7 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_s
   SetType const& key_set,
   host_span<aggregation::Kind const> h_agg_kinds,
   device_span<aggregation::Kind const> d_agg_kinds,
-  host_span<int8_t const> force_non_nullable,
+  std::span<int8_t const> force_non_nullable,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
@@ -160,7 +160,7 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_global
   SetType const& key_set,
   host_span<aggregation::Kind const> h_agg_kinds,
   device_span<aggregation::Kind const> d_agg_kinds,
-  host_span<int8_t const> force_non_nullable,
+  std::span<int8_t const> force_non_nullable,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {

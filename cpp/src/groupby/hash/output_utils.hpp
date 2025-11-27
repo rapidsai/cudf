@@ -32,7 +32,7 @@ namespace cudf::groupby::detail::hash {
 std::unique_ptr<table> create_results_table(size_type output_size,
                                             table_view const& values,
                                             host_span<aggregation::Kind const> agg_kinds,
-                                            host_span<int8_t const> force_non_nullable,
+                                            std::span<int8_t const> force_non_nullable,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr);
 
