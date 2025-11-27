@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libc.stddef cimport size_t
-from libc.stdint cimport int32_t, uint32_t
+from libc.stdint cimport int32_t, uint32_t, int8_t
 from libcpp cimport bool
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 
@@ -53,6 +53,10 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
     cpdef enum class null_aware(bool):
         NO
         YES
+
+    cpdef enum class output_nullability(int8_t):
+        PRESERVE
+        ALL_VALID
 
     cpdef enum class nan_equality(bool):
         ALL_EQUAL
