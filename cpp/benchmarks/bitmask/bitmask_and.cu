@@ -5,7 +5,6 @@
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/common/nvbench_utilities.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
 
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/null_mask.hpp>

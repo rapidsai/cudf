@@ -4,7 +4,6 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/strings/convert/convert_durations.hpp>

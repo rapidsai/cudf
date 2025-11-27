@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/groupby.hpp>
 #include <cudf/sorting.hpp>
