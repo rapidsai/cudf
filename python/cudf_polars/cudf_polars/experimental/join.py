@@ -370,6 +370,7 @@ def _(
                 join_children.reverse()
             graph[(out_name, part_out)] = (
                 partial(ir.do_evaluate, context=context),
+                ir.schema,
                 ir.left_on,
                 ir.right_on,
                 ir.options,
