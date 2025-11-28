@@ -12,6 +12,7 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Join
+from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
 )
@@ -86,6 +87,7 @@ async def broadcast_join_node(
     ch_left: ChannelPair,
     ch_right: ChannelPair,
     broadcast_side: Literal["left", "right"],
+    collective_id: int,
 ) -> None:
     """
     Join node for rapidsmpf.
@@ -106,6 +108,8 @@ async def broadcast_join_node(
         The right input ChannelPair.
     broadcast_side
         The side to broadcast.
+    collective_id: int
+        Pre-allocated collective ID for this operation.
     """
     async with shutdown_on_error(
         context,
@@ -131,6 +135,7 @@ async def broadcast_join_node(
             large_child = ir.children[0]
             chunk_count = left_metadata.count
             partitioned_on = left_metadata.partitioned_on
+            small_duplicated = right_metadata.duplicated
         else:
             # Broadcast left, stream right
             small_ch = ch_left
@@ -138,6 +143,7 @@ async def broadcast_join_node(
             small_child = ir.children[0]
             large_child = ir.children[1]
             chunk_count = right_metadata.count
+            small_duplicated = left_metadata.duplicated
             if ir.options[0] == "Right":
                 partitioned_on = right_metadata.partitioned_on
 
@@ -154,6 +160,22 @@ async def broadcast_join_node(
             *await get_small_table(context, small_child, small_ch),
             context=ir_context,
         )
+        if context.comm().nranks > 1 and not small_duplicated:
+            allgather = AllGatherManager(context, collective_id)
+            allgather.insert(
+                0,
+                TableChunk.from_pylibcudf_table(
+                    small_df.table, small_df.stream, exclusive_view=True
+                ),
+            )
+            allgather.insert_finished()
+            small_table = await allgather.extract_concatenated(small_df.stream)
+            small_df = DataFrame.from_table(
+                small_table,
+                list(small_child.schema.keys()),
+                list(small_child.schema.values()),
+                small_df.stream,
+            )
 
         # Stream through large side, joining with the small-side
         while (msg := await large_ch.data.recv(context)) is not None:
@@ -248,6 +270,9 @@ def _(
         else:
             broadcast_side = "left"
 
+        # Look up the reserved shuffle ID for this operation
+        collective_id = rec.state["collective_id_map"][ir]
+
         nodes[ir] = [
             broadcast_join_node(
                 rec.state["context"],
@@ -257,6 +282,7 @@ def _(
                 channels[left].reserve_output_slot(),
                 channels[right].reserve_output_slot(),
                 broadcast_side=broadcast_side,
+                collective_id=collective_id,
             )
         ]
         return nodes, channels
