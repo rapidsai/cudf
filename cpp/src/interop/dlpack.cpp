@@ -5,6 +5,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/interop.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -195,11 +196,11 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
   for (auto& col : columns) {
     col = make_numeric_column(dtype, num_rows, mask_state::UNALLOCATED, stream, mr);
 
-    CUDF_CUDA_TRY(cudaMemcpyAsync(col->mutable_view().head<void>(),
-                                  reinterpret_cast<void*>(tensor_data),
-                                  bytes,
-                                  cudaMemcpyDefault,
-                                  stream.value()));
+    CUDF_CUDA_TRY(cudf::detail::memcpy_async(col->mutable_view().head<void>(),
+                                             reinterpret_cast<void*>(tensor_data),
+                                             bytes,
+                                             cudaMemcpyDefault,
+                                             stream.value()));
 
     tensor_data += col_stride;
   }
@@ -265,11 +266,11 @@ DLManagedTensor* to_dlpack(table_view const& input,
 
   auto tensor_data = reinterpret_cast<uintptr_t>(tensor.data);
   for (auto const& col : input) {
-    CUDF_CUDA_TRY(cudaMemcpyAsync(reinterpret_cast<void*>(tensor_data),
-                                  get_column_data(col),
-                                  stride_bytes,
-                                  cudaMemcpyDefault,
-                                  stream.value()));
+    CUDF_CUDA_TRY(cudf::detail::memcpy_async(reinterpret_cast<void*>(tensor_data),
+                                             get_column_data(col),
+                                             stride_bytes,
+                                             cudaMemcpyDefault,
+                                             stream.value()));
     tensor_data += stride_bytes;
   }
 

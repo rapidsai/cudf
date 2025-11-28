@@ -20,6 +20,22 @@ void cuda_memcpy_async_impl(
   void* dst, void const* src, size_t size, host_memory_kind kind, rmm::cuda_stream_view stream);
 
 /**
+ * @brief Wrapper around cudaMemcpyAsync
+ *
+ * @param dst Destination memory address
+ * @param src Source memory address
+ * @param count Size in bytes to copy
+ * @param kind Type of memory copy
+ * @param stream CUDA stream
+ * @return cudaError_t CUDA error code
+ */
+inline cudaError_t memcpy_async(
+  void* dst, void const* src, size_t count, cudaMemcpyKind kind, cudaStream_t stream)
+{
+  return cudaMemcpyAsync(dst, src, count, kind, stream);
+}
+
+/**
  * @brief Asynchronously copies data from host to device memory.
  *
  * Implementation may use different strategies depending on the size and type of host data.

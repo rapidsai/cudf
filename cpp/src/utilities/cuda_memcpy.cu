@@ -39,7 +39,7 @@ void copy_pinned(void* dst, void const* src, std::size_t size, rmm::cuda_stream_
     copy_kernel<<<grid_size, block_size, 0, stream.value()>>>(
       static_cast<char const*>(src), static_cast<char*>(dst), size);
   } else {
-    CUDF_CUDA_TRY(cudaMemcpyAsync(dst, src, size, cudaMemcpyDefault, stream));
+    CUDF_CUDA_TRY(cudf::detail::memcpy_async(dst, src, size, cudaMemcpyDefault, stream));
   }
 }
 
@@ -47,7 +47,7 @@ void copy_pageable(void* dst, void const* src, std::size_t size, rmm::cuda_strea
 {
   if (size == 0) return;
 
-  CUDF_CUDA_TRY(cudaMemcpyAsync(dst, src, size, cudaMemcpyDefault, stream));
+  CUDF_CUDA_TRY(cudf::detail::memcpy_async(dst, src, size, cudaMemcpyDefault, stream));
 }
 
 };  // namespace

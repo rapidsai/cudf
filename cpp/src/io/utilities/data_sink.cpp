@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/io/config_utils.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/logger.hpp>
@@ -112,7 +113,7 @@ class host_buffer_sink : public data_sink {
   {
     auto const current_size = buffer_->size();
     buffer_->resize(current_size + size);
-    CUDF_CUDA_TRY(cudaMemcpyAsync(
+    CUDF_CUDA_TRY(cudf::detail::memcpy_async(
       buffer_->data() + current_size, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
     return std::async(std::launch::deferred, [stream]() -> void { stream.synchronize(); });
   }

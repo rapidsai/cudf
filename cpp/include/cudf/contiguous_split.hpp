@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
@@ -170,7 +171,7 @@ struct contiguous_split_state;
  *   // buffer will hold the contents of at most `user_buffer_size` bytes
  *   // of the contiguously packed input `table_view`. You are now free to copy
  *   // this memory somewhere else, for example, to host.
- *   cudaMemcpyAsync(
+ *   cudf::detail::memcpy_async(
  *     host_buffer.data() + host_offset,
  *     user_buffer.data(),
  *     bytes_copied,

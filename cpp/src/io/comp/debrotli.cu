@@ -50,6 +50,7 @@ THE SOFTWARE.
 #include "io/utilities/block_utils.cuh"
 
 #include <cudf/detail/utilities/cuda.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -2085,11 +2086,11 @@ void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
   CUDF_CUDA_TRY(cudaMemsetAsync(scratch.data(), 0, 2 * sizeof(uint32_t), stream.value()));
   // NOTE: The 128KB dictionary copy can have a relatively large overhead since source isn't
   // page-locked
-  CUDF_CUDA_TRY(cudaMemcpyAsync(scratch.data() + fb_heap_size,
-                                get_brotli_dictionary(),
-                                sizeof(brotli_dictionary_s),
-                                cudaMemcpyDefault,
-                                stream.value()));
+  CUDF_CUDA_TRY(cudf::detail::memcpy_async(scratch.data() + fb_heap_size,
+                                           get_brotli_dictionary(),
+                                           sizeof(brotli_dictionary_s),
+                                           cudaMemcpyDefault,
+                                           stream.value()));
   gpu_debrotli_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(
     inputs, outputs, results, scratch.data(), fb_heap_size);
 #if DUMP_FB_HEAP
@@ -2097,7 +2098,7 @@ void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
   uint32_t cur = 0;
   printf("heap dump (%d bytes)\n", fb_heap_size);
   while (cur < fb_heap_size && !(cur & 3)) {
-    CUDF_CUDA_TRY(cudaMemcpyAsync(
+    CUDF_CUDA_TRY(cudf::detail::memcpy_async(
       &dump[0], scratch.data() + cur, 2 * sizeof(uint32_t), cudaMemcpyDefault, stream.value()));
     stream.synchronize();
     printf("@%d: next = %d, size = %d\n", cur, dump[0], dump[1]);
