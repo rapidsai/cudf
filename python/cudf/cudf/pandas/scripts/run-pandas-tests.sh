@@ -186,6 +186,6 @@ PANDAS_CI="1" python -m pytest -p cudf.pandas \
 
 mv ./*.json ..
 cd ..
-rm -rf pandas-testing/pandas-tests/
+rm -rf pandas-tests/
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}
