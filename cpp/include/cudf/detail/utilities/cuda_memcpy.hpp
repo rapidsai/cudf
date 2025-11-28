@@ -29,10 +29,42 @@ void cuda_memcpy_async_impl(
  * @param stream CUDA stream
  * @return cudaError_t CUDA error code
  */
-inline cudaError_t memcpy_async(
+[[nodiscard]] inline cudaError_t memcpy_async(
   void* dst, void const* src, size_t count, cudaMemcpyKind kind, cudaStream_t stream)
 {
   return cudaMemcpyAsync(dst, src, count, kind, stream);
+}
+
+/**
+ * @brief Wrapper around cudaMemcpyBatchAsync
+ *
+ * @param dsts Host pointer to a list of device pointers.
+ * @param srcs Host pointer to a list of device pointers.
+ * @param sizes Host pointer to a list of sizes.
+ * @param count Size of dsts, srcs, sizes arrays
+ * @param fail_idx Which batch has failed, if any. When it's assigned to SIZE_MAX, then
+ *   it's a general error.
+ * @param stream CUDA stream. The wrapper enforces stream order access.
+ */
+[[nodiscard]] cudaError_t memcpy_batch_async(
+  void** dsts, void** srcs, std::size_t* sizes, std::size_t count, cudaStream_t stream)
+{
+#if CUDART_VERSION >= 12080
+  cudaMemcpyAttributes attr;
+  attr.srcAccessOrder = cudaMemcpySrcAccessOrderStream;
+  attr.flags          = cudaMemcpyFlagPreferOverlapWithCompute;
+  std::size_t attrs_idxs{0};
+  std::size_t num_attrs{1};
+#if CUDART_VERSION >= 13000
+  return cudaMemcpyBatchAsync(dsts, srcs, sizes, count, &attr, &attrs_idxs, num_attrs, stream);
+#else
+  std::size_t fail_idx;
+  return cudaMemcpyBatchAsync(
+    dsts, srcs, sizes, count, &attr, &attrs_idxs, num_attrs, &fail_idx, stream);
+#endif  // CUDART_VERSION >= 13000
+#else
+  return cudaErrorInvalidValue;
+#endif  // CUDART_VERSION >= 12080
 }
 
 /**
