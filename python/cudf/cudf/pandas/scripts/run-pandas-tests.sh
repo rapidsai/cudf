@@ -65,12 +65,12 @@ EOF
     # Substitute `pandas.tests` with a relative import.
     # This will depend on the location of the test module relative to
     # the pandas-tests directory.
-    for hit in $(find . -iname '*.py' -print0 | xargs -0 grep "pandas.tests" | cut -d ":" -f 1 | sort | uniq); do
+    for hit in $(find pandas-tests -iname '*.py' -print0 | xargs -0 grep "pandas.tests" | cut -d ":" -f 1 | sort | uniq); do
         # Get the relative path to the test module
         test_module=$(echo "$hit" | cut -d "/" -f 2-)
         # Get the number of directories to go up
         num_dirs=$(echo "$test_module" | grep -o "/" | wc -l)
-        num_dots=$((num_dirs - 2))
+        num_dots=$((num_dirs - 1))
         # Construct the relative import
         relative_import=$(printf "%0.s." $(seq 1 $num_dots))
         # Replace the import
@@ -177,12 +177,16 @@ IGNORE_TESTS_THAT_TEST_PRIVATE_FUNTIONALITY=("--ignore=tests/test_nanops.py"
 )
 
 
-PANDAS_CI="1" python -m pytest -p cudf.pandas \
-    --import-mode=importlib \
-    -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and $TEST_THAT_NEED_REASON_TO_SKIP and $TEST_THAT_USE_STRING_DTYPE_GROUPBY and $TEST_THAT_USE_WEAKREFS" \
-    "${IGNORE_TESTS_THAT_CRASH_PYTEST_COLLECTION[@]}" \
-    "${IGNORE_TESTS_THAT_TEST_PRIVATE_FUNTIONALITY[@]}" \
-    "$@"
+for testfile in tests/*; do
+    PANDAS_CI="1" python -m pytest -p cudf.pandas \
+        --import-mode=importlib \
+        -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and $TEST_THAT_NEED_REASON_TO_SKIP and $TEST_THAT_USE_STRING_DTYPE_GROUPBY and $TEST_THAT_USE_WEAKREFS" \
+        "${IGNORE_TESTS_THAT_CRASH_PYTEST_COLLECTION[@]}" \
+        "${IGNORE_TESTS_THAT_TEST_PRIVATE_FUNTIONALITY[@]}" \
+        "$@" \
+        "${testfile}"
+    echo "The exit code for test file/dir ${testfile} was: $?"
+done
 
 mv ./*.json ..
 cd ..
