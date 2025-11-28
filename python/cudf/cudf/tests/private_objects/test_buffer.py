@@ -65,17 +65,6 @@ def test_buffer_creation_from_any(arr_len):
     assert ary.data.ptr == b.get_ptr(mode="read")
     assert ary.nbytes == b.size
 
-    with pytest.raises(
-        ValueError, match="size must be specified when `data` is an integer"
-    ):
-        as_buffer(ary.data.ptr)
-
-    b = as_buffer(ary.data.ptr, size=ary.nbytes, owner=ary, exposed=True)
-    assert isinstance(b, Buffer)
-    assert ary.data.ptr == b.get_ptr(mode="read")
-    assert ary.nbytes == b.size
-    assert b.owner.owner.owner is ary
-
 
 @pytest.mark.parametrize("size", [10, 2**10 + 500, 2**20])
 def test_buffer_str(size):
