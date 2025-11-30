@@ -48,14 +48,13 @@ auto hash_compound_agg_finalizer::gather_argminmax(aggregation const& agg)
                                static_cast<void const*>(arg_result.data<size_type>()),
                                nullptr,
                                0);
-  auto gather_argminmax =
-    cudf::detail::gather(table_view({col}),
-                         null_removed_map,
-                         arg_result.nullable() ? cudf::out_of_bounds_policy::NULLIFY
-                                               : cudf::out_of_bounds_policy::DONT_CHECK,
-                         cudf::detail::negative_index_policy::NOT_ALLOWED,
-                         stream,
-                         mr);
+  auto gather_argminmax = cudf::detail::gather(
+    table_view{{col}},
+    null_removed_map,
+    col.nullable() ? cudf::out_of_bounds_policy::NULLIFY : cudf::out_of_bounds_policy::DONT_CHECK,
+    cudf::detail::negative_index_policy::NOT_ALLOWED,
+    stream,
+    mr);
   return std::move(gather_argminmax->release()[0]);
 }
 
