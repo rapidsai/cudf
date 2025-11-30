@@ -38,7 +38,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
 {
   // Collect the single-pass aggregations that can be processed in this function.
   // The compound aggregations that require multiple passes will be handled separately later on.
-  auto const [values, agg_kinds, aggs, has_compound_aggs] =
+  auto const [values, agg_kinds, aggs, force_non_nullable, has_compound_aggs] =
     extract_single_pass_aggs(requests, stream);
   auto const d_agg_kinds = cudf::detail::make_device_uvector_async(
     agg_kinds, stream, cudf::get_current_device_resource_ref());
@@ -50,7 +50,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   // present.
   auto const run_aggs_by_global_mem_kernel = [&] {
     auto [agg_results, unique_key_indices] = compute_global_memory_aggs(
-      row_bitmask, values, global_set, agg_kinds, d_agg_kinds, stream, mr);
+      row_bitmask, values, global_set, agg_kinds, d_agg_kinds, force_non_nullable, stream, mr);
     finalize_output(values, aggs, agg_results, cache, stream);
     return std::pair{std::move(unique_key_indices), has_compound_aggs};
   };
@@ -210,8 +210,8 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   key_transform_map = rmm::device_uvector<size_type>{0, stream};  // done, free up memory early
 
   auto const d_spass_values = table_device_view::create(values, stream);
-  auto agg_results =
-    create_results_table(static_cast<size_type>(unique_keys.size()), values, agg_kinds, stream, mr);
+  auto agg_results          = create_results_table(
+    static_cast<size_type>(unique_keys.size()), values, agg_kinds, force_non_nullable, stream, mr);
   auto d_results_ptr = mutable_table_device_view::create(*agg_results, stream);
 
   compute_shared_memory_aggs(grid_size,
