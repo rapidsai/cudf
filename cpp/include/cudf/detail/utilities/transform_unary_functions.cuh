@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,8 +15,8 @@
 
 #pragma once
 
+#include <cuda/std/utility>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/pair.h>
 
 namespace cudf {
 /**
@@ -38,7 +38,7 @@ struct null_replacing_transformer {
   }
 
   template <typename ElementType>
-  CUDF_HOST_DEVICE inline type operator()(thrust::pair<ElementType, bool> const& pair_value)
+  CUDF_HOST_DEVICE inline type operator()(cuda::std::pair<ElementType, bool> const& pair_value)
   {
     if (pair_value.second)
       return f(pair_value.first);
@@ -108,7 +108,7 @@ struct transformer_squared {
 
 /**
  * @brief Uses a scalar value to construct a `meanvar` object.
- * This transforms `thrust::pair<ElementType, bool>` into
+ * This transforms `cuda::std::pair<ElementType, bool>` into
  * `ResultType = meanvar<ElementType>` form.
  *
  * This struct transforms the value and the squared value and the count at once.
@@ -119,7 +119,7 @@ template <typename ElementType>
 struct transformer_meanvar {
   using ResultType = meanvar<ElementType>;
 
-  CUDF_HOST_DEVICE inline ResultType operator()(thrust::pair<ElementType, bool> const& pair)
+  CUDF_HOST_DEVICE inline ResultType operator()(cuda::std::pair<ElementType, bool> const& pair)
   {
     ElementType v = pair.first;
     return meanvar<ElementType>(v, v * v, (pair.second) ? 1 : 0);

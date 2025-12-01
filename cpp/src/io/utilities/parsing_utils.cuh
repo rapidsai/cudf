@@ -28,7 +28,6 @@
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/mismatch.h>
-#include <thrust/pair.h>
 
 using cudf::device_span;
 
@@ -41,7 +40,7 @@ namespace io {
  * @param escaped_char The character to escape.
  * @return The escaped characters for a given character.
  */
-__device__ __forceinline__ thrust::pair<char, char> get_escaped_char(char escaped_char)
+__device__ __forceinline__ cuda::std::pair<char, char> get_escaped_char(char escaped_char)
 {
   switch (escaped_char) {
     case '"': return {'\\', '"'};

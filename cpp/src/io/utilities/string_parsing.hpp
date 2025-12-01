@@ -13,8 +13,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/iterator/zip_iterator.h>
-#include <thrust/tuple.h>
 
 namespace cudf::io {
 /**
@@ -119,7 +119,7 @@ namespace detail {
 CUDF_EXPORT cudf::data_type infer_data_type(
   cudf::io::json_inference_options_view const& options,
   device_span<char const> data,
-  thrust::zip_iterator<thrust::tuple<size_type const*, size_type const*>> offset_length_begin,
+  thrust::zip_iterator<cuda::std::tuple<size_type const*, size_type const*>> offset_length_begin,
   std::size_t const size,
   rmm::cuda_stream_view stream);
 }  // namespace detail
@@ -141,7 +141,7 @@ namespace json::detail {
  */
 CUDF_EXPORT std::unique_ptr<column> parse_data(
   char const* data,
-  thrust::zip_iterator<thrust::tuple<size_type const*, size_type const*>> offset_length_begin,
+  thrust::zip_iterator<cuda::std::tuple<size_type const*, size_type const*>> offset_length_begin,
   size_type col_size,
   data_type col_type,
   rmm::device_buffer&& null_mask,
