@@ -42,11 +42,11 @@ jobs:
         # This gate is here and not at the job level because we need the job to not be skipped,
         # since other jobs depend on it.
         if: ${{ vars.TELEMETRY_ENABLED == 'true' }}
-        uses: rapidsai/shared-actions/telemetry-dispatch-stash-base-env-vars@no-proxy-cache
+        uses: rapidsai/shared-actions/telemetry-dispatch-stash-base-env-vars@main
   cpp-build:
     needs: [telemetry-setup]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@no-proxy-cache
+    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -58,7 +58,7 @@ jobs:
   python-build:
     needs: [telemetry-setup, cpp-build]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@no-proxy-cache
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -69,7 +69,7 @@ jobs:
   python-build-noarch:
     needs: [telemetry-setup, cpp-build, python-build]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@no-proxy-cache
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -80,7 +80,7 @@ jobs:
   upload-conda:
     needs: [cpp-build, python-build, python-build-noarch]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-upload-packages.yaml@no-proxy-cache
+    uses: rapidsai/shared-workflows/.github/workflows/conda-upload-packages.yaml@main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -90,7 +90,7 @@ jobs:
     if: github.ref_type == 'branch'
     needs: [python-build, python-build-noarch]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@no-proxy-cache
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     with:
       arch: "amd64"
       branch: ${{ inputs.branch }}
@@ -103,7 +103,7 @@ jobs:
   wheel-build-libcudf:
     needs: [telemetry-setup]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@no-proxy-cache
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
     with:
       # build for every combination of arch and CUDA version, but only for the latest Python
       matrix_filter: group_by([.ARCH, (.CUDA_VER|split(".")|map(tonumber)|.[0])]) | map(max_by(.PY_VER|split(".")|map(tonumber)))
@@ -119,7 +119,7 @@ jobs:
   wheel-publish-libcudf:
     needs: wheel-build-libcudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@no-proxy-cache
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -130,7 +130,7 @@ jobs:
   wheel-build-pylibcudf:
     needs: [telemetry-setup, wheel-build-libcudf]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@no-proxy-cache
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -144,7 +144,7 @@ jobs:
   wheel-publish-pylibcudf:
     needs: wheel-build-pylibcudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@no-proxy-cache
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -155,7 +155,7 @@ jobs:
   wheel-build-cudf:
     needs: [telemetry-setup, wheel-build-pylibcudf]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@no-proxy-cache
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -169,7 +169,7 @@ jobs:
   wheel-publish-cudf:
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@no-proxy-cache
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -180,7 +180,7 @@ jobs:
   wheel-build-dask-cudf:
     needs: [telemetry-setup, wheel-build-cudf]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@no-proxy-cache
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -197,7 +197,7 @@ jobs:
   wheel-publish-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@no-proxy-cache
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -208,7 +208,7 @@ jobs:
   wheel-build-cudf-polars:
     needs: [telemetry-setup, wheel-build-pylibcudf]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@no-proxy-cache
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -225,7 +225,7 @@ jobs:
   wheel-publish-cudf-polars:
     needs: wheel-build-cudf-polars
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@no-proxy-cache
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -266,4 +266,4 @@ jobs:
     continue-on-error: true
     steps:
       - name: Telemetry summarize
-        uses: rapidsai/shared-actions/telemetry-dispatch-summarize@no-proxy-cache
+        uses: rapidsai/shared-actions/telemetry-dispatch-summarize@main
