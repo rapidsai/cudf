@@ -246,7 +246,7 @@ ConfigureNVBench(HASHING_NVBENCH hashing/hash.cpp hashing/partition.cpp)
 # ##################################################################################################
 # * interop benchmark ------------------------------------------------------------------------------
 ConfigureNVBench(INTEROP_NVBENCH interop/interop.cpp interop/interop_stringview.cpp)
-target_link_libraries(INTEROP_NVBENCH PRIVATE nanoarrow)
+target_link_libraries(INTEROP_NVBENCH PRIVATE nanoarrow::nanoarrow)
 
 # ##################################################################################################
 # * merge benchmark -------------------------------------------------------------------------------
@@ -402,7 +402,7 @@ ConfigureNVBench(
 # ##################################################################################################
 # * strings experimental benchmark ---------------------------------------------------
 ConfigureNVBench(STRINGS_EXPERIMENTAL_NVBENCH string/experimental/stringview_compare.cu)
-target_link_libraries(STRINGS_EXPERIMENTAL_NVBENCH PRIVATE nanoarrow)
+target_link_libraries(STRINGS_EXPERIMENTAL_NVBENCH PRIVATE nanoarrow::nanoarrow)
 
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------
