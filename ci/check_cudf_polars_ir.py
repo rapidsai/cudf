@@ -57,18 +57,26 @@ def get_non_child(class_node: ast.ClassDef) -> tuple[str, ...] | None:
     return None
 
 
-def get_do_evaluate_node(class_node: ast.ClassDef) -> ast.FunctionDef | None:
-    """Get the do_evaluate method node from a class definition."""
-    for item in class_node.body:
-        if isinstance(item, ast.FunctionDef) and item.name == "do_evaluate":
-            return item
-    return None
+def get_node(class_node: ast.ClassDef, name: str) -> ast.FunctionDef | None:
+    """
+    Get a method node from a class definition.
 
+    Parameters
+    ----------
+    class_node : ast.ClassDef
+        The class definition to search for the method node.
+    name : str
+        The name of the method to search for.
 
-def get_init_node(class_node: ast.ClassDef) -> ast.FunctionDef | None:
-    """Get the __init__ method node from a class definition."""
+    Returns
+    -------
+    ast.FunctionDef | None
+        The method node if found, otherwise None.
+        Some nodes (e.g. ErrorNode) don't have a do_evaluate method and
+        so `None` is a valid return value.
+    """
     for item in class_node.body:
-        if isinstance(item, ast.FunctionDef) and item.name == "__init__":
+        if isinstance(item, ast.FunctionDef) and item.name == name:
             return item
     return None
 
@@ -96,13 +104,15 @@ def get_non_child_args_length(init_node: ast.FunctionDef) -> int | None:
 
 
 def get_do_evaluate_params(method_node: ast.FunctionDef) -> list[str]:
-    """Get parameter names from do_evaluate method."""
+    """
+    Get parameter names from do_evaluate method
+
+    This excludes 'cls' and 'self', and keyword-only params like 'context'.
+    """
     params = []
     for arg in method_node.args.args:
-        # Skip 'cls' and 'self' parameters
         if arg.arg not in ("cls", "self"):
             params.append(arg.arg)
-    # Don't include keyword-only args like 'context'
     return params
 
 
@@ -149,14 +159,13 @@ def analyze_content(content: str, filename: str) -> list[ErrorRecord]:
             if non_child is None:
                 continue
 
-            method_node = get_do_evaluate_node(node)
+            method_node = get_node(node, "do_evaluate")
             if method_node is None:
                 # Some nodes (e.g. ErrorNode) don't have a do_evaluate method
                 continue
 
             do_evaluate_params = get_do_evaluate_params(method_node)
 
-            # Check each non_child element
             for i, nc in enumerate(non_child):
                 if nc not in do_evaluate_params:
                     records.append(
@@ -180,7 +189,6 @@ def analyze_content(content: str, filename: str) -> list[ErrorRecord]:
                     )
 
             # Check that all *remaining* args in do_evaluate are 'DataFrame' type
-            # Skip 'cls' or 'self' parameter
             regular_args = [
                 arg
                 for arg in method_node.args.args
@@ -238,7 +246,7 @@ def analyze_content(content: str, filename: str) -> list[ErrorRecord]:
                     )
 
             # Check that __init__ assigns self._non_child_args with matching length
-            init_node = get_init_node(node)
+            init_node = get_node(node, "__init__")
             if init_node is not None:
                 non_child_args_length = get_non_child_args_length(init_node)
                 if non_child_args_length is not None:
