@@ -2039,8 +2039,8 @@ class Index(SingleColumnFrame):
 
         with acquire_spill_lock():
             left_plc, right_plc = plc.join.inner_join(
-                plc.Table([lcol.to_pylibcudf(mode="read")]),
-                plc.Table([rcol.to_pylibcudf(mode="read")]),
+                plc.Table([lcol.plc_column]),
+                plc.Table([rcol.plc_column]),
                 plc.types.NullEquality.EQUAL,
             )
             scatter_map = ColumnBase.from_pylibcudf(left_plc)
@@ -3773,7 +3773,7 @@ class DatetimeIndex(Index):
         if self._freq:
             return self._freq
 
-        plc_col = self._column.to_pylibcudf(mode="read")
+        plc_col = self._column.plc_column
         shifted = plc.copying.shift(
             plc_col, 1, plc.Scalar.from_py(None, dtype=plc_col.type())
         )
@@ -5501,10 +5501,8 @@ class IntervalIndex(Index):
             breaks = breaks.astype(np.dtype(np.int64))
         if copy:
             breaks = breaks.copy()
-        left_col = breaks.slice(0, len(breaks) - 1).to_pylibcudf(mode="read")
-        right_col = (
-            breaks.slice(1, len(breaks)).copy().to_pylibcudf(mode="read")
-        )
+        left_col = breaks.slice(0, len(breaks) - 1).plc_column
+        right_col = breaks.slice(1, len(breaks)).copy().plc_column
         # For indexing, children should both have 0 offset
         right_col = plc.Column(
             right_col.type(),
