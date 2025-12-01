@@ -48,6 +48,7 @@ timeout 15m ./ci/run_cudf_polars_with_rapidsmpf_pytests.sh \
     --no-cov \
     --numprocesses=8 \
     --dist=worksteal \
+    --timeout 300 \
     -v \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-rapidsmpf.xml"
 

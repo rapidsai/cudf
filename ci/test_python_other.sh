@@ -46,6 +46,7 @@ timeout 30m ./ci/run_cudf_polars_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml" \
   --numprocesses=8 \
   --dist=worksteal \
+    --timeout 300 \
   --cov-config=./pyproject.toml \
   --cov=cudf_polars \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-polars-coverage.xml" \
