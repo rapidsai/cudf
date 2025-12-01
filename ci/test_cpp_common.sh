@@ -15,7 +15,14 @@ CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
 rapids-logger "Generate C++ testing dependencies"
 
 ENV_YAML_DIR="$(mktemp -d)"
+conda config --append 'custom_multichannels.conda-forge' 'https://prefix.dev/conda-forge'
+echo "--- .condarc ---"
+cat /opt/conda/.condarc
 mamba clean --yes --all
+
+custom_multichannels:
+  conda-forge:
+    - https://prefix.dev/conda-forge
 
 rapids-dependency-file-generator \
   --output conda \
