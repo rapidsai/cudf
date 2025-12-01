@@ -149,11 +149,11 @@ async def broadcast_join_node(
         )
         await ch_out.send_metadata(context, output_metadata)
 
-        # Collect small-side
-        small_df = _concat(
-            *await get_small_table(context, small_child, small_ch),
-            context=ir_context,
-        )
+        # Collect small-side chunks
+        small_dfs = await get_small_table(context, small_child, small_ch)
+        if ir.options[0] != "Inner":
+            # TODO: Use local repartitioning for non-inner joins
+            small_dfs = [_concat(*small_dfs, context=ir_context)]
 
         # Stream through large side, joining with the small-side
         while (msg := await large_ch.data.recv(context)) is not None:
@@ -169,14 +169,22 @@ async def broadcast_join_node(
             )
 
             # Perform the join
-            df = await asyncio.to_thread(
-                ir.do_evaluate,
-                *ir._non_child_args,
-                *(
-                    [large_df, small_df]
-                    if broadcast_side == "right"
-                    else [small_df, large_df]
-                ),
+            df = _concat(
+                *[
+                    (
+                        await asyncio.to_thread(
+                            ir.do_evaluate,
+                            *ir._non_child_args,
+                            *(
+                                [large_df, small_df]
+                                if broadcast_side == "right"
+                                else [small_df, large_df]
+                            ),
+                            context=ir_context,
+                        )
+                    )
+                    for small_df in small_dfs
+                ],
                 context=ir_context,
             )
 
