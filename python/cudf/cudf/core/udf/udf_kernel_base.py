@@ -7,9 +7,9 @@ from contextlib import nullcontext
 
 import numpy as np
 from numba import cuda, typeof
-from numba.core.errors import TypingError
-from numba.np import numpy_support
-from numba.types import CPointer, Poison, Tuple, boolean, int64, void
+from numba.cuda.core.errors import TypingError
+from numba.cuda.np import numpy_support
+from numba.cuda.types import CPointer, Poison, Tuple, boolean, int64, void
 
 from cudf.api.types import is_scalar
 from cudf.core.udf.masked_typing import MaskedType

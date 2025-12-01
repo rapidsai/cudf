@@ -5,12 +5,12 @@ import operator
 
 import numpy as np
 from numba import types
-from numba.core import cgutils
-from numba.core.extending import models, register_model
-from numba.core.typing import signature as nb_signature
-from numba.core.typing.templates import AbstractTemplate, AttributeTemplate
+from numba.cuda import cgutils
 from numba.cuda.cudadecl import registry as cuda_decl_registry
 from numba.cuda.descriptor import cuda_target
+from numba.cuda.extending import models, register_model
+from numba.cuda.typing import signature as nb_signature
+from numba.cuda.typing.templates import AbstractTemplate, AttributeTemplate
 
 import rmm
 

@@ -4,13 +4,13 @@
 import operator
 
 from llvmlite import ir
-from numba.core import cgutils
-from numba.core.typing import signature as nb_signature
+from numba.cuda import cgutils
 from numba.cuda.cudaimpl import (
     lower as cuda_lower,
     registry as cuda_lowering_registry,
 )
-from numba.extending import lower_builtin, types
+from numba.cuda.extending import lower_builtin, types
+from numba.cuda.typing import signature as nb_signature
 
 from cudf.core.udf import api
 from cudf.core.udf._ops import (
