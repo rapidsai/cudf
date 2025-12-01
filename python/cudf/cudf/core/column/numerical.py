@@ -576,6 +576,20 @@ class NumericalColumn(NumericalBaseColumn):
                 res = self.nans_to_nulls().cast(dtype=dtype)
                 res._dtype = dtype
                 return res  # type: ignore[return-value]
+            
+            # --- FIX: Match Pandas behavior when casting Float(with Nulls) -> Bool ---
+            # Pandas treats NaN as truthy (True) when casting float -> bool.
+            # In cuDF, Nulls propagate. We must fill Nulls with np.nan so the
+            # cast treats them as True.
+            if (
+                self.dtype.kind == "f"
+                and dtype.kind == "b"
+                and not is_pandas_nullable_extension_dtype(dtype)
+                and self.has_nulls()
+            ):
+                return self.fillna(np.nan).cast(dtype=dtype)  # type: ignore[return-value]
+            # ------------------------------------------------------------------------
+
             if dtype_to_pylibcudf_type(dtype) == dtype_to_pylibcudf_type(
                 self.dtype
             ):
