@@ -433,7 +433,7 @@ async def fanout_node_unbounded(
                             # Use device ONLY if message is in device AND we have sufficient headroom.
                             # TODO: Use further information about the downstream operations to make
                             # a more informed decision.
-                            required_headroom = total_copy_cost * 4
+                            required_headroom = total_copy_cost * 2
                             if (
                                 device_size > 0
                                 and available_device_mem >= required_headroom
