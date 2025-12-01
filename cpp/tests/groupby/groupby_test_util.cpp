@@ -19,9 +19,7 @@
 
 namespace cudf ::test {
 
-void test_single_agg(char const* file,
-                     int line,
-                     column_view const& keys,
+void test_single_agg(column_view const& keys,
                      column_view const& values,
                      column_view const& expect_keys,
                      column_view const& expect_vals,
@@ -31,9 +29,11 @@ void test_single_agg(char const* file,
                      sorted keys_are_sorted,
                      std::vector<order> const& column_order,
                      std::vector<null_order> const& null_precedence,
-                     sorted reference_keys_are_sorted)
+                     sorted reference_keys_are_sorted,
+                     std::source_location const location)
 {
-  SCOPED_TRACE("Original failure location: " + std::string{file} + ":" + std::to_string(line));
+  SCOPED_TRACE("Original failure location: " + std::string{location.file_name()} + ":" +
+               std::to_string(location.line()));
 
   auto const [sorted_expect_keys, sorted_expect_vals] = [&]() {
     if (reference_keys_are_sorted == sorted::NO) {
@@ -85,31 +85,27 @@ void test_single_agg(char const* file,
   }
 }
 
-void test_sum_agg(char const* file,
-                  int line,
-                  column_view const& keys,
+void test_sum_agg(column_view const& keys,
                   column_view const& values,
                   column_view const& expected_keys,
-                  column_view const& expected_values)
+                  column_view const& expected_values,
+                  std::source_location const location)
 {
   auto const do_test = [&](auto const use_sort_option) {
-    test_single_agg(file,
-                    line,
-                    keys,
+    test_single_agg(keys,
                     values,
                     expected_keys,
                     expected_values,
                     make_sum_aggregation<groupby_aggregation>(),
                     use_sort_option,
-                    null_policy::INCLUDE);
+                    null_policy::INCLUDE,
+                    location);
   };
   do_test(force_use_sort_impl::YES);
   do_test(force_use_sort_impl::NO);
 }
 
-void test_single_scan(char const* file,
-                      int line,
-                      column_view const& keys,
+void test_single_scan(column_view const& keys,
                       column_view const& values,
                       column_view const& expect_keys,
                       column_view const& expect_vals,
@@ -117,9 +113,11 @@ void test_single_scan(char const* file,
                       null_policy include_null_keys,
                       sorted keys_are_sorted,
                       std::vector<order> const& column_order,
-                      std::vector<null_order> const& null_precedence)
+                      std::vector<null_order> const& null_precedence,
+                      std::source_location const location)
 {
-  SCOPED_TRACE("Original failure location: " + std::string{file} + ":" + std::to_string(line));
+  SCOPED_TRACE("Original failure location: " + std::string{location.file_name()} + ":" +
+               std::to_string(location.line()));
 
   std::vector<groupby::scan_request> requests;
   requests.emplace_back();

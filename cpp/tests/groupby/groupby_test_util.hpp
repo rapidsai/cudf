@@ -8,13 +8,13 @@
 #include <cudf/groupby.hpp>
 #include <cudf/types.hpp>
 
+#include <source_location>
+
 enum class force_use_sort_impl : bool { NO, YES };
 
 namespace cudf::test {
 
-void test_single_agg(char const* file,
-                     int line,
-                     column_view const& keys,
+void test_single_agg(column_view const& keys,
                      column_view const& values,
                      column_view const& expect_keys,
                      column_view const& expect_vals,
@@ -24,17 +24,15 @@ void test_single_agg(char const* file,
                      sorted keys_are_sorted                         = sorted::NO,
                      std::vector<order> const& column_order         = {},
                      std::vector<null_order> const& null_precedence = {},
-                     sorted reference_keys_are_sorted               = sorted::NO);
-void test_sum_agg(char const* file,
-                  int line,
-                  column_view const& keys,
+                     sorted reference_keys_are_sorted               = sorted::NO,
+                     std::source_location const location = std::source_location::current());
+void test_sum_agg(column_view const& keys,
                   column_view const& values,
                   column_view const& expected_keys,
-                  column_view const& expected_values);
+                  column_view const& expected_values,
+                  std::source_location const location = std::source_location::current());
 
-void test_single_scan(char const* file,
-                      int line,
-                      column_view const& keys,
+void test_single_scan(column_view const& keys,
                       column_view const& values,
                       column_view const& expect_keys,
                       column_view const& expect_vals,
@@ -42,10 +40,7 @@ void test_single_scan(char const* file,
                       null_policy include_null_keys                  = null_policy::EXCLUDE,
                       sorted keys_are_sorted                         = sorted::NO,
                       std::vector<order> const& column_order         = {},
-                      std::vector<null_order> const& null_precedence = {});
+                      std::vector<null_order> const& null_precedence = {},
+                      std::source_location const location = std::source_location::current());
 
 }  // namespace cudf::test
-
-#define CUDF_TEST_SINGLE_AGG(...)  cudf::test::test_single_agg(__FILE__, __LINE__, __VA_ARGS__)
-#define CUDF_TEST_SUM_AGG(...)     cudf::test::test_sum_agg(__FILE__, __LINE__, __VA_ARGS__)
-#define CUDF_TEST_SINGLE_SCAN(...) cudf::test::test_single_scan(__FILE__, __LINE__, __VA_ARGS__)
