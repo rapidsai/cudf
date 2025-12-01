@@ -27,50 +27,6 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
 
 
-def df_from_chunks(
-    ir: Repartition,
-    chunks: list[TableChunk],
-    ir_context: IRExecutionContext,
-) -> DataFrame:
-    """
-    Create a DataFrame from a list of TableChunks.
-
-    Parameters
-    ----------
-    ir
-        The Repartition IR node.
-    chunks
-        The list of TableChunks.
-    ir_context
-        The execution context for the IR node.
-
-    Returns
-    -------
-    The DataFrame.
-    """
-    return (
-        DataFrame.from_table(
-            chunks[0].table_view(),
-            list(ir.schema.keys()),
-            list(ir.schema.values()),
-            chunks[0].stream,
-        )
-        if len(chunks) == 1
-        else _concat(
-            *(
-                DataFrame.from_table(
-                    chunk.table_view(),
-                    list(ir.schema.keys()),
-                    list(ir.schema.values()),
-                    chunk.stream,
-                )
-                for chunk in chunks
-            ),
-            context=ir_context,
-        )
-    )
-
-
 @define_py_node()
 async def concatenate_node(
     context: Context,
@@ -79,7 +35,6 @@ async def concatenate_node(
     ch_out: ChannelPair,
     ch_in: ChannelPair,
     *,
-    max_chunks: int | None,
     output_count: int,
     collective_id: int,
 ) -> None:
@@ -98,16 +53,11 @@ async def concatenate_node(
         The output ChannelPair.
     ch_in
         The input ChannelPair.
-    max_chunks
-        The maximum number of chunks to concatenate at once.
-        If `None`, concatenate all input chunks.
     output_count
         The expected number of output chunks.
     collective_id
         Pre-allocated collective ID for this operation.
     """
-    # TODO: Use multiple streams
-    max_chunks = max(2, max_chunks) if max_chunks else None
     async with shutdown_on_error(
         context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
     ):
@@ -115,10 +65,19 @@ async def concatenate_node(
         input_metadata = await ch_in.recv_metadata(context)
         metadata = Metadata(output_count)
 
+        # max_chunks corresponds to the number of chunks we can
+        # concatenate together. If None, we must concatenate everything.
+        # Since a single-partition operation gets "special treatment",
+        # we must make sure `output_count == 1` is always satisfied.
+        max_chunks: int | None = None
+        if output_count > 1:
+            # Make sure max_chunks is at least 2.
+            max_chunks = max(2, math.ceil(input_metadata.count / output_count))
+
         # Check if we need global communication.
         need_global_repartition = (
             # Avoid allgather of already-duplicated data
-            not input_metadata.duplicated and max_chunks is None and output_count == 1
+            not input_metadata.duplicated and output_count == 1
         )
 
         chunks: list[TableChunk]
@@ -172,7 +131,18 @@ async def concatenate_node(
 
                 # Process collected chunks
                 if chunks:
-                    df = df_from_chunks(ir, chunks, ir_context)
+                    df = _concat(
+                        *(
+                            DataFrame.from_table(
+                                chunk.table_view(),
+                                list(ir.schema.keys()),
+                                list(ir.schema.values()),
+                                chunk.stream,
+                            )
+                            for chunk in chunks
+                        ),
+                        context=ir_context,
+                    )
                     await ch_out.data.send(
                         context,
                         Message(
@@ -198,14 +168,11 @@ def _(
     # Repartition node.
 
     partition_info = rec.state["partition_info"]
-    max_chunks: int | None = None
     if partition_info[ir].count > 1:
         count_output = partition_info[ir].count
         count_input = partition_info[ir.children[0]].count
         if count_input < count_output:
             raise ValueError("Repartitioning to more chunks is not supported.")
-        # Make sure max_chunks is at least 2
-        max_chunks = max(2, math.ceil(count_input / count_output))
 
     # Process children
     nodes, channels = rec(ir.children[0])
@@ -224,7 +191,6 @@ def _(
             rec.state["ir_context"],
             channels[ir].reserve_input_slot(),
             channels[ir.children[0]].reserve_output_slot(),
-            max_chunks=max_chunks,
             output_count=partition_info[ir].count,
             collective_id=collective_id,
         )

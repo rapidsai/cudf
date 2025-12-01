@@ -162,6 +162,7 @@ def evaluate_pipeline(
     assert config_options.executor.name == "streaming", "Executor must be streaming"
     assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
 
+    _initial_mr: Any = None
     if rmpf_context is not None:
         # Using "distributed" mode.
         # We can use the existing rapidsmpf context, but we
@@ -178,7 +179,8 @@ def evaluate_pipeline(
     else:
         # Using "single" mode.
         # Create a new local RapidsMPF context.
-        mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
+        _original_mr = rmm.mr.get_current_device_resource()
+        mr = RmmResourceAdaptor(_original_mr)
         rmm.mr.set_current_device_resource(mr)
         memory_available: MutableMapping[MemoryType, LimitAvailableMemory] | None = None
         single_spill_device = config_options.executor.client_device_threshold
@@ -271,6 +273,10 @@ def evaluate_pipeline(
     # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
     # before the Context, which ultimately contains the rmm MR, goes out of scope.
     del nodes, output, messages, chunks, dfs, df
+
+    # Restore the initial RMM memory resource
+    if _initial_mr is not None:
+        rmm.mr.set_current_device_resource(_original_mr)
 
     return result, metadata_collector
 

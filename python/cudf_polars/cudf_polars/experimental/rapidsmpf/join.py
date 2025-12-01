@@ -270,9 +270,6 @@ def _(
         else:
             broadcast_side = "left"
 
-        # Look up the reserved shuffle ID for this operation
-        collective_id = rec.state["collective_id_map"][ir]
-
         nodes[ir] = [
             broadcast_join_node(
                 rec.state["context"],
@@ -282,7 +279,7 @@ def _(
                 channels[left].reserve_output_slot(),
                 channels[right].reserve_output_slot(),
                 broadcast_side=broadcast_side,
-                collective_id=collective_id,
+                collective_id=rec.state["collective_id_map"][ir],
             )
         ]
         return nodes, channels
