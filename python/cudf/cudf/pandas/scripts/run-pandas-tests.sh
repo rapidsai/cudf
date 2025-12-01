@@ -69,7 +69,8 @@ EOF
         # Get the relative path to the test module
         test_module=$(echo "$hit" | cut -d "/" -f 2-)
         # Get the number of directories to go up
-        num_dirs=$(echo "$test_module" | grep -o "/" | wc -l)
+        num_dirs="${test_module//[^\/]/}"
+        num_dirs="${#num_dirs}"
         num_dots=$((num_dirs - 1))
         # Construct the relative import
         relative_import=$(printf "%0.s." $(seq 1 $num_dots))
