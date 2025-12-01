@@ -51,7 +51,7 @@ TYPED_TEST(TableToDeviceArrayTypedTest, SupportedTypes)
 {
   using T     = TypeParam;
   auto stream = cudf::get_default_stream();
-  auto mr     = rmm::mr::get_current_device_resource();
+  auto mr     = cudf::get_current_device_resource_ref();
 
   int nrows = 3;
   int ncols = 4;
@@ -79,7 +79,7 @@ TYPED_TEST(TableToDeviceArrayTypedTest, SupportedTypes)
     cols.begin(), cols.end(), views.begin(), [](auto const& col) { return col->view(); });
   cudf::table_view input{views};
 
-  auto output = cudf::detail::make_zeroed_device_uvector<T>(nrows * ncols, stream, *mr);
+  auto output = cudf::detail::make_zeroed_device_uvector<T>(nrows * ncols, stream, mr);
 
   cudf::table_to_array(
     input,
@@ -103,7 +103,7 @@ TYPED_TEST(FixedPointTableToDeviceArrayTest, SupportedFixedPointTypes)
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
   auto stream = cudf::get_default_stream();
-  auto mr     = rmm::mr::get_current_device_resource();
+  auto mr     = cudf::get_current_device_resource_ref();
   auto scale  = numeric::scale_type{-2};
 
   fp_wrapper col0({123, 456, 789}, scale);
@@ -112,7 +112,7 @@ TYPED_TEST(FixedPointTableToDeviceArrayTest, SupportedFixedPointTypes)
   cudf::table_view input({col0, col1});
   size_t num_elements = input.num_rows() * input.num_columns();
 
-  auto output = cudf::detail::make_zeroed_device_uvector<RepType>(num_elements, stream, *mr);
+  auto output = cudf::detail::make_zeroed_device_uvector<RepType>(num_elements, stream, mr);
 
   cudf::table_to_array(
     input,

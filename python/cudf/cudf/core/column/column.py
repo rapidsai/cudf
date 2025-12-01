@@ -45,7 +45,6 @@ from cudf.core.buffer import (
     Buffer,
     acquire_spill_lock,
     as_buffer,
-    cuda_array_interface_wrapper,
 )
 from cudf.core.buffer.spillable_buffer import SpillableBuffer
 from cudf.core.copy_types import GatherMap
@@ -124,6 +123,46 @@ def _can_values_be_equal(left: DtypeObj, right: DtypeObj) -> bool:
     elif left.kind == right.kind and left.kind in "mM":
         return True
     return False
+
+
+class MaskCAIWrapper:
+    # A wrapper that exposes the __cuda_array_interface__ of a mask that accounts for
+    # the mask being a bitmask in the mask size calculation.
+
+    def __init__(self, mask: Any) -> None:
+        self._mask = mask
+
+    @property
+    def __cuda_array_interface__(self) -> Mapping:
+        cai = self._mask.__cuda_array_interface__.copy()
+        cai["shape"] = (
+            plc.null_mask.bitmask_allocation_size_bytes(cai["shape"][0]),
+        )
+        return cai
+
+
+class ROCAIWrapper:
+    # A wrapper that exposes the __cuda_array_interface__ of a buffer as read-only to
+    # avoid copy-on-write issues.
+    def __init__(self, buffer: Buffer, mode: Literal["read", "write"]) -> None:
+        self._buffer = buffer
+        self._mode = mode
+
+    @property
+    def owner(self) -> Buffer:
+        # This property is how get_buffer_owner in buffer/utils.py knows to access the
+        # owner transitively, which is needed for correctness with copy-on-write
+        return self._buffer
+
+    @property
+    def __cuda_array_interface__(self) -> Mapping:
+        return {
+            "data": (self._buffer.get_ptr(mode=self._mode), False),
+            "shape": (self._buffer.size,),
+            "strides": None,
+            "typestr": "|u1",
+            "version": 0,
+        }
 
 
 class spillable_gpumemoryview(plc.gpumemoryview):
@@ -608,31 +647,22 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         data = None
         if col.base_data is not None:
-            if use_base:
-                data_buff = col.base_data
-            else:
-                data_buff = col.data  # type: ignore[assignment]
-            cai = cuda_array_interface_wrapper(
-                ptr=data_buff.get_ptr(mode=mode),
-                size=data_buff.size,
-                owner=data_buff,
-            )
-            data = plc.gpumemoryview(cai)
+            data_buff = col.base_data
+            if not use_base:
+                assert col.data is not None
+                data_buff = col.data
+            data = plc.gpumemoryview(ROCAIWrapper(data_buff, mode))
 
         mask = None
         if self.nullable:
             # TODO: Are we intentionally use self's mask instead of col's?
             # Where is the mask stored for categoricals?
-            if use_base:
-                mask_buff = self.base_mask
-            else:
+            assert self.base_mask is not None
+            mask_buff = self.base_mask
+            if not use_base:
+                assert self.mask is not None
                 mask_buff = self.mask
-            cai = cuda_array_interface_wrapper(
-                ptr=mask_buff.get_ptr(mode=mode),  # type: ignore[union-attr]
-                size=mask_buff.size,  # type: ignore[union-attr]
-                owner=mask_buff,
-            )
-            mask = plc.gpumemoryview(cai)
+            mask = plc.gpumemoryview(ROCAIWrapper(mask_buff, mode))
 
         children = []
         if col.base_children:
@@ -745,12 +775,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if mask is not None:
             cai_mask = mask.__cuda_array_interface__
             if cai_mask["typestr"][1] == "t":
-                mask_size = plc.null_mask.bitmask_allocation_size_bytes(
-                    cai_mask["shape"][0]
-                )
-                mask_buff = as_buffer(
-                    data=cai_mask["data"][0], size=mask_size, owner=mask
-                )
+                mask_buff = as_buffer(MaskCAIWrapper(mask))
             elif cai_mask["typestr"][1] == "b":
                 mask_buff = ColumnBase.from_cuda_array_interface(
                     mask,
@@ -1978,13 +2003,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             # Create a simple Python object that exposes the
             # `__cuda_array_interface__` attribute here since we need to modify
             # some of the attributes from the numba device array
-            output["mask"] = cuda_array_interface_wrapper(
-                ptr=self.mask_ptr,
-                size=len(self),
-                owner=self.mask,
-                readonly=True,
-                typestr="<t1",
-            )
+            mask = self.mask
+            assert mask is not None
+            # Directly access the mask pointer to trigger copy-on-write handling
+            # TODO: We should find a cleaner way to handle this
+            self.mask_ptr
+            output["mask"] = mask
         return output
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
@@ -3059,7 +3083,7 @@ def as_column(
                 "empty",
                 "boolean",
             ):
-                raise TypeError(
+                raise MixedTypeError(
                     f"Cannot convert a {inferred_dtype} of object type"
                 )
             elif inferred_dtype == "boolean":

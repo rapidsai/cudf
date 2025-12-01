@@ -80,6 +80,7 @@ requirements:
         - libcufile-dev
     - cuda-version =${{ cuda_version }}
   run:
+    - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
     - python
     - typing_extensions >=4.0.0
     - pandas >=2.0,<2.4.0dev0
@@ -97,6 +98,7 @@ requirements:
   ignore_run_exports:
     from_package:
       - cuda-cudart-dev
+      - libcudf
       - if: linux and x86_64
         then:
           - libcufile-dev

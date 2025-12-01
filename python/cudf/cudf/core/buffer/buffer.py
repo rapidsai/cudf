@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import math
 import weakref
-from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy
@@ -40,58 +39,6 @@ def host_memory_allocation(nbytes: int) -> memoryview:
         The new host allocation.
     """
     return numpy.empty((nbytes,), dtype="u1").data
-
-
-def cuda_array_interface_wrapper(
-    ptr: int,
-    size: int,
-    owner: object | None = None,
-    readonly=False,
-    typestr="|u1",
-    version=0,
-):
-    """Wrap device pointer in an object that exposes `__cuda_array_interface__`
-
-    See <https://numba.readthedocs.io/en/stable/cuda/cuda_array_interface.html>
-
-    Parameters
-    ----------
-    ptr : int
-        An integer representing a pointer to device memory.
-    size : int, optional
-        Size of device memory in bytes.
-    owner : object, optional
-        Python object to which the lifetime of the memory allocation is tied.
-        A reference to this object is kept in the returned wrapper object.
-    readonly: bool, optional
-        Mark the interface read-only.
-    typestr: str, optional
-        The type string of the interface. By default this is "|u1", which
-        means "an unsigned integer with a not relevant byteorder". See:
-        <https://numpy.org/doc/stable/reference/arrays.interface.html>
-    version : bool, optional
-        The version of the interface.
-
-    Return
-    ------
-    SimpleNamespace
-        An object that exposes `__cuda_array_interface__` and keeps a reference
-        to `owner`.
-    """
-
-    if size < 0:
-        raise ValueError("size cannot be negative")
-
-    return SimpleNamespace(
-        __cuda_array_interface__={
-            "data": (ptr, readonly),
-            "shape": (size,),
-            "strides": None,
-            "typestr": typestr,
-            "version": version,
-        },
-        owner=owner,
-    )
 
 
 class BufferOwner(Serializable):

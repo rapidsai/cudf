@@ -34,6 +34,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/tuple>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
@@ -42,13 +43,13 @@
 #include <thrust/gather.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
+#include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/random/uniform_int_distribution.h>
 #include <thrust/random/uniform_real_distribution.h>
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
 
 #include <algorithm>
 #include <cstdint>
@@ -437,9 +438,9 @@ rmm::device_uvector<cudf::size_type> sample_indices_with_run_length(cudf::size_t
 
 struct valid_or_zero {
   template <typename T>
-  __device__ T operator()(thrust::tuple<T, bool> len_valid) const
+  __device__ T operator()(cuda::std::tuple<T, bool> len_valid) const
   {
-    return thrust::get<1>(len_valid) ? thrust::get<0>(len_valid) : T{0};
+    return cuda::std::get<1>(len_valid) ? cuda::std::get<0>(len_valid) : T{0};
   }
 };
 
@@ -460,10 +461,10 @@ struct string_generator {
   // range 32-127 is ASCII; 127-136 will be multi-byte UTF-8
   {
   }
-  __device__ void operator()(thrust::tuple<int64_t, int64_t> str_begin_end)
+  __device__ void operator()(cuda::std::tuple<int64_t, int64_t> str_begin_end)
   {
-    auto begin = thrust::get<0>(str_begin_end);
-    auto end   = thrust::get<1>(str_begin_end);
+    auto begin = cuda::std::get<0>(str_begin_end);
+    auto end   = cuda::std::get<1>(str_begin_end);
     engine.discard(begin);
     for (auto i = begin; i < end; ++i) {
       auto ch = char_dist(engine);
@@ -506,7 +507,7 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
     cuda::proclaim_return_type<cudf::size_type>([] __device__(auto) { return 0; }),
     cuda::std::logical_not<bool>{});
   auto valid_lengths = thrust::make_transform_iterator(
-    thrust::make_zip_iterator(thrust::make_tuple(lengths.begin(), null_mask.begin())),
+    thrust::make_zip_iterator(cuda::std::make_tuple(lengths.begin(), null_mask.begin())),
     valid_or_zero{});
 
   // offsets are created as INT32 or INT64 as appropriate
@@ -516,7 +517,7 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
   auto offsets_itr = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
   rmm::device_uvector<char> chars(chars_length, cudf::get_default_stream());
   thrust::for_each_n(thrust::device,
-                     thrust::make_zip_iterator(offsets_itr, offsets_itr + 1),
+                     thrust::make_zip_iterator(cuda::std::make_tuple(offsets_itr, offsets_itr + 1)),
                      num_rows,
                      string_generator<Encoding>{chars.data(), engine});
 

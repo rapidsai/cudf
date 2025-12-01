@@ -25,6 +25,17 @@ namespace CUDF_EXPORT cudf {
  */
 
 /**
+ * @brief Enum to specify the type of join operation
+ */
+enum class join_kind : int32_t {
+  INNER_JOIN     = 0,  ///< Inner join
+  LEFT_JOIN      = 1,  ///< Left join
+  FULL_JOIN      = 2,  ///< Full outer join
+  LEFT_SEMI_JOIN = 3,  ///< Left semi join
+  LEFT_ANTI_JOIN = 4   ///< Left anti join
+};
+
+/**
  * @brief Sentinel value used to indicate an unmatched row index in join operations.
  *
  * This value is used in join result indices to represent rows that do not have a match
