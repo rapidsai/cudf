@@ -20,10 +20,6 @@ echo "--- .condarc ---"
 cat /opt/conda/.condarc
 mamba clean --yes --all
 
-custom_multichannels:
-  conda-forge:
-    - https://prefix.dev/conda-forge
-
 rapids-dependency-file-generator \
   --output conda \
   --file-key test_cpp \
