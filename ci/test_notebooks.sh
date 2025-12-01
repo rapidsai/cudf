@@ -15,6 +15,7 @@ rapids-logger "Generate notebook testing dependencies"
 
 ENV_YAML_DIR="$(mktemp -d)"
 
+mamba clean --yes --all
 rapids-dependency-file-generator \
   --output conda \
   --file-key test_notebooks \

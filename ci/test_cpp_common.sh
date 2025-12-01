@@ -15,6 +15,7 @@ CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
 rapids-logger "Generate C++ testing dependencies"
 
 ENV_YAML_DIR="$(mktemp -d)"
+mamba clean --yes --all
 
 rapids-dependency-file-generator \
   --output conda \

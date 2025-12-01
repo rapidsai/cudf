@@ -14,6 +14,8 @@ rapids-logger "Create test conda environment"
 
 ENV_YAML_DIR="$(mktemp -d)"
 
+mamba clean --yes --all
+
 rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
 PYTHON_CHANNEL=$(rapids-download-conda-from-github python)

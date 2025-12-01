@@ -10,6 +10,7 @@ set -euo pipefail
 
 rapids-logger "Configuring conda strict channel priority"
 conda config --set channel_priority strict
+mamba clean --yes --all
 
 rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
