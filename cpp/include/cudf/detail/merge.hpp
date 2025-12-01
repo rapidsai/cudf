@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,7 +10,7 @@
 
 #include <rmm/device_uvector.hpp>
 
-#include <thrust/pair.h>
+#include <cuda/std/utility>
 
 namespace CUDF_EXPORT cudf {
 namespace detail {
@@ -21,10 +21,10 @@ namespace detail {
 enum class side : bool { LEFT, RIGHT };
 
 /**
- * @brief Tagged index type: `thrust::get<0>` indicates left/right side,
- * `thrust::get<1>` indicates the row index
+ * @brief Tagged index type: `cuda::std::get<0>` indicates left/right side,
+ * `cuda::std::get<1>` indicates the row index
  */
-using index_type = thrust::pair<side, cudf::size_type>;
+using index_type = cuda::std::pair<side, cudf::size_type>;
 
 /**
  * @brief Vector of `index_type` values.

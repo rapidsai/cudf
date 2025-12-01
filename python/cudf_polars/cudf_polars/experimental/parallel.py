@@ -45,6 +45,7 @@ if TYPE_CHECKING:
 
     import polars as pl
 
+    from cudf_polars.experimental.base import StatsCollector
     from cudf_polars.experimental.dispatch import LowerIRTransformer, State
     from cudf_polars.utils.config import ConfigOptions
 
@@ -61,7 +62,7 @@ def _(
 
 def lower_ir_graph(
     ir: IR, config_options: ConfigOptions
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[IR, MutableMapping[IR, PartitionInfo], StatsCollector]:
     """
     Rewrite an IR graph and extract partitioning information.
 
@@ -74,9 +75,10 @@ def lower_ir_graph(
 
     Returns
     -------
-    new_ir, partition_info
-        The rewritten graph, and a mapping from unique nodes
-        in the new graph to associated partitioning information.
+    new_ir, partition_info, stats
+        The rewritten graph, a mapping from unique nodes
+        in the new graph to associated partitioning information,
+        and the statistics collector.
 
     Notes
     -----
@@ -92,7 +94,7 @@ def lower_ir_graph(
         "stats": collect_statistics(ir, config_options),
     }
     mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
-    return mapper(ir)
+    return *mapper(ir), state["stats"]
 
 
 def task_graph(
@@ -245,7 +247,8 @@ def evaluate_rapidsmpf(
     """
     from cudf_polars.experimental.rapidsmpf.core import evaluate_logical_plan
 
-    return evaluate_logical_plan(ir, config_options)
+    result, _ = evaluate_logical_plan(ir, config_options, collect_metadata=False)
+    return result
 
 
 def evaluate_streaming(
@@ -277,7 +280,7 @@ def evaluate_streaming(
         return evaluate_rapidsmpf(ir, config_options)
     else:
         # Using the default task engine.
-        ir, partition_info = lower_ir_graph(ir, config_options)
+        ir, partition_info, _ = lower_ir_graph(ir, config_options)
 
         graph, key = task_graph(ir, partition_info, config_options)
 

@@ -275,6 +275,24 @@ ConfigureTest(
 ConfigureTest(FILTER_TEST filter/filter_test.cpp)
 
 # ##################################################################################################
+# * interop tests -------------------------------------------------------------------------
+ConfigureTest(
+  INTEROP_TEST
+  interop/arrow_data_structures_test.cpp
+  interop/to_arrow_device_test.cpp
+  interop/to_arrow_test.cpp
+  interop/to_arrow_host_test.cpp
+  interop/from_arrow_test.cpp
+  interop/from_arrow_device_test.cpp
+  interop/from_arrow_host_test.cpp
+  interop/from_arrow_stream_test.cpp
+  interop/dlpack_test.cpp
+  EXTRA_LIBS
+  nanoarrow::nanoarrow
+  ${ARROW_LIBRARIES}
+)
+
+# ##################################################################################################
 # * io tests --------------------------------------------------------------------------------------
 ConfigureTest(COMPRESSION_TEST io/comp/comp_test.cpp)
 ConfigureTest(ROW_SELECTION_TEST io/row_selection_test.cpp)
