@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -29,7 +29,7 @@ TYPED_TEST(groupby_collect_list_test, CollectWithoutNulls)
   cudf::test::lists_column_wrapper<V, int32_t> expect_vals{{1, 2, 3}, {4, 5, 6}};
 
   auto agg = cudf::make_collect_list_aggregation<cudf::groupby_aggregation>();
-  CUDF_TEST_SINGLE_AGG(keys, values, expect_keys, expect_vals, std::move(agg));
+  test_single_agg(keys, values, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_collect_list_test, CollectWithNulls)
@@ -48,7 +48,7 @@ TYPED_TEST(groupby_collect_list_test, CollectWithNulls)
     {{1, 2}, validity.begin()}, {{3, 4}, validity.begin()}, {{5, 6}, validity.begin()}};
 
   auto agg = cudf::make_collect_list_aggregation<cudf::groupby_aggregation>();
-  CUDF_TEST_SINGLE_AGG(keys, values, expect_keys, expect_vals, std::move(agg));
+  test_single_agg(keys, values, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_collect_list_test, CollectWithNullExclusion)
@@ -67,7 +67,7 @@ TYPED_TEST(groupby_collect_list_test, CollectWithNullExclusion)
 
   auto agg =
     cudf::make_collect_list_aggregation<cudf::groupby_aggregation>(cudf::null_policy::EXCLUDE);
-  CUDF_TEST_SINGLE_AGG(keys, values, expect_keys, expect_vals, std::move(agg));
+  test_single_agg(keys, values, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_collect_list_test, CollectOnEmptyInput)
@@ -83,7 +83,7 @@ TYPED_TEST(groupby_collect_list_test, CollectOnEmptyInput)
 
   auto agg =
     cudf::make_collect_list_aggregation<cudf::groupby_aggregation>(cudf::null_policy::EXCLUDE);
-  CUDF_TEST_SINGLE_AGG(keys, values, expect_keys, expect_vals, std::move(agg));
+  test_single_agg(keys, values, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_collect_list_test, CollectLists)
@@ -103,7 +103,7 @@ TYPED_TEST(groupby_collect_list_test, CollectLists)
     {{1, 2}, {3, 4}}, {{5, 6, 7}, LCW{}}, {{9, 10}, {11}}};
 
   auto agg = cudf::make_collect_list_aggregation<cudf::groupby_aggregation>();
-  CUDF_TEST_SINGLE_AGG(keys, values, expect_keys, expect_vals, std::move(agg));
+  test_single_agg(keys, values, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_collect_list_test, CollectListsWithNullExclusion)
@@ -124,7 +124,7 @@ TYPED_TEST(groupby_collect_list_test, CollectListsWithNullExclusion)
 
   auto agg =
     cudf::make_collect_list_aggregation<cudf::groupby_aggregation>(cudf::null_policy::EXCLUDE);
-  CUDF_TEST_SINGLE_AGG(keys, values, expect_keys, expect_vals, std::move(agg));
+  test_single_agg(keys, values, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_collect_list_test, CollectOnEmptyInputLists)
@@ -148,7 +148,7 @@ TYPED_TEST(groupby_collect_list_test, CollectOnEmptyInputLists)
     cudf::make_lists_column(0, cudf::make_empty_column(offsets), std::move(expect_child), 0, {});
 
   auto agg = cudf::make_collect_list_aggregation<cudf::groupby_aggregation>();
-  CUDF_TEST_SINGLE_AGG(keys, values->view(), expect_keys, expect_values->view(), std::move(agg));
+  test_single_agg(keys, values->view(), expect_keys, expect_values->view(), std::move(agg));
 }
 
 TYPED_TEST(groupby_collect_list_test, CollectOnEmptyInputListsOfStructs)
@@ -188,7 +188,7 @@ TYPED_TEST(groupby_collect_list_test, CollectOnEmptyInputListsOfStructs)
                             {});
 
   auto agg = cudf::make_collect_list_aggregation<cudf::groupby_aggregation>();
-  CUDF_TEST_SINGLE_AGG(keys, values->view(), expect_keys, expect_values->view(), std::move(agg));
+  test_single_agg(keys, values->view(), expect_keys, expect_values->view(), std::move(agg));
 }
 
 TYPED_TEST(groupby_collect_list_test, dictionary)
@@ -209,9 +209,9 @@ TYPED_TEST(groupby_collect_list_test, dictionary)
                                              0,
                                              rmm::device_buffer{});
 
-  CUDF_TEST_SINGLE_AGG(keys,
-                       vals,
-                       expect_keys,
-                       expect_vals->view(),
-                       cudf::make_collect_list_aggregation<cudf::groupby_aggregation>());
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
+                  expect_vals->view(),
+                  cudf::make_collect_list_aggregation<cudf::groupby_aggregation>());
 }

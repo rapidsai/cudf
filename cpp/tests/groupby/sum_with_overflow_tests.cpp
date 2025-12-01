@@ -54,12 +54,12 @@ TYPED_TEST(groupby_sum_with_overflow_test, basic)
     auto expect_vals = cudf::create_structs_hierarchy(3, std::move(children), 0, {});
 
     auto agg = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
-    CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, *expect_vals, std::move(agg));
+    test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg));
 
     // SUM_WITH_OVERFLOW should throw with sort-based groupby
     auto agg_sort = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
     EXPECT_THROW(
-      CUDF_TEST_SINGLE_AGG(
+      test_single_agg(
         keys, vals, expect_keys, *expect_vals, std::move(agg_sort), force_use_sort_impl::YES),
       cudf::logic_error);
   } else {
@@ -76,12 +76,12 @@ TYPED_TEST(groupby_sum_with_overflow_test, basic)
     auto expect_vals = cudf::create_structs_hierarchy(3, std::move(children), 0, {});
 
     auto agg = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
-    CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, *expect_vals, std::move(agg));
+    test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg));
 
     // SUM_WITH_OVERFLOW should throw with sort-based groupby
     auto agg_sort = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
     EXPECT_THROW(
-      CUDF_TEST_SINGLE_AGG(
+      test_single_agg(
         keys, vals, expect_keys, *expect_vals, std::move(agg_sort), force_use_sort_impl::YES),
       cudf::logic_error);
   }
@@ -109,7 +109,7 @@ TYPED_TEST(groupby_sum_with_overflow_test, empty_cols)
   auto expect_vals = cudf::create_structs_hierarchy(0, std::move(children), 0, {});
 
   auto agg = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
-  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, *expect_vals, std::move(agg));
+  test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg));
 
   // Note: SUM_WITH_OVERFLOW only works with hash groupby, not sort groupby
 }
@@ -134,7 +134,7 @@ TYPED_TEST(groupby_sum_with_overflow_test, zero_valid_keys)
   auto expect_vals = cudf::create_structs_hierarchy(0, std::move(children), 0, {});
 
   auto agg = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
-  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, *expect_vals, std::move(agg));
+  test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg));
 
   // Note: SUM_WITH_OVERFLOW only works with hash groupby, not sort groupby
 }
@@ -163,7 +163,7 @@ TYPED_TEST(groupby_sum_with_overflow_test, zero_valid_values)
     cudf::create_structs_hierarchy(1, std::move(children), null_count, std::move(validity_mask));
 
   auto agg = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
-  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, *expect_vals, std::move(agg));
+  test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg));
 
   // Note: SUM_WITH_OVERFLOW only works with hash groupby, not sort groupby
 }
@@ -198,7 +198,7 @@ TYPED_TEST(groupby_sum_with_overflow_test, null_keys_and_values)
     cudf::create_structs_hierarchy(4, std::move(children), null_count, std::move(validity_mask));
 
   auto agg = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
-  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, *expect_vals, std::move(agg));
+  test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg));
 
   // Note: SUM_WITH_OVERFLOW only works with hash groupby, not sort groupby
 }
@@ -273,12 +273,12 @@ TYPED_TEST(groupby_sum_with_overflow_test, overflow_detection)
     auto expect_vals = cudf::create_structs_hierarchy(4, std::move(children), 0, {});
 
     auto agg = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
-    CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, *expect_vals, std::move(agg));
+    test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg));
 
     // Verify that sort-based groupby throws for decimals
     auto agg2 = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
     EXPECT_THROW(
-      CUDF_TEST_SINGLE_AGG(
+      test_single_agg(
         keys, vals, expect_keys, *expect_vals, std::move(agg2), force_use_sort_impl::YES),
       cudf::logic_error);
   } else {
@@ -343,7 +343,7 @@ TYPED_TEST(groupby_sum_with_overflow_test, overflow_detection)
       auto expect_vals = cudf::create_structs_hierarchy(4, std::move(children), 0, {});
 
       auto agg = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
-      CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, *expect_vals, std::move(agg));
+      test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg));
     } else {
       // For unsigned types: only test positive overflow
       cudf::test::fixed_width_column_wrapper<V> vals{
@@ -380,7 +380,7 @@ TYPED_TEST(groupby_sum_with_overflow_test, overflow_detection)
       auto expect_vals = cudf::create_structs_hierarchy(4, std::move(children), 0, {});
 
       auto agg = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
-      CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, *expect_vals, std::move(agg));
+      test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg));
     }
 
     // Note: SUM_WITH_OVERFLOW only works with hash groupby, not sort groupby

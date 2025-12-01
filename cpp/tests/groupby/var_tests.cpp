@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -38,7 +38,7 @@ TYPED_TEST(groupby_var_test, basic)
   // clang-format on
 
   auto agg = cudf::make_variance_aggregation<cudf::groupby_aggregation>();
-  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
+  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_var_test, empty_cols)
@@ -54,7 +54,7 @@ TYPED_TEST(groupby_var_test, empty_cols)
   cudf::test::fixed_width_column_wrapper<R> expect_vals{};
 
   auto agg = cudf::make_variance_aggregation<cudf::groupby_aggregation>();
-  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
+  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_var_test, zero_valid_keys)
@@ -70,7 +70,7 @@ TYPED_TEST(groupby_var_test, zero_valid_keys)
   cudf::test::fixed_width_column_wrapper<R> expect_vals{};
 
   auto agg = cudf::make_variance_aggregation<cudf::groupby_aggregation>();
-  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
+  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_var_test, zero_valid_values)
@@ -86,7 +86,7 @@ TYPED_TEST(groupby_var_test, zero_valid_values)
   cudf::test::fixed_width_column_wrapper<R> expect_vals({0}, all_nulls());
 
   auto agg = cudf::make_variance_aggregation<cudf::groupby_aggregation>();
-  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
+  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_var_test, null_keys_and_values)
@@ -109,7 +109,7 @@ TYPED_TEST(groupby_var_test, null_keys_and_values)
   // clang-format on
 
   auto agg = cudf::make_variance_aggregation<cudf::groupby_aggregation>();
-  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
+  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_var_test, ddof_non_default)
@@ -133,7 +133,7 @@ TYPED_TEST(groupby_var_test, ddof_non_default)
   // clang-format on
 
   auto agg = cudf::make_variance_aggregation<cudf::groupby_aggregation>(2);
-  CUDF_TEST_SINGLE_AGG(keys, vals, expect_keys, expect_vals, std::move(agg));
+  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 TYPED_TEST(groupby_var_test, dictionary)
@@ -152,11 +152,11 @@ TYPED_TEST(groupby_var_test, dictionary)
   cudf::test::fixed_width_column_wrapper<R> expect_vals({9.,      131./12,      31./3  }, no_nulls());
   // clang-format on
 
-  CUDF_TEST_SINGLE_AGG(keys,
-                       vals,
-                       expect_keys,
-                       expect_vals,
-                       cudf::make_variance_aggregation<cudf::groupby_aggregation>());
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
+                  expect_vals,
+                  cudf::make_variance_aggregation<cudf::groupby_aggregation>());
 }
 
 // This test ensures that the same results are produced by the sort-based and

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -37,11 +37,11 @@ TYPED_TEST(groupby_product_test, basic)
   cudf::test::fixed_width_column_wrapper<R> expect_vals({   0.,       180.,      112. }, no_nulls());
   // clang-format on
 
-  CUDF_TEST_SINGLE_AGG(keys,
-                       vals,
-                       expect_keys,
-                       expect_vals,
-                       cudf::make_product_aggregation<cudf::groupby_aggregation>());
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
+                  expect_vals,
+                  cudf::make_product_aggregation<cudf::groupby_aggregation>());
 }
 
 TYPED_TEST(groupby_product_test, empty_cols)
@@ -56,11 +56,11 @@ TYPED_TEST(groupby_product_test, empty_cols)
   cudf::test::fixed_width_column_wrapper<K> expect_keys{};
   cudf::test::fixed_width_column_wrapper<R> expect_vals{};
 
-  CUDF_TEST_SINGLE_AGG(keys,
-                       vals,
-                       expect_keys,
-                       expect_vals,
-                       cudf::make_product_aggregation<cudf::groupby_aggregation>());
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
+                  expect_vals,
+                  cudf::make_product_aggregation<cudf::groupby_aggregation>());
 }
 
 TYPED_TEST(groupby_product_test, zero_valid_keys)
@@ -75,11 +75,11 @@ TYPED_TEST(groupby_product_test, zero_valid_keys)
   cudf::test::fixed_width_column_wrapper<K> expect_keys{};
   cudf::test::fixed_width_column_wrapper<R> expect_vals{};
 
-  CUDF_TEST_SINGLE_AGG(keys,
-                       vals,
-                       expect_keys,
-                       expect_vals,
-                       cudf::make_product_aggregation<cudf::groupby_aggregation>());
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
+                  expect_vals,
+                  cudf::make_product_aggregation<cudf::groupby_aggregation>());
 }
 
 TYPED_TEST(groupby_product_test, zero_valid_values)
@@ -94,11 +94,11 @@ TYPED_TEST(groupby_product_test, zero_valid_values)
   cudf::test::fixed_width_column_wrapper<K> expect_keys{1};
   cudf::test::fixed_width_column_wrapper<R> expect_vals({0}, all_nulls());
 
-  CUDF_TEST_SINGLE_AGG(keys,
-                       vals,
-                       expect_keys,
-                       expect_vals,
-                       cudf::make_product_aggregation<cudf::groupby_aggregation>());
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
+                  expect_vals,
+                  cudf::make_product_aggregation<cudf::groupby_aggregation>());
 }
 
 TYPED_TEST(groupby_product_test, null_keys_and_values)
@@ -120,11 +120,11 @@ TYPED_TEST(groupby_product_test, null_keys_and_values)
                                             { 1,        1,         1,       0});
   // clang-format on
 
-  CUDF_TEST_SINGLE_AGG(keys,
-                       vals,
-                       expect_keys,
-                       expect_vals,
-                       cudf::make_product_aggregation<cudf::groupby_aggregation>());
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
+                  expect_vals,
+                  cudf::make_product_aggregation<cudf::groupby_aggregation>());
 }
 
 TYPED_TEST(groupby_product_test, dictionary)
@@ -143,11 +143,11 @@ TYPED_TEST(groupby_product_test, dictionary)
   cudf::test::fixed_width_column_wrapper<R> expect_vals({  0.,     180.,        112. }, no_nulls());
   // clang-format on
 
-  CUDF_TEST_SINGLE_AGG(keys,
-                       vals,
-                       expect_keys,
-                       expect_vals,
-                       cudf::make_product_aggregation<cudf::groupby_aggregation>());
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
+                  expect_vals,
+                  cudf::make_product_aggregation<cudf::groupby_aggregation>());
 }
 
 TYPED_TEST(groupby_product_test, dictionary_with_nulls)
@@ -167,9 +167,9 @@ TYPED_TEST(groupby_product_test, dictionary_with_nulls)
   cudf::test::fixed_width_column_wrapper<R> expect_vals({  0.,     180.,        56. }, no_nulls());
   // clang-format on
 
-  CUDF_TEST_SINGLE_AGG(keys,
-                       vals,
-                       expect_keys,
-                       expect_vals,
-                       cudf::make_product_aggregation<cudf::groupby_aggregation>());
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
+                  expect_vals,
+                  cudf::make_product_aggregation<cudf::groupby_aggregation>());
 }

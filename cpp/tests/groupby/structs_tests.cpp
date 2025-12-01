@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2023, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -79,7 +79,7 @@ TYPED_TEST(groupby_structs_test, basic)
   auto expected_keys     = cudf::test::structs_column_wrapper{expected_member_0, expected_member_1, expected_member_2};
   // clang-format on
 
-  CUDF_TEST_SUM_AGG(keys, values, expected_keys, expected_values);
+  test_sum_agg(keys, values, expected_keys, expected_values);
 }
 
 TYPED_TEST(groupby_structs_test, structs_with_nulls_in_members)
@@ -107,7 +107,7 @@ TYPED_TEST(groupby_structs_test, structs_with_nulls_in_members)
   auto expected_keys     = cudf::test::structs_column_wrapper{expected_member_0, expected_member_1, expected_member_2};
   // clang-format on
 
-  CUDF_TEST_SUM_AGG(keys, values, expected_keys, expected_values);
+  test_sum_agg(keys, values, expected_keys, expected_values);
 }
 
 TYPED_TEST(groupby_structs_test, structs_with_null_rows)
@@ -133,7 +133,7 @@ TYPED_TEST(groupby_structs_test, structs_with_null_rows)
 
   print_agg_results(keys, values);
 
-  CUDF_TEST_SUM_AGG(keys, values, expected_keys, expected_values);
+  test_sum_agg(keys, values, expected_keys, expected_values);
 }
 
 TYPED_TEST(groupby_structs_test, structs_with_nulls_in_rows_and_members)
@@ -162,7 +162,7 @@ TYPED_TEST(groupby_structs_test, structs_with_nulls_in_rows_and_members)
   // clang-format on
 
   print_agg_results(keys, values);
-  CUDF_TEST_SUM_AGG(keys, values, expected_keys, expected_values);
+  test_sum_agg(keys, values, expected_keys, expected_values);
 }
 
 TYPED_TEST(groupby_structs_test, null_members_differ_from_null_structs)
@@ -196,7 +196,7 @@ TYPED_TEST(groupby_structs_test, null_members_differ_from_null_structs)
   auto expected_keys     = cudf::test::structs_column_wrapper{{expected_member_0, expected_member_1, expected_member_2}, null_at(4)};
   // clang-format on
 
-  CUDF_TEST_SUM_AGG(keys, values, expected_keys, expected_values);
+  test_sum_agg(keys, values, expected_keys, expected_values);
 }
 
 TYPED_TEST(groupby_structs_test, structs_of_structs)
@@ -232,7 +232,7 @@ TYPED_TEST(groupby_structs_test, structs_of_structs)
   auto expected_keys              = cudf::test::structs_column_wrapper{{expected_structs, expected_struct_1_member_1}};
   // clang-format on
 
-  CUDF_TEST_SUM_AGG(keys, values, expected_keys, expected_values);
+  test_sum_agg(keys, values, expected_keys, expected_values);
 }
 
 TYPED_TEST(groupby_structs_test, empty_input)
@@ -256,7 +256,7 @@ TYPED_TEST(groupby_structs_test, empty_input)
   auto expected_keys     = cudf::test::structs_column_wrapper{expected_member_0, expected_member_1, expected_member_2};
   // clang-format on
 
-  CUDF_TEST_SUM_AGG(keys, values, expected_keys, expected_values);
+  test_sum_agg(keys, values, expected_keys, expected_values);
 }
 
 TYPED_TEST(groupby_structs_test, all_null_input)
@@ -280,7 +280,7 @@ TYPED_TEST(groupby_structs_test, all_null_input)
   auto expected_keys     = cudf::test::structs_column_wrapper{{expected_member_0, expected_member_1, expected_member_2}, all_nulls()};
   // clang-format on
 
-  CUDF_TEST_SUM_AGG(keys, values, expected_keys, expected_values);
+  test_sum_agg(keys, values, expected_keys, expected_values);
 }
 
 TYPED_TEST(groupby_structs_test, lists_as_keys)
@@ -304,5 +304,5 @@ TYPED_TEST(groupby_structs_test, lists_as_keys)
   // clang-format on
   auto expected_keys = cudf::test::structs_column_wrapper{{expected_member_0, expected_member_1}};
 
-  CUDF_TEST_SUM_AGG(keys, values, expected_keys, expected_values);
+  test_sum_agg(keys, values, expected_keys, expected_values);
 }
