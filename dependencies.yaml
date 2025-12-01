@@ -805,7 +805,7 @@ dependencies:
             packages:
               - numba==0.60.0
               - pandas==2.0.*
-              - numba-cuda==0.19.1
+              - numba-cuda==0.21.2
           - matrix: {dependencies: "latest"}
             packages:
               - pandas==2.3.3
@@ -948,18 +948,18 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-        - numba-cuda>=0.19.1,<0.20.0a0
+        - numba-cuda>=0.21.2,<0.22.0a0
     specific:
       - output_types: [requirements, pyproject]
         matrices:
           - matrix:
               cuda: "12.*"
             packages:
-              - numba-cuda[cu12]>=0.19.1,<0.20.0a0
+              - numba-cuda[cu12]>=0.21.2,<0.22.0a0
           # fallback to CUDA 13 versions if 'cuda' is '13.*' or not provided
           - matrix:
             packages:
-              - numba-cuda[cu13]>=0.19.1,<0.20.0a0
+              - numba-cuda[cu13]>=0.21.2,<0.22.0a0
   depends_on_pylibcudf:
     common:
       - output_types: conda
