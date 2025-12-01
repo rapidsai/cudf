@@ -22,7 +22,7 @@ jobs:
   pandas-tests:
       # run the Pandas unit tests
       secrets: inherit
-      uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
+      uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@no-proxy-cache
       with:
         build_type: nightly
         branch: ${{ inputs.branch }}
