@@ -4,6 +4,8 @@
 
 set -euo pipefail
 
+conda config --append 'custom_multichannels.conda-forge' 'https://prefix.dev/conda-forge'
+
 source rapids-date-string
 
 export CMAKE_GENERATOR=Ninja

@@ -6,6 +6,8 @@
 
 set -euo pipefail
 
+conda config --append 'custom_multichannels.conda-forge' 'https://prefix.dev/conda-forge'
+
 . /opt/conda/etc/profile.d/conda.sh
 
 rapids-logger "Configuring conda strict channel priority"

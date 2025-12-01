@@ -4,6 +4,8 @@
 
 set -euo pipefail
 
+conda config --append 'custom_multichannels.conda-forge' 'https://prefix.dev/conda-forge'
+
 RAPIDS_VERSION="$(rapids-version)"
 RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
 export RAPIDS_VERSION
