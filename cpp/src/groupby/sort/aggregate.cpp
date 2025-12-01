@@ -810,13 +810,8 @@ void aggregate_result_functor::operator()<aggregation::TOP_K>(aggregation const&
   auto const k          = dynamic_cast<cudf::detail::top_k_aggregation const&>(agg).k;
   auto const topk_order = dynamic_cast<cudf::detail::top_k_aggregation const&>(agg).topk_order;
 
-  auto result = detail::group_top_k(k,
-                                    topk_order,
-                                    get_grouped_values(),
-                                    helper.group_offsets(stream),
-                                    helper.num_groups(stream),
-                                    stream,
-                                    mr);
+  auto result = detail::group_top_k(
+    k, topk_order, get_grouped_values(), helper.group_offsets(stream), stream, mr);
   cache.add_result(values, agg, std::move(result));
 }
 
