@@ -30,7 +30,7 @@ void test_single_agg(column_view const& keys,
                      std::vector<order> const& column_order,
                      std::vector<null_order> const& null_precedence,
                      sorted reference_keys_are_sorted,
-                     std::source_location const location)
+                     std::source_location const& location)
 {
   SCOPED_TRACE("Original failure location: " + std::string{location.file_name()} + ":" +
                std::to_string(location.line()));
@@ -89,7 +89,7 @@ void test_sum_agg(column_view const& keys,
                   column_view const& values,
                   column_view const& expected_keys,
                   column_view const& expected_values,
-                  std::source_location const location)
+                  std::source_location const& location)
 {
   auto const do_test = [&](auto const use_sort_option) {
     test_single_agg(keys,
@@ -118,7 +118,7 @@ void test_single_scan(column_view const& keys,
                       sorted keys_are_sorted,
                       std::vector<order> const& column_order,
                       std::vector<null_order> const& null_precedence,
-                      std::source_location const location)
+                      std::source_location const& location)
 {
   SCOPED_TRACE("Original failure location: " + std::string{location.file_name()} + ":" +
                std::to_string(location.line()));

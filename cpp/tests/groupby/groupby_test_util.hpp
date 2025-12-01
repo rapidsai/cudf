@@ -25,12 +25,12 @@ void test_single_agg(column_view const& keys,
                      std::vector<order> const& column_order         = {},
                      std::vector<null_order> const& null_precedence = {},
                      sorted reference_keys_are_sorted               = sorted::NO,
-                     std::source_location const location = std::source_location::current());
+                     std::source_location const& location = std::source_location::current());
 void test_sum_agg(column_view const& keys,
                   column_view const& values,
                   column_view const& expected_keys,
                   column_view const& expected_values,
-                  std::source_location const location = std::source_location::current());
+                  std::source_location const& location = std::source_location::current());
 
 void test_single_scan(column_view const& keys,
                       column_view const& values,
@@ -41,6 +41,6 @@ void test_single_scan(column_view const& keys,
                       sorted keys_are_sorted                         = sorted::NO,
                       std::vector<order> const& column_order         = {},
                       std::vector<null_order> const& null_precedence = {},
-                      std::source_location const location = std::source_location::current());
+                      std::source_location const& location = std::source_location::current());
 
 }  // namespace cudf::test
