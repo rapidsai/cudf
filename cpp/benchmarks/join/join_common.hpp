@@ -10,7 +10,6 @@
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/common/nvbench_utilities.hpp>
 #include <benchmarks/common/table_utilities.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/join/nvbench_helpers.hpp>
 
 #include <cudf/ast/expressions.hpp>

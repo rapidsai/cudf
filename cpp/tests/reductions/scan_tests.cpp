@@ -13,8 +13,8 @@
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/reduction.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/host_vector.h>
-#include <thrust/tuple.h>
 
 #include <algorithm>
 #include <functional>
@@ -156,14 +156,14 @@ struct ScanTest : public BaseScanTest<T> {
     bool const nullable = (b.size() > 0);
 
     auto masked_value = [identity](auto const& z) {
-      return thrust::get<1>(z) ? thrust::get<0>(z) : identity;
+      return cuda::std::get<1>(z) ? cuda::std::get<0>(z) : identity;
     };
 
     if (inclusive == scan_type::INCLUSIVE) {
       if (nullable) {
         std::transform_inclusive_scan(
-          thrust::make_zip_iterator(thrust::make_tuple(v.begin(), b.begin())),
-          thrust::make_zip_iterator(thrust::make_tuple(v.end(), b.end())),
+          thrust::make_zip_iterator(cuda::std::make_tuple(v.begin(), b.begin())),
+          thrust::make_zip_iterator(cuda::std::make_tuple(v.end(), b.end())),
           expected.begin(),
           op,
           masked_value);
@@ -177,8 +177,8 @@ struct ScanTest : public BaseScanTest<T> {
     } else {
       if (nullable) {
         std::transform_exclusive_scan(
-          thrust::make_zip_iterator(thrust::make_tuple(v.begin(), b.begin())),
-          thrust::make_zip_iterator(thrust::make_tuple(v.end(), b.end())),
+          thrust::make_zip_iterator(cuda::std::make_tuple(v.begin(), b.begin())),
+          thrust::make_zip_iterator(cuda::std::make_tuple(v.end(), b.end())),
           expected.begin(),
           identity,
           op,

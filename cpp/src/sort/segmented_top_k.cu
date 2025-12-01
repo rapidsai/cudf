@@ -20,6 +20,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/remove.h>
@@ -56,7 +57,7 @@ CUDF_KERNEL void resolve_segment_indices(device_span<size_type const> d_offsets,
 
   if (index == 0) {
     auto const segment_size  = segment_end - segment_start;
-    auto const segment_index = thrust::distance(d_offsets.begin(), sitr) - 1;
+    auto const segment_index = cuda::std::distance(d_offsets.begin(), sitr) - 1;
     // segment is k or less elements
     d_segment_sizes[segment_index] = cuda::std::min(k, segment_size);
   }
