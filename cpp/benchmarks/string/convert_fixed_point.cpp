@@ -4,7 +4,6 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
 
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/convert/convert_floats.hpp>
