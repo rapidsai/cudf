@@ -99,6 +99,10 @@ void test_sum_agg(column_view const& keys,
                     make_sum_aggregation<groupby_aggregation>(),
                     use_sort_option,
                     null_policy::INCLUDE,
+                    sorted::NO,
+                    {},
+                    {},
+                    sorted::NO,
                     location);
   };
   do_test(force_use_sort_impl::YES);
