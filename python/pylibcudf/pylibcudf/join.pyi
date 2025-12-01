@@ -135,3 +135,25 @@ def mixed_left_anti_join(
     stream: Stream | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
+
+class FilteredJoin:
+    def __init__(
+        self,
+        build: Table,
+        compare_nulls: NullEquality,
+        reuse_tbl: int,
+        stream: Stream | None = None,
+        load_factor: float = 0.5,
+    ) -> None: ...
+    def semi_join(
+        self,
+        probe: Table,
+        stream: Stream | None = None,
+        mr: DeviceMemoryResource | None = None,
+    ) -> Column: ...
+    def anti_join(
+        self,
+        probe: Table,
+        stream: Stream | None = None,
+        mr: DeviceMemoryResource | None = None,
+    ) -> Column: ...

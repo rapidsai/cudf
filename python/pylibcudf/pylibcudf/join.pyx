@@ -28,6 +28,7 @@ __all__ = [
     "conditional_left_join",
     "conditional_left_semi_join",
     "cross_join",
+    "FilteredJoin",
     "full_join",
     "inner_join",
     "left_anti_join",
@@ -189,7 +190,7 @@ cpdef Column left_semi_join(
 ):
     """Perform a left semi join between two tables.
 
-    For details, see :cpp:func:`left_semi_join`.
+    For details, see :cpp:class:`cudf::filtered_join`.
 
     Parameters
     ----------
@@ -210,11 +211,19 @@ cpdef Column left_semi_join(
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
+    cdef unique_ptr[cpp_join.filtered_join] join_obj
+
     with nogil:
-        c_result = cpp_join.left_semi_join(
+        join_obj.reset(
+            new cpp_join.filtered_join(
+                right_keys.view(),
+                nulls_equal,
+                cpp_join.set_as_build_table.RIGHT,
+                stream.view()
+            )
+        )
+        c_result = join_obj.get()[0].semi_join(
             left_keys.view(),
-            right_keys.view(),
-            nulls_equal,
             stream.view(),
             mr.get_mr()
         )
@@ -230,7 +239,7 @@ cpdef Column left_anti_join(
 ):
     """Perform a left anti join between two tables.
 
-    For details, see :cpp:func:`left_anti_join`.
+    For details, see :cpp:class:`cudf::filtered_join`.
 
     Parameters
     ----------
@@ -251,11 +260,19 @@ cpdef Column left_anti_join(
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
+    cdef unique_ptr[cpp_join.filtered_join] join_obj
+
     with nogil:
-        c_result = cpp_join.left_anti_join(
+        join_obj.reset(
+            new cpp_join.filtered_join(
+                right_keys.view(),
+                nulls_equal,
+                cpp_join.set_as_build_table.RIGHT,
+                stream.view()
+            )
+        )
+        c_result = join_obj.get()[0].anti_join(
             left_keys.view(),
-            right_keys.view(),
-            nulls_equal,
             stream.view(),
             mr.get_mr()
         )
@@ -803,3 +820,140 @@ cpdef Column mixed_left_anti_join(
             mr.get_mr()
         )
     return _column_from_gather_map(move(c_result), stream, mr)
+
+
+cdef class FilteredJoin:
+    """
+    Filtered hash join that builds hash table on creation and probes
+    results in subsequent join member functions.
+
+    For details, see :cpp:class:`cudf::filtered_join`.
+    """
+
+    def __cinit__(
+        self,
+        Table build,
+        null_equality compare_nulls,
+        int reuse_tbl,
+        Stream stream=None,
+        double load_factor=0.5,
+    ):
+        """
+        Construct a filtered hash join object for subsequent probe calls.
+
+        Parameters
+        ----------
+        build : Table
+            The build table, from which the hash map is built.
+        compare_nulls : NullEquality
+            Controls whether null join-key values should match or not.
+        reuse_tbl : int
+            Specifies which table to use as the build table. Should be 0 for LEFT
+            or 1 for RIGHT. If LEFT, the build table is considered as the left table
+            and is reused with multiple right (probe) tables. If RIGHT, the build
+            table is considered as the right/filter table and will be applied to
+            multiple left (probe) tables.
+        stream : Stream, optional
+            CUDA stream used for device memory operations and kernel launches.
+        load_factor : float, optional
+            The desired ratio of filled slots to total slots in the hash table,
+            must be in range (0,1]. Defaults to 0.5.
+        """
+        stream = _get_stream(stream)
+
+        cdef cpp_join.set_as_build_table c_reuse_tbl
+        if reuse_tbl == 0:
+            c_reuse_tbl = cpp_join.set_as_build_table.LEFT
+        elif reuse_tbl == 1:
+            c_reuse_tbl = cpp_join.set_as_build_table.RIGHT
+        else:
+            raise ValueError("reuse_tbl must be 0 (LEFT) or 1 (RIGHT)")
+
+        with nogil:
+            self.c_obj.reset(
+                new cpp_join.filtered_join(
+                    build.view(),
+                    compare_nulls,
+                    c_reuse_tbl,
+                    load_factor,
+                    stream.view()
+                )
+            )
+
+    def semi_join(
+        self,
+        Table probe,
+        Stream stream=None,
+        DeviceMemoryResource mr=None,
+    ):
+        """
+        Returns a column of row indices corresponding to a semi-join
+        between the build table and probe table.
+
+        For details, see :cpp:func:`cudf::filtered_join::semi_join`.
+
+        Parameters
+        ----------
+        probe : Table
+            The probe table.
+        stream : Stream, optional
+            CUDA stream used for device memory operations and kernel launches.
+        mr : DeviceMemoryResource, optional
+            Device memory resource used to allocate the returned column's device memory.
+
+        Returns
+        -------
+        Column
+            A column containing the row indices from the left table after the join.
+        """
+        cdef cpp_join.gather_map_type c_result
+
+        stream = _get_stream(stream)
+        mr = _get_memory_resource(mr)
+
+        with nogil:
+            c_result = self.c_obj.get()[0].semi_join(
+                probe.view(),
+                stream.view(),
+                mr.get_mr()
+            )
+        return _column_from_gather_map(move(c_result), stream, mr)
+
+    def anti_join(
+        self,
+        Table probe,
+        Stream stream=None,
+        DeviceMemoryResource mr=None,
+    ):
+        """
+        Returns a column of row indices corresponding to an anti-join
+        between the build table and probe table.
+
+        For details, see :cpp:func:`cudf::filtered_join::anti_join`.
+
+        Parameters
+        ----------
+        probe : Table
+            The probe table.
+        stream : Stream, optional
+            CUDA stream used for device memory operations and kernel launches.
+        mr : DeviceMemoryResource, optional
+            Device memory resource used to allocate the returned column's device memory.
+
+        Returns
+        -------
+        Column
+            A column containing the row indices from the left table after the join.
+        """
+        cdef cpp_join.gather_map_type c_result
+
+        stream = _get_stream(stream)
+        mr = _get_memory_resource(mr)
+
+        with nogil:
+            c_result = self.c_obj.get()[0].anti_join(
+                probe.view(),
+                stream.view(),
+                mr.get_mr()
+            )
+        return _column_from_gather_map(move(c_result), stream, mr)
