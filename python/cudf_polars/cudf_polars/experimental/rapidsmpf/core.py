@@ -39,7 +39,7 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
 )
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
-from cudf_polars.utils.config import CUDAStreamPolicy, CUDAStreamPoolConfig
+from cudf_polars.utils.config import CUDAStreamPoolConfig
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -48,6 +48,8 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.leaf_node import DeferredMessages
 
     import polars as pl
+
+    from rmm.pylibrmm.cuda_stream_pool import CudaStreamPool
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
@@ -163,19 +165,12 @@ def evaluate_pipeline(
     assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
 
     _initial_mr: Any = None
+    stream_pool: CudaStreamPool | bool = False
     if rmpf_context is not None:
         # Using "distributed" mode.
-        # We can use the existing rapidsmpf context, but we
-        # still need to create an IR execution context. It is
-        # too late to configure the stream pool, but we can still
-        # use it if "cuda_stream_policy" isn't a CUDAStreamPolicy.
-        if isinstance(config_options.cuda_stream_policy, CUDAStreamPolicy):
-            ir_context = IRExecutionContext.from_config_options(config_options)
-        else:
-            ir_context = IRExecutionContext(
-                get_cuda_stream=rmpf_context.get_stream_from_pool
-            )
+        # Always use the RapidsMPF stream pool for now.
         br = rmpf_context.br()
+        stream_pool = True
     else:
         # Using "single" mode.
         # Create a new local RapidsMPF context.
@@ -192,14 +187,6 @@ def evaluate_pipeline(
                 )
             }
 
-        # We have a couple of cases to consider here:
-        # 1: we want to use the same stream pool for cudf-polars and rapidsmpf
-        # 2: rapidsmpf uses its own pool and cudf-polars uses the default stream
-        if isinstance(config_options.cuda_stream_policy, CUDAStreamPoolConfig):
-            stream_pool = config_options.cuda_stream_policy.build()
-        else:
-            stream_pool = None
-
         options = Options(
             {
                 # By default, set the number of streaming threads to the max
@@ -211,20 +198,21 @@ def evaluate_pipeline(
             }
             | get_environment_variables()
         )
+        if isinstance(config_options.cuda_stream_policy, CUDAStreamPoolConfig):
+            stream_pool = config_options.cuda_stream_policy.build()
         local_comm = new_communicator(options)
         br = BufferResource(
             mr, memory_available=memory_available, stream_pool=stream_pool
         )
         rmpf_context = Context(local_comm, br, options)
 
-        # Create the IR execution context.
-        if stream_pool is not None:
-            # both cudf-polars and rapidsmpf are using the same stream pool
-            ir_context = IRExecutionContext(
-                get_cuda_stream=rmpf_context.get_stream_from_pool
-            )
-        else:
-            ir_context = IRExecutionContext.from_config_options(config_options)
+    # Create the IR execution context
+    if stream_pool:
+        ir_context = IRExecutionContext(
+            get_cuda_stream=rmpf_context.get_stream_from_pool
+        )
+    else:
+        ir_context = IRExecutionContext.from_config_options(config_options)
 
     # Generate network nodes
     assert rmpf_context is not None, "RapidsMPF context must defined."
