@@ -855,11 +855,11 @@ cdef class FilteredJoin:
             table is considered as the left table and is reused with multiple right
             (probe) tables. If RIGHT, the build table is considered as the
             right/filter table and will be applied to multiple left (probe) tables.
-        stream : Stream, optional
-            CUDA stream used for device memory operations and kernel launches.
         load_factor : float, optional
             The desired ratio of filled slots to total slots in the hash table,
             must be in range (0,1]. Defaults to 0.5.
+        stream : Stream, optional
+            CUDA stream used for device memory operations and kernel launches.
         """
         stream = _get_stream(stream)
 

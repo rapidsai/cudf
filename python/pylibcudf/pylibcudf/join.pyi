@@ -148,7 +148,7 @@ class FilteredJoin:
         build: Table,
         compare_nulls: NullEquality,
         reuse_tbl: SetAsBuildTable,
-        load_factor: float = 0.5,
+        load_factor: float,
         stream: Stream | None = None,
     ) -> None: ...
     def semi_join(
