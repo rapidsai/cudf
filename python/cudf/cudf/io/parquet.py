@@ -122,9 +122,7 @@ def _plc_write_parquet(
         index is None and not isinstance(table.index, RangeIndex)
     ):
         columns = itertools.chain(table.index._columns, table._columns)
-        plc_table = plc.Table(
-            [col.to_pylibcudf(mode="read") for col in columns]
-        )
+        plc_table = plc.Table([col.plc_column for col in columns])
         tbl_meta = plc.io.types.TableInputMetadata(plc_table)
         for level, idx_name in enumerate(table.index.names):
             idx_name_str = ioutils._index_level_name(
@@ -137,9 +135,7 @@ def _plc_write_parquet(
             tbl_meta.column_metadata[level].set_name(idx_name_str)
         num_index_cols_meta = table.index.nlevels
     else:
-        plc_table = plc.Table(
-            [col.to_pylibcudf(mode="read") for col in table._columns]
-        )
+        plc_table = plc.Table([col.plc_column for col in table._columns])
         tbl_meta = plc.io.types.TableInputMetadata(plc_table)
         num_index_cols_meta = 0
 
@@ -1814,13 +1810,9 @@ class ParquetWriter:
             table.index.name is not None or isinstance(table.index, MultiIndex)
         ):
             columns = itertools.chain(table.index._columns, table._columns)
-            plc_table = plc.Table(
-                [col.to_pylibcudf(mode="read") for col in columns]
-            )
+            plc_table = plc.Table([col.plc_column for col in columns])
         else:
-            plc_table = plc.Table(
-                [col.to_pylibcudf(mode="read") for col in table._columns]
-            )
+            plc_table = plc.Table([col.plc_column for col in table._columns])
         self.writer.write(plc_table, partitions_info)
 
     def close(self, metadata_file_path=None) -> np.ndarray | None:
@@ -1852,15 +1844,13 @@ class ParquetWriter:
 
         # Set the table_metadata
         num_index_cols_meta = 0
-        plc_table = plc.Table(
-            [col.to_pylibcudf(mode="read") for col in table._columns]
-        )
+        plc_table = plc.Table([col.plc_column for col in table._columns])
         self.tbl_meta = plc.io.types.TableInputMetadata(plc_table)
         if self.index is not False:
             if isinstance(table.index, MultiIndex):
                 plc_table = plc.Table(
                     [
-                        col.to_pylibcudf(mode="read")
+                        col.plc_column
                         for col in itertools.chain(
                             table.index._columns, table._columns
                         )
@@ -1874,7 +1864,7 @@ class ParquetWriter:
                 if table.index.name is not None:
                     plc_table = plc.Table(
                         [
-                            col.to_pylibcudf(mode="read")
+                            col.plc_column
                             for col in itertools.chain(
                                 table.index._columns, table._columns
                             )
