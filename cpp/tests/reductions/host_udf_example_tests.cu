@@ -18,6 +18,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/limits>
+#include <cuda/std/tuple>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
@@ -278,7 +279,7 @@ struct host_udf_segmented_reduction_example : cudf::segmented_reduce_host_udf {
       OutputType init_value;
       cudf::null_policy null_handling;
 
-      thrust::tuple<OutputType, cudf::size_type> __device__ operator()(cudf::size_type idx) const
+      cuda::std::tuple<OutputType, cudf::size_type> __device__ operator()(cudf::size_type idx) const
       {
         auto const start = offsets[idx];
         auto const end   = offsets[idx + 1];

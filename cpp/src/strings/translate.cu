@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,10 +19,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/host_vector.h>
-#include <thrust/pair.h>
 #include <thrust/sort.h>
 
 #include <algorithm>
@@ -30,7 +30,7 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-using translate_table = thrust::pair<char_utf8, char_utf8>;
+using translate_table = cuda::std::pair<char_utf8, char_utf8>;
 
 namespace {
 /**

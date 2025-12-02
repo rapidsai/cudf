@@ -15,8 +15,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cooperative_groups.h>
+#include <cuda/std/tuple>
 #include <thrust/binary_search.h>
-#include <thrust/tuple.h>
 
 namespace cudf::io::parquet::detail {
 
@@ -359,10 +359,10 @@ struct FunctionSwitchImpl {
   static inline __device__ bool run(byte_stream_s* bs,
                                     int field_type,
                                     int const& field,
-                                    thrust::tuple<Operator...>& ops)
+                                    cuda::std::tuple<Operator...>& ops)
   {
-    if (field == thrust::get<index>(ops).field) {
-      return thrust::get<index>(ops)(bs, field_type);
+    if (field == cuda::std::get<index>(ops).field) {
+      return cuda::std::get<index>(ops)(bs, field_type);
     } else {
       return FunctionSwitchImpl<index - 1>::run(bs, field_type, field, ops);
     }
@@ -375,10 +375,10 @@ struct FunctionSwitchImpl<0> {
   static inline __device__ bool run(byte_stream_s* bs,
                                     int field_type,
                                     int const& field,
-                                    thrust::tuple<Operator...>& ops)
+                                    cuda::std::tuple<Operator...>& ops)
   {
-    if (field == thrust::get<0>(ops).field) {
-      return thrust::get<0>(ops)(bs, field_type);
+    if (field == cuda::std::get<0>(ops).field) {
+      return cuda::std::get<0>(ops)(bs, field_type);
     } else {
       skip_struct_field(bs, field_type);
       return false;
@@ -397,9 +397,9 @@ struct FunctionSwitchImpl<0> {
  * byte stream. Otherwise true is returned.
  */
 template <typename... Operator>
-inline __device__ bool parse_header(thrust::tuple<Operator...>& op, byte_stream_s* bs)
+inline __device__ bool parse_header(cuda::std::tuple<Operator...>& op, byte_stream_s* bs)
 {
-  constexpr int index = thrust::tuple_size<thrust::tuple<Operator...>>::value - 1;
+  constexpr int index = cuda::std::tuple_size<cuda::std::tuple<Operator...>>::value - 1;
   int field           = 0;
   while (true) {
     auto const current_byte = getb(bs);
@@ -423,10 +423,11 @@ inline __device__ bool parse_header(thrust::tuple<Operator...>& op, byte_stream_
 struct parse_data_page_header_fn {
   __device__ bool operator()(byte_stream_s* bs)
   {
-    auto op = thrust::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
-                                 ParquetFieldEnum<Encoding>(2, bs->page.encoding),
-                                 ParquetFieldEnum<Encoding>(3, bs->page.definition_level_encoding),
-                                 ParquetFieldEnum<Encoding>(4, bs->page.repetition_level_encoding));
+    auto op =
+      cuda::std::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
+                            ParquetFieldEnum<Encoding>(2, bs->page.encoding),
+                            ParquetFieldEnum<Encoding>(3, bs->page.definition_level_encoding),
+                            ParquetFieldEnum<Encoding>(4, bs->page.repetition_level_encoding));
     return parse_header(op, bs);
   }
 };
@@ -441,8 +442,8 @@ struct parse_data_page_header_fn {
 struct parse_dictionary_page_header_fn {
   __device__ bool operator()(byte_stream_s* bs)
   {
-    auto op = thrust::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
-                                 ParquetFieldEnum<Encoding>(2, bs->page.encoding));
+    auto op = cuda::std::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
+                                    ParquetFieldEnum<Encoding>(2, bs->page.encoding));
     return parse_header(op, bs);
   }
 };
@@ -457,13 +458,14 @@ struct parse_dictionary_page_header_fn {
 struct parse_data_page_header_v2_fn {
   __device__ bool operator()(byte_stream_s* bs)
   {
-    auto op = thrust::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
-                                 ParquetFieldInt32(2, bs->page.num_nulls),
-                                 ParquetFieldInt32(3, bs->page.num_rows),
-                                 ParquetFieldEnum<Encoding>(4, bs->page.encoding),
-                                 ParquetFieldInt32(5, bs->page.lvl_bytes[level_type::DEFINITION]),
-                                 ParquetFieldInt32(6, bs->page.lvl_bytes[level_type::REPETITION]),
-                                 ParquetFieldBool(7, bs->page.is_compressed));
+    auto op =
+      cuda::std::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
+                            ParquetFieldInt32(2, bs->page.num_nulls),
+                            ParquetFieldInt32(3, bs->page.num_rows),
+                            ParquetFieldEnum<Encoding>(4, bs->page.encoding),
+                            ParquetFieldInt32(5, bs->page.lvl_bytes[level_type::DEFINITION]),
+                            ParquetFieldInt32(6, bs->page.lvl_bytes[level_type::REPETITION]),
+                            ParquetFieldBool(7, bs->page.is_compressed));
     return parse_header(op, bs);
   }
 };
@@ -478,12 +480,12 @@ struct parse_data_page_header_v2_fn {
 struct parse_page_header_fn {
   __device__ bool operator()(byte_stream_s* bs)
   {
-    auto op = thrust::make_tuple(ParquetFieldEnum<PageType>(1, bs->page_type),
-                                 ParquetFieldInt32(2, bs->page.uncompressed_page_size),
-                                 ParquetFieldInt32(3, bs->page.compressed_page_size),
-                                 ParquetFieldStruct<parse_data_page_header_fn>(5),
-                                 ParquetFieldStruct<parse_dictionary_page_header_fn>(7),
-                                 ParquetFieldStruct<parse_data_page_header_v2_fn>(8));
+    auto op = cuda::std::make_tuple(ParquetFieldEnum<PageType>(1, bs->page_type),
+                                    ParquetFieldInt32(2, bs->page.uncompressed_page_size),
+                                    ParquetFieldInt32(3, bs->page.compressed_page_size),
+                                    ParquetFieldStruct<parse_data_page_header_fn>(5),
+                                    ParquetFieldStruct<parse_dictionary_page_header_fn>(7),
+                                    ParquetFieldStruct<parse_data_page_header_v2_fn>(8));
     return parse_header(op, bs);
   }
 };

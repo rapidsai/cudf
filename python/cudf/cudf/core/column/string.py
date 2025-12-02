@@ -1083,7 +1083,7 @@ class StringColumn(ColumnBase, Scannable):
         )
         res_col = ColumnBase.from_pylibcudf(plc_column)
         return res_col._with_type_metadata(  # type: ignore[return-value]
-            get_dtype_of_same_kind(self.dtype, res_col.dtype)
+            self._get_pandas_compatible_dtype(res_col.dtype)
         )
 
     def split_record_re(self, pattern: str, maxsplit: int) -> Self:

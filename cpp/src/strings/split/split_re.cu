@@ -22,17 +22,15 @@
 
 #include <cuda/functional>
 #include <cuda/std/iterator>
+#include <cuda/std/tuple>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/transform_reduce.h>
 
 namespace cudf {
 namespace strings {
 namespace detail {
 namespace {
-
-using string_index_pair = thrust::pair<char const*, size_type>;
 
 enum class split_direction {
   FORWARD,  ///< for split logic
@@ -73,7 +71,7 @@ struct token_reader_fn {
       auto const match = prog.find(prog_idx, d_str, itr);
       if (!match) { break; }
 
-      auto const start_pos = thrust::get<0>(match_positions_to_bytes(*match, d_str, last_pos));
+      auto const start_pos = cuda::std::get<0>(match_positions_to_bytes(*match, d_str, last_pos));
 
       // get the token (characters just before this match)
       auto const token = string_index_pair{d_str.data() + last_pos.byte_offset(),
