@@ -37,6 +37,7 @@ from cudf.utils.dtypes import (
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 
 if TYPE_CHECKING:
+    import datetime
     from collections.abc import Callable
 
     from cudf._typing import (
@@ -303,7 +304,7 @@ class DatetimeColumn(TemporalBaseColumn):
         raise NotImplementedError("day_of_week is currently not implemented.")
 
     @functools.cached_property
-    def tz(self):
+    def tz(self) -> datetime.tzinfo | None:
         """
         Return the timezone.
 
@@ -325,15 +326,15 @@ class DatetimeColumn(TemporalBaseColumn):
         raise NotImplementedError("freq is not yet implemented.")
 
     @functools.cached_property
-    def date(self):
+    def date(self) -> None:
         raise NotImplementedError("date is not yet implemented.")
 
     @functools.cached_property
-    def time(self):
+    def time(self) -> None:
         raise NotImplementedError("time is not yet implemented.")
 
     @functools.cached_property
-    def timetz(self):
+    def timetz(self) -> None:
         raise NotImplementedError("timetz is not yet implemented.")
 
     @functools.cached_property
