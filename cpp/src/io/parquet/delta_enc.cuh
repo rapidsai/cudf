@@ -213,21 +213,18 @@ class delta_binary_packer {
     using cudf::detail::warp_size;
 
     __shared__ T block_min;
-    __shared__ bool has_values;
 
     int const t       = threadIdx.x;
     int const warp_id = t / warp_size;
     int const lane_id = t % warp_size;
 
     // if no values have been written, still need to write the header
-    if (t == 0) {
-      if (_current_idx == 0) { write_header(); }
-      has_values = _values_in_buffer > 0;
-    }
+    if (t == 0 and _current_idx == 0) { write_header(); }
+
     __syncthreads();
 
     // if there are no values to write, just return
-    if (not has_values) { return _dst; }
+    if (_values_in_buffer <= 0) { return _dst; }
 
     // Calculate delta for this thread.
     size_type const idx = _current_idx + t;
