@@ -275,6 +275,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self.set_base_children(children)
         self.set_base_data(data)
         self.set_base_mask(mask)
+        # The set of exposed buffers associated with this column. These buffers must be
+        # kept alive for the lifetime of this column since anything that accessed the
+        # CAI of this column will still be pointing to those buffers. As such objects
+        # are destroyed, all references to this column will be removed as well,
+        # triggering the destruction of the exposed buffers.
+        self._exposed_buffers: set[Buffer] = set()
 
     @classmethod
     def _get_data_buffer_from_pylibcudf_column(
@@ -393,6 +399,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             # This happens both when the buffer object is replaced and when
             # ExposureTrackedBuffer.make_single_owner_inplace() is called
             if cudf.get_option("copy_on_write") and (ptr != original_ptr):
+                # The offset must be reset to 0 because we have migrated to a new copied
+                # buffer starting at the old offset.
+                self._offset = 0
                 # Update base_data to match the new data buffer
                 self.set_base_data(self.data)
 
@@ -1550,7 +1559,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         with acquire_spill_lock():
             result = type(self).from_pylibcudf(
-                plc.unary.is_null(self.to_pylibcudf(mode="read"))
+                plc.unary.is_null(self.plc_column)
             )
 
         if self.dtype.kind == "f":
@@ -2005,6 +2014,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             "data": (self.data_ptr, False),
             "version": 1,
         }
+        data_buf = self._data if self._data is not None else self._base_data
+        if data_buf is not None:
+            self._exposed_buffers.add(data_buf)
         if self.nullable and self.has_nulls():
             # Create a simple Python object that exposes the
             # `__cuda_array_interface__` attribute here since we need to modify
@@ -2015,6 +2027,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             # TODO: We should find a cleaner way to handle this
             self.mask_ptr
             output["mask"] = mask
+            self._exposed_buffers.add(mask)
         return output
 
     def __array_ufunc__(

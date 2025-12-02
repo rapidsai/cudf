@@ -30,7 +30,12 @@ if TYPE_CHECKING:
     import numpy as np
     import pyarrow as pa
 
-    from cudf._typing import Axis, Dtype, ScalarLike
+    from cudf._typing import (
+        Axis,
+        Dtype,
+        DtypeObj,
+        ScalarLike,
+    )
     from cudf.core.dataframe import DataFrame
     from cudf.core.index import Index
 
@@ -120,7 +125,7 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @property
     @_performance_tracking
-    def dtype(self) -> Dtype:
+    def dtype(self) -> DtypeObj:
         return self._column.dtype
 
     # TODO: We added fast paths in cudf #18555 to make `to_cupy` and `.values` faster

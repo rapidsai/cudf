@@ -42,7 +42,6 @@ if TYPE_CHECKING:
     from cudf._typing import (
         ColumnBinaryOperand,
         ColumnLike,
-        Dtype,
         DtypeObj,
         ScalarLike,
     )
@@ -399,9 +398,9 @@ class StringColumn(ColumnBase, Scannable):
             )
 
     def strptime(
-        self, dtype: Dtype, format: str
+        self, dtype: DtypeObj, format: str
     ) -> DatetimeColumn | TimeDeltaColumn:
-        if dtype.kind not in "Mm":  # type: ignore[union-attr]
+        if dtype.kind not in "Mm":
             raise ValueError(
                 f"dtype must be datetime or timedelta type, not {dtype}"
             )
@@ -413,7 +412,7 @@ class StringColumn(ColumnBase, Scannable):
             )
 
         casting_func: Callable[[plc.Column, plc.DataType, str], plc.Column]
-        if dtype.kind == "M":  # type: ignore[union-attr]
+        if dtype.kind == "M":
             if format.endswith("%z"):
                 raise NotImplementedError(
                     "cuDF does not yet support timezone-aware datetimes"
@@ -436,7 +435,7 @@ class StringColumn(ColumnBase, Scannable):
 
             casting_func = plc.strings.convert.convert_datetime.to_timestamps
             add_back_nat = is_nat.any()
-        elif dtype.kind == "m":  # type: ignore[union-attr]
+        elif dtype.kind == "m":
             casting_func = plc.strings.convert.convert_durations.to_durations
             add_back_nat = False
 
