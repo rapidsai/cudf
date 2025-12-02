@@ -220,6 +220,7 @@ files:
       - build_cpp
       - depends_on_libkvikio
       - depends_on_librmm
+      - depends_on_libnvcomp
       - depends_on_rapids_logger
   py_run_libcudf:
     output: pyproject
