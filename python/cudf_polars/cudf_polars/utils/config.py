@@ -1096,12 +1096,21 @@ class ConfigOptions:
             cuda_stream_policy = _convert_cuda_stream_policy(user_cuda_stream_policy)
 
         # Pool policy is only supported by the rapidsmpf runtime.
-        if isinstance(cuda_stream_policy, CUDAStreamPoolConfig) and (
+        is_pool = isinstance(cuda_stream_policy, CUDAStreamPoolConfig)
+        if is_pool and (
             (executor.name != "streaming")
             or (executor.name == "streaming" and executor.runtime != Runtime.RAPIDSMPF)
         ):
             raise ValueError(
-                "CUDAStreamPolicy.POOL is only supported by the rapidsmpf runtime."
+                "The rapidsmpf pool policy is only supported with 'runtime=\"rapidsmpf\"'."
+            )
+
+        elif not is_pool and (
+            executor.name == "streaming" and executor.runtime == Runtime.RAPIDSMPF
+        ):
+            # Validate that we're using the rapidsmpf pool with the rapidsmpf runtime.
+            raise ValueError(
+                f"The rapidsmpf runtime must use the rapidsmpf pool policy, not {cuda_stream_policy}."
             )
 
         kwargs["cuda_stream_policy"] = cuda_stream_policy

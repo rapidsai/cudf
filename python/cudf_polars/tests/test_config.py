@@ -796,10 +796,31 @@ def test_cuda_stream_policy_default_rapidsmpf(monkeypatch: pytest.MonkeyPatch) -
 
     # "new" user argument
     monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "new")
-    config = ConfigOptions.from_polars_engine(
-        pl.GPUEngine(executor_options={"runtime": "rapidsmpf"})
-    )
-    assert config.cuda_stream_policy == CUDAStreamPolicy.NEW
+    with pytest.raises(
+        ValueError,
+        match="The rapidsmpf runtime must use the rapidsmpf pool policy, not CUDAStreamPolicy.NEW",
+    ):
+        config = ConfigOptions.from_polars_engine(
+            pl.GPUEngine(executor_options={"runtime": "rapidsmpf"})
+        )
+
+
+@pytest.mark.parametrize(
+    "cuda_stream_policy", [CUDAStreamPolicy.NEW, CUDAStreamPolicy.DEFAULT]
+)
+def test_rapidsmpf_runtime_requires_pool_policy(
+    cuda_stream_policy: CUDAStreamPolicy,
+) -> None:
+    with pytest.raises(
+        ValueError,
+        match=f"The rapidsmpf runtime must use the rapidsmpf pool policy, not {cuda_stream_policy}",
+    ):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor_options={"runtime": "rapidsmpf"},
+                cuda_stream_policy=cuda_stream_policy,
+            )
+        )
 
 
 @pytest.mark.parametrize(
@@ -814,7 +835,7 @@ def test_cuda_stream_policy_pool_only_supported_by_rapidsmpf(
 ) -> None:
     with pytest.raises(
         ValueError,
-        match="CUDAStreamPolicy.POOL is only supported by the rapidsmpf runtime.",
+        match="The rapidsmpf pool policy is only supported with",
     ):
         ConfigOptions.from_polars_engine(
             pl.GPUEngine(
