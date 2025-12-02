@@ -5,7 +5,13 @@ from __future__ import annotations
 
 import pickle
 import warnings
-from collections.abc import Iterable, Iterator, MutableSequence, Sequence
+from collections.abc import (
+    Callable,
+    Iterable,
+    Iterator,
+    MutableSequence,
+    Sequence,
+)
 from decimal import Decimal
 from functools import cached_property
 from itertools import chain
@@ -90,7 +96,7 @@ if TYPE_CHECKING:
     import builtins
     from collections.abc import Generator, Mapping
 
-    from cudf._typing import ColumnLike, Dtype, DtypeObj, ScalarLike
+    from cudf._typing import ColumnLike, Dtype, DtypeObj, NoDefault, ScalarLike
     from cudf.core.column.categorical import CategoricalColumn
     from cudf.core.column.datetime import DatetimeColumn
     from cudf.core.column.decimal import DecimalBaseColumn
@@ -333,7 +339,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
 
     @property
-    def _PANDAS_NA_VALUE(self):
+    def _PANDAS_NA_VALUE(self) -> ScalarLike:
         """Return appropriate NA value based on dtype."""
         if cudf.get_option("mode.pandas_compatible"):
             # In pandas compatibility mode, return pd.NA for all
@@ -739,7 +745,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @classmethod
     def from_cuda_array_interface(
-        cls, arbitrary: Any, data_ptr_exposed=no_default
+        cls, arbitrary: Any, data_ptr_exposed: NoDefault | bool = no_default
     ) -> ColumnBase:
         """
         Create a Column from an object implementing the CUDA array interface.
@@ -1199,7 +1205,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
             return col
 
-    def element_indexing(self, index: int):
+    def element_indexing(self, index: int) -> ScalarLike:
         """Default implementation for indexing to an element
 
         Raises
@@ -2024,7 +2030,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             self._exposed_buffers.add(mask)
         return output
 
-    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+    def __array_ufunc__(
+        self, ufunc: Callable, method: str, *inputs: Any, **kwargs: Any
+    ) -> ColumnBase:
         return _array_ufunc(self, ufunc, method, inputs, kwargs)
 
     def __invert__(self) -> ColumnBase:
@@ -2034,7 +2042,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def searchsorted(
         self,
-        value,
+        value: ColumnBase,
         side: Literal["left", "right"] = "left",
         ascending: bool = True,
         na_position: Literal["first", "last"] = "last",
@@ -2124,7 +2132,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @classmethod
     def deserialize(cls, header: dict, frames: list) -> ColumnBase:
-        def unpack(header, frames) -> tuple[Any, list]:
+        def unpack(header: dict, frames: list) -> tuple[Any, list]:
             count = header["frame_count"]
             obj = cls.device_deserialize(header, frames[:count])
             return obj, frames[count:]
@@ -2208,8 +2216,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         op: str,
         skipna: bool = True,
         min_count: int = 0,
-        *args,
-        **kwargs,
+        *args: Any,
+        **kwargs: Any,
     ) -> ScalarLike:
         """Compute {op} of column values.
 
@@ -2312,8 +2320,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         na_sentinel = pa.scalar(-1)
 
-        def _return_sentinel_column():
-            return as_column(na_sentinel, dtype=dtype, length=len(self))
+        def _return_sentinel_column() -> NumericalColumn:
+            # TODO: Validate that dtype is numeric type
+            return cast(
+                cudf.core.column.numerical.NumericalColumn,
+                as_column(na_sentinel, dtype=dtype, length=len(self)),
+            )
 
         if dtype is None:
             dtype = min_signed_type(max(len(cats), na_sentinel.as_py()), 8)
@@ -2391,7 +2403,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
 
     @acquire_spill_lock()
-    def scan(self, scan_op: str, inclusive: bool, **kwargs) -> Self:
+    def scan(self, scan_op: str, inclusive: bool, **kwargs: Any) -> Self:
         return type(self).from_pylibcudf(
             plc.reduce.scan(
                 self.to_pylibcudf(mode="read"),
@@ -2402,7 +2414,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
         )
 
-    def reduce(self, reduction_op: str, **kwargs) -> ScalarLike:
+    def reduce(self, reduction_op: str, **kwargs: Any) -> ScalarLike:
         col_dtype = self._reduction_result_dtype(reduction_op)
 
         # check empty case
