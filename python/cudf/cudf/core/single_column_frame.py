@@ -25,6 +25,7 @@ from cudf.utils.utils import _is_same_name
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, Mapping
+    from types import NotImplementedType
 
     import numpy as np
     import pyarrow as pa
@@ -33,7 +34,6 @@ if TYPE_CHECKING:
         Axis,
         Dtype,
         DtypeObj,
-        NotImplementedType,
         ScalarLike,
     )
     from cudf.core.dataframe import DataFrame
