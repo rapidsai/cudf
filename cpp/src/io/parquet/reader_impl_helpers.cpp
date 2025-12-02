@@ -17,6 +17,7 @@
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/logger.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 
@@ -885,13 +886,14 @@ void aggregate_reader_metadata::apply_arrow_schema()
       // ensure equal number of children first to avoid any segfaults in children
       if (std::cmp_equal(pq_schema_elem.num_children, arrow_schema.children.size())) {
         // true if and only if true for all children as well
-        return std::all_of(thrust::make_zip_iterator(thrust::make_tuple(
-                             arrow_schema.children.begin(), pq_schema_elem.children_idx.begin())),
-                           thrust::make_zip_iterator(thrust::make_tuple(
-                             arrow_schema.children.end(), pq_schema_elem.children_idx.end())),
-                           [&](auto const& elem) {
-                             return validate_schemas(thrust::get<0>(elem), thrust::get<1>(elem));
-                           });
+        return std::all_of(
+          thrust::make_zip_iterator(cuda::std::make_tuple(arrow_schema.children.begin(),
+                                                          pq_schema_elem.children_idx.begin())),
+          thrust::make_zip_iterator(
+            cuda::std::make_tuple(arrow_schema.children.end(), pq_schema_elem.children_idx.end())),
+          [&](auto const& elem) {
+            return validate_schemas(cuda::std::get<0>(elem), cuda::std::get<1>(elem));
+          });
       } else {
         return false;
       }
@@ -901,12 +903,13 @@ void aggregate_reader_metadata::apply_arrow_schema()
   std::function<void(arrow_schema_data_types const&, int const)> co_walk_schemas =
     [&](arrow_schema_data_types const& arrow_schema, int const schema_idx) {
       auto& pq_schema_elem = per_file_metadata[0].schema[schema_idx];
-      std::for_each(
-        thrust::make_zip_iterator(
-          thrust::make_tuple(arrow_schema.children.begin(), pq_schema_elem.children_idx.begin())),
-        thrust::make_zip_iterator(
-          thrust::make_tuple(arrow_schema.children.end(), pq_schema_elem.children_idx.end())),
-        [&](auto const& elem) { co_walk_schemas(thrust::get<0>(elem), thrust::get<1>(elem)); });
+      std::for_each(thrust::make_zip_iterator(cuda::std::make_tuple(
+                      arrow_schema.children.begin(), pq_schema_elem.children_idx.begin())),
+                    thrust::make_zip_iterator(cuda::std::make_tuple(
+                      arrow_schema.children.end(), pq_schema_elem.children_idx.end())),
+                    [&](auto const& elem) {
+                      co_walk_schemas(cuda::std::get<0>(elem), cuda::std::get<1>(elem));
+                    });
 
       // true for DurationType columns only for now.
       if (arrow_schema.type.id() != type_id::EMPTY) {
@@ -926,11 +929,11 @@ void aggregate_reader_metadata::apply_arrow_schema()
 
   // zip iterator to validate and co-walk the two schemas
   auto schemas = thrust::make_zip_iterator(
-    thrust::make_tuple(arrow_schema_root.children.begin(), pq_schema_root.children_idx.begin()));
+    cuda::std::make_tuple(arrow_schema_root.children.begin(), pq_schema_root.children_idx.begin()));
 
   // Verify equal number of children at all sub-levels
   if (not std::all_of(schemas, schemas + pq_schema_root.num_children, [&](auto const& elem) {
-        return validate_schemas(thrust::get<0>(elem), thrust::get<1>(elem));
+        return validate_schemas(cuda::std::get<0>(elem), cuda::std::get<1>(elem));
       })) {
     CUDF_LOG_ERROR("Parquet reader encountered a mismatch between Parquet and arrow schema.",
                    "arrow:schema not processed.");
@@ -939,7 +942,7 @@ void aggregate_reader_metadata::apply_arrow_schema()
 
   // All good, now co-walk schemas
   std::for_each(schemas, schemas + pq_schema_root.num_children, [&](auto const& elem) {
-    co_walk_schemas(thrust::get<0>(elem), thrust::get<1>(elem));
+    co_walk_schemas(cuda::std::get<0>(elem), cuda::std::get<1>(elem));
   });
 }
 
@@ -1587,6 +1590,7 @@ aggregate_reader_metadata::select_columns(
   std::optional<std::vector<std::string>> const& filter_columns_names,
   bool include_index,
   bool strings_to_categorical,
+  bool ignore_missing_columns,
   type_id timestamp_type_id)
 {
   auto const find_schema_child =
@@ -1849,8 +1853,11 @@ aggregate_reader_metadata::select_columns(
           std::find_if(all_paths.begin(), all_paths.end(), [&](path_info& valid_path) {
             return valid_path.full_path == selected_path;
           });
+        // Ensure that selected path matches a path in all_paths
         if (found_path != all_paths.end()) {
           valid_selected_paths.push_back({selected_path, found_path->schema_idx});
+        } else if (not ignore_missing_columns) {
+          CUDF_FAIL("Encountered non-existent column in selected path", std::invalid_argument);
         }
       }
     }

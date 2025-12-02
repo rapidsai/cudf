@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
 
 class ListColumn(ColumnBase):
-    _VALID_BINARY_OPERATIONS = {"__add__", "__radd__"}
+    _VALID_BINARY_OPERATIONS = {"__add__", "__radd__", "__eq__", "__ne__"}
     _VALID_PLC_TYPES = {plc.TypeId.LIST}
 
     def __init__(
@@ -216,7 +216,7 @@ class ListColumn(ColumnBase):
             )
             new_children = [
                 self.plc_column.children()[0],
-                elements.to_pylibcudf(mode="read"),
+                elements.plc_column,
             ]
             new_plc_column = plc.Column(
                 plc.DataType(plc.TypeId.LIST),
@@ -278,7 +278,7 @@ class ListColumn(ColumnBase):
         offset_col = plc.Column.from_iterable_of_py(
             offset_vals, dtype=plc.types.SIZE_TYPE
         )
-        data_plc_col = data_col.to_pylibcudf(mode="read")
+        data_plc_col = data_col.plc_column
         mask, null_count = plc.transform.bools_to_mask(
             plc.Column.from_iterable_of_py(mask_bools)
         )
@@ -315,7 +315,7 @@ class ListColumn(ColumnBase):
 
         with acquire_spill_lock():
             plc_column = plc.strings.convert.convert_lists.format_list_column(
-                lc.to_pylibcudf(mode="read"),
+                lc.plc_column,
                 pa_scalar_to_plc_scalar(pa.scalar("None")),
                 self._string_separators,
             )
@@ -334,12 +334,12 @@ class ListColumn(ColumnBase):
             leaf_queue.append(curr_col)
             curr_col = curr_col.children[1]
 
-        plc_leaf_col = func(curr_col, *args).to_pylibcudf(mode="read")
+        plc_leaf_col = func(curr_col, *args).plc_column
 
         # Rebuild the list column replacing just the leaf child
         while leaf_queue:
             col = leaf_queue.pop()
-            offsets = col.children[0].to_pylibcudf(mode="read")
+            offsets = col.children[0].plc_column
             plc_leaf_col = plc.Column(
                 plc.DataType(plc.TypeId.LIST),
                 col.size,
@@ -383,14 +383,14 @@ class ListColumn(ColumnBase):
     @acquire_spill_lock()
     def count_elements(self) -> ColumnBase:
         return type(self).from_pylibcudf(
-            plc.lists.count_elements(self.to_pylibcudf(mode="read"))
+            plc.lists.count_elements(self.plc_column)
         )
 
     @acquire_spill_lock()
     def distinct(self, nulls_equal: bool, nans_all_equal: bool) -> ColumnBase:
         return type(self).from_pylibcudf(
             plc.lists.distinct(
-                self.to_pylibcudf(mode="read"),
+                self.plc_column,
                 (
                     plc.types.NullEquality.EQUAL
                     if nulls_equal
@@ -410,7 +410,7 @@ class ListColumn(ColumnBase):
     ) -> ColumnBase:
         return type(self).from_pylibcudf(
             plc.lists.sort_lists(
-                self.to_pylibcudf(mode="read"),
+                self.plc_column,
                 plc.types.Order.ASCENDING
                 if ascending
                 else plc.types.Order.DESCENDING,
@@ -427,7 +427,7 @@ class ListColumn(ColumnBase):
     def extract_element_scalar(self, index: int) -> ColumnBase:
         return type(self).from_pylibcudf(
             plc.lists.extract_list_element(
-                self.to_pylibcudf(mode="read"),
+                self.plc_column,
                 index,
             )
         )
@@ -436,8 +436,8 @@ class ListColumn(ColumnBase):
     def extract_element_column(self, index: ColumnBase) -> ColumnBase:
         return type(self).from_pylibcudf(
             plc.lists.extract_list_element(
-                self.to_pylibcudf(mode="read"),
-                index.to_pylibcudf(mode="read"),
+                self.plc_column,
+                index.plc_column,
             )
         )
 
@@ -445,7 +445,7 @@ class ListColumn(ColumnBase):
     def contains_scalar(self, search_key: pa.Scalar) -> ColumnBase:
         return type(self).from_pylibcudf(
             plc.lists.contains(
-                self.to_pylibcudf(mode="read"),
+                self.plc_column,
                 pa_scalar_to_plc_scalar(search_key),
             )
         )
@@ -454,7 +454,7 @@ class ListColumn(ColumnBase):
     def index_of_scalar(self, search_key: pa.Scalar) -> ColumnBase:
         return type(self).from_pylibcudf(
             plc.lists.index_of(
-                self.to_pylibcudf(mode="read"),
+                self.plc_column,
                 pa_scalar_to_plc_scalar(search_key),
                 plc.lists.DuplicateFindOption.FIND_FIRST,
             )
@@ -464,8 +464,8 @@ class ListColumn(ColumnBase):
     def index_of_column(self, search_keys: ColumnBase) -> ColumnBase:
         return type(self).from_pylibcudf(
             plc.lists.index_of(
-                self.to_pylibcudf(mode="read"),
-                search_keys.to_pylibcudf(mode="read"),
+                self.plc_column,
+                search_keys.plc_column,
                 plc.lists.DuplicateFindOption.FIND_FIRST,
             )
         )
@@ -476,7 +476,7 @@ class ListColumn(ColumnBase):
             plc.lists.concatenate_rows(
                 plc.Table(
                     [
-                        col.to_pylibcudf(mode="read")
+                        col.plc_column
                         for col in itertools.chain([self], other_columns)
                     ]
                 )
@@ -487,7 +487,7 @@ class ListColumn(ColumnBase):
     def concatenate_list_elements(self, dropna: bool) -> ColumnBase:
         return type(self).from_pylibcudf(
             plc.lists.concatenate_list_elements(
-                self.to_pylibcudf(mode="read"),
+                self.plc_column,
                 plc.lists.ConcatenateNullPolicy.IGNORE
                 if dropna
                 else plc.lists.ConcatenateNullPolicy.NULLIFY_OUTPUT_ROW,
@@ -498,8 +498,8 @@ class ListColumn(ColumnBase):
     def segmented_gather(self, gather_map: ColumnBase) -> ColumnBase:
         return type(self).from_pylibcudf(
             plc.lists.segmented_gather(
-                self.to_pylibcudf(mode="read"),
-                gather_map.to_pylibcudf(mode="read"),
+                self.plc_column,
+                gather_map.plc_column,
             )
         )
 
@@ -515,9 +515,9 @@ class ListColumn(ColumnBase):
                 pa.scalar(separator)
             )
         else:
-            sep = separator.to_pylibcudf(mode="read")
+            sep = separator.plc_column
         plc_column = plc.strings.combine.join_list_elements(
-            self.to_pylibcudf(mode="read"),
+            self.plc_column,
             sep,
             pa_scalar_to_plc_scalar(pa.scalar(sep_na_rep)),
             pa_scalar_to_plc_scalar(pa.scalar(string_na_rep)),
@@ -543,11 +543,11 @@ class ListColumn(ColumnBase):
             seed = np.uint32(seed)
         return type(self).from_pylibcudf(
             plc.nvtext.minhash.minhash_ngrams(
-                self.to_pylibcudf(mode="read"),
+                self.plc_column,
                 width,
                 seed,
-                a.to_pylibcudf(mode="read"),
-                b.to_pylibcudf(mode="read"),
+                a.plc_column,
+                b.plc_column,
             )
         )
 
@@ -568,10 +568,10 @@ class ListColumn(ColumnBase):
             seed = np.uint64(seed)
         return type(self).from_pylibcudf(
             plc.nvtext.minhash.minhash64_ngrams(
-                self.to_pylibcudf(mode="read"),
+                self.plc_column,
                 width,
                 seed,
-                a.to_pylibcudf(mode="read"),
-                b.to_pylibcudf(mode="read"),
+                a.plc_column,
+                b.plc_column,
             )
         )
