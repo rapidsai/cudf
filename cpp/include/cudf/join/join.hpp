@@ -205,7 +205,7 @@ full_join(cudf::table_view const& left_keys,
  * @brief Returns a vector of row indices corresponding to a left semi-join
  * between the specified tables.
  *
- * @deprecated Use the object-oriented filtered_join `cudf::filtered_join::anti_join` instead
+ * @deprecated Use the object-oriented filtered_join `cudf::filtered_join::semi_join` instead
  *
  * The returned vector contains the row indices from the left table
  * for which there is a matching row in the right table.
@@ -237,7 +237,7 @@ full_join(cudf::table_view const& left_keys,
  * @brief Returns a vector of row indices corresponding to a left anti join
  * between the specified tables.
  *
- * @deprecated Use the object-oriented filtered_join `cudf::filtered_join::semi_join` instead
+ * @deprecated Use the object-oriented filtered_join `cudf::filtered_join::anti_join` instead
  *
  * The returned vector contains the row indices from the left table
  * for which there is no matching row in the right table.
