@@ -102,7 +102,7 @@ void check_tables_equal(cudf::table_view const& lhs_table,
  */
 template <bool print_progress>
 std::unique_ptr<cudf::table> hybrid_scan(io_source const& io_source,
-                                         cudf::ast::operation const& filter_expression,
+                                         cudf::ast::expression const& filter_expression,
                                          std::unordered_set<parquet_filter_type> const& filters,
                                          rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr);

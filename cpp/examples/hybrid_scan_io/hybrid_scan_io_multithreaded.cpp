@@ -7,6 +7,7 @@
 #include "io_source.hpp"
 #include "timer.hpp"
 
+#include <cudf/ast/expressions.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -42,7 +43,7 @@
  */
 struct hybrid_scan_fn {
   std::vector<io_source> const& input_sources;
-  cudf::ast::operation const& filter_expression;
+  cudf::ast::expression const& filter_expression;
   std::unordered_set<parquet_filter_type> const& filters;
   int const thread_id;
   int const thread_count;
@@ -76,7 +77,7 @@ struct hybrid_scan_fn {
  */
 void hybrid_scan_multithreaded(
   std::vector<io_source> const& input_sources,
-  cudf::ast::operation const& filter_expression,
+  std::vector<cudf::ast::operation> const& filter_expressions,
   std::unordered_set<parquet_filter_type> const& filters,
   int32_t thread_count,
   rmm::cuda_stream_pool& stream_pool,
@@ -85,17 +86,18 @@ void hybrid_scan_multithreaded(
   // Table reading tasks
   std::vector<hybrid_scan_fn> read_tasks;
   read_tasks.reserve(thread_count);
-
+  auto const num_filter_expressions = filter_expressions.size();
   // Create the read tasks
   std::for_each(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(thread_count), [&](auto tid) {
-      read_tasks.emplace_back(hybrid_scan_fn{.input_sources     = input_sources,
-                                             .filter_expression = filter_expression,
-                                             .filters           = filters,
-                                             .thread_id         = tid,
-                                             .thread_count      = thread_count,
-                                             .stream            = stream_pool.get_stream(),
-                                             .mr                = mr});
+      read_tasks.emplace_back(
+        hybrid_scan_fn{.input_sources     = input_sources,
+                       .filter_expression = filter_expressions[tid % num_filter_expressions],
+                       .filters           = filters,
+                       .thread_id         = tid,
+                       .thread_count      = thread_count,
+                       .stream            = stream_pool.get_stream(),
+                       .mr                = mr});
     });
 
   // Create threads with tasks
@@ -195,10 +197,14 @@ int32_t main(int argc, char const** argv)
 
   // Create filter expression
   auto const column_reference = cudf::ast::column_name_reference(column_name);
-  auto scalar                 = cudf::string_scalar(literal_value);
-  auto literal                = cudf::ast::literal(scalar);
-  auto filter_expression =
-    cudf::ast::operation(cudf::ast::ast_operator::EQUAL, column_reference, literal);
+  auto scalar1                = cudf::string_scalar(literal_value);
+  auto literal1               = cudf::ast::literal(scalar1);
+  auto scalar2                = cudf::numeric_scalar<int64_t>(std::stoll(literal_value));
+  auto literal2               = cudf::ast::literal(scalar2);
+
+  std::vector<cudf::ast::operation> filter_expressions;
+  filter_expressions.emplace_back(cudf::ast::ast_operator::EQUAL, column_reference, literal1);
+  filter_expressions.emplace_back(cudf::ast::ast_operator::EQUAL, column_reference, literal2);
 
   // Insert which filters to apply
   std::unordered_set<parquet_filter_type> filters;
@@ -228,7 +234,7 @@ int32_t main(int argc, char const** argv)
                   thrust::make_counting_iterator(num_reads),
                   [&](auto i) {  // Read parquet files and discard the tables
                     hybrid_scan_multithreaded(
-                      input_sources, filter_expression, filters, thread_count, stream_pool);
+                      input_sources, filter_expressions, filters, thread_count, stream_pool);
                   });
     std::cout << "Total ";
     timer.print_elapsed_millis();

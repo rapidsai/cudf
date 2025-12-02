@@ -86,7 +86,7 @@ std::vector<io_source> extract_input_sources(std::string const& paths,
 
   // Current size of list of parquet files
   auto const initial_size = parquet_files.size();
-  if (initial_size == 0) { return {}; }
+  if (initial_size == 0) { throw std::runtime_error("No input files to read. Exiting early.\n"); }
 
   // Reserve space
   parquet_files.reserve(std::max<size_t>(thread_count, input_multiplier * parquet_files.size()));
@@ -100,23 +100,26 @@ std::vector<io_source> extract_input_sources(std::string const& paths,
                                        parquet_files.begin() + initial_size);
                 });
 
-  // Cycle append parquet files from the existing ones if less than the thread_count
-  std::cout << "Warning: Number of input sources < thread count. Cycling from\n"
-               "and appending to current input sources such that the number of\n"
-               "input source == thread count\n";
-  for (size_t idx = 0; thread_count > static_cast<int>(parquet_files.size()); idx++) {
-    parquet_files.emplace_back(parquet_files[idx % initial_size]);
+  if (parquet_files.size() < thread_count) {
+    // Cycle append parquet files from the existing ones if less than the thread_count
+    std::cout << "Warning: Number of input sources < thread count. Cycling from\n"
+                 "and appending to current input sources such that the number of\n"
+                 "input source == thread count\n";
+    for (size_t idx = 0; thread_count > static_cast<int>(parquet_files.size()); idx++) {
+      parquet_files.emplace_back(parquet_files[idx % initial_size]);
+    }
   }
 
   // Vector of io sources
   std::vector<io_source> input_sources;
   input_sources.reserve(parquet_files.size());
   // Transform input files to the specified io sources
-  std::transform(
-    parquet_files.begin(),
-    parquet_files.end(),
-    std::back_inserter(input_sources),
-    [&](auto const& file_name) { return io_source{file_name, io_source_type, stream}; });
+  std::transform(parquet_files.begin(),
+                 parquet_files.end(),
+                 std::back_inserter(input_sources),
+                 [&](auto const& file_name) {
+                   return io_source{file_name, io_source_type, stream};
+                 });
   stream.synchronize();
   return input_sources;
 }
@@ -283,7 +286,7 @@ std::unique_ptr<cudf::table> combine_tables(std::unique_ptr<cudf::table> filter_
  */
 template <bool print_progress>
 std::unique_ptr<cudf::table> hybrid_scan(io_source const& io_source,
-                                         cudf::ast::operation const& filter_expression,
+                                         cudf::ast::expression const& filter_expression,
                                          std::unordered_set<parquet_filter_type> const& filters,
                                          rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr)
@@ -494,14 +497,14 @@ std::unique_ptr<cudf::table> hybrid_scan(io_source const& io_source,
 // Explicit template instantiations
 template std::unique_ptr<cudf::table> hybrid_scan<true>(
   io_source const& io_source,
-  cudf::ast::operation const& filter_expression,
+  cudf::ast::expression const& filter_expression,
   std::unordered_set<parquet_filter_type> const& filters,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
 template std::unique_ptr<cudf::table> hybrid_scan<false>(
   io_source const& io_source,
-  cudf::ast::operation const& filter_expression,
+  cudf::ast::expression const& filter_expression,
   std::unordered_set<parquet_filter_type> const& filters,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
