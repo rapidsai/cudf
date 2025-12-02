@@ -877,3 +877,27 @@ def test_memory_resource_config_raises() -> None:
 def test_memory_resource_config_hash(options) -> None:
     config = MemoryResourceConfig(qualname="rmm.mr.CudaMemoryResource", options=options)
     assert hash(config) == hash(config)
+
+
+def test_rapidsmpf_distributed_warns(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Emulate the case that rapidsmpf is available
+    # (even if it's not actually installed)
+    monkeypatch.setattr(
+        cudf_polars.utils.config,
+        "rapidsmpf_single_available",
+        lambda: True,
+    )
+
+    with pytest.warns(
+        UserWarning,
+        match="The rapidsmpf runtime does NOT support distributed execution yet.",
+    ):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={
+                    "runtime": "rapidsmpf",
+                    "cluster": "distributed",
+                },
+            )
+        )
