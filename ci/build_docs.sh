@@ -12,6 +12,9 @@ export RAPIDS_VERSION_MAJOR_MINOR
 rapids-logger "Create test conda environment"
 . /opt/conda/etc/profile.d/conda.sh
 
+rapids-logger "Configuring conda strict channel priority"
+conda config --set channel_priority strict
+
 ENV_YAML_DIR="$(mktemp -d)"
 
 rapids-logger "Downloading artifacts from previous jobs"
