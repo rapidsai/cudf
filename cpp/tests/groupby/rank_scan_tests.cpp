@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -28,34 +28,34 @@ void test_rank_scans(cudf::column_view const& keys,
                      cudf::column_view const& expected_rank,
                      cudf::column_view const& expected_percent_rank)
 {
-  cudf::test::test_single_scan(keys,
-                               order,
-                               keys,
-                               expected_dense,
-                               cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
-                                 cudf::rank_method::DENSE, {}, cudf::null_policy::INCLUDE),
-                               cudf::null_policy::INCLUDE,
-                               cudf::sorted::YES);
-  cudf::test::test_single_scan(keys,
-                               order,
-                               keys,
-                               expected_rank,
-                               cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
-                                 cudf::rank_method::MIN, {}, cudf::null_policy::INCLUDE),
-                               cudf::null_policy::INCLUDE,
-                               cudf::sorted::YES);
-  cudf::test::test_single_scan(keys,
-                               order,
-                               keys,
-                               expected_percent_rank,
-                               cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
-                                 cudf::rank_method::MIN,
-                                 {},
-                                 cudf::null_policy::INCLUDE,
-                                 {},
-                                 cudf::rank_percentage::ONE_NORMALIZED),
-                               cudf::null_policy::INCLUDE,
-                               cudf::sorted::YES);
+  test_single_scan(keys,
+                   order,
+                   keys,
+                   expected_dense,
+                   cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
+                     cudf::rank_method::DENSE, {}, cudf::null_policy::INCLUDE),
+                   cudf::null_policy::INCLUDE,
+                   cudf::sorted::YES);
+  test_single_scan(keys,
+                   order,
+                   keys,
+                   expected_rank,
+                   cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
+                     cudf::rank_method::MIN, {}, cudf::null_policy::INCLUDE),
+                   cudf::null_policy::INCLUDE,
+                   cudf::sorted::YES);
+  test_single_scan(keys,
+                   order,
+                   keys,
+                   expected_percent_rank,
+                   cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
+                     cudf::rank_method::MIN,
+                     {},
+                     cudf::null_policy::INCLUDE,
+                     {},
+                     cudf::rank_percentage::ONE_NORMALIZED),
+                   cudf::null_policy::INCLUDE,
+                   cudf::sorted::YES);
 }
 
 struct groupby_rank_scan_test : public cudf::test::BaseFixture {};
