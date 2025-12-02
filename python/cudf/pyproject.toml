@@ -117,6 +117,7 @@ filterwarnings = [
 markers = [
     "spilling: mark benchmark a good candidate to run with `CUDF_SPILL=ON`",
     "serial: Mark a test as not being parallel-safe.",
+    "no_copy_on_write: A test that is not valid when copy-on-write is enabled.",
 ]
 xfail_strict = true
 
