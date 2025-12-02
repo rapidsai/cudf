@@ -1011,11 +1011,8 @@ def _(
     # Push casts into literals so we can handle Cast(Literal(Null))
     if isinstance(inner, expr.Literal):
         return inner.astype(dtype)
-    elif isinstance(inner, expr.Cast):
-        # Translation of Len/Count-agg put in a cast, remove double
-        # casts if we have one.
-        (inner,) = inner.children
-    return expr.Cast(dtype, inner)
+    else:
+        return expr.Cast(dtype, inner)
 
 
 @_translate_expr.register
