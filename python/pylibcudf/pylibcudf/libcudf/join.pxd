@@ -216,7 +216,7 @@ cdef extern from "cudf/join/mixed_join.hpp" namespace "cudf" nogil:
     ) except +libcudf_exception_handler
 
 cdef extern from "cudf/join/filtered_join.hpp" namespace "cudf" nogil:
-    cdef enum class set_as_build_table:
+    cpdef enum class set_as_build_table:
         LEFT
         RIGHT
 

@@ -21,6 +21,8 @@ from .expressions cimport Expression
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
 
+from pylibcudf.libcudf.join import set_as_build_table as SetAsBuildTable  # no-cython-lint
+
 __all__ = [
     "conditional_full_join",
     "conditional_inner_join",
@@ -39,6 +41,7 @@ __all__ = [
     "mixed_left_anti_join",
     "mixed_left_join",
     "mixed_left_semi_join",
+    "SetAsBuildTable",
 ]
 
 cdef Column _column_from_gather_map(
@@ -834,9 +837,9 @@ cdef class FilteredJoin:
         self,
         Table build,
         null_equality compare_nulls,
-        int reuse_tbl,
-        Stream stream=None,
+        cpp_join.set_as_build_table reuse_tbl,
         double load_factor=0.5,
+        Stream stream=None,
     ):
         """
         Construct a filtered hash join object for subsequent probe calls.
@@ -847,12 +850,11 @@ cdef class FilteredJoin:
             The build table, from which the hash map is built.
         compare_nulls : NullEquality
             Controls whether null join-key values should match or not.
-        reuse_tbl : int
-            Specifies which table to use as the build table. Should be 0 for LEFT
-            or 1 for RIGHT. If LEFT, the build table is considered as the left table
-            and is reused with multiple right (probe) tables. If RIGHT, the build
-            table is considered as the right/filter table and will be applied to
-            multiple left (probe) tables.
+        reuse_tbl : SetAsBuildTable
+            Specifies which table to use as the build table. If LEFT, the build
+            table is considered as the left table and is reused with multiple right
+            (probe) tables. If RIGHT, the build table is considered as the
+            right/filter table and will be applied to multiple left (probe) tables.
         stream : Stream, optional
             CUDA stream used for device memory operations and kernel launches.
         load_factor : float, optional
@@ -861,20 +863,12 @@ cdef class FilteredJoin:
         """
         stream = _get_stream(stream)
 
-        cdef cpp_join.set_as_build_table c_reuse_tbl
-        if reuse_tbl == 0:
-            c_reuse_tbl = cpp_join.set_as_build_table.LEFT
-        elif reuse_tbl == 1:
-            c_reuse_tbl = cpp_join.set_as_build_table.RIGHT
-        else:
-            raise ValueError("reuse_tbl must be 0 (LEFT) or 1 (RIGHT)")
-
         with nogil:
             self.c_obj.reset(
                 new cpp_join.filtered_join(
                     build.view(),
                     compare_nulls,
-                    c_reuse_tbl,
+                    reuse_tbl,
                     load_factor,
                     stream.view()
                 )
