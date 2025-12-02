@@ -289,10 +289,11 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithByteRanges)
     expected_row_group_indices = std::vector<cudf::size_type>{1};
     EXPECT_EQ(filtered_row_group_indices, expected_row_group_indices);
   }
-  
+
   {
-    // Start with all row groups and skip all row groups as [500000, inf) byte range is beyond the file size
-    auto constexpr skip_bytes               = 500'000;
+    // Start with all row groups and skip all row groups as [500000, inf) byte range is beyond the
+    // file size
+    auto constexpr skip_bytes = 500'000;
     options.set_skip_bytes(skip_bytes);
     auto const filtered_row_group_indices =
       reader->filter_row_groups_with_byte_range(input_row_group_indices, options);

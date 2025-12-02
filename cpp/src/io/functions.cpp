@@ -835,7 +835,8 @@ void parquet_reader_options::set_skip_bytes(size_t val)
 void parquet_reader_options::set_num_bytes(size_t val)
 {
   // Hybrid scan reader does not contain a source so relaxing this check to zero or one source
-  CUDF_EXPECTS(val == 0 or _source.num_sources() == 1 or _source.num_sources() == 0,
+  CUDF_EXPECTS(val == std::numeric_limits<size_t>::max() or _source.num_sources() == 1 or
+                 _source.num_sources() == 0,
                "num_bytes can only be set for single parquet source case");
   CUDF_EXPECTS(not _num_rows.has_value() and _skip_rows == 0,
                "num_bytes cannot be set along with skip_rows and num_rows");
