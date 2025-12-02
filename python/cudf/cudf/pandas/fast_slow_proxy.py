@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import datetime
 import functools
 import inspect
 import operator
@@ -16,6 +17,8 @@ from typing import Any, Literal
 import numpy as np
 
 from rmm import RMMError
+
+import cudf
 
 from ..options import _env_get_bool
 from ..testing import assert_eq
@@ -73,6 +76,13 @@ class _State(IntEnum):
 
     SLOW = 0
     FAST = 1
+
+
+class _BlockState(IntEnum):
+    """Simple enum to track blocking direction of wrapped object of a final proxy"""
+
+    TO_SLOW = 0
+    TO_FAST = 1
 
 
 class _Unusable:
@@ -147,6 +157,8 @@ def make_final_proxy_type(
     slow_to_fast: callable
         Function that accepts a single argument of type `slow_type`
         and returns an object of type `fast_type`
+    module: str | None
+        Module name to assign to the generated proxy type.
     additional_attributes
         Mapping of additional attributes to add to the class
        (optional), these will override any defaulted attributes (e.g.
@@ -174,6 +186,7 @@ def make_final_proxy_type(
             lambda cls, args, kwargs: setattr(
                 self, "_fsproxy_wrapped", cls(*args, **kwargs)
             ),
+            None,
             type(self),
             args,
             kwargs,
@@ -286,6 +299,7 @@ def make_intermediate_proxy_type(
     slow_type: type,
     *,
     module: str | None = None,
+    additional_attributes: Mapping[str, Any] | None = None,
 ) -> type[_IntermediateProxy]:
     """
     Defines a proxy type for a pair of "intermediate" fast and slow
@@ -302,6 +316,13 @@ def make_intermediate_proxy_type(
         The name of the class returned
     fast_type: type
     slow_type: type
+    module: str | None
+        Module name to assign to the generated proxy type.
+    additional_attributes
+        Mapping of additional attributes to add to the class
+       (optional), these will override any defaulted attributes (e.g.
+       ``__init__``). If you want to remove a defaulted attribute
+       completely, pass the special sentinel ``_DELETE`` as a value.
     """
 
     def __init__(self, *args, **kwargs):
@@ -354,6 +375,11 @@ def make_intermediate_proxy_type(
     for method in _SPECIAL_METHODS:
         if method in slow_dir and getattr(slow_type, method, False):
             cls_dict[method] = _FastSlowAttribute(method)
+
+    if additional_attributes is None:
+        additional_attributes = {}
+    for k, v in additional_attributes.items():
+        cls_dict[k] = v
 
     for slow_name in dir(slow_type):
         if slow_name in cls_dict or slow_name.startswith("__"):
@@ -502,6 +528,8 @@ class _FastSlowProxy:
     """
 
     _fsproxy_wrapped: Any
+    # Instance-level transfer blocking flag
+    _fsproxy_transfer_block: _BlockState | None = None
 
     def _fsproxy_fast_to_slow(self) -> Any:
         """
@@ -526,6 +554,13 @@ class _FastSlowProxy:
         type, replaces it with the corresponding "fast" object before
         returning it.
         """
+        # Check for transfer blocking before attempting conversion
+        if (
+            self._fsproxy_transfer_block is _BlockState.TO_FAST
+            and self._fsproxy_state is _State.SLOW  # type: ignore[attr-defined]
+        ):
+            raise RuntimeError("Fast-to-slow transfer is blocked")
+
         self._fsproxy_wrapped = self._fsproxy_slow_to_fast()
         return self._fsproxy_wrapped
 
@@ -538,6 +573,43 @@ class _FastSlowProxy:
         """
         self._fsproxy_wrapped = self._fsproxy_fast_to_slow()
         return self._fsproxy_wrapped
+
+    def set_transfer_block_state(
+        self, transfer_block: _BlockState | None = None
+    ):
+        """Set transfer blocking flag for this specific instance.
+
+        Parameters
+        ----------
+        transfer_block : _BlockState | None
+            None: No blocking (default)
+            _BlockState.TO_FAST: Block slow-to-fast transfers.
+            _BlockState.TO_SLOW: Block fast-to-slow transfers.
+        """
+        self._fsproxy_transfer_block = transfer_block
+
+    def get_transfer_blocking(self):
+        """Get current instance-level transfer blocking flag."""
+        return getattr(self, "_fsproxy_transfer_block", None)
+
+    def force_state(self, state: _State):
+        """Force the proxy to a specific state (FAST or SLOW) and block opposite transfers."""
+        if state == _State.FAST:
+            # Force to fast state and block fast-to-slow transfers
+            self._fsproxy_wrapped = self._fsproxy_slow_to_fast()
+            self.set_transfer_block_state(_BlockState.TO_SLOW)
+        elif state == _State.SLOW:
+            # Force to slow state and block slow-to-fast transfers
+            self._fsproxy_wrapped = self._fsproxy_fast_to_slow()
+            self.set_transfer_block_state(_BlockState.TO_FAST)
+        else:
+            raise ValueError(
+                f"Invalid state: {state}. Must be _State.FAST or _State.SLOW"
+            )
+
+    def unblock_transfers(self):
+        """Remove all transfer blocking for this instance."""
+        self.set_transfer_block_state(None)
 
     def __dir__(self):
         # Try to return the cached dir of the slow object, but if it
@@ -595,6 +667,26 @@ class _FinalProxy(_FastSlowProxy):
             proxy = base_class.__new__(cls)
         elif base_class is ProxyNDarrayBase:
             proxy = base_class.__new__(cls, value)
+        elif base_class is datetime.datetime:
+            proxy = base_class.__new__(
+                cls,
+                year=value.year,
+                month=value.month,
+                day=value.day,
+                hour=value.hour,
+                minute=value.minute,
+                second=value.second,
+                microsecond=value.microsecond,
+                tzinfo=value.tzinfo,
+                fold=value.fold,
+            )
+        elif base_class is datetime.timedelta:
+            proxy = base_class.__new__(
+                cls,
+                days=value.days,
+                seconds=value.seconds,
+                microseconds=value.microseconds,
+            )
         else:
             raise TypeError(
                 f"Cannot create an proxy instance of {cls.__name__} using base class {base_class.__name__}. "
@@ -725,6 +817,7 @@ class _CallableProxyMixin:
             # TODO: When Python 3.11 is the minimum supported Python version
             # this can use operator.call
             call_operator,
+            self.get_transfer_blocking(),  # type: ignore[attr-defined]
             self,
             args,
             kwargs,
@@ -758,9 +851,11 @@ class _FunctionProxy(_CallableProxyMixin):
         *,
         assigned=None,
         updated=None,
+        _fsproxy_transfer_block: _BlockState | None = None,
     ):
         self._fsproxy_fast = fast
         self._fsproxy_slow = slow
+        self._fsproxy_transfer_block = _fsproxy_transfer_block
         if assigned is None:
             assigned = functools.WRAPPER_ASSIGNMENTS
         if updated is None:
@@ -799,6 +894,10 @@ class _FunctionProxy(_CallableProxyMixin):
             unpickled_slow = pickle.loads(state[1])
         self._fsproxy_fast = unpickled_fast
         self._fsproxy_slow = unpickled_slow
+
+    def get_transfer_blocking(self):
+        """Get current instance-level transfer blocking flag."""
+        return self._fsproxy_transfer_block
 
 
 def is_bound_method(obj):
@@ -849,11 +948,15 @@ class _FastSlowAttribute:
                 self._attr = _MethodProxy(
                     fast_attr,
                     slow_attr,
+                    _fsproxy_transfer_block=instance.get_transfer_blocking()
+                    if instance is not None
+                    else None,
                 )
             else:
                 # for anything else, use a fast-slow attribute:
                 self._attr, _ = _fast_slow_function_call(
                     getattr,
+                    None,
                     owner,
                     self._name,
                 )
@@ -878,6 +981,7 @@ class _FastSlowAttribute:
                     )
                 return _fast_slow_function_call(
                     getattr,
+                    None,
                     instance,
                     self._name,
                 )[0]
@@ -886,7 +990,7 @@ class _FastSlowAttribute:
 
 
 class _MethodProxy(_FunctionProxy):
-    def __init__(self, fast, slow):
+    def __init__(self, fast, slow, _fsproxy_transfer_block=None):
         super().__init__(
             fast,
             slow,
@@ -894,6 +998,7 @@ class _MethodProxy(_FunctionProxy):
             assigned=(
                 tuple(filter(lambda x: x != "__name__", _WRAPPER_ASSIGNMENTS))
             ),
+            _fsproxy_transfer_block=_fsproxy_transfer_block,
         )
 
     def __dir__(self):
@@ -987,6 +1092,7 @@ def _slow_function_call():
 
 def _fast_slow_function_call(
     func: Callable,
+    transfer_block: _BlockState | None = None,
     /,
     *args,
     **kwargs,
@@ -1002,7 +1108,10 @@ def _fast_slow_function_call(
     from .module_accelerator import disable_module_accelerator
 
     fast = False
+    block_transfer_to_fast = False
     try:
+        if transfer_block is _BlockState.TO_FAST:
+            raise Exception("Forcing slow path due to transfer blocking")
         with nvtx.annotate(
             "EXECUTE_FAST",
             color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_FAST"],
@@ -1047,6 +1156,8 @@ def _fast_slow_function_call(
                             f"The exception was {e}."
                         )
     except Exception as err:
+        if type(err) is cudf.errors.MixedTypeError:
+            block_transfer_to_fast = True
         with nvtx.annotate(
             "EXECUTE_SLOW",
             color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
@@ -1062,7 +1173,10 @@ def _fast_slow_function_call(
             _slow_function_call()
             with disable_module_accelerator():
                 result = func(*slow_args, **slow_kwargs)
-    return _maybe_wrap_result(result, func, *args, **kwargs), fast
+    result = _maybe_wrap_result(result, func, *args, **kwargs)
+    if block_transfer_to_fast and isinstance(result, _FastSlowProxy):
+        result.force_state(_State.SLOW)
+    return result, fast
 
 
 def _transform_arg(
@@ -1384,6 +1498,8 @@ def is_proxy_instance(obj, type):
 
 PROXY_BASE_CLASSES: set[type] = {
     ProxyNDarrayBase,
+    datetime.datetime,
+    datetime.timedelta,
 }
 
 

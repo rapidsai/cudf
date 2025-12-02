@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from typing import Any
@@ -20,7 +20,7 @@ class Table:
     # Private methods below are included because polars is currently using them,
     # but we want to remove stubs for these private methods eventually
     def _to_schema(self, metadata: Any = None) -> Any: ...
-    def _to_host_array(self) -> Any: ...
+    def _to_host_array(self, stream: Stream) -> Any: ...
     @staticmethod
     def from_arrow(
         arrow_like: ArrowLike,

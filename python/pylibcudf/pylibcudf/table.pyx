@@ -74,7 +74,8 @@ cdef class Table:
 
     def to_arrow(
         self,
-        metadata: list[ColumnMetadata | str] | None = None
+        metadata: list[ColumnMetadata | str] | None = None,
+        stream: Stream | None = None,
     ) -> ArrowLike:
         """Create a pyarrow table from a pylibcudf table.
 
@@ -82,6 +83,8 @@ cdef class Table:
         ----------
         metadata : list[ColumnMetadata | str] | None
             The metadata to attach to the columns of the table.
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
 
         Returns
         -------
@@ -96,7 +99,7 @@ cdef class Table:
         # TODO: Once the arrow C device interface registers more
         # types that it supports, we can call pa.table(self) if
         # no metadata is passed.
-        return pa.table(_ObjectWithArrowMetadata(self, metadata))
+        return pa.table(_ObjectWithArrowMetadata(self, metadata, stream))
 
     @staticmethod
     def from_arrow(
@@ -172,7 +175,11 @@ cdef class Table:
                 )
             result.tbl.swap(c_result)
 
-            return Table.from_table_view_of_arbitrary(result.tbl.get().view(), result)
+            return Table.from_table_view_of_arbitrary(
+                result.tbl.get().view(),
+                result,
+                stream,
+            )
         elif hasattr(obj, "__arrow_c_stream__"):
             arrow_stream = obj.__arrow_c_stream__()
             c_stream = (
@@ -191,7 +198,11 @@ cdef class Table:
                 )
             result.tbl.swap(c_result)
 
-            return Table.from_table_view_of_arbitrary(result.tbl.get().view(), result)
+            return Table.from_table_view_of_arbitrary(
+                result.tbl.get().view(),
+                result,
+                stream,
+            )
         elif hasattr(obj, "__arrow_c_device_stream__"):
             # TODO: When we add support for this case, it should be moved above
             # the __arrow_c_stream__ case since we should prioritize device
@@ -231,6 +242,8 @@ cdef class Table:
         calling libcudf algorithms, and should generally not be needed by users
         (even direct pylibcudf Cython users).
         """
+        assert stream is not None, "stream cannot be None"
+        assert mr is not None, "mr cannot be None"
         cdef vector[unique_ptr[column]] c_columns = dereference(libcudf_tbl).release()
 
         cdef vector[unique_ptr[column]].size_type i
@@ -259,7 +272,11 @@ cdef class Table:
     # from_table_view, but this does not work due to
     # https://github.com/cython/cython/issues/6740
     @staticmethod
-    cdef Table from_table_view_of_arbitrary(const table_view& tv, object owner):
+    cdef Table from_table_view_of_arbitrary(
+        const table_view& tv,
+        object owner,
+        Stream stream,
+    ):
         """Create a Table from a libcudf table_view into an arbitrary owner.
 
         This method accepts shared ownership of the underlying data from the owner.
@@ -276,7 +293,7 @@ cdef class Table:
         assert not isinstance(owner, Table)
         cdef int i
         return Table([
-            Column.from_column_view_of_arbitrary(tv.column(i), owner)
+            Column.from_column_view_of_arbitrary(tv.column(i), owner, stream)
             for i in range(tv.num_columns())
         ])
 
@@ -320,10 +337,11 @@ cdef class Table:
 
         return PyCapsule_New(<void*>raw_schema_ptr, "arrow_schema", _release_schema)
 
-    def _to_host_array(self):
+    def _to_host_array(self, Stream stream):
         cdef ArrowArray* raw_host_array_ptr
+
         with nogil:
-            raw_host_array_ptr = to_arrow_host_raw(self.view())
+            raw_host_array_ptr = to_arrow_host_raw(self.view(), stream.view())
 
         return PyCapsule_New(<void*>raw_host_array_ptr, "arrow_array", _release_array)
 
@@ -342,7 +360,7 @@ cdef class Table:
         if requested_schema is not None:
             raise ValueError("pylibcudf.Table does not support alternative schema")
 
-        return self._to_schema(), self._to_host_array()
+        return self._to_schema(), self._to_host_array(_get_stream(None))
 
     def __arrow_c_device_array__(self, requested_schema=None, **kwargs):
         if requested_schema is not None:

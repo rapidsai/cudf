@@ -9,6 +9,7 @@
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/join/join.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -185,8 +186,8 @@ struct hash_probe_result {
     auto const first  = *(data + probe_idx);
     auto const second = *(data + probe_idx + 1);
 
-    first_slot_is_empty_  = first.second == cudf::detail::JoinNoneValue;
-    second_slot_is_empty_ = second.second == cudf::detail::JoinNoneValue;
+    first_slot_is_empty_  = first.second == cudf::JoinNoMatch;
+    second_slot_is_empty_ = second.second == cudf::JoinNoMatch;
     first_slot_equals_    = (not first_slot_is_empty_ and key_equal(probe_key, first));
     second_slot_equals_   = (not second_slot_is_empty_ and key_equal(probe_key, second));
   }

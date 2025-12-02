@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+import json
 import warnings
 from typing import TYPE_CHECKING, Literal
 
@@ -24,11 +25,6 @@ from cudf.core.index import CategoricalIndex, RangeIndex
 from cudf.core.multiindex import MultiIndex
 from cudf.utils import ioutils
 from cudf.utils.dtypes import cudf_dtype_from_pa_type, dtype_to_pylibcudf_type
-
-try:
-    import ujson as json  # type: ignore[import-untyped]
-except ImportError:
-    import json
 
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
@@ -458,9 +454,7 @@ def _plc_write_orc(
             if table.index is None
             else itertools.chain(table.index._columns, table._columns)
         )
-        plc_table = plc.Table(
-            [col.to_pylibcudf(mode="read") for col in columns]
-        )
+        plc_table = plc.Table([col.plc_column for col in columns])
         tbl_meta = plc.io.types.TableInputMetadata(plc_table)
         for level, idx_name in enumerate(table._index.names):
             tbl_meta.column_metadata[level].set_name(
@@ -468,9 +462,7 @@ def _plc_write_orc(
             )
         num_index_cols_meta = table.index.nlevels
     else:
-        plc_table = plc.Table(
-            [col.to_pylibcudf(mode="read") for col in table._columns]
-        )
+        plc_table = plc.Table([col.plc_column for col in table._columns])
         tbl_meta = plc.io.types.TableInputMetadata(plc_table)
         num_index_cols_meta = 0
 
@@ -569,9 +561,7 @@ class ORCWriter:
         else:
             cols_to_write = table._columns
 
-        self.writer.write(
-            plc.Table([col.to_pylibcudf(mode="read") for col in cols_to_write])
-        )
+        self.writer.write(plc.Table([col.plc_column for col in cols_to_write]))
 
     def close(self):
         if not self.initialized:
@@ -585,15 +575,13 @@ class ORCWriter:
         """
 
         num_index_cols_meta = 0
-        plc_table = plc.Table(
-            [col.to_pylibcudf(mode="read") for col in table._columns]
-        )
+        plc_table = plc.Table([col.plc_column for col in table._columns])
         self.tbl_meta = plc.io.types.TableInputMetadata(plc_table)
         if self.index is not False:
             if isinstance(table.index, MultiIndex):
                 plc_table = plc.Table(
                     [
-                        col.to_pylibcudf(mode="read")
+                        col.plc_column
                         for col in itertools.chain(
                             table.index._columns, table._columns
                         )
@@ -607,7 +595,7 @@ class ORCWriter:
                 if table.index.name is not None:
                     plc_table = plc.Table(
                         [
-                            col.to_pylibcudf(mode="read")
+                            col.plc_column
                             for col in itertools.chain(
                                 table.index._columns, table._columns
                             )

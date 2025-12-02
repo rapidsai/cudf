@@ -17,8 +17,9 @@ import pylibcudf as plc
 
 import cudf
 from cudf.api.types import is_scalar
-from cudf.core.buffer.buffer import Buffer
 from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.core.mixins import Scannable
+from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
@@ -39,7 +40,7 @@ if TYPE_CHECKING:
     from cudf.core.column.string import StringColumn
 
 
-class TemporalBaseColumn(ColumnBase):
+class TemporalBaseColumn(ColumnBase, Scannable):
     """
     Base class for TimeDeltaColumn and DatetimeColumn.
     """
@@ -48,30 +49,12 @@ class TemporalBaseColumn(ColumnBase):
     _UNDERLYING_DTYPE: np.dtype[np.int64] = np.dtype(np.int64)
     _NP_SCALAR: ClassVar[type[np.datetime64] | type[np.timedelta64]]
     _PD_SCALAR: pd.Timestamp | pd.Timedelta
-
-    def __init__(
-        self,
-        data: Buffer,
-        size: int,
-        dtype: np.dtype | pd.DatetimeTZDtype,
-        mask: Buffer | None,
-        offset: int,
-        null_count: int,
-        children: tuple,
-    ):
-        if not isinstance(data, Buffer):
-            raise ValueError("data must be a Buffer.")
-        if len(children) != 0:
-            raise ValueError(f"{type(self).__name__} must have no children.")
-        super().__init__(
-            data=data,
-            size=size,
-            dtype=dtype,
-            mask=mask,
-            offset=offset,
-            null_count=null_count,
-            children=children,
-        )
+    _VALID_SCANS = {
+        "cumsum",
+        "cumprod",
+        "cummin",
+        "cummax",
+    }
 
     def __contains__(self, item: np.datetime64 | np.timedelta64) -> bool:
         """
@@ -89,11 +72,26 @@ class TemporalBaseColumn(ColumnBase):
             isinstance(fill_value, self._NP_SCALAR)
             and self.time_unit != np.datetime_data(fill_value)[0]
         ):
+            if isinstance(fill_value, self._NP_SCALAR):
+                unit = np.datetime_data(fill_value)[0]
+                if unit not in {"s", "ms", "us", "ns"}:
+                    fill_value = fill_value.astype(
+                        np.dtype(f"{fill_value.dtype.kind}8[ns]")
+                    )
             fill_value = fill_value.astype(self.dtype)
         elif isinstance(fill_value, str) and fill_value.lower() == "nat":
             # call-overload must be ignored because numpy stubs only accept literal
             # time unit strings, but we're passing self.time_unit which is valid at runtime
             fill_value = self._NP_SCALAR(fill_value, self.time_unit)  # type: ignore[call-overload]
+        elif (
+            cudf.get_option("mode.pandas_compatible")
+            and is_scalar(fill_value)
+            and not isinstance(fill_value, (self._NP_SCALAR, self._PD_SCALAR))
+        ):
+            raise MixedTypeError(
+                f"Cannot use fill_value of type {type(fill_value)} with "
+                f"TemporalBaseColumn of dtype {self.dtype}."
+            )
         return super()._validate_fillna_value(fill_value)
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
@@ -312,16 +310,24 @@ class TemporalBaseColumn(ColumnBase):
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if to_dtype.kind == self.dtype.kind:
             to_res, _ = np.datetime_data(to_dtype)
+            max_val = self.max()
+            if isinstance(max_val, (pd.Timedelta, pd.Timestamp)):
+                max_val = max_val.to_numpy()
+            max_val = max_val.astype(self._UNDERLYING_DTYPE, copy=False)
+            min_val = self.min()
+            if isinstance(min_val, (pd.Timedelta, pd.Timestamp)):
+                min_val = min_val.to_numpy()
+            min_val = min_val.astype(self._UNDERLYING_DTYPE, copy=False)
             # call-overload must be ignored because numpy stubs only accept literal strings
             # for time units (e.g., "ns", "us") to allow compile-time validation,
             # but we're passing variables (self.time_unit) with time units that
             # we know are valid at runtime
             max_dist = np.timedelta64(
-                self.max().astype(self._UNDERLYING_DTYPE, copy=False),
+                max_val,
                 self.time_unit,  # type: ignore[call-overload]
             )
             min_dist = np.timedelta64(
-                self.min().astype(self._UNDERLYING_DTYPE, copy=False),
+                min_val,
                 self.time_unit,  # type: ignore[call-overload]
             )
             max_to_res = np.timedelta64(
@@ -338,7 +344,7 @@ class TemporalBaseColumn(ColumnBase):
             return False
 
     def mean(
-        self, skipna: bool | None = None, min_count: int = 0
+        self, skipna: bool = True, min_count: int = 0
     ) -> pd.Timestamp | pd.Timedelta:
         return self._PD_SCALAR(
             self.astype(self._UNDERLYING_DTYPE).mean(  # type:ignore[call-arg]
@@ -348,7 +354,7 @@ class TemporalBaseColumn(ColumnBase):
         ).as_unit(self.time_unit)
 
     def std(
-        self, skipna: bool | None = None, min_count: int = 0, ddof: int = 1
+        self, skipna: bool = True, min_count: int = 0, ddof: int = 1
     ) -> pd.Timedelta:
         return pd.Timedelta(
             self.astype(self._UNDERLYING_DTYPE).std(  # type:ignore[call-arg]
@@ -357,9 +363,7 @@ class TemporalBaseColumn(ColumnBase):
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
-    def median(
-        self, skipna: bool | None = None
-    ) -> pd.Timestamp | pd.Timedelta:
+    def median(self, skipna: bool = True) -> pd.Timestamp | pd.Timedelta:
         return self._PD_SCALAR(
             self.astype(self._UNDERLYING_DTYPE).median(skipna=skipna),  # type:ignore[call-arg]
             unit=self.time_unit,

@@ -67,7 +67,9 @@ def test_compute_column(expr, df):
     ir = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
 
     assert isinstance(ir, ir_nodes.Select)
-    table = ir.children[0].evaluate(cache={}, timer=None, context=IRExecutionContext())
+    table = ir.children[0].evaluate(
+        cache={}, timer=None, context=IRExecutionContext(get_cuda_stream=lambda: stream)
+    )
     name_to_index = {c.name: i for i, c in enumerate(table.columns)}
 
     def compute_column(e):
@@ -78,7 +80,7 @@ def test_compute_column(expr, df):
         )
         with pytest.raises(NotImplementedError):
             e_with_colrefs.evaluate(table)
-        ast = to_ast(e_with_colrefs)
+        ast = to_ast(e_with_colrefs, stream=stream)
         if ast is not None:
             return NamedColumn(
                 plc.transform.compute_column(table.table, ast, stream=stream),
@@ -103,10 +105,11 @@ def test_invalid_colref_construction_raises():
 
 
 def test_to_ast_without_colref_raises():
+    stream = get_cuda_stream()
     col = expr_nodes.Col(DataType(pl.datatypes.Int8()), "a")
 
-    with pytest.raises(TypeError):
-        to_ast(col)
+    with pytest.raises(TypeError, match="Should always be wrapped"):
+        to_ast(col, stream=stream)
 
 
 def test_to_parquet_filter_with_colref_raises():
@@ -114,4 +117,4 @@ def test_to_parquet_filter_with_colref_raises():
     colref = expr_nodes.ColRef(col.dtype, 0, plc.expressions.TableReference.LEFT, col)
 
     with pytest.raises(TypeError):
-        to_parquet_filter(colref)
+        to_parquet_filter(colref, stream=get_cuda_stream())

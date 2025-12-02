@@ -12,6 +12,8 @@ import pandas as pd
 import pyarrow as pa
 from typing_extensions import Self
 
+import pylibcudf as plc
+
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core.column import column
@@ -19,6 +21,7 @@ from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     cudf_dtype_to_pa_type,
+    dtype_from_pylibcudf_column,
     find_common_type,
     is_mixed_with_object_dtype,
     min_signed_type,
@@ -30,12 +33,10 @@ from cudf.utils.utils import _is_null_host_scalar
 if TYPE_CHECKING:
     from collections.abc import Mapping, MutableSequence, Sequence
 
-    from pylibcudf import Scalar as plc_Scalar
-
     from cudf._typing import (
         ColumnBinaryOperand,
         ColumnLike,
-        Dtype,
+        DtypeObj,
         ScalarLike,
     )
     from cudf.core.buffer import Buffer
@@ -51,18 +52,6 @@ if TYPE_CHECKING:
 # Using np.int8(-1) to allow silent wrap-around when casting to uint
 # it may make sense to make this dtype specific or a function.
 _DEFAULT_CATEGORICAL_VALUE = np.int8(-1)
-
-
-def validate_categorical_children(children) -> None:
-    if not (
-        len(children) == 1
-        and isinstance(children[0], cudf.core.column.numerical.NumericalColumn)
-        and children[0].dtype.kind in "iu"
-    ):
-        # TODO: Enforce unsigned integer?
-        raise ValueError(
-            "Must specify exactly one child NumericalColumn of integers for representing the codes."
-        )
 
 
 class CategoricalColumn(column.ColumnBase):
@@ -95,34 +84,59 @@ class CategoricalColumn(column.ColumnBase):
         "__gt__",
         "__ge__",
     }
+    # TODO: See if we can narrow these integer types
+    _VALID_PLC_TYPES = {
+        plc.TypeId.INT8,
+        plc.TypeId.INT16,
+        plc.TypeId.INT32,
+        plc.TypeId.INT64,
+        plc.TypeId.UINT8,
+        plc.TypeId.UINT16,
+        plc.TypeId.UINT32,
+        plc.TypeId.UINT64,
+    }
 
     def __init__(
         self,
-        data: None,
+        plc_column: plc.Column,
         size: int,
         dtype: CategoricalDtype,
-        mask: Buffer | None,
         offset: int,
         null_count: int,
-        children: tuple[NumericalColumn],
-    ):
-        if data is not None:
-            raise ValueError(f"{data=} must be None")
-        validate_categorical_children(children)
+        exposed: bool,
+    ) -> None:
         if not isinstance(dtype, CategoricalDtype):
             raise ValueError(
                 f"{dtype=} must be cudf.CategoricalDtype instance."
             )
         super().__init__(
-            data=data,
+            plc_column=plc_column,
             size=size,
             dtype=dtype,
-            mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
+            exposed=exposed,
         )
         self._codes = self.children[0].set_mask(self.mask)
+
+    @classmethod
+    def _get_data_buffer_from_pylibcudf_column(
+        cls, plc_column: plc.Column, exposed: bool
+    ) -> None:
+        """
+        This column considers the plc_column (i.e. codes) as children
+        """
+        return None
+
+    def _get_children_from_pylibcudf_column(
+        self, plc_column: plc.Column, dtype: DtypeObj, exposed: bool
+    ) -> tuple[ColumnBase]:
+        """
+        This column considers the plc_column (i.e. codes) as children
+        """
+        return (
+            type(self).from_pylibcudf(plc_column, data_ptr_exposed=exposed),
+        )
 
     @property
     def base_size(self) -> int:
@@ -137,15 +151,6 @@ class CategoricalColumn(column.ColumnBase):
             return False
         return self._encode(item) in self.codes
 
-    def set_base_data(self, value):
-        if value is not None:
-            raise RuntimeError(
-                "CategoricalColumns do not use data attribute of Column, use "
-                "`set_base_children` instead"
-            )
-        else:
-            super().set_base_data(value)
-
     def _process_values_for_isin(
         self, values: Sequence
     ) -> tuple[ColumnBase, ColumnBase]:
@@ -158,7 +163,6 @@ class CategoricalColumn(column.ColumnBase):
 
     def set_base_children(self, value: tuple[NumericalColumn]) -> None:  # type: ignore[override]
         super().set_base_children(value)
-        validate_categorical_children(value)
         self._codes = value[0].set_mask(self.mask)
 
     @property
@@ -166,9 +170,15 @@ class CategoricalColumn(column.ColumnBase):
         if self.offset == 0 and self.size == self.base_size:
             return super().children  # type: ignore[return-value]
         if self._children is None:
-            # Compute children from the column view (children factoring self.size)
-            child = type(self).from_pylibcudf(
-                self.to_pylibcudf(mode="read").copy()
+            # Pass along size, offset, null_count from __init__
+            # which doesn't necessarily match the attributes of plc_column
+            child = cudf.core.column.numerical.NumericalColumn(
+                plc_column=self.plc_column,
+                size=self.size,
+                dtype=dtype_from_pylibcudf_column(self.plc_column),
+                offset=self.offset,
+                null_count=self.null_count,
+                exposed=False,
             )
             self._children = (child,)
         return self._children
@@ -217,7 +227,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def _fill(
         self,
-        fill_value: plc_Scalar,
+        fill_value: plc.Scalar,
         begin: int,
         end: int,
         inplace: bool = False,
@@ -243,7 +253,7 @@ class CategoricalColumn(column.ColumnBase):
     def _reduce(
         self,
         op: str,
-        skipna: bool | None = None,
+        skipna: bool = True,
         min_count: int = 0,
         *args,
         **kwargs,
@@ -261,13 +271,17 @@ class CategoricalColumn(column.ColumnBase):
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         if isinstance(other, column.ColumnBase):
-            if (
-                isinstance(other, CategoricalColumn)
-                and other.dtype != self.dtype
-            ):
-                raise TypeError(
-                    "Categoricals can only compare with the same type"
-                )
+            if isinstance(other, CategoricalColumn):
+                if self.dtype == other.dtype:
+                    # Dtypes are the same, but ordering may differ
+                    # in which case we need to align them for their codes
+                    # to match.
+                    if not self.dtype._internal_eq(other.dtype):
+                        other = other.as_categorical_column(self.dtype)
+                else:
+                    raise TypeError(
+                        "Categoricals can only compare with the same type"
+                    )
             # We'll compare self's decategorized values later for non-CategoricalColumn
         else:
             codes = column.as_column(
@@ -374,7 +388,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def _cast_self_and_other_for_where(
         self, other: ScalarLike | ColumnBase, inplace: bool
-    ) -> tuple[ColumnBase, plc_Scalar | ColumnBase]:
+    ) -> tuple[ColumnBase, plc.Scalar | ColumnBase]:
         if is_scalar(other):
             try:
                 other = self._encode(other)
@@ -569,7 +583,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def _validate_fillna_value(
         self, fill_value: ScalarLike | ColumnLike
-    ) -> plc_Scalar | ColumnBase:
+    ) -> plc.Scalar | ColumnBase:
         """Align fill_value for .fillna based on column type."""
         if is_scalar(fill_value):
             if fill_value != _DEFAULT_CATEGORICAL_VALUE:
@@ -631,7 +645,10 @@ class CategoricalColumn(column.ColumnBase):
                 return codes._with_type_metadata(dtype)  # type: ignore[return-value]
 
         return self.set_categories(
-            new_categories=dtype.categories, ordered=bool(dtype.ordered)
+            new_categories=self.dtype.categories
+            if dtype._categories is None
+            else dtype.categories,
+            ordered=bool(dtype.ordered),
         )
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
@@ -708,16 +725,15 @@ class CategoricalColumn(column.ColumnBase):
 
         return codes_col._with_type_metadata(CategoricalDtype(categories=cats))  # type: ignore[return-value]
 
-    def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
+    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, CategoricalDtype):
             return type(self)(
-                data=self.data,  # type: ignore[arg-type]
+                plc_column=self.plc_column,
                 size=self.size,
                 dtype=dtype,
-                mask=self.base_mask,
                 offset=self.offset,
                 null_count=self.null_count,
-                children=self.base_children,  # type: ignore[arg-type]
+                exposed=False,
             )
 
         return self

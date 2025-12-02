@@ -1405,8 +1405,11 @@ struct target_type_impl<Source,
   using type = Source;
 };
 
-// SUM_WITH_OVERFLOW always outputs a struct {sum: int64_t, overflow: bool} regardless of input type
+// SUM_WITH_OVERFLOW outputs a struct {sum: Source, overflow: bool} where sum type matches input
+// type, only supports signed integral types (excluding bool) and decimal types
 template <typename Source>
+  requires((cudf::is_integral_not_bool<Source>() && cudf::is_signed<Source>()) ||
+           cudf::is_fixed_point<Source>())
 struct target_type_impl<Source, aggregation::SUM_WITH_OVERFLOW> {
   using type = struct_view;  // SUM_WITH_OVERFLOW outputs a struct with sum and overflow fields
 };
@@ -1585,26 +1588,6 @@ struct target_type_impl<Source,
  */
 template <typename Source, aggregation::Kind k>
 using target_type_t = typename target_type_impl<Source, k>::type;
-
-template <aggregation::Kind k>
-struct kind_to_type_impl {
-  using type = aggregation;
-};
-
-template <aggregation::Kind k>
-using kind_to_type = typename kind_to_type_impl<k>::type;
-
-#ifndef AGG_KIND_MAPPING
-#define AGG_KIND_MAPPING(k, Type) \
-  template <>                     \
-  struct kind_to_type_impl<k> {   \
-    using type = Type;            \
-  }
-#endif
-
-AGG_KIND_MAPPING(aggregation::QUANTILE, quantile_aggregation);
-AGG_KIND_MAPPING(aggregation::STD, std_aggregation);
-AGG_KIND_MAPPING(aggregation::VARIANCE, var_aggregation);
 
 /**
  * @brief Dispatches `k` as a non-type template parameter to a callable,  `f`.

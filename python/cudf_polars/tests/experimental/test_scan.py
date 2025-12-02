@@ -9,7 +9,11 @@ import polars as pl
 
 from cudf_polars import Translator
 from cudf_polars.experimental.parallel import lower_ir_graph
-from cudf_polars.testing.asserts import DEFAULT_CLUSTER, assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    DEFAULT_CLUSTER,
+    DEFAULT_RUNTIME,
+    assert_gpu_result_equal,
+)
 from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.config import ConfigOptions
 
@@ -55,13 +59,14 @@ def test_target_partition_size(tmp_path, df, blocksize, n_files):
         executor_options={
             "target_partition_size": blocksize,
             "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
         },
     )
     assert_gpu_result_equal(q, engine=engine)
 
     # Check partitioning
     qir = Translator(q._ldf.visit(), engine).translate_ir()
-    ir, info = lower_ir_graph(qir, ConfigOptions.from_polars_engine(engine))
+    ir, info, _ = lower_ir_graph(qir, ConfigOptions.from_polars_engine(engine))
     count = info[ir].count
     if blocksize <= 12_000:
         assert count > n_files
@@ -81,6 +86,7 @@ def test_split_scan_predicate(tmp_path, df, mask):
         executor_options={
             "target_partition_size": 1_000,
             "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
         },
     )
     assert_gpu_result_equal(q, engine=engine)

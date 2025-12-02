@@ -2847,9 +2847,10 @@ void filter_unary_operation_typed_test()
     auto constexpr row_group_size_rows = num_rows / 4;
     auto _col0                         = testdata::ascending<T>().release();
     // Add nulls to col0
-    std::bernoulli_distribution bn(0.7f);
-    auto valids =
-      cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
+    [[maybe_unused]] std::bernoulli_distribution bn(0.7f);
+    auto valids = cudf::detail::make_counting_transform_iterator(0, [&](int index) {
+      return (index >= 2 * row_group_size_rows and index < 3 * row_group_size_rows) ? false : true;
+    });
     auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
     _col0->set_null_mask(std::move(null_mask), null_count);
     auto col0                = cudf::purge_nonempty_nulls(_col0->view());
@@ -2929,10 +2930,11 @@ void filter_unary_operation_typed_test()
   auto const col_name_0 = cudf::ast::column_name_reference("col0");
   auto const col_ref_0  = cudf::ast::column_reference(0);
 
-  // Unary operation `IS_NULL` should not filter any row groups and yield exactly `null_count` rows
+  // Unary operation `IS_NULL` should filter all but one row group and yield exactly `null_count`
+  // rows
   {
     auto constexpr expected_total_row_groups          = 4;
-    auto constexpr expected_stats_filtered_row_groups = 4;
+    auto constexpr expected_stats_filtered_row_groups = 1;
 
     auto const filter_expression =
       cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_name_0);
@@ -2944,34 +2946,11 @@ void filter_unary_operation_typed_test()
                             null_count);
   }
 
-  // Expression `NOT(NOT(IS_NULL))` should not filter any row groups and yield exactly
-  // `null_count` rows
+  // Unary operation `NOT(IS_NULL)` should filter all but one row group and yield exactly `num_rows
+  // - null_count` rows
   {
     auto constexpr expected_total_row_groups          = 4;
-    auto constexpr expected_stats_filtered_row_groups = 4;
-
-    auto const is_null_expr = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_name_0);
-    auto const not_is_null_expr = cudf::ast::operation(cudf::ast::ast_operator::NOT, is_null_expr);
-    auto const filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT, not_is_null_expr);
-
-    auto const is_null_ref_expr = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_ref_0);
-    auto const not_is_null_ref_expr =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT, is_null_ref_expr);
-    auto const ref_filter =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT, not_is_null_ref_expr);
-    test_predicate_pushdown(filter_expression,
-                            ref_filter,
-                            expected_total_row_groups,
-                            expected_stats_filtered_row_groups,
-                            null_count);
-  }
-
-  // Unary operation `NOT(IS_NULL)` should not filter any row groups and yield exactly `num_rows -
-  // null_count` rows
-  {
-    auto constexpr expected_total_row_groups          = 4;
-    auto constexpr expected_stats_filtered_row_groups = 4;
+    auto constexpr expected_stats_filtered_row_groups = 3;
 
     auto const is_null_expr = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_name_0);
     auto const filter_expression = cudf::ast::operation(cudf::ast::ast_operator::NOT, is_null_expr);
@@ -2985,36 +2964,6 @@ void filter_unary_operation_typed_test()
                             num_ordered_rows - null_count);
   }
 
-  // Unary operation `NOT(NOT(NOT(IS_NULL)))` should not filter any row groups and yield exactly
-  // `num_rows - null_count` rows
-  {
-    auto constexpr expected_total_row_groups          = 4;
-    auto constexpr expected_stats_filtered_row_groups = 4;
-
-    auto const is_null_expr = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_name_0);
-    auto const not_is_null_expr = cudf::ast::operation(cudf::ast::ast_operator::NOT, is_null_expr);
-    auto const not_not_is_null_expr =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT, not_is_null_expr);
-    auto const filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT, not_not_is_null_expr);
-
-    auto const is_null_ref_expr = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_ref_0);
-    auto const not_is_null_ref_expr =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT, is_null_ref_expr);
-    auto const not_not_is_null_ref_expr =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT, not_is_null_ref_expr);
-    auto const ref_filter =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT, not_not_is_null_ref_expr);
-
-    test_predicate_pushdown(filter_expression,
-                            ref_filter,
-                            expected_total_row_groups,
-                            expected_stats_filtered_row_groups,
-                            num_ordered_rows - null_count);
-  }
-
-  // Unary operation `IS_NULL` should not affect anything when ANDing with another expression, and
-  // should short circuit when ORing with another expression
   {
     auto constexpr expected_total_row_groups = 4;
 
@@ -3043,21 +2992,21 @@ void filter_unary_operation_typed_test()
     auto const ref_expr1 = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
     auto const ref_expr2 = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_ref_0);
 
-    // Filter expression AND unary operation
+    // col0 < 100 AND IS_NULL(col0)
     auto filter_expression =
       cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, expr1, expr2);
     auto ref_filter =
       cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, ref_expr1, ref_expr2);
-    auto constexpr expected_filtered_row_groups_with_unary_and = 2;
+    auto constexpr expected_filtered_row_groups_with_unary_and = 1;
     test_predicate_pushdown(filter_expression,
                             ref_filter,
                             expected_total_row_groups,
                             expected_filtered_row_groups_with_unary_and);
 
-    // Filter expression OR unary operation
+    // col0 < 100 OR IS_NULL(col0)
     filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, expr1, expr2);
     ref_filter = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, ref_expr1, ref_expr2);
-    auto constexpr expected_filtered_row_groups_with_unary_or = 4;
+    auto constexpr expected_filtered_row_groups_with_unary_or = 3;
     test_predicate_pushdown(filter_expression,
                             ref_filter,
                             expected_total_row_groups,

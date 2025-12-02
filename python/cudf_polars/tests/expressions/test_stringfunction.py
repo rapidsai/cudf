@@ -892,3 +892,9 @@ def test_string_concat_empty_frame():
     q = lf.select(pl.lit(", ") + pl.col("a"))
 
     assert_gpu_result_equal(q)
+
+
+def test_single_column_concat_str():
+    lf = pl.LazyFrame({"c0": ["a", "b"]})
+    q = lf.select(pl.concat_str(pl.col("c0")))
+    assert_gpu_result_equal(q)

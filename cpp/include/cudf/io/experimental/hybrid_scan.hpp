@@ -400,8 +400,8 @@ class hybrid_scan_reader {
     rmm::cuda_stream_view stream) const;
 
   /**
-   * @brief Builds a boolean column indicating which rows survive the page statistics in the page
-   * index
+   * @brief Builds a boolean column indicating surviving rows using page-level statistics in the
+   * page index
    *
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options

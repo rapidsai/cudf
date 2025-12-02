@@ -17,7 +17,6 @@
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/fixed_point/conv.hpp>
 #include <cudf/lists/lists_column_view.hpp>
@@ -31,6 +30,7 @@
 #include <cuda/functional>
 #include <cuda/std/iterator>
 #include <cuda/std/span>
+#include <cuda/std/tuple>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
@@ -40,13 +40,11 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/merge.h>
-#include <thrust/pair.h>
 #include <thrust/reduce.h>
 #include <thrust/remove.h>
 #include <thrust/replace.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
 
 namespace cudf {
 namespace tdigest {
@@ -1040,7 +1038,7 @@ std::unique_ptr<column> compute_tdigests(int delta,
   cudf::mutable_column_view weight_col(*centroid_weights);
 
   // reduce the centroids into the clusters
-  auto output = thrust::make_zip_iterator(thrust::make_tuple(
+  auto output = thrust::make_zip_iterator(cuda::std::make_tuple(
     mean_col.begin<double>(), weight_col.begin<double>(), thrust::make_discard_iterator()));
 
   auto const num_values = std::distance(centroids_begin, centroids_end);
@@ -1446,7 +1444,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
                         thrust::make_discard_iterator(),
                         merged_min_col->mutable_view().begin<double>(),
                         cuda::std::equal_to{},  // key equality check
-                        cudf::detail::minimum{});
+                        cuda::minimum{});
 
   auto merged_max_col = cudf::make_numeric_column(
     data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, mr);
@@ -1461,7 +1459,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
                         thrust::make_discard_iterator(),
                         merged_max_col->mutable_view().begin<double>(),
                         cuda::std::equal_to{},  // key equality check
-                        cudf::detail::maximum{});
+                        cuda::maximum{});
 
   auto tdigest_offsets = tdv.centroids().offsets();
 

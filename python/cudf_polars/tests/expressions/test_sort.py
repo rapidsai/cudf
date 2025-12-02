@@ -68,11 +68,12 @@ def test_setsorted(descending, nulls_last, with_nulls):
     q = df.set_sorted("a", descending=descending)
 
     assert_gpu_result_equal(q)
+    translator = Translator(q._ldf.visit(), pl.GPUEngine())
 
-    df = (
-        Translator(q._ldf.visit(), pl.GPUEngine())
-        .translate_ir()
-        .evaluate(cache={}, timer=None, context=IRExecutionContext())
+    df = translator.translate_ir().evaluate(
+        cache={},
+        timer=None,
+        context=IRExecutionContext.from_config_options(translator.config_options),
     )
 
     a = df.column_map["a"]

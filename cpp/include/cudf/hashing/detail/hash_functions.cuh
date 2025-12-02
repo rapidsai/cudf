@@ -78,7 +78,7 @@ __device__ inline uint64_t swap_endian(uint64_t x)
 
 /**
  * SPDX-SnippetBegin
- * SPDX-FileCopyrightText: Copyright (c) 2015 Barry Clark
+ * SPDX-SnippetCopyrightText: Copyright (c) 2015 Barry Clark
  * SPDX-License-Identifier: MIT
  *
  * Modified GPU implementation of

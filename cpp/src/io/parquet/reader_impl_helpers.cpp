@@ -17,6 +17,7 @@
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/logger.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 
@@ -343,11 +344,11 @@ metadata::metadata(datasource* source, bool read_page_indexes)
       int64_t const length = max_offset - min_offset;
       auto const idx_buf   = source->host_read(min_offset, length);
       // Flatten all columns into a single vector for easier task distribution
-      std::vector<std::reference_wrapper<ColumnChunk>> all_columns;
-      all_columns.reserve(row_groups.size() * row_groups.front().columns.size());
+      std::vector<std::reference_wrapper<ColumnChunk>> all_column_chunks;
+      all_column_chunks.reserve(row_groups.size() * row_groups.front().columns.size());
       for (auto& rg : row_groups) {
         for (auto& col : rg.columns) {
-          all_columns.emplace_back(std::ref(col));
+          all_column_chunks.emplace_back(std::ref(col));
         }
       }
 
@@ -369,36 +370,36 @@ metadata::metadata(datasource* source, bool read_page_indexes)
 
       // Use parallel processing only if we have enough columns to justify the overhead
       constexpr std::size_t parallel_threshold = 512;
-      auto const total_columns                 = all_columns.size();
-      if (total_columns >= parallel_threshold) {
+      auto const total_column_chunks           = all_column_chunks.size();
+      if (total_column_chunks >= parallel_threshold) {
         // Dynamically calculate number of tasks based the number or row groups and columns
         constexpr std::size_t min_tasks = 4;
         constexpr std::size_t max_tasks = 32;
-        auto const ratio                = static_cast<double>(total_columns) / parallel_threshold;
+        auto const ratio = static_cast<double>(total_column_chunks) / parallel_threshold;
         // Scale the number of tasks and task size evenly (e.g. quadrupling the number of elements
         // doubles both the number of tasks and the task size)
         auto const multiplier = std::size_t(1) << (static_cast<size_t>(std::log2(ratio)) / 2);
 
-        auto const num_tasks        = std::clamp(min_tasks * multiplier, min_tasks, max_tasks);
-        auto const columns_per_task = total_columns / num_tasks;
-        auto const remainder        = total_columns % num_tasks;
+        auto const num_tasks = std::clamp(min_tasks * multiplier, min_tasks, max_tasks);
+        auto const column_chunks_per_task = total_column_chunks / num_tasks;
+        auto const remainder              = total_column_chunks % num_tasks;
 
         std::vector<std::future<void>> tasks;
         tasks.reserve(num_tasks);
 
         std::size_t start_idx = 0;
         for (std::size_t task_id = 0; task_id < num_tasks; ++task_id) {
-          auto const task_size = columns_per_task + (task_id < remainder ? 1 : 0);
+          auto const task_size = column_chunks_per_task + (task_id < remainder ? 1 : 0);
           auto const end_idx   = start_idx + task_size;
 
-          if (start_idx >= total_columns) break;
+          if (start_idx >= total_column_chunks) break;
 
           tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
-            [&all_columns, &read_column_indexes, start_idx, end_idx]() {
+            [&all_column_chunks, &read_column_indexes, start_idx, end_idx]() {
               CompactProtocolReader local_cp;
 
-              for (size_t i = start_idx; i < end_idx && i < all_columns.size(); ++i) {
-                read_column_indexes(local_cp, all_columns[i].get());
+              for (size_t i = start_idx; i < end_idx && i < all_column_chunks.size(); ++i) {
+                read_column_indexes(local_cp, all_column_chunks[i].get());
               }
             }));
 
@@ -410,7 +411,7 @@ metadata::metadata(datasource* source, bool read_page_indexes)
         }
       } else {
         // For small numbers of columns, use sequential processing to avoid overhead
-        for (auto& col_ref : all_columns) {
+        for (auto& col_ref : all_column_chunks) {
           read_column_indexes(cp, col_ref.get());
         }
       }
@@ -885,13 +886,14 @@ void aggregate_reader_metadata::apply_arrow_schema()
       // ensure equal number of children first to avoid any segfaults in children
       if (std::cmp_equal(pq_schema_elem.num_children, arrow_schema.children.size())) {
         // true if and only if true for all children as well
-        return std::all_of(thrust::make_zip_iterator(thrust::make_tuple(
-                             arrow_schema.children.begin(), pq_schema_elem.children_idx.begin())),
-                           thrust::make_zip_iterator(thrust::make_tuple(
-                             arrow_schema.children.end(), pq_schema_elem.children_idx.end())),
-                           [&](auto const& elem) {
-                             return validate_schemas(thrust::get<0>(elem), thrust::get<1>(elem));
-                           });
+        return std::all_of(
+          thrust::make_zip_iterator(cuda::std::make_tuple(arrow_schema.children.begin(),
+                                                          pq_schema_elem.children_idx.begin())),
+          thrust::make_zip_iterator(
+            cuda::std::make_tuple(arrow_schema.children.end(), pq_schema_elem.children_idx.end())),
+          [&](auto const& elem) {
+            return validate_schemas(cuda::std::get<0>(elem), cuda::std::get<1>(elem));
+          });
       } else {
         return false;
       }
@@ -901,12 +903,13 @@ void aggregate_reader_metadata::apply_arrow_schema()
   std::function<void(arrow_schema_data_types const&, int const)> co_walk_schemas =
     [&](arrow_schema_data_types const& arrow_schema, int const schema_idx) {
       auto& pq_schema_elem = per_file_metadata[0].schema[schema_idx];
-      std::for_each(
-        thrust::make_zip_iterator(
-          thrust::make_tuple(arrow_schema.children.begin(), pq_schema_elem.children_idx.begin())),
-        thrust::make_zip_iterator(
-          thrust::make_tuple(arrow_schema.children.end(), pq_schema_elem.children_idx.end())),
-        [&](auto const& elem) { co_walk_schemas(thrust::get<0>(elem), thrust::get<1>(elem)); });
+      std::for_each(thrust::make_zip_iterator(cuda::std::make_tuple(
+                      arrow_schema.children.begin(), pq_schema_elem.children_idx.begin())),
+                    thrust::make_zip_iterator(cuda::std::make_tuple(
+                      arrow_schema.children.end(), pq_schema_elem.children_idx.end())),
+                    [&](auto const& elem) {
+                      co_walk_schemas(cuda::std::get<0>(elem), cuda::std::get<1>(elem));
+                    });
 
       // true for DurationType columns only for now.
       if (arrow_schema.type.id() != type_id::EMPTY) {
@@ -926,11 +929,11 @@ void aggregate_reader_metadata::apply_arrow_schema()
 
   // zip iterator to validate and co-walk the two schemas
   auto schemas = thrust::make_zip_iterator(
-    thrust::make_tuple(arrow_schema_root.children.begin(), pq_schema_root.children_idx.begin()));
+    cuda::std::make_tuple(arrow_schema_root.children.begin(), pq_schema_root.children_idx.begin()));
 
   // Verify equal number of children at all sub-levels
   if (not std::all_of(schemas, schemas + pq_schema_root.num_children, [&](auto const& elem) {
-        return validate_schemas(thrust::get<0>(elem), thrust::get<1>(elem));
+        return validate_schemas(cuda::std::get<0>(elem), cuda::std::get<1>(elem));
       })) {
     CUDF_LOG_ERROR("Parquet reader encountered a mismatch between Parquet and arrow schema.",
                    "arrow:schema not processed.");
@@ -939,7 +942,7 @@ void aggregate_reader_metadata::apply_arrow_schema()
 
   // All good, now co-walk schemas
   std::for_each(schemas, schemas + pq_schema_root.num_children, [&](auto const& elem) {
-    co_walk_schemas(thrust::get<0>(elem), thrust::get<1>(elem));
+    co_walk_schemas(cuda::std::get<0>(elem), cuda::std::get<1>(elem));
   });
 }
 
@@ -1587,6 +1590,7 @@ aggregate_reader_metadata::select_columns(
   std::optional<std::vector<std::string>> const& filter_columns_names,
   bool include_index,
   bool strings_to_categorical,
+  bool ignore_missing_columns,
   type_id timestamp_type_id)
 {
   auto const find_schema_child =
@@ -1849,8 +1853,11 @@ aggregate_reader_metadata::select_columns(
           std::find_if(all_paths.begin(), all_paths.end(), [&](path_info& valid_path) {
             return valid_path.full_path == selected_path;
           });
+        // Ensure that selected path matches a path in all_paths
         if (found_path != all_paths.end()) {
           valid_selected_paths.push_back({selected_path, found_path->schema_idx});
+        } else if (not ignore_missing_columns) {
+          CUDF_FAIL("Encountered non-existent column in selected path", std::invalid_argument);
         }
       }
     }

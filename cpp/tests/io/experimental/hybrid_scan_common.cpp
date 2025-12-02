@@ -15,7 +15,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/mr/device/aligned_resource_adaptor.hpp>
+#include <rmm/mr/aligned_resource_adaptor.hpp>
 
 #include <format>
 #include <string>
@@ -159,7 +159,7 @@ auto apply_parquet_filters(cudf::host_span<uint8_t const> file_buffer_span,
     std::vector<rmm::device_buffer> dictionary_page_buffers =
       fetch_byte_ranges(file_buffer_span, dict_page_byte_ranges, stream, mr);
 
-    // NOT YET IMPLEMENTED - Filter row groups with dictionary pages
+    // Filter row groups with dictionary pages
     dictionary_page_filtered_row_group_indices = reader->filter_row_groups_with_dictionary_pages(
       dictionary_page_buffers, current_row_group_indices, options, stream);
 
@@ -172,8 +172,8 @@ auto apply_parquet_filters(cudf::host_span<uint8_t const> file_buffer_span,
   bloom_filtered_row_group_indices.reserve(current_row_group_indices.size());
   if (bloom_filter_byte_ranges.size()) {
     // Fetch 32 byte aligned bloom filter data buffers from the input file buffer
-    auto aligned_mr = rmm::mr::aligned_resource_adaptor(cudf::get_current_device_resource(),
-                                                        bloom_filter_alignment);
+    auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::device_async_resource_ref>(
+      cudf::get_current_device_resource_ref(), bloom_filter_alignment);
 
     std::vector<rmm::device_buffer> bloom_filter_data =
       fetch_byte_ranges(file_buffer_span, bloom_filter_byte_ranges, stream, aligned_mr);

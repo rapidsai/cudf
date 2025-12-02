@@ -14,6 +14,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/std/limits>
+
 namespace CUDF_EXPORT cudf {
 
 /**
@@ -21,6 +23,29 @@ namespace CUDF_EXPORT cudf {
  * @{
  * @file
  */
+
+/**
+ * @brief Enum to specify the type of join operation
+ */
+enum class join_kind : int32_t {
+  INNER_JOIN     = 0,  ///< Inner join
+  LEFT_JOIN      = 1,  ///< Left join
+  FULL_JOIN      = 2,  ///< Full outer join
+  LEFT_SEMI_JOIN = 3,  ///< Left semi join
+  LEFT_ANTI_JOIN = 4   ///< Left anti join
+};
+
+/**
+ * @brief Sentinel value used to indicate an unmatched row index in join operations.
+ *
+ * This value is used in join result indices to represent rows that do not have a match
+ * in the other table (e.g., in left joins, full joins, or when using filter_gather_map
+ * with null indices from outer joins).
+ *
+ * The value is set to the minimum possible value for `size_type` to ensure it's easily
+ * distinguishable from valid row indices, which are always non-negative.
+ */
+CUDF_HOST_DEVICE constexpr size_type JoinNoMatch = cuda::std::numeric_limits<size_type>::min();
 
 /**
  * @brief Holds context information about matches between tables during a join operation.
@@ -101,8 +126,7 @@ inner_join(cudf::table_view const& left_keys,
  * The first returned vector contains all the row indices from the left
  * table (in unspecified order). The corresponding value in the
  * second returned vector is either (1) the row index of the matched row
- * from the right table, if there is a match  or  (2) an unspecified
- * out-of-bounds value.
+ * from the right table, if there is a match  or  (2) `JoinNoMatch`.
  *
  * @code{.pseudo}
  * Left: {{0, 1, 2}}
@@ -142,7 +166,7 @@ left_join(cudf::table_view const& left_keys,
  *
  * Taken pairwise, the values from the returned vectors are one of:
  * (1) row indices corresponding to matching rows from the left and
- * right tables, (2) a row index and an unspecified out-of-bounds value,
+ * right tables, (2) a row index and `JoinNoMatch`,
  * representing a row from one table without a match in the other.
  *
  * @code{.pseudo}

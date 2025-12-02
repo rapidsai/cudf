@@ -156,7 +156,7 @@ cdef class ChunkedPack:
     def create(
         Table input,
         size_t user_buffer_size,
-        Stream stream,
+        Stream stream=None,
         DeviceMemoryResource temp_mr=None,
     ):
         """
@@ -177,6 +177,7 @@ cdef class ChunkedPack:
         -------
         New ChunkedPack object.
         """
+        stream = _get_stream(stream)
         temp_mr = _get_memory_resource(temp_mr)
         cdef unique_ptr[chunked_pack] obj = chunked_pack.create(
             input.view(), user_buffer_size, stream.view(), temp_mr.get_mr()
@@ -350,7 +351,7 @@ cpdef PackedColumns pack(Table input, Stream stream=None, DeviceMemoryResource m
     return PackedColumns.from_libcudf(move(pack), stream, mr)
 
 
-cpdef Table unpack(PackedColumns input):
+cpdef Table unpack(PackedColumns input, Stream stream=None):
     """Deserialize the result of `pack`.
 
     Copies the result of a serialized table into a table.
@@ -361,6 +362,8 @@ cpdef Table unpack(PackedColumns input):
     ----------
     input : PackedColumns
         The packed columns to unpack.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -368,14 +371,16 @@ cpdef Table unpack(PackedColumns input):
         Copy of the packed columns.
     """
     cdef table_view v
+    stream = _get_stream(stream)
     with nogil:
         v = cpp_unpack(dereference(input.c_obj))
-    return Table.from_table_view_of_arbitrary(v, input)
+    return Table.from_table_view_of_arbitrary(v, input, stream)
 
 
 cpdef Table unpack_from_memoryviews(
     memoryview metadata,
     gpumemoryview gpu_data,
+    Stream stream=None,
 ):
     """Deserialize the result of `pack`.
 
@@ -389,20 +394,23 @@ cpdef Table unpack_from_memoryviews(
         The packed metadata to unpack.
     gpu_data : gpumemoryview
         The packed gpu_data to unpack.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
     Table
         Copy of the packed columns.
     """
+    stream = _get_stream(stream)
     if metadata.nbytes == 0:
         if gpu_data.__cuda_array_interface__["data"][0] != 0:
             raise ValueError("Expected an empty gpu_data from unpacking an empty table")
-        # For an empty table we just attach the default stream and mr since neither will
-        # be used for any operations.
+        # For an empty table we just attach the default mr since it will not be
+        # used for any operations.
         return Table.from_libcudf(
             make_unique[table](table_view()),
-            _get_stream(),
+            stream,
             _get_memory_resource(),
         )
 
@@ -414,4 +422,4 @@ cpdef Table unpack_from_memoryviews(
     cdef table_view v
     with nogil:
         v = cpp_unpack(metadata_ptr, gpu_data_ptr)
-    return Table.from_table_view_of_arbitrary(v, gpu_data)
+    return Table.from_table_view_of_arbitrary(v, gpu_data, stream)

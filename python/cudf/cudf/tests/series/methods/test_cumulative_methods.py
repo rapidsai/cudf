@@ -123,3 +123,17 @@ def test_scan_boolean(method):
     expect = getattr(s.to_pandas(), method)()
 
     assert_eq(expect, got)
+
+
+def test_cummin_cummax_strings():
+    data = ["dog", "cat", "zebra", "ant", "bat"]
+    gser = cudf.Series(data)
+    pser = pd.Series(data)
+
+    got_min = gser.cummin()
+    expected_min = pser.cummin()
+    assert_eq(got_min, expected_min)
+
+    got_max = gser.cummax()
+    expected_max = pser.cummax()
+    assert_eq(got_max, expected_max)

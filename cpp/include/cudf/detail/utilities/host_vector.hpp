@@ -93,18 +93,15 @@ class rmm_host_allocator {
    */
   rmm_host_allocator() = delete;
 
-#if CCCL_MAJOR_VERSION > 3 || (CCCL_MAJOR_VERSION == 3 && CCCL_MINOR_VERSION >= 1)
   template <class... Properties>
   using async_host_resource_ref = cuda::mr::resource_ref<cuda::mr::host_accessible, Properties...>;
-#else
-  template <class... Properties>
-  using async_host_resource_ref =
-    cuda::mr::async_resource_ref<cuda::mr::host_accessible, Properties...>;
-#endif
 
   /**
    * @brief Construct from a `cudf::host_async_resource_ref`
    */
+#ifdef __CUDACC__
+#pragma nv_exec_check_disable
+#endif
   template <class... Properties>
   rmm_host_allocator(async_host_resource_ref<Properties...> _mr, rmm::cuda_stream_view _stream)
     : mr(_mr),
@@ -112,6 +109,26 @@ class rmm_host_allocator {
       _is_device_accessible{contains_property<cuda::mr::device_accessible, Properties...>}
   {
   }
+
+#ifdef __CUDACC__
+#pragma nv_exec_check_disable
+#endif
+  rmm_host_allocator(rmm_host_allocator const&) = default;
+
+#ifdef __CUDACC__
+#pragma nv_exec_check_disable
+#endif
+  rmm_host_allocator(rmm_host_allocator&&) = default;
+
+#ifdef __CUDACC__
+#pragma nv_exec_check_disable
+#endif
+  rmm_host_allocator& operator=(rmm_host_allocator const&) = default;
+
+#ifdef __CUDACC__
+#pragma nv_exec_check_disable
+#endif
+  rmm_host_allocator& operator=(rmm_host_allocator&&) = default;
 
   /**
    * @brief This method allocates storage for objects in host memory.
@@ -125,8 +142,7 @@ class rmm_host_allocator {
   inline pointer allocate(size_type cnt)
   {
     if (cnt > this->max_size()) { throw std::bad_alloc(); }  // end if
-    auto const result =
-      mr.allocate_async(cnt * sizeof(value_type), rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream);
+    auto const result = mr.allocate(stream, cnt * sizeof(value_type));
     // Synchronize to ensure the memory is allocated before thrust::host_vector initialization
     // TODO: replace thrust::host_vector with a type that does not require synchronization
     stream.synchronize();
@@ -145,7 +161,7 @@ class rmm_host_allocator {
    */
   inline void deallocate(pointer p, size_type cnt) noexcept
   {
-    mr.deallocate_async(p, cnt * sizeof(value_type), rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream);
+    mr.deallocate(stream, p, cnt * sizeof(value_type));
   }
 
   /**

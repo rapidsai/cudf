@@ -29,7 +29,13 @@ if TYPE_CHECKING:
     import numpy as np
     import pyarrow as pa
 
-    from cudf._typing import Axis, Dtype, NotImplementedType, ScalarLike
+    from cudf._typing import (
+        Axis,
+        Dtype,
+        DtypeObj,
+        NotImplementedType,
+        ScalarLike,
+    )
     from cudf.core.dataframe import DataFrame
     from cudf.core.index import Index
 
@@ -119,7 +125,7 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @property
     @_performance_tracking
-    def dtype(self) -> Dtype:
+    def dtype(self) -> DtypeObj:
         return self._column.dtype
 
     # TODO: We added fast paths in cudf #18555 to make `to_cupy` and `.values` faster
@@ -422,6 +428,10 @@ class SingleColumnFrame(Frame, NotIterable):
         else:
             arg = as_column(arg)
             if len(arg) == 0:
+                if arg.dtype.kind == "f":
+                    raise IndexError(
+                        "arrays used as indices must be of integer type"
+                    )
                 arg = column_empty(0, dtype=SIZE_TYPE_DTYPE)
             if arg.dtype.kind in "iu":
                 return self._column.take(arg)

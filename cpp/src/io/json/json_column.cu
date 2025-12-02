@@ -4,14 +4,12 @@
  */
 
 #include "io/utilities/parsing_utils.cuh"
-#include "io/utilities/string_parsing.hpp"
 #include "nested_json.hpp"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/io/detail/json.hpp>
@@ -26,6 +24,7 @@
 
 #include <cuda/atomic>
 #include <cuda/functional>
+#include <cuda/std/utility>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/gather.h>
@@ -119,7 +118,7 @@ reduce_to_column_tree(tree_meta_t const& tree,
                         unique_col_ids.begin(),
                         max_row_offsets.begin(),
                         cuda::std::equal_to<size_type>(),
-                        cudf::detail::maximum<size_type>());
+                        cuda::maximum<size_type>());
 
   // 3. reduce_by_key {col_id}, {node_categories} - custom opp (*+v=*, v+v=v, *+#=E)
   rmm::device_uvector<NodeT> column_categories(num_columns, stream);
@@ -324,7 +323,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
     case json_col_t::StringColumn: {
       // move string_offsets to GPU and transform to string column
       auto const col_size      = json_col.string_offsets.size();
-      using char_length_pair_t = thrust::pair<char const*, size_type>;
+      using char_length_pair_t = cuda::std::pair<char const*, size_type>;
       CUDF_EXPECTS(json_col.string_offsets.size() == json_col.string_lengths.size(),
                    "string offset, string length mismatch");
       rmm::device_uvector<char_length_pair_t> d_string_data(col_size, stream);

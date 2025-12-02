@@ -212,11 +212,15 @@ def _hash_partition_dataframe(
     # partition for each row
     partition_map = plc.binaryop.binary_operation(
         plc.hashing.murmurhash3_x86_32(
-            DataFrame([expr.evaluate(df) for expr in on], stream=df.stream).table
+            DataFrame([expr.evaluate(df) for expr in on], stream=df.stream).table,
+            stream=df.stream,
         ),
-        plc.Scalar.from_py(partition_count, plc.DataType(plc.TypeId.UINT32)),
+        plc.Scalar.from_py(
+            partition_count, plc.DataType(plc.TypeId.UINT32), stream=df.stream
+        ),
         plc.binaryop.BinaryOperator.PYMOD,
         plc.types.DataType(plc.types.TypeId.UINT32),
+        stream=df.stream,
     )
 
     # Apply partitioning
@@ -224,6 +228,7 @@ def _hash_partition_dataframe(
         df.table,
         partition_map,
         partition_count,
+        stream=df.stream,
     )
     splits = offsets[1:-1]
 
@@ -235,7 +240,7 @@ def _hash_partition_dataframe(
             df.dtypes,
             df.stream,
         )
-        for i, split in enumerate(plc.copying.split(t, splits))
+        for i, split in enumerate(plc.copying.split(t, splits, stream=df.stream))
     }
 
 

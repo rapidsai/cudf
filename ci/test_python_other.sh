@@ -18,7 +18,7 @@ trap "EXITCODE=1" ERR
 set +e
 
 rapids-logger "pytest dask_cudf"
-./ci/run_dask_cudf_pytests.sh \
+timeout 30m ./ci/run_dask_cudf_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf.xml" \
   --numprocesses=8 \
   --dist=worksteal \
@@ -28,11 +28,11 @@ rapids-logger "pytest dask_cudf"
   --cov-report=term
 
 rapids-logger "pytest cudf_kafka"
-./ci/run_cudf_kafka_pytests.sh \
+timeout 30m ./ci/run_cudf_kafka_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-kafka.xml"
 
 rapids-logger "pytest custreamz"
-./ci/run_custreamz_pytests.sh \
+timeout 30m ./ci/run_custreamz_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-custreamz.xml" \
   --numprocesses=8 \
   --dist=worksteal \
@@ -42,7 +42,7 @@ rapids-logger "pytest custreamz"
   --cov-report=term
 
 rapids-logger "pytest cudf-polars"
-./ci/run_cudf_polars_pytests.sh \
+timeout 30m ./ci/run_cudf_polars_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml" \
   --dist=worksteal \
   --cov-config=./pyproject.toml \

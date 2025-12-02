@@ -11,7 +11,7 @@ import numpy as np
 import pylibcudf as plc
 
 import cudf
-from cudf.core.buffer import Buffer, acquire_spill_lock
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, column_empty
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
@@ -19,7 +19,6 @@ from cudf.utils.dtypes import _get_nan_for_dtype
 
 if TYPE_CHECKING:
     from cudf._typing import ScalarLike
-    from cudf.core.column.decimal import DecimalDtype
 
 
 _unaryop_map = {
@@ -56,35 +55,14 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         "cummax",
     }
 
-    def __init__(
-        self,
-        data: Buffer,
-        size: int,
-        dtype: DecimalDtype | np.dtype,
-        mask: Buffer | None,
-        offset: int,
-        null_count: int,
-        children: tuple,
-    ):
-        if not isinstance(data, Buffer):
-            raise ValueError("data must be a Buffer instance.")
-        if len(children) != 0:
-            raise ValueError(f"{type(self).__name__} must have no children.")
-        super().__init__(
-            data=data,
-            size=size,
-            dtype=dtype,
-            mask=mask,
-            offset=offset,
-            null_count=null_count,
-            children=children,
-        )
-
     def _can_return_nan(self, skipna: bool | None = None) -> bool:
         return not skipna and self.has_nulls()
 
-    def kurtosis(self, skipna: bool | None = None) -> float:
-        skipna = True if skipna is None else skipna
+    def kurtosis(self, skipna: bool = True) -> float:
+        if not isinstance(skipna, bool):
+            raise ValueError(
+                f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
+            )
 
         if len(self) == 0 or self._can_return_nan(skipna=skipna):
             return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
@@ -108,8 +86,11 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         kurt = term_one_section_one * term_one_section_two - 3 * term_two
         return kurt
 
-    def skew(self, skipna: bool | None = None) -> ScalarLike:
-        skipna = True if skipna is None else skipna
+    def skew(self, skipna: bool = True) -> ScalarLike:
+        if not isinstance(skipna, bool):
+            raise ValueError(
+                f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
+            )
 
         if len(self) == 0 or self._can_return_nan(skipna=skipna):
             return _get_nan_for_dtype(self.dtype)
@@ -187,14 +168,14 @@ class NumericalBaseColumn(ColumnBase, Scannable):
 
     def mean(
         self,
-        skipna: bool | None = None,
+        skipna: bool = True,
         min_count: int = 0,
     ) -> ScalarLike:
         return self._reduce("mean", skipna=skipna, min_count=min_count)
 
     def var(
         self,
-        skipna: bool | None = None,
+        skipna: bool = True,
         min_count: int = 0,
         ddof: int = 1,
     ) -> ScalarLike:
@@ -207,7 +188,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
 
     def std(
         self,
-        skipna: bool | None = None,
+        skipna: bool = True,
         min_count: int = 0,
         ddof: int = 1,
     ) -> ScalarLike:
@@ -218,8 +199,11 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             return _get_nan_for_dtype(self.dtype)
         return result
 
-    def median(self, skipna: bool | None = None) -> NumericalBaseColumn:
-        skipna = True if skipna is None else skipna
+    def median(self, skipna: bool = True) -> NumericalBaseColumn:
+        if not isinstance(skipna, bool):
+            raise ValueError(
+                f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
+            )
 
         if self._can_return_nan(skipna=skipna):
             return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]

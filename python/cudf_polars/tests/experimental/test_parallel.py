@@ -13,14 +13,17 @@ from polars.testing import assert_frame_equal
 
 from cudf_polars import Translator
 from cudf_polars.dsl.expressions.base import Col, NamedExpr
-from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.parallel import (
     get_scheduler,
     lower_ir_graph,
     task_graph,
 )
-from cudf_polars.testing.asserts import DEFAULT_CLUSTER, assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    DEFAULT_CLUSTER,
+    DEFAULT_RUNTIME,
+    assert_gpu_result_equal,
+)
 from cudf_polars.utils.config import ConfigOptions
 from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
@@ -93,6 +96,7 @@ def engine():
         executor_options={
             "max_rows_per_partition": 2,
             "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
         },
     )
 
@@ -126,6 +130,7 @@ def test_preserve_partitioning():
         executor_options={
             "max_rows_per_partition": 2,
             "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
             "broadcast_join_limit": 2,
             "unique_fraction": {"a": 1.0},
         },
@@ -141,13 +146,17 @@ def test_preserve_partitioning():
     )
     config_options = ConfigOptions.from_polars_engine(engine)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
-    ir, partition_info = lower_ir_graph(ir, config_options)
+    ir, partition_info, _ = lower_ir_graph(ir, config_options)
     expect_dtype = ir.schema["a"]
     expect_expr = (NamedExpr("a", Col(expect_dtype, "a")),)
     assert partition_info[ir].partitioned_on == expect_expr
     assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.skipif(
+    DEFAULT_RUNTIME == "rapidsmpf",
+    reason="Uses explicit task graph.",
+)
 def test_single_cluster():
     # Test that the single cluster clears
     # the cache as tasks are executed.
@@ -157,6 +166,7 @@ def test_single_cluster():
         executor_options={
             "max_rows_per_partition": 4,
             "cluster": "single",
+            "runtime": DEFAULT_RUNTIME,
         },
     )
     left = pl.LazyFrame(
@@ -177,9 +187,11 @@ def test_single_cluster():
 
     config_options = ConfigOptions.from_polars_engine(engine)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
-    ir, partition_info = lower_ir_graph(ir, config_options)
+    ir, partition_info, _ = lower_ir_graph(ir, config_options)
     graph, key = task_graph(
-        ir, partition_info, config_options, context=IRExecutionContext()
+        ir,
+        partition_info,
+        config_options,
     )
     scheduler = get_scheduler(config_options)
     cache = {}
@@ -190,6 +202,10 @@ def test_single_cluster():
     assert set(cache) == {key}
 
 
+@pytest.mark.skipif(
+    DEFAULT_RUNTIME == "rapidsmpf",
+    reason="Uses explicit task graph.",
+)
 def test_task_graph_is_pickle_serializable(engine):
     # Dask will fall back to using cloudpickle to serialize the task graph if
     # necessary. We'd like to avoid that, since cloudpickle serialization /
@@ -213,9 +229,11 @@ def test_task_graph_is_pickle_serializable(engine):
 
     config_options = ConfigOptions.from_polars_engine(engine)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
-    ir, partition_info = lower_ir_graph(ir, config_options)
+    ir, partition_info, _ = lower_ir_graph(ir, config_options)
     graph, _ = task_graph(
-        ir, partition_info, config_options, context=IRExecutionContext()
+        ir,
+        partition_info,
+        config_options,
     )
 
     pickle.loads(pickle.dumps(graph))  # no exception

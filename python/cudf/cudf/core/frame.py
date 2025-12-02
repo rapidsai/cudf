@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import cupy
 import numpy as np
+import pandas as pd
 import pyarrow as pa
 from typing_extensions import Self
 
@@ -408,6 +409,11 @@ class Frame(BinaryOperand, Scannable, Serializable):
         """
         raise NotImplementedError
 
+    def __sizeof__(self):
+        if cudf.get_option("mode.pandas_compatible"):
+            return self.memory_usage(deep=True, index=True)
+        return object.__sizeof__(self)
+
     @_performance_tracking
     def __len__(self) -> int:
         return self._num_rows
@@ -416,6 +422,14 @@ class Frame(BinaryOperand, Scannable, Serializable):
     def astype(
         self, dtype: dict[Hashable, DtypeObj], copy: bool | None = None
     ) -> Self:
+        if copy is None:
+            copy = True
+        if not copy:
+            if all(
+                dtype.get(col_name, col.dtype) == col.dtype
+                for col_name, col in self._column_labels_and_values
+            ):
+                return self
         casted = (
             col.astype(dtype.get(col_name, col.dtype), copy=copy)
             for col_name, col in self._column_labels_and_values
@@ -721,9 +735,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         dtype = find_common_type(dtypes)
         casted = self.astype(dtype)
         return plc.interop.to_dlpack(
-            plc.Table(
-                [col.to_pylibcudf(mode="read") for col in casted._columns]
-            )
+            plc.Table([col.plc_column for col in casted._columns])
         )
 
     @_performance_tracking
@@ -767,9 +779,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             shape = (len(self), self._num_columns)
             out = cupy.empty(shape, dtype=dtype, order="F")
 
-            table = plc.Table(
-                [col.to_pylibcudf(mode="read") for col in self._columns]
-            )
+            table = plc.Table([col.plc_column for col in self._columns])
             plc.reshape.table_to_array(
                 table,
                 out.data.ptr,
@@ -1607,7 +1617,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @_performance_tracking
     def _encode(self) -> tuple[Self, ColumnBase]:
         plc_table, plc_column = plc.transform.encode(
-            plc.Table([col.to_pylibcudf(mode="read") for col in self._columns])
+            plc.Table([col.plc_column for col in self._columns])
         )
         columns = [
             ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
@@ -1658,10 +1668,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
             (left_column, right_column, reflect, fill_value),
         ) in operands.items():
             output_mask = None
+            left_is_column = isinstance(left_column, ColumnBase)
+            right_is_column = isinstance(right_column, ColumnBase)
             if fill_value is not None:
-                left_is_column = isinstance(left_column, ColumnBase)
-                right_is_column = isinstance(right_column, ColumnBase)
-
                 if left_is_column and right_is_column:
                     # If both columns are nullable, pandas semantics dictate
                     # that nulls that are present in both left_column and
@@ -1694,7 +1703,11 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 if reflect
                 else getattr(operator, fn)(left_column, right_column)
             )
-            if isinstance(outcol, bool) and fn in {"__eq__", "__ne__"}:
+            if (
+                isinstance(outcol, bool)
+                and fn in {"__eq__", "__ne__"}
+                and right_column is not pd.NA
+            ):
                 # Both columns returned NotImplemented, Python compared using is/is not
                 # TODO: A better solution is to ensure each Column._binaryop
                 # implementation accounts for this case.
@@ -1808,9 +1821,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @_performance_tracking
     def min(
         self,
-        axis=0,
-        skipna=True,
-        numeric_only=False,
+        axis: Axis = 0,
+        skipna: bool = True,
+        numeric_only: bool = False,
         **kwargs,
     ):
         """
@@ -1859,9 +1872,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @_performance_tracking
     def max(
         self,
-        axis=0,
-        skipna=True,
-        numeric_only=False,
+        axis: Axis = 0,
+        skipna: bool = True,
+        numeric_only: bool = False,
         **kwargs,
     ):
         """
@@ -1905,7 +1918,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         )
 
     @_performance_tracking
-    def all(self, axis=0, skipna=True, **kwargs):
+    def all(self, axis: Axis = 0, skipna: bool = True, **kwargs):
         """
         Return whether all elements are True in DataFrame.
 
@@ -1958,7 +1971,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         )
 
     @_performance_tracking
-    def any(self, axis=0, skipna=True, **kwargs):
+    def any(self, axis: Axis = 0, skipna: bool = True, **kwargs):
         """
         Return whether any elements is True in DataFrame.
 
@@ -2046,11 +2059,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
             repeats = as_column(repeats)
 
         with acquire_spill_lock():
-            plc_table = plc.Table(
-                [col.to_pylibcudf(mode="read") for col in columns]
-            )
+            plc_table = plc.Table([col.plc_column for col in columns])
             if isinstance(repeats, ColumnBase):
-                repeats = repeats.to_pylibcudf(mode="read")
+                repeats = repeats.plc_column
             return [
                 ColumnBase.from_pylibcudf(col)
                 for col in plc.filling.repeat(plc_table, repeats).columns()

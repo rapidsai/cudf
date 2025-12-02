@@ -12,7 +12,6 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/split/split_re.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -21,18 +20,17 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/functional>
 #include <cuda/std/iterator>
+#include <cuda/std/tuple>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/transform_reduce.h>
 
 namespace cudf {
 namespace strings {
 namespace detail {
 namespace {
-
-using string_index_pair = thrust::pair<char const*, size_type>;
 
 enum class split_direction {
   FORWARD,  ///< for split logic
@@ -73,7 +71,7 @@ struct token_reader_fn {
       auto const match = prog.find(prog_idx, d_str, itr);
       if (!match) { break; }
 
-      auto const start_pos = thrust::get<0>(match_positions_to_bytes(*match, d_str, last_pos));
+      auto const start_pos = cuda::std::get<0>(match_positions_to_bytes(*match, d_str, last_pos));
 
       // get the token (characters just before this match)
       auto const token = string_index_pair{d_str.data() + last_pos.byte_offset(),
@@ -217,7 +215,7 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
       return static_cast<size_type>(d_offsets[idx + 1] - d_offsets[idx]);
     }),
     0,
-    cudf::detail::maximum<size_type>{});
+    cuda::maximum<size_type>{});
 
   // boundary case: if no columns, return one all-null column (custrings issue #119)
   if (columns_count == 0) {

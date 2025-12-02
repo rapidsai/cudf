@@ -631,6 +631,38 @@ def test_parquet_reader_select_columns(datadir):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("ignore_missing_columns", [True, False])
+def test_parquet_reader_select_nonexistent_columns(ignore_missing_columns):
+    df = cudf.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5, 6],
+            "b": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            "c": ["a", "b", "c", "d", "e", "f"],
+        }
+    )
+    buf = BytesIO()
+    df.to_parquet(buf)
+
+    if ignore_missing_columns:
+        expect = cudf.DataFrame({"a": [1, 2, 3, 4, 5, 6]})
+        got = cudf.read_parquet(
+            buf,
+            columns=["a", "d"],
+            ignore_missing_columns=ignore_missing_columns,
+        )
+        assert_eq(expect, got)
+    else:
+        with pytest.raises(
+            ValueError,
+            match="Encountered non-existent column in selected path",
+        ):
+            cudf.read_parquet(
+                buf,
+                columns=["a", "d"],
+                ignore_missing_columns=ignore_missing_columns,
+            )
+
+
 def test_parquet_reader_invalids(tmp_path):
     test_pdf = cudf.DataFrame(
         {"a": np.array([1, np.nan, np.nan, 2])}, index=cudf.Index([0, 1, 2, 3])
@@ -1203,6 +1235,63 @@ def test_parquet_reader_struct_select_columns(data, columns):
     expect = pq.ParquetFile(buff).read(columns=columns)
     got = cudf.read_parquet(buff, columns=columns)
     assert_arrow_table_equal(expect, got.to_arrow())
+
+
+def nonexistent_select_columns_params():
+    dfs = [
+        # columns that don't exist
+        (
+            [
+                {"a": 1, "b": 2},
+                {"a": 10, "b": 20},
+                {"a": None, "b": 22},
+                {"a": None, "b": None},
+                {"a": 15, "b": None},
+            ],
+            [["c"]],  # top-level missing
+        ),
+        (
+            [
+                {"a": 1, "b": 2, "c": [1, 2, 3]},
+                {"a": 10, "b": 20, "c": [4, 5]},
+                {"a": None, "b": 22, "c": [6]},
+                {"a": None, "b": None, "c": None},
+                {"a": 15, "b": None, "c": [-1, -2]},
+                None,
+                {"a": 100, "b": 200, "c": [-10, None, -20]},
+            ],
+            [
+                ["struct.b", "struct.d", "struct.c"],  # 'struct.d' missing
+            ],
+        ),
+        (
+            [
+                [{"a": 1, "b": 2}, {"a": 2, "b": 3}, {"a": 4, "b": 5}],
+                None,
+                [{"a": 10, "b": 20}],
+                [{"a": 100, "b": 200}, {"a": None, "b": 300}, None],
+            ],
+            [
+                ["struct.list.element.c"],  # subfield 'c' missing
+            ],
+        ),
+    ]
+
+    for df_col_pair in dfs:
+        for cols in df_col_pair[1]:
+            yield df_col_pair[0], cols
+
+
+@pytest.mark.parametrize("data, columns", nonexistent_select_columns_params())
+def test_parquet_reader_struct_select_columns_nonexistent_error(data, columns):
+    table = pa.Table.from_pydict({"struct": data})
+    buff = BytesIO()
+    pa.parquet.write_table(table, buff)
+
+    with pytest.raises(
+        ValueError, match="Encountered non-existent column in selected path"
+    ):
+        cudf.read_parquet(buff, columns=columns, ignore_missing_columns=False)
 
 
 def test_parquet_reader_struct_los_large(tmp_path):
@@ -4679,3 +4768,16 @@ def test_dataframe_parquet_roundtrip(index, write_index, empty):
     gpu_read = cudf.read_parquet(gpu_buf)
     cpu_read = cudf.read_parquet(cpu_buf)
     assert_eq(gpu_read, cpu_read)
+
+
+def test_read_many_colchunks_with_threadpool():
+    nrows = 1000
+    ncols = 100
+    table_data = {}
+    for i in range(ncols):
+        table_data[f"col_{i:04d}"] = [f"row_{j}" for j in range(nrows)]
+    expected = pa.table(table_data)
+    buffer = BytesIO()
+    pq.write_table(expected, buffer, row_group_size=100, write_page_index=True)
+
+    assert_eq(expected, cudf.read_parquet(buffer))

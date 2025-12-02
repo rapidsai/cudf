@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 package ai.rapids.cudf;
@@ -155,6 +155,24 @@ public class NativeDepsLoader {
 
     for (String toLoad : loadOrder) {
       loadDep(os, arch, toLoad, preserveDeps);
+    }
+  }
+
+  /**
+   * Optionally load native dependencies. This method attempts to load the specified libraries
+   * but does not throw exceptions on failure. Instead, it returns true if all libraries were
+   * loaded successfully, false otherwise.
+   * @param loadOrder the base name of the libraries. For example libfoo.so would be passed in as
+   *                  "foo". The libraries are loaded in the order provided.
+   * @return true if all libraries were loaded successfully, false otherwise
+   */
+  public static boolean loadOptionalNativeDeps(String[] loadOrder) {
+    try {
+      loadNativeDeps(loadOrder, preserveDepsAfterLoad);
+      return true;
+    } catch (Throwable t) {
+      log.warn("Could not load optional native dependencies: " + t.getMessage());
+      return false;
     }
   }
 

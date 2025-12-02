@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from enum import IntEnum, auto
 from functools import partial, reduce
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
+
+import polars as pl
 
 import pylibcudf as plc
 
@@ -22,7 +24,9 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     import polars.type_aliases as pl_types
-    from polars.polars import _expr_nodes as pl_expr
+    from polars import polars  # type: ignore[attr-defined]
+
+    from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.containers import DataFrame
 
@@ -53,7 +57,7 @@ class BooleanFunction(Expr):
         Not = auto()
 
         @classmethod
-        def from_polars(cls, obj: pl_expr.BooleanFunction) -> Self:
+        def from_polars(cls, obj: polars._expr_nodes.BooleanFunction) -> Self:
             """Convert from polars' `BooleanFunction`."""
             try:
                 function, name = str(obj).split(".", maxsplit=1)
@@ -101,6 +105,7 @@ class BooleanFunction(Expr):
         keep: plc.stream_compaction.DuplicateKeepOption,
         source_value: plc.Scalar,
         target_value: plc.Scalar,
+        stream: Stream,
     ) -> Column:
         table = plc.Table([column.obj])
         indices = plc.stream_compaction.distinct_indices(
@@ -109,12 +114,20 @@ class BooleanFunction(Expr):
             # TODO: polars doesn't expose options for these
             plc.types.NullEquality.EQUAL,
             plc.types.NanEquality.ALL_EQUAL,
+            stream=stream,
         )
         return Column(
             plc.copying.scatter(
                 [source_value],
                 indices,
-                plc.Table([plc.Column.from_scalar(target_value, table.num_rows())]),
+                plc.Table(
+                    [
+                        plc.Column.from_scalar(
+                            target_value, table.num_rows(), stream=stream
+                        )
+                    ]
+                ),
+                stream=stream,
             ).columns()[0],
             dtype=dtype,
         )
@@ -161,7 +174,9 @@ class BooleanFunction(Expr):
             is_finite = self.name is BooleanFunction.Name.IsFinite
             if not is_float:
                 base = plc.Column.from_scalar(
-                    plc.Scalar.from_py(py_val=is_finite), values.size
+                    plc.Scalar.from_py(py_val=is_finite, stream=df.stream),
+                    values.size,
+                    stream=df.stream,
                 )
                 out = base.with_mask(values.obj.null_mask(), values.null_count)
                 return Column(out, dtype=self.dtype)
@@ -172,10 +187,13 @@ class BooleanFunction(Expr):
             nonfinite_values = plc.Column.from_iterable_of_py(
                 to_search,
                 dtype=values.obj.type(),
+                stream=df.stream,
             )
-            result = plc.search.contains(nonfinite_values, values.obj)
+            result = plc.search.contains(nonfinite_values, values.obj, stream=df.stream)
             if is_finite:
-                result = plc.unary.unary_operation(result, plc.unary.UnaryOperator.NOT)
+                result = plc.unary.unary_operation(
+                    result, plc.unary.UnaryOperator.NOT, stream=df.stream
+                )
             return Column(
                 result.with_mask(values.obj.null_mask(), values.null_count),
                 dtype=self.dtype,
@@ -188,7 +206,9 @@ class BooleanFunction(Expr):
             (column,) = columns
             is_any = self.name is BooleanFunction.Name.Any
             agg = plc.aggregation.any() if is_any else plc.aggregation.all()
-            scalar_result = plc.reduce.reduce(column.obj, agg, self.dtype.plc_type)
+            scalar_result = plc.reduce.reduce(
+                column.obj, agg, self.dtype.plc_type, stream=df.stream
+            )
             if not ignore_nulls and column.null_count > 0:
                 #      Truth tables
                 #     Any         All
@@ -200,20 +220,28 @@ class BooleanFunction(Expr):
                 #
                 # If the input null count was non-zero, we must
                 # post-process the result to insert the correct value.
-                h_result = scalar_result.to_py()
+                h_result = scalar_result.to_py(stream=df.stream)
                 if (is_any and not h_result) or (not is_any and h_result):
                     # Any                     All
                     # False || Null => Null   True && Null => Null
                     return Column(
-                        plc.Column.all_null_like(column.obj, 1), dtype=self.dtype
+                        plc.Column.all_null_like(column.obj, 1, stream=df.stream),
+                        dtype=self.dtype,
                     )
-            return Column(plc.Column.from_scalar(scalar_result, 1), dtype=self.dtype)
+            return Column(
+                plc.Column.from_scalar(scalar_result, 1, stream=df.stream),
+                dtype=self.dtype,
+            )
         if self.name is BooleanFunction.Name.IsNull:
             (column,) = columns
-            return Column(plc.unary.is_null(column.obj), dtype=self.dtype)
+            return Column(
+                plc.unary.is_null(column.obj, stream=df.stream), dtype=self.dtype
+            )
         elif self.name is BooleanFunction.Name.IsNotNull:
             (column,) = columns
-            return Column(plc.unary.is_valid(column.obj), dtype=self.dtype)
+            return Column(
+                plc.unary.is_valid(column.obj, stream=df.stream), dtype=self.dtype
+            )
         elif self.name in (BooleanFunction.Name.IsNan, BooleanFunction.Name.IsNotNan):
             (column,) = columns
             is_float = column.obj.type().id() in (
@@ -230,9 +258,11 @@ class BooleanFunction(Expr):
             else:
                 base = plc.Column.from_scalar(
                     plc.Scalar.from_py(
-                        py_val=self.name is not BooleanFunction.Name.IsNan
+                        py_val=self.name is not BooleanFunction.Name.IsNan,
+                        stream=df.stream,
                     ),
                     column.size,
+                    stream=df.stream,
                 )
             out = base.with_mask(column.obj.null_mask(), column.null_count)
             return Column(out, dtype=self.dtype)
@@ -242,10 +272,13 @@ class BooleanFunction(Expr):
                 column,
                 dtype=self.dtype,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
-                source_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype.plc_type),
-                target_value=plc.Scalar.from_py(
-                    py_val=False, dtype=self.dtype.plc_type
+                source_value=plc.Scalar.from_py(
+                    py_val=True, dtype=self.dtype.plc_type, stream=df.stream
                 ),
+                target_value=plc.Scalar.from_py(
+                    py_val=False, dtype=self.dtype.plc_type, stream=df.stream
+                ),
+                stream=df.stream,
             )
         elif self.name is BooleanFunction.Name.IsLastDistinct:
             (column,) = columns
@@ -253,10 +286,15 @@ class BooleanFunction(Expr):
                 column,
                 dtype=self.dtype,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
-                source_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype.plc_type),
-                target_value=plc.Scalar.from_py(
-                    py_val=False, dtype=self.dtype.plc_type
+                source_value=plc.Scalar.from_py(
+                    py_val=True, dtype=self.dtype.plc_type, stream=df.stream
                 ),
+                target_value=plc.Scalar.from_py(
+                    py_val=False,
+                    dtype=self.dtype.plc_type,
+                    stream=df.stream,
+                ),
+                stream=df.stream,
             )
         elif self.name is BooleanFunction.Name.IsUnique:
             (column,) = columns
@@ -264,10 +302,13 @@ class BooleanFunction(Expr):
                 column,
                 dtype=self.dtype,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_NONE,
-                source_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype.plc_type),
-                target_value=plc.Scalar.from_py(
-                    py_val=False, dtype=self.dtype.plc_type
+                source_value=plc.Scalar.from_py(
+                    py_val=True, dtype=self.dtype.plc_type, stream=df.stream
                 ),
+                target_value=plc.Scalar.from_py(
+                    py_val=False, dtype=self.dtype.plc_type, stream=df.stream
+                ),
+                stream=df.stream,
             )
         elif self.name is BooleanFunction.Name.IsDuplicated:
             (column,) = columns
@@ -276,9 +317,12 @@ class BooleanFunction(Expr):
                 dtype=self.dtype,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_NONE,
                 source_value=plc.Scalar.from_py(
-                    py_val=False, dtype=self.dtype.plc_type
+                    py_val=False, dtype=self.dtype.plc_type, stream=df.stream
                 ),
-                target_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype.plc_type),
+                target_value=plc.Scalar.from_py(
+                    py_val=True, dtype=self.dtype.plc_type, stream=df.stream
+                ),
+                stream=df.stream,
             )
         elif self.name is BooleanFunction.Name.AllHorizontal:
             return Column(
@@ -308,26 +352,45 @@ class BooleanFunction(Expr):
             needles, haystack = columns
             if haystack.obj.type().id() == plc.TypeId.LIST:
                 # Unwrap values from the list column
+                # .inner returns DataTypeClass | DataType, need to cast to DataType
                 haystack = Column(
                     haystack.obj.children()[1],
-                    dtype=DataType(haystack.dtype.polars_type.inner),
-                ).astype(needles.dtype)
+                    dtype=DataType(
+                        cast(
+                            pl.DataType, cast(pl.List, haystack.dtype.polars_type).inner
+                        )
+                    ),
+                ).astype(needles.dtype, stream=df.stream)
             if haystack.size:
                 return Column(
                     plc.search.contains(
                         haystack.obj,
                         needles.obj,
+                        stream=df.stream,
                     ),
                     dtype=self.dtype,
                 )
             return Column(
-                plc.Column.from_scalar(plc.Scalar.from_py(py_val=False), needles.size),
+                plc.Column.from_scalar(
+                    plc.Scalar.from_py(py_val=False, stream=df.stream),
+                    needles.size,
+                    stream=df.stream,
+                ),
                 dtype=self.dtype,
             )
         elif self.name is BooleanFunction.Name.Not:
             (column,) = columns
+            # Polars semantics:
+            #   integer input: NOT => bitwise invert.
+            #   boolean input: NOT => logical NOT.
             return Column(
-                plc.unary.unary_operation(column.obj, plc.unary.UnaryOperator.NOT),
+                plc.unary.unary_operation(
+                    column.obj,
+                    plc.unary.UnaryOperator.NOT
+                    if column.obj.type().id() == plc.TypeId.BOOL8
+                    else plc.unary.UnaryOperator.BIT_INVERT,
+                    stream=df.stream,
+                ),
                 dtype=self.dtype,
             )
         else:

@@ -30,6 +30,9 @@ import os
 import warnings
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
+from rmm.pylibrmm.cuda_stream import CudaStreamFlags
+from rmm.pylibrmm.cuda_stream_pool import CudaStreamPool
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -37,12 +40,15 @@ if TYPE_CHECKING:
 
     import polars.lazyframe.engine_config
 
+    import rmm.mr
+
 
 __all__ = [
     "Cluster",
     "ConfigOptions",
     "InMemoryExecutor",
     "ParquetOptions",
+    "Runtime",
     "Scheduler",  # Deprecated, kept for backward compatibility
     "ShuffleMethod",
     "StatsPlanningOptions",
@@ -135,6 +141,20 @@ class StreamingFallbackMode(str, enum.Enum):
     WARN = "warn"
     RAISE = "raise"
     SILENT = "silent"
+
+
+class Runtime(str, enum.Enum):
+    """
+    The runtime to use for the streaming executor.
+
+    * ``Runtime.TASKS`` : Use the task-based runtime.
+      This is the default runtime.
+    * ``Runtime.RAPIDSMPF`` : Use the coroutine-based streaming runtime (rapidsmpf).
+      This runtime is experimental.
+    """
+
+    TASKS = "tasks"
+    RAPIDSMPF = "rapidsmpf"
 
 
 class Cluster(str, enum.Enum):
@@ -403,6 +423,102 @@ class StatsPlanningOptions:
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
+class MemoryResourceConfig:
+    """
+    Configuration for the default memory resource.
+
+    Parameters
+    ----------
+    qualname
+        The fully qualified name of the memory resource class to use.
+    options
+        This can be either a dictionary representing the options to pass
+        to the memory resource class, or, a dictionary representing a
+        nested memory resource configuration. The presence of "qualname"
+        field indicates a nested memory resource configuration.
+
+    Examples
+    --------
+    Create a memory resource config for a single memory resource:
+    >>> MemoryResourceConfig(
+    ...     qualname="rmm.mr.CudaAsyncMemoryResource",
+    ...     options={"initial_pool_size": 100},
+    ... )
+
+    Create a memory resource config for a nested memory resource configuration:
+    >>> MemoryResourceConfig(
+    ...     qualname="rmm.mr.PrefetchResourceAdaptor",
+    ...     options={
+    ...         "upstream_mr": {
+    ...             "qualname": "rmm.mr.PoolMemoryResource",
+    ...             "options": {
+    ...                 "upstream_mr": {
+    ...                     "qualname": "rmm.mr.ManagedMemoryResource",
+    ...                 },
+    ...                 "initial_pool_size": 256,
+    ...             },
+    ...         }
+    ...     },
+    ... )
+    """
+
+    _env_prefix = "CUDF_POLARS__MEMORY_RESOURCE_CONFIG"
+    qualname: str = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__QUALNAME",
+            str,
+            # We shouldn't reach here if qualname isn't set in the environment.
+            default=None,  # type: ignore[assignment]
+        )
+    )
+    options: dict[str, Any] | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__OPTIONS",
+            json.loads,
+            default=None,
+        )
+    )
+
+    def __post_init__(self) -> None:
+        if self.qualname.count(".") < 1:
+            raise ValueError(
+                f"MemoryResourceConfig.qualname '{self.qualname}' must be a fully qualified name to a class, including the module name."
+            )
+
+    def create_memory_resource(self) -> rmm.mr.DeviceMemoryResource:
+        """Create a memory resource from the configuration."""
+
+        def create_mr(
+            qualname: str, options: dict[str, Any] | None
+        ) -> rmm.mr.DeviceMemoryResource:
+            module_name, class_name = qualname.rsplit(".", 1)
+            module = importlib.import_module(module_name)
+            cls = getattr(module, class_name)
+            return cls(**options or {})
+
+        def process_options(opts: dict[str, Any] | None) -> dict[str, Any]:
+            if opts is None:
+                return {}
+
+            processed = {}
+            for key, value in opts.items():
+                if isinstance(value, dict) and "qualname" in value:
+                    # This is a nested memory resource config
+                    nested_qualname = value["qualname"]
+                    nested_options = process_options(value.get("options"))
+                    processed[key] = create_mr(nested_qualname, nested_options)
+                else:
+                    processed[key] = value
+            return processed
+
+        # Create the top-level memory resource
+        return create_mr(self.qualname, process_options(self.options))
+
+    def __hash__(self) -> int:
+        return hash((self.qualname, json.dumps(self.options, sort_keys=True)))
+
+
+@dataclasses.dataclass(frozen=True, eq=True)
 class StreamingExecutor:
     """
     Configuration for the cudf-polars streaming executor.
@@ -412,11 +528,14 @@ class StreamingExecutor:
 
     Parameters
     ----------
+    runtime
+        The runtime to use for the streaming executor.
+        ``Runtime.TASKS`` by default.
     cluster
         The cluster configuration for the streaming executor.
         ``Cluster.SINGLE`` by default.
 
-        This setting applies to both task-based and rapidsmpf execution models:
+        This setting applies to both task-based and rapidsmpf execution modes:
 
         * ``Cluster.SINGLE``: Single-GPU execution
         * ``Cluster.DISTRIBUTED``: Multi-GPU distributed execution (requires
@@ -482,6 +601,10 @@ class StreamingExecutor:
     rapidsmpf_spill
         Whether to wrap task arguments and output in objects that are
         spillable by 'rapidsmpf'.
+    client_device_threshold
+        Threshold for spilling data from device memory in rapidsmpf.
+        Default is 50% of device memory on the client process.
+        This argument is only used by the "rapidsmpf" runtime.
     sink_to_directory
         Whether multi-partition sink operations should write to a directory
         rather than a single file. By default, this will be set to True for
@@ -490,6 +613,9 @@ class StreamingExecutor:
     stats_planning
         Options controlling statistics-based query planning. See
         :class:`~cudf_polars.utils.config.StatsPlanningOptions` for more.
+    max_io_threads
+        Maximum number of IO threads for the rapidsmpf runtime. Default is 2.
+        This controls the parallelism of IO operations when reading data.
 
     Notes
     -----
@@ -502,6 +628,13 @@ class StreamingExecutor:
     _env_prefix = "CUDF_POLARS__EXECUTOR"
 
     name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
+    runtime: Runtime = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__RUNTIME",
+            Runtime.__call__,
+            default=Runtime.TASKS,
+        )
+    )
     cluster: Cluster | None = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__CLUSTER",
@@ -560,6 +693,11 @@ class StreamingExecutor:
             f"{_env_prefix}__RAPIDSMPF_SPILL", _bool_converter, default=False
         )
     )
+    client_device_threshold: float = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__CLIENT_DEVICE_THRESHOLD", float, default=0.5
+        )
+    )
     sink_to_directory: bool | None = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__SINK_TO_DIRECTORY", _bool_converter, default=None
@@ -568,8 +706,23 @@ class StreamingExecutor:
     stats_planning: StatsPlanningOptions = dataclasses.field(
         default_factory=StatsPlanningOptions
     )
+    max_io_threads: int = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__MAX_IO_THREADS", int, default=2
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
+        # Check for rapidsmpf runtime
+        if self.runtime == "rapidsmpf":  # pragma: no cover; requires rapidsmpf runtime
+            if not rapidsmpf_single_available():
+                raise ValueError("The rapidsmpf streaming engine requires rapidsmpf.")
+            if self.shuffle_method == "tasks":
+                raise ValueError(
+                    "The rapidsmpf streaming engine does not support task-based shuffling."
+                )
+            object.__setattr__(self, "shuffle_method", "rapidsmpf")
+
         # Handle backward compatibility for deprecated scheduler parameter
         if self.scheduler is not None:
             if self.cluster is not None:
@@ -596,6 +749,16 @@ class StreamingExecutor:
         elif self.cluster is None:
             object.__setattr__(self, "cluster", Cluster.SINGLE)
         assert self.cluster is not None, "Expected cluster to be set."
+
+        # Warn loudly that multi-GPU execution is under construction
+        # for the rapidsmpf runtime
+        if self.cluster == "distributed" and self.runtime == "rapidsmpf":
+            warnings.warn(
+                "UNDER CONSTRUCTION!!!"
+                "The rapidsmpf runtime does NOT support distributed execution yet. "
+                "Use at your own risk!!!",
+                stacklevel=2,
+            )
 
         # Handle shuffle_method defaults for streaming executor
         if self.shuffle_method is None:
@@ -629,13 +792,15 @@ class StreamingExecutor:
         )
         if self.target_partition_size == 0:
             object.__setattr__(
-                self, "target_partition_size", default_blocksize(self.cluster)
+                self,
+                "target_partition_size",
+                default_blocksize(self.cluster),
             )
         if self.broadcast_join_limit == 0:
             object.__setattr__(
                 self,
                 "broadcast_join_limit",
-                # Usually better to avoid shuffling for single gpu
+                # Usually better to avoid shuffling for single gpu with UVM
                 2 if self.cluster == "distributed" else 32,
             )
         object.__setattr__(self, "cluster", Cluster(self.cluster))
@@ -673,6 +838,10 @@ class StreamingExecutor:
             raise TypeError("rapidsmpf_spill must be bool")
         if not isinstance(self.sink_to_directory, bool):
             raise TypeError("sink_to_directory must be bool")
+        if not isinstance(self.client_device_threshold, float):
+            raise TypeError("client_device_threshold must be a float")
+        if not isinstance(self.max_io_threads, int):
+            raise TypeError("max_io_threads must be an int")
 
         # RapidsMPF spill is only supported for distributed clusters for now.
         # This is because the spilling API is still within the RMPF-Dask integration.
@@ -703,6 +872,79 @@ class InMemoryExecutor:
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
+class CUDAStreamPoolConfig:
+    """
+    Configuration for the CUDA stream pool.
+
+    Parameters
+    ----------
+    pool_size
+        The size of the CUDA stream pool.
+    flags
+        The flags to use for the CUDA stream pool.
+    """
+
+    pool_size: int = 16
+    flags: CudaStreamFlags = CudaStreamFlags.NON_BLOCKING
+
+    def build(self) -> CudaStreamPool:
+        return CudaStreamPool(
+            pool_size=self.pool_size,
+            flags=self.flags,
+        )
+
+
+class CUDAStreamPolicy(str, enum.Enum):
+    """
+    The policy to use for acquiring new CUDA streams.
+
+    * ``CUDAStreamPolicy.DEFAULT`` : Use the default CUDA stream.
+    * ``CUDAStreamPolicy.NEW`` : Create a new CUDA stream.
+    """
+
+    DEFAULT = "default"
+    NEW = "new"
+
+
+def _convert_cuda_stream_policy(
+    user_cuda_stream_policy: dict | str,
+) -> CUDAStreamPolicy | CUDAStreamPoolConfig:
+    match user_cuda_stream_policy:
+        case "default" | "new":
+            return CUDAStreamPolicy(user_cuda_stream_policy)
+        case "pool":
+            return CUDAStreamPoolConfig()
+        case dict():
+            return CUDAStreamPoolConfig(**user_cuda_stream_policy)
+        case str():
+            # assume it's a JSON encoded CUDAStreamPoolConfig
+            try:
+                d = json.loads(user_cuda_stream_policy)
+            except json.JSONDecodeError:
+                raise ValueError(
+                    f"Invalid CUDA stream policy: '{user_cuda_stream_policy}'"
+                ) from None
+            match d:
+                case {"pool_size": int(), "flags": int()}:
+                    return CUDAStreamPoolConfig(
+                        pool_size=d["pool_size"], flags=CudaStreamFlags(d["flags"])
+                    )
+                case {"pool_size": int(), "flags": str()}:
+                    # convert the string names to enums
+                    return CUDAStreamPoolConfig(
+                        pool_size=d["pool_size"],
+                        flags=CudaStreamFlags(CudaStreamFlags.__members__[d["flags"]]),
+                    )
+                case _:
+                    try:
+                        return CUDAStreamPoolConfig(**d)
+                    except TypeError:
+                        raise ValueError(
+                            f"Invalid CUDA stream policy: {user_cuda_stream_policy}"
+                        ) from None
+
+
+@dataclasses.dataclass(frozen=True, eq=True)
 class ConfigOptions:
     """
     Configuration for the polars GPUEngine.
@@ -721,6 +963,8 @@ class ConfigOptions:
     device
         The GPU used to run the query. If not provided, the
         query uses the current CUDA device.
+    cuda_stream_policy
+        The policy to use for acquiring new CUDA streams. See :class:`~cudf_polars.utils.config.CUDAStreamPolicy` for more.
     """
 
     raise_on_fail: bool = False
@@ -729,6 +973,14 @@ class ConfigOptions:
         default_factory=StreamingExecutor
     )
     device: int | None = None
+    memory_resource_config: MemoryResourceConfig | None = None
+    cuda_stream_policy: CUDAStreamPolicy | CUDAStreamPoolConfig = dataclasses.field(
+        default_factory=_make_default_factory(
+            "CUDF_POLARS__CUDA_STREAM_POLICY",
+            CUDAStreamPolicy.__call__,
+            default=CUDAStreamPolicy.DEFAULT,
+        )
+    )
 
     @classmethod
     def from_polars_engine(
@@ -742,6 +994,8 @@ class ConfigOptions:
             "executor_options",
             "parquet_options",
             "raise_on_fail",
+            "memory_resource_config",
+            "cuda_stream_policy",
         }
 
         extra_options = set(engine.config.keys()) - valid_options
@@ -756,6 +1010,16 @@ class ConfigOptions:
         user_parquet_options = engine.config.get("parquet_options", {})
         # This is set in polars, and so can't be overridden by the environment
         user_raise_on_fail = engine.config.get("raise_on_fail", False)
+        user_memory_resource_config = engine.config.get("memory_resource_config", None)
+        if user_memory_resource_config is None and (
+            os.environ.get(f"{MemoryResourceConfig._env_prefix}__QUALNAME", "") != ""
+        ):
+            # We'll pick up the qualname / options from the environment.
+            user_memory_resource_config = MemoryResourceConfig()
+        elif isinstance(user_memory_resource_config, dict):
+            user_memory_resource_config = MemoryResourceConfig(
+                **user_memory_resource_config
+            )
 
         # Backward compatibility for "cardinality_factor"
         # TODO: Remove this in 25.10
@@ -803,9 +1067,43 @@ class ConfigOptions:
             case _:  # pragma: no cover; Unreachable
                 raise ValueError(f"Unsupported executor: {user_executor}")
 
-        return cls(
-            raise_on_fail=user_raise_on_fail,
-            parquet_options=ParquetOptions(**user_parquet_options),
-            executor=executor,
-            device=engine.device,
-        )
+        kwargs = {
+            "raise_on_fail": user_raise_on_fail,
+            "parquet_options": ParquetOptions(**user_parquet_options),
+            "executor": executor,
+            "device": engine.device,
+            "memory_resource_config": user_memory_resource_config,
+        }
+
+        # Handle "cuda-stream-policy".
+        # The default will depend on the runtime and executor.
+        user_cuda_stream_policy = engine.config.get(
+            "cuda_stream_policy", None
+        ) or os.environ.get("CUDF_POLARS__CUDA_STREAM_POLICY", None)
+
+        cuda_stream_policy: CUDAStreamPolicy | CUDAStreamPoolConfig
+
+        if user_cuda_stream_policy is None:
+            if (
+                executor.name == "streaming" and executor.runtime == Runtime.RAPIDSMPF
+            ):  # pragma: no cover; requires rapidsmpf runtime
+                # the rapidsmpf runtime defaults to using a stream pool
+                cuda_stream_policy = CUDAStreamPoolConfig()
+            else:
+                # everything else defaults to the default stream
+                cuda_stream_policy = CUDAStreamPolicy.DEFAULT
+        else:
+            cuda_stream_policy = _convert_cuda_stream_policy(user_cuda_stream_policy)
+
+        # Pool policy is only supported by the rapidsmpf runtime.
+        if isinstance(cuda_stream_policy, CUDAStreamPoolConfig) and (
+            (executor.name != "streaming")
+            or (executor.name == "streaming" and executor.runtime != Runtime.RAPIDSMPF)
+        ):
+            raise ValueError(
+                "CUDAStreamPolicy.POOL is only supported by the rapidsmpf runtime."
+            )
+
+        kwargs["cuda_stream_policy"] = cuda_stream_policy
+
+        return cls(**kwargs)

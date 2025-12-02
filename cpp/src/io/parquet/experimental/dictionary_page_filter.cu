@@ -16,7 +16,6 @@
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
-#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_checks.hpp>
@@ -24,7 +23,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/mr/device/polymorphic_allocator.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/extent.cuh>
 #include <cuco/static_set.cuh>
@@ -255,8 +254,8 @@ __device__ __forceinline__ void decode_int96timestamp(uint8_t const* int96_ptr,
   // Note: This function has been modified from the original at
   // https://github.com/rapidsai/cudf/blob/c89c83c00c729a86c56570693b627f31408bc2c9/cpp/src/io/parquet/page_data.cuh#L133-L198
 
-  int64_t nanos = cudf::io::unaligned_load64(int96_ptr);
-  int64_t days  = cudf::io::unaligned_load32(int96_ptr + sizeof(int64_t));
+  int64_t nanos = cudf::io::unaligned_load<uint64_t>(int96_ptr);
+  int64_t days  = cudf::io::unaligned_load<uint32_t>(int96_ptr + sizeof(int64_t));
 
   // Convert from Julian day at noon to UTC seconds
   cudf::duration_D duration_days{
@@ -490,7 +489,7 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
       // Handle timestamps
       if constexpr (cudf::is_timestamp<T>()) {
         auto const timestamp =
-          cudf::io::unaligned_load32(page_data + (value_idx * sizeof(uint32_t)));
+          cudf::io::unaligned_load<uint32_t>(page_data + (value_idx * sizeof(uint32_t)));
         if (timestamp_scale != 0) {
           decoded_value = T{typename T::duration(static_cast<typename T::rep>(timestamp))};
         } else {
@@ -514,7 +513,7 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
         }
 
         auto const duration =
-          cudf::io::unaligned_load32(page_data + (value_idx * sizeof(uint32_t)));
+          cudf::io::unaligned_load<uint32_t>(page_data + (value_idx * sizeof(uint32_t)));
         decoded_value = T{static_cast<typename T::rep>(duration)};
       }
       // Handle other int32 encoded values including smaller bitwidths and decimal32
@@ -524,8 +523,8 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
           set_error(error, decode_error::INVALID_DATA_TYPE);
           return {};
         }
-        decoded_value =
-          static_cast<T>(cudf::io::unaligned_load32(page_data + (value_idx * sizeof(uint32_t))));
+        decoded_value = static_cast<T>(
+          cudf::io::unaligned_load<uint32_t>(page_data + (value_idx * sizeof(uint32_t))));
       }
       break;
     }
@@ -539,7 +538,7 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
       // Handle timestamps
       if constexpr (cudf::is_timestamp<T>()) {
         int64_t const timestamp =
-          cudf::io::unaligned_load64(page_data + (value_idx * sizeof(int64_t)));
+          cudf::io::unaligned_load<uint64_t>(page_data + (value_idx * sizeof(int64_t)));
         if (timestamp_scale != 0) {
           decoded_value = T{typename T::duration(
             static_cast<typename T::rep>(convert_to_timestamp64(timestamp, timestamp_scale)))};
@@ -549,8 +548,8 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
       }
       // Handle durations and other int64 encoded values including decimal64
       else {
-        decoded_value =
-          static_cast<T>(cudf::io::unaligned_load64(page_data + (value_idx * sizeof(uint64_t))));
+        decoded_value = static_cast<T>(
+          cudf::io::unaligned_load<uint64_t>(page_data + (value_idx * sizeof(uint64_t))));
       }
       break;
     }

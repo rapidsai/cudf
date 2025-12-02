@@ -26,7 +26,7 @@ cdef class OwnerWithCAI:
     cdef dict cai
 
     @staticmethod
-    cdef create(column_view cv, object owner)
+    cdef create(column_view cv, object owner, Stream stream)
 
 
 cdef class OwnerMaskWithCAI:
@@ -37,7 +37,7 @@ cdef class OwnerMaskWithCAI:
     cdef create(column_view cv, object owner)
 
 
-cdef gpumemoryview _copy_array_to_device(object buf)
+cdef gpumemoryview _copy_array_to_device(object buf, Stream stream=*)
 
 
 cdef class Column:
@@ -68,7 +68,11 @@ cdef class Column:
     cdef Column from_column_view(const column_view& cv, Column owner)
 
     @staticmethod
-    cdef Column from_column_view_of_arbitrary(const column_view& cv, object owner)
+    cdef Column from_column_view_of_arbitrary(
+        const column_view& cv,
+        object owner,
+        Stream stream,
+    )
 
     @staticmethod
     cdef Column _wrap_nested_list_column(
@@ -76,6 +80,7 @@ cdef class Column:
         tuple shape,
         DataType dtype,
         Column base=*,
+        Stream stream=*,
     )
 
     cpdef Scalar to_scalar(self, Stream stream=*, DeviceMemoryResource mr=*)

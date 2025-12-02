@@ -23,25 +23,20 @@ project(
   LANGUAGES C CXX CUDA
 )
 
-if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.0)
+if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.2)
   message(
     FATAL_ERROR
-      "libcudf requires CUDA Toolkit 12.0+ to compile (nvcc ${CMAKE_CUDA_COMPILER_VERSION} provided)"
+      "libcudf requires CUDA Toolkit 12.2+ to compile (nvcc ${CMAKE_CUDA_COMPILER_VERSION} provided)"
   )
 endif()
 
 rapids_cmake_write_version_file(include/cudf/version_config.hpp)
 
-# Needed because GoogleBenchmark changes the state of FindThreads.cmake, causing subsequent runs to
-# have different values for the `Threads::Threads` target. Setting this flag ensures
-# `Threads::Threads` is the same value in first run and subsequent runs.
-set(THREADS_PREFER_PTHREAD_FLAG ON)
-
 # ##################################################################################################
 # * build options ---------------------------------------------------------------------------------
 option(USE_NVTX "Build with NVTX support" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
-option(BUILD_BENCHMARKS "Configure CMake to build (google & nvbench) benchmarks" OFF)
+option(BUILD_BENCHMARKS "Configure CMake to build benchmarks" OFF)
 option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 option(CUDF_BUILD_TESTUTIL "Whether to build the test utilities contained in libcudf" ON)
@@ -91,7 +86,7 @@ option(
 
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
-message(VERBOSE "CUDF: Configure CMake to build (google & nvbench) benchmarks: ${BUILD_BENCHMARKS}")
+message(VERBOSE "CUDF: Configure CMake to build benchmarks: ${BUILD_BENCHMARKS}")
 message(VERBOSE "CUDF: Build cuDF shared libraries: ${BUILD_SHARED_LIBS}")
 message(VERBOSE "CUDF: Use a file cache for JIT compiled kernels: ${JITIFY_USE_CACHE}")
 message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}")
@@ -279,10 +274,10 @@ include(cmake/thirdparty/get_nvtx.cmake)
 # find nvCOMP
 include(cmake/thirdparty/get_nvcomp.cmake)
 
-# find CCCL before rmm so that we get cudf's patched version of CCCL
+# find CCCL
 include(cmake/thirdparty/get_cccl.cmake)
 
-# find rmm
+# find rmm, should come after including CCCL to allow overriding the CCCL version used for testing
 include(cmake/thirdparty/get_rmm.cmake)
 
 # find croaring
@@ -538,6 +533,7 @@ add_library(
   src/io/parquet/experimental/hybrid_scan_impl.cpp
   src/io/parquet/experimental/hybrid_scan_preprocess.cu
   src/io/parquet/experimental/page_index_filter.cu
+  src/io/parquet/experimental/page_index_filter_utils.cu
   src/io/parquet/page_data.cu
   src/io/parquet/chunk_dict.cu
   src/io/parquet/page_enc.cu
@@ -981,7 +977,7 @@ target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio nanoarrow zstd
+          kvikio::kvikio nanoarrow::nanoarrow zstd
 )
 
 # Add Conda library, and include paths if specified
@@ -1176,10 +1172,6 @@ endif()
 # ##################################################################################################
 # * add benchmarks --------------------------------------------------------------------------------
 if(CUDF_BUILD_BENCHMARKS)
-  # Find or install GoogleBench
-  include(${rapids-cmake-dir}/cpm/gbench.cmake)
-  rapids_cpm_gbench(BUILD_STATIC)
-
   # Find or install nvbench
   include(cmake/thirdparty/get_nvbench.cmake)
 
