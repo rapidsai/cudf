@@ -22,6 +22,7 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    Metadata,
     process_children,
 )
 from cudf_polars.experimental.utils import _concat
@@ -106,25 +107,53 @@ async def broadcast_join_node(
     broadcast_side
         The side to broadcast.
     """
-    async with shutdown_on_error(context, ch_left.data, ch_right.data, ch_out.data):
+    async with shutdown_on_error(
+        context,
+        ch_left.metadata,
+        ch_left.data,
+        ch_right.metadata,
+        ch_right.data,
+        ch_out.metadata,
+        ch_out.data,
+    ):
+        # Receive metadata.
+        left_metadata, right_metadata = await asyncio.gather(
+            ch_left.recv_metadata(context),
+            ch_right.recv_metadata(context),
+        )
+
+        partitioned_on: tuple[str, ...] = ()
         if broadcast_side == "right":
             # Broadcast right, stream left
             small_ch = ch_right
             large_ch = ch_left
             small_child = ir.children[1]
             large_child = ir.children[0]
+            chunk_count = left_metadata.count
+            partitioned_on = left_metadata.partitioned_on
         else:
             # Broadcast left, stream right
             small_ch = ch_left
             large_ch = ch_right
             small_child = ir.children[0]
             large_child = ir.children[1]
+            chunk_count = right_metadata.count
+            if ir.options[0] == "Right":
+                partitioned_on = right_metadata.partitioned_on
 
-        # Collect small-side chunks
-        small_dfs = await get_small_table(context, small_child, small_ch)
-        if ir.options[0] != "Inner":
-            # TODO: Use local repartitioning for non-inner joins
-            small_dfs = [_concat(*small_dfs, context=ir_context)]
+        # Send metadata.
+        output_metadata = Metadata(
+            chunk_count,
+            partitioned_on=partitioned_on,
+            duplicated=left_metadata.duplicated and right_metadata.duplicated,
+        )
+        await ch_out.send_metadata(context, output_metadata)
+
+        # Collect small-side
+        small_df = _concat(
+            *await get_small_table(context, small_child, small_ch),
+            context=ir_context,
+        )
 
         # Stream through large side, joining with the small-side
         while (msg := await large_ch.data.recv(context)) is not None:
@@ -140,22 +169,14 @@ async def broadcast_join_node(
             )
 
             # Perform the join
-            df = _concat(
-                *[
-                    (
-                        await asyncio.to_thread(
-                            ir.do_evaluate,
-                            *ir._non_child_args,
-                            *(
-                                [large_df, small_df]
-                                if broadcast_side == "right"
-                                else [small_df, large_df]
-                            ),
-                            context=ir_context,
-                        )
-                    )
-                    for small_df in small_dfs
-                ],
+            df = await asyncio.to_thread(
+                ir.do_evaluate,
+                *ir._non_child_args,
+                *(
+                    [large_df, small_df]
+                    if broadcast_side == "right"
+                    else [small_df, large_df]
+                ),
                 context=ir_context,
             )
 
@@ -202,6 +223,7 @@ def _(
 
     if pwise_join:
         # Partition-wise join (use default_node_multi)
+        partitioning_index = 1 if ir.options[0] == "Right" else 0
         nodes[ir] = [
             default_node_multi(
                 rec.state["context"],
@@ -212,6 +234,7 @@ def _(
                     channels[left].reserve_output_slot(),
                     channels[right].reserve_output_slot(),
                 ),
+                partitioning_index=partitioning_index,
             )
         ]
         return nodes, channels
