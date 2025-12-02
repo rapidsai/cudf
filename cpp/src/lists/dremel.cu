@@ -16,6 +16,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/tuple>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
@@ -24,6 +25,7 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
 
 #include <functional>
 
@@ -307,13 +309,13 @@ dremel_data get_encoding(column_view h_col,
 
     // Zip the input and output value iterators so that merge operation is done only once
     auto input_parent_zip_it =
-      thrust::make_zip_iterator(thrust::make_tuple(input_parent_rep_it, input_parent_def_it));
+      thrust::make_zip_iterator(cuda::std::make_tuple(input_parent_rep_it, input_parent_def_it));
 
     auto input_child_zip_it =
-      thrust::make_zip_iterator(thrust::make_tuple(input_child_rep_it, input_child_def_it));
+      thrust::make_zip_iterator(cuda::std::make_tuple(input_child_rep_it, input_child_def_it));
 
     auto output_zip_it =
-      thrust::make_zip_iterator(thrust::make_tuple(rep_level.begin(), def_level.begin()));
+      thrust::make_zip_iterator(cuda::std::make_tuple(rep_level.begin(), def_level.begin()));
 
     auto ends = thrust::merge_by_key(rmm::exec_policy(stream),
                                      empties.begin(),
@@ -394,13 +396,13 @@ dremel_data get_encoding(column_view h_col,
 
     // Zip the input and output value iterators so that merge operation is done only once
     auto input_parent_zip_it =
-      thrust::make_zip_iterator(thrust::make_tuple(input_parent_rep_it, input_parent_def_it));
+      thrust::make_zip_iterator(cuda::std::make_tuple(input_parent_rep_it, input_parent_def_it));
 
-    auto input_child_zip_it =
-      thrust::make_zip_iterator(thrust::make_tuple(temp_rep_vals.begin(), temp_def_vals.begin()));
+    auto input_child_zip_it = thrust::make_zip_iterator(
+      cuda::std::make_tuple(temp_rep_vals.begin(), temp_def_vals.begin()));
 
     auto output_zip_it =
-      thrust::make_zip_iterator(thrust::make_tuple(rep_level.begin(), def_level.begin()));
+      thrust::make_zip_iterator(cuda::std::make_tuple(rep_level.begin(), def_level.begin()));
 
     auto ends = thrust::merge_by_key(rmm::exec_policy(stream),
                                      transformed_empties,

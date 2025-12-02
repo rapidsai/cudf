@@ -17,6 +17,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/tuple>
 #include <thrust/for_each.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -212,8 +213,8 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
         thrust::make_zip_iterator(thrust::make_counting_iterator(1) + num_columns, row_idx.end()),
         row_idx.begin() + 1,
         cuda::proclaim_return_type<NodeIndexT>([] __device__(auto a) {
-          auto n   = thrust::get<0>(a);
-          auto idx = thrust::get<1>(a);
+          auto n   = cuda::std::get<0>(a);
+          auto idx = cuda::std::get<1>(a);
           return n == 1 ? idx : idx + 1;
         }),
         cuda::std::plus<NodeIndexT>{});

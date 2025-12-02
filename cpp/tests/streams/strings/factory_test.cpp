@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,14 +11,14 @@
 
 #include <rmm/device_uvector.hpp>
 
-#include <thrust/pair.h>
+#include <cuda/std/utility>
 
 #include <string>
 #include <vector>
 
 class StringsFactoryTest : public cudf::test::BaseFixture {};
 
-using string_pair = thrust::pair<char const*, cudf::size_type>;
+using string_pair = cuda::std::pair<char const*, cudf::size_type>;
 
 TEST_F(StringsFactoryTest, StringConstructionFromPairs)
 {

@@ -114,7 +114,7 @@ TYPED_TEST(GroupbyM2TypedTest, AllNullValuesInput)
   auto const vals = vals_col<T>{{3, 4, 5}, all_nulls()};
 
   auto const [out_keys, out_M2s] = compute_M2(keys, vals);
-  auto const expected_M2s        = M2s_col<R>{{null, null, null}, all_nulls()};
+  auto const expected_M2s        = M2s_col<R>{0, 0, 0};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(keys, *out_keys, verbosity);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);
@@ -168,7 +168,7 @@ TYPED_TEST(GroupbyM2TypedTest, ValuesHaveNulls)
 
   auto const [out_keys, out_M2s] = compute_M2(keys, vals);
   auto const expected_keys       = keys_col<T>{1, 2, 3, 4, 5};
-  auto const expected_M2s        = M2s_col<R>{{0.0, 2.0, 8.0, 0.0, 0.0 /*NULL*/}, null_at(4)};
+  auto const expected_M2s        = M2s_col<R>{0.0, 2.0, 8.0, 0.0, 0.0};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, verbosity);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);
@@ -188,7 +188,7 @@ TYPED_TEST(GroupbyM2TypedTest, KeysAndValuesHaveNulls)
 
   auto const [out_keys, out_M2s] = compute_M2(keys, vals);
   auto const expected_keys       = keys_col<T>{1, 2, 3, 4};
-  auto const expected_M2s = M2s_col<R>{{4.5, 32.0 + 2.0 / 3.0, 18.0, 0.0 /*NULL*/}, null_at(3)};
+  auto const expected_M2s        = M2s_col<R>{4.5, 32.0 + 2.0 / 3.0, 18.0, 0.0};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, verbosity);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);

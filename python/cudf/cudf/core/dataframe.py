@@ -1973,7 +1973,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             plc_tables = [
                 plc.Table(
                     [
-                        c.to_pylibcudf(mode="read")
+                        c.plc_column
                         for c in (
                             table._columns
                             if ignore
@@ -2710,10 +2710,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         with acquire_spill_lock():
             plc_table, offsets = plc.partitioning.partition(
-                plc.Table(
-                    [col.to_pylibcudf(mode="read") for col in source_columns]
-                ),
-                map_index.to_pylibcudf(mode="read"),
+                plc.Table([col.plc_column for col in source_columns]),
+                map_index.plc_column,
                 map_size,
             )
         return self._wrap_from_partitions(
@@ -5114,7 +5112,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         with acquire_spill_lock():
             plc_table, offsets = plc.partitioning.hash_partition(
-                plc.Table([col.to_pylibcudf(mode="read") for col in cols]),
+                plc.Table([col.plc_column for col in cols]),
                 key_indices,
                 nparts,
             )
@@ -6227,9 +6225,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if method == "table":
             with acquire_spill_lock():
                 plc_table = plc.quantiles.quantiles(
-                    plc.Table(
-                        [c.to_pylibcudf(mode="read") for c in self._columns]
-                    ),
+                    plc.Table([c.plc_column for c in self._columns]),
                     qs,
                     plc.types.Interpolation[
                         (interpolation or "nearest").upper()
@@ -7528,7 +7524,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     [
                         as_column(
                             unique_named_levels.get_level_values(i)
-                        ).to_pylibcudf(mode="read")
+                        ).plc_column
                         for i in range(unique_named_levels.nlevels)
                     ]
                 ),
@@ -7626,12 +7622,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             with acquire_spill_lock():
                 interleaved_col = ColumnBase.from_pylibcudf(
                     plc.reshape.interleave_columns(
-                        plc.Table(
-                            [
-                                col.to_pylibcudf(mode="read")
-                                for col in homogenized
-                            ]
-                        )
+                        plc.Table([col.plc_column for col in homogenized])
                     )
                 )
             stacked.append(interleaved_col._with_type_metadata(common_type))
@@ -7792,8 +7783,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         else:
             first_null_count = self._columns[0].null_count
             children = (
-                col.copy(deep=True).to_pylibcudf(mode="read")
-                for col in self._columns
+                col.copy(deep=True).plc_column for col in self._columns
             )
             if all(
                 col.null_count == first_null_count for col in self._columns
@@ -8168,12 +8158,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         with acquire_spill_lock():
             result_col = ColumnBase.from_pylibcudf(
                 plc.reshape.interleave_columns(
-                    plc.Table(
-                        [
-                            col.to_pylibcudf(mode="read")
-                            for col in self._columns
-                        ]
-                    )
+                    plc.Table([col.plc_column for col in self._columns])
                 )
             )
         return self._constructor_sliced._from_column(result_col)
@@ -8182,9 +8167,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     def _compute_column(self, expr: str) -> ColumnBase:
         """Helper function for eval"""
         plc_column = plc.transform.compute_column(
-            plc.Table(
-                [col.to_pylibcudf(mode="read") for col in self._columns]
-            ),
+            plc.Table([col.plc_column for col in self._columns]),
             plc.expressions.to_expression(expr, self._column_names),
         )
         return ColumnBase.from_pylibcudf(plc_column)
