@@ -1553,7 +1553,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         with acquire_spill_lock():
             result = type(self).from_pylibcudf(
-                plc.unary.is_null(self.to_pylibcudf(mode="read"))
+                plc.unary.is_null(self.plc_column)
             )
 
         if self.dtype.kind == "f":
