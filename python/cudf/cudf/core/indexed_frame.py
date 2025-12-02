@@ -2933,9 +2933,7 @@ class IndexedFrame(Frame):
                 f"`{method}`. Only {seed_hash_methods} support seeds."
             )
         with acquire_spill_lock():
-            plc_table = plc.Table(
-                [c.to_pylibcudf(mode="read") for c in self._columns]
-            )
+            plc_table = plc.Table([c.plc_column for c in self._columns])
             if method == "murmur3":
                 plc_column = plc.hashing.murmurhash3_x86_32(plc_table, seed)
             elif method == "xxhash32":
@@ -3274,7 +3272,7 @@ class IndexedFrame(Frame):
 
         with acquire_spill_lock():
             plc_column = plc.stream_compaction.distinct_indices(
-                plc.Table([col.to_pylibcudf(mode="read") for col in columns]),
+                plc.Table([col.plc_column for col in columns]),
                 keep_option,
                 plc.types.NullEquality.EQUAL,
                 plc.types.NanEquality.ALL_EQUAL,
@@ -3297,7 +3295,7 @@ class IndexedFrame(Frame):
             plc_table = plc.copying.empty_like(
                 plc.Table(
                     [
-                        col.to_pylibcudf(mode="read")
+                        col.plc_column
                         for col in (
                             itertools.chain(self.index._columns, self._columns)
                             if keep_index
@@ -5453,7 +5451,7 @@ class IndexedFrame(Frame):
             plc_table = plc.lists.explode_outer(
                 plc.Table(
                     [
-                        col.to_pylibcudf(mode="read")
+                        col.plc_column
                         for col in itertools.chain(idx_cols, self._columns)
                     ]
                 ),
@@ -5545,7 +5543,7 @@ class IndexedFrame(Frame):
             plc_table = plc.reshape.tile(
                 plc.Table(
                     [
-                        col.to_pylibcudf(mode="read")
+                        col.plc_column
                         for col in itertools.chain(
                             self.index._columns, self._columns
                         )
