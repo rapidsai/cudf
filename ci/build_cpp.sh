@@ -4,8 +4,6 @@
 
 set -euo pipefail
 
-conda config --append 'custom_multichannels.conda-forge' 'https://prefix.dev/conda-forge'
-
 source rapids-configure-sccache
 source rapids-date-string
 
@@ -23,8 +21,6 @@ export RAPIDS_PACKAGE_VERSION
 RAPIDS_ARTIFACTS_DIR=${RAPIDS_ARTIFACTS_DIR:-"${PWD}/artifacts"}
 mkdir -p "${RAPIDS_ARTIFACTS_DIR}"
 export RAPIDS_ARTIFACTS_DIR
-
-mamba clean --yes --all
 
 # populates `RATTLER_CHANNELS` array and `RATTLER_ARGS` array
 source rapids-rattler-channel-string

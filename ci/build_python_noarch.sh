@@ -4,8 +4,6 @@
 
 set -euo pipefail
 
-conda config --append 'custom_multichannels.conda-forge' 'https://prefix.dev/conda-forge'
-
 source rapids-date-string
 
 export CMAKE_GENERATOR=Ninja
@@ -16,8 +14,6 @@ rapids-generate-version > ./VERSION
 rapids-generate-version > ./python/cudf/cudf/VERSION
 
 rapids-logger "Begin py build"
-
-mamba clean --yes --all
 
 CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
 PYTHON_CHANNEL=$(rapids-download-from-github "$(rapids-package-name conda_python cudf)")

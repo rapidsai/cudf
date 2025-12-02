@@ -19,7 +19,6 @@ rapids-dependency-file-generator \
   --prepend-channel "${CPP_CHANNEL}" \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch)" | tee "${ENV_YAML_DIR}/env.yaml"
 
-mamba clean --yes --all
 rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n test
 
 export CMAKE_GENERATOR=Ninja

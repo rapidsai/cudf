@@ -6,13 +6,10 @@
 
 set -euo pipefail
 
-conda config --append 'custom_multichannels.conda-forge' 'https://prefix.dev/conda-forge'
-
 . /opt/conda/etc/profile.d/conda.sh
 
 rapids-logger "Configuring conda strict channel priority"
 conda config --set channel_priority strict
-mamba clean --yes --all
 
 rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-conda-from-github cpp)

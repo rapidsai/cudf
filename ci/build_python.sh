@@ -4,8 +4,6 @@
 
 set -euo pipefail
 
-conda config --append 'custom_multichannels.conda-forge' 'https://prefix.dev/conda-forge'
-
 source rapids-configure-sccache
 source rapids-date-string
 
@@ -17,8 +15,6 @@ rapids-generate-version > ./VERSION
 rapids-generate-version > ./python/cudf/cudf/VERSION
 
 rapids-logger "Begin py build"
-
-mamba clean --yes --all
 
 CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
 

@@ -4,8 +4,6 @@
 
 set -euo pipefail
 
-conda config --append 'custom_multichannels.conda-forge' 'https://prefix.dev/conda-forge'
-
 RAPIDS_VERSION="$(rapids-version)"
 RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
 export RAPIDS_VERSION
@@ -15,8 +13,6 @@ rapids-logger "Create test conda environment"
 . /opt/conda/etc/profile.d/conda.sh
 
 ENV_YAML_DIR="$(mktemp -d)"
-
-mamba clean --yes --all
 
 rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
