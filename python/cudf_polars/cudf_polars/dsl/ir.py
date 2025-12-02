@@ -1808,7 +1808,12 @@ class GroupBy(IR):
                 col = child.evaluate(df, context=ExecutionContext.GROUPBY).obj
             else:
                 # Anything else, we pre-evaluate
-                col = value.evaluate(df, context=ExecutionContext.GROUPBY).obj
+                column = value.evaluate(df, context=ExecutionContext.GROUPBY)
+                if column.size != keys[0].size:
+                    column = broadcast(
+                        column, target_length=keys[0].size, stream=df.stream
+                    )[0]
+                col = column.obj
             requests.append(plc.groupby.GroupByRequest(col, [value.agg_request]))
             names.append(name)
         group_keys, raw_tables = grouper.aggregate(requests, stream=df.stream)
