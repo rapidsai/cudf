@@ -18,7 +18,6 @@ import rmm
 from cudf.core.buffer.buffer import (
     Buffer,
     BufferOwner,
-    cuda_array_interface_wrapper,
     host_memory_allocation,
 )
 from cudf.core.buffer.exposure_tracked_buffer import ExposureTrackedBuffer
@@ -61,6 +60,30 @@ class DelayedPointerTuple(collections.abc.Sequence):
         elif i == 1:
             return False
         raise IndexError("tuple index out of range")
+
+
+class SpillableBufferCAIWrapper:
+    # A wrapper that exposes the __cuda_array_interface__ of a SpillableBuffer without
+    # actually accessing __cuda_array_interface__, which triggers spilling.
+
+    _buf: SpillableBuffer
+
+    def __init__(self, buf: SpillableBuffer) -> None:
+        self._buf = buf
+        self._spill_lock = SpillLock()
+
+    @property
+    def __cuda_array_interface__(self) -> dict:
+        self._buf.spill_lock(self._spill_lock)
+        # Accessing _memory_info doesn't trigger spilling
+        ptr, size, _ = self._buf.memory_info()
+        return {
+            "data": (ptr, False),
+            "shape": (size,),
+            "strides": None,
+            "typestr": "|u1",
+            "version": 0,
+        }
 
 
 class SpillableBufferOwner(BufferOwner):
@@ -248,7 +271,6 @@ class SpillableBufferOwner(BufferOwner):
 
         This also unspills the buffer (unspillable buffers cannot be spilled!).
         """
-
         self._manager.spill_to_device_limit()
         with self.lock:
             if not self.exposed:
@@ -421,17 +443,10 @@ class SpillableBuffer(ExposureTrackedBuffer):
                 frames = [self.memoryview()]
             else:
                 # TODO: Use `frames=[self]` instead of this hack, see doc above
-                spill_lock = SpillLock()
-                self.spill_lock(spill_lock)
-                ptr, size, _ = self.memory_info()
                 frames = [
                     Buffer(
                         owner=BufferOwner.from_device_memory(
-                            cuda_array_interface_wrapper(
-                                ptr=ptr,
-                                size=size,
-                                owner=(self._owner, spill_lock),
-                            ),
+                            SpillableBufferCAIWrapper(self),
                             exposed=False,
                         )
                     )

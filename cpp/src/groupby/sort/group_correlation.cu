@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,13 +17,13 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
 
 #include <type_traits>
 
@@ -177,7 +177,7 @@ std::unique_ptr<column> group_correlation(column_view const& covariance,
   CUDF_EXPECTS(covariance.type().id() == type_id::FLOAT64, "Covariance result must be FLOAT64");
   auto stddev0_ptr = stddev_0.begin<result_type>();
   auto stddev1_ptr = stddev_1.begin<result_type>();
-  auto stddev_iter = thrust::make_zip_iterator(thrust::make_tuple(stddev0_ptr, stddev1_ptr));
+  auto stddev_iter = thrust::make_zip_iterator(cuda::std::make_tuple(stddev0_ptr, stddev1_ptr));
   auto result      = make_numeric_column(covariance.type(),
                                     covariance.size(),
                                     cudf::detail::copy_bitmask(covariance, stream, mr),
@@ -191,7 +191,7 @@ std::unique_ptr<column> group_correlation(column_view const& covariance,
                     stddev_iter,
                     d_result,
                     [] __device__(auto const covariance, auto const stddev) {
-                      return covariance / thrust::get<0>(stddev) / thrust::get<1>(stddev);
+                      return covariance / cuda::std::get<0>(stddev) / cuda::std::get<1>(stddev);
                     });
 
   result->set_null_count(covariance.null_count());

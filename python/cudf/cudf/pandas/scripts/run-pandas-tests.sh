@@ -65,12 +65,13 @@ EOF
     # Substitute `pandas.tests` with a relative import.
     # This will depend on the location of the test module relative to
     # the pandas-tests directory.
-    for hit in $(find . -iname '*.py' -print0 | xargs -0 grep "pandas.tests" | cut -d ":" -f 1 | sort | uniq); do
+    for hit in $(find pandas-tests -iname '*.py' -print0 | xargs -0 grep "pandas.tests" | cut -d ":" -f 1 | sort | uniq); do
         # Get the relative path to the test module
         test_module=$(echo "$hit" | cut -d "/" -f 2-)
         # Get the number of directories to go up
-        num_dirs=$(echo "$test_module" | grep -o "/" | wc -l)
-        num_dots=$((num_dirs - 2))
+        num_dirs="${test_module//[^\/]/}"
+        num_dirs="${#num_dirs}"
+        num_dots=$((num_dirs - 1))
         # Construct the relative import
         relative_import=$(printf "%0.s." $(seq 1 $num_dots))
         # Replace the import
@@ -172,6 +173,8 @@ IGNORE_TESTS_THAT_TEST_PRIVATE_FUNTIONALITY=("--ignore=tests/test_nanops.py"
                                              "--ignore=tests/frame/test_block_internals.py"
                                              "--ignore=tests/arrays/sparse/test_libsparse.py"
                                              "--ignore=tests/copy_view/test_internals.py"
+                                             "--ignore=tests/indexing/test_chaining_and_caching.py"
+                                             "--ignore=tests/indexing/multiindex/test_chaining_and_caching.py"
 )
 
 
@@ -184,6 +187,6 @@ PANDAS_CI="1" python -m pytest -p cudf.pandas \
 
 mv ./*.json ..
 cd ..
-rm -rf pandas-testing/pandas-tests/
+rm -rf pandas-tests/
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}

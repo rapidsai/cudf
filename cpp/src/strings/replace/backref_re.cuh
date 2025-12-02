@@ -14,15 +14,15 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
-#include <thrust/pair.h>
 
 namespace cudf {
 namespace strings {
 namespace detail {
 
-using backref_type = thrust::pair<size_type, size_type>;
+using backref_type = cuda::std::pair<size_type, size_type>;
 
 /**
  * @brief This functor handles replacing strings by applying the compiled regex pattern

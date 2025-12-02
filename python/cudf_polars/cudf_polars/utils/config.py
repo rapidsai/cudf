@@ -613,6 +613,9 @@ class StreamingExecutor:
     stats_planning
         Options controlling statistics-based query planning. See
         :class:`~cudf_polars.utils.config.StatsPlanningOptions` for more.
+    max_io_threads
+        Maximum number of IO threads for the rapidsmpf runtime. Default is 2.
+        This controls the parallelism of IO operations when reading data.
 
     Notes
     -----
@@ -703,6 +706,11 @@ class StreamingExecutor:
     stats_planning: StatsPlanningOptions = dataclasses.field(
         default_factory=StatsPlanningOptions
     )
+    max_io_threads: int = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__MAX_IO_THREADS", int, default=2
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         # Check for rapidsmpf runtime
@@ -741,6 +749,16 @@ class StreamingExecutor:
         elif self.cluster is None:
             object.__setattr__(self, "cluster", Cluster.SINGLE)
         assert self.cluster is not None, "Expected cluster to be set."
+
+        # Warn loudly that multi-GPU execution is under construction
+        # for the rapidsmpf runtime
+        if self.cluster == "distributed" and self.runtime == "rapidsmpf":
+            warnings.warn(
+                "UNDER CONSTRUCTION!!!"
+                "The rapidsmpf runtime does NOT support distributed execution yet. "
+                "Use at your own risk!!!",
+                stacklevel=2,
+            )
 
         # Handle shuffle_method defaults for streaming executor
         if self.shuffle_method is None:
@@ -822,6 +840,8 @@ class StreamingExecutor:
             raise TypeError("sink_to_directory must be bool")
         if not isinstance(self.client_device_threshold, float):
             raise TypeError("client_device_threshold must be a float")
+        if not isinstance(self.max_io_threads, int):
+            raise TypeError("max_io_threads must be an int")
 
         # RapidsMPF spill is only supported for distributed clusters for now.
         # This is because the spilling API is still within the RMPF-Dask integration.

@@ -92,6 +92,7 @@ if TYPE_CHECKING:
         MutableMapping,
         Sequence,
     )
+    from types import NotImplementedType
 
     from cudf._typing import (
         Axis,
@@ -99,7 +100,6 @@ if TYPE_CHECKING:
         DataFrameOrSeries,
         Dtype,
         DtypeObj,
-        NotImplementedType,
         ScalarLike,
     )
     from cudf.core.series import Series
@@ -633,8 +633,7 @@ class IndexedFrame(Frame):
         """
         return self._from_data(
             self._data.copy(deep=deep),
-            # Indexes are immutable so copies can always be shallow.
-            self.index.copy(deep=False),
+            self.index.copy(deep=deep),
             attrs=copy.deepcopy(self.attrs) if deep else self._attrs,
         )
 
@@ -2934,9 +2933,7 @@ class IndexedFrame(Frame):
                 f"`{method}`. Only {seed_hash_methods} support seeds."
             )
         with acquire_spill_lock():
-            plc_table = plc.Table(
-                [c.to_pylibcudf(mode="read") for c in self._columns]
-            )
+            plc_table = plc.Table([c.plc_column for c in self._columns])
             if method == "murmur3":
                 plc_column = plc.hashing.murmurhash3_x86_32(plc_table, seed)
             elif method == "xxhash32":
@@ -3275,7 +3272,7 @@ class IndexedFrame(Frame):
 
         with acquire_spill_lock():
             plc_column = plc.stream_compaction.distinct_indices(
-                plc.Table([col.to_pylibcudf(mode="read") for col in columns]),
+                plc.Table([col.plc_column for col in columns]),
                 keep_option,
                 plc.types.NullEquality.EQUAL,
                 plc.types.NanEquality.ALL_EQUAL,
@@ -3298,7 +3295,7 @@ class IndexedFrame(Frame):
             plc_table = plc.copying.empty_like(
                 plc.Table(
                     [
-                        col.to_pylibcudf(mode="read")
+                        col.plc_column
                         for col in (
                             itertools.chain(self.index._columns, self._columns)
                             if keep_index
@@ -5454,7 +5451,7 @@ class IndexedFrame(Frame):
             plc_table = plc.lists.explode_outer(
                 plc.Table(
                     [
-                        col.to_pylibcudf(mode="read")
+                        col.plc_column
                         for col in itertools.chain(idx_cols, self._columns)
                     ]
                 ),
@@ -5546,7 +5543,7 @@ class IndexedFrame(Frame):
             plc_table = plc.reshape.tile(
                 plc.Table(
                     [
-                        col.to_pylibcudf(mode="read")
+                        col.plc_column
                         for col in itertools.chain(
                             self.index._columns, self._columns
                         )

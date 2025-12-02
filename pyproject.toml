@@ -17,8 +17,14 @@ exclude = [
  ]
 
 [[tool.mypy.overrides]]
+module = ["cudf.core.column.*"]
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
 module = ["cudf_polars.*"]
 disallow_untyped_defs = true
+follow_imports = "normal"
+ignore_missing_imports = false
 
 [[tool.mypy.overrides]]
 module = ["polars.*"]

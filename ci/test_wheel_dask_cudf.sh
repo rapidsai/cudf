@@ -41,7 +41,7 @@ mkdir -p "${RAPIDS_TESTS_DIR}"
 # Run tests in dask_cudf/tests and dask_cudf/io/tests
 rapids-logger "pytest dask_cudf"
 pushd python/dask_cudf/dask_cudf
-python -m pytest \
+timeout 15m python -m pytest \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf.xml" \
   --numprocesses=8 \
   --dist=worksteal \

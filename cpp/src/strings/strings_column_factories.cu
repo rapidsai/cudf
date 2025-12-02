@@ -19,8 +19,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/utility>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/scan.h>
 #include <thrust/uninitialized_fill.h>
 
@@ -173,7 +173,7 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
 
 // Create a strings-type column from vector of pointer/size pairs
 std::unique_ptr<column> make_strings_column(
-  device_span<thrust::pair<char const*, size_type> const> strings,
+  device_span<cuda::std::pair<char const*, size_type> const> strings,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
@@ -182,7 +182,7 @@ std::unique_ptr<column> make_strings_column(
 }
 
 std::vector<std::unique_ptr<column>> make_strings_column_batch(
-  std::vector<cudf::device_span<thrust::pair<char const*, size_type> const>> const& input,
+  std::vector<cudf::device_span<cuda::std::pair<char const*, size_type> const>> const& input,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
@@ -194,11 +194,11 @@ namespace {
 struct string_view_to_pair {
   string_view null_placeholder;
   string_view_to_pair(string_view n) : null_placeholder(n) {}
-  __device__ thrust::pair<char const*, size_type> operator()(string_view const& i)
+  __device__ cuda::std::pair<char const*, size_type> operator()(string_view const& i)
   {
     return (i.data() == null_placeholder.data())
-             ? thrust::pair<char const*, size_type>{nullptr, 0}
-             : thrust::pair<char const*, size_type>{i.data(), i.size_bytes()};
+             ? cuda::std::pair<char const*, size_type>{nullptr, 0}
+             : cuda::std::pair<char const*, size_type>{i.data(), i.size_bytes()};
   }
 };
 
