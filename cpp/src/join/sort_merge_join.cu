@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "cudf/null_mask.hpp"
-
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
@@ -13,6 +11,7 @@
 #include <cudf/detail/row_operator/lexicographic.cuh>
 #include <cudf/join/sort_merge_join.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
@@ -250,6 +249,10 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
   // remove rows that have nulls at any nesting level
   // step 1: identify nulls at root level
   auto [validity_mask, num_nulls] = cudf::bitmask_and(table, stream, temp_mr);
+
+  // If the table has no nullable top-level columns, then we need to create
+  // an all-valid bitmask that is passed to subsequent operations. This bitmask
+  // is updated if any of the nested struct/list children columns have nulls.
   if (validity_mask.is_empty())
     validity_mask = create_null_mask(table.num_rows(), mask_state::ALL_VALID, stream, temp_mr);
 
@@ -293,31 +296,42 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
                             child_positions,
                             static_cast<size_type>(subset_offset)});
     } else if (col.type().id() == type_id::STRUCT) {
+      // Recursive lambda to traverse struct hierarchy and accumulate null information.
+      // This lambda ANDs the column's null mask with the accumulated mask in-place and recursively
+      // processes all child columns to capture nested nulls.
       auto and_bitmasks = [&](auto&& self, bitmask_type* mask, column_view const& colview) -> void {
         auto const num_rows = colview.size();
-        if (colview.type().id() != cudf::type_id::EMPTY && colview.nullable()) {
-          auto colmask = colview.null_mask();
-          std::vector<bitmask_type const*> masks{reinterpret_cast<bitmask_type const*>(colmask),
-                                                 reinterpret_cast<bitmask_type const*>(mask)};
-          std::vector<size_type> begin_bits{0, 0};
-          auto const valid_count = cudf::detail::inplace_bitmask_and(
-            device_span<bitmask_type>(mask, num_bitmask_words(num_rows)),
-            masks,
-            begin_bits,
-            num_rows,
-            stream);
-          CUDF_EXPECTS(
-            std::all_of(colview.child_begin(),
-                        colview.child_end(),
-                        [&](auto const& child_col) { return num_rows == child_col.size(); }),
-            "Child columns must have the same number of rows as the Struct column.");
+        if (colview.type().id() != cudf::type_id::EMPTY) {
+          if (colview.nullable()) {
+            // AND this column's null mask with the accumulated mask
+            auto colmask = colview.null_mask();
+            std::vector masks{reinterpret_cast<bitmask_type const*>(colmask),
+                              reinterpret_cast<bitmask_type const*>(mask)};
+            std::vector<size_type> begin_bits{0, 0};
+            cudf::detail::inplace_bitmask_and(
+              device_span<bitmask_type>(mask, num_bitmask_words(num_rows)),
+              masks,
+              begin_bits,
+              num_rows,
+              stream);
+          }
+          if (colview.type().id() == cudf::type_id::STRUCT ||
+              colview.type().id() == cudf::type_id::LIST) {
+            CUDF_EXPECTS(
+              std::all_of(colview.child_begin(),
+                          colview.child_end(),
+                          [&](auto const& child_col) { return num_rows == child_col.size(); }),
+              "Child columns must have the same number of rows as the Struct column.");
 
-          for (auto it = colview.child_begin(); it != colview.child_end(); it++) {
-            auto& child = *it;
-            self(self, mask, child);
+            // Recursively process child columns to capture nulls at deeper nesting levels.
+            for (auto it = colview.child_begin(); it != colview.child_end(); it++) {
+              auto& child = *it;
+              self(self, mask, child);
+            }
           }
         }
       };
+      // Process all children of the struct column
       for (auto it = col.child_begin(); it != col.child_end(); it++) {
         auto& child = *it;
         and_bitmasks(and_bitmasks, static_cast<bitmask_type*>(validity_mask.data()), child);
