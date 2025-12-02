@@ -14,7 +14,7 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 from cudf_polars.containers import DataFrame
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
-from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
+from cudf_polars.experimental.rapidsmpf.utils import ChannelManager, Metadata
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import _concat
 
@@ -57,7 +57,21 @@ async def concatenate_node(
     """
     # TODO: Use multiple streams
     max_chunks = max(2, max_chunks) if max_chunks else None
-    async with shutdown_on_error(context, ch_in.data, ch_out.data):
+    async with shutdown_on_error(
+        context, ch_in.metadata, ch_in.data, ch_out.metadata, ch_out.data
+    ):
+        # Receive/send metadata.
+        input_metadata = await ch_in.recv_metadata(context)
+        output_count = (
+            max(1, math.ceil(input_metadata.count / max_chunks))
+            if max_chunks
+            else input_metadata.count
+        )
+        # TODO: Mark as duplicated once global Repartition->1 is added.
+        await ch_out.send_metadata(
+            context, Metadata(output_count, duplicated=input_metadata.duplicated)
+        )
+
         seq_num = 0
         while True:
             chunks: list[TableChunk] = []

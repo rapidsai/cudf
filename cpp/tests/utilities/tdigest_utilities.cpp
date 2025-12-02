@@ -17,8 +17,8 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/tuple.h>
 
 // for use with groupby and reduction aggregation tests.
 
@@ -33,16 +33,16 @@ void tdigest_sample_compare(cudf::tdigest::tdigest_column_view const& tdv,
 
   auto h_expected_src = std::vector<size_type>(h_expected.size());
   std::transform(h_expected.begin(), h_expected.end(), h_expected_src.begin(), [](auto const& ex) {
-    return thrust::get<0>(ex);
+    return cuda::std::get<0>(ex);
   });
   auto h_expected_mean = std::vector<double>(h_expected.size());
   std::transform(h_expected.begin(), h_expected.end(), h_expected_mean.begin(), [](auto const& ex) {
-    return thrust::get<1>(ex);
+    return cuda::std::get<1>(ex);
   });
   auto h_expected_weight = std::vector<double>(h_expected.size());
   std::transform(
     h_expected.begin(), h_expected.end(), h_expected_weight.begin(), [](auto const& ex) {
-      return thrust::get<2>(ex);
+      return cuda::std::get<2>(ex);
     });
 
   auto d_expected_src = cudf::detail::make_device_uvector_async(
@@ -77,15 +77,8 @@ std::unique_ptr<column> make_expected_tdigest_column(std::vector<expected_tdiges
     auto tdigests =
       cudf::make_structs_column(tdigest.mean.size(), std::move(inner_children), 0, {});
 
-    std::vector<size_type> h_offsets{0, tdigest.mean.size()};
-    auto offsets =
-      cudf::make_fixed_width_column(data_type{type_id::INT32}, 2, mask_state::UNALLOCATED);
-    CUDF_CUDA_TRY(cudaMemcpy(offsets->mutable_view().begin<size_type>(),
-                             h_offsets.data(),
-                             sizeof(size_type) * 2,
-                             cudaMemcpyDefault));
-
-    auto list = cudf::make_lists_column(1, std::move(offsets), std::move(tdigests), 0, {});
+    auto offsets = cudf::test::fixed_width_column_wrapper<int32_t>({0, tdigest.mean.size()});
+    auto list    = cudf::make_lists_column(1, offsets.release(), std::move(tdigests), 0, {});
 
     auto min_col = cudf::test::fixed_width_column_wrapper<double>({tdigest.min});
     auto max_col = cudf::test::fixed_width_column_wrapper<double>({tdigest.max});

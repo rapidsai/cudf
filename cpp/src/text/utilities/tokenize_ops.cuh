@@ -9,15 +9,15 @@
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/string_view.cuh>
 
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/logical.h>
-#include <thrust/pair.h>
 
 namespace nvtext {
 namespace detail {
-using string_index_pair = thrust::pair<char const*, cudf::size_type>;
-using position_pair     = thrust::pair<cudf::size_type, cudf::size_type>;
+using string_index_pair = cuda::std::pair<char const*, cudf::size_type>;
+using position_pair     = cuda::std::pair<cudf::size_type, cudf::size_type>;
 
 /**
  * @brief Tokenizer class that use multi-character delimiters.

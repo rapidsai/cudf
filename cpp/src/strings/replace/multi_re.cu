@@ -23,10 +23,10 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/std/iterator>
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 #include <thrust/find.h>
-#include <thrust/pair.h>
 
 #include <algorithm>
 #include <functional>
@@ -36,7 +36,7 @@ namespace strings {
 namespace detail {
 namespace {
 // this is a [begin,end) pair of character positions when a substring is matched
-using found_range = thrust::pair<size_type, size_type>;
+using found_range = cuda::std::pair<size_type, size_type>;
 
 /**
  * @brief This functor handles replacing strings by applying the compiled regex patterns

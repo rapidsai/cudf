@@ -22,10 +22,7 @@ from pylibcudf.io.types import CompressionType
 _COMMON_JSON_SOURCE_KWARGS = {"format": "json", "orient": "records"}
 
 
-# TODO: Reenable testing on non-default stream once we can resolve
-# https://github.com/rapidsai/cudf/issues/19900
-# @pytest.mark.parametrize("stream", [None, Stream()])
-@pytest.mark.parametrize("stream", [None])
+@pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("rows_per_chunk", [8, 100])
 @pytest.mark.parametrize("lines", [True, False])
 def test_write_json_basic(
