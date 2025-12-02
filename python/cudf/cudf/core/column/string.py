@@ -358,7 +358,7 @@ class StringColumn(ColumnBase, Scannable):
             return result._with_type_metadata(new_type)
         return result
 
-    def _scan(self, op: str):
+    def _scan(self, op: str) -> ColumnBase:
         return self.scan(op.replace("cum", ""), True)._with_type_metadata(
             self.dtype
         )
