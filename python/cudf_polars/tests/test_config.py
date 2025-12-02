@@ -887,6 +887,11 @@ def test_rapidsmpf_distributed_warns(monkeypatch: pytest.MonkeyPatch) -> None:
         "rapidsmpf_single_available",
         lambda: True,
     )
+    monkeypatch.setattr(
+        cudf_polars.utils.config,
+        "rapidsmpf_distributed_available",
+        lambda: True,
+    )
 
     with pytest.warns(
         UserWarning,
