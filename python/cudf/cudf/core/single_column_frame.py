@@ -25,11 +25,12 @@ from cudf.utils.utils import _is_same_name
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, Mapping
+    from types import NotImplementedType
 
     import numpy as np
     import pyarrow as pa
 
-    from cudf._typing import Axis, Dtype, NotImplementedType, ScalarLike
+    from cudf._typing import Axis, Dtype, ScalarLike
     from cudf.core.dataframe import DataFrame
     from cudf.core.index import Index
 
