@@ -43,7 +43,7 @@ install(TARGETS hybrid_scan_io DESTINATION bin/examples/libcudf/hybrid_scan_io)
 add_executable(hybrid_scan_io_multithreaded hybrid_scan_io_multithreaded.cpp)
 target_link_libraries(
   hybrid_scan_io_multithreaded PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
-                                   $<TARGET_OBJECTS:hybrid_scan_io_utils>
+                                       $<TARGET_OBJECTS:hybrid_scan_io_utils>
 )
 target_compile_features(hybrid_scan_io_multithreaded PRIVATE cxx_std_20)
 install(TARGETS hybrid_scan_io_multithreaded DESTINATION bin/examples/libcudf/hybrid_scan_io)

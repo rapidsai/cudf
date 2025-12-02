@@ -118,7 +118,7 @@ void inline print_usage()
                "<input multiplier>\n"
                "                                    <thread count> <number of times to read> "
                "<column name>\n"
-               "                                    <literal> <iosource type> \n\n"
+               "                                    <literal> <io source type> \n\n"
 
                "Available IO source types: HOST_BUFFER, PINNED_BUFFER (Default)\n\n"
                "Note: Provide as many arguments as you like in the above order. Default values\n"
