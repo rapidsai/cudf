@@ -125,11 +125,12 @@ from cudf.utils.utils import (
 )
 
 if TYPE_CHECKING:
+    from types import NotImplementedType
+
     from cudf._typing import (
         Axis,
         ColumnLike,
         Dtype,
-        NotImplementedType,
         ScalarLike,
     )
 
