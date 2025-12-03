@@ -150,11 +150,8 @@ filter_join_indices(cudf::table_view const& left,
 
   // Handle different join semantics
   if (join_kind == join_kind::INNER_JOIN) {
-    // INNER_JOIN: only keep pairs that satisfy the predicate AND have valid indices
-    auto valid_predicate = [=] __device__(size_type i) -> bool {
-      auto const indices_valid = (left_ptr[i] != JoinNoMatch) && (right_ptr[i] != JoinNoMatch);
-      return indices_valid && predicate_results_ptr[i];
-    };
+    // INNER_JOIN: only keep pairs that satisfy the predicate
+    auto valid_predicate = [=] __device__(size_type i) -> bool { return predicate_results_ptr[i]; };
 
     auto const num_valid =
       thrust::count_if(rmm::exec_policy_nosync(stream),
