@@ -245,9 +245,15 @@ std::unique_ptr<cudf::table> cross_join(
  * as a two-step process: equality-based join followed by conditional filtering.
  *
  * The behavior depends on the join type:
- * - **INNER_JOIN**: Only pairs that satisfy the predicate and have valid indices are kept.
- * - **LEFT_JOIN**: All left rows are preserved. Failed predicates nullify right indices.
- * - **FULL_JOIN**: All rows from both sides are preserved. Failed predicates create separate pairs.
+ * - INNER_JOIN: Only pairs that satisfy the predicate and have valid indices are kept.
+ * - LEFT_JOIN: All left rows are preserved. Failed predicates nullify right indices.
+ * - FULL_JOIN: All rows from both sides are preserved. Failed predicates create separate pairs.
+ *
+ * Note on JoinNoMatch pairs: If an input pair already contains `JoinNoMatch` in either
+ * position, the predicate cannot be evaluated and the pair passes through unchanged. The
+ * "separate pairs" splitting only occurs when both indices are valid but the predicate fails.
+ * For example, a FULL_JOIN pair `(5, 10)` that fails the predicate becomes two pairs:
+ * `(5, JoinNoMatch)` and `(JoinNoMatch, 10)`, ensuring both rows appear in the output.
  *
  * ## Usage Pattern
  *
