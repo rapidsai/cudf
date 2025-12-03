@@ -40,14 +40,52 @@ std::string random_file_in_dir(std::string const& dir_path)
   return filename;
 }
 
-cuio_source_sink_pair::cuio_source_sink_pair(io_type type)
-  : type{type},
+cuio_source_sink_pair::cuio_source_sink_pair(io_type type_param)
+  : type{type_param},
     pinned_buffer({pinned_memory_resource(), cudf::get_default_stream()}),
     d_buffer{0, cudf::get_default_stream()},
     file_name{random_file_in_dir(tmpdir.path())},
-    void_sink{cudf::io::data_sink::create()}
+    void_sink{cudf::io::data_sink::create()},
+    owns_file{true}
 {
 }
+
+cuio_source_sink_pair::~cuio_source_sink_pair()
+{
+  if (owns_file) { cleanup(); }
+}
+
+cuio_source_sink_pair::cuio_source_sink_pair(cuio_source_sink_pair&& ss) noexcept
+  : type{std::exchange(ss.type, io_type::VOID)},
+    h_buffer{std::move(ss.h_buffer)},
+    pinned_buffer{std::move(ss.pinned_buffer)},
+    d_buffer{std::move(ss.d_buffer)},
+    file_name{std::move(ss.file_name)},
+    void_sink{std::move(ss.void_sink)},
+    owns_file{std::exchange(ss.owns_file, false)}
+{
+}
+
+cuio_source_sink_pair& cuio_source_sink_pair::operator=(cuio_source_sink_pair&& ss) noexcept
+{
+  if (this != &ss) {
+    if (owns_file) {
+      // Clean up current resource. This needs to happen before file_name is reassigned.
+      cleanup();
+    }
+
+    type          = std::exchange(ss.type, io_type::VOID);
+    h_buffer      = std::move(ss.h_buffer);
+    pinned_buffer = std::move(ss.pinned_buffer);
+    d_buffer      = std::move(ss.d_buffer);
+    file_name     = std::move(ss.file_name);
+    void_sink     = std::move(ss.void_sink);
+    owns_file     = std::exchange(ss.owns_file, false);
+  }
+  return *this;
+}
+
+void cuio_source_sink_pair::cleanup() { std::remove(file_name.c_str()); }
 
 cudf::io::source_info cuio_source_sink_pair::make_source_info()
 {
