@@ -1301,9 +1301,9 @@ class top_k_aggregation final : public groupby_aggregation {
     return k == other.k and topk_order == other.topk_order;
   }
 
-  [[nodiscard]] size_t do_hash() const override
+  [[nodiscard]] std::size_t do_hash() const override
   {
-    return this->aggregation::do_hash() ^ static_cast<size_t>(k) ^ static_cast<size_t>(topk_order);
+    return this->aggregation::do_hash() ^ hash_impl();
   }
 
   [[nodiscard]] std::unique_ptr<aggregation> clone() const override
@@ -1318,6 +1318,12 @@ class top_k_aggregation final : public groupby_aggregation {
   }
 
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+
+ private:
+  [[nodiscard]] std::size_t hash_impl() const
+  {
+    return std::hash<int>{}(static_cast<int>(k)) ^ std::hash<int>{}(static_cast<int>(topk_order));
+  }
 };
 
 /**

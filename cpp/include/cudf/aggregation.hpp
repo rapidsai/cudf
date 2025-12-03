@@ -801,7 +801,7 @@ std::unique_ptr<Base> make_bitwise_aggregation(bitwise_op op);
 /**
  * @brief Factory to create a TOP_K aggregation
  *
- * The `topk_order` identifies if the values are selecting descending (default)
+ * The `topk_order` identifies if the values are selected descending (default)
  * or ascending. The returned values may not be sorted.
  *
  * @param k Number of top values for each group
