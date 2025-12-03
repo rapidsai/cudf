@@ -1039,13 +1039,13 @@ parquet_column_schema walk_schema(aggregate_reader_metadata const* mt, int idx)
 
 parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> const> sources)
 {
-  // Do not use arrow schema when reading information from parquet metadata.
+  // Do not use arrow schema when only reading the parquet footer metadata.
   constexpr auto use_arrow_schema = false;
 
   // Do not select any columns when only reading the parquet metadata.
   constexpr auto has_column_projection = false;
 
-  // Do not read page indexes when reading the parquet metadata.
+  // Do not read page indexes as it's not used to construct `parquet_metadata`.
   constexpr auto read_page_indexes = false;
 
   // Open and parse the source dataset metadata
@@ -1064,13 +1064,13 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
 std::vector<parquet::FileMetaData> read_parquet_footers(
   host_span<std::unique_ptr<datasource> const> sources)
 {
-  // Do not use arrow schema when reading information from parquet metadata.
+  // Do not use arrow schema when only reading the parquet metadata.
   constexpr auto use_arrow_schema = false;
 
   // Do not select any columns when only reading the parquet metadata.
   constexpr auto has_column_projection = false;
 
-  // Read page indexes if needed.
+  // Read page indexes if available here since we will want to reuse the raw metadata for later use.
   constexpr auto read_page_indexes = true;
 
   // Parse the source dataset metadata
