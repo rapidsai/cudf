@@ -100,8 +100,8 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
 
   aggregate_reader_metadata(aggregate_reader_metadata const&)            = delete;
   aggregate_reader_metadata& operator=(aggregate_reader_metadata const&) = delete;
-  aggregate_reader_metadata(aggregate_reader_metadata&&)                 = delete;
-  aggregate_reader_metadata& operator=(aggregate_reader_metadata&&)      = delete;
+  aggregate_reader_metadata(aggregate_reader_metadata&&)                 = default;
+  aggregate_reader_metadata& operator=(aggregate_reader_metadata&&)      = default;
 
   /**
    * @brief Initialize the internal variables

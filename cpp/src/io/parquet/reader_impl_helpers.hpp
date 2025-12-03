@@ -342,8 +342,8 @@ class aggregate_reader_metadata {
 
   aggregate_reader_metadata(aggregate_reader_metadata const&)            = delete;
   aggregate_reader_metadata& operator=(aggregate_reader_metadata const&) = delete;
-  aggregate_reader_metadata(aggregate_reader_metadata&&)                 = delete;
-  aggregate_reader_metadata& operator=(aggregate_reader_metadata&&)      = delete;
+  aggregate_reader_metadata(aggregate_reader_metadata&&)                 = default;
+  aggregate_reader_metadata& operator=(aggregate_reader_metadata&&)      = default;
 
   [[nodiscard]] RowGroup const& get_row_group(size_type row_group_index, size_type src_idx) const;
 

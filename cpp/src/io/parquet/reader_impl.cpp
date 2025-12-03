@@ -528,7 +528,8 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
     _input_pass_read_limit{pass_read_limit}
 {
   // Open and parse the source dataset metadata
-  CUDF_EXPECTS(file_metadatas.empty() or file_metadatas.size() == _sources.size(), "");
+  CUDF_EXPECTS(file_metadatas.empty() or file_metadatas.size() == _sources.size(),
+               "Encountered a mismatch in the number of provided data sources and metadatas");
   _metadata =
     file_metadatas.empty()
       ? std::make_unique<aggregate_reader_metadata>(
