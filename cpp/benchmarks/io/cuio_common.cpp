@@ -18,6 +18,7 @@
 #include <fstream>
 #include <numeric>
 #include <string>
+#include <utility>
 
 temp_directory const cuio_source_sink_pair::tmpdir{"cudf_bench"};
 
