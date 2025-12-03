@@ -53,10 +53,10 @@ filter_join_indices(cudf::table_view const& left,
                "Left and right index arrays must have the same size",
                std::invalid_argument);
 
-  CUDF_EXPECTS(
-    join_kind == join_kind::INNER_JOIN || join_kind == join_kind::LEFT_JOIN ||
-      join_kind == join_kind::FULL_JOIN,
-    "filter_join_indices only supports INNER_JOIN, LEFT_JOIN, and FULL_JOIN" std::invalid_argument);
+  CUDF_EXPECTS(join_kind == join_kind::INNER_JOIN || join_kind == join_kind::LEFT_JOIN ||
+                 join_kind == join_kind::FULL_JOIN,
+               "filter_join_indices only supports INNER_JOIN, LEFT_JOIN, and FULL_JOIN.",
+               std::invalid_argument);
 
   auto make_empty_result = [&]() {
     return std::pair{std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
