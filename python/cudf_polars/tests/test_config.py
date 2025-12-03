@@ -806,14 +806,22 @@ def test_cuda_stream_policy_default_rapidsmpf(monkeypatch: pytest.MonkeyPatch) -
 
 
 @pytest.mark.parametrize(
-    "cuda_stream_policy", [CUDAStreamPolicy.NEW, CUDAStreamPolicy.DEFAULT]
+    "cuda_stream_policy",
+    [CUDAStreamPolicy.NEW, CUDAStreamPolicy.DEFAULT],
 )
 def test_rapidsmpf_runtime_requires_pool_policy(
     cuda_stream_policy: CUDAStreamPolicy,
+    *,
+    rapidsmpf_single_available: bool,
 ) -> None:
+    if rapidsmpf_single_available:
+        msg = f"The rapidsmpf runtime must use the rapidsmpf pool policy, not {cuda_stream_policy}"
+    else:
+        msg = "The rapidsmpf streaming engine requires rapidsmpf"
+
     with pytest.raises(
         ValueError,
-        match=f"The rapidsmpf runtime must use the rapidsmpf pool policy, not {cuda_stream_policy}",
+        match=msg,
     ):
         ConfigOptions.from_polars_engine(
             pl.GPUEngine(
