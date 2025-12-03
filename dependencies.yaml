@@ -219,6 +219,7 @@ files:
       - build_base
       - build_cpp
       - depends_on_libkvikio
+      - depends_on_libnvcomp
       - depends_on_librmm
       - depends_on_rapids_logger
   py_run_libcudf:
@@ -228,11 +229,8 @@ files:
       table: project
     includes:
       - depends_on_libkvikio
+      - depends_on_libnvcomp
       - depends_on_librmm
-      # TODO: restore runtime dependency when we no longer vendor nvcomp
-      # (when nvcomp ships C++ wheels)
-      # https://github.com/rapidsai/build-planning/issues/171
-      # - depends_on_libnvcomp
       - depends_on_rapids_logger
   py_build_pylibcudf:
     output: pyproject
@@ -500,7 +498,21 @@ dependencies:
       - output_types: conda
         packages:
           # Align nvcomp version with rapids-cmake
-          - libnvcomp-dev==5.0.0.6
+          - libnvcomp-dev==5.1.0.21
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+            packages:
+              - nvidia-libnvcomp-cu12==5.1.0.21
+          - matrix:
+              cuda: "13.*"
+            packages:
+              - nvidia-libnvcomp-cu13==5.1.0.21
+          - matrix:
+            packages:
+              - nvidia-libnvcomp==5.1.0.21
   rapids_build_skbuild:
     common:
       - output_types: [conda, requirements, pyproject]
