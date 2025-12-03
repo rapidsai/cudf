@@ -27,6 +27,7 @@
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/transform_iterator.h>
+
 #include <cstddef>
 
 namespace cudf {
@@ -263,12 +264,13 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
 
   if (average_string_length > string_parallel_threshold) {
     constexpr int max_threadblocks = 65536;
-    const std::size_t grid_size = min((static_cast<int>(output_count) + warps_per_threadblock - 1) / warps_per_threadblock, max_threadblocks);
-    gather_chars_fn_string_parallel<<<
-      grid_size,
-      warps_per_threadblock * cudf::detail::warp_size,
-      0,
-      stream.value()>>>(
+    const std::size_t grid_size =
+      min((static_cast<int>(output_count) + warps_per_threadblock - 1) / warps_per_threadblock,
+          max_threadblocks);
+    gather_chars_fn_string_parallel<<<grid_size,
+                                      warps_per_threadblock * cudf::detail::warp_size,
+                                      0,
+                                      stream.value()>>>(
       d_strings->begin<string_view>(), d_out_chars, offsets_view, begin, output_count);
   } else {
     // Threshold is based on empirical data on H100.
@@ -278,12 +280,10 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
 
     if (output_count < cub_batch_copy_threshold) {
       constexpr int strings_per_threadblock = 32;
-      const std::size_t grid_size = (output_count + strings_per_threadblock - 1) / strings_per_threadblock;
+      const std::size_t grid_size =
+        (output_count + strings_per_threadblock - 1) / strings_per_threadblock;
       gather_chars_fn_char_parallel<strings_per_threadblock>
-        <<<grid_size,
-           warps_per_threadblock * cudf::detail::warp_size,
-           0,
-           stream.value()>>>(
+        <<<grid_size, warps_per_threadblock * cudf::detail::warp_size, 0, stream.value()>>>(
           d_strings->begin<string_view>(), d_out_chars, offsets_view, begin, output_count);
     } else {
       // Iterator over the character column of input strings to gather
