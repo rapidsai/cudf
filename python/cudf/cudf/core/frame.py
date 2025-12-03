@@ -735,9 +735,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         dtype = find_common_type(dtypes)
         casted = self.astype(dtype)
         return plc.interop.to_dlpack(
-            plc.Table(
-                [col.to_pylibcudf(mode="read") for col in casted._columns]
-            )
+            plc.Table([col.plc_column for col in casted._columns])
         )
 
     @_performance_tracking
@@ -781,9 +779,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             shape = (len(self), self._num_columns)
             out = cupy.empty(shape, dtype=dtype, order="F")
 
-            table = plc.Table(
-                [col.to_pylibcudf(mode="read") for col in self._columns]
-            )
+            table = plc.Table([col.plc_column for col in self._columns])
             plc.reshape.table_to_array(
                 table,
                 out.data.ptr,
@@ -1621,7 +1617,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @_performance_tracking
     def _encode(self) -> tuple[Self, ColumnBase]:
         plc_table, plc_column = plc.transform.encode(
-            plc.Table([col.to_pylibcudf(mode="read") for col in self._columns])
+            plc.Table([col.plc_column for col in self._columns])
         )
         columns = [
             ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
@@ -2063,11 +2059,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
             repeats = as_column(repeats)
 
         with acquire_spill_lock():
-            plc_table = plc.Table(
-                [col.to_pylibcudf(mode="read") for col in columns]
-            )
+            plc_table = plc.Table([col.plc_column for col in columns])
             if isinstance(repeats, ColumnBase):
-                repeats = repeats.to_pylibcudf(mode="read")
+                repeats = repeats.plc_column
             return [
                 ColumnBase.from_pylibcudf(col)
                 for col in plc.filling.repeat(plc_table, repeats).columns()

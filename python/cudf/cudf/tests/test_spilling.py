@@ -48,6 +48,9 @@ if get_global_manager() is not None:
         allow_module_level=True,
     )
 
+# For now, don't try and make CoW and spilling play well together
+pytestmark = pytest.mark.no_copy_on_write
+
 
 @contextlib.contextmanager
 def set_rmm_memory_pool(nbytes: int):
