@@ -16,7 +16,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <thrust/pair.h>
+#include <cuda/std/utility>
 #include <thrust/scan.h>
 #include <thrust/transform_scan.h>
 
@@ -24,7 +24,7 @@ namespace cudf {
 namespace detail {
 
 template <typename T>
-using pair_type = thrust::pair<T, T>;
+using pair_type = cuda::std::pair<T, T>;
 
 /**
  * @brief functor to be summed over in a prefix sum such that
@@ -50,7 +50,7 @@ struct ewma_functor_base {
 
 template <typename T, bool is_numerator>
 struct ewma_adjust_nulls_functor : public ewma_functor_base<T> {
-  __device__ pair_type<T> operator()(thrust::tuple<bool, int, T> const data)
+  __device__ pair_type<T> operator()(cuda::std::tuple<bool, int, T> const data)
   {
     // Not const to allow for updating the input value
     auto [valid, exp, input] = data;
@@ -92,7 +92,7 @@ struct ewma_noadjust_nulls_functor : public ewma_functor_base<T> {
     properly downweight the previous values. But now but we also need to compute
     the normalization factors and divide the results into them at the end.
   */
-  __device__ pair_type<T> operator()(thrust::tuple<T, size_type, bool, size_type> const data)
+  __device__ pair_type<T> operator()(cuda::std::tuple<T, size_type, bool, size_type> const data)
   {
     T const beta                              = this->beta;
     auto const [input, index, valid, nullcnt] = data;
@@ -111,7 +111,7 @@ struct ewma_noadjust_nulls_functor : public ewma_functor_base<T> {
 
 template <typename T>
 struct ewma_noadjust_no_nulls_functor : public ewma_functor_base<T> {
-  __device__ pair_type<T> operator()(thrust::tuple<T, size_type> const data)
+  __device__ pair_type<T> operator()(cuda::std::tuple<T, size_type> const data)
   {
     T const beta              = this->beta;
     auto const [input, index] = data;
@@ -162,7 +162,7 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
     auto device_view                             = column_device_view::create(input);
     auto valid_it = cudf::detail::make_validity_iterator(*device_view);
     auto data =
-      thrust::make_zip_iterator(thrust::make_tuple(valid_it, nullcnt.begin(), input.begin<T>()));
+      thrust::make_zip_iterator(cuda::std::make_tuple(valid_it, nullcnt.begin(), input.begin<T>()));
 
     thrust::transform_inclusive_scan(rmm::exec_policy(stream),
                                      data,
@@ -237,7 +237,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
 
   if (!input.has_nulls()) {
     auto data = thrust::make_zip_iterator(
-      thrust::make_tuple(input.begin<T>(), thrust::make_counting_iterator<size_type>(0)));
+      cuda::std::make_tuple(input.begin<T>(), thrust::make_counting_iterator<size_type>(0)));
     thrust::transform_inclusive_scan(rmm::exec_policy(stream),
                                      data,
                                      data + input.size(),
@@ -249,7 +249,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
     auto device_view = column_device_view::create(input);
     auto valid_it    = detail::make_validity_iterator(*device_view);
 
-    auto data = thrust::make_zip_iterator(thrust::make_tuple(
+    auto data = thrust::make_zip_iterator(cuda::std::make_tuple(
       input.begin<T>(), thrust::make_counting_iterator<size_type>(0), valid_it, nullcnt.begin()));
 
     thrust::transform_inclusive_scan(rmm::exec_policy(stream),
