@@ -301,33 +301,34 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
       // processes all child columns to capture nested nulls.
       auto and_bitmasks = [&](auto&& self, bitmask_type* mask, column_view const& colview) -> void {
         auto const num_rows = colview.size();
-        if (colview.type().id() != cudf::type_id::EMPTY) {
-          if (colview.nullable()) {
-            // AND this column's null mask with the accumulated mask
-            auto colmask = colview.null_mask();
-            std::vector masks{reinterpret_cast<bitmask_type const*>(colmask),
-                              reinterpret_cast<bitmask_type const*>(mask)};
-            std::vector<size_type> begin_bits{0, 0};
-            cudf::detail::inplace_bitmask_and(
-              device_span<bitmask_type>(mask, num_bitmask_words(num_rows)),
-              masks,
-              begin_bits,
-              num_rows,
-              stream);
-          }
-          if (colview.type().id() == cudf::type_id::STRUCT ||
-              colview.type().id() == cudf::type_id::LIST) {
-            CUDF_EXPECTS(
-              std::all_of(colview.child_begin(),
-                          colview.child_end(),
-                          [&](auto const& child_col) { return num_rows == child_col.size(); }),
-              "Child columns must have the same number of rows as the Struct column.");
+        if (colview.type().id() == cudf::type_id::EMPTY) { return; }
 
-            // Recursively process child columns to capture nulls at deeper nesting levels.
-            for (auto it = colview.child_begin(); it != colview.child_end(); it++) {
-              auto& child = *it;
-              self(self, mask, child);
-            }
+        if (colview.nullable()) {
+          // AND this column's null mask with the accumulated mask
+          auto colmask = colview.null_mask();
+          std::vector masks{reinterpret_cast<bitmask_type const*>(colmask),
+                            reinterpret_cast<bitmask_type const*>(mask)};
+          std::vector<size_type> begin_bits{0, 0};
+          cudf::detail::inplace_bitmask_and(
+            device_span<bitmask_type>(mask, num_bitmask_words(num_rows)),
+            masks,
+            begin_bits,
+            num_rows,
+            stream);
+        }
+
+        if (colview.type().id() == cudf::type_id::STRUCT ||
+            colview.type().id() == cudf::type_id::LIST) {
+          CUDF_EXPECTS(
+            std::all_of(colview.child_begin(),
+                        colview.child_end(),
+                        [&](auto const& child_col) { return num_rows == child_col.size(); }),
+            "Child columns must have the same number of rows as the Struct column.");
+
+          // Recursively process child columns to capture nulls at deeper nesting levels.
+          for (auto it = colview.child_begin(); it != colview.child_end(); it++) {
+            auto& child = *it;
+            self(self, mask, child);
           }
         }
       };
