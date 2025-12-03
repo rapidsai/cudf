@@ -2559,7 +2559,7 @@ TEST_F(ParquetMetadataReaderTest, TestPreMaterializedMetadata)
   auto const test_parquet_metadata = [&](int num_sources) {
     auto const source_info = cudf::io::source_info{std::vector<std::string>(num_sources, filepath)};
     auto datasources       = cudf::io::make_datasources(source_info);
-    auto metadatas         = cudf::io::read_parquet_metadata(datasources);
+    auto metadatas         = cudf::io::read_parquet_footers(datasources);
     EXPECT_EQ(metadatas.size(), num_sources);
     auto const rows_in_metadatas =
       std::accumulate(metadatas.begin(), metadatas.end(), 0, [](auto acc, auto const& metadata) {

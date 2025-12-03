@@ -279,7 +279,7 @@ parquet_metadata read_parquet_metadata(source_info const& src_info);
  *
  * @return List of FileMetaData objects, one per parquet source
  */
-std::vector<parquet::FileMetaData> read_parquet_metadata(
+std::vector<parquet::FileMetaData> read_parquet_footers(
   cudf::host_span<std::unique_ptr<cudf::io::datasource> const> sources);
 
 /** @} */  // end of group
