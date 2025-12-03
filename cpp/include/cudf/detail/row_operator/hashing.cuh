@@ -123,11 +123,9 @@ class device_row_hasher {
           row_index);
       });
 
-    auto const initial_hash = *it;
-    return detail::accumulate(
-      it + 1, it + _table.num_columns(), initial_hash, [](auto hash, auto h) {
-        return cudf::hashing::detail::hash_combine(hash, h);
-      });
+    return detail::accumulate(it, it + _table.num_columns(), _seed, [](auto hash, auto h) {
+      return cudf::hashing::detail::hash_combine(hash, h);
+    });
   }
 
  private:
