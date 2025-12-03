@@ -8541,6 +8541,8 @@ NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS = {
     "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_consistency_series_cov_corr[series_data5-rolling_consistency_cases0-True-0]",
     "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_consistency_series_cov_corr[series_data6-rolling_consistency_cases0-True-0]",
     "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_consistency_series_cov_corr[series_data7-rolling_consistency_cases0-True-0]",
+    "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_consistency_series_cov_corr[series_data6-rolling_consistency_cases0-False-0]",
+    "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_consistency_series_cov_corr[series_data7-rolling_consistency_cases0-False-0]",
     "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_consistency_mean[all_data1-rolling_consistency_cases0-True]",
     "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_consistency_mean[all_data1-rolling_consistency_cases0-False]",
     "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_consistency_mean[all_data5-rolling_consistency_cases0-True]",
@@ -8559,6 +8561,7 @@ NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS = {
     "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_consistency_mean[all_data17-rolling_consistency_cases0-False]",
     "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_consistency_constant[consistent_data1-rolling_consistency_cases0-True]",
     "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_consistency_constant[consistent_data1-rolling_consistency_cases0-False]",
+    "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_consistency_constant[consistent_data3-rolling_consistency_cases0-True]",
     "tests/window/test_rolling.py::test_rolling_mean_all_nan_window_floating_artifacts[1-exp_values0]",
     "tests/window/test_rolling.py::test_rolling_mean_all_nan_window_floating_artifacts[2-exp_values1]",
 }
