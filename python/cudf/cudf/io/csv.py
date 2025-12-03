@@ -471,7 +471,7 @@ def _plc_write_csv(
         if index
         else table._columns
     )
-    columns = [col.to_pylibcudf(mode="read") for col in iter_columns]
+    columns = [col.plc_column for col in iter_columns]
     col_names = []
     if header:
         table_names = (

@@ -1635,26 +1635,6 @@ struct target_type_impl<Source, aggregation::TOP_K> {
 template <typename Source, aggregation::Kind k>
 using target_type_t = typename target_type_impl<Source, k>::type;
 
-template <aggregation::Kind k>
-struct kind_to_type_impl {
-  using type = aggregation;
-};
-
-template <aggregation::Kind k>
-using kind_to_type = typename kind_to_type_impl<k>::type;
-
-#ifndef AGG_KIND_MAPPING
-#define AGG_KIND_MAPPING(k, Type) \
-  template <>                     \
-  struct kind_to_type_impl<k> {   \
-    using type = Type;            \
-  }
-#endif
-
-AGG_KIND_MAPPING(aggregation::QUANTILE, quantile_aggregation);
-AGG_KIND_MAPPING(aggregation::STD, std_aggregation);
-AGG_KIND_MAPPING(aggregation::VARIANCE, var_aggregation);
-
 /**
  * @brief Dispatches `k` as a non-type template parameter to a callable,  `f`.
  *

@@ -609,6 +609,12 @@ def _(
     assert partition_info.io_plan is not None, "Scan node must have a partition plan"
     plan: IOPartitionPlan = partition_info.io_plan
 
+    # Native node cannot split large files in distributed mode yet
+    distributed_split_files = (
+        plan.flavor == IOPartitionFlavor.SPLIT_FILES
+        and rec.state["context"].comm().nranks > 1
+    )
+
     # Use rapidsmpf native read_parquet for multi-partition Parquet scans.
     ch_pair = channels[ir].reserve_input_slot()
     nodes: dict[IR, list[Any]] = {}
@@ -620,6 +626,7 @@ def _(
         and ir.include_file_paths is None
         and ir.n_rows == -1
         and ir.skip_rows == 0
+        and not distributed_split_files
     ):
         native_node = make_rapidsmpf_read_parquet_node(
             rec.state["context"],

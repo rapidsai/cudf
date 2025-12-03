@@ -2025,7 +2025,7 @@ class MultiIndex(Index):
         join_keys = map(list, zip(*join_keys, strict=True))
         with acquire_spill_lock():
             plc_tables = [
-                plc.Table([col.to_pylibcudf(mode="read") for col in cols])
+                plc.Table([col.plc_column for col in cols])
                 for cols in join_keys
             ]
             left_plc, right_plc = plc.join.inner_join(
