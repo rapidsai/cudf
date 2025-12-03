@@ -6,6 +6,9 @@ set -euo pipefail
 
 . /opt/conda/etc/profile.d/conda.sh
 
+rapids-logger "Configuring conda strict channel priority"
+conda config --set channel_priority strict
+
 # This script runs compute-sanitizer on a single libcudf test executable
 # Usage: ./run_compute_sanitizer_test.sh TOOL_NAME TEST_NAME [additional gtest args...]
 # Example: ./run_compute_sanitizer_test.sh memcheck AST_TEST
