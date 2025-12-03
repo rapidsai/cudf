@@ -9,7 +9,13 @@ import operator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from functools import reduce
-from typing import TYPE_CHECKING, Any, TypeAlias
+from typing import TYPE_CHECKING, Any
+
+from rapidsmpf.streaming.chunks.arbitrary import ArbitraryChunk
+from rapidsmpf.streaming.core.message import Message
+from rapidsmpf.streaming.cudf.table_chunk import TableChunk
+
+import pylibcudf as plc
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable
@@ -17,14 +23,11 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
-    from rapidsmpf.streaming.cudf.table_chunk import TableChunk
+
+    from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
-
-
-# Type alias for metadata payloads (placeholder - not used yet)
-MetadataPayload: TypeAlias = Any
 
 
 @asynccontextmanager
@@ -49,6 +52,29 @@ async def shutdown_on_error(
         raise
 
 
+class Metadata:
+    """Metadata payload for an individual ChannelPair."""
+
+    __slots__ = ("count", "duplicated", "partitioned_on")
+    count: int
+    """Chunk-count estimate."""
+    partitioned_on: tuple[str, ...]
+    """Partitioned-on columns."""
+    duplicated: bool
+    """Whether the data is duplicated on all workers."""
+
+    def __init__(
+        self,
+        count: int,
+        *,
+        partitioned_on: tuple[str, ...] = (),
+        duplicated: bool = False,
+    ):
+        self.count = count
+        self.partitioned_on = partitioned_on
+        self.duplicated = duplicated
+
+
 @dataclass
 class ChannelPair:
     """
@@ -71,7 +97,7 @@ class ChannelPair:
     in follow-up work.
     """
 
-    metadata: Channel[MetadataPayload]
+    metadata: Channel[ArbitraryChunk]
     data: Channel[TableChunk]
 
     @classmethod
@@ -81,6 +107,39 @@ class ChannelPair:
             metadata=context.create_channel(),
             data=context.create_channel(),
         )
+
+    async def send_metadata(self, ctx: Context, metadata: Metadata) -> None:
+        """
+        Send metadata and drain the metadata channel.
+
+        Parameters
+        ----------
+        ctx :
+            The streaming context.
+        metadata :
+            The metadata to send.
+        """
+        msg = Message(0, ArbitraryChunk(metadata))
+        await self.metadata.send(ctx, msg)
+        await self.metadata.drain(ctx)
+
+    async def recv_metadata(self, ctx: Context) -> Metadata:
+        """
+        Receive metadata from the metadata channel.
+
+        Parameters
+        ----------
+        ctx :
+            The streaming context.
+
+        Returns
+        -------
+        ChunkMetadata
+            The metadata, or None if channel is drained.
+        """
+        msg = await self.metadata.recv(ctx)
+        assert msg is not None, f"Expected Metadata message, got {msg}."
+        return ArbitraryChunk.from_message(msg).release()
 
 
 class ChannelManager:
@@ -161,6 +220,40 @@ def process_children(
     nodes: dict[IR, list[Any]] = reduce(operator.or_, _nodes_list)
     channels: dict[IR, ChannelManager] = reduce(operator.or_, _channels_list)
     return nodes, channels
+
+
+def empty_table_chunk(ir: IR, context: Context, stream: Stream) -> TableChunk:
+    """
+    Make an empty table chunk.
+
+    Parameters
+    ----------
+    ir
+        The IR node to use for the schema.
+    context
+        The rapidsmpf context.
+    stream
+        The stream to use for the table chunk.
+
+    Returns
+    -------
+    The empty table chunk.
+    """
+    # Create an empty table with the correct schema
+    empty_columns = [
+        plc.column_factories.make_empty_column(
+            plc.DataType(dtype.id()),
+            stream=stream,
+        )
+        for dtype in ir.schema.values()
+    ]
+    empty_table = plc.Table(empty_columns)
+
+    return TableChunk.from_pylibcudf_table(
+        empty_table,
+        stream,
+        exclusive_view=True,
+    )
 
 
 def make_spill_function(
