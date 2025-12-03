@@ -28,18 +28,6 @@ namespace CUDF_EXPORT cudf {
  */
 
 /**
- * @brief Sentinel value used to indicate an unmatched row index in join operations.
- *
- * This value is used in join result indices to represent rows that do not have a match
- * in the other table (e.g., in left joins, full joins, or when using filter_gather_map
- * with null indices from outer joins).
- *
- * The value is set to the minimum possible value for `size_type` to ensure it's easily
- * distinguishable from valid row indices, which are always non-negative.
- */
-CUDF_HOST_DEVICE constexpr size_type JoinNoMatch = cuda::std::numeric_limits<size_type>::min();
-
-/**
  * @brief Specifies the type of join operation to perform.
  *
  * This enum is used to control the behavior of join operations, particularly
@@ -53,6 +41,18 @@ enum class join_kind : int32_t {
   LEFT_SEMI_JOIN = 3,  ///< Left semi join: left rows that have matches in right table
   LEFT_ANTI_JOIN = 4   ///< Left anti join: left rows that have no matches in right table
 };
+
+/**
+ * @brief Sentinel value used to indicate an unmatched row index in join operations.
+ *
+ * This value is used in join result indices to represent rows that do not have a match
+ * in the other table (e.g., in left joins, full joins, or when using filter_gather_map
+ * with null indices from outer joins).
+ *
+ * The value is set to the minimum possible value for `size_type` to ensure it's easily
+ * distinguishable from valid row indices, which are always non-negative.
+ */
+CUDF_HOST_DEVICE constexpr size_type JoinNoMatch = cuda::std::numeric_limits<size_type>::min();
 
 /**
  * @brief Holds context information about matches between tables during a join operation.
@@ -289,12 +289,16 @@ std::unique_ptr<cudf::table> cross_join(
  * LEFT_JOIN result:  left_indices = {0, 1, 2}, right_indices = {JoinNoMatch, 1, 2}
  * @endcode
  *
+ *
+ * @throw std::invalid_argument if join_kind is not INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
+ * @throw std::invalid_argument if left_indices and right_indices have different sizes.
+ *
  * @param left The left table for predicate evaluation (conditional columns only).
  * @param right The right table for predicate evaluation (conditional columns only).
  * @param left_indices Device span of row indices in the left table from hash join.
  * @param right_indices Device span of row indices in the right table from hash join.
  * @param predicate An AST expression that returns a boolean for each pair of rows.
- * @param join_kind The type of join operation (INNER_JOIN, LEFT_JOIN, or FULL_JOIN).
+ * @param join_kind The type of join operation. Must be INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
  * @param stream CUDA stream used for kernel launches and memory operations.
  * @param mr Device memory resource used to allocate output indices.
  *
