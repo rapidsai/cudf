@@ -170,7 +170,7 @@ int32_t main(int argc, char const** argv)
   }
 
   // Initialize mr, default stream and stream pool
-  bool constexpr is_pool_used = true;
+  bool constexpr is_pool_used = false;
   auto resource               = create_memory_resource(is_pool_used);
   auto default_stream         = cudf::get_default_stream();
   auto stats_mr =
@@ -203,8 +203,8 @@ int32_t main(int argc, char const** argv)
   auto literal2               = cudf::ast::literal(scalar2);
 
   std::vector<cudf::ast::operation> filter_expressions;
-  filter_expressions.emplace_back(cudf::ast::ast_operator::EQUAL, column_reference, literal1);
   filter_expressions.emplace_back(cudf::ast::ast_operator::EQUAL, column_reference, literal2);
+  filter_expressions.emplace_back(cudf::ast::ast_operator::EQUAL, column_reference, literal1);
 
   // Insert which filters to apply
   std::unordered_set<parquet_filter_type> filters;
