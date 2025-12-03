@@ -7,6 +7,7 @@ import pytest
 import polars as pl
 
 from cudf_polars.testing.asserts import (
+    assert_collect_raises,
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
@@ -58,3 +59,30 @@ def test_allow_double_cast():
     df = pl.LazyFrame({"c0": [1000]})
     query = df.select(pl.col("c0").cast(pl.Boolean).cast(pl.Int8))
     assert_gpu_result_equal(query)
+
+
+@pytest.mark.parametrize("dtype", [pl.Int64(), pl.Float64()])
+@pytest.mark.parametrize("strict", [True, False])
+def test_cast_strict_false_string_to_numeric(dtype, strict):
+    df = pl.LazyFrame({"c0": ["1969-12-08 17:00:01"]})
+    query = df.with_columns(pl.col("c0").cast(dtype, strict=strict))
+    if strict:
+        assert_collect_raises(
+            query,
+            polars_except=pl.exceptions.InvalidOperationError,
+            cudf_except=pl.exceptions.InvalidOperationError,
+        )
+    else:
+        assert_gpu_result_equal(query)
+
+
+def test_cast_from_string_unsupported():
+    df = pl.LazyFrame({"a": ["True"]})
+    query = df.select(pl.col("a").cast(pl.Boolean()))
+    assert_ir_translation_raises(query, NotImplementedError)
+
+
+def test_cast_to_string_unsupported():
+    df = pl.LazyFrame({"a": [True]})
+    query = df.select(pl.col("a").cast(pl.String()))
+    assert_ir_translation_raises(query, NotImplementedError)
