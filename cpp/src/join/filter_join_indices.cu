@@ -8,7 +8,6 @@
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/join/join.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
@@ -23,15 +22,12 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuda/std/functional>
 #include <cuda/std/tuple>
 #include <thrust/copy.h>
 #include <thrust/count.h>
-#include <thrust/execution_policy.h>
 #include <thrust/iterator/zip_iterator.h>
 
 #include <memory>
-#include <stdexcept>
 #include <utility>
 
 namespace cudf {
