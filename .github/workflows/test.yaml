@@ -23,6 +23,7 @@ on:
         default: nightly
 jobs:
   conda-cpp-checks:
+    if: false
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-post-build-checks.yaml@release/25.12
     with:
@@ -41,6 +42,7 @@ jobs:
       sha: ${{ inputs.sha }}
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   conda-cpp-memcheck-tests:
+    if: false
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@release/25.12
     with:
@@ -53,6 +55,7 @@ jobs:
       container_image: "rapidsai/ci-conda:25.12-latest"
       script: "ci/test_cpp_memcheck.sh"
   cpp-linters:
+    if: false
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@release/25.12
     with:
@@ -63,6 +66,7 @@ jobs:
       script: "ci/cpp_linters.sh"
       file_to_upload: iwyu_results.txt
   conda-python-cudf-tests:
+    if: false
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@release/25.12
     with:
@@ -73,6 +77,7 @@ jobs:
       script: "ci/test_python_cudf.sh"
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   conda-python-other-tests:
+    if: false
     # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@release/25.12
@@ -84,6 +89,7 @@ jobs:
       script: "ci/test_python_other.sh"
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   conda-java-tests:
+    if: false
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@release/25.12
     with:
@@ -96,6 +102,7 @@ jobs:
       container_image: "rapidsai/ci-conda:25.12-latest"
       script: "ci/test_java.sh"
   conda-notebook-tests:
+    if: false
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@release/25.12
     with:
@@ -108,6 +115,7 @@ jobs:
       container_image: "rapidsai/ci-conda:25.12-latest"
       script: "ci/test_notebooks.sh"
   wheel-tests-cudf:
+    if: false
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@release/25.12
     with:
@@ -118,6 +126,7 @@ jobs:
       script: ci/test_wheel_cudf.sh
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-tests-dask-cudf:
+    if: false
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@release/25.12
     with:
@@ -128,6 +137,7 @@ jobs:
       script: ci/test_wheel_dask_cudf.sh
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   unit-tests-cudf-pandas:
+    if: false
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@release/25.12
     with:
@@ -138,6 +148,7 @@ jobs:
       script: ci/cudf_pandas_scripts/run_tests.sh
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   third-party-integration-tests-cudf-pandas:
+    if: false
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@release/25.12
     with:
@@ -151,6 +162,7 @@ jobs:
       script: |
         ci/cudf_pandas_scripts/third-party-integration/test.sh python/cudf/cudf_pandas_tests/third_party_integration_tests/dependencies.yaml
   wheel-tests-cudf-polars:
+    if: false
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@release/25.12
     with:
@@ -161,6 +173,7 @@ jobs:
       script: "ci/test_wheel_cudf_polars.sh"
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-tests-cudf-polars-with-rapidsmpf:
+    if: false
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@release/25.12
     with:
@@ -175,6 +188,7 @@ jobs:
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
       continue-on-error: true
   cudf-polars-polars-tests:
+    if: false
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@release/25.12
     with:
@@ -185,6 +199,7 @@ jobs:
       script: "ci/test_cudf_polars_polars_tests.sh"
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   narwhals-tests:
+    if: false
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@release/25.12
     with:

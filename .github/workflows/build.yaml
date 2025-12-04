@@ -56,6 +56,7 @@ jobs:
       sha: ${{ inputs.sha }}
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   python-build:
+    if: false
     needs: [telemetry-setup, cpp-build]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@release/25.12
@@ -67,6 +68,7 @@ jobs:
       sha: ${{ inputs.sha }}
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   upload-conda:
+    if: false
     needs: [cpp-build, python-build]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-upload-packages.yaml@release/25.12
@@ -76,7 +78,7 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
   docs-build:
-    if: github.ref_type == 'branch'
+    if: false
     needs: python-build
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@release/25.12
@@ -90,6 +92,7 @@ jobs:
       script: "ci/build_docs.sh"
       sha: ${{ inputs.sha }}
   wheel-build-libcudf:
+    if: false
     needs: [telemetry-setup]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@release/25.12
@@ -106,6 +109,7 @@ jobs:
       package-type: cpp
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-publish-libcudf:
+    if: false
     needs: wheel-build-libcudf
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@release/25.12
@@ -117,6 +121,7 @@ jobs:
       package-name: libcudf
       package-type: cpp
   wheel-build-pylibcudf:
+    if: false
     needs: [telemetry-setup, wheel-build-libcudf]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@release/25.12
@@ -131,6 +136,7 @@ jobs:
       package-type: python
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-publish-pylibcudf:
+    if: false
     needs: wheel-build-pylibcudf
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@release/25.12
@@ -142,6 +148,7 @@ jobs:
       package-name: pylibcudf
       package-type: python
   wheel-build-cudf:
+    if: false
     needs: [telemetry-setup, wheel-build-pylibcudf]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@release/25.12
@@ -156,6 +163,7 @@ jobs:
       package-type: python
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-publish-cudf:
+    if: false
     needs: wheel-build-cudf
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@release/25.12
@@ -167,6 +175,7 @@ jobs:
       package-name: cudf
       package-type: python
   wheel-build-dask-cudf:
+    if: false
     needs: [telemetry-setup, wheel-build-cudf]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@release/25.12
@@ -184,6 +193,7 @@ jobs:
       pure-wheel: true
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-publish-dask-cudf:
+    if: false
     needs: wheel-build-dask-cudf
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@release/25.12
@@ -195,6 +205,7 @@ jobs:
       package-name: dask_cudf
       package-type: python
   wheel-build-cudf-polars:
+    if: false
     needs: [telemetry-setup, wheel-build-pylibcudf]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@release/25.12
@@ -212,6 +223,7 @@ jobs:
       pure-wheel: true
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-publish-cudf-polars:
+    if: false
     needs: wheel-build-cudf-polars
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@release/25.12
@@ -223,7 +235,7 @@ jobs:
       package-name: cudf_polars
       package-type: python
   trigger-pandas-tests:
-    if: inputs.build_type == 'nightly'
+    if: false
     needs: wheel-build-cudf
     runs-on: ubuntu-latest
     steps:

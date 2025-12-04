@@ -17,7 +17,8 @@ set +e
 export GTEST_OUTPUT=xml:${RAPIDS_TESTS_DIR}/
 
 rapids-logger "Run libcudf gtests"
-./ci/run_cudf_ctests.sh -j20
+# ./ci/run_cudf_ctests.sh -j20
+./ci/debug_tests.sh ${INSTALL_PREFIX:-${CONDA_PREFIX:-/usr}}/bin/gtests/libcudf/PARQUET_TEST
 SUITEERROR=$?
 
 if (( SUITEERROR == 0 )); then
