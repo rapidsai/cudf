@@ -359,7 +359,7 @@ def _decompose_agg_node(
 
         # Chunkwise stage
         columns, input_ir, partition_info = select(
-            [Cast(agg.dtype, agg)],
+            [Cast(agg.dtype, 0, agg)],
             input_ir,
             partition_info,
             names=names,

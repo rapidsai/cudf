@@ -25,14 +25,14 @@ __all__ = ["Cast", "Len", "UnaryFunction"]
 class Cast(Expr):
     """Class representing a cast of an expression."""
 
-    __slots__ = ("strict",)
-    _non_child = ("dtype",)
+    __slots__ = ("cast_option",)
+    _non_child = ("dtype", "cast_option")
 
-    def __init__(self, dtype: DataType, value: Expr, *, cast_option: int = 0) -> None:
+    def __init__(self, dtype: DataType, cast_option: int, value: Expr) -> None:
         self.dtype = dtype
+        self.cast_option = cast_option
         self.children = (value,)
         self.is_pointwise = True
-        self.strict = cast_option != 1
         if not dtypes.can_cast(value.dtype.plc_type, self.dtype.plc_type):
             raise NotImplementedError(
                 f"Can't cast {value.dtype.id().name} to {self.dtype.id().name}"
@@ -44,7 +44,7 @@ class Cast(Expr):
         """Evaluate this expression given a dataframe for context."""
         (child,) = self.children
         column = child.evaluate(df, context=context)
-        return column.astype(self.dtype, stream=df.stream, strict=self.strict)
+        return column.astype(self.dtype, stream=df.stream, strict=self.cast_option != 1)
 
 
 class Len(Expr):
