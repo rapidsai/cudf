@@ -433,9 +433,9 @@ def test_groupby_sum_decimal_null_group() -> None:
 
 @pytest.mark.xfail(
     raises=AssertionError,
-    reason="Polars returns bool column, cuDF returns list[bool] column",
+    reason="https://github.com/rapidsai/cudf/issues/19610",
 )
 def test_groupby_literal_agg():
     df = pl.LazyFrame({"c0": [True, False]})
     q = df.group_by("c0").agg(pl.lit(1).is_not_null())
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, check_row_order=False)
