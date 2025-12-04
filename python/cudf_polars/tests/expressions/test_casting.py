@@ -11,6 +11,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 _supported_dtypes = [(pl.Int8(), pl.Int64())]
 
@@ -67,10 +68,15 @@ def test_cast_strict_false_string_to_numeric(dtype, strict):
     df = pl.LazyFrame({"c0": ["1969-12-08 17:00:01"]})
     query = df.with_columns(pl.col("c0").cast(dtype, strict=strict))
     if strict:
+        cudf_except = (
+            pl.exceptions.ComputeError
+            if POLARS_VERSION_LT_130
+            else pl.exceptions.InvalidOperationError
+        )
         assert_collect_raises(
             query,
             polars_except=pl.exceptions.InvalidOperationError,
-            cudf_except=pl.exceptions.InvalidOperationError,
+            cudf_except=cudf_except,
         )
     else:
         assert_gpu_result_equal(query)
