@@ -9,7 +9,7 @@
 #include <cuda/std/limits>
 #include <cuda/std/optional>
 #include <cuda/std/type_traits>
-#include <thrust/pair.h>
+#include <cuda/std/utility>
 
 namespace cudf {
 namespace strings {
@@ -30,7 +30,7 @@ namespace detail {
  * @return Integer component and exponent offset.
  */
 template <typename UnsignedDecimalType>
-__device__ inline thrust::pair<UnsignedDecimalType, int32_t> parse_integer(
+__device__ inline cuda::std::pair<UnsignedDecimalType, int32_t> parse_integer(
   char const*& iter, char const* iter_end, char const decimal_pt_char = '.')
 {
   // highest value where another decimal digit cannot be appended without an overflow;

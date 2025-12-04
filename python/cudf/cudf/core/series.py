@@ -75,12 +75,12 @@ from cudf.utils.utils import _EQUALITY_OPS, _is_same_name
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, Iterable, MutableMapping
+    from types import NotImplementedType
 
     from cudf._typing import (
         Axis,
         DataFrameOrSeries,
         Dtype,
-        NotImplementedType,
         ScalarLike,
     )
     from cudf.core.dataframe import DataFrame

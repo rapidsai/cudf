@@ -40,18 +40,19 @@ def load_library():
         # them.
         import libkvikio
         import librmm
+        import nvidia.libnvcomp
         import rapids_logger
 
         rapids_logger.load_library()
         librmm.load_library()
         libkvikio.load_library()
+        nvidia.libnvcomp.load_library()
     except ModuleNotFoundError:
         # libcudf's runtime dependency on libkvikio may be satisfied by a natively
         # installed library or a conda package, in which case the import will fail and
         # we assume the library is discoverable on system paths.
         pass
 
-    _load_library("libnvcomp.so.5")
     return _load_library("libcudf.so")
 
 

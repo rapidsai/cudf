@@ -1,0 +1,51 @@
+name: Compute Sanitizer Run
+
+on:
+  workflow_call:
+    inputs:
+      tool_name:
+        required: true
+        type: string
+        description: "Compute sanitizer tool to run (memcheck, racecheck, initcheck, synccheck)"
+      test_names:
+        required: true
+        type: string
+        description: "JSON array of test names to run"
+  workflow_dispatch:
+    inputs:
+      tool_name:
+        required: true
+        type: choice
+        description: "Compute sanitizer tool to run"
+        options:
+          - memcheck
+          - racecheck
+          - initcheck
+          - synccheck
+      test_names:
+        required: true
+        type: string
+        description: "JSON array of test names to run"
+
+jobs:
+  run-sanitizer-tests:
+    name: Run ${{ inputs.tool_name }} on ${{ matrix.test_name }}
+    runs-on: linux-amd64-gpu-l4-latest-1
+    container:
+      image: rapidsai/ci-conda:26.02-latest
+      options: --gpus all
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        test_name: ${{ fromJson(inputs.test_names) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+      - name: Run compute-sanitizer ${{ inputs.tool_name }} on ${{ matrix.test_name }}
+        shell: bash
+        env:
+          TOOL_NAME: "${{ inputs.tool_name }}"
+          TEST_NAME: "${{ matrix.test_name }}"
+        run: |
+          ./ci/run_compute_sanitizer_test.sh "${TOOL_NAME}" "${TEST_NAME}"

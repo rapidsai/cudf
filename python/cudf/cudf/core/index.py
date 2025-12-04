@@ -2039,8 +2039,8 @@ class Index(SingleColumnFrame):
 
         with acquire_spill_lock():
             left_plc, right_plc = plc.join.inner_join(
-                plc.Table([lcol.to_pylibcudf(mode="read")]),
-                plc.Table([rcol.to_pylibcudf(mode="read")]),
+                plc.Table([lcol.plc_column]),
+                plc.Table([rcol.plc_column]),
                 plc.types.NullEquality.EQUAL,
             )
             scatter_map = ColumnBase.from_pylibcudf(left_plc)
@@ -2938,7 +2938,7 @@ class RangeIndex(Index):
     @cached_property
     @_performance_tracking
     def values_host(self) -> np.ndarray:
-        return np.arange(start=self.start, stop=self.stop, step=self.step)
+        return np.arange(self.start, self.stop, self.step)
 
     @_performance_tracking
     def to_numpy(self) -> np.ndarray:
@@ -3646,14 +3646,24 @@ class DatetimeIndex(Index):
     @_performance_tracking
     def serialize(self):
         header, frames = super().serialize()
-        header["freq"] = self.freq
+        if self.freq is not None:
+            header["freq"] = {
+                "kwds": self.freq.kwds,
+            }
+        else:
+            header["freq"] = None
         return header, frames
 
     @classmethod
     @_performance_tracking
     def deserialize(cls, header, frames):
         obj = super().deserialize(header, frames)
-        obj._freq = _validate_freq(header["freq"])
+        if (header_payload := header.get("freq")) is not None:
+            freq = cudf.DateOffset(**header_payload["kwds"])
+        else:
+            freq = None
+
+        obj._freq = _validate_freq(freq)
         return obj
 
     @_performance_tracking
@@ -3763,7 +3773,7 @@ class DatetimeIndex(Index):
         if self._freq:
             return self._freq
 
-        plc_col = self._column.to_pylibcudf(mode="read")
+        plc_col = self._column.plc_column
         shifted = plc.copying.shift(
             plc_col, 1, plc.Scalar.from_py(None, dtype=plc_col.type())
         )
@@ -5491,10 +5501,8 @@ class IntervalIndex(Index):
             breaks = breaks.astype(np.dtype(np.int64))
         if copy:
             breaks = breaks.copy()
-        left_col = breaks.slice(0, len(breaks) - 1).to_pylibcudf(mode="read")
-        right_col = (
-            breaks.slice(1, len(breaks)).copy().to_pylibcudf(mode="read")
-        )
+        left_col = breaks.slice(0, len(breaks) - 1).plc_column
+        right_col = breaks.slice(1, len(breaks)).copy().plc_column
         # For indexing, children should both have 0 offset
         right_col = plc.Column(
             right_col.type(),

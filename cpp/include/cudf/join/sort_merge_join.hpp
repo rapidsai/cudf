@@ -255,12 +255,16 @@ class sort_merge_join {
    * @param right_view The preprocessed right table view
    * @param left_view The preprocessed left table view
    * @param op The merge operation functor to execute during the merge
+   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return The result of the merge operation as defined by the MergeOperation functor
    *         (typically pairs of join indices or match counts)
    */
   template <typename MergeOperation>
-  auto invoke_merge(table_view right_view, table_view left_view, MergeOperation&& op);
+  auto invoke_merge(table_view right_view,
+                    table_view left_view,
+                    MergeOperation&& op,
+                    rmm::cuda_stream_view stream);
 };
 
 /**

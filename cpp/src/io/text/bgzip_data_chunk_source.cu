@@ -22,6 +22,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
@@ -41,17 +42,17 @@ struct bgzip_nvcomp_transform_functor {
   uint8_t const* compressed_ptr;
   uint8_t* decompressed_ptr;
 
-  __device__ thrust::tuple<device_span<uint8_t const>, device_span<uint8_t>> operator()(
-    thrust::tuple<std::size_t, std::size_t, std::size_t, std::size_t> t)
+  __device__ cuda::std::tuple<device_span<uint8_t const>, device_span<uint8_t>> operator()(
+    cuda::std::tuple<std::size_t, std::size_t, std::size_t, std::size_t> t)
   {
-    auto const compressed_begin   = thrust::get<0>(t);
-    auto const compressed_end     = thrust::get<1>(t);
-    auto const decompressed_begin = thrust::get<2>(t);
-    auto const decompressed_end   = thrust::get<3>(t);
-    return thrust::make_tuple(device_span<uint8_t const>{compressed_ptr + compressed_begin,
-                                                         compressed_end - compressed_begin},
-                              device_span<uint8_t>{decompressed_ptr + decompressed_begin,
-                                                   decompressed_end - decompressed_begin});
+    auto const compressed_begin   = cuda::std::get<0>(t);
+    auto const compressed_end     = cuda::std::get<1>(t);
+    auto const decompressed_begin = cuda::std::get<2>(t);
+    auto const decompressed_end   = cuda::std::get<3>(t);
+    return cuda::std::make_tuple(device_span<uint8_t const>{compressed_ptr + compressed_begin,
+                                                            compressed_end - compressed_begin},
+                                 device_span<uint8_t>{decompressed_ptr + decompressed_begin,
+                                                      decompressed_end - decompressed_begin});
   }
 };
 
