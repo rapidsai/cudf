@@ -89,6 +89,7 @@ class element_hasher {
   }
 
   Nullate _check_nulls;
+  // Assumes seeds are the same as the result type of the hash function
   result_type _seed;
   result_type _null_hash;
 };
@@ -117,10 +118,7 @@ class device_row_hasher {
     auto it =
       thrust::make_transform_iterator(_table.begin(), [row_index, this](auto const& column) {
         return cudf::type_dispatcher<dispatch_storage_type>(
-          column.type(),
-          element_hasher_adapter<hash_function>{_check_nulls, _seed},
-          column,
-          row_index);
+          column.type(), element_hasher_adapter{_check_nulls, _seed}, column, row_index);
       });
 
     return detail::accumulate(it, it + _table.num_columns(), _seed, [](auto hash, auto h) {
@@ -136,9 +134,8 @@ class device_row_hasher {
    * When the column is nested, this uses the element_hasher to hash the shape and values of the
    * column.
    */
-  template <template <typename> class hash_fn>
   class element_hasher_adapter {
-    using result_type                          = typename hash_fn<int32_t>::result_type;
+    using result_type                          = typename hash_function<int32_t>::result_type;
     static constexpr result_type NULL_HASH     = cuda::std::numeric_limits<result_type>::max();
     static constexpr result_type NON_NULL_HASH = 0;
 
@@ -180,7 +177,7 @@ class device_row_hasher {
           auto list_sizes = make_list_size_iterator(list_col);
           hash            = detail::accumulate(
             list_sizes, list_sizes + list_col.size(), hash, [](auto hash, auto size) {
-              return cudf::hashing::detail::hash_combine(hash, hash_fn<size_type>{}(size));
+              return cudf::hashing::detail::hash_combine(hash, hash_function<size_type>{}(size));
             });
           curr_col = list_col.get_sliced_child();
         }
@@ -193,7 +190,7 @@ class device_row_hasher {
       return hash;
     }
 
-    element_hasher<hash_fn, Nullate> const _element_hasher;
+    element_hasher<hash_function, Nullate> const _element_hasher;
     Nullate const _check_nulls;
   };
 
@@ -206,6 +203,7 @@ class device_row_hasher {
 
   Nullate const _check_nulls;
   table_device_view const _table;
+  // Assumes seeds are the same as the result type of the hash function
   result_type const _seed;
 };
 
