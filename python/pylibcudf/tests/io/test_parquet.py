@@ -344,11 +344,11 @@ def test_read_parquet_filters_jit(
     )
     options.set_filter(plc_filter)
 
-    plc_table_w_meta = plc.io.parquet.read_parquet(options)
-    exp = read_table(source, filters=pa_filter)
+    got = plc.io.parquet.read_parquet(options)
+    expect = read_table(source, filters=pa_filter)
 
     assert_table_and_meta_eq(
-        exp,
-        plc_table_w_meta,
+        expect,
+        got,
         check_field_nullability=False,
     )
