@@ -289,6 +289,15 @@ def test_scan_csv_null_values(tmp_path, nulls):
     assert_gpu_result_equal(q)
 
 
+def test_scan_csv_empty_string(tmp_path):
+    with (tmp_path / "test.csv").open("w") as f:
+        f.write('''c0,c1,c3\n"",\"abc\","abc,d"''')
+
+    q = pl.scan_csv(tmp_path / "test.csv")
+
+    assert_gpu_result_equal(q)
+
+
 def test_scan_csv_decimal_comma(tmp_path):
     with (tmp_path / "test.csv").open("w") as f:
         f.write("""foo|bar|baz\n1,23|2,34|3,56\n1""")

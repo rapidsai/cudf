@@ -670,7 +670,7 @@ class Scan(IR):
             header = 0 if has_header else -1
 
             # polars defaults to no null recognition
-            null_values = [""]
+            null_values = []
             if parse_options["null_values"] is not None:
                 ((typ, nulls),) = parse_options["null_values"].items()
                 if typ == "AllColumnsSingle":
