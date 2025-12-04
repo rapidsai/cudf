@@ -41,7 +41,7 @@ from cudf_polars.dsl.expressions.aggregation import Agg
 from cudf_polars.dsl.expressions.base import Col, ExecutionContext, Expr, NamedExpr
 from cudf_polars.dsl.expressions.binaryop import BinOp
 from cudf_polars.dsl.expressions.literal import Literal
-from cudf_polars.dsl.expressions.unary import Cast, UnaryFunction
+from cudf_polars.dsl.expressions.unary import Cast, Len, UnaryFunction
 from cudf_polars.dsl.ir import IR, Distinct, Empty, HConcat, Select
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
@@ -401,6 +401,64 @@ def _decompose_agg_node(
 _SUPPORTED_AGGS = ("count", "min", "max", "sum", "mean", "n_unique")
 
 
+def _decompose_len(
+    len_expr: Len,
+    input_ir: IR,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    config_options: ConfigOptions,
+    *,
+    names: Generator[str, None, None],
+) -> tuple[Expr, IR, MutableMapping[IR, PartitionInfo]]:
+    """
+    Decompose a Len into partition-wise stages.
+
+    Parameters
+    ----------
+    len_expr
+        The Len node to decompose.
+    input_ir
+        The original input-IR node that ``len`` will evaluate.
+    partition_info
+        A mapping from all unique IR nodes to the
+        associated partitioning information.
+    config_options
+        GPUEngine configuration options.
+    names
+        Generator of unique names for temporaries.
+
+    Returns
+    -------
+    expr
+        Decomposed Agg node.
+    input_ir
+        The rewritten ``input_ir`` to be evaluated by ``expr``.
+    partition_info
+        A mapping from unique nodes in the new graph to associated
+        partitioning information.
+    """
+    # Mechanically similar to _decompose_agg_node with a count Agg expression.
+
+    # Chunkwise stage
+    columns, input_ir, partition_info = select(
+        [len_expr],
+        input_ir,
+        partition_info,
+        names=names,
+        repartition=True,
+    )
+
+    # Combined stage
+    (column,) = columns
+    columns, input_ir, partition_info = select(
+        [Agg(len_expr.dtype, "sum", None, ExecutionContext.FRAME, column)],
+        input_ir,
+        partition_info,
+        names=names,
+    )
+    (expr,) = columns
+    return expr, input_ir, partition_info
+
+
 def _decompose_expr_node(
     expr: Expr,
     input_ir: IR,
@@ -457,6 +515,14 @@ def _decompose_expr_node(
         # This is a supported Agg expression.
         return _decompose_agg_node(
             expr, input_ir, partition_info, config_options, names=names
+        )
+    elif isinstance(expr, Len):
+        return _decompose_len(
+            expr,
+            input_ir,
+            partition_info,
+            config_options,
+            names=names,
         )
     elif isinstance(expr, UnaryFunction) and expr.name == "unique":
         return _decompose_unique(
