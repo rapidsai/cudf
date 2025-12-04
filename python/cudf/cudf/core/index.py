@@ -2938,7 +2938,7 @@ class RangeIndex(Index):
     @cached_property
     @_performance_tracking
     def values_host(self) -> np.ndarray:
-        return np.arange(start=self.start, stop=self.stop, step=self.step)
+        return np.arange(self.start, self.stop, self.step)
 
     @_performance_tracking
     def to_numpy(self) -> np.ndarray:
