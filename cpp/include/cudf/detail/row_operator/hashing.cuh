@@ -22,6 +22,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cuda/std/limits>
+#include <cuda/std/type_traits>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <memory>
@@ -38,7 +39,7 @@ namespace detail::row::hash {
 template <template <typename> class hash_function, typename Nullate>
 class element_hasher {
  public:
-  using result_type = typename hash_function<int32_t>::result_type;
+  using result_type = cuda::std::invoke_result_t<hash_function<int32_t>, int32_t>;
 
   /**
    * @brief Constructs an element_hasher object.
@@ -105,7 +106,7 @@ class device_row_hasher {
   friend class row_hasher;
 
  public:
-  using result_type = typename hash_function<int32_t>::result_type;
+  using result_type = cuda::std::invoke_result_t<hash_function<int32_t>, int32_t>;
 
   /**
    * @brief Return the hash value of a row in the given table.
@@ -135,7 +136,6 @@ class device_row_hasher {
    * column.
    */
   class element_hasher_adapter {
-    using result_type                          = typename hash_function<int32_t>::result_type;
     static constexpr result_type NULL_HASH     = cuda::std::numeric_limits<result_type>::max();
     static constexpr result_type NON_NULL_HASH = 0;
 
