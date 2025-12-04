@@ -45,6 +45,7 @@ from ..fast_slow_proxy import (
     _FastSlowAttribute,
     _FunctionProxy,
     _maybe_wrap_result,
+    _State,
     _Unusable,
     is_proxy_object,
     make_final_proxy_type as _make_final_proxy_type,
@@ -181,6 +182,7 @@ def Timestamp_Timedelta__new__(cls, *args, **kwargs):
     # hence this method is needed.
     self, _ = _fast_slow_function_call(
         lambda cls, args, kwargs: cls(*args, **kwargs),
+        None,
         cls,
         args,
         kwargs,
@@ -292,11 +294,24 @@ def _DataFrame_dtypes_apply_func(value):
 def _DataFrame__dtypes(self):
     result = _fast_slow_function_call(
         lambda self: self.dtypes,
+        None,
         self,
     )[0]
     result = _maybe_wrap_result(
         result._fsproxy_slow.apply(_DataFrame_dtypes_apply_func), None
     )
+    result.force_state(_State.SLOW)
+    return result
+
+
+@functools.wraps(pd.DataFrame.columns)
+def _DataFrame_columns(self):
+    result = _fast_slow_function_call(
+        lambda self: self.columns,
+        None,
+        self,
+    )[0]
+    result.force_state(_State.SLOW)
     return result
 
 
@@ -314,6 +329,7 @@ DataFrame = make_final_proxy_type(
         "_constructor_sliced": _FastSlowAttribute("_constructor_sliced"),
         "_accessors": set(),
         "_ipython_canary_method_should_not_exist_": ignore_ipython_canary_check,
+        "columns": property(_DataFrame_columns),
         "dtypes": property(_DataFrame__dtypes),
         "__iter__": custom_iter,
         "attrs": _FastSlowAttribute("attrs"),
@@ -340,6 +356,7 @@ def custom_repr_html(obj):
     # for ipython
     return _fast_slow_function_call(
         lambda obj: obj._repr_html_(),
+        None,
         obj,
     )[0]
 
@@ -424,6 +441,7 @@ def Index__new__(cls, *args, **kwargs):
     # make_final_proxy_type provides.
     self, _ = _fast_slow_function_call(
         lambda cls, args, kwargs: cls(*args, **kwargs),
+        None,
         cls,
         args,
         kwargs,

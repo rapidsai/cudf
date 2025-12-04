@@ -40,6 +40,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/tuple>
 #include <thrust/for_each.h>
 #include <thrust/gather.h>
 #include <thrust/host_vector.h>
@@ -740,8 +741,8 @@ struct column_to_strings_fn {
       i_col_begin + num_columns,
       std::back_inserter(str_column_vec),
       [this, &children_names](auto const& i_current_col) {
-        auto const i            = thrust::get<0>(i_current_col);
-        auto const& current_col = thrust::get<1>(i_current_col);
+        auto const i            = cuda::std::get<0>(i_current_col);
+        auto const& current_col = cuda::std::get<1>(i_current_col);
         // Struct needs children's column names
         if (current_col.type().id() == type_id::STRUCT) {
           return this->template operator()<cudf::struct_view>(current_col,

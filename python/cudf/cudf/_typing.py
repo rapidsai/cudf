@@ -1,24 +1,17 @@
 # SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
-import sys
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any, Literal, TypeVar, Union
 
 import numpy as np
-from pandas import Period, Timedelta, Timestamp
+import pandas as pd
+from packaging.version import parse
 
 if TYPE_CHECKING:
     from pandas.api.extensions import ExtensionDtype
 
     import cudf
-
-# Backwards compat: mypy >= 0.790 rejects Type[NotImplemented], but
-# NotImplementedType is only introduced in 3.10
-if sys.version_info >= (3, 10):
-    from types import NotImplementedType
-else:
-    NotImplementedType = Any
 
 # Many of these are from
 # https://github.com/pandas-dev/pandas/blob/master/pandas/_typing.py
@@ -30,7 +23,7 @@ DtypeObj = Union["ExtensionDtype", np.dtype]
 
 # scalars
 DatetimeLikeScalar = TypeVar(
-    "DatetimeLikeScalar", Period, Timestamp, Timedelta
+    "DatetimeLikeScalar", pd.Period, pd.Timestamp, pd.Timedelta
 )
 ScalarLike = Any
 
@@ -51,3 +44,8 @@ MultiColumnAggType = Union[  # noqa: UP007
 ]
 
 Axis = Literal[0, 1, "index", "columns"]
+
+if parse(pd.__version__) >= parse("3.0.0"):
+    from pandas.api.typing import NoDefault
+else:
+    NoDefault = Any

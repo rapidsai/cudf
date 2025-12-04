@@ -44,7 +44,7 @@ set +e
 rapids-logger "Running cudf_polars tests with rapidsmpf"
 
 # Run cudf_polars tests with rapidsmpf using dedicated test runner
-./ci/run_cudf_polars_with_rapidsmpf_pytests.sh \
+timeout 15m ./ci/run_cudf_polars_with_rapidsmpf_pytests.sh \
     --no-cov \
     --numprocesses=8 \
     --dist=worksteal \

@@ -18,15 +18,15 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/tuple.h>
 
 // for use with groupby and reduction aggregation tests.
 
 namespace CUDF_EXPORT cudf {
 namespace test {
 
-using expected_value = thrust::tuple<size_type, double, double>;
+using expected_value = cuda::std::tuple<size_type, double, double>;
 
 /**
  * @brief Functor to generate a tdigest.

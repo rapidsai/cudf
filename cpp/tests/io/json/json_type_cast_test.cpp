@@ -22,6 +22,8 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/tuple>
+
 #include <algorithm>
 #include <iterator>
 #include <type_traits>
@@ -61,7 +63,7 @@ TEST_F(JSONTypeCastTest, String)
   auto str_col = cudf::io::json::detail::parse_data(
     column.chars_begin(stream),
     thrust::make_zip_iterator(
-      thrust::make_tuple(column.offsets().begin<cudf::size_type>(), svs_length.begin())),
+      cuda::std::make_tuple(column.offsets().begin<cudf::size_type>(), svs_length.begin())),
     column.size(),
     type,
     std::move(null_mask),
@@ -95,7 +97,7 @@ TEST_F(JSONTypeCastTest, Int)
   auto col = cudf::io::json::detail::parse_data(
     column.chars_begin(stream),
     thrust::make_zip_iterator(
-      thrust::make_tuple(column.offsets().begin<cudf::size_type>(), svs_length.begin())),
+      cuda::std::make_tuple(column.offsets().begin<cudf::size_type>(), svs_length.begin())),
     column.size(),
     type,
     std::move(null_mask),
@@ -136,7 +138,7 @@ TEST_F(JSONTypeCastTest, StringEscapes)
   auto col = cudf::io::json::detail::parse_data(
     column.chars_begin(stream),
     thrust::make_zip_iterator(
-      thrust::make_tuple(column.offsets().begin<cudf::size_type>(), svs_length.begin())),
+      cuda::std::make_tuple(column.offsets().begin<cudf::size_type>(), svs_length.begin())),
     column.size(),
     type,
     std::move(null_mask),
@@ -206,7 +208,7 @@ TEST_F(JSONTypeCastTest, ErrorNulls)
     auto str_col = cudf::io::json::detail::parse_data(
       column.chars_begin(stream),
       thrust::make_zip_iterator(
-        thrust::make_tuple(column.offsets().begin<cudf::size_type>(), svs_length.begin())),
+        cuda::std::make_tuple(column.offsets().begin<cudf::size_type>(), svs_length.begin())),
       column.size(),
       type,
       std::move(null_mask),
