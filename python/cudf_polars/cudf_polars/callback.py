@@ -11,6 +11,7 @@ import textwrap
 import time
 import warnings
 from functools import cache, partial
+from threading import Lock
 from typing import TYPE_CHECKING, Literal, overload
 
 import nvtx
@@ -162,6 +163,11 @@ def set_memory_resource(
         rmm.mr.set_current_device_resource(previous)
 
 
+# libcudf doesn't support executing on multiple devices from within the same process.
+SEEN_DEVICE = None
+SEEN_DEVICE_LOCK = Lock()
+
+
 @contextlib.contextmanager
 def set_device(device: int | None) -> Generator[int, None, None]:
     """
@@ -180,13 +186,28 @@ def set_device(device: int | None) -> Generator[int, None, None]:
     -----
     At exit, the device is restored to whatever was current at entry.
     """
-    previous: int = gpu.getDevice()
-    if device is not None:
-        gpu.setDevice(device)
-    try:
-        yield previous
-    finally:
-        gpu.setDevice(previous)
+    global SEEN_DEVICE  # noqa: PLW0603
+    current: int = gpu.getDevice()
+    to_use = device if device is not None else current
+    with SEEN_DEVICE_LOCK:
+        if (
+            SEEN_DEVICE is not None and to_use != SEEN_DEVICE
+        ):  # pragma: no cover; requires multiple GPUs in CI
+            raise RuntimeError(
+                "cudf-polars does not support running queries on "
+                "multiple devices in the same process. "
+                f"A previous query used device-{SEEN_DEVICE}, "
+                f"the current query is using device-{to_use}."
+            )
+        SEEN_DEVICE = to_use
+    if to_use != current:
+        gpu.setDevice(to_use)
+        try:
+            yield to_use
+        finally:
+            gpu.setDevice(current)
+    else:
+        yield to_use
 
 
 @overload
