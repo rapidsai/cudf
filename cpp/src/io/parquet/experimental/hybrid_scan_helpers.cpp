@@ -573,12 +573,13 @@ named_to_reference_converter::named_to_reference_converter(
 
   // Map column indices to their names
   auto const& root = schema_tree.front();
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(root.children_idx.size()),
-                [&](int32_t col_idx) {
-                  auto const schema_idx = root.children_idx[col_idx];
-                  _column_indices_to_names.insert({col_idx, schema_tree[schema_idx].name});
-                });
+  std::transform(thrust::counting_iterator<int32_t>(0),
+                 thrust::counting_iterator<int32_t>(root.children_idx.size()),
+                 std::inserter(_column_indices_to_names, _column_indices_to_names.end()),
+                 [&](auto col_idx) {
+                   auto const schema_idx = root.children_idx[col_idx];
+                   return std::pair{col_idx, schema_tree[schema_idx].name};
+                 });
 
   expr.value().get().accept(*this);
 }
@@ -621,12 +622,13 @@ names_from_expression::names_from_expression(
   } else {
     // Otherwise, map all column indices to their names from the schema tree
     auto const& root = schema_tree.front();
-    std::for_each(thrust::counting_iterator<size_t>(0),
-                  thrust::counting_iterator(root.children_idx.size()),
-                  [&](int32_t col_idx) {
-                    auto const schema_idx = root.children_idx[col_idx];
-                    _column_indices_to_names.insert({col_idx, schema_tree[schema_idx].name});
-                  });
+    std::transform(thrust::counting_iterator<int32_t>(0),
+                   thrust::counting_iterator<int32_t>(root.children_idx.size()),
+                   std::inserter(_column_indices_to_names, _column_indices_to_names.end()),
+                   [&](auto col_idx) {
+                     auto const schema_idx = root.children_idx[col_idx];
+                     std::pair{col_idx, schema_tree[schema_idx].name};
+                   });
   }
 
   expr.value().get().accept(*this);
