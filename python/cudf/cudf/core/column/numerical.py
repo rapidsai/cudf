@@ -44,7 +44,6 @@ if TYPE_CHECKING:
     from cudf._typing import (
         ColumnBinaryOperand,
         ColumnLike,
-        Dtype,
         DtypeObj,
         ScalarLike,
     )
@@ -935,7 +934,7 @@ class NumericalColumn(NumericalBaseColumn):
 
         return self
 
-    def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
+    def _reduction_result_dtype(self, reduction_op: str) -> DtypeObj:
         if reduction_op in {"sum", "product"}:
             if self.dtype.kind == "f":
                 return self.dtype
