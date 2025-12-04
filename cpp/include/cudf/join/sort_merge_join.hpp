@@ -333,6 +333,14 @@ sort_merge_inner_join(cudf::table_view const& left_keys,
                       rmm::cuda_stream_view stream      = cudf::get_default_stream(),
                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+sort_merge_left_join(cudf::table_view const& left_keys,
+                      cudf::table_view const& right_keys,
+                      null_equality compare_nulls       = null_equality::EQUAL,
+                      rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                      rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
 /**
  * @brief Returns a pair of row index vectors corresponding to an inner join between the specified
  * tables.
@@ -373,6 +381,14 @@ sort_merge_inner_join(cudf::table_view const& left_keys,
 [[deprecated]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
                          std::unique_ptr<rmm::device_uvector<size_type>>>
 merge_inner_join(cudf::table_view const& left_keys,
+                 cudf::table_view const& right_keys,
+                 null_equality compare_nulls       = null_equality::EQUAL,
+                 rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                 rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+merge_left_join(cudf::table_view const& left_keys,
                  cudf::table_view const& right_keys,
                  null_equality compare_nulls       = null_equality::EQUAL,
                  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
