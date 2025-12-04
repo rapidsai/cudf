@@ -1720,17 +1720,16 @@ CUDF_KERNEL void __launch_bounds__(block_size)
         if (!is_dictionary(s->chunk.encoding_kind)) {
           if (t < numvals)
             secondary_val = (s->chunk.type_kind == TIMESTAMP) ? s->vals.u64[t] : s->vals.u32[t];
-          if (s->chunk.type_kind != TIMESTAMP) {
-            lengths_to_positions(s->vals.u32, numvals, t);
-            __syncthreads();
-          }
+          if (s->chunk.type_kind != TIMESTAMP) { lengths_to_positions(s->vals.u32, numvals, t); }
         }
+        __syncthreads();
         // Adjust the maximum number of values
+        auto const max_vals_local = s->top.data.max_vals;
         if (numvals == 0 && vals_skipped == 0) {
-          numvals = s->top.data.max_vals;  // Just so that we don't hang if the stream is corrupted
-        } else {
-          if (t == 0 && numvals < s->top.data.max_vals) { s->top.data.max_vals = numvals; }
+          numvals = max_vals_local;  // Just so that we don't hang if the stream is corrupted
         }
+        __syncthreads();
+        if (t == 0 and numvals < max_vals_local) { s->top.data.max_vals = numvals; }
       }
       __syncthreads();
       // Account for skipped values
