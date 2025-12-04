@@ -236,7 +236,7 @@ def _decompose_unique(
 
 
 def _decompose_agg_node(
-    agg: Agg,
+    agg: Agg | Len,
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
@@ -272,7 +272,7 @@ def _decompose_agg_node(
     """
     expr: Expr
     exprs: list[Expr]
-    if agg.name == "count":
+    if isinstance(agg, Len) or agg.name == "count":
         # Chunkwise stage
         columns, input_ir, partition_info = select(
             [agg],
@@ -401,64 +401,6 @@ def _decompose_agg_node(
 _SUPPORTED_AGGS = ("count", "min", "max", "sum", "mean", "n_unique")
 
 
-def _decompose_len(
-    len_expr: Len,
-    input_ir: IR,
-    partition_info: MutableMapping[IR, PartitionInfo],
-    config_options: ConfigOptions,
-    *,
-    names: Generator[str, None, None],
-) -> tuple[Expr, IR, MutableMapping[IR, PartitionInfo]]:
-    """
-    Decompose a Len into partition-wise stages.
-
-    Parameters
-    ----------
-    len_expr
-        The Len node to decompose.
-    input_ir
-        The original input-IR node that ``len`` will evaluate.
-    partition_info
-        A mapping from all unique IR nodes to the
-        associated partitioning information.
-    config_options
-        GPUEngine configuration options.
-    names
-        Generator of unique names for temporaries.
-
-    Returns
-    -------
-    expr
-        Decomposed Agg node.
-    input_ir
-        The rewritten ``input_ir`` to be evaluated by ``expr``.
-    partition_info
-        A mapping from unique nodes in the new graph to associated
-        partitioning information.
-    """
-    # Mechanically similar to _decompose_agg_node with a count Agg expression.
-
-    # Chunkwise stage
-    columns, input_ir, partition_info = select(
-        [len_expr],
-        input_ir,
-        partition_info,
-        names=names,
-        repartition=True,
-    )
-
-    # Combined stage
-    (column,) = columns
-    columns, input_ir, partition_info = select(
-        [Agg(len_expr.dtype, "sum", None, ExecutionContext.FRAME, column)],
-        input_ir,
-        partition_info,
-        names=names,
-    )
-    (expr,) = columns
-    return expr, input_ir, partition_info
-
-
 def _decompose_expr_node(
     expr: Expr,
     input_ir: IR,
@@ -511,18 +453,12 @@ def _decompose_expr_node(
     if partition_count == 1 or expr.is_pointwise:
         # Single-partition and pointwise expressions are always supported.
         return expr, input_ir, partition_info
-    elif isinstance(expr, Agg) and expr.name in _SUPPORTED_AGGS:
+    elif isinstance(expr, Len) or (
+        isinstance(expr, Agg) and expr.name in _SUPPORTED_AGGS
+    ):
         # This is a supported Agg expression.
         return _decompose_agg_node(
             expr, input_ir, partition_info, config_options, names=names
-        )
-    elif isinstance(expr, Len):
-        return _decompose_len(
-            expr,
-            input_ir,
-            partition_info,
-            config_options,
-            names=names,
         )
     elif isinstance(expr, UnaryFunction) and expr.name == "unique":
         return _decompose_unique(
