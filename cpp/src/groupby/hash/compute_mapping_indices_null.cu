@@ -18,5 +18,6 @@ template void compute_mapping_indices<nullable_hash_set_ref_t<cuco::insert_and_f
   size_type* local_mapping_index,
   size_type* global_mapping_index,
   size_type* block_cardinality,
+  size_type* block_row_ends,
   rmm::cuda_stream_view stream);
 }  // namespace cudf::groupby::detail::hash
