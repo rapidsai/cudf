@@ -65,15 +65,10 @@ void expect_match_counts_equal(rmm::device_uvector<cudf::size_type> const& actua
 using JoinResult = std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
                              std::unique_ptr<rmm::device_uvector<cudf::size_type>>>;
 
-template <std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
-                    std::unique_ptr<rmm::device_uvector<cudf::size_type>>> (*join_impl)(
-            cudf::table_view const& left_keys,
-            cudf::table_view const& right_keys,
-            cudf::null_equality compare_nulls,
-            rmm::cuda_stream_view stream,
-            rmm::device_async_resource_ref mr),
-          cudf::out_of_bounds_policy oob_policy = cudf::out_of_bounds_policy::DONT_CHECK>
+template <cudf::out_of_bounds_policy oob_policy = cudf::out_of_bounds_policy::DONT_CHECK,
+          typename Func>
 std::unique_ptr<cudf::table> join_and_gather(
+  Func&& join_impl,
   cudf::table_view const& left_input,
   cudf::table_view const& right_input,
   std::vector<cudf::size_type> const& left_on,
@@ -113,14 +108,49 @@ std::unique_ptr<cudf::table> inner_join(
   algorithm algo                    = algorithm::HASH)
 {
   if (algo == algorithm::SORT_MERGE) {
-    return join_and_gather<cudf::sort_merge_inner_join>(
-      left_input, right_input, left_on, right_on, compare_nulls);
+    return join_and_gather(
+      [](cudf::table_view const& left,
+         cudf::table_view const& right,
+         cudf::null_equality compare_nulls,
+         rmm::cuda_stream_view stream,
+         rmm::device_async_resource_ref mr) {
+        cudf::sort_merge_join obj(right, cudf::sorted::NO, compare_nulls, stream);
+        return obj.inner_join(left, cudf::sorted::NO, stream, mr);
+      },
+      left_input,
+      right_input,
+      left_on,
+      right_on,
+      compare_nulls);
   } else if (algo == algorithm::MERGE) {
-    return join_and_gather<cudf::merge_inner_join>(
-      left_input, right_input, left_on, right_on, compare_nulls);
+    return join_and_gather(
+      [](cudf::table_view const& left,
+         cudf::table_view const& right,
+         cudf::null_equality compare_nulls,
+         rmm::cuda_stream_view stream,
+         rmm::device_async_resource_ref mr) {
+        cudf::sort_merge_join obj(right, cudf::sorted::YES, compare_nulls, stream);
+        return obj.inner_join(left, cudf::sorted::YES, stream, mr);
+      },
+      left_input,
+      right_input,
+      left_on,
+      right_on,
+      compare_nulls);
   }
-  return join_and_gather<cudf::inner_join>(
-    left_input, right_input, left_on, right_on, compare_nulls);
+  return join_and_gather(
+    [](cudf::table_view const& left,
+       cudf::table_view const& right,
+       cudf::null_equality compare_nulls,
+       rmm::cuda_stream_view stream,
+       rmm::device_async_resource_ref mr) {
+      return cudf::inner_join(left, right, compare_nulls, stream, mr);
+    },
+    left_input,
+    right_input,
+    left_on,
+    right_on,
+    compare_nulls);
 }
 
 std::vector<cudf::size_type> inner_join_size_per_row(
@@ -149,8 +179,19 @@ std::unique_ptr<cudf::table> left_join(
   std::vector<cudf::size_type> const& right_on,
   cudf::null_equality compare_nulls = cudf::null_equality::EQUAL)
 {
-  return join_and_gather<cudf::left_join, cudf::out_of_bounds_policy::NULLIFY>(
-    left_input, right_input, left_on, right_on, compare_nulls);
+  return join_and_gather<cudf::out_of_bounds_policy::NULLIFY>(
+    [](cudf::table_view const& left,
+       cudf::table_view const& right,
+       cudf::null_equality compare_nulls,
+       rmm::cuda_stream_view stream,
+       rmm::device_async_resource_ref mr) {
+      return cudf::left_join(left, right, compare_nulls, stream, mr);
+    },
+    left_input,
+    right_input,
+    left_on,
+    right_on,
+    compare_nulls);
 }
 
 std::unique_ptr<cudf::table> full_join(
@@ -160,8 +201,19 @@ std::unique_ptr<cudf::table> full_join(
   std::vector<cudf::size_type> const& right_on,
   cudf::null_equality compare_nulls = cudf::null_equality::EQUAL)
 {
-  return join_and_gather<cudf::full_join, cudf::out_of_bounds_policy::NULLIFY>(
-    full_input, right_input, full_on, right_on, compare_nulls);
+  return join_and_gather<cudf::out_of_bounds_policy::NULLIFY>(
+    [](cudf::table_view const& left,
+       cudf::table_view const& right,
+       cudf::null_equality compare_nulls,
+       rmm::cuda_stream_view stream,
+       rmm::device_async_resource_ref mr) {
+      return cudf::full_join(left, right, compare_nulls, stream, mr);
+    },
+    full_input,
+    right_input,
+    full_on,
+    right_on,
+    compare_nulls);
 }
 
 }  // anonymous namespace

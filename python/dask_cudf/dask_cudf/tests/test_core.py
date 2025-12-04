@@ -622,9 +622,7 @@ def test_hash_object_dispatch(index):
 )
 def test_make_meta_backends(index):
     dtypes = ["int8", "int32", "int64", "float64"]
-    df = cudf.DataFrame(
-        {dt: np.arange(start=0, stop=3, dtype=dt) for dt in dtypes}
-    )
+    df = cudf.DataFrame({dt: np.arange(0, 3, dtype=dt) for dt in dtypes})
     df["strings"] = ["cat", "dog", "fish"]
     df["cats"] = df["strings"].astype("category")
     df["time_s"] = np.array(
