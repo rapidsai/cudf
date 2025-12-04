@@ -172,8 +172,7 @@ async def broadcast_join_node(
             small_dfs = [_concat(*small_dfs, context=ir_context)]
         if need_allgather:
             allgather = AllGatherManager(context, collective_id)
-            for s_id in range(len(small_dfs)):
-                small_df = small_dfs.pop()
+            for s_id, small_df in enumerate(small_dfs):
                 allgather.insert(
                     s_id,
                     TableChunk.from_pylibcudf_table(
