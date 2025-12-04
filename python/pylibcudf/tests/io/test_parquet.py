@@ -344,6 +344,8 @@ def test_read_parquet_filters_jit(
     )
     options.set_filter(plc_filter)
 
+    assert options.is_enabled_use_jit_filter() is use_jit_filter
+
     got = plc.io.parquet.read_parquet(options)
     expect = read_table(source, filters=pa_filter)
 
