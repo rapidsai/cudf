@@ -114,12 +114,11 @@ std::vector<io_source> extract_input_sources(std::string const& paths,
   std::vector<io_source> input_sources;
   input_sources.reserve(parquet_files.size());
   // Transform input files to the specified io sources
-  std::transform(parquet_files.begin(),
-                 parquet_files.end(),
-                 std::back_inserter(input_sources),
-                 [&](auto const& file_name) {
-                   return io_source{file_name, io_source_type, stream};
-                 });
+  std::transform(
+    parquet_files.begin(),
+    parquet_files.end(),
+    std::back_inserter(input_sources),
+    [&](auto const& file_name) { return io_source{file_name, io_source_type, stream}; });
   stream.synchronize();
   return input_sources;
 }
@@ -243,8 +242,6 @@ std::vector<rmm::device_buffer> fetch_byte_ranges(
                     buffer.data(), chunk_offset, chunk_size, cudaMemcpyDefault, stream.value()));
                   buffers[idx] = std::move(buffer);
                 });
-
-  stream.synchronize_no_throw();
   return buffers;
 }
 

@@ -195,16 +195,13 @@ int32_t main(int argc, char const** argv)
     throw std::runtime_error("No input files to read. Exiting early.\n");
   }
 
-  // Create filter expression
+  // Create filter expressions (one per thread; reused circularly if needed)
   auto const column_reference = cudf::ast::column_name_reference(column_name);
-  auto scalar1                = cudf::string_scalar(literal_value);
-  auto literal1               = cudf::ast::literal(scalar1);
-  auto scalar2                = cudf::numeric_scalar<int64_t>(std::stoll(literal_value));
-  auto literal2               = cudf::ast::literal(scalar2);
+  auto scalar                 = cudf::string_scalar(literal_value);
+  auto literal                = cudf::ast::literal(scalar);
 
   std::vector<cudf::ast::operation> filter_expressions;
-  filter_expressions.emplace_back(cudf::ast::ast_operator::EQUAL, column_reference, literal2);
-  filter_expressions.emplace_back(cudf::ast::ast_operator::EQUAL, column_reference, literal1);
+  filter_expressions.emplace_back(cudf::ast::ast_operator::EQUAL, column_reference, literal);
 
   // Insert which filters to apply
   std::unordered_set<parquet_filter_type> filters;
