@@ -373,9 +373,9 @@ class Column:
                 f"Unsupported casting from {self.dtype.id()} to {dtype.id()}."
             )
 
-        are_values_type = type_checker(self.obj, stream=stream)  # type: ignore[call-arg]
+        castable = type_checker(self.obj, stream=stream)  # type: ignore[call-arg]
         if not plc.reduce.reduce(
-            are_values_type,
+            castable,
             plc.aggregation.all(),
             plc.DataType(plc.TypeId.BOOL8),
             stream=stream,
@@ -385,12 +385,12 @@ class Column:
                     f"Conversion from {self.dtype.id()} to {dtype.id()} failed."
                 )
             else:
-                return plc.Column.from_scalar(
-                    plc.Scalar.from_py(None, dtype, stream=stream),
-                    size=self.size,
-                    stream=stream,
+                values = self.obj.with_mask(
+                    *plc.transform.bools_to_mask(castable, stream=stream)
                 )
-        return type_caster(self.obj, dtype, stream=stream)
+        else:
+            values = self.obj
+        return type_caster(values, dtype, stream=stream)
 
     def copy_metadata(self, from_: pl_Series, /) -> Self:
         """

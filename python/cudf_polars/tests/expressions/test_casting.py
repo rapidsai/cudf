@@ -65,7 +65,7 @@ def test_allow_double_cast():
 @pytest.mark.parametrize("dtype", [pl.Int64(), pl.Float64()])
 @pytest.mark.parametrize("strict", [True, False])
 def test_cast_strict_false_string_to_numeric(dtype, strict):
-    df = pl.LazyFrame({"c0": ["1969-12-08 17:00:01"]})
+    df = pl.LazyFrame({"c0": ["1969-12-08 17:00:01", "1", None]})
     query = df.with_columns(pl.col("c0").cast(dtype, strict=strict))
     if strict:
         cudf_except = (
