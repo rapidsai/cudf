@@ -92,6 +92,7 @@ if TYPE_CHECKING:
         MutableMapping,
         Sequence,
     )
+    from types import NotImplementedType
 
     from cudf._typing import (
         Axis,
@@ -99,7 +100,6 @@ if TYPE_CHECKING:
         DataFrameOrSeries,
         Dtype,
         DtypeObj,
-        NotImplementedType,
         ScalarLike,
     )
     from cudf.core.series import Series
