@@ -150,8 +150,22 @@ void aggregate_reader_metadata::setup_page_index(cudf::host_span<uint8_t const> 
 
   // Get the file metadata and setup the page index
   auto& file_metadata = per_file_metadata.front();
+
+  auto const& row_groups = file_metadata.row_groups;
+
+  // Check for empty parquet file
+  CUDF_EXPECTS(not row_groups.empty() and not row_groups.front().columns.empty(),
+               "No column chunks in Parquet schema to read page index for");
+
   // Set the first ColumnChunk's offset of ColumnIndex as the adjusted zero offset
-  int64_t const min_offset = file_metadata.row_groups.front().columns.front().column_index_offset;
+  int64_t const min_offset = row_groups.front().columns.front().column_index_offset;
+
+  // Check if the page index buffer is valid
+  {
+    auto const& last_col  = row_groups.back().columns.back();
+    auto const max_offset = last_col.offset_index_offset + last_col.offset_index_length;
+    CUDF_EXPECTS(max_offset > min_offset, "Encountered an invalid page index buffer");
+  }
 
   file_metadata.setup_page_index(page_index_bytes, min_offset);
 }
