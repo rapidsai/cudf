@@ -68,7 +68,7 @@ using JoinResult = std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type
 template <cudf::out_of_bounds_policy oob_policy = cudf::out_of_bounds_policy::DONT_CHECK,
           typename Func>
 std::unique_ptr<cudf::table> join_and_gather(
-  Func join_impl,
+  Func&& join_impl,
   cudf::table_view const& left_input,
   cudf::table_view const& right_input,
   std::vector<cudf::size_type> const& left_on,
