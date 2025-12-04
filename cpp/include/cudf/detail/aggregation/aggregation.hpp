@@ -7,6 +7,7 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/utilities/assert.cuh>
+#include <cudf/strings/string_view.hpp>
 #include <cudf/structs/struct_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>

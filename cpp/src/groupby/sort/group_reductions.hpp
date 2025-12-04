@@ -550,15 +550,15 @@ std::unique_ptr<column> group_bitwise(bitwise_op bit_op,
  *
  * @param k Number of top elements to find in each group
  * @param topk_order Identifies ascending or descending for selecting the values
- * @param grouped_values Grouped values to find top k elements within
- * @param group_labels ID of group that the corresponding value belongs to
+ * @param values Grouped values to find top k elements within
+ * @param group_offsets Offsets to identify each group in values
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> group_top_k(size_type k,
                                     order topk_order,
-                                    column_view const& grouped_values,
-                                    device_span<size_type const> group_labels,
+                                    column_view const& values,
+                                    device_span<size_type const> group_offsets,
                                     rmm::cuda_stream_view stream,
                                     rmm::device_async_resource_ref mr);
 }  // namespace detail
