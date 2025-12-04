@@ -1720,16 +1720,18 @@ CUDF_KERNEL void __launch_bounds__(block_size)
         if (!is_dictionary(s->chunk.encoding_kind)) {
           if (t < numvals)
             secondary_val = (s->chunk.type_kind == TIMESTAMP) ? s->vals.u64[t] : s->vals.u32[t];
-          if (s->chunk.type_kind != TIMESTAMP) { lengths_to_positions(s->vals.u32, numvals, t); }
+          if (s->chunk.type_kind != TIMESTAMP) {
+            lengths_to_positions(s->vals.u32, numvals, t);
+            __syncthreads();
+          }
         }
-        __syncthreads();
+
         // Adjust the maximum number of values
-        auto const max_vals_local = s->top.data.max_vals;
         if (numvals == 0 && vals_skipped == 0) {
-          numvals = max_vals_local;  // Just so that we don't hang if the stream is corrupted
+          numvals = s->top.data.max_vals;  // Just so that we don't hang if the stream is corrupted
         }
         __syncthreads();
-        if (t == 0 and numvals < max_vals_local) { s->top.data.max_vals = numvals; }
+        if (t == 0) { s->top.data.max_vals = cuda::std::min(s->top.data.max_vals, numvals); }
       }
       __syncthreads();
       // Account for skipped values
