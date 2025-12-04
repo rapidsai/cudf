@@ -17,7 +17,6 @@ import pylibcudf as plc
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.expressions.base import ExecutionContext
-from cudf_polars.dsl.traversal import traversal
 from cudf_polars.utils.versions import POLARS_VERSION_LT_134, POLARS_VERSION_LT_1323
 
 if TYPE_CHECKING:
@@ -96,14 +95,6 @@ def decompose_single_agg(
     """
     agg = named_expr.value
     name = named_expr.name
-    leaves = [
-        e for e in traversal([agg]) if isinstance(e, (expr.Col, expr.Literal, expr.Len))
-    ]
-    has_cols = any(isinstance(e, expr.Col) for e in leaves)
-    has_lit = any(isinstance(e, expr.Literal) for e in leaves)
-    has_len = any(isinstance(e, expr.Len) for e in leaves)
-    if has_lit and not (has_cols or has_len):
-        return [], named_expr
     if isinstance(agg, expr.UnaryFunction) and agg.name in {
         "rank",
         "fill_null_with_strategy",
