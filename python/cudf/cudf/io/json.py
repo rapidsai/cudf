@@ -341,9 +341,7 @@ def _plc_write_json(
     try:
         # TODO: TableWithMetadata expects list[ColumnNameSpec] but receives list[tuple[Hashable, Any]]
         tbl_w_meta = plc.io.TableWithMetadata(
-            plc.Table(
-                [col.to_pylibcudf(mode="read") for col in table._columns]
-            ),
+            plc.Table([col.plc_column for col in table._columns]),
             colnames,  # type: ignore[arg-type]
         )
         options = (

@@ -27,6 +27,7 @@
 #include <cudf/io/parquet.hpp>
 #include <cudf/join/conditional_join.hpp>
 #include <cudf/join/distinct_hash_join.hpp>
+#include <cudf/join/filtered_join.hpp>
 #include <cudf/join/hash_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/join/mixed_join.hpp>
@@ -3511,13 +3512,16 @@ Java_ai_rapids_cudf_Table_mixedFullJoinGatherMaps(JNIEnv* env,
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftSemiJoinGatherMap(
   JNIEnv* env, jclass, jlong j_left_keys, jlong j_right_keys, jboolean compare_nulls_equal)
 {
+  double constexpr load_factor = 0.5;
   return cudf::jni::join_gather_single_map(
     env,
     j_left_keys,
     j_right_keys,
     compare_nulls_equal,
-    [](cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
-      return cudf::left_semi_join(left, right, nulleq);
+    [load_factor](
+      cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
+      cudf::filtered_join obj(right, nulleq, cudf::set_as_build_table::RIGHT, load_factor);
+      return obj.semi_join(left);
     });
 }
 
@@ -3608,13 +3612,16 @@ Java_ai_rapids_cudf_Table_mixedLeftSemiJoinGatherMap(JNIEnv* env,
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftAntiJoinGatherMap(
   JNIEnv* env, jclass, jlong j_left_keys, jlong j_right_keys, jboolean compare_nulls_equal)
 {
+  double constexpr load_factor = 0.5;
   return cudf::jni::join_gather_single_map(
     env,
     j_left_keys,
     j_right_keys,
     compare_nulls_equal,
-    [](cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
-      return cudf::left_anti_join(left, right, nulleq);
+    [load_factor](
+      cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
+      cudf::filtered_join obj(right, nulleq, cudf::set_as_build_table::RIGHT, load_factor);
+      return obj.anti_join(left);
     });
 }
 

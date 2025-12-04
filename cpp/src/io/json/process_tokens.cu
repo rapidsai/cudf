@@ -16,6 +16,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/utility>
 #include <thrust/iterator/tabulate_output_iterator.h>
 #include <thrust/transform_scan.h>
 
@@ -24,7 +25,7 @@ namespace detail {
 
 struct write_if {
   using token_t   = cudf::io::json::token_t;
-  using scan_type = thrust::pair<token_t, bool>;
+  using scan_type = cuda::std::pair<token_t, bool>;
   PdaTokenT* tokens;
   size_t n;
   // Index, value

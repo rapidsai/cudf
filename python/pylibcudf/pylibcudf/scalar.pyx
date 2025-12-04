@@ -159,7 +159,7 @@ cdef class Scalar:
     def to_arrow(
         self,
         metadata: list[ColumnMetadata] | str | None = None,
-        stream: Stream = None,
+        stream: Stream | None = None,
     ) -> ArrowLike:
         """Create a PyArrow array from a pylibcudf scalar.
 
@@ -707,7 +707,12 @@ def _(
     cdef DataType c_dtype = dtype
     cdef type_id tid = c_dtype.id()
     if isinstance(py_val, datetime.datetime):
-        epoch_seconds = py_val.timestamp()
+        if py_val.tzinfo is None:
+            # Treat tz-naive datetime as UTC so .timestamp()
+            # does not account for the system's timezone.
+            epoch_seconds = py_val.replace(tzinfo=datetime.timezone.utc).timestamp()
+        else:
+            epoch_seconds = py_val.timestamp()
     else:
         epoch_seconds = (py_val - datetime.date(1970, 1, 1)).total_seconds()
     if tid == type_id.TIMESTAMP_NANOSECONDS:

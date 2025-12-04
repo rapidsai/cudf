@@ -58,11 +58,11 @@ test = [
     "fastavro>=0.22.9",
     "hypothesis>=6.131.7",
     "msgpack",
+    "pytest",
     "pytest-benchmark",
     "pytest-cases>=3.8.2",
     "pytest-cov",
     "pytest-xdist",
-    "pytest<9.0.0a0",
     "s3fs>=2022.3.0",
     "scipy",
     "tzdata",
@@ -117,6 +117,7 @@ filterwarnings = [
 markers = [
     "spilling: mark benchmark a good candidate to run with `CUDF_SPILL=ON`",
     "serial: Mark a test as not being parallel-safe.",
+    "no_copy_on_write: A test that is not valid when copy-on-write is enabled.",
 ]
 xfail_strict = true
 

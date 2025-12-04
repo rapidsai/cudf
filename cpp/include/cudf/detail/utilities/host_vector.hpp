@@ -99,6 +99,9 @@ class rmm_host_allocator {
   /**
    * @brief Construct from a `cudf::host_async_resource_ref`
    */
+#ifdef __CUDACC__
+#pragma nv_exec_check_disable
+#endif
   template <class... Properties>
   rmm_host_allocator(async_host_resource_ref<Properties...> _mr, rmm::cuda_stream_view _stream)
     : mr(_mr),
@@ -106,6 +109,26 @@ class rmm_host_allocator {
       _is_device_accessible{contains_property<cuda::mr::device_accessible, Properties...>}
   {
   }
+
+#ifdef __CUDACC__
+#pragma nv_exec_check_disable
+#endif
+  rmm_host_allocator(rmm_host_allocator const&) = default;
+
+#ifdef __CUDACC__
+#pragma nv_exec_check_disable
+#endif
+  rmm_host_allocator(rmm_host_allocator&&) = default;
+
+#ifdef __CUDACC__
+#pragma nv_exec_check_disable
+#endif
+  rmm_host_allocator& operator=(rmm_host_allocator const&) = default;
+
+#ifdef __CUDACC__
+#pragma nv_exec_check_disable
+#endif
+  rmm_host_allocator& operator=(rmm_host_allocator&&) = default;
 
   /**
    * @brief This method allocates storage for objects in host memory.

@@ -52,3 +52,9 @@ def test_cast_unsupported(tests):
     assert_ir_translation_raises(
         df.select(pl.col("a").cast(totype)), NotImplementedError
     )
+
+
+def test_allow_double_cast():
+    df = pl.LazyFrame({"c0": [1000]})
+    query = df.select(pl.col("c0").cast(pl.Boolean).cast(pl.Int8))
+    assert_gpu_result_equal(query)
