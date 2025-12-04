@@ -51,9 +51,9 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/std/iterator>
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
-#include <thrust/pair.h>
 
 namespace {  // anonymous
 
@@ -80,7 +80,7 @@ __device__ auto get_new_value(cudf::size_type idx,
   } else {
     new_value = input_data[idx];
   }
-  return thrust::make_pair(new_value, output_is_valid);
+  return cuda::std::make_pair(new_value, output_is_valid);
 }
 
 /**

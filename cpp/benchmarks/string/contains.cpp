@@ -4,7 +4,6 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
 
 #include <cudf/strings/contains.hpp>
 #include <cudf/strings/regex/regex_program.hpp>

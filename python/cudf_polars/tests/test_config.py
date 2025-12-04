@@ -13,8 +13,10 @@ from polars.testing.asserts import assert_frame_equal
 
 import pylibcudf as plc
 import rmm
+from rmm._cuda import gpu
 from rmm.pylibrmm import CudaStreamFlags
 
+import cudf_polars.callback
 import cudf_polars.utils.config
 from cudf_polars.callback import default_memory_resource, set_memory_resource
 from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext
@@ -79,8 +81,21 @@ def test_unsupported_config_raises():
         q.collect(engine=pl.GPUEngine(unknown_key=True))
 
 
+def test_use_device_not_current(monkeypatch):
+    # This is testing the set/restore device functionality in callback
+    # for the case where the device to use is not the current device and no
+    # previous query has used a device.
+    monkeypatch.setattr(cudf_polars.callback, "SEEN_DEVICE", None)
+    monkeypatch.setattr(gpu, "setDevice", lambda arg: None)
+    # Fake that the current device is 1.
+    monkeypatch.setattr(gpu, "getDevice", lambda: 1)
+    q = pl.LazyFrame({})
+    assert_gpu_result_equal(q, engine=pl.GPUEngine(device=0))
+
+
 @pytest.mark.parametrize("device", [-1, "foo"])
-def test_invalid_device_raises(device):
+def test_invalid_device_raises(device, monkeypatch):
+    monkeypatch.setattr(cudf_polars.callback, "SEEN_DEVICE", None)
     q = pl.LazyFrame({})
     if POLARS_VERSION_LT_130:
         with pytest.raises(pl.exceptions.ComputeError):
@@ -93,8 +108,21 @@ def test_invalid_device_raises(device):
             q.collect(engine=pl.GPUEngine(device=device))
 
 
+def test_multiple_devices_in_same_process_raise(monkeypatch):
+    # A device we haven't already seen
+    monkeypatch.setattr(cudf_polars.callback, "SEEN_DEVICE", 4)
+    q = pl.LazyFrame({})
+    if POLARS_VERSION_LT_130:
+        with pytest.raises(pl.exceptions.ComputeError):
+            q.collect(engine=pl.GPUEngine())
+    else:
+        with pytest.raises(RuntimeError):
+            q.collect(engine=pl.GPUEngine())
+
+
 @pytest.mark.parametrize("mr", [1, object()])
-def test_invalid_memory_resource_raises(mr):
+def test_invalid_memory_resource_raises(mr, monkeypatch):
+    monkeypatch.setattr(cudf_polars.callback, "SEEN_DEVICE", None)
     q = pl.LazyFrame({})
     if POLARS_VERSION_LT_130:
         with pytest.raises(pl.exceptions.ComputeError):
@@ -250,6 +278,20 @@ def test_validate_streaming_executor_shuffle_method(
             ConfigOptions.from_polars_engine(engine)
 
 
+def test_join_rapidsmpf_single_private_config() -> None:
+    # The user may not specify "rapidsmpf-single" directly
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "shuffle_method": "rapidsmpf-single",
+            "runtime": "tasks",
+        },
+    )
+    with pytest.raises(ValueError, match="not a supported shuffle method"):
+        ConfigOptions.from_polars_engine(engine)
+
+
 @pytest.mark.parametrize("executor", ["in-memory", "streaming"])
 def test_hashable(executor: str) -> None:
     config = ConfigOptions.from_polars_engine(
@@ -382,9 +424,10 @@ def test_validate_shuffle_method_defaults(
         "rapidsmpf_spill",
         "sink_to_directory",
         "client_device_threshold",
+        "max_io_threads",
     ],
 )
-def test_validate_max_rows_per_partition(option: str) -> None:
+def test_validate_streaming_executor_options(option: str) -> None:
     with pytest.raises(TypeError, match=f"{option} must be"):
         ConfigOptions.from_polars_engine(
             pl.GPUEngine(
@@ -862,3 +905,32 @@ def test_memory_resource_config_raises() -> None:
 def test_memory_resource_config_hash(options) -> None:
     config = MemoryResourceConfig(qualname="rmm.mr.CudaMemoryResource", options=options)
     assert hash(config) == hash(config)
+
+
+def test_rapidsmpf_distributed_warns(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Emulate the case that rapidsmpf is available
+    # (even if it's not actually installed)
+    monkeypatch.setattr(
+        cudf_polars.utils.config,
+        "rapidsmpf_single_available",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        cudf_polars.utils.config,
+        "rapidsmpf_distributed_available",
+        lambda: True,
+    )
+
+    with pytest.warns(
+        UserWarning,
+        match="The rapidsmpf runtime does NOT support distributed execution yet.",
+    ):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={
+                    "runtime": "rapidsmpf",
+                    "cluster": "distributed",
+                },
+            )
+        )

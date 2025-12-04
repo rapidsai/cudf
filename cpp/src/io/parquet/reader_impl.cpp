@@ -18,6 +18,7 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <bitset>
@@ -552,6 +553,7 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
                               filter_columns_names,
                               options.is_enabled_use_pandas_metadata(),
                               _strings_to_categorical,
+                              options.is_enabled_ignore_missing_columns(),
                               _options.timestamp_type.id());
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
@@ -923,7 +925,7 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
   }
 
   auto page_and_mask_begin =
-    thrust::make_zip_iterator(thrust::make_tuple(pages.host_begin(), page_mask.begin()));
+    thrust::make_zip_iterator(cuda::std::make_tuple(pages.host_begin(), page_mask.begin()));
 
   auto null_masks = std::vector<bitmask_type*>{};
   auto begin_bits = std::vector<cudf::size_type>{};
@@ -932,10 +934,10 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
   std::for_each(
     page_and_mask_begin, page_and_mask_begin + pages.size(), [&](auto const& page_and_mask_pair) {
       // Return early if the page is valid - Note: dictionary pages are always valid
-      if (thrust::get<1>(page_and_mask_pair)) { return; }
+      if (cuda::std::get<1>(page_and_mask_pair)) { return; }
 
       // Get the current page
-      auto const& page = thrust::get<0>(page_and_mask_pair);
+      auto const& page = cuda::std::get<0>(page_and_mask_pair);
 
       // Table row bounds
       auto const table_start_row = skip_rows;
@@ -1001,12 +1003,12 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
   // Otherwise, update the nullmasks in a loop
   else {
     auto nullmask_iter = thrust::make_zip_iterator(
-      thrust::make_tuple(null_masks.begin(), begin_bits.begin(), end_bits.begin()));
+      cuda::std::make_tuple(null_masks.begin(), begin_bits.begin(), end_bits.begin()));
     std::for_each(
       nullmask_iter, nullmask_iter + null_masks.size(), [&](auto const& nullmask_tuple) {
-        cudf::set_null_mask(thrust::get<0>(nullmask_tuple),
-                            thrust::get<1>(nullmask_tuple),
-                            thrust::get<2>(nullmask_tuple),
+        cudf::set_null_mask(cuda::std::get<0>(nullmask_tuple),
+                            cuda::std::get<1>(nullmask_tuple),
+                            cuda::std::get<2>(nullmask_tuple),
                             false,
                             _stream);
       });

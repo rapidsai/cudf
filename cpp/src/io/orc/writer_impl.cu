@@ -38,6 +38,7 @@
 #include <cuda/std/climits>
 #include <cuda/std/limits>
 #include <cuda/std/optional>
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/extrema.h>
 #include <thrust/for_each.h>
@@ -46,7 +47,6 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/sequence.h>
@@ -1865,7 +1865,8 @@ orc_table_view make_orc_table_view(table_view const& table,
     type_kinds, stream, cudf::get_current_device_resource_ref());
 
   rmm::device_uvector<orc_column_device_view> d_orc_columns(orc_columns.size(), stream);
-  using stack_value_type = thrust::pair<column_device_view const*, cuda::std::optional<uint32_t>>;
+  using stack_value_type =
+    cuda::std::pair<column_device_view const*, cuda::std::optional<uint32_t>>;
   rmm::device_uvector<stack_value_type> stack_storage(orc_columns.size(), stream);
 
   // pre-order append ORC device columns
