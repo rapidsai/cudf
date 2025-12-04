@@ -1725,7 +1725,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
             __syncthreads();
           }
         }
-
         // Adjust the maximum number of values
         if (numvals == 0 && vals_skipped == 0) {
           numvals = s->top.data.max_vals;  // Just so that we don't hang if the stream is corrupted
