@@ -239,13 +239,12 @@ class row_hasher {
   /**
    * @brief Get the hash operator to use on the device
    *
-   * Returns a unary callable, `F`, with signature `hash_function::result_type F(size_type)`.
-   *
-   * `F(i)` returns the hash of row i.
+   * Returns a unary callable, `F`, where `F(i)` returns the hash value of row i.
    *
    * @tparam hash_function Hash functor to use for hashing elements
    * @tparam DeviceRowHasher The device row hasher type to use
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls
+   *
    * @param nullate Indicates if any input column contains nulls
    * @param seed The seed to use for the hash function
    * @return A hash operator to use on the device
@@ -255,8 +254,8 @@ class row_hasher {
     template <template <typename> class, typename> class DeviceRowHasher = device_row_hasher,
     typename Nullate>
   DeviceRowHasher<hash_function, Nullate> device_hasher(
-    Nullate nullate                                   = {},
-    typename hash_function<int32_t>::result_type seed = DEFAULT_HASH_SEED) const
+    Nullate nullate                                                  = {},
+    cuda::std::invoke_result_t<hash_function<int32_t>, int32_t> seed = DEFAULT_HASH_SEED) const
   {
     return DeviceRowHasher<hash_function, Nullate>(nullate, *d_t, seed);
   }

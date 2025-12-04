@@ -170,7 +170,7 @@ class row_equality_comparator {
 template <template <typename> class Hash>
 class element_hasher {
  public:
-  using result_type = typename Hash<int32_t>::result_type;
+  using result_type = cuda::std::invoke_result_t<Hash<int32_t>, int32_t>;
 
   /**
    * @brief Returns the hash value of the given element in the given column.
@@ -206,7 +206,7 @@ class element_hasher {
 template <template <typename> class Hash = cudf::hashing::detail::default_hash>
 class row_hasher {
  public:
-  using result_type = typename element_hasher<Hash>::result_type;
+  using result_type = cuda::std::invoke_result_t<Hash<int32_t>, int32_t>;
 
   row_hasher() = delete;
 
