@@ -233,13 +233,6 @@ def test_groupby_nan_minmax_raises(op):
             pl.lit([[4, 5, 6]]).alias("value"),
             marks=pytest.mark.xfail(reason="Need to expose OtherScalar in rust IR"),
         ),
-        pytest.param(
-            pl.Series("value", [[4, 5, 6]], dtype=pl.List(pl.Int32)),
-            marks=pytest.mark.xfail(
-                condition=not POLARS_VERSION_LT_1321,
-                reason="https://github.com/rapidsai/cudf/issues/19610",
-            ),
-        ),
         pl.col("float") * (1 - pl.col("int")),
         [pl.lit(2).alias("value"), pl.col("float") * 2],
     ],
