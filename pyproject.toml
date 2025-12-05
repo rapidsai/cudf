@@ -6,8 +6,6 @@ ignore_missing_imports = true
 ignore_errors = false
 enable_error_code = "ignore-without-code"
 warn_unused_ignores = true
-# If we don't specify this, then mypy will check excluded files if
-# they are imported by a checked file.
 exclude = [
     "cudf/_lib/",
     "cudf/cudf/tests/",
