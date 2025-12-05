@@ -1604,7 +1604,7 @@ TEST_P(JoinParameterizedTest, EmptyLeftTableLeftJoin)
   Table empty0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result            = left_join(empty0, t1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
+  auto result = left_join(empty0, t1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(empty0, *result);
 }
 
@@ -1707,7 +1707,7 @@ TEST_P(JoinParameterizedTest, EmptyRightTableLeftJoin)
   Table empty1(std::move(cols1));
 
   {
-    auto result            = left_join(t0, empty1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
+    auto result = left_join(t0, empty1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(t0, *result);
   }
 
@@ -1808,7 +1808,7 @@ TEST_P(JoinParameterizedTest, BothEmptyLeftJoin)
   Table t0(std::move(cols0));
   Table empty1(std::move(cols1));
 
-  auto result            = left_join(t0, empty1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
+  auto result = left_join(t0, empty1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(empty1, *result);
 }
 
@@ -1889,7 +1889,7 @@ TEST_P(JoinParameterizedTest, EqualValuesLeftJoin)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result            = left_join(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
+  auto result = left_join(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
 
   column_wrapper<int32_t> col_gold_0{{0, 0, 0, 0}, {true, true, true, true}};
   strcol_wrapper col_gold_1({"s0", "s0", "s0", "s0"}, {true, true, true, true});
@@ -2970,9 +2970,9 @@ struct JoinParameterizedTestLists : public JoinTestLists,
   }
 
   void left_join(cudf::column_view left_gold_map,
-                  cudf::column_view right_gold_map,
-                  cudf::null_equality nulls_equal,
-                  algorithm algo)
+                 cudf::column_view right_gold_map,
+                 cudf::null_equality nulls_equal,
+                 algorithm algo)
   {
     auto join_lambda = [](cudf::table_view const& left,
                           cudf::table_view const& right,
@@ -3029,7 +3029,7 @@ TEST_F(JoinTestLists, ListWithNullsUnequalFullJoin)
 
 TEST_P(JoinParameterizedTestLists, ListWithNullsEqualLeftJoin)
 {
-  auto algo = GetParam();
+  auto algo                 = GetParam();
   auto const left_gold_map  = column_wrapper<int32_t>({0, 1, 2, 3, 4});
   auto const right_gold_map = column_wrapper<int32_t>({2, 0, 4, 3, NoneValue});
   this->left_join(left_gold_map, right_gold_map, cudf::null_equality::EQUAL, algo);
@@ -3037,7 +3037,7 @@ TEST_P(JoinParameterizedTestLists, ListWithNullsEqualLeftJoin)
 
 TEST_P(JoinParameterizedTestLists, ListWithNullsUnequalLeftJoin)
 {
-  auto algo = GetParam();
+  auto algo                 = GetParam();
   auto const left_gold_map  = column_wrapper<int32_t>({0, 1, 2, 3, 4});
   auto const right_gold_map = column_wrapper<int32_t>({NoneValue, 0, NoneValue, 3, NoneValue});
   this->left_join(left_gold_map, right_gold_map, cudf::null_equality::UNEQUAL, algo);
