@@ -56,17 +56,18 @@ cudaError_t memcpy_batch_async(
   void** dsts, void** srcs, std::size_t* sizes, std::size_t count, rmm::cuda_stream_view stream)
 {
 #if CUDART_VERSION >= 12080
-  cudaMemcpyAttributes attr;
-  attr.srcAccessOrder = cudaMemcpySrcAccessOrderStream;
-  attr.flags          = cudaMemcpyFlagPreferOverlapWithCompute;
+  cudaMemcpyAttributes attrs[1] = {};  // zero-initialize all fields
+  attrs[0].srcAccessOrder       = cudaMemcpySrcAccessOrderStream;
+  attrs[0].flags                = cudaMemcpyFlagPreferOverlapWithCompute;
+  std::size_t attrs_idxs[1]     = {0};
   std::size_t num_attrs{1};
 #if CUDART_VERSION >= 13000
-  return cudaMemcpyBatchAsync(dsts, srcs, sizes, count, &attr, nullptr, num_attrs, stream.value());
+  return cudaMemcpyBatchAsync(
+    dsts, srcs, sizes, count, attrs, attrs_idxs, num_attrs, stream.value());
 #else
-  std::size_t attrs_idxs{0};
   std::size_t fail_idx;
   return cudaMemcpyBatchAsync(
-    dsts, srcs, sizes, count, &attr, &attrs_idxs, num_attrs, &fail_idx, stream.value());
+    dsts, srcs, sizes, count, attrs, attrs_idxs, num_attrs, &fail_idx, stream.value());
 #endif  // CUDART_VERSION >= 13000
 #else
   // Implement a compatible API for CUDA < 12.8
@@ -82,6 +83,8 @@ cudaError_t memcpy_batch_async(
 cudaError_t memcpy_async(
   void* dst, void const* src, size_t count, cudaMemcpyKind kind, rmm::cuda_stream_view stream)
 {
+  if (count == 0) { return cudaSuccess; }
+
   // Use batch API with size 1 to prefer cudaMemcpyBatchAsync over
   // cudaMemcpyAsync. The batched API can be more efficient.
   void* dsts[1]   = {dst};
