@@ -4,6 +4,7 @@
  */
 
 #include "cudf/join/join.hpp"
+#include "thrust/iterator/zip_iterator.h"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -69,6 +70,14 @@ struct unprocessed_table_mapper {
   __device__ auto operator()(size_type idx) const noexcept
   {
     return cudf::bit_is_set(_validity_mask, idx);
+  }
+};
+
+struct left_join_nulls {
+  bitmask_type const* const _validity_mask;
+  __device__ auto operator()(size_type idx) const noexcept
+  {
+    return !cudf::bit_is_set(_validity_mask, idx);
   }
 };
 
@@ -698,11 +707,46 @@ sort_merge_join::left_join(table_view const& left,
   return invoke_merge(
     preprocessed_right._null_processed_table_view,
     preprocessed_left._null_processed_table_view,
-    [this, stream, mr](auto& obj) {
+    [this, left, stream, mr] (auto& obj) {
       auto [preprocessed_right_indices, preprocessed_left_indices] = obj.left(stream, mr);
       postprocess_indices(*preprocessed_right_indices, *preprocessed_left_indices, stream);
-      stream.synchronize();
-      return std::pair{std::move(preprocessed_left_indices), std::move(preprocessed_right_indices)};
+
+      // For left join with UNEQUAL nulls, we need to add back rows that were filtered out
+      if (compare_nulls == null_equality::UNEQUAL && has_nested_nulls(preprocessed_left._table_view)) {
+        // Get the number of null rows that were filtered out
+        auto const num_filtered_nulls = preprocessed_left._num_nulls.value();
+        auto const total_output_size = preprocessed_left_indices->size() + num_filtered_nulls;
+      
+        // Create new result vectors with space for filtered rows
+        rmm::device_uvector<size_type> left_result_indices(total_output_size, stream, mr);
+        rmm::device_uvector<size_type> right_result_indices(total_output_size, stream, mr);
+        
+        // Copy left and right indices
+        thrust::copy(rmm::exec_policy_nosync(stream),
+                    thrust::make_zip_iterator(preprocessed_left_indices->begin(), preprocessed_right_indices->begin()),
+                    thrust::make_zip_iterator(preprocessed_left_indices->end(), preprocessed_right_indices->end()),
+                    thrust::make_zip_iterator(left_result_indices.begin(), right_result_indices.begin()));
+
+        // Add the filtered null rows at the end with JoinNoMatch for right side
+        auto const validity_mask = static_cast<bitmask_type const*>(preprocessed_left._validity_mask.value().data());
+        auto null_row_it = thrust::counting_iterator<size_type>(0);
+        thrust::copy_if(rmm::exec_policy_nosync(stream),
+                       null_row_it,
+                       null_row_it + left.num_rows(),
+                       left_result_indices.begin() + preprocessed_left_indices->size(),
+                       left_join_nulls{validity_mask});
+        thrust::fill(rmm::exec_policy_nosync(stream),
+                    right_result_indices.begin() + preprocessed_right_indices->size(),
+                    right_result_indices.end(),
+                    JoinNoMatch);
+        
+        stream.synchronize();
+        return std::pair{std::make_unique<rmm::device_uvector<size_type>>(std::move(left_result_indices)),
+                        std::make_unique<rmm::device_uvector<size_type>>(std::move(right_result_indices))};
+      } else {
+        stream.synchronize();
+        return std::pair{std::move(preprocessed_left_indices), std::move(preprocessed_right_indices)};
+      }
     },
     stream);
 }
