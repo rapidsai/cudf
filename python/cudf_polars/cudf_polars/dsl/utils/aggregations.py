@@ -158,7 +158,25 @@ def decompose_single_agg(
         )
     if isinstance(agg, expr.Len):
         return [(named_expr, True)], named_expr.reconstruct(expr.Col(agg.dtype, name))
-    if isinstance(agg, (expr.Literal, expr.LiteralColumn)):
+    if isinstance(agg, expr.Literal):
+        return [], named_expr
+    if isinstance(agg, expr.LiteralColumn):
+        # Reconstruct the LiteralColumn to
+        # have a nested list dtype.
+        pl_dtype = agg.dtype.polars_type
+        if isinstance(pl_dtype, pl.List):
+            inner = agg.value
+            list_dtype = pl.List(pl_dtype)
+            named_expr = named_expr.reconstruct(
+                expr.LiteralColumn(
+                    DataType(list_dtype),
+                    pl.Series(
+                        name=inner.name,
+                        values=[[v] for v in inner],
+                        dtype=list_dtype,
+                    ),
+                )
+            )
         return [], named_expr
     if isinstance(agg, expr.Agg):
         if agg.name == "quantile":

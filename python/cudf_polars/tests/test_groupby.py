@@ -429,3 +429,22 @@ def test_groupby_sum_decimal_null_group() -> None:
     )
     q = df.group_by("key1").agg(pl.col("foo").sum())
     assert_gpu_result_equal(q, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "series",
+    [
+        pl.Series("foo", [[]], dtype=pl.List(pl.Int64())),
+        pl.Series("foo", [[[], [1]]], dtype=pl.List(pl.List(pl.Int64()))),
+        pl.Series("foo", [[1, 2, 3]], dtype=pl.List(pl.Int64())),
+        pl.Series("foo", [[[1, 2], [4]]], dtype=pl.List(pl.List(pl.Int64()))),
+        pl.Series(
+            "foo",
+            [[[[1], [2]], [[3], [4]]]],
+            dtype=pl.List(pl.List(pl.List(pl.Int64()))),
+        ),
+    ],
+)
+def test_groupby_agg_list_literal(series: pl.Series) -> None:
+    q = pl.LazyFrame({"a": [1, 1, 2]}).group_by("a").agg(series)
+    assert_gpu_result_equal(q, check_row_order=False)
