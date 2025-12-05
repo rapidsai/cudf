@@ -53,7 +53,7 @@ namespace {
 template <typename T>
 struct mapping_functor {
   T mapping;  ///< Mapping container that translates indices
-  
+
   __device__ size_type operator()(size_type idx) const noexcept
   {
     return idx >= 0 ? mapping[idx] : idx;
@@ -67,11 +67,11 @@ struct mapping_functor {
  * in the output validity mask for nested list columns.
  */
 struct list_nonnull_filter {
-  bitmask_type* const validity_mask;              ///< Output validity mask to update
-  bitmask_type const* const reduced_validity_mask;///< Input reduced validity mask
-  device_span<size_type const> child_positions;   ///< Positions in the child column
-  size_type const subset_offset;                  ///< Offset into child_positions
-  
+  bitmask_type* const validity_mask;                ///< Output validity mask to update
+  bitmask_type const* const reduced_validity_mask;  ///< Input reduced validity mask
+  device_span<size_type const> child_positions;     ///< Positions in the child column
+  size_type const subset_offset;                    ///< Offset into child_positions
+
   __device__ void operator()(size_type idx) const noexcept
   {
     if (!bit_is_set(reduced_validity_mask, idx)) {
@@ -87,7 +87,7 @@ struct list_nonnull_filter {
  */
 struct unprocessed_table_mapper {
   bitmask_type const* const _validity_mask;  ///< Validity mask for the table
-  
+
   __device__ auto operator()(size_type idx) const noexcept
   {
     return cudf::bit_is_set(_validity_mask, idx);
@@ -101,7 +101,7 @@ struct unprocessed_table_mapper {
  */
 struct left_join_unequal_nulls {
   bitmask_type const* const _validity_mask;  ///< Validity mask for the table
-  
+
   __device__ auto operator()(size_type idx) const noexcept
   {
     return !cudf::bit_is_set(_validity_mask, idx);
@@ -764,7 +764,7 @@ sort_merge_join::left_join(table_view const& left,
       // Rows containing nulls were filtered during preprocessing and must be reinserted.
       // These rows have no matches by definition (nulls are unequal), so they're added
       // to the output with JoinNoMatch sentinel values for the right side.
-      
+
       auto const num_filtered_nulls = preprocessed_left._num_nulls.value();
       auto const total_output_size  = preprocessed_left_indices->size() + num_filtered_nulls;
 
