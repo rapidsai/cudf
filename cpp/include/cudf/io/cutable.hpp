@@ -222,6 +222,16 @@ class cutable_reader_options_builder {
   cutable_reader_options _options;
 };
 
+/** @} */  // end of group
+}  // namespace io
+
+namespace io::experimental {
+
+/**
+ * @addtogroup io_cutable
+ * @{
+ */
+
 /**
  * @brief Write a table using the CUTable binary format.
  *
@@ -275,5 +285,5 @@ packed_table read_cutable(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
-}  // namespace io
+}  // namespace io::experimental
 }  // namespace CUDF_EXPORT cudf

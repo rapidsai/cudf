@@ -28,7 +28,7 @@ void cutable_write_common(cudf::table_view const& view, io_type sink_type, nvben
       cuio_source_sink_pair source_sink(sink_type);
 
       timer.start();
-      cudf::io::write_cutable(
+      cudf::io::experimental::write_cutable(
         cudf::io::cutable_writer_options::builder(source_sink.make_sink_info(), view).build());
       timer.stop();
 

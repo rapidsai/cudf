@@ -29,8 +29,8 @@ void cutable_read_common(cudf::size_type num_rows_to_read,
       try_drop_l3_cache();
 
       timer.start();
-      auto result =
-        cudf::io::read_cutable(cudf::io::cutable_reader_options::builder(source_info).build());
+      auto result = cudf::io::experimental::read_cutable(
+        cudf::io::cutable_reader_options::builder(source_info).build());
       timer.stop();
 
       CUDF_EXPECTS(result.table.num_columns() == num_cols_to_read, "Unexpected number of columns");
@@ -54,7 +54,7 @@ void BM_cutable_read_data_sizes(nvbench::state& state)
       create_random_table(cycle_dtypes(d_type, num_cols), table_size_bytes{data_size});
     auto const view = tbl->view();
 
-    cudf::io::write_cutable(
+    cudf::io::experimental::write_cutable(
       cudf::io::cutable_writer_options::builder(source_sink.make_sink_info(), view).build());
     return view.num_rows();
   }();
@@ -77,7 +77,7 @@ void BM_cutable_read_data_common(nvbench::state& state,
       create_random_table(cycle_dtypes(d_type, num_cols), table_size_bytes{data_size}, profile);
     auto const view = tbl->view();
 
-    cudf::io::write_cutable(
+    cudf::io::experimental::write_cutable(
       cudf::io::cutable_writer_options::builder(source_sink.make_sink_info(), view).build());
     return view.num_rows();
   }();
@@ -108,7 +108,7 @@ void BM_cutable_read_num_columns(nvbench::state& state,
       create_random_table(cycle_dtypes(d_type, n_col), table_size_bytes{data_size_bytes});
     auto const view = tbl->view();
 
-    cudf::io::write_cutable(
+    cudf::io::experimental::write_cutable(
       cudf::io::cutable_writer_options::builder(source_sink.make_sink_info(), view).build());
     return view.num_rows();
   }();
