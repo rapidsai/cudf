@@ -12,6 +12,7 @@
 #include <cudf/detail/interop.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
@@ -109,7 +110,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> get_mask_buffer(
   auto const copy_size    = cudf::util::div_rounding_up_safe(num_rows + bit_index, bits_in_byte);
 
   auto mask = rmm::device_uvector<bitmask_type>(padded_words, stream, mr);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(
+  CUDF_CUDA_TRY(cudf::detail::memcpy_async(
     mask.data(), bitmap + offset_index, copy_size, cudaMemcpyDefault, stream.value()));
 
   if (mask_words > 0 && bit_index > 0) {
@@ -158,11 +159,11 @@ struct dispatch_copy_from_arrow_host {
 
     auto col = make_fixed_width_column(type, num_rows, mask_state::UNALLOCATED, stream, mr);
     auto mutable_column_view = col->mutable_view();
-    CUDF_CUDA_TRY(cudaMemcpyAsync(mutable_column_view.data<DeviceType>(),
-                                  data_buffer + input->offset,
-                                  sizeof(DeviceType) * num_rows,
-                                  cudaMemcpyDefault,
-                                  stream.value()));
+    CUDF_CUDA_TRY(cudf::detail::memcpy_async(mutable_column_view.data<DeviceType>(),
+                                             data_buffer + input->offset,
+                                             sizeof(DeviceType) * num_rows,
+                                             cudaMemcpyDefault,
+                                             stream.value()));
 
     if (!skip_mask) {
       auto [mask, null_count] = get_mask_buffer(input, stream, mr);
@@ -190,7 +191,7 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<bool>(ArrowSch
   auto const copy_size    = cudf::util::div_rounding_up_safe(num_rows + bit_index, bits_in_byte);
 
   auto data = rmm::device_uvector<bitmask_type>(data_words, stream, mr);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(
+  CUDF_CUDA_TRY(cudf::detail::memcpy_async(
     data.data(), data_buffer + offset_index, copy_size, cudaMemcpyDefault, stream.value()));
 
   if (data_words > 0 && bit_index > 0) {

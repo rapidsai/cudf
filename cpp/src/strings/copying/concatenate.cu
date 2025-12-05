@@ -10,6 +10,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -281,8 +282,8 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
         auto d_chars     = column->head<char>() + bytes_offset;
         auto const bytes = bytes_end - bytes_offset;
 
-        CUDF_CUDA_TRY(
-          cudaMemcpyAsync(d_new_chars, d_chars, bytes, cudaMemcpyDefault, stream.value()));
+        CUDF_CUDA_TRY(cudf::detail::memcpy_async(
+          d_new_chars, d_chars, bytes, cudaMemcpyDefault, stream.value()));
 
         // get ready for the next column
         d_new_chars += bytes;

@@ -13,6 +13,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/detail/concatenate.hpp>
@@ -298,11 +299,11 @@ std::unique_ptr<column> for_each_concatenate(host_span<column_view const> views,
 
   auto count = 0;
   for (auto& v : views) {
-    CUDF_CUDA_TRY(cudaMemcpyAsync(m_view.begin<T>() + count,
-                                  v.begin<T>(),
-                                  v.size() * sizeof(T),
-                                  cudaMemcpyDefault,
-                                  stream.value()));
+    CUDF_CUDA_TRY(cudf::detail::memcpy_async(m_view.begin<T>() + count,
+                                             v.begin<T>(),
+                                             v.size() * sizeof(T),
+                                             cudaMemcpyDefault,
+                                             stream.value()));
     count += v.size();
   }
 

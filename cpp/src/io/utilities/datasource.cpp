@@ -5,6 +5,7 @@
 
 #include "getenv_or.hpp"
 
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/config_utils.hpp>
@@ -227,8 +228,8 @@ class device_buffer_source final : public datasource {
                                         rmm::cuda_stream_view stream) override
   {
     auto const count = std::min(size, this->size() - offset);
-    CUDF_CUDA_TRY(
-      cudaMemcpyAsync(dst, _d_buffer.data() + offset, count, cudaMemcpyDefault, stream.value()));
+    CUDF_CUDA_TRY(cudf::detail::memcpy_async(
+      dst, _d_buffer.data() + offset, count, cudaMemcpyDefault, stream.value()));
     return std::async(std::launch::deferred, [count] { return count; });
   }
 

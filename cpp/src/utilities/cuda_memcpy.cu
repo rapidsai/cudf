@@ -39,7 +39,7 @@ void copy_pinned(void* dst, void const* src, std::size_t size, rmm::cuda_stream_
     copy_kernel<<<grid_size, block_size, 0, stream.value()>>>(
       static_cast<char const*>(src), static_cast<char*>(dst), size);
   } else {
-    CUDF_CUDA_TRY(cudaMemcpyAsync(dst, src, size, cudaMemcpyDefault, stream));
+    CUDF_CUDA_TRY(cudf::detail::memcpy_async(dst, src, size, cudaMemcpyDefault, stream));
   }
 }
 
@@ -47,10 +47,51 @@ void copy_pageable(void* dst, void const* src, std::size_t size, rmm::cuda_strea
 {
   if (size == 0) return;
 
-  CUDF_CUDA_TRY(cudaMemcpyAsync(dst, src, size, cudaMemcpyDefault, stream));
+  CUDF_CUDA_TRY(cudf::detail::memcpy_async(dst, src, size, cudaMemcpyDefault, stream));
 }
 
 };  // namespace
+
+cudaError_t memcpy_batch_async(
+  void** dsts, void** srcs, std::size_t* sizes, std::size_t count, rmm::cuda_stream_view stream)
+{
+#if CUDART_VERSION >= 12080
+  cudaMemcpyAttributes attrs[1] = {};  // zero-initialize all fields
+  attrs[0].srcAccessOrder       = cudaMemcpySrcAccessOrderStream;
+  attrs[0].flags                = cudaMemcpyFlagPreferOverlapWithCompute;
+  std::size_t attrs_idxs[1]     = {0};
+  std::size_t num_attrs{1};
+#if CUDART_VERSION >= 13000
+  return cudaMemcpyBatchAsync(
+    dsts, srcs, sizes, count, attrs, attrs_idxs, num_attrs, stream.value());
+#else
+  std::size_t fail_idx;
+  return cudaMemcpyBatchAsync(
+    dsts, srcs, sizes, count, attrs, attrs_idxs, num_attrs, &fail_idx, stream.value());
+#endif  // CUDART_VERSION >= 13000
+#else
+  // Implement a compatible API for CUDA < 12.8
+  for (std::size_t i = 0; i < count; ++i) {
+    cudaError_t status =
+      cudaMemcpyAsync(dsts[i], srcs[i], sizes[i], cudaMemcpyDefault, stream.value());
+    if (status != cudaSuccess) { return status; }
+  }
+  return cudaSuccess;
+#endif  // CUDART_VERSION >= 12080
+}
+
+cudaError_t memcpy_async(
+  void* dst, void const* src, size_t count, cudaMemcpyKind kind, rmm::cuda_stream_view stream)
+{
+  if (count == 0) { return cudaSuccess; }
+
+  // Use batch API with size 1 to prefer cudaMemcpyBatchAsync over
+  // cudaMemcpyAsync. The batched API can be more efficient.
+  void* dsts[1]   = {dst};
+  void* srcs[1]   = {const_cast<void*>(src)};
+  size_t sizes[1] = {count};
+  return memcpy_batch_async(dsts, srcs, sizes, 1, stream);
+}
 
 void cuda_memcpy_async_impl(
   void* dst, void const* src, size_t size, host_memory_kind kind, rmm::cuda_stream_view stream)

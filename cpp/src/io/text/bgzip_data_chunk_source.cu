@@ -8,6 +8,7 @@
 #include "io/text/device_data_chunks.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -293,12 +294,12 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     if (read_size <= _curr_blocks.remaining_size()) {
       _curr_blocks.decompress(stream);
       rmm::device_uvector<char> data(read_size, stream);
-      CUDF_CUDA_TRY(
-        cudaMemcpyAsync(data.data(),
-                        _curr_blocks.d_decompressed_blocks.data() + _curr_blocks.read_pos,
-                        read_size,
-                        cudaMemcpyDefault,
-                        stream.value()));
+      CUDF_CUDA_TRY(cudf::detail::memcpy_async(
+        data.data(),
+        _curr_blocks.d_decompressed_blocks.data() + _curr_blocks.read_pos,
+        read_size,
+        cudaMemcpyDefault,
+        stream.value()));
       // record the host-to-device copy, decompression and device copy
       CUDF_CUDA_TRY(cudaEventRecord(_curr_blocks.event, stream.value()));
       _curr_blocks.consume_bytes(read_size);
@@ -309,16 +310,18 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     _curr_blocks.decompress(stream);
     read_size = std::min(read_size, _prev_blocks.remaining_size() + _curr_blocks.remaining_size());
     rmm::device_uvector<char> data(read_size, stream);
-    CUDF_CUDA_TRY(cudaMemcpyAsync(data.data(),
-                                  _prev_blocks.d_decompressed_blocks.data() + _prev_blocks.read_pos,
-                                  _prev_blocks.remaining_size(),
-                                  cudaMemcpyDefault,
-                                  stream.value()));
-    CUDF_CUDA_TRY(cudaMemcpyAsync(data.data() + _prev_blocks.remaining_size(),
-                                  _curr_blocks.d_decompressed_blocks.data() + _curr_blocks.read_pos,
-                                  read_size - _prev_blocks.remaining_size(),
-                                  cudaMemcpyDefault,
-                                  stream.value()));
+    CUDF_CUDA_TRY(
+      cudf::detail::memcpy_async(data.data(),
+                                 _prev_blocks.d_decompressed_blocks.data() + _prev_blocks.read_pos,
+                                 _prev_blocks.remaining_size(),
+                                 cudaMemcpyDefault,
+                                 stream.value()));
+    CUDF_CUDA_TRY(
+      cudf::detail::memcpy_async(data.data() + _prev_blocks.remaining_size(),
+                                 _curr_blocks.d_decompressed_blocks.data() + _curr_blocks.read_pos,
+                                 read_size - _prev_blocks.remaining_size(),
+                                 cudaMemcpyDefault,
+                                 stream.value()));
     // record the host-to-device copy, decompression and device copy
     CUDF_CUDA_TRY(cudaEventRecord(_curr_blocks.event, stream.value()));
     CUDF_CUDA_TRY(cudaEventRecord(_prev_blocks.event, stream.value()));

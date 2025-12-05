@@ -12,6 +12,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/interop.hpp>
@@ -80,13 +81,13 @@ struct dispatch_to_arrow_host {
 
     NANOARROW_RETURN_NOT_OK(ArrowBitmapResize(bitmap, static_cast<int64_t>(column.size()), 0));
     enable_hugepage(&bitmap->buffer);
-    CUDF_CUDA_TRY(cudaMemcpyAsync(bitmap->buffer.data,
-                                  (column.offset() > 0)
-                                    ? cudf::detail::copy_bitmask(column, stream, mr).data()
-                                    : column.null_mask(),
-                                  bitmap->buffer.size_bytes,
-                                  cudaMemcpyDefault,
-                                  stream.value()));
+    CUDF_CUDA_TRY(cudf::detail::memcpy_async(
+      bitmap->buffer.data,
+      (column.offset() > 0) ? cudf::detail::copy_bitmask(column, stream, mr).data()
+                            : column.null_mask(),
+      bitmap->buffer.size_bytes,
+      cudaMemcpyDefault,
+      stream.value()));
     return NANOARROW_OK;
   }
 
@@ -95,7 +96,7 @@ struct dispatch_to_arrow_host {
   {
     NANOARROW_RETURN_NOT_OK(ArrowBufferResize(buffer, input.size_bytes(), 1));
     enable_hugepage(buffer);
-    CUDF_CUDA_TRY(cudaMemcpyAsync(
+    CUDF_CUDA_TRY(cudf::detail::memcpy_async(
       buffer->data, input.data(), input.size_bytes(), cudaMemcpyDefault, stream.value()));
     return NANOARROW_OK;
   }
@@ -502,7 +503,7 @@ unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& 
       auto const offset = i == 0 ? 0 : h_offsets[i - 1];
       auto const size   = h_offsets[i] - offset;
       NANOARROW_THROW_NOT_OK(ArrowBufferReserve(variadic_buf, size));
-      CUDF_CUDA_TRY(cudaMemcpyAsync(
+      CUDF_CUDA_TRY(cudf::detail::memcpy_async(
         variadic_buf->data, chars_data + offset, size, cudaMemcpyDefault, stream.value()));
       private_data->variadic_buffer_sizes[i] = size;
     }
@@ -521,8 +522,8 @@ unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& 
   auto data_buffer   = ArrowArrayBuffer(out.get(), data_buffer_idx);
   auto const bv_size = d_items.size() * sizeof(ArrowBinaryView);
   NANOARROW_THROW_NOT_OK(ArrowBufferReserve(data_buffer, bv_size));
-  CUDF_CUDA_TRY(
-    cudaMemcpyAsync(data_buffer->data, d_items.data(), bv_size, cudaMemcpyDefault, stream.value()));
+  CUDF_CUDA_TRY(cudf::detail::memcpy_async(
+    data_buffer->data, d_items.data(), bv_size, cudaMemcpyDefault, stream.value()));
   data_buffer->size_bytes = bv_size;
 
   out->length     = col.size();
