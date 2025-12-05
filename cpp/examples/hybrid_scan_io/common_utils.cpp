@@ -228,20 +228,24 @@ std::vector<rmm::device_buffer> fetch_byte_ranges(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
+  static std::mutex mutex;
+
   CUDF_FUNC_RANGE();
 
   std::vector<rmm::device_buffer> buffers(byte_ranges.size());
-
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(byte_ranges.size()),
-                [&](auto const idx) {
-                  auto const chunk_offset = host_buffer.data() + byte_ranges[idx].offset();
-                  auto const chunk_size   = byte_ranges[idx].size();
-                  auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
-                  CUDF_CUDA_TRY(cudaMemcpyAsync(
-                    buffer.data(), chunk_offset, chunk_size, cudaMemcpyDefault, stream.value()));
-                  buffers[idx] = std::move(buffer);
-                });
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    std::for_each(thrust::counting_iterator<size_t>(0),
+                  thrust::counting_iterator(byte_ranges.size()),
+                  [&](auto const idx) {
+                    auto const chunk_offset = host_buffer.data() + byte_ranges[idx].offset();
+                    auto const chunk_size   = byte_ranges[idx].size();
+                    auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
+                    CUDF_CUDA_TRY(cudaMemcpyAsync(
+                      buffer.data(), chunk_offset, chunk_size, cudaMemcpyDefault, stream.value()));
+                    buffers[idx] = std::move(buffer);
+                  });
+  }
   return buffers;
 }
 
