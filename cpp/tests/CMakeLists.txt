@@ -171,6 +171,12 @@ ConfigureTest(
   PERCENT 100
 )
 
+ConfigureTest(
+  DEBUG_JOIN_TEST join/mixed_join_debug_tests.cu
+  GPUS 1
+  PERCENT 100
+)
+
 # ##################################################################################################
 # * is_sorted tests -------------------------------------------------------------------------------
 ConfigureTest(IS_SORTED_TEST sort/is_sorted_tests.cpp)
