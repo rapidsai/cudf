@@ -62,7 +62,7 @@ class CsvReaderOptionsBuilder:
 def read_csv(
     options: CsvReaderOptions,
     stream: Stream | None = None,
-    mr: DeviceMemoryResource = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> TableWithMetadata: ...
 def write_csv(options: CsvWriterOptions, stream: Stream | None = None): ...
 
