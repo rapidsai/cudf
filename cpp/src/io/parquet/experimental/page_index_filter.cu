@@ -1096,7 +1096,7 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   auto tree_levels_data = rmm::device_uvector<bool>(tree_level_offsets.back(), stream, mr);
 
   // Pointers to each Fenwick tree level data
-  auto host_tree_level_ptrs = cudf::detail::make_host_vector<bool*>(num_levels, stream);
+  auto host_tree_level_ptrs = cudf::detail::make_pinned_vector_async<bool*>(num_levels, stream);
   // Zeroth level is just the row mask itself
   host_tree_level_ptrs[0] = const_cast<bool*>(row_mask.template begin<bool>()) + row_mask_offset;
   std::for_each(

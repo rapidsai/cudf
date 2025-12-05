@@ -509,15 +509,17 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     mr);
 
   auto comp_in =
-    cudf::detail::make_empty_host_vector<device_span<uint8_t const>>(num_comp_pages, stream);
+    cudf::detail::make_pinned_vector_async<device_span<uint8_t const>>(num_comp_pages, stream);
   auto comp_out =
-    cudf::detail::make_empty_host_vector<device_span<uint8_t>>(num_comp_pages, stream);
+    cudf::detail::make_pinned_vector_async<device_span<uint8_t>>(num_comp_pages, stream);
+  auto current_comp_page_index = 0;
 
   // vectors to save v2 def and rep level data, if any
   auto copy_in =
-    cudf::detail::make_empty_host_vector<device_span<uint8_t const>>(num_comp_pages, stream);
+    cudf::detail::make_pinned_vector_async<device_span<uint8_t const>>(num_comp_pages, stream);
   auto copy_out =
-    cudf::detail::make_empty_host_vector<device_span<uint8_t>>(num_comp_pages, stream);
+    cudf::detail::make_pinned_vector_async<device_span<uint8_t>>(num_comp_pages, stream);
+  auto current_copy_page_index = 0;
 
   auto set_parameters = [&](codec_stats& codec,
                             host_span<PageInfo> pages,
@@ -545,15 +547,17 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
         // input and output buffers. otherwise we'd have to keep both the compressed
         // and decompressed data.
         if (offset != 0) {
-          copy_in.push_back({page.page_data, static_cast<size_t>(offset)});
-          copy_out.push_back({dst_base, static_cast<size_t>(offset)});
+          copy_in[current_copy_page_index]  = {page.page_data, static_cast<size_t>(offset)};
+          copy_out[current_copy_page_index] = {dst_base, static_cast<size_t>(offset)};
+          current_copy_page_index++;
         }
         // Only decompress if the page contains data after the def/rep levels
         if (page.compressed_page_size > offset) {
-          comp_in.push_back(
-            {page.page_data + offset, static_cast<size_t>(page.compressed_page_size - offset)});
-          comp_out.push_back(
-            {dst_base + offset, static_cast<size_t>(page.uncompressed_page_size - offset)});
+          comp_in[current_comp_page_index] = {
+            page.page_data + offset, static_cast<size_t>(page.compressed_page_size - offset)};
+          comp_out[current_comp_page_index] = {
+            dst_base + offset, static_cast<size_t>(page.uncompressed_page_size - offset)};
+          current_comp_page_index++;
         } else {
           // If the page wasn't included in the decompression parameters, we need to adjust the
           // page count to allocate results and perform decompression correctly
