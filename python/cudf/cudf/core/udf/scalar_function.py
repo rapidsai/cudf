@@ -4,7 +4,7 @@
 from functools import cache
 
 from numba import cuda
-from numba.cuda.np import numpy_support
+from numba.np import numpy_support
 
 from cudf.core.udf.api import Masked, pack_return
 from cudf.core.udf.masked_typing import MaskedType

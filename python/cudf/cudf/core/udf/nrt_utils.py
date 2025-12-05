@@ -4,7 +4,7 @@
 import contextvars
 from contextlib import contextmanager
 
-from numba.cuda import config as numba_config
+from numba import config as numba_config
 
 _current_nrt_context: contextvars.ContextVar = contextvars.ContextVar(
     "current_nrt_context"

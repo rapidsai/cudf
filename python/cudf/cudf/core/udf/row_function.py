@@ -5,7 +5,7 @@ from functools import cache
 
 import numpy as np
 from numba import cuda
-from numba.cuda.np import numpy_support
+from numba.np import numpy_support
 
 from cudf.core.udf.api import Masked, pack_return
 from cudf.core.udf.masked_typing import MaskedType
@@ -33,7 +33,7 @@ def _get_frame_row_type(dtype):
     containing these MaskedTypes. Large parts of this function are copied with
     comments from the Numba internals and slightly modified to account for
     validity bools to be present in the final struct. See
-    numba.cuda.np.numpy_support.from_struct_dtype for details.
+    numba.np.numpy_support.from_struct_dtype for details.
     """
 
     # Create the numpy structured type corresponding to the numpy dtype.

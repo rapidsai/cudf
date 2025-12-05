@@ -7,9 +7,9 @@ from functools import cache
 import cupy as cp
 import numpy as np
 from numba import cuda, types
-from numba.cuda.core.errors import TypingError
+from numba.core.errors import TypingError
 from numba.cuda.cudadrv.devices import get_context
-from numba.cuda.np import numpy_support
+from numba.np import numpy_support
 
 from cudf.core.column import as_column, column_empty
 from cudf.core.udf.groupby_typing import (

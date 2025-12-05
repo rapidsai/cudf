@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-from numba.cuda import types
+from numba import types
 
 from cudf.core.udf.utils import _udf_code_cache, compile_udf
 

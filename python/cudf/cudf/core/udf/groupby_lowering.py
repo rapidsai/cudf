@@ -1,13 +1,13 @@
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2023, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from functools import partial
 
 from numba import types
-from numba.cuda import cgutils
+from numba.core import cgutils
+from numba.core.extending import lower_builtin
+from numba.core.typing import signature as nb_signature
 from numba.cuda.cudaimpl import lower as cuda_lower
-from numba.cuda.extending import lower_builtin
-from numba.cuda.typing import signature as nb_signature
 
 from cudf.core.udf.groupby_typing import (
     SUPPORTED_GROUPBY_NUMBA_TYPES,

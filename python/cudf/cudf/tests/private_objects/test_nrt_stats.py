@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import pytest
-from numba.cuda import config
+from numba import config
 from numba.cuda.memory_management.nrt import rtsys
 
 import cudf

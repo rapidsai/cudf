@@ -4,23 +4,23 @@
 import operator
 
 import numpy as np
-from numba.cuda import types
-from numba.cuda.cudadecl import registry as cuda_decl_registry
-from numba.cuda.datamodel import cuda_models as models
-from numba.cuda.descriptor import cuda_target
-from numba.cuda.extending import (
+from numba import types
+from numba.core.datamodel import default_manager
+from numba.core.extending import (
     make_attribute_wrapper,
+    models,
     register_model,
     typeof_impl,
 )
-from numba.cuda.np.numpy_support import from_dtype
-from numba.cuda.typing import signature as nb_signature
-from numba.cuda.typing.templates import (
+from numba.core.typing import signature as nb_signature
+from numba.core.typing.templates import (
     AbstractTemplate,
     AttributeTemplate,
     ConcreteTemplate,
 )
-from numba.cuda.typing.typeof import typeof
+from numba.core.typing.typeof import typeof
+from numba.cuda.cudadecl import registry as cuda_decl_registry
+from numba.np.numpy_support import from_dtype
 
 from cudf.core.missing import NA
 from cudf.core.udf import api
@@ -113,9 +113,7 @@ class MaskedType(types.Type):
     def __init__(self, value):
         # MaskedType in Numba shall be parameterized
         # with a value type
-        if cuda_target.target_context.data_model_manager[
-            value
-        ].has_nrt_meminfo():
+        if default_manager[value].has_nrt_meminfo():
             ctx = _current_nrt_context.get(None)
             if ctx is not None:
                 # we're in a compilation that is determining

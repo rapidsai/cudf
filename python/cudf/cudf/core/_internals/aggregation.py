@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
-from numba.cuda.np import numpy_support
+from numba.np import numpy_support
 
 import pylibcudf as plc
 

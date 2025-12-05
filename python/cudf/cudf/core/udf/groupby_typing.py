@@ -5,19 +5,18 @@ from __future__ import annotations
 from typing import Any
 
 import numba
-from numba import cuda
-from numba.cuda import types
-from numba.cuda.cudadecl import registry as cuda_registry
-from numba.cuda.datamodel import cuda_models as models
-from numba.cuda.extending import (
+from numba import cuda, types
+from numba.core.extending import (
     make_attribute_wrapper,
+    models,
     register_model,
     type_callable,
     typeof_impl,
 )
-from numba.cuda.np import numpy_support
-from numba.cuda.typing import signature as nb_signature
-from numba.cuda.typing.templates import AbstractTemplate, AttributeTemplate
+from numba.core.typing import signature as nb_signature
+from numba.core.typing.templates import AbstractTemplate, AttributeTemplate
+from numba.cuda.cudadecl import registry as cuda_registry
+from numba.np import numpy_support
 
 from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
 from cudf.core.udf.utils import Row, UDFError

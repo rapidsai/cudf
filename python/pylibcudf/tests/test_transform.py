@@ -86,9 +86,7 @@ def test_transform_udf():
         return (a + b) * c
 
     ptx, _ = cuda.compile_ptx_for_current_device(
-        op,
-        (numba.cuda.float64, numba.cuda.float64, numba.cuda.float64),
-        device=True,
+        op, (numba.float64, numba.float64, numba.float64), device=True
     )
 
     A = 5.0

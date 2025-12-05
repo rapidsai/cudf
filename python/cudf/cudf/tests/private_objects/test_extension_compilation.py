@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from numba import cuda, types
 from numba.cuda import compile_ptx
-from numba.cuda.np.numpy_support import from_dtype
+from numba.np.numpy_support import from_dtype
 
 import cudf
 from cudf import NA

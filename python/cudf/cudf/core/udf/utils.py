@@ -14,11 +14,10 @@ import llvmlite.binding as ll
 import numpy as np
 from cuda.bindings import runtime
 from numba import cuda, typeof
-from numba.cuda.datamodel import models
-from numba.cuda.descriptor import cuda_target
-from numba.cuda.extending import register_model
-from numba.cuda.np import numpy_support
-from numba.cuda.types import CPointer, Record, Tuple, int64, void
+from numba.core.datamodel import default_manager, models
+from numba.core.extending import register_model
+from numba.np import numpy_support
+from numba.types import CPointer, Record, Tuple, int64, void
 
 import rmm
 
@@ -304,7 +303,7 @@ def _get_extensionty_size(ty):
     Return the size of an extension type in bytes
     """
     target_data = ll.create_target_data(_nvvm_data_layout)
-    llty = cuda_target.data_model_manager[ty].get_value_type()
+    llty = default_manager[ty].get_value_type()
     return llty.get_abi_size(target_data)
 
 

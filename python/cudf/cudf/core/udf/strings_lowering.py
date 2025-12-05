@@ -6,12 +6,12 @@ from functools import partial
 
 from llvmlite import ir
 from numba import cuda, types
-from numba.cuda import cgutils
+from numba.core import cgutils
+from numba.core.typing import signature as nb_signature
 from numba.cuda.cudaimpl import (
     lower as cuda_lower,
     registry as cuda_lowering_registry,
 )
-from numba.cuda.typing import signature as nb_signature
 
 from cudf._lib.strings_udf import (
     get_character_cases_table_ptr,
