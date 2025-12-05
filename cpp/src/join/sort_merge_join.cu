@@ -3,15 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "cudf/join/join.hpp"
-#include "thrust/iterator/zip_iterator.h"
-
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/row_operator/lexicographic.cuh>
+#include <cudf/join/join.hpp>
 #include <cudf/join/sort_merge_join.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
@@ -31,6 +29,7 @@
 #include <thrust/for_each.h>
 #include <thrust/iterator/tabulate_output_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
 #include <thrust/uninitialized_fill.h>
@@ -43,20 +42,36 @@ namespace cudf {
 
 namespace {
 
+/**
+ * @brief Functor to map indices through a provided mapping container.
+ *
+ * Non-negative indices are mapped through the container, while negative indices
+ * (e.g., JoinNoMatch) are passed through unchanged.
+ *
+ * @tparam T Type of the mapping container
+ */
 template <typename T>
 struct mapping_functor {
-  T mapping;
+  T mapping;  ///< Mapping container that translates indices
+  
   __device__ size_type operator()(size_type idx) const noexcept
   {
     return idx >= 0 ? mapping[idx] : idx;
   }
 };
 
+/**
+ * @brief Functor to filter and update validity masks for list columns.
+ *
+ * Propagates null information from a reduced validity mask to specific child positions
+ * in the output validity mask for nested list columns.
+ */
 struct list_nonnull_filter {
-  bitmask_type* const validity_mask;
-  bitmask_type const* const reduced_validity_mask;
-  device_span<size_type const> child_positions;
-  size_type const subset_offset;
+  bitmask_type* const validity_mask;              ///< Output validity mask to update
+  bitmask_type const* const reduced_validity_mask;///< Input reduced validity mask
+  device_span<size_type const> child_positions;   ///< Positions in the child column
+  size_type const subset_offset;                  ///< Offset into child_positions
+  
   __device__ void operator()(size_type idx) const noexcept
   {
     if (!bit_is_set(reduced_validity_mask, idx)) {
@@ -65,16 +80,28 @@ struct list_nonnull_filter {
   };
 };
 
+/**
+ * @brief Functor to check if a row is valid in an unprocessed table.
+ *
+ * Maps table row indices to boolean values based on the validity mask.
+ */
 struct unprocessed_table_mapper {
-  bitmask_type const* const _validity_mask;
+  bitmask_type const* const _validity_mask;  ///< Validity mask for the table
+  
   __device__ auto operator()(size_type idx) const noexcept
   {
     return cudf::bit_is_set(_validity_mask, idx);
   }
 };
 
-struct left_join_nulls {
-  bitmask_type const* const _validity_mask;
+/**
+ * @brief Functor to identify null rows for left join with unequal null semantics.
+ *
+ * Returns true for rows that have nulls and were filtered out during preprocessing.
+ */
+struct left_join_unequal_nulls {
+  bitmask_type const* const _validity_mask;  ///< Validity mask for the table
+  
   __device__ auto operator()(size_type idx) const noexcept
   {
     return !cudf::bit_is_set(_validity_mask, idx);
@@ -258,6 +285,18 @@ merge<LargerIterator, SmallerIterator>::inner(rmm::cuda_stream_view stream,
           std::make_unique<rmm::device_uvector<size_type>>(std::move(larger_indices))};
 }
 
+/**
+ * @brief Performs a left join between the larger and smaller tables.
+ *
+ * This method performs a sort-merge left join, ensuring all rows from the larger table
+ * are included in the output. Rows with no matches in the smaller table are paired with
+ * JoinNoMatch sentinel values. The output indices are organized with unmatched rows first,
+ * followed by matched rows.
+ *
+ * @param stream CUDA stream used for device operations
+ * @param mr Device memory resource for allocations
+ * @return Pair of device vectors containing (smaller_indices, larger_indices)
+ */
 template <typename LargerIterator, typename SmallerIterator>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
@@ -269,7 +308,7 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
   auto const larger_numrows  = larger.num_rows();
   auto const smaller_numrows = smaller.num_rows();
 
-  // naive: iterate through larger table and binary search on smaller table
+  // Compute match counts per row and identify rows with at least one match
   auto match_counts = matches_per_row(stream, temp_mr);
 
   auto count_matches_it = thrust::transform_iterator(
@@ -285,7 +324,8 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
                   nonzero_matches.begin(),
                   cuda::std::identity{});
 
-  // Fill in the unmatched entries
+  // Fill in unmatched entries (left-join-only rows)
+  // These rows exist in the larger table but have no matches in the smaller table
   auto const inner_join_matches =
     thrust::reduce(rmm::exec_policy_nosync(stream), match_counts->begin(), match_counts->end());
   auto const left_join_only_matches = larger_numrows - nonzero_matches.size();
@@ -304,13 +344,14 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
                smaller_indices.begin() + left_join_only_matches,
                JoinNoMatch);
 
-  // Now fill the matched entries
+  // Fill in matched entries (same algorithm as inner join)
+  // Convert match counts to offsets for scatter operation
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          match_counts->begin(),
                          match_counts->end(),
                          match_counts->begin());
 
-  // populate larger indices
+  // Populate larger indices for matched rows
   thrust::scatter(rmm::exec_policy_nosync(stream),
                   nonzero_matches.begin(),
                   nonzero_matches.end(),
@@ -322,7 +363,7 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
                          larger_indices.begin() + left_join_only_matches,
                          cuda::maximum<size_type>{});
 
-  // populate smaller indices
+  // Populate smaller indices for matched rows using binary search
   thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
                              smaller_indices.begin() + left_join_only_matches,
                              smaller_indices.end(),
@@ -719,7 +760,11 @@ sort_merge_join::left_join(table_view const& left,
                          std::move(preprocessed_right_indices)};
       }
 
-      // Get the number of null rows that were filtered out
+      // Special handling for UNEQUAL null semantics with nested nulls:
+      // Rows containing nulls were filtered during preprocessing and must be reinserted.
+      // These rows have no matches by definition (nulls are unequal), so they're added
+      // to the output with JoinNoMatch sentinel values for the right side.
+      
       auto const num_filtered_nulls = preprocessed_left._num_nulls.value();
       auto const total_output_size  = preprocessed_left_indices->size() + num_filtered_nulls;
 
@@ -727,7 +772,7 @@ sort_merge_join::left_join(table_view const& left,
       rmm::device_uvector<size_type> left_result_indices(total_output_size, stream, mr);
       rmm::device_uvector<size_type> right_result_indices(total_output_size, stream, mr);
 
-      // Copy left and right indices
+      // Copy existing join results
       thrust::copy(
         rmm::exec_policy_nosync(stream),
         thrust::make_zip_iterator(preprocessed_left_indices->begin(),
@@ -736,7 +781,7 @@ sort_merge_join::left_join(table_view const& left,
                                   preprocessed_right_indices->end()),
         thrust::make_zip_iterator(left_result_indices.begin(), right_result_indices.begin()));
 
-      // Add the filtered null rows at the end with JoinNoMatch for right side
+      // Append filtered null rows with JoinNoMatch for right side
       auto const validity_mask =
         static_cast<bitmask_type const*>(preprocessed_left._validity_mask.value().data());
       auto null_row_it = thrust::counting_iterator<size_type>(0);
@@ -744,7 +789,7 @@ sort_merge_join::left_join(table_view const& left,
                       null_row_it,
                       null_row_it + left.num_rows(),
                       left_result_indices.begin() + preprocessed_left_indices->size(),
-                      left_join_nulls{validity_mask});
+                      left_join_unequal_nulls{validity_mask});
       thrust::fill(rmm::exec_policy_nosync(stream),
                    right_result_indices.begin() + preprocessed_right_indices->size(),
                    right_result_indices.end(),
