@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <cudf/ast/expressions.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -16,6 +17,8 @@
 
 #include <cuda/std/limits>
 
+#include <cstdint>
+
 namespace CUDF_EXPORT cudf {
 
 /**
@@ -25,14 +28,18 @@ namespace CUDF_EXPORT cudf {
  */
 
 /**
- * @brief Enum to specify the type of join operation
+ * @brief Specifies the type of join operation to perform.
+ *
+ * This enum is used to control the behavior of join operations, particularly
+ * in functions like filter_join_indices() that need to apply different logic
+ * based on the join semantics.
  */
 enum class join_kind : int32_t {
-  INNER_JOIN     = 0,  ///< Inner join
-  LEFT_JOIN      = 1,  ///< Left join
-  FULL_JOIN      = 2,  ///< Full outer join
-  LEFT_SEMI_JOIN = 3,  ///< Left semi join
-  LEFT_ANTI_JOIN = 4   ///< Left anti join
+  INNER_JOIN     = 0,  ///< Inner join: only matching rows from both tables
+  LEFT_JOIN      = 1,  ///< Left join: all rows from left table, matching rows from right
+  FULL_JOIN      = 2,  ///< Full outer join: all rows from both tables
+  LEFT_SEMI_JOIN = 3,  ///< Left semi join: left rows that have matches in right table
+  LEFT_ANTI_JOIN = 4   ///< Left anti join: left rows that have no matches in right table
 };
 
 /**
@@ -229,6 +236,85 @@ std::unique_ptr<cudf::table> cross_join(
   cudf::table_view const& right,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Filters join result indices based on a conditional predicate and join type.
+ *
+ * This function takes the result indices from a hash/sort join operation and applies
+ * a conditional predicate to filter the pairs. It enables implementing mixed joins
+ * as a two-step process: equality-based join followed by conditional filtering.
+ *
+ * The behavior depends on the join type:
+ * - INNER_JOIN: Only pairs that satisfy the predicate and have valid indices are kept.
+ * - LEFT_JOIN: All left rows are preserved. Failed predicates nullify right indices.
+ * - FULL_JOIN: All rows from both sides are preserved. Failed predicates create separate pairs.
+ *
+ * Note on JoinNoMatch pairs: If an input pair already contains `JoinNoMatch` in either
+ * position, the predicate cannot be evaluated and the pair passes through unchanged. The
+ * "separate pairs" splitting only occurs when both indices are valid but the predicate fails.
+ * For example, a FULL_JOIN pair `(5, 10)` that fails the predicate becomes two pairs:
+ * `(5, JoinNoMatch)` and `(JoinNoMatch, 10)`, ensuring both rows appear in the output.
+ *
+ * ## Usage Pattern
+ *
+ * Typical usage involves performing an equality-based hash join first, then filtering
+ * the results with a conditional predicate:
+ *
+ * @code{.cpp}
+ * // Step 1: Perform equality-based hash join
+ * auto hash_joiner = cudf::hash_join(right_equality_table, null_equality::EQUAL);
+ * auto [left_indices, right_indices] = hash_joiner.inner_join(left_equality_table);
+ *
+ * // Step 2: Apply conditional filter on conditional columns
+ * auto [filtered_left, filtered_right] = cudf::filter_join_indices(
+ *   left_conditional_table,   // Table with columns referenced by predicate
+ *   right_conditional_table,  // Table with columns referenced by predicate
+ *   *left_indices,           // Indices from hash join
+ *   *right_indices,          // Indices from hash join
+ *   predicate,               // AST expression: e.g., left.col0 > right.col0
+ *   cudf::join_kind::INNER_JOIN);
+ * @endcode
+ *
+ * ## Example
+ * @code{.pseudo}
+ * Left equality:    {id: [1, 2, 3]}
+ * Right equality:   {id: [1, 2, 3]}
+ * Left conditional: {val: [10, 20, 30]}
+ * Right conditional:{val: [15, 15, 25]}
+ *
+ * Hash join (id == id): left_indices = {0, 1, 2}, right_indices = {0, 1, 2}
+ * Predicate: left.val > right.val
+ *
+ * INNER_JOIN result: left_indices = {1, 2}, right_indices = {1, 2}  // 20>15, 30>25
+ * LEFT_JOIN result:  left_indices = {0, 1, 2}, right_indices = {JoinNoMatch, 1, 2}
+ * @endcode
+ *
+ *
+ * @throw std::invalid_argument if join_kind is not INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
+ * @throw std::invalid_argument if left_indices and right_indices have different sizes.
+ *
+ * @param left The left table for predicate evaluation (conditional columns only).
+ * @param right The right table for predicate evaluation (conditional columns only).
+ * @param left_indices Device span of row indices in the left table from hash join.
+ * @param right_indices Device span of row indices in the right table from hash join.
+ * @param predicate An AST expression that returns a boolean for each pair of rows.
+ * @param join_kind The type of join operation. Must be INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
+ * @param stream CUDA stream used for kernel launches and memory operations.
+ * @param mr Device memory resource used to allocate output indices.
+ *
+ * @return A pair of device vectors [filtered_left_indices, filtered_right_indices]
+ *         corresponding to rows that satisfy the join semantics and predicate.
+ */
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+filter_join_indices(cudf::table_view const& left,
+                    cudf::table_view const& right,
+                    cudf::device_span<size_type const> left_indices,
+                    cudf::device_span<size_type const> right_indices,
+                    cudf::ast::expression const& predicate,
+                    cudf::join_kind join_kind,
+                    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 
