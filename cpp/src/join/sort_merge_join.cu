@@ -831,19 +831,6 @@ sort_merge_inner_join(cudf::table_view const& left_keys,
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-sort_merge_left_join(cudf::table_view const& left_keys,
-                      cudf::table_view const& right_keys,
-                      null_equality compare_nulls,
-                      rmm::cuda_stream_view stream,
-                      rmm::device_async_resource_ref mr)
-{
-  cudf::scoped_range range{"sort_merge_left_join"};
-  cudf::sort_merge_join obj(right_keys, sorted::NO, compare_nulls, stream);
-  return obj.left_join(left_keys, sorted::NO, stream, mr);
-}
-
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
 merge_inner_join(cudf::table_view const& left_keys,
                  cudf::table_view const& right_keys,
                  null_equality compare_nulls,
@@ -853,19 +840,6 @@ merge_inner_join(cudf::table_view const& left_keys,
   cudf::scoped_range range{"merge_inner_join"};
   cudf::sort_merge_join obj(right_keys, sorted::YES, compare_nulls, stream);
   return obj.inner_join(left_keys, sorted::YES, stream, mr);
-}
-
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
-merge_left_join(cudf::table_view const& left_keys,
-                 cudf::table_view const& right_keys,
-                 null_equality compare_nulls,
-                 rmm::cuda_stream_view stream,
-                 rmm::device_async_resource_ref mr)
-{
-  cudf::scoped_range range{"merge_left_join"};
-  cudf::sort_merge_join obj(right_keys, sorted::YES, compare_nulls, stream);
-  return obj.left_join(left_keys, sorted::YES, stream, mr);
 }
 
 }  // namespace cudf
