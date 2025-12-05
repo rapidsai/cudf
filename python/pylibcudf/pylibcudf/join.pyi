@@ -3,8 +3,8 @@
 
 from enum import IntEnum
 
-from rmm.pylibrmm import Stream
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
+from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.column import Column
 from pylibcudf.expressions import Expression
