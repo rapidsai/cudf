@@ -26,7 +26,7 @@ if TYPE_CHECKING:
         expr.Literal(DataType(pl.Int64()), 42),
         expr.Cast(
             DataType(pl.Float64()),
-            0,
+            True,  # noqa: FBT003
             expr.Col(DataType(pl.Int64), "foo"),
         ),
         expr.BinOp(
