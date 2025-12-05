@@ -574,7 +574,7 @@ TEST_F(groupby_max_hash_based_shmem_kernel_test, repeated_keys)
   // Thread blocks (of 128 threads) will not fallback when they encounter up to 128 distinct keys.
   std::vector<int> h_keys(block_size * 10000);
 
-  // Repeate the keys for all blocks.
+  // Repeat the keys for all blocks.
   auto it = h_keys.begin();
   while (it != h_keys.end()) {
     std::iota(it, it + block_size, 0);
