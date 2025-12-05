@@ -67,7 +67,7 @@ class HybridScanReader:
         row_group_indices: list[int],
         options: ParquetReaderOptions,
         stream: Stream | None = None,
-        mr: DeviceMemoryResource = None,
+        mr: DeviceMemoryResource | None = None,
     ) -> Column: ...
     def filter_column_chunks_byte_ranges(
         self, row_group_indices: list[int], options: ParquetReaderOptions
