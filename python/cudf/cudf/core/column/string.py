@@ -1500,7 +1500,8 @@ class StringColumn(ColumnBase, Scannable):
                 and self.dtype.na_value is np.nan
             ):
                 res = res.fillna(False)
-                new_type = np.dtype("bool")  # type: ignore[var-annotated]
+                # var-annotated ignore not needed for numpy>=2.4.0
+                new_type = np.dtype("bool")  # type: ignore[var-annotated,unused-ignore]
             else:
                 new_type = get_dtype_of_same_kind(
                     pd.StringDtype()

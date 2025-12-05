@@ -2125,6 +2125,9 @@ TEST_F(OrcWriterTest, BounceBufferBug)
 
 TEST_F(OrcReaderTest, SizeTypeRowsOverflow)
 {
+  // this test runs over 1.5 hours when racecheck is used
+  if (getenv("LIBCUDF_RACECHECK_ENABLED")) { GTEST_SKIP(); }
+
   using cudf::test::iterators::no_nulls;
   constexpr auto num_rows   = 500'000'000l;
   constexpr auto num_reps   = 5;

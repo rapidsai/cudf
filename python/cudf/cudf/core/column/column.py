@@ -2594,7 +2594,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             common_dtype = find_common_type(
                 [
                     self.dtype,
-                    np.min_scalar_type(other)
+                    # can_cast_safely should imply this is safe
+                    np.min_scalar_type(other)  # type: ignore[arg-type]
                     if other_is_scalar
                     else other.dtype,
                 ]
