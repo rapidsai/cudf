@@ -80,6 +80,28 @@ class sort_merge_join {
              rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
+   * @brief Returns the row indices that can be used to construct the result of performing
+   * a left join between the right table passed while creating the sort_merge_join object, and the
+   * left table.
+   * @see cudf::left_join().
+   *
+   * @param left The left table
+   * @param is_left_sorted Enum to indicate if left table is pre-sorted
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the join indices' device
+   * memory.
+   *
+   * @return A pair of device vectors [`left_indices`, `right_indices`] that can be used to
+   * construct the result of performing a left join between two tables
+   */
+  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+            std::unique_ptr<rmm::device_uvector<size_type>>>
+  left_join(table_view const& left,
+            sorted is_left_sorted,
+            rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+            rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
    * @brief Returns context information about matches between the left and right tables.
    *
    * This method computes, for each row in the left table, how many matching rows exist in
