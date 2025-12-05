@@ -39,7 +39,7 @@ def test_dataframe_isnull_isna_and_reverse(na_data, nan_as_null, api_call):
         return x.apply(lambda v: isinstance(v, float) and np.isnan(v))
 
     df = na_data
-    nan_contains = df.select_dtypes(object).apply(detect_nan)
+    nan_contains = df.select_dtypes(str).apply(detect_nan)
     if nan_as_null is False and (
         nan_contains.any().any() and not nan_contains.all().all()
     ):
