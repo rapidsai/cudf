@@ -27,6 +27,13 @@ timeout 40m ./ci/run_pylibcudf_pytests.sh \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/pylibcudf-coverage.xml" \
   --cov-report=term
 
+# If the RAPIDS_PY_VERSION is 3.13, set CUDF_TEST_COPY_ON_WRITE to '1' to enable copy-on-write tests.
+if [[ "${RAPIDS_PY_VERSION}" == "3.13" ]]; then
+  echo "Running tests with CUDF_TEST_COPY_ON_WRITE enabled"
+  export CUDF_TEST_COPY_ON_WRITE='1'
+else
+  echo "Running tests with CUDF_TEST_COPY_ON_WRITE disabled"
+fi
 rapids-logger "pytest cudf"
 timeout 40m ./ci/run_cudf_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf.xml" \

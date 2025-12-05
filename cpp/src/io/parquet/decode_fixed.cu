@@ -98,12 +98,8 @@ __device__ void decode_fixed_width_values(
   int const skipped_leaf_values = s->page.skipped_leaf_values;
 
   // decode values
-  int pos = start;
-  while (pos < end) {
-    int const batch_size = min(max_batch_size, end - pos);
-    int const target_pos = pos + batch_size;
-    int const thread_pos = pos + t;
-
+  int thread_pos = start + t;
+  while (thread_pos < end) {
     // Index from value buffer (doesn't include nulls) to final array (has gaps for nulls)
     int const dst_pos = [&]() {
       if constexpr (copy_mode_t == copy_mode::DIRECT) {
@@ -115,9 +111,8 @@ __device__ void decode_fixed_width_values(
       }
     }();
 
-    // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
-    // before first_row) in the flat hierarchy case.
-    if (thread_pos < target_pos && dst_pos >= 0) {
+    // dst_pos may be negative (values before first_row) for non-lists.
+    if (dst_pos >= 0) {
       // nesting level that is storing actual leaf values
 
       // src_pos represents the logical row position we want to read from. But in the case of
@@ -174,7 +169,7 @@ __device__ void decode_fixed_width_values(
       }
     }
 
-    pos += batch_size;
+    thread_pos += max_batch_size;
   }
 }
 
@@ -197,13 +192,8 @@ __device__ inline void decode_fixed_width_split_values(
   int const skipped_leaf_values = s->page.skipped_leaf_values;
 
   // decode values
-  int pos = start;
-  while (pos < end) {
-    int const batch_size = min(max_batch_size, end - pos);
-
-    int const target_pos = pos + batch_size;
-    int const thread_pos = pos + t;
-
+  int thread_pos = start + t;
+  while (thread_pos < end) {
     // Index from value buffer (doesn't include nulls) to final array (has gaps for nulls)
     int const dst_pos = [&]() {
       if constexpr (copy_mode_t == copy_mode::DIRECT) {
@@ -215,9 +205,8 @@ __device__ inline void decode_fixed_width_split_values(
       }
     }();
 
-    // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
-    // before first_row) in the flat hierarchy case.
-    if (thread_pos < target_pos && dst_pos >= 0) {
+    // dst_pos may be negative (values before first_row) for non-lists.
+    if (dst_pos >= 0) {
       // src_pos represents the logical row position we want to read from. But in the case of
       // nested hierarchies (lists), there is no 1:1 mapping of rows to values. So src_pos
       // has to take into account the # of values we have to skip in the page to get to the
@@ -281,7 +270,7 @@ __device__ inline void decode_fixed_width_split_values(
       }
     }
 
-    pos += batch_size;
+    thread_pos += max_batch_size;
   }
 }
 
@@ -1206,18 +1195,20 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   }
 
   // Zero-fill null positions after decoding valid values
-  if (should_process_nulls) {
-    uint32_t const dtype_len = has_strings_t ? sizeof(cudf::size_type) : s->dtype_len;
-    int const num_values     = [&]() {
-      if constexpr (has_lists_t) {
-        auto const& ni = s->nesting_info[s->col.max_nesting_depth - 1];
-        return ni.valid_map_offset - init_valid_map_offset;
-      } else {
-        return s->num_rows;
-      }
-    }();
-    zero_fill_null_positions_shared<decode_block_size_t>(
-      s, dtype_len, init_valid_map_offset, num_values, t);
+  if constexpr (has_strings_t || has_lists_t) {
+    if (should_process_nulls) {
+      uint32_t const dtype_len = has_strings_t ? sizeof(cudf::size_type) : s->dtype_len;
+      int const num_values     = [&]() {
+        if constexpr (has_lists_t) {
+          auto const& ni = s->nesting_info[s->col.max_nesting_depth - 1];
+          return ni.valid_map_offset - init_valid_map_offset;
+        } else {
+          return s->num_rows;
+        }
+      }();
+      zero_fill_null_positions_shared<decode_block_size_t>(
+        s, dtype_len, init_valid_map_offset, num_values, t);
+    }
   }
 
   if constexpr (has_strings_t) {
