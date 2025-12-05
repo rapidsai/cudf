@@ -449,7 +449,8 @@ void decode_page_headers(pass_intermediate_data& pass,
   // page headers kernel
   if (has_page_index) {
     auto host_page_locations =
-      cudf::detail::make_empty_host_vector<uint8_t*>(unsorted_pages.size(), stream);
+      cudf::detail::make_pinned_vector_async<uint8_t*>(unsorted_pages.size(), stream);
+    auto current_page_idx = cudf::size_type{0};
 
     std::for_each(pass.chunks.begin(), pass.chunks.end(), [&](auto const& chunk) {
       // Column chunk buffer's data pointer
@@ -466,7 +467,8 @@ void decode_page_headers(pass_intermediate_data& pass,
         CUDF_EXPECTS(std::cmp_less(chunk.h_chunk_info->dictionary_offset.value(),
                                    chunk.h_chunk_info->pages.front().location.offset),
                      "Encountered dictionary page located beyond the first data page");
-        host_page_locations.push_back(data_ptr);
+        host_page_locations[current_page_idx] = data_ptr;
+        current_page_idx++;
         data_ptr += chunk.h_chunk_info->dictionary_size.value();
       }
 
@@ -478,7 +480,8 @@ void decode_page_headers(pass_intermediate_data& pass,
       std::for_each(thrust::counting_iterator(0),
                     thrust::counting_iterator(num_data_pages),
                     [&](auto const page_idx) {
-                      host_page_locations.push_back(data_ptr);
+                      host_page_locations[current_page_idx] = data_ptr;
+                      current_page_idx++;
                       if (page_idx < num_data_pages - 1) {
                         data_ptr += chunk.h_chunk_info->pages[page_idx + 1].location.offset -
                                     chunk.h_chunk_info->pages[page_idx].location.offset;
@@ -487,7 +490,7 @@ void decode_page_headers(pass_intermediate_data& pass,
     });
 
     // Check if we have data ptrs for all input pages
-    CUDF_EXPECTS(host_page_locations.size() == unsorted_pages.size(),
+    CUDF_EXPECTS(std::cmp_equal(current_page_idx, unsorted_pages.size()),
                  "Expected page offsets to match total pages");
 
     // Copy page data ptrs to device
@@ -521,18 +524,18 @@ void decode_page_headers(pass_intermediate_data& pass,
 
   // compute max bytes needed for level data
   auto level_bit_size = cudf::detail::make_counting_transform_iterator(
-    0, cuda::proclaim_return_type<int>([chunks = pass.chunks.d_begin()] __device__(int i) {
+    0, cuda::proclaim_return_type<int32_t>([chunks = pass.chunks.d_begin()] __device__(int i) {
       auto c = chunks[i];
-      return static_cast<int>(
-        max(c.level_bits[level_type::REPETITION], c.level_bits[level_type::DEFINITION]));
+      return std::max<int32_t>(c.level_bits[level_type::REPETITION],
+                               c.level_bits[level_type::DEFINITION]);
     }));
   // max level data bit size.
-  int const max_level_bits = thrust::reduce(rmm::exec_policy(stream),
-                                            level_bit_size,
-                                            level_bit_size + pass.chunks.size(),
-                                            0,
-                                            cuda::maximum<int>());
-  pass.level_type_size     = std::max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
+  int32_t const max_level_bits = thrust::reduce(rmm::exec_policy(stream),
+                                                level_bit_size,
+                                                level_bit_size + pass.chunks.size(),
+                                                0,
+                                                cuda::maximum<int>());
+  pass.level_type_size = std::max<int32_t>(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
 
   // sort the pages in chunk/schema order.
   pass.pages = sort_pages(unsorted_pages, pass.chunks, stream);

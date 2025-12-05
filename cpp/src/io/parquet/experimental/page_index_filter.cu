@@ -1135,7 +1135,14 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
     search_fenwick_tree_functor{fenwick_tree_level_ptrs.data(), page_offsets.data(), num_ranges});
 
   //  Copy over search results to host
-  auto host_results      = cudf::detail::make_host_vector_async(device_data_page_mask, stream);
+  auto host_results =
+    cudf::detail::make_pinned_vector_async<bool>(device_data_page_mask.size(), stream);
+  cudaMemcpyAsync(host_results.data(),
+                  device_data_page_mask.data(),
+                  device_data_page_mask.size() * sizeof(bool),
+                  cudaMemcpyDeviceToHost,
+                  stream.value());
+  stream.synchronize();
   auto const total_pages = page_row_offsets.size() - num_columns;
   auto data_page_mask    = thrust::host_vector<bool>(total_pages, stream);
   auto host_results_iter = host_results.begin();
