@@ -55,7 +55,7 @@ class ChunkedParquetReader:
 def read_parquet(
     options: ParquetReaderOptions,
     stream: Stream | None = None,
-    mr: DeviceMemoryResource = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> TableWithMetadata: ...
 
 class ParquetWriterOptions:
