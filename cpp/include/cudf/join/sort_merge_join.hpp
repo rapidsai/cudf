@@ -276,6 +276,9 @@ class sort_merge_join {
  * The corresponding values in the second returned vector are
  * the matched row indices from the right table.
  *
+ * @deprecated Use the object-oriented sort_merge_join API `cudf::sort_merge_join::inner_join`
+ * instead
+ *
  * @code{.pseudo}
  * Left: {{0, 1, 2}}
  * Right: {{1, 2, 3}}
@@ -300,8 +303,8 @@ class sort_merge_join {
  * the result of performing an inner join between two tables with `left_keys` and `right_keys`
  * as the join keys .
  */
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
+[[deprecated]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                         std::unique_ptr<rmm::device_uvector<size_type>>>
 sort_merge_inner_join(cudf::table_view const& left_keys,
                       cudf::table_view const& right_keys,
                       null_equality compare_nulls       = null_equality::EQUAL,
@@ -318,6 +321,9 @@ sort_merge_inner_join(cudf::table_view const& left_keys,
  * The corresponding values in the second returned vector are
  * the matched row indices from the right table.
  *
+ * @deprecated Use the object-oriented sort_merge_join API `cudf::sort_merge_join::inner_join`
+ * instead
+ *
  * @code{.pseudo}
  * Left: {{0, 1, 2}}
  * Right: {{1, 2, 3}}
@@ -342,8 +348,8 @@ sort_merge_inner_join(cudf::table_view const& left_keys,
  * the result of performing an inner join between two tables with `left_keys` and `right_keys`
  * as the join keys .
  */
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
+[[deprecated]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                         std::unique_ptr<rmm::device_uvector<size_type>>>
 merge_inner_join(cudf::table_view const& left_keys,
                  cudf::table_view const& right_keys,
                  null_equality compare_nulls       = null_equality::EQUAL,
