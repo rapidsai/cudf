@@ -49,6 +49,8 @@ if TYPE_CHECKING:
 
     import polars as pl
 
+    from rmm.pylibrmm.cuda_stream_pool import CudaStreamPool
+
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
@@ -86,27 +88,41 @@ def evaluate_logical_plan(
     assert config_options.executor.name == "streaming", "Executor must be streaming"
     assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
 
-    if (
-        config_options.executor.scheduler == "distributed"
-    ):  # pragma: no cover; Requires distributed
-        # TODO: Add distributed-execution support
-        raise NotImplementedError(
-            "The rapidsmpf engine does not support distributed execution yet."
-        )
-
     # Lower the IR graph on the client process (for now).
     ir, partition_info, stats = lower_ir_graph(ir, config_options)
 
-    # Reserve collective IDs for the entire pipeline execution
-    with ReserveOpIDs(ir) as collective_id_map:
-        result, metadata_collector = evaluate_pipeline(
-            ir,
-            partition_info,
-            config_options,
-            stats,
-            collective_id_map,
-            collect_metadata=collect_metadata,
-        )
+    # Reserve shuffle IDs for the entire pipeline execution
+    with ReserveOpIDs(ir) as shuffle_id_map:
+        # Build and execute the streaming pipeline.
+        # This must be done on all worker processes
+        # for cluster == "distributed".
+        if (
+            config_options.executor.cluster == "distributed"
+        ):  # pragma: no cover; block depends on executor type and Distributed cluster
+            # Distributed execution: Use client.run
+
+            # NOTE: Distributed execution requires Dask for now
+            from cudf_polars.experimental.rapidsmpf.dask import evaluate_pipeline_dask
+
+            result, metadata_collector = evaluate_pipeline_dask(
+                evaluate_pipeline,
+                ir,
+                partition_info,
+                config_options,
+                stats,
+                shuffle_id_map,
+                collect_metadata=collect_metadata,
+            )
+        else:
+            # Single-process execution: Run locally
+            result, metadata_collector = evaluate_pipeline(
+                ir,
+                partition_info,
+                config_options,
+                stats,
+                shuffle_id_map,
+                collect_metadata=collect_metadata,
+            )
 
     return result, metadata_collector
 
@@ -148,48 +164,50 @@ def evaluate_pipeline(
     assert config_options.executor.name == "streaming", "Executor must be streaming"
     assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
 
-    # Configure the context.
-    # TODO: Multi-GPU version will be different. The rest of this function
-    #       will be executed on each rank independently.
-    # TODO: Need a way to configure options specific to the rapidmspf engine.
-    options = Options(
-        {
-            # By default, set the number of streaming threads to the max
-            # number of IO threads. The user may override this with an
-            # environment variable (i.e. RAPIDSMPF_NUM_STREAMING_THREADS)
-            "num_streaming_threads": str(max(config_options.executor.max_io_threads, 1))
-        }
-        | get_environment_variables()
-    )
-    comm = new_communicator(options)
-    mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
-    rmm.mr.set_current_device_resource(mr)
-    memory_available: MutableMapping[MemoryType, LimitAvailableMemory] | None = None
-    single_spill_device = config_options.executor.client_device_threshold
-    if single_spill_device > 0.0 and single_spill_device < 1.0:
-        total_memory = rmm.mr.available_device_memory()[1]
-        memory_available = {
-            MemoryType.DEVICE: LimitAvailableMemory(
-                mr, limit=int(total_memory * single_spill_device)
-            )
-        }
-
-    # We have a couple of cases to consider here:
-    # 1: we want to use the same stream pool for cudf-polars and rapidsmpf
-    # 2: rapidsmpf uses its own pool and cudf-polars uses the default stream
-    if isinstance(config_options.cuda_stream_policy, CUDAStreamPoolConfig):
-        stream_pool = config_options.cuda_stream_policy.build()
+    _initial_mr: Any = None
+    stream_pool: CudaStreamPool | bool = False
+    if rmpf_context is not None:
+        # Using "distributed" mode.
+        # Always use the RapidsMPF stream pool for now.
+        br = rmpf_context.br()
+        stream_pool = True
     else:
-        stream_pool = None
+        # Using "single" mode.
+        # Create a new local RapidsMPF context.
+        _original_mr = rmm.mr.get_current_device_resource()
+        mr = RmmResourceAdaptor(_original_mr)
+        rmm.mr.set_current_device_resource(mr)
+        memory_available: MutableMapping[MemoryType, LimitAvailableMemory] | None = None
+        single_spill_device = config_options.executor.client_device_threshold
+        if single_spill_device > 0.0 and single_spill_device < 1.0:
+            total_memory = rmm.mr.available_device_memory()[1]
+            memory_available = {
+                MemoryType.DEVICE: LimitAvailableMemory(
+                    mr, limit=int(total_memory * single_spill_device)
+                )
+            }
 
-    br = BufferResource(mr, memory_available=memory_available, stream_pool=stream_pool)
-    rmpf_context = Context(comm, br, options)
+        options = Options(
+            {
+                # By default, set the number of streaming threads to the max
+                # number of IO threads. The user may override this with an
+                # environment variable (i.e. RAPIDSMPF_NUM_STREAMING_THREADS)
+                "num_streaming_threads": str(
+                    max(config_options.executor.max_io_threads, 1)
+                )
+            }
+            | get_environment_variables()
+        )
+        if isinstance(config_options.cuda_stream_policy, CUDAStreamPoolConfig):
+            stream_pool = config_options.cuda_stream_policy.build()
+        local_comm = new_communicator(options)
+        br = BufferResource(
+            mr, memory_available=memory_available, stream_pool=stream_pool
+        )
+        rmpf_context = Context(local_comm, br, options)
 
-    executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cpse")
-
-    # Create the IR execution context.
-    if stream_pool is not None:
-        # both cudf-polars and rapidsmpf are using the same stream pool
+    # Create the IR execution context
+    if stream_pool:
         ir_context = IRExecutionContext(
             get_cuda_stream=rmpf_context.get_stream_from_pool
         )
@@ -197,6 +215,7 @@ def evaluate_pipeline(
         ir_context = IRExecutionContext.from_config_options(config_options)
 
     # Generate network nodes
+    assert rmpf_context is not None, "RapidsMPF context must defined."
     metadata_collector: list[Metadata] | None = [] if collect_metadata else None
     nodes, output = generate_network(
         rmpf_context,
@@ -210,6 +229,7 @@ def evaluate_pipeline(
     )
 
     # Run the network
+    executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cpse")
     run_streaming_pipeline(nodes=nodes, py_executor=executor)
 
     # Extract/return the concatenated result.
@@ -241,6 +261,10 @@ def evaluate_pipeline(
     # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
     # before the Context, which ultimately contains the rmm MR, goes out of scope.
     del nodes, output, messages, chunks, dfs, df
+
+    # Restore the initial RMM memory resource
+    if _initial_mr is not None:
+        rmm.mr.set_current_device_resource(_original_mr)
 
     return result, metadata_collector
 
