@@ -312,11 +312,19 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithStats)
   auto constexpr rows_per_row_group = page_size_for_ordered_tests;
   auto [written_table, file_buffer] = create_parquet_with_stats<T, num_concat, false>();
 
-  // Filtering AST - table[0] < 50
-  auto literal_value     = cudf::numeric_scalar<T>(50);
-  auto literal           = cudf::ast::literal(literal_value);
-  auto col_ref_0         = cudf::ast::column_name_reference("col0");
-  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+  // Filtering AST - table[0] < 50 and table[2] < "000010000"
+  auto literal_value1     = cudf::numeric_scalar<T>(50);
+  auto literal1           = cudf::ast::literal(literal_value1);
+  auto col_ref0           = cudf::ast::column_reference(0);
+  auto filter_expression1 = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, literal1);
+
+  auto literal_value2     = cudf::string_scalar("000010000");
+  auto literal2           = cudf::ast::literal(literal_value2);
+  auto col_ref2           = cudf::ast::column_reference(2);
+  auto filter_expression2 = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref2, literal2);
+
+  auto filter_expression = cudf::ast::operation(
+    cudf::ast::ast_operator::LOGICAL_AND, filter_expression1, filter_expression2);
 
   // Create reader options with empty source info
   cudf::io::parquet_reader_options options =
@@ -868,7 +876,7 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterFewLiteralsTyped)
     // Build the filter expression
     auto const literal = cudf::ast::literal(literal_value);
     auto const filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_name, literal);
+      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref, literal);
 
     // Check the results
     EXPECT_EQ(filter_row_groups_with_dictionaries(file_buffer_span, filter_expression, stream, mr),
@@ -1020,9 +1028,9 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterManyLiteralsTyped)
     auto const filter_expression1 =
       cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_name, literal1);
     auto const filter_expression2 =
-      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_name, literal2);
+      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref, literal2);
     auto const filter_expression3 =
-      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_name, literal3);
+      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref, literal3);
     auto const filter_expression12 = cudf::ast::operation(
       cudf::ast::ast_operator::LOGICAL_OR, filter_expression1, filter_expression2);
     auto const filter_expression = cudf::ast::operation(
@@ -1050,9 +1058,9 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterManyLiteralsTyped)
     auto const literal3 = cudf::ast::literal(literal_value3);
 
     auto const filter_expression1 =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col_name, literal1);
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col_ref, literal1);
     auto const filter_expression2 =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col_name, literal2);
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col_ref, literal2);
     auto const filter_expression3 =
       cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col_name, literal3);
     auto const filter_expression12 = cudf::ast::operation(
