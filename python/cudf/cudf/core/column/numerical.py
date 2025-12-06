@@ -489,7 +489,7 @@ class NumericalColumn(NumericalBaseColumn):
             )
         if len(self) == 0:
             return cast(
-                cudf.core.column.StringColumn,
+                "cudf.core.column.StringColumn",
                 column_empty(0, dtype=CUDF_STRING_DTYPE),
             )
 
@@ -575,6 +575,20 @@ class NumericalColumn(NumericalBaseColumn):
                 res = self.nans_to_nulls().cast(dtype=dtype)
                 res._dtype = dtype
                 return res  # type: ignore[return-value]
+
+            # --- FIX: Match Pandas behavior when casting Float(with Nulls) -> Bool ---
+            # Pandas treats NaN as truthy (True) when casting float -> bool.
+            # In cuDF, Nulls propagate. We must fill Nulls with np.nan so the
+            # cast treats them as True.
+            if (
+                self.dtype.kind == "f"
+                and dtype.kind == "b"
+                and not is_pandas_nullable_extension_dtype(dtype)
+                and self.has_nulls()
+            ):
+                return self.fillna(np.nan).cast(dtype=dtype)  # type: ignore[return-value]
+            # ------------------------------------------------------------------------
+
             if dtype_to_pylibcudf_type(dtype) == dtype_to_pylibcudf_type(
                 self.dtype
             ):
@@ -745,7 +759,7 @@ class NumericalColumn(NumericalBaseColumn):
             replacement_col = replacement_col.repeat(len(to_replace_col))
         elif len(replacement_col) == 1 and len(to_replace_col) == 0:
             return self.copy()
-        replaced = cast(Self, self.astype(common_type))
+        replaced = cast("Self", self.astype(common_type))
         df = cudf.DataFrame._from_data(
             {
                 "old": to_replace_col.astype(common_type),
@@ -910,7 +924,7 @@ class NumericalColumn(NumericalBaseColumn):
     ) -> ColumnBase:
         if isinstance(dtype, CategoricalDtype):
             codes_dtype = min_unsigned_type(len(dtype.categories))
-            codes = cast(NumericalColumn, self.astype(codes_dtype))
+            codes = cast("NumericalColumn", self.astype(codes_dtype))
             return CategoricalColumn(
                 plc_column=codes.to_pylibcudf(mode="read"),
                 size=codes.size,
