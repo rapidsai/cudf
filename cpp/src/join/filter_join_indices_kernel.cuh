@@ -31,13 +31,13 @@ namespace cudf::detail {
  * @tparam has_complex_type Indicates whether the expression may contain complex types
  */
 template <cudf::size_type max_block_size, bool has_nulls, bool has_complex_type>
-__launch_bounds__(max_block_size) __global__
-  void filter_join_indices_kernel(cudf::table_device_view left_table,
-                                  cudf::table_device_view right_table,
-                                  cudf::device_span<cudf::size_type const> left_indices,
-                                  cudf::device_span<cudf::size_type const> right_indices,
-                                  cudf::ast::detail::expression_device_view device_expression_data,
-                                  bool* predicate_results)
+CUDF_KERNEL __launch_bounds__(max_block_size) void filter_join_indices_kernel(
+  cudf::table_device_view left_table,
+  cudf::table_device_view right_table,
+  cudf::device_span<cudf::size_type const> left_indices,
+  cudf::device_span<cudf::size_type const> right_indices,
+  cudf::ast::detail::expression_device_view device_expression_data,
+  bool* predicate_results)
 {
   // Shared memory for intermediate storage
   extern __shared__ char raw_intermediate_storage[];
