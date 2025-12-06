@@ -1,6 +1,11 @@
-#include "jit/rtc/sha256.hpp"
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #include <cudf/utilities/error.hpp>
+
+#include <jit/rtc/sha256.hpp>
 
 extern "C" {
 #include <openssl/evp.h>

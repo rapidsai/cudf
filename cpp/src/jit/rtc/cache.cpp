@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "jit/rtc/cache.hpp"
-
 #include <cudf/detail/nvtx/ranges.hpp>
+
+#include <jit/rtc/cache.hpp>
 
 namespace cudf {
 namespace rtc {

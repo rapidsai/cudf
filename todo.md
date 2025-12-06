@@ -1,5 +1,3 @@
 [ ] Use PCH
 [ ] Add time trace to JIT and AOT
 
-
-  COMMAND = cd /home/coder/cudf/cpp/src && /home/coder/.conda/envs/rapids/bin/cmake -E make_directory /home/coder/cudf/cpp/build/conda/cuda-13.0/release/include/jit_preprocessed_files/binaryop/jit && /home/coder/.conda/envs/rapids/bin/cmake -E env LD_LIBRARY_PATH=/home/coder/.conda/envs/rapids/lib /home/coder/cudf/cpp/build/conda/cuda-13.0/release/bin/cudf/jitify_preprocess binaryop/jit/kernel.cu -o /home/coder/cudf/cpp/build/conda/cuda-13.0/release/include/jit_preprocessed_files/binaryop/jit -i -std=c++20 -remove-unused-globals -D_FILE_OFFSET_BITS=64 -D__CUDACC_RTC__ -DCUDF_RUNTIME_JIT -I/home/coder/cudf/cpp/include -I/home/coder/cudf/cpp/src -I/home/coder/cudf/cpp/build/conda/cuda-13.0/release/_deps/cccl-src/lib/cmake/libcudacxx/../../../libcudacxx/include -I/home/coder/.conda/envs/rapids/targets/x86_64-linux/include -I/home/coder/.conda/envs/rapids/targets/x86_64-linux/include/cccl --no-preinclude-workarounds --no-replace-pragma-once --diag-suppress=47 --device-int128

@@ -4,14 +4,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "jit/rtc/rtc.hpp"
-
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <cuda.h>
 #include <cuda_runtime.h>
 
+#include <jit/rtc/rtc.hpp>
 #include <nvJitLink.h>
 #include <nvrtc.h>
 

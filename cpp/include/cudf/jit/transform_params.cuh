@@ -4,15 +4,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
- * SPDX-License-Identifier: Apache-2.0
- */
 #pragma once
 #include <cudf/jit/lto/types.cuh>
-#include <cudf/utilities/export.hpp>
 
-namespace CUDF_EXPORT cudf {
+namespace CUDF_LTO_EXPORT cudf {
 
 namespace lto {
 
@@ -25,4 +20,4 @@ struct transform_params {
 };
 
 }  // namespace lto
-}  // namespace CUDF_EXPORT cudf
+}  // namespace CUDF_LTO_EXPORT cudf

@@ -453,8 +453,8 @@ endif()
 if(CUDA_ENABLE_LINEINFO)
   list(APPEND CUDF_JIT_CUDA_FLAGS "${CUDF_JIT_CUDA_FLAGS};-lineinfo")
 endif()
-  
- 
+
+
 
 #  use current project CUDA_ARCHITECTURES for JIT compilation
 set(CUDF_CXX_STANDARD 20)
