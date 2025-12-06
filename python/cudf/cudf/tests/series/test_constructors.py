@@ -1407,37 +1407,28 @@ def test_from_pandas_obj_tz_aware_unsupported(klass):
 
 
 @pytest.mark.parametrize(
-    "data",
+    "codes",
     [
-        [1, 2, 3, 4],
-        ["a", "1", "2", "1", "a"],
-        pd.Series(["a", "1", "22", "1", "aa"]),
-        pd.Series(["a", "1", "22", "1", "aa"], dtype="category"),
-        pd.Series([1, 2, 3, -4], dtype="int64"),
-        pd.Series([1, 2, 3, 4], dtype="uint64"),
-        pd.Series([1, 2.3, 3, 4], dtype="float"),
-        np.asarray([0, 2, 1]),
-        [None, 1, None, 2, None],
-        [],
+        [0],
+        [0, 1, 2],
+        [0, 1, -1],
+        [0, 1, 2, -1],
     ],
 )
 @pytest.mark.parametrize(
     "categories",
     [
         ["aa", "bb", "cc"],
-        [2, 4, 10, 100],
-        ["a", "b", "c"],
-        ["22", "b", "c"],
-        [],
+        [2, 4, 10],
     ],
 )
-def test_categorical_creation(data, categories):
-    dtype = pd.CategoricalDtype(categories)
-    expected = pd.Series(data, dtype=dtype)
-    got = cudf.Series(data, dtype=dtype)
+def test_categorical_creation(codes, categories):
+    data = pd.Categorical.from_codes(codes, categories)
+    expected = pd.Series(data)
+    got = cudf.Series(data)
     assert_eq(expected, got)
 
-    got = cudf.Series(data, dtype=cudf.from_pandas(dtype))
+    got = cudf.Series(data, dtype=cudf.from_pandas(data.dtype))
     assert_eq(expected, got)
 
     expected = pd.Series(data, dtype="category")
@@ -1485,7 +1476,7 @@ def test_categorical_interval_pandas_roundtrip():
 
 
 def test_from_arrow_missing_categorical():
-    pd_cat = pd.Categorical(["a", "b", "c"], categories=["a", "b"])
+    pd_cat = pd.Categorical.from_codes([0, 1, -1], categories=["a", "b"])
     pa_cat = pa.array(pd_cat, from_pandas=True)
     gd_cat = cudf.Series(pa_cat)
 

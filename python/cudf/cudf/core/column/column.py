@@ -3362,7 +3362,11 @@ def as_column(
                 # pd.Series(arbitrary) might be already inferred as IntervalDtype
                 ser = pd.Series(arbitrary).astype(dtype)
             else:
-                ser = pd.Series(arbitrary, dtype=dtype)
+                ser = pd.Series(arbitrary, dtype="category")
+                if dtype.categories is not None:
+                    ser = ser.cat.set_categories(
+                        dtype.categories, ordered=dtype.ordered
+                    )
         elif dtype == object and not cudf.get_option("mode.pandas_compatible"):
             # Unlike pandas, interpret object as "str" instead of "python object"
             ser = pd.Series(arbitrary, dtype="str")
