@@ -65,6 +65,7 @@ def test_to_py(py_scalar):
     if isinstance(py_scalar, (datetime.datetime, datetime.timedelta)):
         with pytest.raises(NotImplementedError):
             plc.Scalar.from_py(py_scalar).to_py()
+        assert py_scalar == plc.Scalar.from_py(py_scalar).to_arrow().as_py()
     else:
         assert py_scalar == plc.Scalar.from_py(py_scalar).to_py()
 

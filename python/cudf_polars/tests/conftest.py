@@ -83,11 +83,6 @@ def pytest_configure(config):
                 "Rapidsmpf runtime requires the 'rapidsmpf' package"
             )
 
-        if config.getoption("--cluster") == "distributed":
-            raise pytest.UsageError(
-                "Rapidsmpf runtime requires 'single' cluster (for now)"
-            )
-
     cudf_polars.testing.asserts.DEFAULT_EXECUTOR = config.getoption("--executor")
     cudf_polars.testing.asserts.DEFAULT_RUNTIME = config.getoption("--runtime")
     cudf_polars.testing.asserts.DEFAULT_CLUSTER = config.getoption("--cluster")

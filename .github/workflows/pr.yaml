@@ -390,8 +390,7 @@ jobs:
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
       continue-on-error: true
-      # TODO: Switch to ci-conda:25-10-latest when XGBoost has CUDA 13 packages
-      container_image: "rapidsai/ci-conda:26.02-cuda12.9.1-ubuntu24.04-py3.13"
+      container_image: "rapidsai/ci-conda:26.02-latest"
       script: |
         ci/cudf_pandas_scripts/third-party-integration/test.sh python/cudf/cudf_pandas_tests/third_party_integration_tests/dependencies.yaml
   pandas-tests:

@@ -74,6 +74,18 @@ size_type hybrid_scan_reader::total_rows_in_row_groups(
   return _impl->total_rows_in_row_groups(input_row_group_indices);
 }
 
+std::vector<size_type> hybrid_scan_reader::filter_row_groups_with_byte_range(
+  cudf::host_span<size_type const> row_group_indices, parquet_reader_options const& options) const
+{
+  CUDF_FUNC_RANGE();
+
+  // Temporary vector with row group indices from the first source
+  auto const input_row_group_indices =
+    std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
+
+  return _impl->filter_row_groups_with_byte_range(input_row_group_indices, options).front();
+}
+
 std::vector<cudf::size_type> hybrid_scan_reader::filter_row_groups_with_stats(
   cudf::host_span<size_type const> row_group_indices,
   parquet_reader_options const& options,

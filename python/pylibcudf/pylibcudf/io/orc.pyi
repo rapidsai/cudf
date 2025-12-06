@@ -37,7 +37,7 @@ class OrcReaderOptionsBuilder:
 def read_orc(
     options: OrcReaderOptions,
     stream: Stream | None = None,
-    mr: DeviceMemoryResource = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> TableWithMetadata: ...
 
 class OrcColumnStatistics:

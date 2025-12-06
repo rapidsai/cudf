@@ -27,7 +27,7 @@ from cudf.utils.dtypes import is_mixed_with_object_dtype
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-    from cudf._typing import Dtype
+    from cudf._typing import DtypeObj
     from cudf.core.column import ColumnBase
 
 
@@ -96,7 +96,7 @@ class ColumnAccessor(MutableMapping):
     rangeindex : bool, optional
         Whether the keys should be returned as a RangeIndex
         in `to_pandas_index` (default=False).
-    label_dtype : Dtype, optional
+    label_dtype : DtypeObj, optional
         What dtype should be returned in `to_pandas_index`
         (default=None).
     verify : bool, optional
@@ -113,7 +113,7 @@ class ColumnAccessor(MutableMapping):
         multiindex: bool = False,
         level_names=None,
         rangeindex: bool = False,
-        label_dtype: Dtype | None = None,
+        label_dtype: DtypeObj | None = None,
         verify: bool = True,
     ) -> None:
         if isinstance(data, ColumnAccessor):
@@ -121,7 +121,7 @@ class ColumnAccessor(MutableMapping):
             self._level_names = data.level_names
             self.multiindex: bool = data.multiindex
             self.rangeindex: bool = data.rangeindex
-            self.label_dtype: Dtype | None = data.label_dtype
+            self.label_dtype: DtypeObj | None = data.label_dtype
         elif isinstance(data, MutableMapping):
             # This code path is performance-critical for copies and should be
             # modified with care.

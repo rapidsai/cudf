@@ -6,8 +6,8 @@
 # =============================================================================
 
 set(cython_sources
-    aggregation.pyx binaryop.pyx copying.pyx datetime.pyx expressions.pyx labeling.pyx reduce.pyx
-    replace.pyx round.pyx stream_compaction.pyx types.pyx unary.pyx
+    aggregation.pyx binaryop.pyx copying.pyx datetime.pyx expressions.pyx join.pyx labeling.pyx
+    reduce.pyx replace.pyx round.pyx stream_compaction.pyx types.pyx unary.pyx
 )
 
 set(linked_libraries cudf::cudf)

@@ -320,7 +320,11 @@ def _cast_literal_to_decimal(
         name = side.name
     if (type_ := phys_type_map[name]).id() in _DECIMAL_IDS:
         scale = abs(type_.scale())
-        return expr.Cast(side.dtype, expr.Cast(DataType(pl.Decimal(38, scale)), lit))
+        return expr.Cast(
+            side.dtype,
+            True,  # noqa: FBT003
+            expr.Cast(DataType(pl.Decimal(38, scale)), True, lit),  # noqa: FBT003
+        )
     return lit
 
 

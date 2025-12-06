@@ -22,6 +22,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cuda/std/limits>
+#include <cuda/std/type_traits>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <memory>
@@ -38,6 +39,8 @@ namespace detail::row::hash {
 template <template <typename> class hash_function, typename Nullate>
 class element_hasher {
  public:
+  using result_type = cuda::std::invoke_result_t<hash_function<int32_t>, int32_t>;
+
   /**
    * @brief Constructs an element_hasher object.
    *
@@ -47,8 +50,8 @@ class element_hasher {
    */
   __device__ element_hasher(
     Nullate nulls,
-    uint32_t seed             = DEFAULT_HASH_SEED,
-    hash_value_type null_hash = cuda::std::numeric_limits<hash_value_type>::max()) noexcept
+    result_type seed      = DEFAULT_HASH_SEED,
+    result_type null_hash = cuda::std::numeric_limits<result_type>::max()) noexcept
     : _check_nulls(nulls), _seed(seed), _null_hash(null_hash)
   {
   }
@@ -62,8 +65,8 @@ class element_hasher {
    * @return The hash value of the given element
    */
   template <typename T>
-  __device__ hash_value_type operator()(column_device_view const& col,
-                                        size_type row_index) const noexcept
+  __device__ result_type operator()(column_device_view const& col,
+                                    size_type row_index) const noexcept
     requires(column_device_view::has_element_accessor<T>())
   {
     if (_check_nulls && col.is_null(row_index)) { return _null_hash; }
@@ -79,16 +82,17 @@ class element_hasher {
    * @return The hash value of the given element
    */
   template <typename T>
-  __device__ hash_value_type operator()(column_device_view const& col,
-                                        size_type row_index) const noexcept
+  __device__ result_type operator()(column_device_view const& col,
+                                    size_type row_index) const noexcept
     requires(not column_device_view::has_element_accessor<T>())
   {
     CUDF_UNREACHABLE("Unsupported type in hash.");
   }
 
   Nullate _check_nulls;
-  uint32_t _seed;
-  hash_value_type _null_hash;
+  // Assumes seeds are the same as the result type of the hash function
+  result_type _seed;
+  result_type _null_hash;
 };
 
 /**
@@ -102,21 +106,20 @@ class device_row_hasher {
   friend class row_hasher;
 
  public:
+  using result_type = cuda::std::invoke_result_t<hash_function<int32_t>, int32_t>;
+
   /**
    * @brief Return the hash value of a row in the given table.
    *
    * @param row_index The row index to compute the hash value of
    * @return The hash value of the row
    */
-  __device__ auto operator()(size_type row_index) const noexcept
+  __device__ result_type operator()(size_type row_index) const noexcept
   {
     auto it =
       thrust::make_transform_iterator(_table.begin(), [row_index, this](auto const& column) {
         return cudf::type_dispatcher<dispatch_storage_type>(
-          column.type(),
-          element_hasher_adapter<hash_function>{_check_nulls, _seed},
-          column,
-          row_index);
+          column.type(), element_hasher_adapter{_check_nulls, _seed}, column, row_index);
       });
 
     return detail::accumulate(it, it + _table.num_columns(), _seed, [](auto hash, auto h) {
@@ -132,31 +135,30 @@ class device_row_hasher {
    * When the column is nested, this uses the element_hasher to hash the shape and values of the
    * column.
    */
-  template <template <typename> class hash_fn>
   class element_hasher_adapter {
-    static constexpr hash_value_type NULL_HASH = cuda::std::numeric_limits<hash_value_type>::max();
-    static constexpr hash_value_type NON_NULL_HASH = 0;
+    static constexpr result_type NULL_HASH     = cuda::std::numeric_limits<result_type>::max();
+    static constexpr result_type NON_NULL_HASH = 0;
 
    public:
-    __device__ element_hasher_adapter(Nullate check_nulls, uint32_t seed) noexcept
+    __device__ element_hasher_adapter(Nullate check_nulls, result_type seed) noexcept
       : _element_hasher(check_nulls, seed), _check_nulls(check_nulls)
     {
     }
 
     template <typename T>
-    __device__ hash_value_type operator()(column_device_view const& col,
-                                          size_type row_index) const noexcept
+    __device__ result_type operator()(column_device_view const& col,
+                                      size_type row_index) const noexcept
       requires(not cudf::is_nested<T>())
     {
       return _element_hasher.template operator()<T>(col, row_index);
     }
 
     template <typename T>
-    __device__ hash_value_type operator()(column_device_view const& col,
-                                          size_type row_index) const noexcept
+    __device__ result_type operator()(column_device_view const& col,
+                                      size_type row_index) const noexcept
       requires(cudf::is_nested<T>())
     {
-      auto hash                   = hash_value_type{0};
+      auto hash                   = result_type{0};
       column_device_view curr_col = col.slice(row_index, 1);
       while (curr_col.type().id() == type_id::STRUCT || curr_col.type().id() == type_id::LIST) {
         if (_check_nulls) {
@@ -175,7 +177,7 @@ class device_row_hasher {
           auto list_sizes = make_list_size_iterator(list_col);
           hash            = detail::accumulate(
             list_sizes, list_sizes + list_col.size(), hash, [](auto hash, auto size) {
-              return cudf::hashing::detail::hash_combine(hash, hash_fn<size_type>{}(size));
+              return cudf::hashing::detail::hash_combine(hash, hash_function<size_type>{}(size));
             });
           curr_col = list_col.get_sliced_child();
         }
@@ -188,20 +190,21 @@ class device_row_hasher {
       return hash;
     }
 
-    element_hasher<hash_fn, Nullate> const _element_hasher;
+    element_hasher<hash_function, Nullate> const _element_hasher;
     Nullate const _check_nulls;
   };
 
   CUDF_HOST_DEVICE device_row_hasher(Nullate check_nulls,
                                      table_device_view t,
-                                     uint32_t seed = DEFAULT_HASH_SEED) noexcept
+                                     result_type seed = DEFAULT_HASH_SEED) noexcept
     : _check_nulls{check_nulls}, _table{t}, _seed(seed)
   {
   }
 
   Nullate const _check_nulls;
   table_device_view const _table;
-  uint32_t const _seed;
+  // Assumes seeds are the same as the result type of the hash function
+  result_type const _seed;
 };
 
 /**
@@ -236,11 +239,12 @@ class row_hasher {
   /**
    * @brief Get the hash operator to use on the device
    *
-   * Returns a unary callable, `F`, with signature `hash_function::hash_value_type F(size_type)`.
+   * Returns a unary callable, `F`, where `F(i)` returns the hash value of row i.
    *
-   * `F(i)` returns the hash of row i.
-   *
+   * @tparam hash_function Hash functor to use for hashing elements
+   * @tparam DeviceRowHasher The device row hasher type to use
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls
+   *
    * @param nullate Indicates if any input column contains nulls
    * @param seed The seed to use for the hash function
    * @return A hash operator to use on the device
@@ -249,8 +253,9 @@ class row_hasher {
     template <typename> class hash_function = cudf::hashing::detail::default_hash,
     template <template <typename> class, typename> class DeviceRowHasher = device_row_hasher,
     typename Nullate>
-  DeviceRowHasher<hash_function, Nullate> device_hasher(Nullate nullate = {},
-                                                        uint32_t seed   = DEFAULT_HASH_SEED) const
+  DeviceRowHasher<hash_function, Nullate> device_hasher(
+    Nullate nullate                                                  = {},
+    cuda::std::invoke_result_t<hash_function<int32_t>, int32_t> seed = DEFAULT_HASH_SEED) const
   {
     return DeviceRowHasher<hash_function, Nullate>(nullate, *d_t, seed);
   }

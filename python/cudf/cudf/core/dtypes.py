@@ -36,7 +36,7 @@ else:
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from typing_extension import Self
+    from typing_extensions import Self
 
     from cudf._typing import Dtype, DtypeObj
     from cudf.core.buffer import Buffer

@@ -588,7 +588,6 @@ add_library(
   src/join/mixed_join_semi.cu
   src/join/mixed_join_size_kernel.cu
   src/join/mixed_join_size_kernel_nulls.cu
-  src/join/semi_join.cu
   src/join/sort_merge_join.cu
   src/json/json_path.cu
   src/lists/contains.cu
@@ -977,7 +976,7 @@ target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio nanoarrow zstd
+          kvikio::kvikio nanoarrow::nanoarrow zstd
 )
 
 # Add Conda library, and include paths if specified

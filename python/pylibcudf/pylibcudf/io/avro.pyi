@@ -22,5 +22,5 @@ class AvroReaderOptionsBuilder:
 def read_avro(
     options: AvroReaderOptions,
     stream: Stream | None = None,
-    mr: DeviceMemoryResource = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> TableWithMetadata: ...

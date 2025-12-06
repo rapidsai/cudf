@@ -998,8 +998,7 @@ def date_range(
         stop = end_estim.astype(np.dtype(np.int64))
         start = start.astype(np.dtype(np.int64))
         step = _offset_to_nanoseconds_lower_bound(offset)
-        arr = range(int(start), int(stop), step)
-        res = as_column(arr).astype(dtype)
+        res = as_column(range(int(start), int(stop), step)).astype(dtype)
 
     return DatetimeIndex._from_column(res, name=name, freq=freq).tz_localize(
         tz

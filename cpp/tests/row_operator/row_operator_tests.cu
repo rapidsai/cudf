@@ -11,10 +11,17 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/row_operator/equality.cuh>
+#include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/row_operator/lexicographic.cuh>
+#include <cudf/detail/row_operator/primitive_row_operators.cuh>
+#include <cudf/hashing/detail/xxhash_64.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
 
 template <typename T>
 struct TypedTableViewTest : public cudf::test::BaseFixture {};
@@ -331,4 +338,52 @@ TEST_F(RowOperatorTest, TestCheckShapeCompatibility)
   EXPECT_THROW(
     cudf::detail::row::equality::two_table_comparator(string_table, numeric_table, stream),
     std::invalid_argument);
+}
+
+TEST_F(RowOperatorTest, TestRowHasher64BitHash)
+{
+  auto const col   = cudf::test::fixed_width_column_wrapper<int32_t>{{0, 42, 123456789}};
+  auto const input = cudf::table_view{{col}};
+
+  auto const stream       = cudf::get_default_stream();
+  auto const preprocessed = cudf::detail::row::hash::preprocessed_table::create(input, stream);
+  auto const row_hasher   = cudf::detail::row::hash::row_hasher{preprocessed};
+  auto const hasher =
+    row_hasher.device_hasher<cudf::hashing::detail::XXHash_64>(cudf::nullate::DYNAMIC{false});
+
+  auto results = cudf::test::fixed_width_column_wrapper<std::uint64_t>{{0, 0, 0}};
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    thrust::counting_iterator<cudf::size_type>{0},
+                    thrust::counting_iterator<cudf::size_type>{3},
+                    cudf::mutable_column_view{results}.begin<std::uint64_t>(),
+                    hasher);
+
+  // Expected values are hash_combine(seed=0, xxhash_64(element))
+  auto const expected = cudf::test::fixed_width_column_wrapper<std::uint64_t>{
+    {15647511400073222857ul, 8470797489250732038ul, 2416304890555758815ul}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results, expected);
+}
+
+TEST_F(RowOperatorTest, TestPrimitiveRowHasher64BitHash)
+{
+  auto const col   = cudf::test::fixed_width_column_wrapper<int32_t>{{0, 42, 123456789}};
+  auto const input = cudf::table_view{{col}};
+
+  auto const stream  = cudf::get_default_stream();
+  auto const d_input = cudf::table_device_view::create(input, stream);
+
+  auto const hasher = cudf::detail::row::primitive::row_hasher<cudf::hashing::detail::XXHash_64>(
+    cudf::nullate::DYNAMIC{false}, *d_input, static_cast<std::uint64_t>(cudf::DEFAULT_HASH_SEED));
+
+  auto results = cudf::test::fixed_width_column_wrapper<std::uint64_t>{{0, 0, 0}};
+
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    thrust::counting_iterator<cudf::size_type>{0},
+                    thrust::counting_iterator<cudf::size_type>{3},
+                    cudf::mutable_column_view{results}.begin<std::uint64_t>(),
+                    hasher);
+
+  auto const expected = cudf::test::fixed_width_column_wrapper<std::uint64_t>{
+    {4246796580750024372ul, 15516826743637085169ul, 9462334144942111946ul}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results, expected);
 }

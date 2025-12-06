@@ -1276,7 +1276,7 @@ def _transform_arg(
             for k, a in arg.items()
         }
     elif isinstance(arg, np.ndarray) and arg.dtype == "O":
-        transformed: list[Any] = [  # type: ignore[var-annotated]
+        transformed: list[Any] = [
             _transform_arg(a, attribute_name, seen) for a in arg.flat
         ]
         # Keep the same memory layout as arg (the default is C_CONTIGUOUS)

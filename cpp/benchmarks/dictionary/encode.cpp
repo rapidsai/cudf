@@ -1,0 +1,43 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <benchmarks/common/generate_input.hpp>
+
+#include <cudf/column/column.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/dictionary/encode.hpp>
+#include <cudf/utilities/default_stream.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+
+#include <nvbench/nvbench.cuh>
+
+static void bench_dictionary_encode(nvbench::state& state)
+{
+  auto const num_rows    = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
+  auto constexpr width   = 32;  // width does not matter so keep it smallish
+
+  auto input = create_string_column(num_rows, width, cardinality);
+
+  state.add_global_memory_reads<uint8_t>(input->alloc_size());
+
+  auto stream = cudf::get_default_stream();
+  auto result =
+    cudf::dictionary::encode(input->view(), cudf::data_type{cudf::type_id::INT32}, stream);
+  state.add_global_memory_writes<uint8_t>(result->alloc_size());
+
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
+    auto result =
+      cudf::dictionary::encode(input->view(), cudf::data_type{cudf::type_id::INT32}, stream);
+  });
+}
+
+NVBENCH_BENCH(bench_dictionary_encode)
+  .set_name("encode")
+  .add_int64_axis("num_rows", {262144, 2097152, 16777216, 67108864})
+  .add_int64_axis("cardinality", {10});

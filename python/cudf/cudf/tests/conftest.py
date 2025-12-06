@@ -63,6 +63,17 @@ def default_float_bitwidth(request):
         yield request.param
 
 
+@pytest.fixture(autouse=True)
+def set_copy_on_write_option(request):
+    if os.environ.get(
+        "CUDF_TEST_COPY_ON_WRITE"
+    ) == "1" and not request.node.get_closest_marker("no_copy_on_write"):
+        with cudf.option_context("copy_on_write", True):
+            yield
+    else:
+        yield
+
+
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(item, call):
     """Hook to make result information available in fixtures

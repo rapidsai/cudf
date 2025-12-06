@@ -40,26 +40,28 @@ set(CUDF_EXPORT_NVCOMP OFF)
 include(../../cpp/cmake/thirdparty/get_nvcomp.cmake)
 
 # Install only the specific libnvcomp.so.* library instead of all nvcomp targets
-if(TARGET nvcomp::nvcomp)
-  get_target_property(is_imported nvcomp::nvcomp IMPORTED)
-  if(is_imported)
-    get_target_property(nvcomp_lib_path nvcomp::nvcomp IMPORTED_LOCATION_RELEASE)
-    # Compute the SOVERSION from the library path
-    get_filename_component(nvcomp_lib_dir ${nvcomp_lib_path} DIRECTORY)
-    get_filename_component(nvcomp_lib_name ${nvcomp_lib_path} NAME)
-    string(REGEX REPLACE "^libnvcomp\\.so\\.([0-9]+).*$" "\\1" nvcomp_soversion_major
-                         ${nvcomp_lib_name}
-    )
-    install(
-      FILES ${nvcomp_lib_path}
-      DESTINATION ${SKBUILD_PLATLIB_DIR}/libcudf/lib64/
-      RENAME libnvcomp.so.${nvcomp_soversion_major}
-    )
+if(NOT USE_NVCOMP_RUNTIME_WHEEL)
+  if(TARGET nvcomp::nvcomp)
+    get_target_property(is_imported nvcomp::nvcomp IMPORTED)
+    if(is_imported)
+      get_target_property(nvcomp_lib_path nvcomp::nvcomp IMPORTED_LOCATION_RELEASE)
+      # Compute the SOVERSION from the library path
+      get_filename_component(nvcomp_lib_dir ${nvcomp_lib_path} DIRECTORY)
+      get_filename_component(nvcomp_lib_name ${nvcomp_lib_path} NAME)
+      string(REGEX REPLACE "^libnvcomp\\.so\\.([0-9]+).*$" "\\1" nvcomp_soversion_major
+                           ${nvcomp_lib_name}
+      )
+      install(
+        FILES ${nvcomp_lib_path}
+        DESTINATION ${SKBUILD_PLATLIB_DIR}/libcudf/lib64/
+        RENAME libnvcomp.so.${nvcomp_soversion_major}
+      )
+    else()
+      message(FATAL_ERROR "nvcomp target must be imported")
+    endif()
   else()
-    message(FATAL_ERROR "nvcomp target must be imported")
+    message(FATAL_ERROR "nvcomp target not found")
   endif()
-else()
-  message(FATAL_ERROR "nvcomp target not found")
 endif()
 
 set(CUDA_STATIC_RUNTIME ON)
@@ -67,12 +69,3 @@ set(CUDA_STATIC_RUNTIME ON)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 
 add_subdirectory(../../cpp cudf-cpp)
-
-if(USE_NVCOMP_RUNTIME_WHEEL)
-  set(rpaths "$ORIGIN/../../nvidia/nvcomp")
-  set_property(
-    TARGET cudf
-    PROPERTY INSTALL_RPATH ${rpaths}
-    APPEND
-  )
-endif()

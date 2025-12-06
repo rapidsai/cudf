@@ -76,7 +76,7 @@ class JsonReaderOptionsBuilder:
 def read_json(
     options: JsonReaderOptions,
     stream: Stream | None = None,
-    mr: DeviceMemoryResource = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> TableWithMetadata: ...
 def read_json_from_string_column(
     input: Column,
@@ -86,7 +86,7 @@ def read_json_from_string_column(
     compression: CompressionType = CompressionType.NONE,
     recovery_mode: JSONRecoveryMode = JSONRecoveryMode.RECOVER_WITH_NULL,
     stream: Stream | None = None,
-    mr: DeviceMemoryResource = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> TableWithMetadata: ...
 
 class JsonWriterOptions:
@@ -113,7 +113,7 @@ def chunked_read_json(
     options: JsonReaderOptions,
     chunk_size: int = 100_000_000,
     stream: Stream | None = None,
-    mr: DeviceMemoryResource = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> tuple[list[Column], list[str], ChildNameToTypeMap]: ...
 def is_supported_write_json(type: DataType) -> bool: ...
 def _setup_json_reader_options(
