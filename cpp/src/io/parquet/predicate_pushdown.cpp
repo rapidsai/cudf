@@ -448,10 +448,16 @@ std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_in
   auto const host_bitmask = [&] {
     auto const num_bitmasks = num_bitmask_words(predicate.size());
     if (predicate.nullable()) {
-      return cudf::detail::make_host_vector(
-        device_span<bitmask_type const>(predicate.null_mask(), num_bitmasks), stream);
+      auto bitmask = cudf::detail::make_pinned_vector_async<bitmask_type>(num_bitmasks, stream);
+      CUDF_CUDA_TRY(cudaMemcpyAsync(bitmask.data(),
+                                    predicate.null_mask(),
+                                    num_bitmasks * sizeof(bitmask_type),
+                                    cudaMemcpyDeviceToHost,
+                                    stream.value()));
+      stream.synchronize();
+      return bitmask;
     } else {
-      auto bitmask = cudf::detail::make_host_vector<bitmask_type>(num_bitmasks, stream);
+      auto bitmask = cudf::detail::make_pinned_vector_async<bitmask_type>(num_bitmasks, stream);
       std::fill(bitmask.begin(), bitmask.end(), ~bitmask_type{0});
       return bitmask;
     }
@@ -461,9 +467,14 @@ std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_in
     0, [bitmask = host_bitmask.data()](auto bit_index) { return bit_is_set(bitmask, bit_index); });
 
   // Return only filtered row groups based on predicate
-  auto const is_row_group_required = cudf::detail::make_host_vector(
-    device_span<uint8_t const>(predicate.data<uint8_t>(), predicate.size()), stream);
-
+  auto is_row_group_required =
+    cudf::detail::make_pinned_vector_async<uint8_t>(predicate.size(), stream);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(is_row_group_required.data(),
+                                static_cast<uint8_t const*>(predicate.data<uint8_t>()),
+                                predicate.size() * sizeof(uint8_t),
+                                cudaMemcpyDeviceToHost,
+                                stream.value()));
+  stream.synchronize();
   // Return if all are required, or all are nulls.
   if (predicate.null_count() == predicate.size() or std::all_of(is_row_group_required.cbegin(),
                                                                 is_row_group_required.cend(),
