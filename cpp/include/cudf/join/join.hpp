@@ -36,7 +36,7 @@ namespace CUDF_EXPORT cudf {
  */
 enum class join_kind : int32_t {
   INNER_JOIN     = 0,  ///< Inner join: only matching rows from both tables
-  LEFT_JOIN      = 1,  ///< Left join: all rows from left table, matching rows from right
+  LEFT_JOIN      = 1,  ///< Left join: all rows from left table plus matching rows from right
   FULL_JOIN      = 2,  ///< Full outer join: all rows from both tables
   LEFT_SEMI_JOIN = 3,  ///< Left semi join: left rows that have matches in right table
   LEFT_ANTI_JOIN = 4   ///< Left anti join: left rows that have no matches in right table
