@@ -536,3 +536,11 @@ def test_groupby_rolling_pickleable():
     df = cudf.DataFrame({"a": [1, 1, 2], "b": [1, 2, 3]})
     gb_rolling = pickle.loads(pickle.dumps(df.groupby("a").rolling(2)))
     assert_eq(gb_rolling.obj, cudf.DataFrame({"b": [1, 2, 3]}))
+
+
+def test_rolling_min_periods_zero():
+    s = cudf.Series([np.nan, 1.0, 2.0, 3.0])
+    ps = s.to_pandas()
+    result = s.rolling(2, min_periods=0).sum()
+    expected = ps.rolling(2, min_periods=0).sum()
+    assert_eq(result, expected)
