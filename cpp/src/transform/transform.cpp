@@ -16,13 +16,14 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cudf_lto_library_fatbin_bytes.h>
 #include <jit/cache.hpp>
 #include <jit/helpers.hpp>
 #include <jit/parser.hpp>
 #include <jit/row_ir.hpp>
 #include <jit/span.cuh>
 #include <jit/util.hpp>
-#include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
+#include <jit_preprocessed_files/jit/lto/library.cuh.jit.hpp>
 
 namespace cudf {
 namespace transformation {
@@ -35,6 +36,28 @@ jitify2::Kernel get_kernel(std::string const& kernel_name, std::string const& cu
   return cudf::jit::get_program_cache(*transform_jit_kernel_cu_jit)
     .get_kernel(kernel_name, {}, {{"cudf/detail/operation-udf.hpp", cuda_source}}, {"-arch=sm_."});
 }
+
+// [ ] load the cudf transformation LTO library; return Culibrary object representing it
+// void get_transform_library();
+
+// [ ] take CUDA/PTX code as input
+// [ ] support different function signature styles
+// [ ] handle include directories
+// [ ] C++/C-ABI symbol name for locating function to link against
+// [ ] take input and output data types as parameters
+// [ ] take function_info struct as input; describe: input/output types, null-awareness, user-data
+// requirement, etc.
+// [ ] return Culibrary object representing compiled operator
+// void compile_library();
+// void compile_transform_operator_thunk();
+
+// [ ] take LTO-IR compiled binary of operator as input
+// [ ] link it into the lto library; return
+// void link_transform_thunk();
+
+// [ ] if we can, we should not depend on jitify for LTO-IR compilation, linking, and caching; use
+// nvJITLink directly
+// void cache_transform_thunk();
 
 jitify2::ConfiguredKernel build_transform_kernel(
   std::string const& kernel_name,
