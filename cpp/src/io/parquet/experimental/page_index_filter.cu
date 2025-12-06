@@ -1126,7 +1126,14 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   //  Search the Fenwick tree to see if there's a surviving row in each page's row range
   auto const num_ranges = static_cast<cudf::size_type>(page_row_offsets.size() - 1);
   rmm::device_uvector<bool> device_data_page_mask(num_ranges, stream, mr);
-  auto page_offsets = cudf::detail::make_device_uvector_async(page_row_offsets, stream, mr);
+  auto host_page_offsets =
+    cudf::detail::make_pinned_vector_async<size_type>(page_row_offsets.size(), stream);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(host_page_offsets.data(),
+                                page_row_offsets.data(),
+                                page_row_offsets.size() * sizeof(size_type),
+                                cudaMemcpyHostToHost,
+                                stream.value()));
+  auto page_offsets = cudf::detail::make_device_uvector_async(host_page_offsets, stream, mr);
   thrust::transform(
     rmm::exec_policy_nosync(stream),
     thrust::counting_iterator(0),

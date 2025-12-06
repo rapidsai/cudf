@@ -12,6 +12,7 @@
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/reduction/detail/reduction.cuh>
 
 #include <rmm/exec_policy.hpp>
 
@@ -530,11 +531,24 @@ void decode_page_headers(pass_intermediate_data& pass,
                                c.level_bits[level_type::DEFINITION]);
     }));
   // max level data bit size.
-  int32_t const max_level_bits = thrust::reduce(rmm::exec_policy(stream),
-                                                level_bit_size,
-                                                level_bit_size + pass.chunks.size(),
-                                                0,
-                                                cuda::maximum<int>());
+  int32_t const max_level_bits = [&]() {
+    auto result      = cudf::reduction::detail::reduce(level_bit_size,
+                                                  pass.chunks.size(),
+                                                  cudf::reduction::detail::op::max{},
+                                                       {},
+                                                  stream,
+                                                  cudf::get_current_device_resource_ref());
+    auto host_result = cudf::detail::make_pinned_vector_async<uint32_t>(1, stream);
+    CUDF_CUDA_TRY(
+      cudaMemcpyAsync(host_result.data(),
+                      static_cast<cudf::numeric_scalar<uint32_t>*>(result.get())->data(),
+                      sizeof(uint32_t),
+                      cudaMemcpyDeviceToHost,
+                      stream.value()));
+    stream.synchronize();
+    return host_result.front();
+  }();
+
   pass.level_type_size = std::max<int32_t>(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
 
   // sort the pages in chunk/schema order.

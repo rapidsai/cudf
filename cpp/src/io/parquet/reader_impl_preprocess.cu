@@ -13,6 +13,7 @@
 #include <cudf/detail/utilities/batched_memset.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/reduction/detail/reduction.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -62,8 +63,24 @@ void reader_impl::build_string_dict_indices()
                    pass.pages.d_end(),
                    set_str_dict_index_count{str_dict_index_count, pass.chunks});
 
-  size_t const total_str_dict_indexes = thrust::reduce(
-    rmm::exec_policy(_stream), str_dict_index_count.begin(), str_dict_index_count.end());
+  size_t const total_str_dict_indexes = [&]() {
+    auto result      = cudf::reduction::detail::reduce(str_dict_index_count.begin(),
+                                                  str_dict_index_count.size(),
+                                                  cudf::reduction::detail::op::sum{},
+                                                       {},
+                                                  _stream,
+                                                  cudf::get_current_device_resource_ref());
+    auto host_result = cudf::detail::make_pinned_vector_async<uint32_t>(1, _stream);
+    CUDF_CUDA_TRY(
+      cudaMemcpyAsync(host_result.data(),
+                      static_cast<cudf::numeric_scalar<uint32_t>*>(result.get())->data(),
+                      sizeof(uint32_t),
+                      cudaMemcpyDeviceToHost,
+                      _stream.value()));
+    _stream.synchronize();
+    return host_result.front();
+  }();
+
   if (total_str_dict_indexes == 0) { return; }
 
   // convert to offsets
@@ -384,10 +401,23 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
                          _page_string_offset_indices.begin());
 
   // Compute the total number of offsets needed
-  size_t total_num_offsets = thrust::reduce(
-    rmm::exec_policy_nosync(_stream), d_page_offset_counts.begin(), d_page_offset_counts.end());
-
-  _stream.synchronize();
+  size_t total_num_offsets = [&]() {
+    auto result      = cudf::reduction::detail::reduce(d_page_offset_counts.begin(),
+                                                  d_page_offset_counts.size(),
+                                                  cudf::reduction::detail::op::sum{},
+                                                       {},
+                                                  _stream,
+                                                  cudf::get_current_device_resource_ref());
+    auto host_result = cudf::detail::make_pinned_vector_async<uint32_t>(1, _stream);
+    CUDF_CUDA_TRY(
+      cudaMemcpyAsync(host_result.data(),
+                      static_cast<cudf::numeric_scalar<uint32_t>*>(result.get())->data(),
+                      sizeof(uint32_t),
+                      cudaMemcpyDeviceToHost,
+                      _stream.value()));
+    _stream.synchronize();
+    return host_result.front();
+  }();
 
   // Allocate the string offset buffer
   _string_offset_buffer = rmm::device_uvector<uint32_t>(total_num_offsets, _stream, _mr);
@@ -1019,7 +1049,14 @@ cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
                         reduce_keys.begin(),
                         d_col_sizes.begin());
 
-  return cudf::detail::make_host_vector(d_col_sizes, _stream);
+  auto host_col_sizes = cudf::detail::make_pinned_vector_async<size_t>(d_col_sizes.size(), _stream);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(host_col_sizes.data(),
+                                d_col_sizes.data(),
+                                d_col_sizes.size() * sizeof(size_t),
+                                cudaMemcpyDeviceToHost,
+                                _stream.value()));
+  _stream.synchronize();
+  return host_col_sizes;
 }
 
 }  // namespace cudf::io::parquet::detail

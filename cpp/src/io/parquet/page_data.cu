@@ -7,6 +7,7 @@
 #include "page_decode.cuh"
 
 #include <cudf/detail/utilities/batched_memcpy.hpp>
+#include <cudf/reduction/detail/reduction.cuh>
 
 #include <rmm/exec_policy.hpp>
 
@@ -503,11 +504,21 @@ uint32_t get_aggregated_decode_kernel_mask(cudf::detail::hostdevice_span<PageInf
 {
   // determine which kernels to invoke
   auto mask_iter = thrust::make_transform_iterator(pages.device_begin(), mask_tform{});
-  return thrust::reduce(rmm::exec_policy(stream),
-                        mask_iter,
-                        mask_iter + pages.size(),
-                        0U,
-                        cuda::std::bit_or<uint32_t>{});
+  // reduce mask_iter with bit_or to compute the return value
+  auto result      = cudf::reduction::detail::reduce(mask_iter,
+                                                pages.size(),
+                                                cudf::reduction::detail::op::bit_or{},
+                                                     {},
+                                                stream,
+                                                cudf::get_current_device_resource_ref());
+  auto host_result = cudf::detail::make_pinned_vector_async<uint32_t>(1, stream);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(host_result.data(),
+                                static_cast<cudf::numeric_scalar<uint32_t>*>(result.get())->data(),
+                                sizeof(uint32_t),
+                                cudaMemcpyDeviceToHost,
+                                stream.value()));
+  stream.synchronize();
+  return host_result.front();
 }
 
 /**
