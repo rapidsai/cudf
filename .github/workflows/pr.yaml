@@ -150,7 +150,7 @@ jobs:
     with:
       build_type: pull-request
       script: "ci/cpp_linters.sh"
-      node_type: cpu16
+      node_type: "cpu16"
   conda-cpp-checks:
     needs: conda-cpp-build
     secrets: inherit
