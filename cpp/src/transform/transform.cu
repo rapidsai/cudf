@@ -316,7 +316,7 @@ std::unique_ptr<column> string_view_operation(column_view base_column,
 
   auto may_return_nulls = may_evaluate_null(base_column, inputs, is_null_aware, null_policy);
 
-  std::optional<rmm::device_uvector<bool>> intermediate_null_mask  = std::nullopt;
+  std::optional<rmm::device_uvector<bool>> intermediate_null_mask   = std::nullopt;
   std::optional<std::tuple<rmm::device_buffer, size_type>> and_mask = std::nullopt;
 
   if (is_null_aware == null_aware::NO) {
