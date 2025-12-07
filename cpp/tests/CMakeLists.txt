@@ -328,7 +328,7 @@ ConfigureTest(
   io/parquet_v2_test.cpp
   io/parquet_writer_test.cpp
   GPUS 1
-  PERCENT 50
+  PERCENT 30
 )
 ConfigureTest(
   HYBRID_SCAN_TEST
@@ -704,7 +704,7 @@ ConfigureTest(
   lists/stream_compaction/apply_boolean_mask_tests.cpp
   lists/stream_compaction/distinct_tests.cpp
   GPUS 1
-  PERCENT 80
+  PERCENT 70
 )
 
 # ##################################################################################################
