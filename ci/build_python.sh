@@ -53,16 +53,6 @@ rapids-telemetry-record build-cudf.log \
 rapids-telemetry-record sccache-stats-cudf.txt sccache --show-adv-stats
 sccache --stop-server >/dev/null 2>&1 || true
 
-rapids-logger "Building dask-cudf"
-
-rapids-telemetry-record build-dask-cudf.log \
-    rattler-build build --recipe conda/recipes/dask-cudf \
-                    "${RATTLER_ARGS[@]}" \
-                    "${RATTLER_CHANNELS[@]}"
-
-rapids-telemetry-record sccache-stats-dask-cudf.txt sccache --show-adv-stats
-sccache --stop-server >/dev/null 2>&1 || true
-
 rapids-logger "Building cudf_kafka"
 
 rapids-telemetry-record build-cudf_kafka.log \
@@ -73,25 +63,8 @@ rapids-telemetry-record build-cudf_kafka.log \
 rapids-telemetry-record sccache-stats-cudf_kafka.txt sccache --show-adv-stats
 sccache --stop-server >/dev/null 2>&1 || true
 
-rapids-logger "Building custreamz"
-
-rapids-telemetry-record build-custreamz.log \
-    rattler-build build --recipe conda/recipes/custreamz \
-                    "${RATTLER_ARGS[@]}" \
-                    "${RATTLER_CHANNELS[@]}"
-
-rapids-telemetry-record sccache-stats-custreamz.txt sccache --show-adv-stats
-sccache --stop-server >/dev/null 2>&1 || true
-
-rapids-logger "Building cudf-polars"
-
-rapids-telemetry-record build-cudf-polars.log \
-    rattler-build build --recipe conda/recipes/cudf-polars \
-                    "${RATTLER_ARGS[@]}" \
-                    "${RATTLER_CHANNELS[@]}"
-
-rapids-telemetry-record sccache-stats-cudf-polars.txt sccache --show-adv-stats
-sccache --stop-server >/dev/null 2>&1 || true
-
 # remove build_cache directory
 rm -rf "$RAPIDS_CONDA_BLD_OUTPUT_DIR"/build_cache
+
+RAPIDS_PACKAGE_NAME="$(rapids-package-name conda_python cudf)"
+export RAPIDS_PACKAGE_NAME

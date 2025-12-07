@@ -41,13 +41,6 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
         device_memory_resource* mr
     ) except +libcudf_exception_handler
 
-    cdef unique_ptr[column] compute_column(
-        table_view table,
-        expression expr,
-        cuda_stream_view stream,
-        device_memory_resource* mr
-    ) except +libcudf_exception_handler
-
     cdef unique_ptr[column] transform(
         const vector[column_view] & inputs,
         const string & transform_udf,
@@ -74,6 +67,13 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] compute_column(
+        const table_view table,
+        const expression& expr,
+        cuda_stream_view stream,
+        device_memory_resource* mr
+    ) except +libcudf_exception_handler
+
+    cdef unique_ptr[column] compute_column_jit(
         const table_view table,
         const expression& expr,
         cuda_stream_view stream,

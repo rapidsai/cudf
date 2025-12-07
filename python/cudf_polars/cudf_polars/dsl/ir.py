@@ -320,7 +320,11 @@ def _cast_literal_to_decimal(
         name = side.name
     if (type_ := phys_type_map[name]).id() in _DECIMAL_IDS:
         scale = abs(type_.scale())
-        return expr.Cast(side.dtype, expr.Cast(DataType(pl.Decimal(38, scale)), lit))
+        return expr.Cast(
+            side.dtype,
+            True,  # noqa: FBT003
+            expr.Cast(DataType(pl.Decimal(38, scale)), True, lit),  # noqa: FBT003
+        )
     return lit
 
 
@@ -1291,6 +1295,42 @@ class DataFrameScan(IR):
         self.children = ()
         self._id_for_hash = random.randint(0, 2**64 - 1)
 
+    @staticmethod
+    def _reconstruct(
+        schema: Schema,
+        pl_df: pl.DataFrame,
+        projection: Sequence[str] | None,
+        id_for_hash: int,
+    ) -> DataFrameScan:  # pragma: no cover
+        """
+        Reconstruct a DataFrameScan from pickled data.
+
+        Parameters
+        ----------
+        schema: Schema
+            The schema of the DataFrameScan.
+        pl_df: pl.DataFrame
+            The underlying polars DataFrame.
+        projection: Sequence[str] | None
+            The projection of the DataFrameScan.
+        id_for_hash: int
+            The id for hash of the DataFrameScan.
+
+        Returns
+        -------
+        The reconstructed DataFrameScan.
+        """
+        node = DataFrameScan(schema, pl_df._df, projection)
+        node._id_for_hash = id_for_hash
+        return node
+
+    def __reduce__(self) -> tuple[Any, ...]:  # pragma: no cover
+        """Pickle a DataFrameScan object."""
+        return (
+            self._reconstruct,
+            (*self._non_child_args, self._id_for_hash),
+        )
+
     def get_hashable(self) -> Hashable:
         """
         Hashable representation of the node.
@@ -1305,6 +1345,17 @@ class DataFrameScan(IR):
             schema_hash,
             self._id_for_hash,
             self.projection,
+        )
+
+    def is_equal(self, other: Self) -> bool:
+        """Equality of DataFrameScan nodes."""
+        return self is other or (
+            self._id_for_hash == other._id_for_hash
+            and self.schema == other.schema
+            and self.projection == other.projection
+            and pl.DataFrame._from_pydf(self.df).equals(
+                pl.DataFrame._from_pydf(other.df)
+            )
         )
 
     @classmethod

@@ -52,9 +52,9 @@ def test_obj_scalar_caching():
         plc.Column.from_iterable_of_py([1], dtype.plc_type),
         dtype=dtype,
     )
-    assert column.obj_scalar(stream=stream).to_py() == 1
+    assert column.obj_scalar(stream=stream).to_py(stream=stream) == 1
     # test caching behavior
-    assert column.obj_scalar(stream=stream).to_py() == 1
+    assert column.obj_scalar(stream=stream).to_py(stream=stream) == 1
 
 
 def test_check_sorted():
@@ -294,3 +294,23 @@ def test_dtype_header_roundtrip(dtype: pl.DataType):
     header = cudf_polars.containers.datatype._dtype_to_header(dt)
     result = cudf_polars.containers.datatype._dtype_from_header(header)
     assert result == dt
+
+
+def test_astype_to_string_unsupported():
+    col = Column(
+        plc.Column.from_iterable_of_py([True], plc.DataType(plc.TypeId.BOOL8)),
+        dtype=DataType(pl.Boolean()),
+    )
+    stream = get_cuda_stream()
+    with pytest.raises(pl.exceptions.InvalidOperationError):
+        col.astype(DataType(pl.String()), stream=stream)
+
+
+def test_astype_from_string_unsupported():
+    col = Column(
+        plc.Column.from_iterable_of_py(["True"], plc.DataType(plc.TypeId.STRING)),
+        dtype=DataType(pl.String()),
+    )
+    stream = get_cuda_stream()
+    with pytest.raises(pl.exceptions.InvalidOperationError):
+        col.astype(DataType(pl.Boolean()), stream=stream)

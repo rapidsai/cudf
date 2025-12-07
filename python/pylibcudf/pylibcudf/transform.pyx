@@ -108,6 +108,43 @@ cpdef Column compute_column(
     return Column.from_libcudf(move(c_result), stream, mr)
 
 
+cpdef Column compute_column_jit(
+    Table input, Expression expr, Stream stream=None, DeviceMemoryResource mr=None
+):
+    """
+    Create a column by evaluating an expression on a table
+    using a JIT-compiled kernel.
+
+    For details see :cpp:func:`compute_column_jit`.
+
+    Parameters
+    ----------
+    input : Table
+        Table used for expression evaluation
+    expr : Expression
+        Expression to evaluate
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned column's device memory.
+
+    Returns
+    -------
+    Column of the evaluated expression
+    """
+    cdef unique_ptr[column] c_result
+
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
+
+    with nogil:
+        c_result = cpp_transform.compute_column_jit(
+            input.view(), dereference(expr.c_obj.get()), stream.view(), mr.get_mr()
+        )
+
+    return Column.from_libcudf(move(c_result), stream, mr)
+
+
 cpdef tuple[gpumemoryview, int] bools_to_mask(
     Column input,
     Stream stream=None,

@@ -25,15 +25,12 @@
 #include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
-#include <thrust/pair.h>
 
 namespace cudf {
 namespace strings {
 namespace detail {
 
 namespace {
-
-using string_index_pair = thrust::pair<char const*, size_type>;
 
 /**
  * @brief This functor handles extracting strings by applying the compiled regex pattern

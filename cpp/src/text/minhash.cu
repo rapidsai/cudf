@@ -34,6 +34,7 @@
 #include <cuda/functional>
 #include <cuda/std/iterator>
 #include <cuda/std/limits>
+#include <cuda/std/tuple>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
@@ -133,7 +134,7 @@ CUDF_KERNEL void minhash_seed_kernel(cudf::column_device_view const d_strings,
     if constexpr (std::is_same_v<hash_value_type, uint32_t>) {
       hv = hasher(hash_str);
     } else {
-      hv = thrust::get<0>(hasher(hash_str));
+      hv = cuda::std::get<0>(hasher(hash_str));
     }
     // disallowing hash to zero case
     *seed_hashes = cuda::std::max(hv, hash_value_type{1});

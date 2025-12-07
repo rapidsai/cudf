@@ -34,7 +34,15 @@ repos:
     rev: 'v1.13.0'
     hooks:
       - id: mypy
-        additional_dependencies: [numpy, polars, pyarrow-stubs, pytest, types-cachetools]
+        additional_dependencies: [
+          polars,
+          "numpy",
+          pyarrow-stubs,
+          pytest,
+          types-cachetools,
+          "rmm-cu12==26.2.*,>=0.0.0a0",
+          "--extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/"
+        ]
         args: ["--config-file=pyproject.toml",
                "python/cudf/cudf",
                "python/pylibcudf/pylibcudf",

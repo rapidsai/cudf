@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from typing_extensions import Self
@@ -61,10 +61,10 @@ class CsvReaderOptionsBuilder:
 
 def read_csv(
     options: CsvReaderOptions,
-    stream: Stream = None,
-    mr: DeviceMemoryResource = None,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> TableWithMetadata: ...
-def write_csv(options: CsvWriterOptions, stream: Stream = None): ...
+def write_csv(options: CsvWriterOptions, stream: Stream | None = None): ...
 
 class CsvWriterOptions:
     def __init__(self): ...

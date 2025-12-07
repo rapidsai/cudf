@@ -21,6 +21,10 @@ cpdef Column compute_column(
     Table input, Expression expr, Stream stream = *, DeviceMemoryResource mr = *
 )
 
+cpdef Column compute_column_jit(
+    Table input, Expression expr, Stream stream = *, DeviceMemoryResource mr = *
+)
+
 cpdef tuple[gpumemoryview, int] bools_to_mask(
     Column input, Stream stream = *, DeviceMemoryResource mr = *
 )
