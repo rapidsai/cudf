@@ -92,6 +92,12 @@ def test_select_with_cse_with_agg():
     assert_gpu_result_equal(query)
 
 
+def test_select_native_datetime():
+    df = pl.LazyFrame({"c0": [1]})
+    query = df.select(pl.datetime(1969, 12, 7, 20, 47, 14))
+    assert_gpu_result_equal(query)
+
+
 @pytest.mark.parametrize("fmt", ["ndjson", "csv"])
 def test_select_fast_count_unsupported_formats(tmp_path, fmt):
     df = pl.DataFrame({"a": [1, 2, 3]})

@@ -577,6 +577,11 @@ add_library(
   src/join/conditional_join.cu
   src/join/cross_join.cu
   src/join/distinct_hash_join.cu
+  src/join/filter_join_indices.cu
+  src/join/filter_join_indices_kernel_complex.cu
+  src/join/filter_join_indices_kernel_null_complex.cu
+  src/join/filter_join_indices_kernel_null_primitive.cu
+  src/join/filter_join_indices_kernel_primitive.cu
   src/join/filtered_join.cu
   src/join/hash_join.cu
   src/join/join.cu
@@ -588,7 +593,6 @@ add_library(
   src/join/mixed_join_semi.cu
   src/join/mixed_join_size_kernel.cu
   src/join/mixed_join_size_kernel_nulls.cu
-  src/join/semi_join.cu
   src/join/sort_merge_join.cu
   src/json/json_path.cu
   src/lists/contains.cu
