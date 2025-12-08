@@ -7,6 +7,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 template <typename V>
@@ -44,7 +45,7 @@ TEST_F(groupby_topk_test, WithNulls)
   // clang-format off
   auto keys   = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 1, 2, 1, 2, 3, 3, 2, 1, 3, 3});
   auto values = cudf::test::fixed_width_column_wrapper<int32_t>({1, 4, 2, 5, 3, 6, 7, 8, 0, 9, 0, 10},
-    {true, true, true, true, true, true, true, true, false, true, false, true});
+    cudf::test::iterators::nulls_at({8,10}));
   // clang-format on
 
   auto expect_keys = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 3});
