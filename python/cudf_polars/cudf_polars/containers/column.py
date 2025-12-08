@@ -16,7 +16,6 @@ from pylibcudf.strings.convert.convert_integers import (
     is_integer,
     to_integers,
 )
-from pylibcudf.traits import is_floating_point
 
 from cudf_polars.containers import DataType
 from cudf_polars.containers.datatype import _dtype_from_header, _dtype_to_header
@@ -24,6 +23,8 @@ from cudf_polars.utils import conversion
 from cudf_polars.utils.dtypes import is_order_preserving_cast
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from typing_extensions import Self
 
     from polars import Series as pl_Series
@@ -264,7 +265,7 @@ class Column:
             return True
         return False
 
-    def astype(self, dtype: DataType, stream: Stream) -> Column:
+    def astype(self, dtype: DataType, stream: Stream, *, strict: bool = True) -> Column:
         """
         Cast the column to as the requested dtype.
 
@@ -275,6 +276,9 @@ class Column:
         stream
             CUDA stream used for device memory operations and kernel launches
             on this Column. The data in ``self.obj`` must be valid on this stream.
+        strict
+            If True, raise an error if the cast is unsupported.
+            If False, return nulls for unsupported casts.
 
         Returns
         -------
@@ -299,7 +303,8 @@ class Column:
             or self.obj.type().id() == plc.TypeId.STRING
         ):
             return Column(
-                self._handle_string_cast(plc_dtype, stream=stream), dtype=dtype
+                self._handle_string_cast(plc_dtype, stream=stream, strict=strict),
+                dtype=dtype,
             )
         elif plc.traits.is_integral_not_bool(
             self.obj.type()
@@ -340,33 +345,52 @@ class Column:
                 return result.sorted_like(self)
             return result
 
-    def _handle_string_cast(self, dtype: plc.DataType, stream: Stream) -> plc.Column:
+    def _handle_string_cast(
+        self, dtype: plc.DataType, stream: Stream, *, strict: bool
+    ) -> plc.Column:
         if dtype.id() == plc.TypeId.STRING:
-            if is_floating_point(self.obj.type()):
+            if plc.traits.is_floating_point(self.obj.type()):
                 return from_floats(self.obj, stream=stream)
-            else:
+            elif plc.traits.is_integral_not_bool(self.obj.type()):
                 return from_integers(self.obj, stream=stream)
-        else:
-            if is_floating_point(dtype):
-                floats = is_float(self.obj, stream=stream)
-                if not plc.reduce.reduce(
-                    floats,
-                    plc.aggregation.all(),
-                    plc.DataType(plc.TypeId.BOOL8),
-                    stream=stream,
-                ).to_py(stream=stream):
-                    raise InvalidOperationError("Conversion from `str` failed.")
-                return to_floats(self.obj, dtype)
             else:
-                integers = is_integer(self.obj, stream=stream)
-                if not plc.reduce.reduce(
-                    integers,
-                    plc.aggregation.all(),
-                    plc.DataType(plc.TypeId.BOOL8),
-                    stream=stream,
-                ).to_py(stream=stream):
-                    raise InvalidOperationError("Conversion from `str` failed.")
-                return to_integers(self.obj, dtype, stream=stream)
+                raise InvalidOperationError(
+                    f"Unsupported casting from {self.dtype.id()} to {dtype.id()}."
+                )
+
+        type_checker: Callable[[plc.Column, Stream], plc.Column]
+        type_caster: Callable[[plc.Column, plc.DataType, Stream], plc.Column]
+        if plc.traits.is_floating_point(dtype):
+            type_checker = is_float
+            type_caster = to_floats
+        elif plc.traits.is_integral_not_bool(dtype):
+            # is_integer has a second optional int_type: plc.DataType | None = None argument
+            # we do not use
+            type_checker = is_integer  # type: ignore[assignment]
+            type_caster = to_integers
+        else:
+            raise InvalidOperationError(
+                f"Unsupported casting from {self.dtype.id()} to {dtype.id()}."
+            )
+
+        castable = type_checker(self.obj, stream=stream)  # type: ignore[call-arg]
+        if not plc.reduce.reduce(
+            castable,
+            plc.aggregation.all(),
+            plc.DataType(plc.TypeId.BOOL8),
+            stream=stream,
+        ).to_py(stream=stream):
+            if strict:
+                raise InvalidOperationError(
+                    f"Conversion from {self.dtype.id()} to {dtype.id()} failed."
+                )
+            else:
+                values = self.obj.with_mask(
+                    *plc.transform.bools_to_mask(castable, stream=stream)
+                )
+        else:
+            values = self.obj
+        return type_caster(values, dtype, stream=stream)
 
     def copy_metadata(self, from_: pl_Series, /) -> Self:
         """
