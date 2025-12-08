@@ -114,7 +114,7 @@ class host_buffer_sink : public data_sink {
     auto const current_size = buffer_->size();
     buffer_->resize(current_size + size);
     CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-      buffer_->data() + current_size, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
+      buffer_->data() + current_size, gpu_data, size, cudaMemcpyDeviceToHost, stream));
     return std::async(std::launch::deferred, [stream]() -> void { stream.synchronize(); });
   }
 

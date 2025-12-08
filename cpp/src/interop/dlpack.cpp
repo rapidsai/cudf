@@ -200,7 +200,7 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
                                              reinterpret_cast<void*>(tensor_data),
                                              bytes,
                                              cudaMemcpyDefault,
-                                             stream.value()));
+                                             stream));
 
     tensor_data += col_stride;
   }
@@ -270,7 +270,7 @@ DLManagedTensor* to_dlpack(table_view const& input,
                                              get_column_data(col),
                                              stride_bytes,
                                              cudaMemcpyDefault,
-                                             stream.value()));
+                                             stream));
     tensor_data += stride_bytes;
   }
 

@@ -114,7 +114,7 @@ class compressed_host_buffer_source final : public datasource {
     return thread_pool.submit_task([this, offset, size, dst, stream] {
       auto hbuf = host_read(offset, size);
       CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-        dst, hbuf->data(), hbuf->size(), cudaMemcpyHostToDevice, stream.value()));
+        dst, hbuf->data(), hbuf->size(), cudaMemcpyHostToDevice, stream));
       stream.synchronize();
       return hbuf->size();
     });
@@ -687,7 +687,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
       h_buffers.emplace_back(sources[i]->host_read(range_offset, data_size));
       auto const& h_buffer = h_buffers.back();
       CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-        destination, h_buffer->data(), h_buffer->size(), cudaMemcpyHostToDevice, stream.value()));
+        destination, h_buffer->data(), h_buffer->size(), cudaMemcpyHostToDevice, stream));
       bytes_read += h_buffer->size();
     }
     range_offset = 0;

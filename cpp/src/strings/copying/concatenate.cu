@@ -282,8 +282,8 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
         auto d_chars     = column->head<char>() + bytes_offset;
         auto const bytes = bytes_end - bytes_offset;
 
-        CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-          d_new_chars, d_chars, bytes, cudaMemcpyDefault, stream.value()));
+        CUDF_CUDA_TRY(
+          cudf::detail::memcpy_async(d_new_chars, d_chars, bytes, cudaMemcpyDefault, stream));
 
         // get ready for the next column
         d_new_chars += bytes;

@@ -111,7 +111,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> get_mask_buffer(
 
   auto mask = rmm::device_uvector<bitmask_type>(padded_words, stream, mr);
   CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-    mask.data(), bitmap + offset_index, copy_size, cudaMemcpyDefault, stream.value()));
+    mask.data(), bitmap + offset_index, copy_size, cudaMemcpyDefault, stream));
 
   if (mask_words > 0 && bit_index > 0) {
     auto dest_mask = rmm::device_uvector<bitmask_type>(padded_words, stream, mr);
@@ -163,7 +163,7 @@ struct dispatch_copy_from_arrow_host {
                                              data_buffer + input->offset,
                                              sizeof(DeviceType) * num_rows,
                                              cudaMemcpyDefault,
-                                             stream.value()));
+                                             stream));
 
     if (!skip_mask) {
       auto [mask, null_count] = get_mask_buffer(input, stream, mr);
@@ -192,7 +192,7 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<bool>(ArrowSch
 
   auto data = rmm::device_uvector<bitmask_type>(data_words, stream, mr);
   CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-    data.data(), data_buffer + offset_index, copy_size, cudaMemcpyDefault, stream.value()));
+    data.data(), data_buffer + offset_index, copy_size, cudaMemcpyDefault, stream));
 
   if (data_words > 0 && bit_index > 0) {
     auto dest_data = rmm::device_uvector<bitmask_type>(data_words, stream, mr);

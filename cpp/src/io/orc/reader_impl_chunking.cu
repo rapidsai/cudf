@@ -521,7 +521,7 @@ void reader_impl::load_next_stripe_data(read_mode mode)
     auto* host_buffer = host_read_buffers.back().get();
     CUDF_EXPECTS(host_buffer->size() == expected_size, "Unexpected discrepancy in bytes read.");
     CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-      dev_dst, host_buffer->data(), host_buffer->size(), cudaMemcpyDefault, _stream.value()));
+      dev_dst, host_buffer->data(), host_buffer->size(), cudaMemcpyDefault, _stream));
   }
 
   for (auto& task : device_read_tasks) {  // if there were device reads

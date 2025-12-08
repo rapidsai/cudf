@@ -440,7 +440,7 @@ std::vector<column_buffer> decode_data(metadata& meta,
                                                valid_alias[i],
                                                out_buffers[i].null_mask_size(),
                                                cudaMemcpyDefault,
-                                               stream.value()));
+                                               stream));
     }
   }
   schema_desc.device_to_host(stream);

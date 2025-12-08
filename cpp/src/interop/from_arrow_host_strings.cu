@@ -52,8 +52,8 @@ std::unique_ptr<column> from_arrow_string(ArrowSchemaView const* schema,
 
   rmm::device_buffer chars(char_data_length, stream, mr);
   auto const* chars_data = static_cast<uint8_t const*>(input->buffers[chars_buffer_idx]) + offset;
-  CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-    chars.data(), chars_data, chars.size(), cudaMemcpyDefault, stream.value()));
+  CUDF_CUDA_TRY(
+    cudf::detail::memcpy_async(chars.data(), chars_data, chars.size(), cudaMemcpyDefault, stream));
 
   return make_strings_column(static_cast<size_type>(input->length),
                              std::move(offsets_column),
@@ -81,7 +81,7 @@ std::unique_ptr<column> from_arrow_stringview(ArrowSchemaView const* schema,
                                            items + input->offset,
                                            input->length * sizeof(ArrowBinaryView),
                                            cudaMemcpyDefault,
-                                           stream.value()));
+                                           stream));
 
   // then copy variadic buffers to device
   auto variadics     = std::vector<rmm::device_buffer>();

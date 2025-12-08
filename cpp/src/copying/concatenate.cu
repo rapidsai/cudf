@@ -299,11 +299,8 @@ std::unique_ptr<column> for_each_concatenate(host_span<column_view const> views,
 
   auto count = 0;
   for (auto& v : views) {
-    CUDF_CUDA_TRY(cudf::detail::memcpy_async(m_view.begin<T>() + count,
-                                             v.begin<T>(),
-                                             v.size() * sizeof(T),
-                                             cudaMemcpyDefault,
-                                             stream.value()));
+    CUDF_CUDA_TRY(cudf::detail::memcpy_async(
+      m_view.begin<T>() + count, v.begin<T>(), v.size() * sizeof(T), cudaMemcpyDefault, stream));
     count += v.size();
   }
 

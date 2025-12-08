@@ -704,7 +704,7 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
                                            segmentation.rowgroups.base_device_ptr(),
                                            aligned_rgs.count() * sizeof(rowgroup_rows),
                                            cudaMemcpyDefault,
-                                           stream.value()));
+                                           stream));
   auto const d_stripes = cudf::detail::make_device_uvector_async(
     segmentation.stripes, stream, cudf::get_current_device_resource_ref());
 

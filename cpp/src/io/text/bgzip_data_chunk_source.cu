@@ -299,7 +299,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
         _curr_blocks.d_decompressed_blocks.data() + _curr_blocks.read_pos,
         read_size,
         cudaMemcpyDefault,
-        stream.value()));
+        stream));
       // record the host-to-device copy, decompression and device copy
       CUDF_CUDA_TRY(cudaEventRecord(_curr_blocks.event, stream.value()));
       _curr_blocks.consume_bytes(read_size);
@@ -315,13 +315,13 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
                                  _prev_blocks.d_decompressed_blocks.data() + _prev_blocks.read_pos,
                                  _prev_blocks.remaining_size(),
                                  cudaMemcpyDefault,
-                                 stream.value()));
+                                 stream));
     CUDF_CUDA_TRY(
       cudf::detail::memcpy_async(data.data() + _prev_blocks.remaining_size(),
                                  _curr_blocks.d_decompressed_blocks.data() + _curr_blocks.read_pos,
                                  read_size - _prev_blocks.remaining_size(),
                                  cudaMemcpyDefault,
-                                 stream.value()));
+                                 stream));
     // record the host-to-device copy, decompression and device copy
     CUDF_CUDA_TRY(cudaEventRecord(_curr_blocks.event, stream.value()));
     CUDF_CUDA_TRY(cudaEventRecord(_prev_blocks.event, stream.value()));
