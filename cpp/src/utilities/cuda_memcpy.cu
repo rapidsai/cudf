@@ -16,6 +16,8 @@
 
 #include <thrust/copy.h>
 
+#include <vector>
+
 namespace cudf::detail {
 
 namespace {
@@ -50,26 +52,75 @@ void copy_pageable(void* dst, void const* src, std::size_t size, rmm::cuda_strea
   CUDF_CUDA_TRY(cudf::detail::memcpy_async(dst, src, size, cudaMemcpyDefault, stream));
 }
 
+bool is_memcpy_batch_async_supported()
+{
+#if CUDART_VERSION >= 13000
+  // cudaMemcpyBatchAsync is supported on all CUDA 13 versions
+  return true;
+#else
+  // For CUDA 12, we check for CUDA runtime >=12.8 and cache the result
+  static auto supports_memcpy_batch_async{[] {
+    // CUDA 12.8 or higher is required for cudaMemcpyBatchAsync
+    int cuda_runtime_version{};
+    auto runtime_result = cudaRuntimeGetVersion(&cuda_runtime_version);
+    return runtime_result == cudaSuccess and cuda_runtime_version >= 12080;
+  }()};
+  return supports_memcpy_batch_async;
+#endif
+}
+
 };  // namespace
 
 cudaError_t memcpy_batch_async(
   void** dsts, void** srcs, std::size_t* sizes, std::size_t count, rmm::cuda_stream_view stream)
 {
+  // Filter out invalid copies (nullptr dst/src or size==0);
+  // cudaMemcpyBatchAsync does not support these inputs
+  std::size_t valid_count = 0;
+  for (std::size_t i = 0; i < count; ++i) {
+    if (dsts[i] != nullptr && srcs[i] != nullptr && sizes[i] != 0) { ++valid_count; }
+  }
+  if (valid_count == 0) { return cudaSuccess; }
+
+  // Build filtered arrays if any copies were invalid
+  std::vector<void*> valid_dsts;
+  std::vector<void*> valid_srcs;
+  std::vector<std::size_t> valid_sizes;
+  if (valid_count < count) {
+    valid_dsts.reserve(valid_count);
+    valid_srcs.reserve(valid_count);
+    valid_sizes.reserve(valid_count);
+    for (std::size_t i = 0; i < count; ++i) {
+      if (dsts[i] != nullptr && srcs[i] != nullptr && sizes[i] != 0) {
+        valid_dsts.push_back(dsts[i]);
+        valid_srcs.push_back(srcs[i]);
+        valid_sizes.push_back(sizes[i]);
+      }
+    }
+    dsts  = valid_dsts.data();
+    srcs  = valid_srcs.data();
+    sizes = valid_sizes.data();
+    count = valid_count;
+  }
+
+  // The cudaMemcpyBatchAsync API requires CUDA >= 12.8 and does not support the CUDA legacy stream
+  if (is_memcpy_batch_async_supported() && stream.value() != cudaStreamLegacy) {
 #if CUDART_VERSION >= 12080
-  cudaMemcpyAttributes attrs[1] = {};  // zero-initialize all fields
-  attrs[0].srcAccessOrder       = cudaMemcpySrcAccessOrderStream;
-  attrs[0].flags                = cudaMemcpyFlagPreferOverlapWithCompute;
-  std::size_t attrs_idxs[1]     = {0};
-  std::size_t num_attrs{1};
+    cudaMemcpyAttributes attrs[1] = {};  // zero-initialize all fields
+    attrs[0].srcAccessOrder       = cudaMemcpySrcAccessOrderStream;
+    attrs[0].flags                = cudaMemcpyFlagPreferOverlapWithCompute;
+    std::size_t attrs_idxs[1]     = {0};
+    std::size_t num_attrs{1};
 #if CUDART_VERSION >= 13000
-  return cudaMemcpyBatchAsync(
-    dsts, srcs, sizes, count, attrs, attrs_idxs, num_attrs, stream.value());
+    return cudaMemcpyBatchAsync(
+      dsts, srcs, sizes, count, attrs, attrs_idxs, num_attrs, stream.value());
 #else
-  std::size_t fail_idx;
-  return cudaMemcpyBatchAsync(
-    dsts, srcs, sizes, count, attrs, attrs_idxs, num_attrs, &fail_idx, stream.value());
+    std::size_t fail_idx;
+    return cudaMemcpyBatchAsync(
+      dsts, srcs, sizes, count, attrs, attrs_idxs, num_attrs, &fail_idx, stream.value());
 #endif  // CUDART_VERSION >= 13000
-#else
+#endif  // CUDART_VERSION >= 12080
+  }
   // Implement a compatible API for CUDA < 12.8
   for (std::size_t i = 0; i < count; ++i) {
     cudaError_t status =
@@ -77,7 +128,6 @@ cudaError_t memcpy_batch_async(
     if (status != cudaSuccess) { return status; }
   }
   return cudaSuccess;
-#endif  // CUDART_VERSION >= 12080
 }
 
 cudaError_t memcpy_async(
