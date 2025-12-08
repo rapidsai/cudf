@@ -492,7 +492,7 @@ unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& 
                       buffer_indices.end(),
                       buffer_offsets.begin(),
                       [d_offsets] __device__(auto idx) { return d_offsets[idx]; });
-    auto h_offsets = make_std_vector_async(buffer_offsets, stream);
+    auto h_offsets = make_std_vector(buffer_offsets, stream);
 
     // build up the variadic buffers needed
     NANOARROW_THROW_NOT_OK(ArrowArrayAddVariadicBuffers(out.get(), num_buffers));
