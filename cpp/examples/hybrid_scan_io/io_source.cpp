@@ -26,7 +26,9 @@ rmm::host_async_resource_ref pinned_memory_resource()
 io_source_type get_io_source_type(std::string name)
 {
   static std::unordered_map<std::string_view, io_source_type> const map = {
-    {"HOST_BUFFER", io_source_type::HOST_BUFFER}, {"PINNED_BUFFER", io_source_type::PINNED_BUFFER}};
+    {"HOST_BUFFER", io_source_type::HOST_BUFFER},
+    {"PINNED_BUFFER", io_source_type::PINNED_BUFFER},
+    {"FILEPATH", io_source_type::FILEPATH}};
 
   std::transform(name.begin(), name.end(), name.begin(), ::toupper);
   if (map.find(name) != map.end()) {
