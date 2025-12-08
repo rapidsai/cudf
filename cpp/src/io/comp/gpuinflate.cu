@@ -1121,7 +1121,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       copy_stored(state, t);
     }
     if (state->blast) break;
-    //__syncthreads();
   }
   __syncthreads();
   // Output decompression status and length
