@@ -9,30 +9,6 @@
 
 auto const num_keys = 2;
 
-void create_complex_ast_expression(cudf::ast::tree& tree, cudf::size_type ast_levels)
-{
-  CUDF_EXPECTS(ast_levels > 0, "Number of AST levels must be greater than 0");
-
-  // For mixed joins, the conditional tables only have 1 column each (column 0)
-  // So we'll create multiple comparisons of the same column to stress the AST evaluation
-  tree.push(cudf::ast::column_reference(0));
-  tree.push(cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT));
-
-  tree.push(cudf::ast::operation(cudf::ast::ast_operator::EQUAL, tree.at(0), tree.at(1)));
-
-  if (ast_levels == 1) { return; }
-
-  // For multiple levels, create additional comparisons of the same columns
-  // This will create expressions like: (col0_L == col0_R) && (col0_L == col0_R) && ...
-  // Total operators created: (2 * ast_levels - 1) = ast_levels EQUAL + (ast_levels-1) LOGICAL_AND
-  for (cudf::size_type i = 1; i < ast_levels; i++) {
-    tree.push(cudf::ast::operation(cudf::ast::ast_operator::EQUAL, tree.at(0), tree.at(1)));
-
-    tree.push(cudf::ast::operation(
-      cudf::ast::ast_operator::LOGICAL_AND, tree.at(tree.size() - 2), tree.back()));
-  }
-}
-
 template <bool Nullable, cudf::null_equality NullEquality, data_type DataType>
 void nvbench_mixed_inner_join(nvbench::state& state,
                               nvbench::type_list<nvbench::enum_type<Nullable>,

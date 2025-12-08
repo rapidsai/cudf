@@ -9,6 +9,7 @@
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/row_operator/lexicographic.cuh>
+#include <cudf/join/join.hpp>
 #include <cudf/join/sort_merge_join.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
@@ -28,6 +29,7 @@
 #include <thrust/for_each.h>
 #include <thrust/iterator/tabulate_output_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
 #include <thrust/uninitialized_fill.h>
@@ -40,17 +42,36 @@ namespace cudf {
 
 namespace {
 
+/**
+ * @brief Functor to map indices through a provided mapping container.
+ *
+ * Non-negative indices are mapped through the container, while negative indices
+ * (e.g., JoinNoMatch) are passed through unchanged.
+ *
+ * @tparam T Type of the mapping container
+ */
 template <typename T>
 struct mapping_functor {
-  T mapping;
-  __device__ size_type operator()(size_type idx) const noexcept { return mapping[idx]; }
+  T mapping;  ///< Mapping container that translates indices
+
+  __device__ size_type operator()(size_type idx) const noexcept
+  {
+    return idx >= 0 ? mapping[idx] : idx;
+  }
 };
 
+/**
+ * @brief Functor to filter and update validity masks for list columns.
+ *
+ * Propagates null information from a reduced validity mask to specific child positions
+ * in the output validity mask for nested list columns.
+ */
 struct list_nonnull_filter {
-  bitmask_type* const validity_mask;
-  bitmask_type const* const reduced_validity_mask;
-  device_span<size_type const> child_positions;
-  size_type const subset_offset;
+  bitmask_type* const validity_mask;                ///< Output validity mask to update
+  bitmask_type const* const reduced_validity_mask;  ///< Input reduced validity mask
+  device_span<size_type const> child_positions;     ///< Positions in the child column
+  size_type const subset_offset;                    ///< Offset into child_positions
+
   __device__ void operator()(size_type idx) const noexcept
   {
     if (!bit_is_set(reduced_validity_mask, idx)) {
@@ -59,11 +80,31 @@ struct list_nonnull_filter {
   };
 };
 
+/**
+ * @brief Functor to check if a row is valid in an unprocessed table.
+ *
+ * Maps table row indices to boolean values based on the validity mask.
+ */
 struct unprocessed_table_mapper {
-  bitmask_type const* const _validity_mask;
+  bitmask_type const* const _validity_mask;  ///< Validity mask for the table
+
   __device__ auto operator()(size_type idx) const noexcept
   {
     return cudf::bit_is_set(_validity_mask, idx);
+  }
+};
+
+/**
+ * @brief Functor to identify null rows for left join with unequal null semantics.
+ *
+ * Returns true for rows that have nulls and were filtered out during preprocessing.
+ */
+struct left_join_unequal_nulls {
+  bitmask_type const* const _validity_mask;  ///< Validity mask for the table
+
+  __device__ auto operator()(size_type idx) const noexcept
+  {
+    return !cudf::bit_is_set(_validity_mask, idx);
   }
 };
 
@@ -104,7 +145,11 @@ class merge {
 
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
-  operator()(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
+  inner(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
+
+  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+            std::unique_ptr<rmm::device_uvector<size_type>>>
+  left(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 };
 
 template <typename LargerIterator, typename SmallerIterator>
@@ -152,8 +197,8 @@ merge<LargerIterator, SmallerIterator>::matches_per_row(rmm::cuda_stream_view st
 template <typename LargerIterator, typename SmallerIterator>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
-                                                   rmm::device_async_resource_ref mr)
+merge<LargerIterator, SmallerIterator>::inner(rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr)
 {
   auto temp_mr               = cudf::get_current_device_resource_ref();
   auto const has_nulls       = has_nested_nulls(smaller) or has_nested_nulls(larger);
@@ -194,7 +239,7 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
                          larger_indices.begin(),
                          larger_indices.end(),
                          larger_indices.begin(),
-                         thrust::maximum<size_type>{});
+                         cuda::maximum<size_type>{});
 
   // populate smaller indices
   rmm::device_uvector<size_type> smaller_indices(total_matches, stream, mr);
@@ -232,6 +277,130 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
                     smaller_indices.begin(),
                     smaller_indices.end(),
                     smaller_indices.begin(),
+                    mapping_functor<SmallerIterator>{sorted_smaller_order_begin});
+
+  stream.synchronize();
+
+  return {std::make_unique<rmm::device_uvector<size_type>>(std::move(smaller_indices)),
+          std::make_unique<rmm::device_uvector<size_type>>(std::move(larger_indices))};
+}
+
+/**
+ * @brief Performs a left join between the larger and smaller tables.
+ *
+ * This method performs a sort-merge left join, ensuring all rows from the larger table
+ * are included in the output. Rows with no matches in the smaller table are paired with
+ * JoinNoMatch sentinel values. The output indices are organized with unmatched rows first,
+ * followed by matched rows.
+ *
+ * @param stream CUDA stream used for device operations
+ * @param mr Device memory resource for allocations
+ * @return Pair of device vectors containing (smaller_indices, larger_indices)
+ */
+template <typename LargerIterator, typename SmallerIterator>
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
+                                             rmm::device_async_resource_ref mr)
+{
+  auto temp_mr               = cudf::get_current_device_resource_ref();
+  auto const has_nulls       = has_nested_nulls(smaller) or has_nested_nulls(larger);
+  auto const larger_numrows  = larger.num_rows();
+  auto const smaller_numrows = smaller.num_rows();
+
+  // Compute match counts per row and identify rows with at least one match
+  auto match_counts = matches_per_row(stream, temp_mr);
+
+  auto count_matches_it = thrust::transform_iterator(
+    match_counts->begin(),
+    cuda::proclaim_return_type<size_type>([] __device__(auto c) -> size_type { return c != 0; }));
+  auto const count_matches =
+    thrust::reduce(rmm::exec_policy(stream), count_matches_it, count_matches_it + larger_numrows);
+  rmm::device_uvector<size_type> nonzero_matches(count_matches, stream, temp_mr);
+  thrust::copy_if(rmm::exec_policy_nosync(stream),
+                  thrust::counting_iterator(0),
+                  thrust::counting_iterator(0) + larger_numrows,
+                  match_counts->begin(),
+                  nonzero_matches.begin(),
+                  cuda::std::identity{});
+
+  // Fill in unmatched entries (left-join-only rows)
+  // These rows exist in the larger table but have no matches in the smaller table
+  auto const inner_join_matches =
+    thrust::reduce(rmm::exec_policy_nosync(stream), match_counts->begin(), match_counts->end());
+  auto const left_join_only_matches = larger_numrows - nonzero_matches.size();
+  auto larger_indices               = cudf::detail::make_zeroed_device_uvector_async<size_type>(
+    inner_join_matches + left_join_only_matches, stream, mr);
+  rmm::device_uvector<size_type> smaller_indices(
+    inner_join_matches + left_join_only_matches, stream, mr);
+  thrust::copy_if(rmm::exec_policy_nosync(stream),
+                  thrust::counting_iterator(0),
+                  thrust::counting_iterator(0) + larger_numrows,
+                  match_counts->begin(),
+                  larger_indices.begin(),
+                  [] __device__(auto c) -> bool { return c == 0; });
+  thrust::fill(rmm::exec_policy_nosync(stream),
+               smaller_indices.begin(),
+               smaller_indices.begin() + left_join_only_matches,
+               JoinNoMatch);
+
+  // Fill in matched entries (same algorithm as inner join)
+  // Convert match counts to offsets for scatter operation
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+                         match_counts->begin(),
+                         match_counts->end(),
+                         match_counts->begin());
+
+  // Populate larger indices for matched rows
+  thrust::scatter(rmm::exec_policy_nosync(stream),
+                  nonzero_matches.begin(),
+                  nonzero_matches.end(),
+                  thrust::permutation_iterator(match_counts->begin(), nonzero_matches.begin()),
+                  larger_indices.begin() + left_join_only_matches);
+  thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
+                         larger_indices.begin() + left_join_only_matches,
+                         larger_indices.end(),
+                         larger_indices.begin() + left_join_only_matches,
+                         cuda::maximum<size_type>{});
+
+  // Populate smaller indices for matched rows using binary search
+  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
+                             smaller_indices.begin() + left_join_only_matches,
+                             smaller_indices.end(),
+                             1);
+  auto const comparator = tt_comparator->less<true>(nullate::DYNAMIC{has_nulls});
+
+  auto smaller_tabulate_it = thrust::tabulate_output_iterator(
+    [nonzero_matches = nonzero_matches.begin(),
+     match_counts    = match_counts->begin(),
+     smaller_indices = smaller_indices.begin() + left_join_only_matches] __device__(auto idx,
+                                                                                    auto lb) {
+      auto const lhs_idx   = nonzero_matches[idx];
+      auto const pos       = match_counts[lhs_idx];
+      smaller_indices[pos] = lb;
+    });
+  auto smaller_it = thrust::transform_iterator(
+    sorted_smaller_order_begin,
+    [] __device__(size_type idx) { return static_cast<detail::row::lhs_index_type>(idx); });
+  auto larger_it = thrust::transform_iterator(
+    nonzero_matches.begin(),
+    [] __device__(size_type idx) { return static_cast<detail::row::rhs_index_type>(idx); });
+  thrust::lower_bound(rmm::exec_policy_nosync(stream),
+                      smaller_it,
+                      smaller_it + smaller_numrows,
+                      larger_it,
+                      larger_it + nonzero_matches.size(),
+                      smaller_tabulate_it,
+                      comparator);
+  thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
+                                larger_indices.begin() + left_join_only_matches,
+                                larger_indices.end(),
+                                smaller_indices.begin() + left_join_only_matches,
+                                smaller_indices.begin() + left_join_only_matches);
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    smaller_indices.begin() + left_join_only_matches,
+                    smaller_indices.end(),
+                    smaller_indices.begin() + left_join_only_matches,
                     mapping_functor<SmallerIterator>{sorted_smaller_order_begin});
 
   stream.synchronize();
@@ -537,10 +706,98 @@ sort_merge_join::inner_join(table_view const& left,
     preprocessed_right._null_processed_table_view,
     preprocessed_left._null_processed_table_view,
     [this, stream, mr](auto& obj) {
-      auto [preprocessed_right_indices, preprocessed_left_indices] = obj(stream, mr);
+      auto [preprocessed_right_indices, preprocessed_left_indices] = obj.inner(stream, mr);
       postprocess_indices(*preprocessed_right_indices, *preprocessed_left_indices, stream);
       stream.synchronize();
       return std::pair{std::move(preprocessed_left_indices), std::move(preprocessed_right_indices)};
+    },
+    stream);
+}
+
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+sort_merge_join::left_join(table_view const& left,
+                           sorted is_left_sorted,
+                           rmm::cuda_stream_view stream,
+                           rmm::device_async_resource_ref mr)
+{
+  cudf::scoped_range range{"sort_merge_join::left_join"};
+  // Sanity checks
+  CUDF_EXPECTS(left.num_columns() != 0,
+               "Number of columns in left keys must be non-zero for a join",
+               std::invalid_argument);
+  CUDF_EXPECTS(left.num_columns() == preprocessed_right._null_processed_table_view.num_columns(),
+               "Number of columns must match for a join",
+               std::invalid_argument);
+
+  // Preprocessing the left table
+  preprocessed_left._table_view = left;
+  if (compare_nulls == null_equality::EQUAL) {
+    preprocessed_left._null_processed_table_view = left;
+  } else {
+    // if a table has no nullable column, then there's no preprocessing to be done
+    auto is_left_nullable = has_nested_nulls(left);
+    if (is_left_nullable) {
+      preprocessed_left.preprocess_unprocessed_table(stream);
+    } else {
+      preprocessed_left._null_processed_table_view = left;
+    }
+  }
+  if (is_left_sorted == cudf::sorted::NO) { preprocessed_left.get_sorted_order(stream); }
+
+  return invoke_merge(
+    preprocessed_right._null_processed_table_view,
+    preprocessed_left._null_processed_table_view,
+    [this, left, stream, mr](auto& obj) {
+      auto [preprocessed_right_indices, preprocessed_left_indices] = obj.left(stream, mr);
+      postprocess_indices(*preprocessed_right_indices, *preprocessed_left_indices, stream);
+
+      // For left join with UNEQUAL nulls, we need to add back rows that were filtered out.
+      // Remaining configs can return directly
+      if (!(compare_nulls == null_equality::UNEQUAL &&
+            has_nested_nulls(preprocessed_left._table_view))) {
+        return std::pair{std::move(preprocessed_left_indices),
+                         std::move(preprocessed_right_indices)};
+      }
+
+      // Special handling for UNEQUAL null semantics with nested nulls:
+      // Rows containing nulls were filtered during preprocessing and must be reinserted.
+      // These rows have no matches by definition (nulls are unequal), so they're added
+      // to the output with JoinNoMatch sentinel values for the right side.
+
+      auto const num_filtered_nulls = preprocessed_left._num_nulls.value();
+      auto const total_output_size  = preprocessed_left_indices->size() + num_filtered_nulls;
+
+      // Create new result vectors with space for filtered rows
+      rmm::device_uvector<size_type> left_result_indices(total_output_size, stream, mr);
+      rmm::device_uvector<size_type> right_result_indices(total_output_size, stream, mr);
+
+      // Copy existing join results
+      thrust::copy(
+        rmm::exec_policy_nosync(stream),
+        thrust::make_zip_iterator(preprocessed_left_indices->begin(),
+                                  preprocessed_right_indices->begin()),
+        thrust::make_zip_iterator(preprocessed_left_indices->end(),
+                                  preprocessed_right_indices->end()),
+        thrust::make_zip_iterator(left_result_indices.begin(), right_result_indices.begin()));
+
+      // Append filtered null rows with JoinNoMatch for right side
+      auto const validity_mask =
+        static_cast<bitmask_type const*>(preprocessed_left._validity_mask.value().data());
+      auto null_row_it = thrust::counting_iterator<size_type>(0);
+      thrust::copy_if(rmm::exec_policy_nosync(stream),
+                      null_row_it,
+                      null_row_it + left.num_rows(),
+                      left_result_indices.begin() + preprocessed_left_indices->size(),
+                      left_join_unequal_nulls{validity_mask});
+      thrust::fill(rmm::exec_policy_nosync(stream),
+                   right_result_indices.begin() + preprocessed_right_indices->size(),
+                   right_result_indices.end(),
+                   JoinNoMatch);
+
+      return std::pair{
+        std::make_unique<rmm::device_uvector<size_type>>(std::move(left_result_indices)),
+        std::make_unique<rmm::device_uvector<size_type>>(std::move(right_result_indices))};
     },
     stream);
 }
@@ -639,7 +896,7 @@ sort_merge_join::partitioned_inner_join(cudf::join_partition_context const& cont
   auto [preprocessed_right_indices, preprocessed_left_indices] = invoke_merge(
     preprocessed_right._null_processed_table_view,
     null_processed_left_partition,
-    [this, left_partition_start_idx, stream, mr](auto& obj) { return obj(stream, mr); },
+    [this, left_partition_start_idx, stream, mr](auto& obj) { return obj.inner(stream, mr); },
     stream);
   // Map from slice to total null processed table
   thrust::transform(
