@@ -38,7 +38,7 @@ struct SetBitmaskTest : public cudf::test::BaseFixture {
   {
     rmm::device_uvector<bool> result(expect.size(), stream);
     auto counting_iter = thrust::counting_iterator<cudf::size_type>{0};
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       counting_iter + start_bit,
                       counting_iter + start_bit + expect.size(),
                       result.begin(),

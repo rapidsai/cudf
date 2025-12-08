@@ -140,7 +140,7 @@ rmm::device_uvector<cudf::size_type> null_roll_up(column_view const& input,
     cuda::proclaim_return_type<int>([] __device__(int valid) -> int { return 1 - valid; }));
 
   // valid mask {1, 0, 1, 0, 0, 1} leads to output array {0, 0, 1, 0, 1, 2}
-  thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+  thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
                                 invalid_it,
                                 invalid_it + input.size() - 1,
                                 invalid_it,
@@ -164,19 +164,19 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
     auto data =
       thrust::make_zip_iterator(cuda::std::make_tuple(valid_it, nullcnt.begin(), input.begin<T>()));
 
-    thrust::transform_inclusive_scan(rmm::exec_policy(stream),
+    thrust::transform_inclusive_scan(rmm::exec_policy_nosync(stream),
                                      data,
                                      data + input.size(),
                                      pairs.begin(),
                                      ewma_adjust_nulls_functor<T, true>{beta},
                                      recurrence_functor<T>{});
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       pairs.begin(),
                       pairs.end(),
                       output.begin(),
                       [] __device__(pair_type<T> pair) -> T { return pair.second; });
 
-    thrust::transform_inclusive_scan(rmm::exec_policy(stream),
+    thrust::transform_inclusive_scan(rmm::exec_policy_nosync(stream),
                                      data,
                                      data + input.size(),
                                      pairs.begin(),
@@ -184,20 +184,20 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
                                      recurrence_functor<T>{});
 
   } else {
-    thrust::transform_inclusive_scan(rmm::exec_policy(stream),
+    thrust::transform_inclusive_scan(rmm::exec_policy_nosync(stream),
                                      input.begin<T>(),
                                      input.end<T>(),
                                      pairs.begin(),
                                      ewma_adjust_no_nulls_functor<T, true>{beta},
                                      recurrence_functor<T>{});
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       pairs.begin(),
                       pairs.end(),
                       output.begin(),
                       [] __device__(pair_type<T> pair) -> T { return pair.second; });
     auto itr = thrust::make_counting_iterator<size_type>(0);
 
-    thrust::transform_inclusive_scan(rmm::exec_policy(stream),
+    thrust::transform_inclusive_scan(rmm::exec_policy_nosync(stream),
                                      itr,
                                      itr + input.size(),
                                      pairs.begin(),
@@ -206,7 +206,7 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
   }
 
   thrust::transform(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     pairs.begin(),
     pairs.end(),
     output.begin(),
@@ -238,7 +238,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
   if (!input.has_nulls()) {
     auto data = thrust::make_zip_iterator(
       cuda::std::make_tuple(input.begin<T>(), thrust::make_counting_iterator<size_type>(0)));
-    thrust::transform_inclusive_scan(rmm::exec_policy(stream),
+    thrust::transform_inclusive_scan(rmm::exec_policy_nosync(stream),
                                      data,
                                      data + input.size(),
                                      pairs.begin(),
@@ -252,7 +252,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
     auto data = thrust::make_zip_iterator(cuda::std::make_tuple(
       input.begin<T>(), thrust::make_counting_iterator<size_type>(0), valid_it, nullcnt.begin()));
 
-    thrust::transform_inclusive_scan(rmm::exec_policy(stream),
+    thrust::transform_inclusive_scan(rmm::exec_policy_nosync(stream),
                                      data,
                                      data + input.size(),
                                      pairs.begin(),
@@ -261,7 +261,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
   }
 
   // copy the second elements to the output for now
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     pairs.begin(),
                     pairs.end(),
                     output.begin(),

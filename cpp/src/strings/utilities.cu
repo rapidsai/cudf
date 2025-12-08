@@ -42,7 +42,7 @@ rmm::device_uvector<string_view> create_string_vector_from_column(
 
   auto strings_vector = rmm::device_uvector<string_view>(input.size(), stream, mr);
 
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(input.size()),
                     strings_vector.begin(),

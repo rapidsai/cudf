@@ -1061,7 +1061,7 @@ void compute_page_string_sizes_pass2(cudf::detail::hostdevice_span<PageInfo> pag
 {
   // check for needed temp space for DELTA_BYTE_ARRAY
   auto const need_sizes =
-    thrust::any_of(rmm::exec_policy(stream),
+    thrust::any_of(rmm::exec_policy_nosync(stream),
                    pages.device_begin(),
                    pages.device_end(),
                    cuda::proclaim_return_type<bool>(
@@ -1071,7 +1071,7 @@ void compute_page_string_sizes_pass2(cudf::detail::hostdevice_span<PageInfo> pag
     // sum up all of the temp_string_sizes
     auto const page_sizes = cuda::proclaim_return_type<int64_t>(
       [] __device__(PageInfo const& page) { return page.temp_string_size; });
-    auto const total_size = thrust::transform_reduce(rmm::exec_policy(stream),
+    auto const total_size = thrust::transform_reduce(rmm::exec_policy_nosync(stream),
                                                      pages.device_begin(),
                                                      pages.device_end(),
                                                      page_sizes,

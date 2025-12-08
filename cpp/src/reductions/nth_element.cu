@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -41,13 +41,13 @@ std::unique_ptr<cudf::scalar> nth_element(column_view const& col,
                                       }));
     rmm::device_uvector<size_type> null_skipped_index(col.size(), stream);
     // null skipped index for valids only.
-    thrust::inclusive_scan(rmm::exec_policy(stream),
+    thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
                            bitmask_iterator,
                            bitmask_iterator + col.size(),
                            null_skipped_index.begin());
 
     auto n_pos = thrust::upper_bound(
-      rmm::exec_policy(stream), null_skipped_index.begin(), null_skipped_index.end(), n);
+      rmm::exec_policy_nosync(stream), null_skipped_index.begin(), null_skipped_index.end(), n);
     auto null_skipped_n = n_pos - null_skipped_index.begin();
     return cudf::detail::get_element(col, null_skipped_n, stream, mr);
   } else {

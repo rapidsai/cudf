@@ -111,7 +111,7 @@ reduce_to_column_tree(tree_meta_t const& tree,
   rmm::device_uvector<size_type> max_row_offsets(num_columns, stream);
   auto ordered_row_offsets =
     thrust::make_permutation_iterator(row_offsets.begin(), ordered_node_ids.begin());
-  thrust::reduce_by_key(rmm::exec_policy(stream),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                         sorted_col_ids.begin(),
                         sorted_col_ids.end(),
                         ordered_row_offsets,
@@ -123,7 +123,7 @@ reduce_to_column_tree(tree_meta_t const& tree,
   // 3. reduce_by_key {col_id}, {node_categories} - custom opp (*+v=*, v+v=v, *+#=E)
   rmm::device_uvector<NodeT> column_categories(num_columns, stream);
   thrust::reduce_by_key(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     sorted_col_ids.begin(),
     sorted_col_ids.end(),
     thrust::make_permutation_iterator(tree.node_categories.begin(), ordered_node_ids.begin()),
@@ -554,7 +554,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
   device_json_column root_column(stream, mr);
   root_column.type = json_col_t::ListColumn;
   root_column.child_offsets.resize(2, stream);
-  thrust::fill(rmm::exec_policy(stream),
+  thrust::fill(rmm::exec_policy_nosync(stream),
                root_column.child_offsets.begin(),
                root_column.child_offsets.end(),
                0);

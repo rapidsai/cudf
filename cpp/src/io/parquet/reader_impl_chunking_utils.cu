@@ -316,7 +316,7 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
   // key
   rmm::device_uvector<size_type> key_offsets(pages.size() + 1, stream);
   auto page_keys             = make_page_key_iterator(pages);
-  auto const key_offsets_end = thrust::reduce_by_key(rmm::exec_policy(stream),
+  auto const key_offsets_end = thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                                                      page_keys,
                                                      page_keys + pages.size(),
                                                      thrust::make_constant_iterator(1),
@@ -398,7 +398,7 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   // total page count over all columns
   auto page_count_iter = thrust::make_transform_iterator(page_bounds.begin(), get_span_size{});
   size_t const total_pages =
-    thrust::reduce(rmm::exec_policy(stream), page_count_iter, page_count_iter + num_columns);
+    thrust::reduce(rmm::exec_policy_nosync(stream), page_count_iter, page_count_iter + num_columns);
 
   return {
     std::move(page_bounds), total_pages, h_aggregated_info[end_index].size_bytes - cumulative_size};
@@ -622,7 +622,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   }
 
   CUDF_EXPECTS(
-    thrust::all_of(rmm::exec_policy(stream),
+    thrust::all_of(rmm::exec_policy_nosync(stream),
                    comp_res.begin(),
                    comp_res.end(),
                    [] __device__(auto const& res) { return res.status == codec_status::SUCCESS; }),
@@ -645,7 +645,7 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
     thrust::make_transform_iterator(pages.begin(), flat_column_num_rows{chunks.data()});
   auto const row_counts_begin = row_counts.begin();
   auto page_keys              = make_page_key_iterator(pages);
-  auto const row_counts_end   = thrust::reduce_by_key(rmm::exec_policy(stream),
+  auto const row_counts_end   = thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                                                     page_keys,
                                                     page_keys + pages.size(),
                                                     size_iter,
@@ -656,7 +656,7 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
   // make sure all non-zero row counts are the same
   rmm::device_uvector<size_type> compacted_row_counts(pages.size(), stream);
   auto const compacted_row_counts_begin = compacted_row_counts.begin();
-  auto const compacted_row_counts_end   = thrust::copy_if(rmm::exec_policy(stream),
+  auto const compacted_row_counts_end   = thrust::copy_if(rmm::exec_policy_nosync(stream),
                                                         row_counts_begin,
                                                         row_counts_end,
                                                         compacted_row_counts_begin,
@@ -672,7 +672,7 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
 
     // all non-zero row counts must be the same
     auto const chk =
-      thrust::count_if(rmm::exec_policy(stream),
+      thrust::count_if(rmm::exec_policy_nosync(stream),
                        compacted_row_counts_begin,
                        compacted_row_counts_end,
                        row_counts_different{static_cast<size_type>(found_row_count)});
@@ -717,7 +717,7 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
   for (auto const codec : codecs) {
     if (cudf::io::detail::is_decompression_scratch_size_ex_supported(codec)) {
       auto const total_decomp_info = thrust::transform_reduce(
-        rmm::exec_policy(stream),
+        rmm::exec_policy_nosync(stream),
         decomp_iter,
         decomp_iter + pages.size(),
         cuda::proclaim_return_type<decompression_info>(

@@ -201,7 +201,7 @@ struct page_stats_caster : public stats_caster_base {
                    row_str_sizes.begin());
 
     // Total bytes in the output chars buffer
-    auto const total_bytes = thrust::reduce(rmm::exec_policy(stream),
+    auto const total_bytes = thrust::reduce(rmm::exec_policy_nosync(stream),
                                             row_str_sizes.begin(),
                                             row_str_sizes.end(),
                                             size_t{0},
@@ -981,7 +981,7 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
 
   // Return an empty vector if all rows are invalid or all rows are required
   if (row_mask.null_count(row_mask_offset, row_mask_offset + total_rows, stream) == total_rows or
-      thrust::all_of(rmm::exec_policy(stream),
+      thrust::all_of(rmm::exec_policy_nosync(stream),
                      row_mask.template begin<bool>() + row_mask_offset,
                      row_mask.template begin<bool>() + row_mask_offset + total_rows,
                      cuda::std::identity{})) {

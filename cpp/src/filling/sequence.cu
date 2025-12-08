@@ -71,7 +71,7 @@ struct sequence_functor {
     // not using thrust::sequence because it requires init and step to be passed as
     // constants, not iterators. to do that we would have to retrieve the scalar values off the gpu,
     // which is undesirable from a performance perspective.
-    thrust::tabulate(rmm::exec_policy(stream),
+    thrust::tabulate(rmm::exec_policy_nosync(stream),
                      result_device_view->begin<T>(),
                      result_device_view->end<T>(),
                      tabulator<T>{n_init, n_step});
@@ -95,7 +95,7 @@ struct sequence_functor {
     // not using thrust::sequence because it requires init and step to be passed as
     // constants, not iterators. to do that we would have to retrieve the scalar values off the gpu,
     // which is undesirable from a performance perspective.
-    thrust::tabulate(rmm::exec_policy(stream),
+    thrust::tabulate(rmm::exec_policy_nosync(stream),
                      result_device_view->begin<T>(),
                      result_device_view->end<T>(),
                      const_tabulator<T>{n_init});

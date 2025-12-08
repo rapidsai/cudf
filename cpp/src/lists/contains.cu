@@ -162,7 +162,7 @@ void index_of(InputIterator input_it,
 {
   auto const keys_dv_ptr       = column_device_view::create(search_keys, stream);
   auto const key_validity_iter = cudf::detail::make_validity_iterator<true>(*keys_dv_ptr);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     input_it,
                     input_it + num_rows,
                     output_it,
@@ -245,7 +245,7 @@ std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
   auto const positions_begin = key_positions->view().template begin<size_type>();
   auto result                = make_numeric_column(
     data_type{type_id::BOOL8}, key_positions->size(), mask_state::UNALLOCATED, stream, mr);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     positions_begin,
                     positions_begin + key_positions->size(),
                     result->mutable_view().template begin<bool>(),
@@ -342,7 +342,7 @@ std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
   auto const lists_cdv_ptr = column_device_view::create(lists_cv, stream);
 
   thrust::tabulate(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     out_begin,
     out_begin + lists.size(),
     cuda::proclaim_return_type<bool>([lists = cudf::detail::lists_column_device_view{

@@ -199,7 +199,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
 
   // gather_map_end will be the end of valid data in gather_map
   auto gather_map_end =
-    thrust::copy_if(rmm::exec_policy(stream),
+    thrust::copy_if(rmm::exec_policy_nosync(stream),
                     thrust::counting_iterator<size_type>(0),
                     thrust::counting_iterator<size_type>(probe.num_rows()),
                     left_table_keep_mask.begin(),

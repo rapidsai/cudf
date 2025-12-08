@@ -366,7 +366,7 @@ static void BM_sv_hash(nvbench::state& state)
     auto const d_chars          = reinterpret_cast<char const*>(data_buffer.data());
     state.add_global_memory_reads(num_rows * sizeof(ArrowBinaryView) + data_buffer.size());
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-      thrust::transform(rmm::exec_policy(stream),
+      thrust::transform(rmm::exec_policy_nosync(stream),
                         begin,
                         end,
                         output.begin(),
@@ -377,7 +377,8 @@ static void BM_sv_hash(nvbench::state& state)
     auto col_size  = column->alloc_size();
     state.add_global_memory_reads(col_size);
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-      thrust::transform(rmm::exec_policy(stream), begin, end, output.begin(), hash_sv{*d_strings});
+      thrust::transform(
+        rmm::exec_policy_nosync(stream), begin, end, output.begin(), hash_sv{*d_strings});
     });
   }
 }
@@ -407,7 +408,7 @@ static void BM_sv_starts(nvbench::state& state)
     auto const d_chars          = reinterpret_cast<char const*>(data_buffer.data());
     state.add_global_memory_reads(num_rows * sizeof(ArrowBinaryView) + data_buffer.size());
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-      thrust::transform(rmm::exec_policy(stream),
+      thrust::transform(rmm::exec_policy_nosync(stream),
                         begin,
                         end,
                         output.begin(),
@@ -418,8 +419,11 @@ static void BM_sv_starts(nvbench::state& state)
     auto col_size  = column->alloc_size();
     state.add_global_memory_reads(col_size);
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-      thrust::transform(
-        rmm::exec_policy(stream), begin, end, output.begin(), starts_sv{*d_strings, tgt_size});
+      thrust::transform(rmm::exec_policy_nosync(stream),
+                        begin,
+                        end,
+                        output.begin(),
+                        starts_sv{*d_strings, tgt_size});
     });
   }
 }

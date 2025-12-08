@@ -3423,7 +3423,7 @@ void EncodePages(device_span<EncPage> pages,
 
   // determine which kernels to invoke
   auto mask_iter       = thrust::make_transform_iterator(pages.begin(), mask_tform{});
-  uint32_t kernel_mask = thrust::reduce(rmm::exec_policy(stream),
+  uint32_t kernel_mask = thrust::reduce(rmm::exec_policy_nosync(stream),
                                         mask_iter,
                                         mask_iter + pages.size(),
                                         0U,

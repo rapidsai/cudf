@@ -136,7 +136,7 @@ std::unique_ptr<cudf::column> clamper(column_view const& input,
 
   auto input_pair_iterator =
     make_optional_iterator<T>(*input_device_view, nullate::DYNAMIC{input.has_nulls()});
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     input_pair_iterator,
                     input_pair_iterator + input.size(),
                     scalar_zip_itr,

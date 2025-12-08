@@ -480,13 +480,13 @@ unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& 
       0, cuda::proclaim_return_type<int64_t>([] __device__(auto idx) {
         return (idx + 1) * max_size;
       }));
-    thrust::lower_bound(rmm::exec_policy(stream),
+    thrust::lower_bound(rmm::exec_policy_nosync(stream),
                         d_offsets,
                         d_offsets + longer_strings.size(),
                         bound_itr,
                         bound_itr + num_buffers,
                         buffer_indices.begin());
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       buffer_indices.begin(),
                       buffer_indices.end(),
                       buffer_offsets.begin(),

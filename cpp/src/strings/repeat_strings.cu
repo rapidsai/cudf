@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -50,7 +50,7 @@ std::unique_ptr<string_scalar> repeat_string(string_scalar const& input,
   auto buff           = rmm::device_buffer(repeat_times * input.size(), stream, mr);
 
   // Pull data from the input string into each byte of the output string.
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + repeat_times * str_size,
                     static_cast<char*>(buff.data()),

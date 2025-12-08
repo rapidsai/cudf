@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -55,7 +55,7 @@ std::unique_ptr<column> get_normalized_offsets(lists_column_view const& input,
                                          cudf::mask_state::UNALLOCATED,
                                          stream,
                                          mr);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     input.offsets_begin(),
                     input.offsets_end(),
                     out_offsets->mutable_view().begin<size_type>(),

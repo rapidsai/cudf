@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -108,7 +108,7 @@ std::unique_ptr<column> shift(strings_column_view const& input,
   auto d_chars = chars.data();
 
   // run kernel to shift all the characters
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::counting_iterator<int64_t>(0),
                     thrust::counting_iterator<int64_t>(total_bytes),
                     d_chars,

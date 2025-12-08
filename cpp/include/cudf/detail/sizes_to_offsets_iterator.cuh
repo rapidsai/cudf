@@ -196,7 +196,7 @@ struct sizes_to_offsets_iterator {
  *  auto itr = make_sizes_to_offsets_iterator(result.begin(),
  *                                            result.end(),
  *                                            last.data());
- *  thrust::exclusive_scan(rmm::exec_policy(stream), begin, end, itr, int64_t{0});
+ *  thrust::exclusive_scan(rmm::exec_policy_nosync(stream), begin, end, itr, int64_t{0});
  *  // last contains the value of the final element in the scan result
  * @endcode
  *

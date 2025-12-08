@@ -82,7 +82,7 @@ struct quantile_functor {
     if (!cudf::is_dictionary(input.type())) {
       auto sorted_data =
         thrust::make_permutation_iterator(input.data<StorageType>(), ordered_indices);
-      thrust::transform(rmm::exec_policy(stream),
+      thrust::transform(rmm::exec_policy_nosync(stream),
                         q_device.begin(),
                         q_device.end(),
                         d_output->template begin<StorageResult>(),
@@ -94,7 +94,7 @@ struct quantile_functor {
     } else {
       auto sorted_data = thrust::make_permutation_iterator(
         dictionary::detail::make_dictionary_iterator<T>(*d_input), ordered_indices);
-      thrust::transform(rmm::exec_policy(stream),
+      thrust::transform(rmm::exec_policy_nosync(stream),
                         q_device.begin(),
                         q_device.end(),
                         d_output->template begin<StorageResult>(),

@@ -101,7 +101,7 @@ struct host_udf_groupby_example : cudf::groupby_host_udf {
       rmm::device_uvector<cudf::size_type> valid_idx(num_groups, stream);
 
       thrust::transform(
-        rmm::exec_policy(stream),
+        rmm::exec_policy_nosync(stream),
         thrust::make_counting_iterator(0),
         thrust::make_counting_iterator(num_groups),
         thrust::make_zip_iterator(output->mutable_view().begin<OutputType>(), valid_idx.begin()),
