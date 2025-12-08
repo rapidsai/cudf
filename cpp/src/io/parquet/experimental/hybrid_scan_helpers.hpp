@@ -147,6 +147,24 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
                            type_id timestamp_type_id);
 
   /**
+   * @brief Filters row groups such that only the row groups that start within the byte range
+   * specified by [`bytes_to_skip`, `bytes_to_skip + bytes_to_read`) are selected
+   *
+   * @note The last selected row group may end beyond the byte range.
+   *
+   * @param row_group_indices Input row groups indices
+   * @param bytes_to_skip Bytes to skip before selecting row groups
+   * @param bytes_to_read Optional bytes to select row groups from after skipping. All row groups
+   * until the end of the file are selected if not provided
+   *
+   * @return Filtered row group indices
+   */
+  [[nodiscard]] std::vector<std::vector<cudf::size_type>> filter_row_groups_with_byte_range(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    std::size_t bytes_to_skip,
+    std::optional<std::size_t> const& bytes_to_read) const;
+
+  /**
    * @brief Filter the row groups with statistics based on predicate filter
    *
    * @param row_group_indices Input row groups indices

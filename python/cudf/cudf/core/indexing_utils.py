@@ -513,8 +513,8 @@ def ordered_find(needles: ColumnBase, haystack: ColumnBase) -> GatherMap:
     # the needle might appear multiple times in the haystack).
 
     left_rows, right_rows = plc.join.left_join(
-        plc.Table([needles.to_pylibcudf(mode="read")]),
-        plc.Table([haystack.to_pylibcudf(mode="read")]),
+        plc.Table([needles.plc_column]),
+        plc.Table([haystack.plc_column]),
         plc.types.NullEquality.EQUAL,
     )
     right_order = plc.copying.gather(
