@@ -17,7 +17,7 @@
 #include <algorithm>
 #include <memory>
 #include <tuple>
-#include <unordered_set>
+#include <unordered_map>
 #include <vector>
 
 namespace cudf::groupby::detail::hash {
@@ -111,29 +111,33 @@ extract_single_pass_aggs(host_span<aggregation_request const> requests,
   for (auto const& request : requests) {
     auto const& input_aggs = request.aggregations;
 
-    // The set of input aggregations.
-    std::unordered_set<aggregation::Kind> input_agg_kinds_set;
+    // Map aggregation kind to:
+    // - INPUT_NOT_EXTRACTED: aggregation requested by the users, not yet extracted
+    // - INPUT_EXTRACTED: aggregation requested by the users and has already been extracted
+    // - INTERMEDIATE: extracted intermediate aggregation
+    enum class aggregation_group { INPUT_NOT_EXTRACTED, INPUT_EXTRACTED, INTERMEDIATE };
+    std::unordered_map<aggregation::Kind, aggregation_group> agg_kinds_set;
     for (auto const& agg : input_aggs) {
-      input_agg_kinds_set.insert(agg->kind);
+      agg_kinds_set[agg->kind] = aggregation_group::INPUT_NOT_EXTRACTED;
     }
 
-    // The aggregations extracted from the input request, including the original single-pass
-    // aggregations and the intermediate single-pass aggregations replacing compound
-    // aggregations.
-    std::unordered_set<aggregation::Kind> agg_kinds_set;
-
     auto insert_agg = [&](column_view const& request_values, std::unique_ptr<aggregation>&& agg) {
-      if (agg_kinds_set.insert(agg->kind).second) {
-        // Check if the inserted aggregation is an input aggregation or a replacement aggregation.
-        // If it is not an input aggregation, we can force its output to be non-nullable
-        // (by storing `1` value in the `force_non_nullable` vector).
-        auto const is_input_agg = input_agg_kinds_set.contains(agg->kind);
-        force_non_nullable.push_back(is_input_agg ? 0 : 1);
+      auto const it = agg_kinds_set.find(agg->kind);
+      auto const need_update =
+        it == agg_kinds_set.end() || it->second == aggregation_group::INPUT_NOT_EXTRACTED;
+      if (!need_update) { return; }
 
-        agg_kinds.push_back(agg->kind);
-        aggs.push_back(std::move(agg));
-        columns.push_back(request_values);
-      }
+      auto const is_intermediate = it == agg_kinds_set.end();
+      agg_kinds_set[agg->kind] =
+        is_intermediate ? aggregation_group::INTERMEDIATE : aggregation_group::INPUT_EXTRACTED;
+
+      // If the inserted aggregation is an intermediate aggregation, we can force its output to be
+      // non-nullable (by storing `1` value in the `force_non_nullable` vector).
+      force_non_nullable.push_back(static_cast<int8_t>(is_intermediate));
+
+      agg_kinds.push_back(agg->kind);
+      aggs.push_back(std::move(agg));
+      columns.push_back(request_values);
     };
 
     auto const values_type = cudf::is_dictionary(request.values.type())
