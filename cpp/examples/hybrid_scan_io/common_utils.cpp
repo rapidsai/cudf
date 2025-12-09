@@ -8,6 +8,7 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/join/filtered_join.hpp>
