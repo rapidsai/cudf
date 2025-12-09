@@ -65,7 +65,7 @@ cudf::io::source_info generate_source_info_from_file(std::string const& file_pat
   std::size_t const offset{0};
   auto const file_size = kvikio_datasource->size();
 
-  auto num_bytes_read =
+  auto const num_bytes_read =
     kvikio_datasource->host_read(offset, file_size, reinterpret_cast<uint8_t*>(container.data()));
   CUDF_EXPECTS(num_bytes_read == file_size, "Failed to read expected number of bytes");
 
@@ -79,12 +79,6 @@ io_source::io_source(std::string_view file_path, io_source_type type, rmm::cuda_
   : _io_type(type), _pinned_buffer({pinned_memory_resource(), stream})
 {
   std::string const file_name{file_path};
-
-  // todo: check if the file is local or remote
-
-  // Use KvikIO to read the file
-  std::ifstream file{file_name, std::ifstream::binary};
-  CUDF_EXPECTS(!file.fail(), "File " + file_name + " failed to open");
 
   // Copy file contents to the specified io source buffer
   switch (type) {
