@@ -3362,7 +3362,9 @@ def as_column(
                 # pd.Series(arbitrary) might be already inferred as IntervalDtype
                 ser = pd.Series(arbitrary).astype(dtype)
             else:
-                ser = pd.Series(arbitrary, dtype="category")
+                ser = pd.Series(
+                    arbitrary, dtype=pd.CategoricalDtype(ordered=dtype.ordered)
+                )
                 if dtype.categories is not None:
                     ser = ser.cat.set_categories(
                         dtype.categories, ordered=dtype.ordered
