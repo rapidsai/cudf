@@ -63,57 +63,63 @@ void check_tables_equal(cudf::table_view const& lhs_table,
                         cudf::table_view const& rhs_table,
                         rmm::cuda_stream_view stream = cudf::get_default_stream());
 
-/**
- * @brief Fetches a host span of Parquet footer bytes from the input buffer span
- *
- * @param buffer Input buffer span
- * @return A host span of the footer bytes
- */
-cudf::host_span<uint8_t const> fetch_footer_bytes(cudf::host_span<uint8_t const> buffer);
-/**
- * @brief Fetches a host span of Parquet PageIndexbytes from the input buffer span
- *
- * @param buffer Input buffer span
- * @param page_index_bytes Byte range of `PageIndex` to fetch
- * @return A host span of the PageIndex bytes
- */
-cudf::host_span<uint8_t const> fetch_page_index_bytes(
-  cudf::host_span<uint8_t const> buffer, cudf::io::text::byte_range_info const page_index_bytes);
-
-/**
- * @brief Fetches a list of byte ranges from a host buffer into a vector of device buffers
- *
- * @param host_buffer Host buffer span
- * @param byte_ranges Byte ranges to fetch
- * @param stream CUDA stream
- * @param mr Device memory resource to create device buffers with
- *
- * @return Vector of device buffers
- */
-std::vector<rmm::device_buffer> fetch_byte_ranges(
-  cudf::host_span<uint8_t const> host_buffer,
-  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
-
 class io_backend {
  public:
+  /**
+   * @brief Constructs a new I/O backend object from an in-memory host data source
+   *
+   * @param buffer Host memory that contains the file data
+   * @param stream CUDA stream
+   */
   explicit io_backend(cudf::host_span<std::byte const> buffer, rmm::cuda_stream_view stream);
 
+  /**
+   * @brief Constructs a new I/O backend object from a file data source
+   *
+   * @param filepath Path to a file on the disk
+   * @param stream CUDA stream
+   */
   explicit io_backend(std::string const& filepath, rmm::cuda_stream_view stream);
 
+  /**
+   * @brief Fetches a host span of Parquet footer bytes from the data source
+   *
+   * @return A host span of the footer bytes
+   */
   [[nodiscard]] std::vector<uint8_t> fetch_footer_bytes();
 
+  /**
+   * @brief Fetches a host span of Parquet PageIndexbytes from the data source
+   *
+   * @param page_index_bytes Byte range of `PageIndex` to fetch
+   * @return A host span of the PageIndex bytes
+   */
   [[nodiscard]] std::vector<uint8_t> fetch_page_index_bytes(
     cudf::io::text::byte_range_info const page_index_bytes);
 
+  /**
+   * @brief Fetches a list of byte ranges from the data source into a vector of device buffers
+   *
+   * @param byte_ranges Byte ranges to fetch
+   * @param stream CUDA stream
+   * @param mr Device memory resource to create device buffers with
+   *
+   * @return Vector of device buffers
+   */
   [[nodiscard]] std::vector<rmm::device_buffer> fetch_byte_ranges_to_device(
     cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr);
 
  private:
-  void fetch_byte_ranges_to_host(size_t offset, size_t size, uint8_t* dst);
+  /**
+   * @brief Fetches a byte range from the data source into a preallocated buffer
+   *
+   * @param offset File offset
+   * @param size Number of bytes to read
+   * @param dst Destination host buffer
+   */
+  void fetch_byte_range_to_host(size_t offset, size_t size, uint8_t* dst);
 
   std::unique_ptr<host_buffer_source> _host_buffer_source;
   std::unique_ptr<cudf::io::datasource> _datasource;

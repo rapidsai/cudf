@@ -29,11 +29,6 @@ std::unique_ptr<cudf::io::datasource::buffer> host_buffer_source::host_read(size
 
 [[nodiscard]] bool host_buffer_source::supports_device_read() const { return true; }
 
-[[nodiscard]] bool host_buffer_source::is_device_read_preferred(size_t size) const
-{
-  return supports_device_read();
-}
-
 std::future<std::size_t> host_buffer_source::device_read_async(std::size_t offset,
                                                                std::size_t size,
                                                                uint8_t* dst,
