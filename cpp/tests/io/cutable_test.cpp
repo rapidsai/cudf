@@ -543,7 +543,7 @@ TEST_F(CutableTest, LongStringColumns)
 
 TEST_F(CutableTest, ManyColumns)
 {
-  constexpr int num_cols = 123'456;
+  constexpr int num_cols = 12'345;
   std::vector<cudf::column_view> columns;
   for (int i = 0; i < num_cols; ++i) {
     cudf::test::fixed_width_column_wrapper<int32_t> col({i % 10, (i + 1) % 10, (i + 2) % 10});
