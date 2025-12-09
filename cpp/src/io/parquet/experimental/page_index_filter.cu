@@ -981,13 +981,13 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   auto const total_rows = total_rows_in_row_groups(row_group_indices);
 
   // Return an empty vector if all rows are invalid or all rows are required
-  // if (row_mask.null_count(row_mask_offset, row_mask_offset + total_rows, stream) == total_rows or
-  //    thrust::all_of(rmm::exec_policy(stream),
-  //                   row_mask.template begin<bool>() + row_mask_offset,
-  //                   row_mask.template begin<bool>() + row_mask_offset + total_rows,
-  //                   cuda::std::identity{})) {
-  //  return thrust::host_vector<bool>(0, stream);
-  //}
+  if (row_mask.null_count(row_mask_offset, row_mask_offset + total_rows, stream) == total_rows or
+      thrust::all_of(rmm::exec_policy(stream),
+                     row_mask.template begin<bool>() + row_mask_offset,
+                     row_mask.template begin<bool>() + row_mask_offset + total_rows,
+                     cuda::std::identity{})) {
+    return thrust::host_vector<bool>(0, stream);
+  }
 
   CUDF_EXPECTS(row_mask_offset + total_rows <= row_mask.size(),
                "Mismatch in total rows in input row mask and row groups",
