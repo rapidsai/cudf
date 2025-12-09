@@ -42,9 +42,4 @@ std::future<std::size_t> host_buffer_source::device_read_async(std::size_t offse
   return future;
 }
 
-[[nodiscard]] std::size_t host_buffer_source::size() const
-{
-  return _h_buffer.size();
-}
-
-;
+[[nodiscard]] std::size_t host_buffer_source::size() const { return _h_buffer.size(); }
