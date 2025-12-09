@@ -94,7 +94,6 @@ std::vector<rmm::device_buffer> fetch_byte_ranges(
       return buffer;
     });
 
-  stream.synchronize_no_throw();
   return buffers;
 }
 

@@ -183,7 +183,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   if (has_strings) {
     // Host vector to initialize the initial string offsets
     auto host_offsets_vector =
-      cudf::detail::make_host_vector<size_t>(_input_columns.size(), _stream);
+      cudf::detail::make_pinned_vector<size_t>(_input_columns.size(), _stream);
     std::fill(
       host_offsets_vector.begin(), host_offsets_vector.end(), std::numeric_limits<size_t>::max());
     // Initialize the initial string offsets vector from the host vector
@@ -400,7 +400,12 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   update_output_nullmasks_for_pruned_pages(_subpass_page_mask, skip_rows, num_rows);
 
   // Copy over initial string offsets from device
-  auto h_initial_str_offsets = cudf::detail::make_host_vector_async(initial_str_offsets, _stream);
+  auto h_initial_str_offsets =
+    cudf::detail::make_pinned_vector_async<size_t>(initial_str_offsets.size(), _stream);
+  cudf::detail::cuda_memcpy_async(
+    cudf::host_span<size_t>(h_initial_str_offsets.data(), initial_str_offsets.size()),
+    cudf::device_span<size_t const>(initial_str_offsets.data(), initial_str_offsets.size()),
+    _stream);
 
   if (auto const error = error_code.value_sync(_stream); error != 0) {
     CUDF_FAIL("Parquet data decode failed with code(s) " + kernel_error::to_string(error));
@@ -927,9 +932,9 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
   auto page_and_mask_begin =
     thrust::make_zip_iterator(cuda::std::make_tuple(pages.host_begin(), page_mask.begin()));
 
-  auto null_masks = std::vector<bitmask_type*>{};
-  auto begin_bits = std::vector<cudf::size_type>{};
-  auto end_bits   = std::vector<cudf::size_type>{};
+  auto host_null_masks = std::vector<bitmask_type*>{};
+  auto host_begin_bits = std::vector<cudf::size_type>{};
+  auto host_end_bits   = std::vector<cudf::size_type>{};
 
   std::for_each(
     page_and_mask_begin, page_and_mask_begin + pages.size(), [&](auto const& page_and_mask_pair) {
@@ -982,9 +987,9 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
         cols          = &out_buf.children;
         if (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) { continue; }
         // Add the nullmask and bit bounds to corresponding lists
-        null_masks.emplace_back(out_buf.null_mask());
-        begin_bits.emplace_back(start_row);
-        end_bits.emplace_back(end_row);
+        host_null_masks.emplace_back(out_buf.null_mask());
+        host_begin_bits.emplace_back(start_row);
+        host_end_bits.emplace_back(end_row);
 
         // Increment the null count by the number of rows in this page
         out_buf.null_count() += page.num_rows;
@@ -994,9 +999,21 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
   // Min number of nullmasks to use bulk update optimally
   constexpr auto min_nullmasks_for_bulk_update = 32;
 
+  // Use a bounce buffer to avoid pageable copies
+  auto null_masks =
+    cudf::detail::make_pinned_vector_async<bitmask_type*>(host_null_masks.size(), _stream);
+  auto begin_bits =
+    cudf::detail::make_pinned_vector_async<cudf::size_type>(host_begin_bits.size(), _stream);
+  auto end_bits =
+    cudf::detail::make_pinned_vector_async<cudf::size_type>(host_end_bits.size(), _stream);
+  _stream.synchronize();
+  std::move(host_null_masks.begin(), host_null_masks.end(), null_masks.begin());
+  std::move(host_begin_bits.begin(), host_begin_bits.end(), begin_bits.begin());
+  std::move(host_end_bits.begin(), host_end_bits.end(), end_bits.begin());
+
   // Bulk update the nullmasks if the number of pages is above the threshold
   if (null_masks.size() >= min_nullmasks_for_bulk_update) {
-    auto valids = cudf::detail::make_host_vector<bool>(null_masks.size(), _stream);
+    auto valids = cudf::detail::make_pinned_vector<bool>(null_masks.size(), _stream);
     std::fill(valids.begin(), valids.end(), false);
     cudf::set_null_masks_safe(null_masks, begin_bits, end_bits, valids, _stream);
   }

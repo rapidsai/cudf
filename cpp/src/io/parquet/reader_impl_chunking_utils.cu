@@ -362,7 +362,12 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
   // bring back to the cpu
-  auto const h_aggregated_info = cudf::detail::make_host_vector(aggregated_info, stream);
+  auto h_aggregated_info =
+    cudf::detail::make_pinned_vector_async<cumulative_page_info>(aggregated_info.size(), stream);
+  cudf::detail::cuda_memcpy(
+    cudf::host_span<cumulative_page_info>{h_aggregated_info.data(), aggregated_info.size()},
+    cudf::device_span<cumulative_page_info const>{aggregated_info.data(), aggregated_info.size()},
+    stream);
 
 #if defined(CHUNKING_DEBUG)
   print_cumulative_page_info(h_aggregated_info, "adjusted");
@@ -414,7 +419,12 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
   // bring back to the cpu
-  auto const h_aggregated_info = cudf::detail::make_host_vector(aggregated_info, stream);
+  auto h_aggregated_info =
+    cudf::detail::make_pinned_vector_async<cumulative_page_info>(aggregated_info.size(), stream);
+  cudf::detail::cuda_memcpy(
+    cudf::host_span<cumulative_page_info>{h_aggregated_info.data(), aggregated_info.size()},
+    cudf::device_span<cumulative_page_info const>{aggregated_info.data(), aggregated_info.size()},
+    stream);
 
 #if defined(CHUNKING_DEBUG)
   print_cumulative_page_info(h_aggregated_info, "adjusted");
@@ -509,15 +519,18 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     mr);
 
   auto comp_in =
-    cudf::detail::make_empty_host_vector<device_span<uint8_t const>>(num_comp_pages, stream);
+    cudf::detail::make_pinned_vector_async<device_span<uint8_t const>>(num_comp_pages, stream);
   auto comp_out =
-    cudf::detail::make_empty_host_vector<device_span<uint8_t>>(num_comp_pages, stream);
+    cudf::detail::make_pinned_vector_async<device_span<uint8_t>>(num_comp_pages, stream);
+  auto curr_comp_page = 0;
 
   // vectors to save v2 def and rep level data, if any
   auto copy_in =
-    cudf::detail::make_empty_host_vector<device_span<uint8_t const>>(num_comp_pages, stream);
+    cudf::detail::make_pinned_vector_async<device_span<uint8_t const>>(num_comp_pages, stream);
   auto copy_out =
-    cudf::detail::make_empty_host_vector<device_span<uint8_t>>(num_comp_pages, stream);
+    cudf::detail::make_pinned_vector_async<device_span<uint8_t>>(num_comp_pages, stream);
+  auto curr_copy_page = 0;
+  stream.synchronize();
 
   auto set_parameters = [&](codec_stats& codec,
                             host_span<PageInfo> pages,
@@ -545,15 +558,17 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
         // input and output buffers. otherwise we'd have to keep both the compressed
         // and decompressed data.
         if (offset != 0) {
-          copy_in.push_back({page.page_data, static_cast<size_t>(offset)});
-          copy_out.push_back({dst_base, static_cast<size_t>(offset)});
+          copy_in[curr_copy_page]  = {page.page_data, static_cast<size_t>(offset)};
+          copy_out[curr_copy_page] = {dst_base, static_cast<size_t>(offset)};
+          ++curr_copy_page;
         }
         // Only decompress if the page contains data after the def/rep levels
         if (page.compressed_page_size > offset) {
-          comp_in.push_back(
-            {page.page_data + offset, static_cast<size_t>(page.compressed_page_size - offset)});
-          comp_out.push_back(
-            {dst_base + offset, static_cast<size_t>(page.uncompressed_page_size - offset)});
+          comp_in[curr_comp_page]  = {page.page_data + offset,
+                                      static_cast<size_t>(page.compressed_page_size - offset)};
+          comp_out[curr_comp_page] = {dst_base + offset,
+                                      static_cast<size_t>(page.uncompressed_page_size - offset)};
+          ++curr_comp_page;
         } else {
           // If the page wasn't included in the decompression parameters, we need to adjust the
           // page count to allocate results and perform decompression correctly
@@ -700,8 +715,13 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
                                 decomp_sum{});
 
   // retrieve to host so we can get compression scratch sizes
-  auto h_decomp_info = cudf::detail::make_host_vector(decomp_info, stream);
-  auto temp_cost     = cudf::detail::make_host_vector<size_t>(pages.size(), stream);
+  auto h_decomp_info =
+    cudf::detail::make_pinned_vector_async<decompression_info>(decomp_info.size(), stream);
+  auto temp_cost = cudf::detail::make_pinned_vector_async<size_t>(pages.size(), stream);
+  cudf::detail::cuda_memcpy(
+    cudf::host_span<decompression_info>(h_decomp_info.data(), decomp_info.size()),
+    cudf::device_span<decompression_info const>(decomp_info.data(), decomp_info.size()),
+    stream);
   std::transform(h_decomp_info.begin(), h_decomp_info.end(), temp_cost.begin(), [](auto const& d) {
     return cudf::io::detail::get_decompression_scratch_size(d);
   });
