@@ -115,7 +115,7 @@ extract_single_pass_aggs(host_span<aggregation_request const> requests,
     // - INPUT_NOT_EXTRACTED: aggregation requested by the users, not yet extracted
     // - INPUT_EXTRACTED: aggregation requested by the users and has already been extracted
     // - INTERMEDIATE: extracted intermediate aggregation
-    enum class aggregation_group { INPUT_NOT_EXTRACTED, INPUT_EXTRACTED, INTERMEDIATE };
+    enum class aggregation_group : int8_t { INPUT_NOT_EXTRACTED, INPUT_EXTRACTED, INTERMEDIATE };
     std::unordered_map<aggregation::Kind, aggregation_group> agg_kinds_set;
     for (auto const& agg : input_aggs) {
       agg_kinds_set[agg->kind] = aggregation_group::INPUT_NOT_EXTRACTED;

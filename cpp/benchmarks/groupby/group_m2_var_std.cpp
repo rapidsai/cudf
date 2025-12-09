@@ -52,7 +52,7 @@ void run_benchmark(nvbench::state& state,
     } else if constexpr (Agg == cudf::aggregation::Kind::STD) {
       request.aggregations.push_back(cudf::make_std_aggregation<cudf::groupby_aggregation>());
     } else {
-      throw std::runtime_error("Unsupported aggregation kind.");
+      CUDF_FAIL("Unsupported aggregation kind.");
     }
     values_cols.emplace_back(std::move(values));
     requests.emplace_back(std::move(request));
