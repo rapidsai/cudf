@@ -4988,39 +4988,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         return self._apply(func, DataFrameApplyKernel, *args, **kwargs)
 
-    def applymap(
-        self,
-        func: Callable[[Any], Any],
-        na_action: str | None = None,
-        **kwargs,
-    ) -> DataFrame:
-        """
-        Apply a function to a Dataframe elementwise.
-
-        This method applies a function that accepts and returns a scalar
-        to every element of a DataFrame.
-
-        Parameters
-        ----------
-        func : callable
-            Python function, returns a single value from a single value.
-        na_action : {None, 'ignore'}, default None
-            If 'ignore', propagate NaN values, without passing them to func.
-
-        Returns
-        -------
-        DataFrame
-            Transformed DataFrame.
-        """
-        # Do not remove until pandas 3.0 support is added.
-        assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
-        warnings.warn(
-            "DataFrame.applymap has been deprecated. Use DataFrame.map "
-            "instead.",
-            FutureWarning,
-        )
-        return self.map(func=func, na_action=na_action, **kwargs)
-
     def map(
         self,
         func: Callable[[Any], Any],
@@ -5048,7 +5015,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         if kwargs:
             raise NotImplementedError(
-                "DataFrame.applymap does not yet support **kwargs."
+                "DataFrame.map does not yet support **kwargs."
             )
 
         if na_action not in {"ignore", None}:

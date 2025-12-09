@@ -107,7 +107,6 @@ Function application, GroupBy & window
 
    DataFrame.agg
    DataFrame.apply
-   DataFrame.applymap
    DataFrame.groupby
    DataFrame.map
    DataFrame.pipe
