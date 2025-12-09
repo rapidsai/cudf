@@ -691,14 +691,126 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         dtype = dtype_from_pylibcudf_column(col)
 
-        return build_column(  # type: ignore[return-value]
-            plc_column=col,
-            size=col.size(),
-            dtype=dtype,
-            offset=col.offset(),
-            null_count=col.null_count(),
-            exposed=data_ptr_exposed,
-        )
+        # Build a Column of the appropriate type from the pylibcudf Column
+        size = col.size()
+        offset = col.offset()
+        null_count = col.null_count()
+
+        if isinstance(dtype, CategoricalDtype):
+            return cudf.core.column.CategoricalColumn(  # type: ignore[return-value]
+                plc_column=col,
+                size=size,
+                dtype=dtype,
+                offset=offset,
+                null_count=null_count,
+                exposed=data_ptr_exposed,
+            )
+        elif isinstance(dtype, pd.DatetimeTZDtype):
+            return cudf.core.column.datetime.DatetimeTZColumn(  # type: ignore[return-value]
+                plc_column=col,
+                size=size,
+                dtype=dtype,
+                offset=offset,
+                null_count=null_count,
+                exposed=data_ptr_exposed,
+            )
+        elif dtype.kind == "M":
+            return cudf.core.column.DatetimeColumn(  # type: ignore[return-value]
+                plc_column=col,
+                size=size,
+                dtype=dtype,
+                offset=offset,
+                null_count=null_count,
+                exposed=data_ptr_exposed,
+            )
+        elif dtype.kind == "m":
+            return cudf.core.column.TimeDeltaColumn(  # type: ignore[return-value]
+                plc_column=col,
+                size=size,
+                dtype=dtype,
+                offset=offset,
+                null_count=null_count,
+                exposed=data_ptr_exposed,
+            )
+        elif (
+            dtype == CUDF_STRING_DTYPE
+            or dtype.kind == "U"
+            or isinstance(dtype, pd.StringDtype)
+            or (isinstance(dtype, pd.ArrowDtype) and dtype.kind == "U")
+        ):
+            return cudf.core.column.StringColumn(  # type: ignore[return-value]
+                plc_column=col,
+                size=size,
+                dtype=dtype,
+                offset=offset,
+                null_count=null_count,
+                exposed=data_ptr_exposed,
+            )
+        elif isinstance(dtype, ListDtype):
+            return cudf.core.column.ListColumn(  # type: ignore[return-value]
+                plc_column=col,
+                size=size,
+                dtype=dtype,
+                offset=offset,
+                null_count=null_count,
+                exposed=data_ptr_exposed,
+            )
+        elif isinstance(dtype, IntervalDtype):
+            return cudf.core.column.IntervalColumn(  # type: ignore[return-value]
+                plc_column=col,
+                size=size,
+                dtype=dtype,
+                offset=offset,
+                null_count=null_count,
+                exposed=data_ptr_exposed,
+            )
+        elif isinstance(dtype, StructDtype):
+            return cudf.core.column.StructColumn(  # type: ignore[return-value]
+                plc_column=col,
+                size=size,
+                dtype=dtype,
+                offset=offset,
+                null_count=null_count,
+                exposed=data_ptr_exposed,
+            )
+        elif isinstance(dtype, cudf.Decimal64Dtype):
+            return cudf.core.column.Decimal64Column(  # type: ignore[return-value]
+                plc_column=col,
+                size=size,
+                dtype=dtype,
+                offset=offset,
+                null_count=null_count,
+                exposed=data_ptr_exposed,
+            )
+        elif isinstance(dtype, cudf.Decimal32Dtype):
+            return cudf.core.column.Decimal32Column(  # type: ignore[return-value]
+                plc_column=col,
+                size=size,
+                dtype=dtype,
+                offset=offset,
+                null_count=null_count,
+                exposed=data_ptr_exposed,
+            )
+        elif isinstance(dtype, cudf.Decimal128Dtype):
+            return cudf.core.column.Decimal128Column(  # type: ignore[return-value]
+                plc_column=col,
+                size=size,
+                dtype=dtype,
+                offset=offset,
+                null_count=null_count,
+                exposed=data_ptr_exposed,
+            )
+        elif dtype.kind in "iufb":
+            return cudf.core.column.NumericalColumn(  # type: ignore[return-value]
+                plc_column=col,
+                size=size,
+                dtype=dtype,
+                offset=offset,
+                null_count=null_count,
+                exposed=data_ptr_exposed,
+            )
+        else:
+            raise TypeError(f"Unrecognized dtype: {dtype}")
 
     @classmethod
     def from_cuda_array_interface(
@@ -2673,150 +2785,6 @@ def column_empty(
                 row_count,
             )
         )._with_type_metadata(dtype)
-
-
-def build_column(
-    plc_column: plc.Column,
-    dtype: DtypeObj,
-    *,
-    size: int,
-    offset: int,
-    null_count: int,
-    exposed: bool,
-) -> ColumnBase:
-    """
-    Build a Column of the appropriate type from the given parameters
-
-    Parameters
-    ----------
-    plc_column : plc.Column
-        The backing pylibcudf.Column
-    dtype
-        The dtype associated with the Column to construct
-    size : int, optional
-        The size of the column.
-    offset : int, optional
-        The offset of the column.
-    null_count : int, optional
-        The number of nulls in the column.
-    exposed : bool, optional
-        Whether the data buffers of the plc_column are exposed.
-    """
-    if isinstance(dtype, CategoricalDtype):
-        return cudf.core.column.CategoricalColumn(
-            plc_column=plc_column,
-            size=size,
-            dtype=dtype,
-            offset=offset,
-            null_count=null_count,
-            exposed=exposed,
-        )
-    elif isinstance(dtype, pd.DatetimeTZDtype):
-        return cudf.core.column.datetime.DatetimeTZColumn(
-            plc_column=plc_column,
-            size=size,
-            dtype=dtype,
-            offset=offset,
-            null_count=null_count,
-            exposed=exposed,
-        )
-    elif dtype.kind == "M":
-        return cudf.core.column.DatetimeColumn(
-            plc_column=plc_column,
-            size=size,
-            dtype=dtype,
-            offset=offset,
-            null_count=null_count,
-            exposed=exposed,
-        )
-    elif dtype.kind == "m":
-        return cudf.core.column.TimeDeltaColumn(
-            plc_column=plc_column,
-            size=size,
-            dtype=dtype,
-            offset=offset,
-            null_count=null_count,
-            exposed=exposed,
-        )
-    elif (
-        dtype == CUDF_STRING_DTYPE
-        or dtype.kind == "U"
-        or isinstance(dtype, pd.StringDtype)
-        or (isinstance(dtype, pd.ArrowDtype) and dtype.kind == "U")
-    ):
-        return cudf.core.column.StringColumn(
-            plc_column=plc_column,
-            size=size,
-            dtype=dtype,
-            offset=offset,
-            null_count=null_count,
-            exposed=exposed,
-        )
-    elif isinstance(dtype, ListDtype):
-        return cudf.core.column.ListColumn(
-            plc_column=plc_column,
-            size=size,
-            dtype=dtype,
-            offset=offset,
-            null_count=null_count,
-            exposed=exposed,
-        )
-    elif isinstance(dtype, IntervalDtype):
-        return cudf.core.column.IntervalColumn(
-            plc_column=plc_column,
-            size=size,
-            dtype=dtype,
-            offset=offset,
-            null_count=null_count,
-            exposed=exposed,
-        )
-    elif isinstance(dtype, StructDtype):
-        return cudf.core.column.StructColumn(
-            plc_column=plc_column,
-            size=size,
-            dtype=dtype,
-            offset=offset,
-            null_count=null_count,
-            exposed=exposed,
-        )
-    elif isinstance(dtype, cudf.Decimal64Dtype):
-        return cudf.core.column.Decimal64Column(
-            plc_column=plc_column,
-            size=size,
-            dtype=dtype,
-            offset=offset,
-            null_count=null_count,
-            exposed=exposed,
-        )
-    elif isinstance(dtype, cudf.Decimal32Dtype):
-        return cudf.core.column.Decimal32Column(
-            plc_column=plc_column,
-            size=size,
-            dtype=dtype,
-            offset=offset,
-            null_count=null_count,
-            exposed=exposed,
-        )
-    elif isinstance(dtype, cudf.Decimal128Dtype):
-        return cudf.core.column.Decimal128Column(
-            plc_column=plc_column,
-            size=size,
-            dtype=dtype,
-            offset=offset,
-            null_count=null_count,
-            exposed=exposed,
-        )
-    elif dtype.kind in "iufb":
-        return cudf.core.column.NumericalColumn(
-            plc_column=plc_column,
-            size=size,
-            dtype=dtype,
-            offset=offset,
-            null_count=null_count,
-            exposed=exposed,
-        )
-    else:
-        raise TypeError(f"Unrecognized dtype: {dtype}")
 
 
 def check_invalid_array(shape: tuple, dtype: np.dtype) -> None:
