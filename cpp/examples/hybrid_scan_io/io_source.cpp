@@ -75,8 +75,9 @@ concept ResizableContainer = requires(T& container, std::size_t n) {
 };
 
 /**
- * @brief Create a `cudf::io::source_info` object using the container as the underlying storage. The
- * container must initially be empty, and this function will resize it to hold the file data.
+ * @brief Create a `cudf::io::source_info` object, using the container as the underlying storage and
+ * populating it with the file data. The container must initially be empty, and this function will
+ * resize it to hold the file data.
  *
  * @tparam T Container type that must satisfy the `ResizableContainer` concept
  * @param file_path Path of the file to be read.
