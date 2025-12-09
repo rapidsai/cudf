@@ -17,14 +17,14 @@ class host_buffer_source : public cudf::io::datasource {
  public:
   /**
    * @brief Constructs a host buffer data source from a host buffer that contains the Parquet file
-   * data
+   * data.
    *
    * @param h_buffer A host buffer containing the Parquet file data
    */
   explicit host_buffer_source(cudf::host_span<std::byte const> h_buffer);
 
   /**
-   * @brief This override is required by the base class `cudf::io::datasource`
+   * @brief This override is required by the base class `cudf::io::datasource`.
    *
    * @param offset Offset at which to read the in-memory host data
    * @param size Number of bytes to read
@@ -33,7 +33,7 @@ class host_buffer_source : public cudf::io::datasource {
   std::unique_ptr<cudf::io::datasource::buffer> host_read(size_t offset, size_t size) override;
 
   /**
-   * @brief This override is required by the base class `cudf::io::datasource`
+   * @brief This override is required by the base class `cudf::io::datasource`.
    *
    * @param offset Offset at which to read the in-memory host data
    * @param size Number of bytes to read
@@ -43,14 +43,14 @@ class host_buffer_source : public cudf::io::datasource {
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override;
 
   /**
-   * @brief This override is required by the base class `cudf::io::datasource`
+   * @brief This override is required by the base class `cudf::io::datasource`.
    *
    * @return Whether this data source supports reading into device buffer
    */
   [[nodiscard]] bool supports_device_read() const override;
 
   /**
-   * @brief Copies data to a preallocated device buffer
+   * @brief Copies data to a preallocated device buffer.
    *
    * @param offset Offset at which to read the in-memory host data
    * @param size Number of bytes to read
@@ -64,7 +64,7 @@ class host_buffer_source : public cudf::io::datasource {
                                              rmm::cuda_stream_view stream) override;
 
   /**
-   * @brief This override is required by the base class `cudf::io::datasource`
+   * @brief This override is required by the base class `cudf::io::datasource`.
    *
    * @return The size of the in-memory host buffer
    */

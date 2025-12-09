@@ -66,7 +66,7 @@ void check_tables_equal(cudf::table_view const& lhs_table,
 class io_backend {
  public:
   /**
-   * @brief Constructs a new I/O backend object from an in-memory host data source
+   * @brief Constructs a new I/O backend object from an in-memory host data source.
    *
    * @param buffer Host memory that contains the file data
    * @param stream CUDA stream
@@ -74,7 +74,7 @@ class io_backend {
   explicit io_backend(cudf::host_span<std::byte const> buffer, rmm::cuda_stream_view stream);
 
   /**
-   * @brief Constructs a new I/O backend object from a file data source
+   * @brief Constructs a new I/O backend object from a file data source.
    *
    * @param filepath Path to a file on the disk
    * @param stream CUDA stream
@@ -82,14 +82,14 @@ class io_backend {
   explicit io_backend(std::string const& filepath, rmm::cuda_stream_view stream);
 
   /**
-   * @brief Fetches a host span of Parquet footer bytes from the data source
+   * @brief Fetches a host span of Parquet footer bytes from the data source.
    *
    * @return A host span of the footer bytes
    */
   [[nodiscard]] std::vector<uint8_t> fetch_footer_bytes();
 
   /**
-   * @brief Fetches a host span of Parquet PageIndexbytes from the data source
+   * @brief Fetches a host span of Parquet PageIndexbytes from the data source.
    *
    * @param page_index_bytes Byte range of `PageIndex` to fetch
    * @return A host span of the PageIndex bytes
@@ -98,7 +98,7 @@ class io_backend {
     cudf::io::text::byte_range_info const page_index_bytes);
 
   /**
-   * @brief Fetches a list of byte ranges from the data source into a vector of device buffers
+   * @brief Fetches a list of byte ranges from the data source into a vector of device buffers.
    *
    * @param byte_ranges Byte ranges to fetch
    * @param stream CUDA stream
@@ -113,7 +113,7 @@ class io_backend {
 
  private:
   /**
-   * @brief Fetches a byte range from the data source into a preallocated buffer
+   * @brief Fetches a byte range from the data source into a preallocated buffer.
    *
    * @param offset File offset
    * @param size Number of bytes to read

@@ -66,7 +66,7 @@ struct pinned_allocator : public std::allocator<T> {
 };
 
 /**
- * @brief Class to create a cudf::io::source_info of given type from the input parquet file
+ * @brief Class to create a cudf::io::source_info of given type from the input parquet file.
  *
  */
 class io_source {
