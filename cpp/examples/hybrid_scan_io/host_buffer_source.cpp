@@ -16,7 +16,7 @@ size_t host_buffer_source::host_read(size_t offset, size_t size, uint8_t* dst)
 {
   auto const count = std::min(size, this->size() - offset);
   std::memcpy(dst, _h_buffer.data() + offset, count);
-  return size;
+  return count;
 }
 
 std::unique_ptr<cudf::io::datasource::buffer> host_buffer_source::host_read(size_t offset,
@@ -34,11 +34,12 @@ std::future<std::size_t> host_buffer_source::device_read_async(std::size_t offse
                                                                uint8_t* dst,
                                                                rmm::cuda_stream_view stream)
 {
+  auto const count = std::min(size, this->size() - offset);
   CUDF_CUDA_TRY(cudaMemcpyAsync(
-    dst, _h_buffer.data() + offset, size, cudaMemcpyKind::cudaMemcpyDefault, stream));
+    dst, _h_buffer.data() + offset, count, cudaMemcpyKind::cudaMemcpyDefault, stream));
   std::promise<std::size_t> p;
   auto future = p.get_future();
-  p.set_value(size);
+  p.set_value(count);
   return future;
 }
 
