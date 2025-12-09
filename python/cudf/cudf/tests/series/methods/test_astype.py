@@ -1347,3 +1347,4 @@ def test_series_astype_no_copy(copy):
     result = gsr.astype("int64", copy=copy)
     assert_eq(result, gsr)
     assert (result is gsr) is (not copy)
+    
