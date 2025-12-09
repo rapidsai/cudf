@@ -92,8 +92,9 @@ def set_copy_on_write_option():
 
     cudf = xpd._fsproxy_fast
     pd = xpd._fsproxy_slow
-    cudf.set_option("copy_on_write", True)
-    pd.set_option("mode.copy_on_write", True)
+    with cudf.option_context("copy_on_write", True):
+        with pd.option_context("mode.copy_on_write", True):
+            yield
 
 
 # TODO: Pass these tests with cudf.pandas enabled.
