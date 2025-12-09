@@ -490,7 +490,7 @@ class NumericalColumn(NumericalBaseColumn):
             )
         if len(self) == 0:
             return cast(
-                "cudf.core.column.StringColumn",
+                cudf.core.column.StringColumn,
                 column_empty(0, dtype=CUDF_STRING_DTYPE),
             )
 
@@ -577,10 +577,6 @@ class NumericalColumn(NumericalBaseColumn):
                 res._dtype = dtype
                 return res  # type: ignore[return-value]
 
-            # --- FIX: Match Pandas behavior when casting Float(with Nulls) -> Bool ---
-            # Pandas treats NaN as truthy (True) when casting float -> bool.
-            # In cuDF, Nulls propagate. We must fill Nulls with np.nan so the
-            # cast treats them as True.
             if (
                 self.dtype.kind == "f"
                 and dtype.kind == "b"
