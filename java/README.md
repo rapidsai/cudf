@@ -79,20 +79,13 @@ If you decide to build without Docker and the build script, examining the cmake 
 settings in the [Java CI build script](ci/build-in-docker.sh) can be helpful if you are
 encountering difficulties during the build.
 
-## Statically Linking the CUDA Runtime
-
-If you use the default cmake options libcudart will be dynamically linked to libcudf and libcudfjni.
-To build with a static CUDA runtime, build libcudf with the `-DCUDA_STATIC_RUNTIME=ON` as a cmake
-parameter, and similarly build with `-DCUDA_STATIC_RUNTIME=ON` when building the Java bindings
-with Maven.
-
 ### Building with a libcudf Archive
 
-When statically linking the CUDA runtime, it is recommended to build cuDF as an archive rather than
-a shared library, as this allows the Java bindings to only have a single shared library that uses
-the CUDA runtime. To build libcudf as an archive, specify `-DBUILD_SHARED_LIBS=OFF` as a cmake
-parameter when building libcudf, then specify `-DCUDF_JNI_LIBCUDF_STATIC=ON` when building the Java
-bindings with Maven.
+When building the Java bindings against a static libcudf, it is recommended to build cuDF as an
+archive rather than a shared library, as this allows the Java bindings to only have a single shared
+library that uses the CUDA runtime. To build libcudf as an archive, specify `-DBUILD_SHARED_LIBS=OFF`
+as a cmake parameter when building libcudf, then specify `-DCUDF_JNI_LIBCUDF_STATIC=ON` when building
+the Java bindings with Maven.
 
 ## Per-thread Default Stream
 
