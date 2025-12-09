@@ -88,8 +88,7 @@ class sort_merge_join {
    * @param left The left table
    * @param is_left_sorted Enum to indicate if left table is pre-sorted
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource used to allocate the join indices' device
-   * memory.
+   * @param mr Device memory resource used to allocate the join indices' device memory
    *
    * @return A pair of device vectors [`left_indices`, `right_indices`] that can be used to
    * construct the result of performing a left join between two tables
@@ -231,7 +230,7 @@ class sort_merge_join {
      *
      * @param stream CUDA stream used for device memory operations and kernel launches
      */
-    void get_sorted_order(rmm::cuda_stream_view stream);
+    void compute_sorted_order(rmm::cuda_stream_view stream);
 
     /**
      * @brief Create mapping from processed table indices to unprocessed table indices
