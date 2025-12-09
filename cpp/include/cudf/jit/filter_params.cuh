@@ -19,4 +19,4 @@ struct filter_params {
 };
 
 }  // namespace lto
-}  // namespace CUDF_EXPORT cudf
+}  // namespace CUDF_LTO_EXPORT cudf

@@ -18,19 +18,21 @@ typedef struct evp_md_ctx_st EVP_MD_CTX;
 namespace CUDF_EXPORT cudf {
 namespace rtc {
 
-struct sha256_hex_string {
+struct [[nodiscard]] sha256_hex_string {
   char data_[65];
 
-  constexpr operator std::string_view() const { return std::string_view{data_, 64}; }
+  constexpr std::string_view view() const { return std::string_view{data_, 64}; }
 
-  char const* data() const { return data_; }
+  constexpr operator std::string_view() const { return view(); }
 
-  char const* c_str() const { return data_; }
+  [[nodiscard]] char const* data() const { return data_; }
+
+  [[nodiscard]] char const* c_str() const { return data_; }
 
   static constexpr size_t size() { return 64; }
 };
 
-struct sha256_hash {
+struct [[nodiscard]] sha256_hash {
   alignas(16) uint8_t data_[32];
 
   constexpr bool operator==(sha256_hash const& hash) const
@@ -40,7 +42,7 @@ struct sha256_hash {
 
   constexpr bool operator!=(sha256_hash const& hash) const { return !(*this == hash); }
 
-  constexpr sha256_hex_string to_hex() const
+  constexpr sha256_hex_string to_hex_string() const
   {
     static constexpr char const HEX_CHARS[] = "0123456789abcdef";
     sha256_hex_string hex;
@@ -53,11 +55,11 @@ struct sha256_hash {
   }
 };
 
-struct sha256_hash_hasher {
+struct [[nodiscard]] sha256_hash_hasher {
   constexpr uint64_t operator()(sha256_hash const& obj) const
   {
     struct u64x4 {
-      uint64_t v[4];
+      alignas(16) uint64_t v[4];
     };
 
     auto value    = std::bit_cast<u64x4>(obj);
@@ -75,7 +77,7 @@ struct sha256_hash_hasher {
   }
 };
 
-struct sha256_context {
+struct [[nodiscard]] sha256_context {
  private:
   EVP_MD_CTX* ectx_;
 
