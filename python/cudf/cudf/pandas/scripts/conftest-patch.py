@@ -4,6 +4,7 @@
 import contextlib
 import json
 import os
+import re
 import sys
 import traceback
 from collections import defaultdict
@@ -10745,12 +10746,23 @@ def pytest_collection_modifyitems(session, config, items):
             NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS_WITH_REASON.values()
         )
     )
+    # Strip out the suffixes pytest-repeat adds to ids so that matches still work
+    if config.pluginmanager.has_plugin("repeat"):
+
+        def strip_ids(item):
+            stripped = re.sub(r"\[(.*?)-?\d+-\d+\]$", r"[\1]", item)
+            return stripped.replace("[]", "")
+    else:
+
+        def strip_ids(item):
+            return item
+
     for item in items:
-        if item.nodeid in TO_XFAIL:
+        if strip_ids(item.nodeid) in TO_XFAIL:
             item.add_marker(
                 pytest.mark.xfail(reason="Fails with cudf.pandas enabled.")
             )
-        elif item.nodeid in TO_SKIP:
+        if strip_ids(item.nodeid) in TO_SKIP:
             # Don't think there's an easy way to remove a marker
             # https://github.com/pytest-dev/pytest/issues/3324
             item.add_marker(
