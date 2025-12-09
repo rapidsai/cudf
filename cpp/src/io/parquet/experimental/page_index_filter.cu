@@ -20,6 +20,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/logger.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/reduction/detail/reduction.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -980,13 +981,30 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   auto const total_rows = total_rows_in_row_groups(row_group_indices);
 
   // Return an empty vector if all rows are invalid or all rows are required
-  if (row_mask.null_count(row_mask_offset, row_mask_offset + total_rows, stream) == total_rows or
-      thrust::all_of(rmm::exec_policy(stream),
-                     row_mask.template begin<bool>() + row_mask_offset,
-                     row_mask.template begin<bool>() + row_mask_offset + total_rows,
-                     cuda::std::identity{})) {
-    return thrust::host_vector<bool>(0, stream);
-  }
+  auto const is_all_nulls =
+    row_mask.null_count(row_mask_offset, row_mask_offset + total_rows, stream) == total_rows;
+  auto const is_all_needed = [&]() {
+    auto result = cudf::reduction::detail::reduce(
+      thrust::make_transform_iterator(
+        row_mask.template begin<bool>() + row_mask_offset,
+        [] __device__(auto const& val) -> size_type { return val ? 1 : 0; }),
+      total_rows,
+      cudf::reduction::detail::op::sum{},
+      {},
+      stream,
+      cudf::get_current_device_resource_ref());
+
+    auto host_result = cudf::detail::make_pinned_vector_async<size_type>(1, stream);
+    CUDF_CUDA_TRY(
+      cudaMemcpyAsync(host_result.data(),
+                      static_cast<cudf::numeric_scalar<size_type>*>(result.get())->data(),
+                      sizeof(uint32_t),
+                      cudaMemcpyDeviceToHost,
+                      stream.value()));
+
+    return host_result.front() == total_rows;
+  }();
+  if (is_all_nulls or is_all_needed) { return thrust::host_vector<bool>(0, stream); }
 
   CUDF_EXPECTS(row_mask_offset + total_rows <= row_mask.size(),
                "Mismatch in total rows in input row mask and row groups",
