@@ -189,8 +189,6 @@ merge<LargerIterator, SmallerIterator>::matches_per_row(rmm::cuda_stream_view st
                       match_counts_update_it,
                       comparator);
 
-  stream.synchronize();
-
   return std::make_unique<rmm::device_uvector<size_type>>(std::move(match_counts));
 }
 
@@ -278,8 +276,6 @@ merge<LargerIterator, SmallerIterator>::inner(rmm::cuda_stream_view stream,
                     smaller_indices.end(),
                     smaller_indices.begin(),
                     mapping_functor<SmallerIterator>{sorted_smaller_order_begin});
-
-  stream.synchronize();
 
   return {std::make_unique<rmm::device_uvector<size_type>>(std::move(smaller_indices)),
           std::make_unique<rmm::device_uvector<size_type>>(std::move(larger_indices))};
@@ -402,8 +398,6 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
                     smaller_indices.end(),
                     smaller_indices.begin() + left_join_only_matches,
                     mapping_functor<SmallerIterator>{sorted_smaller_order_begin});
-
-  stream.synchronize();
 
   return {std::make_unique<rmm::device_uvector<size_type>>(std::move(smaller_indices)),
           std::make_unique<rmm::device_uvector<size_type>>(std::move(larger_indices))};
@@ -706,7 +700,6 @@ sort_merge_join::inner_join(table_view const& left,
     [this, stream, mr](auto& obj) {
       auto [preprocessed_right_indices, preprocessed_left_indices] = obj.inner(stream, mr);
       postprocess_indices(*preprocessed_right_indices, *preprocessed_left_indices, stream);
-      stream.synchronize();
       return std::pair{std::move(preprocessed_left_indices), std::move(preprocessed_right_indices)};
     },
     stream);
@@ -849,7 +842,6 @@ cudf::join_match_context sort_merge_join::inner_join_match_context(
                         matches_per_row->end(),
                         mapping.begin(),
                         unprocessed_matches_per_row.begin());
-        stream.synchronize();
         return join_match_context{
           left,
           std::make_unique<rmm::device_uvector<size_type>>(std::move(unprocessed_matches_per_row))};
@@ -905,7 +897,6 @@ sort_merge_join::partitioned_inner_join(cudf::join_partition_context const& cont
     [left_partition_start_idx] __device__(auto idx) { return left_partition_start_idx + idx; });
   // Map from total null processed table to unprocessed table
   postprocess_indices(*preprocessed_right_indices, *preprocessed_left_indices, stream);
-  stream.synchronize();
   return std::pair{std::move(preprocessed_left_indices), std::move(preprocessed_right_indices)};
 }
 
