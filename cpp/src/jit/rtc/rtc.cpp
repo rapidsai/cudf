@@ -269,14 +269,12 @@ fragment fragment_t::compile(compile_params const& params)
 
 blob const& fragment_t::get_lto_ir() const
 {
-  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(type_ == binary_type::LTO_IR, "Fragment does not contain LTO IR");
   return blob_;
 }
 
 blob const& fragment_t::get_cubin() const
 {
-  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(type_ == binary_type::CUBIN, "Fragment does not contain CUBIN");
   return blob_;
 }
@@ -291,6 +289,8 @@ void kernel_ref::launch(uint32_t grid_dim_x,
                         CUstream stream,
                         void** kernel_params)
 {
+  CUDF_FUNC_RANGE();
+
   CUlaunchConfig cfg{.gridDimX       = grid_dim_x,
                      .gridDimY       = grid_dim_y,
                      .gridDimZ       = grid_dim_z,
@@ -307,7 +307,6 @@ void kernel_ref::launch(uint32_t grid_dim_x,
 
 std::string_view kernel_ref::get_name() const
 {
-  CUDF_FUNC_RANGE();
   char const* name;
   CUDFRTC_CHECK_CUDA(cuKernelGetName(&name, handle_));
   return std::string_view{name == nullptr ? "" : name};
@@ -323,6 +322,7 @@ library_t::~library_t()
 library library_t::load(load_params const& params)
 {
   CUDF_FUNC_RANGE();
+
   CUlibrary handle;
 
   CUDFRTC_CHECK_CUDA(
@@ -405,6 +405,7 @@ blob library_t::link_as_blob(link_params const& params)
 library library_t::link(link_params const& params)
 {
   CUDF_FUNC_RANGE();
+
   auto blob = link_as_blob(params);
   return load(load_params{blob->view(), params.output_type});
 }

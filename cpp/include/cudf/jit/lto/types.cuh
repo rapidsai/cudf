@@ -4,7 +4,7 @@
  */
 #pragma once
 
-#define CUDF_LTO_EXPORT __attribute__((visibility("default")))
+#define CUDF_LTO_EXPORT
 
 namespace CUDF_LTO_EXPORT cudf {
 

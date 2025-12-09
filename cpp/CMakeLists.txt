@@ -350,125 +350,36 @@ function(embed_fatbins_command target_name)
 
 endfunction()
 
-
-"""
-
-# Take a list of files to JIT-compile and run them through jitify_preprocess.
-function(jit_preprocess_files)
-  cmake_parse_arguments(ARG "" "SOURCE_DIRECTORY" "FILES" ${ARGN})
-
-  get_target_property(libcudacxx_raw_includes CCCL::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)
-  set(includes)
-  foreach(inc IN LISTS libcudacxx_raw_includes CUDAToolkit_INCLUDE_DIRS)
-    list(APPEND includes "-I${inc}")
-  endforeach()
-  foreach(ARG_FILE ${ARG_FILES})
-    set(ARG_OUTPUT ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files/${ARG_FILE}.jit.hpp)
-    get_filename_component(jit_output_directory "${ARG_OUTPUT}" DIRECTORY)
-    list(APPEND JIT_PREPROCESSED_FILES "${ARG_OUTPUT}")
-
-    get_filename_component(ARG_OUTPUT_DIR "${ARG_OUTPUT}" DIRECTORY)
-
-    # Note: need to pass _FILE_OFFSET_BITS=64 in COMMAND due to a limitation in how conda builds
-    # glibc
-    add_custom_command(
-      OUTPUT ${ARG_OUTPUT}
-      DEPENDS jitify_preprocess "${ARG_SOURCE_DIRECTORY}/${ARG_FILE}"
-      WORKING_DIRECTORY ${ARG_SOURCE_DIRECTORY}
-      VERBATIM
-      COMMAND ${CMAKE_COMMAND} -E make_directory "${jit_output_directory}"
-      COMMAND
-        "${CMAKE_COMMAND}" -E env LD_LIBRARY_PATH=${CUDAToolkit_LIBRARY_DIR}
-        $<TARGET_FILE:jitify_preprocess> ${ARG_FILE} -o ${ARG_OUTPUT_DIR} -i -std=c++20
-        -remove-unused-globals -D_FILE_OFFSET_BITS=64 -D__CUDACC_RTC__ -DCUDF_RUNTIME_JIT
-        -I${CUDF_SOURCE_DIR}/include -I${CUDF_SOURCE_DIR}/src ${includes}
-        --no-preinclude-workarounds --no-replace-pragma-once --diag-suppress=47 --device-int128
-      COMMENT "Custom command to JIT-compile files."
-    )
-  endforeach()
-  set(JIT_PREPROCESSED_FILES
-      "${JIT_PREPROCESSED_FILES}"
-      PARENT_SCOPE
-  )
-endfunction()
-
-if(NOT (EXISTS "${CUDF_GENERATED_INCLUDE_DIR}/include"))
-  make_directory("${CUDF_GENERATED_INCLUDE_DIR}/include")
-endif()
-
-"""
-# needs to recursively bundle the actually used headers; not everything
-# should we just use the install include dir?
-# provided cudacxx will also be exported? can we get the installed include dir path?
-# after installing, should be configure a file that points to the installed cudacxx include dir?
-
-set(CUDF_JIT_INCLUDE_HEADERS
-include/cudf/table/table_device_view.cuh
-include/cudf/jit/lto/types.cuh
-include/cudf/jit/lto/operators.cuh
-include/cudf/jit/lto/library.cuh
-include/cudf/jit/lto/thunk.cuh
-include/cudf/jit/transform_params.cuh
-include/cudf/jit/filter_params.cuh
-include/cudf/utilities/traits.cuh
-include/cudf/strings/string_view.cuh
-include/cudf/column/column_device_view_base.cuh
-include/cudf/detail/null_mask.cuh
-include/cudf/detail/utilities/grid_1d.cuh
-include/cudf/detail/offsets_iterator.cuh
-include/cudf/detail/indexalator.cuh
-include/cudf/ast/detail/operator_functor.cuh
-include/cudf/ast/detail/operators.cuh
-src/jit/accessors.cuh
-src/jit/span.cuh
-)
-
-# CCCL::libcudacxx
-
-  # we have to copy everything in the include dirs here
-  # get_target_property(libcudacxx_raw_includes CCCL::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)
-
-set(CUDF_JIT_LTO_INCLUDE_HEADERS
-include/cudf/jit/lto/types.cuh
-include/cudf/jit/lto/operators.cuh
-include/cudf/jit/transform_params.cuh
-include/cudf/jit/filter_params.cuh
-)
-
-
-# CUDA/STD headers
-
-
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(CUDF_JIT_CUDA_FLAGS "-G")
-else if(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
-  set(CUDF_JIT_CUDA_FLAGS "-O2;-DNDEBUG")
-else if(CMAKE_BUILD_TYPE STREQUAL "Release")
-  set(CUDF_JIT_CUDA_FLAGS "-O3;-DNDEBUG")
-  endif()
+else()
+  if(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+    set(CUDF_JIT_CUDA_FLAGS "-O2;-DNDEBUG")
+  else()
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+      set(CUDF_JIT_CUDA_FLAGS "-O3;-DNDEBUG")
+    endif()
   endif()
 endif()
-
 
 if(CUDA_ENABLE_LINEINFO)
   list(APPEND CUDF_JIT_CUDA_FLAGS "${CUDF_JIT_CUDA_FLAGS};-lineinfo")
 endif()
 
-
-
-#  use current project CUDA_ARCHITECTURES for JIT compilation
 set(CUDF_CXX_STANDARD 20)
 set(CUDF_CUDA_STANDARD ${CUDF_CXX_STANDARD})
 set(CUDF_JIT_ARCHITECTURES "75;80;86;90;100;120")
-set(CUDF_JIT_DEFINITIONS "${CUDF_CUDA_DEFINITIONS};-DCUDF_RUNTIME_JIT;-D__CUDACC_RTC__")
-# set(CUDF_JIT_)
-set(CUDF_JIT_COMPILE_FLAGS "-O3;-std=c++${CUDF_CUDA_STANDARD};-Xcompiler=-fPIC;-Xcompiler=-DPIC;-fvisibility=hidden;-Xfatbin=--compress-all;--compress-mode=size")
-set(CUDF_JIT_LINK_FLAGS)
+set(CUDF_JIT_DEFINITIONS "-DCUDF_RUNTIME_JIT;-D__CUDACC_RTC__")
+set(CUDF_JIT_COMPILE_FLAGS
+    "-O3;-std=c++${CUDF_CUDA_STANDARD};-Xcompiler=-fPIC;-Xcompiler=-DPIC;-fvisibility=hidden;-Xfatbin=--compress-all;--compress-mode=size;--device-int128"
+)
 
 function(add_lto_ir_library target_name source_file)
 
   add_library(${target_name} OBJECT ${source_file})
-  target_compile_options(${target_name} PRIVATE -Xfatbin=--compress-all --compress-mode=size)
+  target_compile_options(
+    ${target_name} PRIVATE -Xfatbin=--compress-all --compress-mode=size --device-int128
+  )
   set_target_properties(
     ${target_name}
     PROPERTIES CUDA_ARCHITECTURES "75-real;80-real;86-real;90-real;100-real;120-real"
@@ -480,7 +391,7 @@ function(add_lto_ir_library target_name source_file)
   target_include_directories(
     ${target_name} PUBLIC ${CUDF_SOURCE_DIR}/include ${CUDF_SOURCE_DIR}/src
   )
-  target_compile_definitions(${target_name} PUBLIC ${CUDF_CUDA_DEFINITIONS} -DCUDF_RUNTIME_JIT -D__CUDACC_RTC__)
+  target_compile_definitions(${target_name} PUBLIC ${CUDF_CUDA_DEFINITIONS} -DCUDF_RUNTIME_JIT)
   target_link_libraries(${target_name} PUBLIC CCCL::libcudacxx)
   set_target_properties(
     ${target_name}
@@ -494,11 +405,61 @@ function(add_lto_ir_library target_name source_file)
                CUDA_VISIBILITY_PRESET hidden
   )
 
-  embed_fatbins_command(${target_name})
-
 endfunction()
 
 add_lto_ir_library(cudf_lto_library src/jit/lto/library.cu)
+embed_fatbins_command(cudf_lto_library)
+
+function(embed_jit_sources_var)
+
+endfunction()
+
+function(embed_jit_options_var)
+
+endfunction()
+
+embed_jit_sources_var(
+  identifier_name
+  EXPLICIT
+  SOURCE_DIRECTORY
+  cudf/include/
+  FILES
+  cudf/table/table_device_view.cuh
+  cudf/jit/lto/types.cuh
+  cudf/jit/lto/operators.cuh
+  cudf/jit/lto/library.cuh
+  cudf/jit/lto/thunk.cuh
+  cudf/jit/transform_params.cuh
+  cudf/jit/filter_params.cuh
+  cudf/utilities/traits.cuh
+  cudf/strings/string_view.cuh
+  cudf/column/column_device_view_base.cuh
+  cudf/detail/null_mask.cuh
+  cudf/detail/utilities/grid_1d.cuh
+  cudf/detail/offsets_iterator.cuh
+  cudf/detail/indexalator.cuh
+  cudf/ast/detail/operator_functor.cuh
+  cudf/ast/detail/operators.cuh
+  cudf/jit/lto/types.cuh
+  cudf/jit/lto/operators.cuh
+  cudf/jit/transform_params.cuh
+  cudf/jit/filter_params.cuh
+)
+
+embed_jit_sources_var(
+  identifier_name EXPLICIT SOURCE_DIRECTORY src FILES src/jit/accessors.cuh src/jit/span.cuh
+)
+
+get_target_property(LIBCUDACXX_RAW_INCLUDE_DIRS CCCL::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)
+
+# CUDA/STD headers
+# needs to recursively bundle the actually used headers; not everything should we just use the
+# install include dir? provided cudacxx will also be exported? can we get the installed include dir
+# path? after installing, should be configure a file that points to the installed cudacxx include
+# dir?
+embed_jit_sources_var(identifier_name RECURSIVE SOURCE_DIRECTORY ${LIBCUDACXX_RAW_INCLUDE_DIRS})
+
+embed_jit_options_var(identifier_name OPTIONS ${CUDF_JIT_COMPILE_FLAGS})
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------

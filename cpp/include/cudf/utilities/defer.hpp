@@ -13,6 +13,10 @@
 
 namespace CUDF_EXPORT cudf {
 
+/// @brief RAII utility to execute a callable at the end of a scope.
+/// This is useful for ensuring cleanup code is executed, even in the presence of exceptions.
+/// And is intended for wrapping C APIs that require explicit resource management without having to
+/// write custom wrapper types.
 template <typename T>
 struct defer {
  private:
