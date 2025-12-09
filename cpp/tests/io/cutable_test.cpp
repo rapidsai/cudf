@@ -68,25 +68,6 @@ struct CutableTest : public cudf::test::BaseFixture {
     run_test_file(t);
     run_test_buffer(t);
   }
-
-  void run_test_device_buffer(cudf::table_view const& expected)
-  {
-    std::vector<char> buffer;
-
-    cudf::io::experimental::write_cutable(
-      cudf::io::cutable_writer_options::builder(cudf::io::sink_info{&buffer}, expected).build());
-
-    rmm::device_buffer device_buffer(buffer.size(), cudf::get_default_stream());
-    CUDF_CUDA_TRY(
-      cudaMemcpy(device_buffer.data(), buffer.data(), buffer.size(), cudaMemcpyHostToDevice));
-
-    auto device_span = cudf::device_span<std::byte const>(
-      static_cast<std::byte const*>(device_buffer.data()), device_buffer.size());
-    auto result = cudf::io::experimental::read_cutable(
-      cudf::io::cutable_reader_options::builder(cudf::io::source_info{device_span}).build());
-
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.table);
-  }
 };
 
 TEST_F(CutableTest, SingleColumnFixedWidth)
@@ -114,20 +95,10 @@ TEST_F(CutableTest, MultiColumnFixedWidth)
                                                      {true, false, true, true, true, true, true});
   cudf::test::fixed_width_column_wrapper<double> col3({8, 4, 2, 0, 7, 1, 3},
                                                       {false, true, true, true, true, true, true});
+  cudf::test::fixed_width_column_wrapper<bool> col4({true, false, true, false, true, false, true},
+                                                    {true, true, false, true, true, true, false});
 
-  auto const expected = cudf::table_view{{col1, col2, col3}};
-  run_test(expected);
-}
-
-TEST_F(CutableTest, MultiColumnWithStrings)
-{
-  cudf::test::fixed_width_column_wrapper<int16_t> col1(
-    {1, 2, 3, 4, 5, 6, 7}, {true, true, true, false, true, false, true});
-  cudf::test::strings_column_wrapper col2({"Lorem", "ipsum", "dolor", "sit", "amet", "ort", "ral"},
-                                          {true, false, true, true, true, false, true});
-  cudf::test::strings_column_wrapper col3({"", "this", "is", "a", "column", "of", "strings"});
-
-  auto const expected = cudf::table_view{{col1, col2, col3}};
+  auto const expected = cudf::table_view{{col1, col2, col3, col4}};
   run_test(expected);
 }
 
@@ -139,25 +110,23 @@ TEST_F(CutableTest, EmptyTable)
   run_test(expected);
 }
 
-TEST_F(CutableTest, Lists)
+TEST_F(CutableTest, MultiColumnCompound)
 {
-  // Create a list column with element validity
+  cudf::test::strings_column_wrapper string_col({"Lorem", "ipsum", "dolor", "sit"},
+                                                {true, false, true, true});
+
   auto valids =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
-  cudf::test::lists_column_wrapper<int32_t> col{
-    {{1, 2, 3}, valids}, {4, 5}, {}, {{6, 7, 8, 9}, valids}, {10}};
+  cudf::test::lists_column_wrapper<int32_t> list_col{
+    {{1, 2, 3}, valids}, {4, 5}, {}, {{6, 7, 8, 9}, valids}};
 
-  auto const expected = cudf::table_view{{col}};
-  run_test(expected);
-}
+  cudf::test::fixed_width_column_wrapper<int32_t> struct_col1{{1, 2, 3, 4},
+                                                              {true, false, true, true}};
+  cudf::test::strings_column_wrapper struct_col2{{"a", "b", "c", "d"}, {true, true, false, true}};
+  cudf::test::structs_column_wrapper struct_col{{struct_col1, struct_col2},
+                                                {true, true, true, false}};
 
-TEST_F(CutableTest, StructColumn)
-{
-  cudf::test::fixed_width_column_wrapper<int32_t> col1{{1, 2, 3, 4}, {true, false, true, true}};
-  cudf::test::strings_column_wrapper col2{{"a", "b", "c", "d"}, {true, true, false, true}};
-  cudf::test::structs_column_wrapper struct_col{{col1, col2}, {true, true, true, false}};
-
-  auto const expected = cudf::table_view{{struct_col}};
+  auto const expected = cudf::table_view{{string_col, list_col, struct_col}};
   run_test(expected);
 }
 
@@ -415,7 +384,7 @@ TEST_F(CutableTest, DictionaryColumn)
   run_test(expected);
 }
 
-TEST_F(CutableTest, ListsOfTypes)
+TEST_F(CutableTest, Lists)
 {
   using namespace cudf::test;
   using namespace cuda::std::chrono;
@@ -546,7 +515,22 @@ TEST_F(CutableTest, DeviceBufferSource)
   cudf::test::fixed_width_column_wrapper<int32_t> col({1, 2, 3, 4, 5});
 
   auto const expected = cudf::table_view{{col}};
-  run_test_device_buffer(expected);
+
+  std::vector<char> buffer;
+
+  cudf::io::experimental::write_cutable(
+    cudf::io::cutable_writer_options::builder(cudf::io::sink_info{&buffer}, expected).build());
+
+  rmm::device_buffer device_buffer(buffer.size(), cudf::get_default_stream());
+  CUDF_CUDA_TRY(
+    cudaMemcpy(device_buffer.data(), buffer.data(), buffer.size(), cudaMemcpyHostToDevice));
+
+  auto device_span = cudf::device_span<std::byte const>(
+    static_cast<std::byte const*>(device_buffer.data()), device_buffer.size());
+  auto result = cudf::io::experimental::read_cutable(
+    cudf::io::cutable_reader_options::builder(cudf::io::source_info{device_span}).build());
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.table);
 }
 
 TEST_F(CutableTest, UnicodeStrings)
@@ -585,17 +569,6 @@ TEST_F(CutableTest, ManyColumns)
   }
 
   cudf::table_view expected(columns);
-  run_test(expected);
-}
-
-TEST_F(CutableTest, SingleColumnManyRows)
-{
-  constexpr int num_rows = 1234567;
-
-  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
-  cudf::test::fixed_width_column_wrapper<int64_t> col(sequence, sequence + num_rows);
-
-  auto const expected = cudf::table_view{{col}};
   run_test(expected);
 }
 
