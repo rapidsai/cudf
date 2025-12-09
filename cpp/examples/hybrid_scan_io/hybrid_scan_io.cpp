@@ -350,10 +350,6 @@ int main(int argc, char const** argv)
       filters.insert(parquet_filter_type::PAYLOAD_COLUMN_PAGES_WITH_ROW_MASK);
     }
 
-    timer timer;
-    std::cout << "Reading " << input_filepath << " with next-gen parquet reader...\n";
-    timer.reset();
-
     // Create io source
     auto const data_source = io_source{input_filepath, io_source_type, stream};
 
@@ -364,6 +360,10 @@ int main(int argc, char const** argv)
                    "times for nvcomp, cufile loading and RMM growth.\n\n";
       std::ignore = read_parquet(data_source, filter_expression, stream);
     }
+
+    timer timer;
+    std::cout << "Reading " << input_filepath << " with next-gen parquet reader...\n";
+    timer.reset();
 
     auto [table_next_gen_reader, row_mask] =
       hybrid_scan(data_source, filter_expression, filters, stream, stats_mr);
