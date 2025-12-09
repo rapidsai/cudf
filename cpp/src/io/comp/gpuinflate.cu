@@ -1066,6 +1066,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   __syncthreads();
   // Main loop decoding blocks
   while (!state->err) {
+    __syncthreads();
     if (!t) {
       // Thread0: read last flag, block type and custom huffman tables if any
       if (state->cur + (state->bitpos >> 3) >= state->end)
@@ -1120,7 +1121,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       copy_stored(state, t);
     }
     if (state->blast) break;
-    __syncthreads();
   }
   __syncthreads();
   // Output decompression status and length

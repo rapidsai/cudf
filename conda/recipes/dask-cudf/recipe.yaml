@@ -28,7 +28,7 @@ requirements:
   host:
     - python >=3.10
     - pip
-    - rapids-build-backend >=0.4.0,<0.5.0.dev0
+    - rapids-build-backend >=0.4.0,<0.5.0
     - setuptools
     - cuda-version =${{ cuda_version }}
   run:

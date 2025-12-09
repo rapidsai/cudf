@@ -115,7 +115,7 @@ def decompose_single_agg(
         # - min/max/dense/ordinal -> IDX_DTYPE (UInt32/UInt64)
         post_col: expr.Expr = expr.Col(agg.dtype, name)
         if agg.name == "rank":
-            post_col = expr.Cast(agg.dtype, post_col)
+            post_col = expr.Cast(agg.dtype, True, post_col)  # noqa: FBT003
 
         return [(named_expr, True)], named_expr.reconstruct(post_col)
     if isinstance(agg, expr.UnaryFunction) and agg.name == "null_count":
@@ -131,10 +131,10 @@ def decompose_single_agg(
         sum_name = next(name_generator)
         sum_agg = expr.NamedExpr(
             sum_name,
-            expr.Agg(u32, "sum", (), context, expr.Cast(u32, is_null_bool)),
+            expr.Agg(u32, "sum", (), context, expr.Cast(u32, True, is_null_bool)),  # noqa: FBT003
         )
         return [(sum_agg, True)], named_expr.reconstruct(
-            expr.Cast(u32, expr.Col(u32, sum_name))
+            expr.Cast(u32, True, expr.Col(u32, sum_name))  # noqa: FBT003
         )
     if isinstance(agg, expr.Col):
         # TODO: collect_list produces null for empty group in libcudf, empty list in polars.
@@ -201,6 +201,7 @@ def decompose_single_agg(
                     agg.dtype
                     if plc.traits.is_floating_point(agg.dtype.plc_type)
                     else DataType(pl.Float64()),
+                    True,  # noqa: FBT003
                     child,
                 )
                 child_dtype = child.dtype.plc_type
@@ -229,7 +230,11 @@ def decompose_single_agg(
 
         if agg.name == "sum":
             col = (
-                expr.Cast(agg.dtype, expr.Col(DataType(pl.datatypes.Int64()), name))
+                expr.Cast(
+                    agg.dtype,
+                    True,  # noqa: FBT003
+                    expr.Col(DataType(pl.datatypes.Int64()), name),
+                )
                 if (
                     plc.traits.is_integral(agg.dtype.plc_type)
                     and agg.dtype.id() != plc.TypeId.INT64
@@ -282,7 +287,7 @@ def decompose_single_agg(
             )  # libcudf promotes to float64
             if agg.dtype.plc_type.id() == plc.TypeId.FLOAT32:
                 # Cast back to float32 to match Polars
-                post_agg_col = expr.Cast(agg.dtype, post_agg_col)
+                post_agg_col = expr.Cast(agg.dtype, True, post_agg_col)  # noqa: FBT003
             return [(named_expr, True)], named_expr.reconstruct(post_agg_col)
         else:
             return [(named_expr, True)], named_expr.reconstruct(
