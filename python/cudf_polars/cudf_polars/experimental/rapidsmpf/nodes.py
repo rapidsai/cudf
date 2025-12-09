@@ -161,9 +161,7 @@ async def default_node_multi(
         # Recv/send data.
         while True:
             # Receive from all non-finished channels
-            for ch_idx, (ch_in, _child) in enumerate(
-                zip(chs_in, ir.children, strict=True)
-            ):
+            for ch_idx, ch_in in enumerate(chs_in):
                 if ch_idx in finished_channels:
                     continue  # This channel already finished, reuse its data
 
@@ -175,19 +173,19 @@ async def default_node_multi(
                     # Store the new chunk (replacing previous if any)
                     ready_chunks[ch_idx] = TableChunk.from_message(msg)
                     chunk_count[ch_idx] += 1
-                assert ready_chunks[ch_idx] is not None, (
-                    f"Channel {ch_idx} has no data after receive loop."
-                )
 
             # If all channels finished, we're done
             if len(finished_channels) == n_children:
                 break
 
-            # Convert chunks to DataFrames right before evaluation
-            # All chunks are guaranteed to be non-None by the assertion above
-            assert all(chunk is not None for chunk in ready_chunks), (
-                "All chunks must be non-None"
-            )
+            # Check if any channel drained without providing data.
+            # If so, create an empty chunk for that channel.
+            for ch_idx, child in enumerate(ir.children):
+                if ready_chunks[ch_idx] is None:
+                    # Channel drained without data - create empty chunk
+                    stream = ir_context.get_cuda_stream()
+                    ready_chunks[ch_idx] = empty_table_chunk(child, context, stream)
+
             # Ensure all table chunks are unspilled and available.
             ready_chunks = [
                 chunk.make_available_and_spill(context.br(), allow_overbooking=True)
