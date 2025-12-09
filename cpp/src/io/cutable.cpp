@@ -45,20 +45,6 @@ struct cutable_header {
   uint64_t data_length;      ///< Length of data buffer in bytes
 };
 
-/**
- * @brief Validate the cutable header
- *
- * @param header The header to validate
- * @throws cudf::logic_error If the header is invalid
- */
-void validate_header(cutable_header const& header)
-{
-  CUDF_EXPECTS(header.magic == cutable_header::magic_number,
-               "Invalid magic number in cutable header");
-  CUDF_EXPECTS(header.format_version == cutable_header::version,
-               "Unsupported cutable format version");
-}
-
 }  // anonymous namespace
 
 cutable_writer_options_builder cutable_writer_options::builder(sink_info const& sink,
@@ -152,8 +138,10 @@ packed_table read_cutable(cutable_reader_options const& options,
 
   source->host_read(0, header_size, reinterpret_cast<uint8_t*>(&header));
 
-  // Validate the header
-  validate_header(header);
+  CUDF_EXPECTS(header.magic == cutable_header::magic_number,
+               "Invalid magic number in cutable header");
+  CUDF_EXPECTS(header.format_version == cutable_header::version,
+               "Unsupported cutable format version");
 
   // Calculate offsets
   size_t metadata_offset = header_size;
