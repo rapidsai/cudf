@@ -183,17 +183,6 @@ class cutable_reader_options_builder {
  * then writes it to the specified sink with a simple header containing metadata
  * and data lengths.
  *
- * The output format consists of:
- * 1. A fixed-size header (24 bytes) containing:
- *    - Magic number for format validation
- *    - Version number for compatibility
- *    - Metadata buffer size
- *    - Data buffer size
- * 2. The metadata buffer (host-side)
- * 3. The data buffer (device-side, copied to sink)
- *
- * @throws cudf::logic_error If the sink cannot be written to
- *
  * @param options Options specifying the sink and table to write
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr An optional memory resource to use for all device allocations
@@ -220,9 +209,6 @@ void write_cutable(cutable_writer_options const& options,
  *
  * It is the caller's responsibility to ensure the table_view does not outlive
  * the packed_columns data.
- *
- * @throws cudf::logic_error If the header is invalid or corrupted
- * @throws cudf::logic_error If the format version is not supported
  *
  * @param options Options specifying the source to read from
  * @param stream CUDA stream used for device memory operations and kernel launches
