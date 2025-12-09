@@ -21,8 +21,6 @@ namespace CUDF_EXPORT cudf {
 namespace io {
 
 /**
- * @addtogroup io_cutable
- * @{
  * @file
  * @brief CUTable binary format APIs for serialization and deserialization
  */
@@ -31,7 +29,7 @@ namespace io {
  * @brief Simple binary file format header for CUTable
  *
  * The CUTable format stores a table in a simple binary layout:
- * - Magic number (4 bytes): "CUDF"
+ * - Magic number (4 bytes): "CTBL"
  * - Version (4 bytes): uint32_t format version (currently 1)
  * - Metadata length (8 bytes): uint64_t size of the metadata buffer in bytes
  * - Data length (8 bytes): uint64_t size of the data buffer in bytes
@@ -39,7 +37,7 @@ namespace io {
  * - Data (variable): contiguous device data from pack()
  */
 struct cutable_header {
-  static constexpr uint32_t magic_number = 0x46445543;  ///< "CUDF" in little-endian
+  static constexpr uint32_t magic_number = 0x4C425443;  ///< "CTBL" in little-endian
   static constexpr uint32_t version      = 1;           ///< Format version
 
   uint32_t magic;            ///< Magic number for format validation
@@ -222,13 +220,12 @@ class cutable_reader_options_builder {
   cutable_reader_options _options;
 };
 
-/** @} */  // end of group
 }  // namespace io
 
 namespace io::experimental {
 
 /**
- * @addtogroup io_cutable
+ * @addtogroup io_writers
  * @{
  */
 
@@ -257,6 +254,12 @@ namespace io::experimental {
 void write_cutable(cutable_writer_options const& options,
                    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
                    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/** @} */  // end of group
+/**
+ * @addtogroup io_readers
+ * @{
+ */
 
 /**
  * @brief Read a table in CUTable binary format.
