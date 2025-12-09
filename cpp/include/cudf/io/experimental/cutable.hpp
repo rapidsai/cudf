@@ -204,11 +204,12 @@ void write_cutable(cutable_writer_options const& options,
  * and uses `cudf::unpack` to deserialize the table.
  *
  * Returns a `packed_table` containing a `table_view` and the underlying `packed_columns`
- * data. This is a zero-copy operation - the table_view points directly into the
- * contiguous memory buffers owned by the packed_columns.
+ * data. After reading the data from the source, the unpacking operation creates views
+ * without copying - the `table_view` points directly into the contiguous memory buffers
+ * owned by `packed_columns`.
  *
- * It is the caller's responsibility to ensure the table_view does not outlive
- * the packed_columns data.
+ * It is the caller's responsibility to ensure the `table_view` does not outlive
+ * the `packed_columns` data.
  *
  * @param options Options specifying the source to read from
  * @param stream CUDA stream used for device memory operations and kernel launches
