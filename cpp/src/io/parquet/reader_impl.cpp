@@ -401,7 +401,13 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   update_output_nullmasks_for_pruned_pages(_subpass_page_mask, skip_rows, num_rows);
 
   // Copy over initial string offsets from device
-  auto h_initial_str_offsets = cudf::detail::make_host_vector_async(initial_str_offsets, _stream);
+  auto h_initial_str_offsets =
+    cudf::detail::make_pinned_vector_async<size_t>(initial_str_offsets.size(), _stream);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(h_initial_str_offsets.data(),
+                                initial_str_offsets.data(),
+                                initial_str_offsets.size() * sizeof(size_t),
+                                cudaMemcpyDeviceToHost,
+                                _stream.value()));
 
   if (auto const error = error_code.value_sync(_stream); error != 0) {
     CUDF_FAIL("Parquet data decode failed with code(s) " + kernel_error::to_string(error));
