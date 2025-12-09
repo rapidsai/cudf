@@ -421,46 +421,66 @@ TEST_F(CutableTest, ListsOfTypes)
   using namespace cuda::std::chrono;
   using namespace numeric;
 
-  // Lists of lists (nested lists)
-  cudf::test::lists_column_wrapper<int32_t> child_list{{1, 2}, {3, 4}, {5, 6, 7}, {8}};
+  // Lists of lists (nested lists) - 4 rows
+  cudf::test::lists_column_wrapper<int32_t> child_list{{1, 2}, {3, 4}, {5, 6, 7}, {8}, {}, {9, 10}};
   auto lists_of_lists_offsets =
-    cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 4}.release();
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 4, 6, 6}.release();
   auto lists_of_lists_col = cudf::make_lists_column(
-    2, std::move(lists_of_lists_offsets), child_list.release(), 0, rmm::device_buffer{});
+    4, std::move(lists_of_lists_offsets), child_list.release(), 0, rmm::device_buffer{});
 
-  // Lists of strings
-  cudf::test::lists_column_wrapper<cudf::string_view> lists_of_strings_col{
-    {{"hello", "world"}, {"foo", "bar", "baz"}}};
+  // Lists of strings - 4 rows
+  cudf::test::strings_column_wrapper strings_child{"hello", "world", "foo", "bar", "baz", "test"};
+  auto strings_offsets =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 5, 5, 6}.release();
+  auto lists_of_strings_col = cudf::make_lists_column(
+    4, std::move(strings_offsets), strings_child.release(), 0, rmm::device_buffer{});
 
-  // Lists of timestamps
-  cudf::test::lists_column_wrapper<cudf::timestamp_ms> lists_of_timestamps_col{
-    {{cudf::timestamp_ms{100ms}, cudf::timestamp_ms{200ms}}, {cudf::timestamp_ms{300ms}}}};
+  // Lists of timestamps - 4 rows
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms> timestamps_child{
+    cudf::timestamp_ms{100ms},
+    cudf::timestamp_ms{200ms},
+    cudf::timestamp_ms{300ms},
+    cudf::timestamp_ms{400ms},
+    cudf::timestamp_ms{500ms},
+    cudf::timestamp_ms{600ms}};
+  auto timestamps_offsets =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 3, 3, 6}.release();
+  auto lists_of_timestamps_col = cudf::make_lists_column(
+    4, std::move(timestamps_offsets), timestamps_child.release(), 0, rmm::device_buffer{});
 
-  // Lists of durations
-  cudf::test::lists_column_wrapper<cudf::duration_ns> lists_of_durations_col{
-    {{cudf::duration_ns{1000ns}, cudf::duration_ns{2000ns}}, {cudf::duration_ns{3000ns}}}};
+  // Lists of durations - 4 rows
+  cudf::test::fixed_width_column_wrapper<cudf::duration_ns> durations_child{
+    cudf::duration_ns{1000ns},
+    cudf::duration_ns{2000ns},
+    cudf::duration_ns{3000ns},
+    cudf::duration_ns{4000ns},
+    cudf::duration_ns{5000ns}};
+  auto durations_offsets =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 3, 3, 5}.release();
+  auto lists_of_durations_col = cudf::make_lists_column(
+    4, std::move(durations_offsets), durations_child.release(), 0, rmm::device_buffer{});
 
-  // Lists of decimals (DECIMAL32)
+  // Lists of decimals (DECIMAL32) - 4 rows
   cudf::test::fixed_point_column_wrapper<int32_t> decimal32_child{
     {12345, -67890, 99999, 0}, {true, true, true, true}, scale_type{2}};
   auto decimal32_offsets =
-    cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 4}.release();
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 3, 3, 4}.release();
   auto lists_of_decimals_col = cudf::make_lists_column(
-    2, std::move(decimal32_offsets), decimal32_child.release(), 0, rmm::device_buffer{});
+    4, std::move(decimal32_offsets), decimal32_child.release(), 0, rmm::device_buffer{});
 
-  // Lists of structs
-  cudf::test::fixed_width_column_wrapper<int32_t> struct_col1{1, 2, 3, 4};
-  cudf::test::strings_column_wrapper struct_col2{"a", "b", "c", "d"};
+  // Lists of structs - 4 rows (need 6 struct elements for 4 lists)
+  cudf::test::fixed_width_column_wrapper<int32_t> struct_col1{1, 2, 3, 4, 5, 6};
+  cudf::test::strings_column_wrapper struct_col2{"a", "b", "c", "d", "e", "f"};
   cudf::test::structs_column_wrapper struct_col{{struct_col1, struct_col2}};
   auto lists_of_structs_offsets =
-    cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 4}.release();
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 1, 3, 4, 6}.release();
   auto lists_of_structs_col = cudf::make_lists_column(
-    2, std::move(lists_of_structs_offsets), struct_col.release(), 0, rmm::device_buffer{});
+    4, std::move(lists_of_structs_offsets), struct_col.release(), 0, rmm::device_buffer{});
 
   auto const expected = cudf::table_view{{lists_of_lists_col->view(),
-                                          lists_of_strings_col,
-                                          lists_of_timestamps_col,
-                                          lists_of_durations_col,
+                                          lists_of_strings_col->view(),
+                                          lists_of_timestamps_col->view(),
+                                          lists_of_durations_col->view(),
                                           lists_of_decimals_col->view(),
                                           lists_of_structs_col->view()}};
   run_test(expected);
