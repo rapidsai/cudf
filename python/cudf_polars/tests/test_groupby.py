@@ -429,3 +429,13 @@ def test_groupby_sum_decimal_null_group() -> None:
     )
     q = df.group_by("key1").agg(pl.col("foo").sum())
     assert_gpu_result_equal(q, check_row_order=False)
+
+
+@pytest.mark.xfail(
+    raises=AssertionError,
+    reason="https://github.com/rapidsai/cudf/issues/19610",
+)
+def test_groupby_literal_agg():
+    df = pl.LazyFrame({"c0": [True, False]})
+    q = df.group_by("c0").agg(pl.lit(1).is_not_null())
+    assert_gpu_result_equal(q, check_row_order=False)
