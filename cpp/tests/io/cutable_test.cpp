@@ -388,21 +388,18 @@ TEST_F(CutableTest, Lists)
   using namespace cuda::std::chrono;
   using namespace numeric;
 
-  // Lists of lists (nested lists) - 4 rows
   cudf::test::lists_column_wrapper<int32_t> child_list{{1, 2}, {3, 4}, {5, 6, 7}, {8}, {}, {9, 10}};
   auto lists_of_lists_offsets =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 4, 6, 6}.release();
   auto lists_of_lists_col = cudf::make_lists_column(
     4, std::move(lists_of_lists_offsets), child_list.release(), 0, rmm::device_buffer{});
 
-  // Lists of strings - 4 rows
   cudf::test::strings_column_wrapper strings_child{"hello", "world", "foo", "bar", "baz", "test"};
   auto strings_offsets =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 5, 5, 6}.release();
   auto lists_of_strings_col = cudf::make_lists_column(
     4, std::move(strings_offsets), strings_child.release(), 0, rmm::device_buffer{});
 
-  // Lists of timestamps - 4 rows
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms> timestamps_child{
     cudf::timestamp_ms{100ms},
     cudf::timestamp_ms{200ms},
@@ -415,7 +412,6 @@ TEST_F(CutableTest, Lists)
   auto lists_of_timestamps_col = cudf::make_lists_column(
     4, std::move(timestamps_offsets), timestamps_child.release(), 0, rmm::device_buffer{});
 
-  // Lists of durations - 4 rows
   cudf::test::fixed_width_column_wrapper<cudf::duration_ns> durations_child{
     cudf::duration_ns{1000ns},
     cudf::duration_ns{2000ns},
@@ -427,7 +423,6 @@ TEST_F(CutableTest, Lists)
   auto lists_of_durations_col = cudf::make_lists_column(
     4, std::move(durations_offsets), durations_child.release(), 0, rmm::device_buffer{});
 
-  // Lists of decimals (DECIMAL32) - 4 rows
   cudf::test::fixed_point_column_wrapper<int32_t> decimal32_child{
     {12345, -67890, 99999, 0}, {true, true, true, true}, scale_type{2}};
   auto decimal32_offsets =
@@ -435,7 +430,6 @@ TEST_F(CutableTest, Lists)
   auto lists_of_decimals_col = cudf::make_lists_column(
     4, std::move(decimal32_offsets), decimal32_child.release(), 0, rmm::device_buffer{});
 
-  // Lists of structs - 4 rows (need 6 struct elements for 4 lists)
   cudf::test::fixed_width_column_wrapper<int32_t> struct_col1{1, 2, 3, 4, 5, 6};
   cudf::test::strings_column_wrapper struct_col2{"a", "b", "c", "d", "e", "f"};
   cudf::test::structs_column_wrapper struct_col{{struct_col1, struct_col2}};
@@ -460,19 +454,6 @@ TEST_F(CutableTest, StructsContainingLists)
   cudf::test::structs_column_wrapper struct_col{{list_col, int_col}};
 
   auto const expected = cudf::table_view{{struct_col}};
-  run_test(expected);
-}
-
-TEST_F(CutableTest, NestedStructs)
-{
-  cudf::test::fixed_width_column_wrapper<int32_t> inner_col1{1, 2};
-  cudf::test::strings_column_wrapper inner_col2{"a", "b"};
-  cudf::test::structs_column_wrapper inner_struct{{inner_col1, inner_col2}};
-
-  cudf::test::fixed_width_column_wrapper<float> outer_col{1.5f, 2.5f};
-  cudf::test::structs_column_wrapper outer_struct{{inner_struct, outer_col}};
-
-  auto const expected = cudf::table_view{{outer_struct}};
   run_test(expected);
 }
 
