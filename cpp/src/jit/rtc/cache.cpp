@@ -1,6 +1,6 @@
 
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -34,9 +34,7 @@ namespace {
 
 }  // namespace
 
-compile_cache_t::compile_cache_t(bool enabled,
-                                 std::string cache_dir,
-                                 compile_cache_limits const& limits)
+cache_t::cache_t(bool enabled, std::string cache_dir, cache_limits const& limits)
   : enabled_{enabled},
     cache_dir_{std::move(cache_dir)},
     limits_{limits},
@@ -51,13 +49,13 @@ compile_cache_t::compile_cache_t(bool enabled,
   }
 }
 
-bool compile_cache_t::is_enabled() const { return enabled_; }
+bool cache_t::is_enabled() const { return enabled_; }
 
-void compile_cache_t::enable() { enabled_ = true; }
+void cache_t::enable() { enabled_ = true; }
 
-void compile_cache_t::disable() { enabled_ = false; }
+void cache_t::disable() { enabled_ = false; }
 
-void compile_cache_t::store_blob_to_memory(sha256_hash const& sha, std::shared_future<blob> binary)
+void cache_t::store_blob_to_memory(sha256_hash const& sha, std::shared_future<blob> binary)
 {
   CUDF_FUNC_RANGE();
 
@@ -71,7 +69,7 @@ void compile_cache_t::store_blob_to_memory(sha256_hash const& sha, std::shared_f
   blobs_cache_.insert(sha, std::move(binary), current_tick);
 }
 
-void compile_cache_t::store_blob_to_disk(sha256_hash const& sha, blob_view binary)
+void cache_t::store_blob_to_disk(sha256_hash const& sha, blob_view binary)
 {
   CUDF_FUNC_RANGE();
 
@@ -117,8 +115,7 @@ void compile_cache_t::store_blob_to_disk(sha256_hash const& sha, blob_view binar
   }
 }
 
-std::optional<std::shared_future<blob>> compile_cache_t::query_blob_from_memory(
-  sha256_hash const& sha)
+std::optional<std::shared_future<blob>> cache_t::query_blob_from_memory(sha256_hash const& sha)
 {
   CUDF_FUNC_RANGE();
 
@@ -142,7 +139,7 @@ std::optional<std::shared_future<blob>> compile_cache_t::query_blob_from_memory(
   }
 }
 
-std::optional<blob> compile_cache_t::query_blob_from_disk(sha256_hash const& sha)
+std::optional<blob> cache_t::query_blob_from_disk(sha256_hash const& sha)
 {
   CUDF_FUNC_RANGE();
 
@@ -185,7 +182,7 @@ std::optional<blob> compile_cache_t::query_blob_from_disk(sha256_hash const& sha
     blob_t::from_parts(static_cast<uint8_t const*>(map), file_size, nullptr, deleter));
 }
 
-void compile_cache_t::store_fragment(sha256_hash const& sha, std::shared_future<fragment> frag)
+void cache_t::store_fragment(sha256_hash const& sha, std::shared_future<fragment> frag)
 {
   CUDF_FUNC_RANGE();
 
@@ -201,7 +198,7 @@ void compile_cache_t::store_fragment(sha256_hash const& sha, std::shared_future<
   }
 }
 
-std::optional<std::shared_future<fragment>> compile_cache_t::query_fragment(sha256_hash const& sha)
+std::optional<std::shared_future<fragment>> cache_t::query_fragment(sha256_hash const& sha)
 {
   CUDF_FUNC_RANGE();
 
@@ -225,7 +222,7 @@ std::optional<std::shared_future<fragment>> compile_cache_t::query_fragment(sha2
   }
 }
 
-void compile_cache_t::store_library(sha256_hash const& sha, std::shared_future<library> mod)
+void cache_t::store_library(sha256_hash const& sha, std::shared_future<library> mod)
 {
   CUDF_FUNC_RANGE();
 
@@ -241,7 +238,7 @@ void compile_cache_t::store_library(sha256_hash const& sha, std::shared_future<l
   }
 }
 
-std::optional<std::shared_future<library>> compile_cache_t::query_library(sha256_hash const& sha)
+std::optional<std::shared_future<library>> cache_t::query_library(sha256_hash const& sha)
 {
   CUDF_FUNC_RANGE();
 
@@ -265,13 +262,13 @@ std::optional<std::shared_future<library>> compile_cache_t::query_library(sha256
   }
 }
 
-compile_cache_statistics compile_cache_t::get_statistics() const { return counter_.get(); }
+cache_statistics cache_t::get_statistics() const { return counter_.get_statistics(); }
 
-void compile_cache_t::clear_statistics() { counter_.clear(); }
+void cache_t::clear_statistics() { counter_.clear(); }
 
-compile_cache_limits compile_cache_t::get_limits() const { return limits_; }
+cache_limits cache_t::get_limits() const { return limits_; }
 
-size_t compile_cache_t::get_blob_count() const
+size_t cache_t::get_blob_count() const
 {
   CUDF_FUNC_RANGE();
 
@@ -281,7 +278,7 @@ size_t compile_cache_t::get_blob_count() const
   }
 }
 
-size_t compile_cache_t::get_fragment_count() const
+size_t cache_t::get_fragment_count() const
 {
   CUDF_FUNC_RANGE();
 
@@ -291,7 +288,7 @@ size_t compile_cache_t::get_fragment_count() const
   }
 }
 
-size_t compile_cache_t::get_library_count() const
+size_t cache_t::get_library_count() const
 {
   CUDF_FUNC_RANGE();
 
@@ -301,7 +298,7 @@ size_t compile_cache_t::get_library_count() const
   }
 }
 
-void compile_cache_t::clear_memory_store()
+void cache_t::clear_memory_store()
 {
   CUDF_FUNC_RANGE();
 
@@ -321,9 +318,10 @@ void compile_cache_t::clear_memory_store()
   }
 }
 
-void compile_cache_t::clear_disk_store()
+void cache_t::clear_disk_store()
 {
   CUDF_FUNC_RANGE();
+
   DIR* dir = opendir(cache_dir_.c_str());
 
   if (dir == nullptr) { throw_posix("Failed to open RTC cache directory for clearing", "opendir"); }

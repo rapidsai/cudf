@@ -1,6 +1,6 @@
 
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,7 +19,7 @@
 namespace cudf {
 namespace rtc {
 
-struct [[nodiscard]] compile_cache_statistics {
+struct [[nodiscard]] cache_statistics {
   uint64_t blob_memory_hits       = 0;
   uint64_t blob_memory_misses     = 0;
   uint64_t fragment_memory_hits   = 0;
@@ -30,7 +30,7 @@ struct [[nodiscard]] compile_cache_statistics {
   uint64_t blob_disk_misses       = 0;
 };
 
-struct [[nodiscard]] compile_cache_limits {
+struct [[nodiscard]] cache_limits {
   uint32_t num_blobs     = 1024;
   uint32_t num_fragments = 1024;
   uint32_t num_libraries = 1024;
@@ -196,7 +196,7 @@ struct alignas(std::hardware_destructive_interference_size) counter {
   }
 };
 
-struct compile_cache_statistics_counter {
+struct cache_statistics_counter {
   counter blob_memory_hits;
   counter blob_memory_misses;
   counter fragment_memory_hits;
@@ -234,22 +234,22 @@ struct compile_cache_statistics_counter {
 
   void miss_disk_blob() { blob_disk_misses.increment(); }
 
-  compile_cache_statistics get() const
+  cache_statistics get_statistics() const
   {
-    return compile_cache_statistics{.blob_memory_hits       = blob_memory_hits.get(),
-                                    .blob_memory_misses     = blob_memory_misses.get(),
-                                    .fragment_memory_hits   = fragment_memory_hits.get(),
-                                    .fragment_memory_misses = fragment_memory_misses.get(),
-                                    .library_memory_hits    = library_memory_hits.get(),
-                                    .library_memory_misses  = library_memory_misses.get(),
-                                    .blob_disk_hits         = blob_disk_hits.get(),
-                                    .blob_disk_misses       = blob_disk_misses.get()};
+    return cache_statistics{.blob_memory_hits       = blob_memory_hits.get(),
+                            .blob_memory_misses     = blob_memory_misses.get(),
+                            .fragment_memory_hits   = fragment_memory_hits.get(),
+                            .fragment_memory_misses = fragment_memory_misses.get(),
+                            .library_memory_hits    = library_memory_hits.get(),
+                            .library_memory_misses  = library_memory_misses.get(),
+                            .blob_disk_hits         = blob_disk_hits.get(),
+                            .blob_disk_misses       = blob_disk_misses.get()};
   }
 };
 
 }  // namespace detail
 
-/// @brief Compile cache for RTC blobs, fragments, and libraries
+/// @brief Thread-safe compile cache for compiled blobs, fragments, and libraries
 /// @details Provides in-memory and on-disk caching of compiled RTC artifacts.
 /// The cache uses an LRU eviction policy when the number of cached items
 /// exceeds user-defined limits.
@@ -261,13 +261,13 @@ struct compile_cache_statistics_counter {
 /// in-memory and on-disk caches to help monitor cache performance in benchmarking and debugging.
 /// The interface is zero-copy throughout, using shared pointers and spans to avoid unnecessary data
 /// copying across threads and disk.
-struct compile_cache_t {
+struct cache_t {
  private:
   bool enabled_;
 
   std::string cache_dir_;
 
-  compile_cache_limits limits_;
+  cache_limits limits_;
 
   detail::lru_memory_cache<std::shared_future<blob>> blobs_cache_;
 
@@ -275,23 +275,23 @@ struct compile_cache_t {
 
   detail::lru_memory_cache<std::shared_future<library>> libraries_cache_;
 
-  detail::compile_cache_statistics_counter counter_;
+  detail::cache_statistics_counter counter_;
 
   alignas(std::hardware_destructive_interference_size) uint64_t tick_;
 
  public:
-  compile_cache_t(bool enabled, std::string cache_dir, compile_cache_limits const& limits);
-  compile_cache_t(compile_cache_t const&)            = delete;
-  compile_cache_t& operator=(compile_cache_t const&) = delete;
-  compile_cache_t(compile_cache_t&&)                 = delete;
-  compile_cache_t& operator=(compile_cache_t&&)      = delete;
-  ~compile_cache_t()                                 = default;
+  cache_t(bool enabled, std::string cache_dir, cache_limits const& limits);
+  cache_t(cache_t const&)            = delete;
+  cache_t& operator=(cache_t const&) = delete;
+  cache_t(cache_t&&)                 = delete;
+  cache_t& operator=(cache_t&&)      = delete;
+  ~cache_t()                         = default;
+
+  [[nodiscard]] bool is_enabled() const;
 
   void enable();
 
   void disable();
-
- [[nodiscard]] bool is_enabled();
 
   void store_blob_to_memory(sha256_hash const& sha, std::shared_future<blob> binary);
 
@@ -309,17 +309,17 @@ struct compile_cache_t {
 
   std::optional<std::shared_future<library>> query_library(sha256_hash const& sha);
 
-  compile_cache_statistics get_statistics() const;
+  cache_statistics get_statistics() const;
 
   void clear_statistics();
 
-  compile_cache_limits get_limits() const;
+  cache_limits get_limits() const;
 
- [[nodiscard]]  size_t get_blob_count() const;
+  [[nodiscard]] size_t get_blob_count() const;
 
   [[nodiscard]] size_t get_fragment_count() const;
 
-  [[nodiscard]]  size_t get_library_count() const;
+  [[nodiscard]] size_t get_library_count() const;
 
   void clear_memory_store();
 
