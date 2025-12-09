@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include "host_buffer_source.hpp"
+
 #include <cudf/ast/expressions.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
@@ -13,6 +15,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <memory>
 #include <string>
 
 /**
@@ -112,6 +115,7 @@ class io_backend {
  private:
   void fetch_byte_ranges_to_host(size_t offset, size_t size, uint8_t* dst);
 
+  std::unique_ptr<host_buffer_source> _host_buffer_source;
   std::unique_ptr<cudf::io::datasource> _datasource;
   rmm::cuda_stream_view _stream;
 };

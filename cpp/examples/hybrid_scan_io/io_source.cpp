@@ -64,6 +64,7 @@ cudf::io::source_info generate_source_info_from_file(std::string const& file_pat
   auto kvikio_datasource = cudf::io::datasource::create(file_path);
   std::size_t const offset{0};
   auto const file_size = kvikio_datasource->size();
+  container.resize(file_size);
 
   auto const num_bytes_read =
     kvikio_datasource->host_read(offset, file_size, reinterpret_cast<uint8_t*>(container.data()));

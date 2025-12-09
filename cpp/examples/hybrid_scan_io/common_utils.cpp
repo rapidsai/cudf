@@ -5,6 +5,8 @@
 
 #include "common_utils.hpp"
 
+#include "host_buffer_source.hpp"
+
 #include <cudf/ast/expressions.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -153,8 +155,9 @@ std::vector<rmm::device_buffer> fetch_byte_ranges(
 }
 
 io_backend::io_backend(cudf::host_span<std::byte const> buffer, rmm::cuda_stream_view stream)
-  : _datasource(cudf::io::datasource::create(buffer)), _stream(stream)
+  : _host_buffer_source(std::make_unique<host_buffer_source>(buffer)), _stream(stream)
 {
+  _datasource = cudf::io::datasource::create(_host_buffer_source.get());
   CUDF_EXPECTS(_datasource != nullptr, "Failed to create datasource from buffer");
 }
 

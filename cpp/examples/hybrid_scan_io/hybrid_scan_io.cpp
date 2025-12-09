@@ -300,87 +300,87 @@ void inline print_usage()
  */
 int main(int argc, char const** argv)
 {
-  try {
-    auto input_filepath = std::string{"example.parquet"};
-    auto column_name    = std::string{"string_col"};
-    auto literal_value  = std::string{"0000001"};
-    auto io_source_type = io_source_type::PINNED_BUFFER;
+  //   try {
+  auto input_filepath = std::string{"example.parquet"};
+  auto column_name    = std::string{"string_col"};
+  auto literal_value  = std::string{"0000001"};
+  auto io_source_type = io_source_type::PINNED_BUFFER;
 
-    switch (argc) {
-      case 5: io_source_type = get_io_source_type(argv[4]); [[fallthrough]];
-      case 4: literal_value = argv[3]; [[fallthrough]];
-      case 3: column_name = argv[2]; [[fallthrough]];
-      case 2:  // Check if instead of input_paths, the first argument is `-h` or `--help`
-        if (auto arg = std::string{argv[1]}; arg != "-h" and arg != "--help") {
-          input_filepath = std::move(arg);
-          break;
-        }
-        [[fallthrough]];
-      default: print_usage(); throw std::invalid_argument("Invalid arguments");
-    }
-
-    // Check if input file exists
-    if (not std::filesystem::is_regular_file(input_filepath)) {
-      throw std::runtime_error("Input file does not exist");
-    }
-
-    // Initialize mr, default stream and stream pool
-    auto constexpr is_pool_used = false;
-    auto stream                 = cudf::get_default_stream();
-    auto resource               = create_memory_resource(is_pool_used);
-    auto stats_mr =
-      rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(resource.get());
-    rmm::mr::set_current_device_resource(&stats_mr);
-
-    // Create filter expression
-    auto const column_reference = cudf::ast::column_name_reference(column_name);
-    auto scalar                 = cudf::string_scalar(literal_value);
-    auto literal                = cudf::ast::literal(scalar);
-    auto filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, column_reference, literal);
-
-    // Insert which filters to apply
-    std::unordered_set<parquet_filter_type> filters;
-    {
-      filters.insert(parquet_filter_type::ROW_GROUPS_WITH_STATS);
-      filters.insert(parquet_filter_type::ROW_GROUPS_WITH_DICT_PAGES);
-      filters.insert(parquet_filter_type::ROW_GROUPS_WITH_BLOOM_FILTERS);
-      // Deliberately disabled as it has a high cost to benefit ratio
-      // filters.insert(parquet_filter_type::FILTER_COLUMN_PAGES_WITH_PAGE_INDEX);
-      filters.insert(parquet_filter_type::PAYLOAD_COLUMN_PAGES_WITH_ROW_MASK);
-    }
-
-    timer timer;
-    std::cout << "Reading " << input_filepath << " with next-gen parquet reader...\n";
-    timer.reset();
-
-    // Create io source
-    auto const data_source = io_source{input_filepath, io_source_type, stream};
-
-    // Read with the main reader without timing
-    {
-      std::cout << "\nReading " << input_filepath << "...\n";
-      std::cout << "Note: Not timing this initial parquet read as it may include\n"
-                   "times for nvcomp, cufile loading and RMM growth.\n\n";
-      std::ignore = read_parquet(data_source, filter_expression, stream);
-    }
-
-    auto [table_next_gen_reader, row_mask] =
-      hybrid_scan(data_source, filter_expression, filters, stream, stats_mr);
-
-    timer.print_elapsed_millis();
-
-    std::cout << "Reading " << input_filepath << " with main parquet reader...\n";
-    timer.reset();
-    auto [table_main_reader, metadata] = read_parquet(data_source, filter_expression, stream);
-    timer.print_elapsed_millis();
-
-    // Check for validity
-    check_tables_equal(table_next_gen_reader->view(), table_main_reader->view(), stream);
-
-  } catch (std::exception const& ex) {
-    std::cout << ex.what() << std::endl;
+  switch (argc) {
+    case 5: io_source_type = get_io_source_type(argv[4]); [[fallthrough]];
+    case 4: literal_value = argv[3]; [[fallthrough]];
+    case 3: column_name = argv[2]; [[fallthrough]];
+    case 2:  // Check if instead of input_paths, the first argument is `-h` or `--help`
+      if (auto arg = std::string{argv[1]}; arg != "-h" and arg != "--help") {
+        input_filepath = std::move(arg);
+        break;
+      }
+      [[fallthrough]];
+    default: print_usage(); throw std::invalid_argument("Invalid arguments");
   }
+
+  // Check if input file exists
+  if (not std::filesystem::is_regular_file(input_filepath)) {
+    throw std::runtime_error("Input file does not exist");
+  }
+
+  // Initialize mr, default stream and stream pool
+  auto constexpr is_pool_used = false;
+  auto stream                 = cudf::get_default_stream();
+  auto resource               = create_memory_resource(is_pool_used);
+  auto stats_mr =
+    rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(resource.get());
+  rmm::mr::set_current_device_resource(&stats_mr);
+
+  // Create filter expression
+  auto const column_reference = cudf::ast::column_name_reference(column_name);
+  auto scalar                 = cudf::string_scalar(literal_value);
+  auto literal                = cudf::ast::literal(scalar);
+  auto filter_expression =
+    cudf::ast::operation(cudf::ast::ast_operator::EQUAL, column_reference, literal);
+
+  // Insert which filters to apply
+  std::unordered_set<parquet_filter_type> filters;
+  {
+    filters.insert(parquet_filter_type::ROW_GROUPS_WITH_STATS);
+    filters.insert(parquet_filter_type::ROW_GROUPS_WITH_DICT_PAGES);
+    filters.insert(parquet_filter_type::ROW_GROUPS_WITH_BLOOM_FILTERS);
+    // Deliberately disabled as it has a high cost to benefit ratio
+    // filters.insert(parquet_filter_type::FILTER_COLUMN_PAGES_WITH_PAGE_INDEX);
+    filters.insert(parquet_filter_type::PAYLOAD_COLUMN_PAGES_WITH_ROW_MASK);
+  }
+
+  timer timer;
+  std::cout << "Reading " << input_filepath << " with next-gen parquet reader...\n";
+  timer.reset();
+
+  // Create io source
+  auto const data_source = io_source{input_filepath, io_source_type, stream};
+
+  // Read with the main reader without timing
+  {
+    std::cout << "\nReading " << input_filepath << "...\n";
+    std::cout << "Note: Not timing this initial parquet read as it may include\n"
+                 "times for nvcomp, cufile loading and RMM growth.\n\n";
+    std::ignore = read_parquet(data_source, filter_expression, stream);
+  }
+
+  auto [table_next_gen_reader, row_mask] =
+    hybrid_scan(data_source, filter_expression, filters, stream, stats_mr);
+
+  timer.print_elapsed_millis();
+
+  std::cout << "Reading " << input_filepath << " with main parquet reader...\n";
+  timer.reset();
+  auto [table_main_reader, metadata] = read_parquet(data_source, filter_expression, stream);
+  timer.print_elapsed_millis();
+
+  // Check for validity
+  check_tables_equal(table_next_gen_reader->view(), table_main_reader->view(), stream);
+
+  //   } catch (std::exception const& ex) {
+  //     std::cout << ex.what() << std::endl;
+  //   }
 
   return 0;
 }
