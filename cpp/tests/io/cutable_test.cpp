@@ -102,11 +102,17 @@ TEST_F(CutableTest, MultiColumnFixedWidth)
   run_test(expected);
 }
 
+TEST_F(CutableTest, EmptyColumn)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> empty_col({});
+
+  auto const expected = cudf::table_view{{empty_col}};
+  run_test(expected);
+}
+
 TEST_F(CutableTest, EmptyTable)
 {
-  cudf::test::fixed_width_column_wrapper<int32_t> col({});
-
-  auto const expected = cudf::table_view{{col}};
+  auto const expected = cudf::table_view{std::vector<cudf::column_view>{}};
   run_test(expected);
 }
 
@@ -132,7 +138,7 @@ TEST_F(CutableTest, MultiColumnCompound)
 
 TEST_F(CutableTest, LargeTable)
 {
-  constexpr int num_rows = 234567;
+  constexpr int num_rows = 23'456'789;
 
   auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
   cudf::test::fixed_width_column_wrapper<int32_t> col1(sequence, sequence + num_rows);
@@ -221,14 +227,6 @@ TEST_F(CutableTest, TruncatedFile)
     cudf::io::experimental::read_cutable(
       cudf::io::cutable_reader_options::builder(cudf::io::source_info{filepath}).build()),
     cudf::logic_error);
-}
-
-TEST_F(CutableTest, BooleanColumn)
-{
-  cudf::test::fixed_width_column_wrapper<bool> col({true, false, true, false, true});
-
-  auto const expected = cudf::table_view{{col}};
-  run_test(expected);
 }
 
 TEST_F(CutableTest, IntegralTypes)
@@ -478,23 +476,26 @@ TEST_F(CutableTest, NestedStructs)
   run_test(expected);
 }
 
-TEST_F(CutableTest, DeepNestingThreeLevels)
+TEST_F(CutableTest, DeepNestingStructs)
 {
-  cudf::test::fixed_width_column_wrapper<int32_t> level3_col{10, 20};
-  cudf::test::strings_column_wrapper level3_str{"x", "y"};
-  cudf::test::structs_column_wrapper level3_struct{{level3_col, level3_str}};
+  cudf::test::fixed_width_column_wrapper<int32_t> level4_col{10, 20};
+  cudf::test::strings_column_wrapper level4_str{"x", "y"};
+  cudf::test::structs_column_wrapper level4_struct{{level4_col, level4_str}};
 
-  cudf::test::fixed_width_column_wrapper<float> level2_col{1.1f, 2.2f};
+  cudf::test::fixed_width_column_wrapper<float> level3_col{1.1f, 2.2f};
+  cudf::test::structs_column_wrapper level3_struct{{level4_struct, level3_col}};
+
+  cudf::test::fixed_width_column_wrapper<double> level2_col{100.5, 200.5};
   cudf::test::structs_column_wrapper level2_struct{{level3_struct, level2_col}};
 
-  cudf::test::fixed_width_column_wrapper<double> level1_col{100.5, 200.5};
+  cudf::test::fixed_width_column_wrapper<int64_t> level1_col{1000LL, 2000LL};
   cudf::test::structs_column_wrapper level1_struct{{level2_struct, level1_col}};
 
   auto const expected = cudf::table_view{{level1_struct}};
   run_test(expected);
 }
 
-TEST_F(CutableTest, DeepNestingListsOfListsOfLists)
+TEST_F(CutableTest, DeepNestingLists)
 {
   cudf::test::lists_column_wrapper<int32_t> level3_list{{1, 2}, {3, 4}, {5}, {6, 7, 8}};
 
@@ -542,7 +543,7 @@ TEST_F(CutableTest, UnicodeStrings)
   run_test(expected);
 }
 
-TEST_F(CutableTest, VeryLongStrings)
+TEST_F(CutableTest, LongStringColumns)
 {
   // Set threshold to enable int64 offsets for strings exceeding this size
   constexpr int64_t threshold = 10000;
@@ -561,7 +562,7 @@ TEST_F(CutableTest, VeryLongStrings)
 
 TEST_F(CutableTest, ManyColumns)
 {
-  constexpr int num_cols = 1234;
+  constexpr int num_cols = 123'456;
   std::vector<cudf::column_view> columns;
   for (int i = 0; i < num_cols; ++i) {
     cudf::test::fixed_width_column_wrapper<int32_t> col({i % 10, (i + 1) % 10, (i + 2) % 10});
@@ -569,14 +570,6 @@ TEST_F(CutableTest, ManyColumns)
   }
 
   cudf::table_view expected(columns);
-  run_test(expected);
-}
-
-TEST_F(CutableTest, EmptyColumn)
-{
-  cudf::test::fixed_width_column_wrapper<int32_t> empty_col({});
-
-  auto const expected = cudf::table_view{{empty_col}};
   run_test(expected);
 }
 
