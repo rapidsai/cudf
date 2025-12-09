@@ -104,7 +104,7 @@ cudaError_t memcpy_batch_async(
   }
 
   // The cudaMemcpyBatchAsync API requires CUDA >= 12.8 and does not support the default stream
-  if (is_memcpy_batch_async_supported() && !stream.is_default() && stream.value() != 0) {
+  if (is_memcpy_batch_async_supported() && !stream.is_default()) {
 #if CUDART_VERSION >= 12080
     cudaMemcpyAttributes attrs[1] = {};  // zero-initialize all fields
     attrs[0].srcAccessOrder       = cudaMemcpySrcAccessOrderStream;
