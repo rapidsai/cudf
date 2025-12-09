@@ -18,7 +18,7 @@
 #include <utility>
 
 namespace CUDF_EXPORT cudf {
-namespace io {
+namespace io::experimental {
 
 /**
  * @file
@@ -219,10 +219,6 @@ class cutable_reader_options_builder {
  private:
   cutable_reader_options _options;
 };
-
-}  // namespace io
-
-namespace io::experimental {
 
 /**
  * @addtogroup io_writers

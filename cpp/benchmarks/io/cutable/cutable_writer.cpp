@@ -29,7 +29,8 @@ void cutable_write_common(cudf::table_view const& view, io_type sink_type, nvben
 
       timer.start();
       cudf::io::experimental::write_cutable(
-        cudf::io::cutable_writer_options::builder(source_sink.make_sink_info(), view).build());
+        cudf::io::experimental::cutable_writer_options::builder(source_sink.make_sink_info(), view)
+          .build());
       timer.stop();
 
       encoded_file_size = source_sink.size();

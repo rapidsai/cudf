@@ -39,11 +39,13 @@ struct CutableTest : public cudf::test::BaseFixture {
   {
     auto const filepath = temp_env->get_temp_filepath("test.cutable");
 
-    cudf::io::experimental::write_cutable(
-      cudf::io::cutable_writer_options::builder(cudf::io::sink_info{filepath}, expected).build());
+    cudf::io::experimental::write_cutable(cudf::io::experimental::cutable_writer_options::builder(
+                                            cudf::io::sink_info{filepath}, expected)
+                                            .build());
 
     auto result = cudf::io::experimental::read_cutable(
-      cudf::io::cutable_reader_options::builder(cudf::io::source_info{filepath}).build());
+      cudf::io::experimental::cutable_reader_options::builder(cudf::io::source_info{filepath})
+        .build());
 
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.table);
   }
@@ -52,13 +54,15 @@ struct CutableTest : public cudf::test::BaseFixture {
   {
     std::vector<char> buffer;
 
-    cudf::io::experimental::write_cutable(
-      cudf::io::cutable_writer_options::builder(cudf::io::sink_info{&buffer}, expected).build());
+    cudf::io::experimental::write_cutable(cudf::io::experimental::cutable_writer_options::builder(
+                                            cudf::io::sink_info{&buffer}, expected)
+                                            .build());
 
     auto host_buffer = cudf::host_span<std::byte const>(
       reinterpret_cast<std::byte const*>(buffer.data()), buffer.size());
     auto result = cudf::io::experimental::read_cutable(
-      cudf::io::cutable_reader_options::builder(cudf::io::source_info{host_buffer}).build());
+      cudf::io::experimental::cutable_reader_options::builder(cudf::io::source_info{host_buffer})
+        .build());
 
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.table);
   }
@@ -175,7 +179,8 @@ TEST_F(CutableTest, InvalidHeaderMagic)
   cudf::test::fixed_width_column_wrapper<int32_t> col({1, 2, 3});
   auto const expected = cudf::table_view{{col}};
   cudf::io::experimental::write_cutable(
-    cudf::io::cutable_writer_options::builder(cudf::io::sink_info{filepath}, expected).build());
+    cudf::io::experimental::cutable_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .build());
 
   // Corrupt the magic number
   std::fstream file(filepath, std::ios::in | std::ios::out | std::ios::binary);
@@ -185,7 +190,8 @@ TEST_F(CutableTest, InvalidHeaderMagic)
 
   EXPECT_THROW(
     cudf::io::experimental::read_cutable(
-      cudf::io::cutable_reader_options::builder(cudf::io::source_info{filepath}).build()),
+      cudf::io::experimental::cutable_reader_options::builder(cudf::io::source_info{filepath})
+        .build()),
     cudf::logic_error);
 }
 
@@ -195,7 +201,8 @@ TEST_F(CutableTest, InvalidHeaderVersion)
   cudf::test::fixed_width_column_wrapper<int32_t> col({1, 2, 3});
   auto const expected = cudf::table_view{{col}};
   cudf::io::experimental::write_cutable(
-    cudf::io::cutable_writer_options::builder(cudf::io::sink_info{filepath}, expected).build());
+    cudf::io::experimental::cutable_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .build());
 
   // Corrupt the version
   std::fstream file(filepath, std::ios::in | std::ios::out | std::ios::binary);
@@ -206,7 +213,8 @@ TEST_F(CutableTest, InvalidHeaderVersion)
 
   EXPECT_THROW(
     cudf::io::experimental::read_cutable(
-      cudf::io::cutable_reader_options::builder(cudf::io::source_info{filepath}).build()),
+      cudf::io::experimental::cutable_reader_options::builder(cudf::io::source_info{filepath})
+        .build()),
     cudf::logic_error);
 }
 
@@ -216,7 +224,8 @@ TEST_F(CutableTest, TruncatedFile)
   cudf::test::fixed_width_column_wrapper<int32_t> col({1, 2, 3, 4, 5});
   auto const expected = cudf::table_view{{col}};
   cudf::io::experimental::write_cutable(
-    cudf::io::cutable_writer_options::builder(cudf::io::sink_info{filepath}, expected).build());
+    cudf::io::experimental::cutable_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .build());
 
   // Truncate the file
   std::ofstream file(filepath, std::ios::binary | std::ios::trunc);
@@ -225,7 +234,8 @@ TEST_F(CutableTest, TruncatedFile)
 
   EXPECT_THROW(
     cudf::io::experimental::read_cutable(
-      cudf::io::cutable_reader_options::builder(cudf::io::source_info{filepath}).build()),
+      cudf::io::experimental::cutable_reader_options::builder(cudf::io::source_info{filepath})
+        .build()),
     cudf::logic_error);
 }
 
@@ -501,7 +511,8 @@ TEST_F(CutableTest, DeviceBufferSource)
   std::vector<char> buffer;
 
   cudf::io::experimental::write_cutable(
-    cudf::io::cutable_writer_options::builder(cudf::io::sink_info{&buffer}, expected).build());
+    cudf::io::experimental::cutable_writer_options::builder(cudf::io::sink_info{&buffer}, expected)
+      .build());
 
   rmm::device_buffer device_buffer(buffer.size(), cudf::get_default_stream());
   CUDF_CUDA_TRY(
@@ -510,7 +521,8 @@ TEST_F(CutableTest, DeviceBufferSource)
   auto device_span = cudf::device_span<std::byte const>(
     static_cast<std::byte const*>(device_buffer.data()), device_buffer.size());
   auto result = cudf::io::experimental::read_cutable(
-    cudf::io::cutable_reader_options::builder(cudf::io::source_info{device_span}).build());
+    cudf::io::experimental::cutable_reader_options::builder(cudf::io::source_info{device_span})
+      .build());
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.table);
 }
@@ -565,7 +577,8 @@ TEST_F(CutableTest, FileTooSmallForHeader)
 
   EXPECT_THROW(
     cudf::io::experimental::read_cutable(
-      cudf::io::cutable_reader_options::builder(cudf::io::source_info{filepath}).build()),
+      cudf::io::experimental::cutable_reader_options::builder(cudf::io::source_info{filepath})
+        .build()),
     cudf::logic_error);
 }
 
@@ -575,7 +588,8 @@ TEST_F(CutableTest, CorruptedMetadataLength)
   cudf::test::fixed_width_column_wrapper<int32_t> col({1, 2, 3});
   auto const expected = cudf::table_view{{col}};
   cudf::io::experimental::write_cutable(
-    cudf::io::cutable_writer_options::builder(cudf::io::sink_info{filepath}, expected).build());
+    cudf::io::experimental::cutable_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .build());
 
   // Get the actual file size
   std::ifstream size_check(filepath, std::ios::binary | std::ios::ate);
@@ -593,7 +607,8 @@ TEST_F(CutableTest, CorruptedMetadataLength)
 
   EXPECT_THROW(
     cudf::io::experimental::read_cutable(
-      cudf::io::cutable_reader_options::builder(cudf::io::source_info{filepath}).build()),
+      cudf::io::experimental::cutable_reader_options::builder(cudf::io::source_info{filepath})
+        .build()),
     cudf::logic_error);
 }
 
@@ -603,7 +618,8 @@ TEST_F(CutableTest, CorruptedDataLength)
   cudf::test::fixed_width_column_wrapper<int32_t> col({1, 2, 3});
   auto const expected = cudf::table_view{{col}};
   cudf::io::experimental::write_cutable(
-    cudf::io::cutable_writer_options::builder(cudf::io::sink_info{filepath}, expected).build());
+    cudf::io::experimental::cutable_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .build());
 
   // Get the actual file size
   std::ifstream size_check(filepath, std::ios::binary | std::ios::ate);
@@ -634,7 +650,8 @@ TEST_F(CutableTest, CorruptedDataLength)
 
   EXPECT_THROW(
     cudf::io::experimental::read_cutable(
-      cudf::io::cutable_reader_options::builder(cudf::io::source_info{filepath}).build()),
+      cudf::io::experimental::cutable_reader_options::builder(cudf::io::source_info{filepath})
+        .build()),
     cudf::logic_error);
 }
 
@@ -644,18 +661,21 @@ TEST_F(CutableTest, MultipleSourcesError)
   auto const expected = cudf::table_view{{col}};
 
   auto const filepath1 = temp_env->get_temp_filepath("source1.cutable");
-  cudf::io::experimental::write_cutable(
-    cudf::io::cutable_writer_options::builder(cudf::io::sink_info{filepath1}, expected).build());
+  cudf::io::experimental::write_cutable(cudf::io::experimental::cutable_writer_options::builder(
+                                          cudf::io::sink_info{filepath1}, expected)
+                                          .build());
 
   auto const filepath2 = temp_env->get_temp_filepath("source2.cutable");
-  cudf::io::experimental::write_cutable(
-    cudf::io::cutable_writer_options::builder(cudf::io::sink_info{filepath2}, expected).build());
+  cudf::io::experimental::write_cutable(cudf::io::experimental::cutable_writer_options::builder(
+                                          cudf::io::sink_info{filepath2}, expected)
+                                          .build());
 
   // Try to read with multiple sources - should fail
   std::vector<std::string> filepaths{filepath1, filepath2};
   EXPECT_THROW(
     cudf::io::experimental::read_cutable(
-      cudf::io::cutable_reader_options::builder(cudf::io::source_info{filepaths}).build()),
+      cudf::io::experimental::cutable_reader_options::builder(cudf::io::source_info{filepaths})
+        .build()),
     cudf::logic_error);
 }
 

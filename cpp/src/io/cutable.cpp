@@ -21,7 +21,7 @@
 #include <vector>
 
 namespace cudf {
-namespace io {
+namespace io::experimental {
 
 namespace {
 
@@ -51,10 +51,6 @@ cutable_reader_options_builder cutable_reader_options::builder(source_info src)
 {
   return cutable_reader_options_builder(std::move(src));
 }
-
-}  // namespace io
-
-namespace io::experimental {
 
 void write_cutable(cutable_writer_options const& options,
                    rmm::cuda_stream_view stream,

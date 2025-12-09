@@ -30,7 +30,7 @@ void cutable_read_common(cudf::size_type num_rows_to_read,
 
       timer.start();
       auto result = cudf::io::experimental::read_cutable(
-        cudf::io::cutable_reader_options::builder(source_info).build());
+        cudf::io::experimental::cutable_reader_options::builder(source_info).build());
       timer.stop();
 
       CUDF_EXPECTS(result.table.num_columns() == num_cols_to_read, "Unexpected number of columns");
@@ -55,7 +55,8 @@ void BM_cutable_read_data_sizes(nvbench::state& state)
     auto const view = tbl->view();
 
     cudf::io::experimental::write_cutable(
-      cudf::io::cutable_writer_options::builder(source_sink.make_sink_info(), view).build());
+      cudf::io::experimental::cutable_writer_options::builder(source_sink.make_sink_info(), view)
+        .build());
     return view.num_rows();
   }();
 
@@ -78,7 +79,8 @@ void BM_cutable_read_data_common(nvbench::state& state,
     auto const view = tbl->view();
 
     cudf::io::experimental::write_cutable(
-      cudf::io::cutable_writer_options::builder(source_sink.make_sink_info(), view).build());
+      cudf::io::experimental::cutable_writer_options::builder(source_sink.make_sink_info(), view)
+        .build());
     return view.num_rows();
   }();
 
@@ -109,7 +111,8 @@ void BM_cutable_read_num_columns(nvbench::state& state,
     auto const view = tbl->view();
 
     cudf::io::experimental::write_cutable(
-      cudf::io::cutable_writer_options::builder(source_sink.make_sink_info(), view).build());
+      cudf::io::experimental::cutable_writer_options::builder(source_sink.make_sink_info(), view)
+        .build());
     return view.num_rows();
   }();
 
