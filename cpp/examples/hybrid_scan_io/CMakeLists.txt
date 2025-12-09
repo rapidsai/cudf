@@ -26,7 +26,7 @@ rapids_cmake_build_type("Release")
 # gcc>=14. We can remove this once we upgrade to a newer sccache version.
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
-add_library(hybrid_scan_io_utils OBJECT common_utils.cpp io_source.cpp datasource_reader.cpp)
+add_library(hybrid_scan_io_utils OBJECT common_utils.cpp io_source.cpp)
 target_compile_features(hybrid_scan_io_utils PRIVATE cxx_std_20)
 target_link_libraries(hybrid_scan_io_utils PRIVATE cudf::cudf)
 

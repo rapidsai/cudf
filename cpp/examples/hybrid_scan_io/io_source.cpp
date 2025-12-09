@@ -6,6 +6,7 @@
 #include "io_source.hpp"
 
 #include <cudf/io/types.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -42,39 +43,47 @@ io_source_type get_io_source_type(std::string name)
 
 cudf::host_span<uint8_t const> io_source::get_host_buffer_span() const
 {
-  if (io_type == io_source_type::HOST_BUFFER) {
-    return cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(h_buffer.data()),
-                                          h_buffer.size());
-  } else if (io_type == io_source_type::PINNED_BUFFER) {
-    return cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(pinned_buffer.data()),
-                                          pinned_buffer.size());
+  if (_io_type == io_source_type::HOST_BUFFER) {
+    return cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(_h_buffer.data()),
+                                          _h_buffer.size());
+  } else if (_io_type == io_source_type::PINNED_BUFFER) {
+    return cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(_pinned_buffer.data()),
+                                          _pinned_buffer.size());
   } else {
     throw std::invalid_argument("Invalid io type to get host buffer span");
   }
 }
 
 io_source::io_source(std::string_view file_path, io_source_type type, rmm::cuda_stream_view stream)
-  : io_type(type), pinned_buffer({pinned_memory_resource(), stream})
+  : _io_type(type), _pinned_buffer({pinned_memory_resource(), stream})
 {
   std::string const file_name{file_path};
+
+  // todo: check if the file is local or remote
+
   auto const file_size = std::filesystem::file_size(file_name);
 
   std::ifstream file{file_name, std::ifstream::binary};
+  CUDF_EXPECTS(!file.fail(), "File " + file_name + " failed to open");
 
   // Copy file contents to the specified io source buffer
   switch (type) {
     case io_source_type::HOST_BUFFER: {
-      h_buffer.resize(file_size);
-      file.read(h_buffer.data(), file_size);
-      source_info = cudf::io::source_info(cudf::host_span<std::byte const>(
-        reinterpret_cast<std::byte const*>(h_buffer.data()), file_size));
+      _h_buffer.resize(file_size);
+      file.read(_h_buffer.data(), file_size);
+      _source_info = cudf::io::source_info(cudf::host_span<std::byte const>(
+        reinterpret_cast<std::byte const*>(_h_buffer.data()), file_size));
       break;
     }
     case io_source_type::PINNED_BUFFER: {
-      pinned_buffer.resize(file_size);
-      file.read(pinned_buffer.data(), file_size);
-      source_info = cudf::io::source_info(cudf::host_span<std::byte const>(
-        reinterpret_cast<std::byte const*>(pinned_buffer.data()), file_size));
+      _pinned_buffer.resize(file_size);
+      file.read(_pinned_buffer.data(), file_size);
+      _source_info = cudf::io::source_info(cudf::host_span<std::byte const>(
+        reinterpret_cast<std::byte const*>(_pinned_buffer.data()), file_size));
+      break;
+    }
+    case io_source_type::FILEPATH: {
+      _source_info = cudf::io::source_info{file_name};
       break;
     }
     default: {
