@@ -49,11 +49,23 @@ cache_t::cache_t(bool enabled, std::string cache_dir, cache_limits const& limits
   }
 }
 
-bool cache_t::is_enabled() const { return enabled_; }
+bool cache_t::is_enabled()
+{
+  std::atomic_ref c{enabled_};
+  return c.load(std::memory_order_relaxed);
+}
 
-void cache_t::enable() { enabled_ = true; }
+void cache_t::enable()
+{
+  std::atomic_ref c{enabled_};
+  c.store(true, std::memory_order_relaxed);
+}
 
-void cache_t::disable() { enabled_ = false; }
+void cache_t::disable()
+{
+  std::atomic_ref c{enabled_};
+  c.store(false, std::memory_order_relaxed);
+}
 
 void cache_t::store_blob_to_memory(sha256_hash const& sha, std::shared_future<blob> binary)
 {
@@ -262,13 +274,13 @@ std::optional<std::shared_future<library>> cache_t::query_library(sha256_hash co
   }
 }
 
-cache_statistics cache_t::get_statistics() const { return counter_.get_statistics(); }
+cache_statistics cache_t::get_statistics() { return counter_.get_statistics(); }
 
 void cache_t::clear_statistics() { counter_.clear(); }
 
-cache_limits cache_t::get_limits() const { return limits_; }
+cache_limits cache_t::get_limits() { return limits_; }
 
-size_t cache_t::get_blob_count() const
+size_t cache_t::get_blob_count()
 {
   CUDF_FUNC_RANGE();
 
@@ -278,7 +290,7 @@ size_t cache_t::get_blob_count() const
   }
 }
 
-size_t cache_t::get_fragment_count() const
+size_t cache_t::get_fragment_count()
 {
   CUDF_FUNC_RANGE();
 
@@ -288,7 +300,7 @@ size_t cache_t::get_fragment_count() const
   }
 }
 
-size_t cache_t::get_library_count() const
+size_t cache_t::get_library_count()
 {
   CUDF_FUNC_RANGE();
 

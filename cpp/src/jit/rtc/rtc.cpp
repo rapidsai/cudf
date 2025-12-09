@@ -121,7 +121,7 @@ fragment fragment_t::load(load_params const& params)
 {
   CUDF_FUNC_RANGE();
 
-  return std::make_shared<fragment_t>(params.blob, params.type);
+  return std::make_shared<fragment_t>(params.binary, params.type);
 }
 
 void log_nvrtc_compile_result(fragment_t::compile_params const& params,

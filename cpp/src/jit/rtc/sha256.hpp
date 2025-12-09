@@ -44,7 +44,7 @@ struct [[nodiscard]] sha256_hash {
 
   constexpr sha256_hex_string to_hex_string() const
   {
-    static constexpr char const HEX_CHARS[] = "0123456789abcdef";
+    constexpr char const HEX_CHARS[] = "0123456789abcdef";
     sha256_hex_string hex;
     for (size_t i = 0; i < 32; ++i) {
       hex.data_[i * 2]     = HEX_CHARS[(data_[i] >> 4) & 0x0F];

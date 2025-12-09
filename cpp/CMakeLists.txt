@@ -377,9 +377,7 @@ set(CUDF_JIT_COMPILE_FLAGS
 function(add_lto_ir_library target_name source_file)
 
   add_library(${target_name} OBJECT ${source_file})
-  target_compile_options(
-    ${target_name} PRIVATE -Xfatbin=--compress-all --compress-mode=size --device-int128
-  )
+  target_compile_options(${target_name} PRIVATE -Xfatbin=--compress-all --compress-mode=size)
   set_target_properties(
     ${target_name}
     PROPERTIES CUDA_ARCHITECTURES "75-real;80-real;86-real;90-real;100-real;120-real"
@@ -452,11 +450,10 @@ embed_jit_sources_var(
 
 get_target_property(LIBCUDACXX_RAW_INCLUDE_DIRS CCCL::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)
 
-# CUDA/STD headers
-# needs to recursively bundle the actually used headers; not everything should we just use the
-# install include dir? provided cudacxx will also be exported? can we get the installed include dir
-# path? after installing, should be configure a file that points to the installed cudacxx include
-# dir?
+# CUDA/STD headers needs to recursively bundle the actually used headers; not everything should we
+# just use the install include dir? provided cudacxx will also be exported? can we get the installed
+# include dir path? after installing, should be configure a file that points to the installed
+# cudacxx include dir?
 embed_jit_sources_var(identifier_name RECURSIVE SOURCE_DIRECTORY ${LIBCUDACXX_RAW_INCLUDE_DIRS})
 
 embed_jit_options_var(identifier_name OPTIONS ${CUDF_JIT_COMPILE_FLAGS})
@@ -706,6 +703,10 @@ add_library(
   src/jit/parser.cpp
   src/jit/row_ir.cpp
   src/jit/util.cpp
+  src/jit/rtc/cache.cpp
+  src/jit/rtc/cudf.cpp
+  src/jit/rtc/rtc.cpp
+  src/jit/rtc/sha256.cpp
   src/join/conditional_join.cu
   src/join/cross_join.cu
   src/join/distinct_hash_join.cu

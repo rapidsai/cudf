@@ -128,8 +128,11 @@ struct write_guard {
   ~write_guard() { lock_.unlock_write(); }
 };
 
+inline constexpr size_t CACHELINE_ALIGNMENT =
+  64;  // = std::hardware_destructive_interference_size */
+
 template <typename T>
-struct alignas(std::hardware_destructive_interference_size) lru_memory_cache {
+struct alignas(CACHELINE_ALIGNMENT) lru_memory_cache {
   struct entry {
     uint64_t last_touched_tick;
     T value;
@@ -174,7 +177,7 @@ struct alignas(std::hardware_destructive_interference_size) lru_memory_cache {
   }
 };
 
-struct alignas(std::hardware_destructive_interference_size) counter {
+struct alignas(CACHELINE_ALIGNMENT) counter {
   uint64_t value_ = 0;
 
   void increment()
@@ -277,7 +280,7 @@ struct cache_t {
 
   detail::cache_statistics_counter counter_;
 
-  alignas(std::hardware_destructive_interference_size) uint64_t tick_;
+  alignas(detail::CACHELINE_ALIGNMENT) uint64_t tick_;
 
  public:
   cache_t(bool enabled, std::string cache_dir, cache_limits const& limits);
@@ -287,7 +290,7 @@ struct cache_t {
   cache_t& operator=(cache_t&&)      = delete;
   ~cache_t()                         = default;
 
-  [[nodiscard]] bool is_enabled() const;
+  [[nodiscard]] bool is_enabled();
 
   void enable();
 
@@ -309,17 +312,17 @@ struct cache_t {
 
   std::optional<std::shared_future<library>> query_library(sha256_hash const& sha);
 
-  cache_statistics get_statistics() const;
+  cache_statistics get_statistics();
 
   void clear_statistics();
 
-  cache_limits get_limits() const;
+  cache_limits get_limits();
 
-  [[nodiscard]] size_t get_blob_count() const;
+  [[nodiscard]] size_t get_blob_count();
 
-  [[nodiscard]] size_t get_fragment_count() const;
+  [[nodiscard]] size_t get_fragment_count();
 
-  [[nodiscard]] size_t get_library_count() const;
+  [[nodiscard]] size_t get_library_count();
 
   void clear_memory_store();
 

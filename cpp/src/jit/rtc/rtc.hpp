@@ -83,7 +83,7 @@ struct fragment_t {
 
  public:
   struct load_params {
-    blob blob        = {};
+    blob binary      = {};
     binary_type type = binary_type::LTO_IR;
   };
 
