@@ -49,13 +49,6 @@ class cutable_writer_options {
 
  public:
   /**
-   * @brief Default constructor.
-   *
-   * This has been added since Cython requires a default constructor to create objects on stack.
-   */
-  explicit cutable_writer_options() = default;
-
-  /**
    * @brief Create builder to create `cutable_writer_options`.
    *
    * @param sink The sink used for writer output
@@ -92,13 +85,6 @@ class cutable_writer_options {
  */
 class cutable_writer_options_builder {
  public:
-  /**
-   * @brief Default constructor.
-   *
-   * This has been added since Cython requires a default constructor to create objects on stack.
-   */
-  explicit cutable_writer_options_builder() = default;
-
   /**
    * @brief Constructor from sink and table.
    *
@@ -140,13 +126,6 @@ class cutable_reader_options {
 
  public:
   /**
-   * @brief Default constructor.
-   *
-   * This has been added since Cython requires a default constructor to create objects on stack.
-   */
-  explicit cutable_reader_options() = default;
-
-  /**
    * @brief Creates a `cutable_reader_options_builder` to build `cutable_reader_options`.
    *
    * @param src Source information to read cutable file
@@ -174,13 +153,6 @@ class cutable_reader_options {
  */
 class cutable_reader_options_builder {
  public:
-  /**
-   * @brief Default constructor.
-   *
-   * This has been added since Cython requires a default constructor to create objects on stack.
-   */
-  explicit cutable_reader_options_builder() = default;
-
   /**
    * @brief Constructor from source info.
    *
