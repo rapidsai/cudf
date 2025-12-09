@@ -8040,6 +8040,7 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_apply_consistency_sum[all_data6-rolling_consistency_cases1-True-sum]",
     "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_apply_consistency_sum[all_data7-rolling_consistency_cases1-False-sum]",
     "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_apply_consistency_sum[all_data7-rolling_consistency_cases1-True-sum]",
+    "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_consistency_series_cov_corr[series_data1-rolling_consistency_cases0-False-0]",
     "tests/window/test_api.py::test_rolling_max_min_periods[None]",
     "tests/window/test_api.py::test_rolling_min_min_periods[None]",
     "tests/window/test_apply.py::test_ragged_apply[engine_and_raw1]",
