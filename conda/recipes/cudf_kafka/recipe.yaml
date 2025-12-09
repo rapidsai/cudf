@@ -79,7 +79,6 @@ requirements:
     - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
     - libcudf_kafka =${{ version }}
     - pylibcudf =${{ version }}
-    - cuda-cudart
   ignore_run_exports:
     from_package:
       - cuda-cudart-dev
