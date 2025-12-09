@@ -20,8 +20,7 @@
 #include <cstring>
 #include <vector>
 
-namespace cudf {
-namespace io::experimental {
+namespace cudf::io::experimental {
 
 namespace {
 
@@ -81,6 +80,8 @@ void write_cutable(cutable_writer_options const& options,
 
   auto const& sink_info = options.get_sink();
   auto const& input     = options.get_table();
+
+  CUDF_EXPECTS(sink_info.num_sinks() == 1, "CUTable format only supports single sink");
 
   // Create data_sink from sink_info based on type
   std::unique_ptr<data_sink> sink;
@@ -185,5 +186,4 @@ packed_table read_cutable(cutable_reader_options const& options,
   return packed_table{unpacked_view, std::move(packed)};
 }
 
-}  // namespace io::experimental
-}  // namespace cudf
+}  // namespace cudf::io::experimental
