@@ -725,9 +725,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         cai_dtype = np.dtype(cai["typestr"])
         check_invalid_array(cai["shape"], cai_dtype)
-        arbitrary = maybe_reshape(
-            arbitrary, cai["shape"], cai["strides"], cai_dtype
-        )
+        # Reshape ndarrays compatible with cuDF columns
+        if len(cai["shape"]) == 0:
+            arbitrary = cp.asarray(arbitrary)[np.newaxis]
+        if not plc.column.is_c_contiguous(
+            cai["shape"], cai["strides"], cai_dtype.itemsize
+        ):
+            arbitrary = cp.ascontiguousarray(arbitrary)
 
         # TODO: Can remove once from_cuda_array_interface can handle masks
         # https://github.com/rapidsai/cudf/issues/19122
@@ -2823,27 +2827,6 @@ def check_invalid_array(shape: tuple, dtype: np.dtype) -> None:
         raise TypeError("Unsupported type float16")
 
 
-def maybe_reshape(
-    arbitrary: Any,
-    shape: tuple[int, ...],
-    strides: tuple[int, ...] | None,
-    dtype: np.dtype,
-) -> Any:
-    """Reshape ndarrays compatible with cuDF columns."""
-    if len(shape) == 0:
-        arbitrary = cp.asarray(arbitrary)[np.newaxis]
-    if not plc.column.is_c_contiguous(shape, strides, dtype.itemsize):
-        arbitrary = cp.ascontiguousarray(arbitrary)
-    return arbitrary
-
-
-def as_memoryview(arbitrary: Any) -> memoryview | None:
-    try:
-        return memoryview(arbitrary)
-    except TypeError:
-        return None
-
-
 def as_column(
     arbitrary: Any,
     nan_as_null: bool | None = None,
@@ -3282,16 +3265,23 @@ def as_column(
             return result_column
         else:
             raise NotImplementedError(f"{arbitrary.dtype} not supported")
-    elif (view := as_memoryview(arbitrary)) is not None:
-        return as_column(
-            np.asarray(view), dtype=dtype, nan_as_null=nan_as_null
-        )
-    elif not isinstance(arbitrary, (Iterable, Sequence)):
-        raise TypeError(
-            f"{type(arbitrary).__name__} must be an iterable or sequence."
-        )
-    elif isinstance(arbitrary, Iterator):
-        arbitrary = list(arbitrary)
+    else:
+        # Try to convert to memoryview
+        try:
+            view = memoryview(arbitrary)
+            return as_column(
+                np.asarray(view), dtype=dtype, nan_as_null=nan_as_null
+            )
+        except TypeError:
+            pass
+
+        # Memoryview failed, check if it's iterable
+        if not isinstance(arbitrary, (Iterable, Sequence)):
+            raise TypeError(
+                f"{type(arbitrary).__name__} must be an iterable or sequence."
+            )
+        elif isinstance(arbitrary, Iterator):
+            arbitrary = list(arbitrary)
 
     # Start of arbitrary that's not handed above but dtype provided
     if isinstance(dtype, pd.DatetimeTZDtype):
