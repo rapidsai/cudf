@@ -116,19 +116,19 @@ extract_single_pass_aggs(host_span<aggregation_request const> requests,
     // - INPUT_EXTRACTED: aggregation requested by the users and has already been extracted
     // - INTERMEDIATE: extracted intermediate aggregation
     enum class aggregation_group : int8_t { INPUT_NOT_EXTRACTED, INPUT_EXTRACTED, INTERMEDIATE };
-    std::unordered_map<aggregation::Kind, aggregation_group> agg_kinds_set;
+    std::unordered_map<aggregation::Kind, aggregation_group> agg_kinds_map;
     for (auto const& agg : input_aggs) {
-      agg_kinds_set[agg->kind] = aggregation_group::INPUT_NOT_EXTRACTED;
+      agg_kinds_map[agg->kind] = aggregation_group::INPUT_NOT_EXTRACTED;
     }
 
     auto insert_agg = [&](column_view const& request_values, std::unique_ptr<aggregation>&& agg) {
-      auto const it = agg_kinds_set.find(agg->kind);
+      auto const it = agg_kinds_map.find(agg->kind);
       auto const need_update =
-        it == agg_kinds_set.end() || it->second == aggregation_group::INPUT_NOT_EXTRACTED;
+        it == agg_kinds_map.end() || it->second == aggregation_group::INPUT_NOT_EXTRACTED;
       if (!need_update) { return; }
 
-      auto const is_intermediate = it == agg_kinds_set.end();
-      agg_kinds_set[agg->kind] =
+      auto const is_intermediate = it == agg_kinds_map.end();
+      agg_kinds_map[agg->kind] =
         is_intermediate ? aggregation_group::INTERMEDIATE : aggregation_group::INPUT_EXTRACTED;
 
       // If the inserted aggregation is an intermediate aggregation, we can force its output to be
