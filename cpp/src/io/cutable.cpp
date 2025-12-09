@@ -8,9 +8,9 @@
 #include <cudf/contiguous_split.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/io/cutable.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/io/experimental/cutable.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 

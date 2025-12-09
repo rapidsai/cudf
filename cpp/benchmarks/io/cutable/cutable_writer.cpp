@@ -7,8 +7,8 @@
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/io/nvbench_helpers.hpp>
 
-#include <cudf/io/cutable.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/io/experimental/cutable.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <nvbench/nvbench.cuh>
