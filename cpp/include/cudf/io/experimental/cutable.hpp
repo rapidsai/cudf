@@ -5,8 +5,8 @@
 
 #pragma once
 
-#include <cudf/contiguous_split.hpp>
 #include <cudf/io/types.hpp>
+#include <cudf/packed_types.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
