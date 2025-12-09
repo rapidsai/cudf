@@ -10301,6 +10301,7 @@ NODEIDS_THAT_ARE_FLAKY_WITH_COPY_ON_WRITE: set[str] = {
     "tests/extension/test_arrow.py::test_dt_tz_localize_nonexistent[shift_forward-exp_date0]",
     "tests/extension/test_arrow.py::test_duration_overflow_from_ndarray_containing_nat",
     "tests/extension/test_categorical.py::TestCategorical::test_setitem_integer_array[True-integer-array]",
+    "tests/extension/test_categorical.py::TestCategorical::test_setitem_mask_aligned",
     "tests/extension/test_categorical.py::TestCategorical::test_setitem_mask_aligned[None-True]",
     "tests/extension/test_categorical.py::TestCategorical::test_setitem_mask_aligned[loc-False]"
     "tests/extension/test_interval.py::TestIntervalArray::test_compare_array[eq]",
@@ -10598,6 +10599,7 @@ NODEIDS_THAT_ARE_FLAKY_WITH_COPY_ON_WRITE: set[str] = {
     "tests/strings/test_find_replace.py::test_contains[string=str[pyarrow]]",
     "tests/strings/test_find_replace.py::test_contains[string=str[python]]",
     "tests/strings/test_find_replace.py::test_contains[string=string[pyarrow]]",
+    "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_consistency_series_cov_corr[series_data1-rolling_consistency_cases0-False-0]",
     "tests/window/test_dtypes.py::test_dataframe_dtypes[category-None-max-expected_data1-None]",
     "tests/window/test_dtypes.py::test_dataframe_dtypes[category-None-min-expected_data2-None]",
     "tests/window/test_dtypes.py::test_dataframe_dtypes[category-None-std-expected_data5-None]",
