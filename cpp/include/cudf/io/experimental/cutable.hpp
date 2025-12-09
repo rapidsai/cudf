@@ -25,27 +25,6 @@ namespace io::experimental {
  * @brief CUTable binary format APIs for serialization and deserialization
  */
 
-/**
- * @brief Simple binary file format header for CUTable
- *
- * The CUTable format stores a table in a simple binary layout:
- * - Magic number (4 bytes): "CTBL"
- * - Version (4 bytes): uint32_t format version (currently 1)
- * - Metadata length (8 bytes): uint64_t size of the metadata buffer in bytes
- * - Data length (8 bytes): uint64_t size of the data buffer in bytes
- * - Metadata (variable): serialized column metadata from pack()
- * - Data (variable): contiguous device data from pack()
- */
-struct cutable_header {
-  static constexpr uint32_t magic_number = 0x4C425443;  ///< "CTBL" in little-endian
-  static constexpr uint32_t version      = 1;           ///< Format version
-
-  uint32_t magic;            ///< Magic number for format validation
-  uint32_t format_version;   ///< Format version number
-  uint64_t metadata_length;  ///< Length of metadata buffer in bytes
-  uint64_t data_length;      ///< Length of data buffer in bytes
-};
-
 class cutable_writer_options_builder;
 
 /**
