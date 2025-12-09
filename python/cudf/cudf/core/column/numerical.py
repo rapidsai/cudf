@@ -44,7 +44,6 @@ if TYPE_CHECKING:
     from cudf._typing import (
         ColumnBinaryOperand,
         ColumnLike,
-        Dtype,
         DtypeObj,
         ScalarLike,
     )
@@ -130,7 +129,13 @@ class NumericalColumn(NumericalBaseColumn):
         except (TypeError, ValueError):
             return False
         # TODO: Use `scalar`-based `contains` wrapper
-        return self.contains(as_column([search_item], dtype=self.dtype)).any()
+        return self.contains(
+            as_column(
+                [search_item],
+                dtype=self.dtype,
+                nan_as_null=not cudf.get_option("mode.pandas_compatible"),
+            ),
+        ).any()
 
     @property
     def values(self) -> cp.ndarray:
@@ -398,9 +403,7 @@ class NumericalColumn(NumericalBaseColumn):
         if self.dtype.kind != "f" or self.nan_count == 0:
             return self
         with acquire_spill_lock():
-            mask, _ = plc.transform.nans_to_nulls(
-                self.to_pylibcudf(mode="read")
-            )
+            mask, _ = plc.transform.nans_to_nulls(self.plc_column)
             return self.set_mask(as_buffer(mask))
 
     def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
@@ -469,7 +472,7 @@ class NumericalColumn(NumericalBaseColumn):
         if self.dtype != np.dtype(np.uint32):
             raise TypeError("Only uint32 type can be converted to ip")
         plc_column = plc.strings.convert.convert_ipv4.integers_to_ipv4(
-            self.to_pylibcudf(mode="read")
+            self.plc_column
         )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
@@ -513,7 +516,7 @@ class NumericalColumn(NumericalBaseColumn):
             return (
                 type(self)
                 .from_pylibcudf(  # type: ignore[return-value]
-                    conv_func(col.to_pylibcudf(mode="read"))
+                    conv_func(col.plc_column)
                 )
                 ._with_type_metadata(dtype)
             )
@@ -585,7 +588,7 @@ class NumericalColumn(NumericalBaseColumn):
                     # If the dtype is a pandas nullable extension type, we need to
                     # float column doesn't have any NaNs.
                     res = self.nans_to_nulls()
-                    res._dtype = dtype
+                    res._dtype = dtype  # type: ignore[has-type]
                     return res
                 else:
                     self._dtype = dtype
@@ -829,7 +832,8 @@ class NumericalColumn(NumericalBaseColumn):
                     finfo = np.finfo(to_dtype_numpy)
                     lower_: int | float
                     upper_: int | float
-                    lower_, upper_ = finfo.min, finfo.max  # type: ignore[assignment]
+                    # assignment ignore not needed for numpy>=2.4.0
+                    lower_, upper_ = finfo.min, finfo.max  # type: ignore[assignment,unused-ignore]
 
                     # Check specifically for np.pi values when casting to lower precision
                     if self_dtype_numpy.itemsize > to_dtype_numpy.itemsize:
@@ -931,7 +935,7 @@ class NumericalColumn(NumericalBaseColumn):
 
         return self
 
-    def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
+    def _reduction_result_dtype(self, reduction_op: str) -> DtypeObj:
         if reduction_op in {"sum", "product"}:
             if self.dtype.kind == "f":
                 return self.dtype
@@ -975,8 +979,8 @@ class NumericalColumn(NumericalBaseColumn):
 
         return type(self).from_pylibcudf(
             getattr(plc.search, "lower_bound" if right else "upper_bound")(
-                plc.Table([bin_col.to_pylibcudf(mode="read")]),
-                plc.Table([self.to_pylibcudf(mode="read")]),
+                plc.Table([bin_col.plc_column]),
+                plc.Table([self.plc_column]),
                 [plc.types.Order.ASCENDING],
                 [plc.types.NullOrder.BEFORE],
             )

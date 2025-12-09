@@ -37,6 +37,7 @@ from cudf.utils.dtypes import (
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 
 if TYPE_CHECKING:
+    import datetime
     from collections.abc import Callable
 
     from cudf._typing import (
@@ -303,7 +304,7 @@ class DatetimeColumn(TemporalBaseColumn):
         raise NotImplementedError("day_of_week is currently not implemented.")
 
     @functools.cached_property
-    def tz(self):
+    def tz(self) -> datetime.tzinfo | None:
         """
         Return the timezone.
 
@@ -325,15 +326,15 @@ class DatetimeColumn(TemporalBaseColumn):
         raise NotImplementedError("freq is not yet implemented.")
 
     @functools.cached_property
-    def date(self):
+    def date(self) -> None:
         raise NotImplementedError("date is not yet implemented.")
 
     @functools.cached_property
-    def time(self):
+    def time(self) -> None:
         raise NotImplementedError("time is not yet implemented.")
 
     @functools.cached_property
-    def timetz(self):
+    def timetz(self) -> None:
         raise NotImplementedError("timetz is not yet implemented.")
 
     @functools.cached_property
@@ -590,9 +591,9 @@ class DatetimeColumn(TemporalBaseColumn):
                 lhs_unit = lhs.type.unit
                 other_dtype = cudf_dtype_from_pa_type(lhs.type)
             else:
-                lhs_unit = lhs.time_unit  # type: ignore[attr-defined]
+                lhs_unit = getattr(lhs, "time_unit", None)
                 other_dtype = lhs.dtype
-            rhs_unit = rhs.time_unit
+            rhs_unit = getattr(rhs, "time_unit", None)
         else:
             lhs = self
             rhs = other  # type: ignore[assignment]
@@ -600,9 +601,9 @@ class DatetimeColumn(TemporalBaseColumn):
                 rhs_unit = rhs.type.unit
                 other_dtype = cudf_dtype_from_pa_type(rhs.type)
             else:
-                rhs_unit = rhs.time_unit
+                rhs_unit = getattr(rhs, "time_unit", None)
                 other_dtype = rhs.dtype
-            lhs_unit = lhs.time_unit
+            lhs_unit = getattr(lhs, "time_unit", None)
 
         other_is_timedelta = other_dtype.kind == "m"
         other_is_datetime64 = other_dtype.kind == "M"

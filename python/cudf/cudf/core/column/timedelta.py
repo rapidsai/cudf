@@ -18,10 +18,13 @@ from cudf.core._internals import binaryop
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.temporal_base import TemporalBaseColumn
+from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
     find_common_type,
+    get_dtype_of_same_kind,
+    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.temporal import unit_to_nanoseconds_conversion
@@ -153,13 +156,15 @@ class TimeDeltaColumn(TemporalBaseColumn):
                 "NULL_EQUALS",
                 "NULL_NOT_EQUALS",
             }:
-                out_dtype = np.dtype(np.bool_)
+                out_dtype = get_dtype_of_same_kind(
+                    self.dtype, np.dtype(np.bool_)
+                )
             elif op == "__mod__":
                 out_dtype = find_common_type((self.dtype, other_cudf_dtype))
             elif op in {"__truediv__", "__floordiv__"}:
                 common_dtype = find_common_type((self.dtype, other_cudf_dtype))
                 out_dtype = (
-                    np.dtype(np.float64)
+                    get_dtype_of_same_kind(self.dtype, np.dtype(np.float64))
                     if op == "__truediv__"
                     else self._UNDERLYING_DTYPE
                 )
@@ -207,7 +212,11 @@ class TimeDeltaColumn(TemporalBaseColumn):
         lhs, rhs = (other, this) if reflect else (this, other)
 
         result = binaryop.binaryop(lhs, rhs, op, out_dtype)
-        if cudf.get_option("mode.pandas_compatible") and out_dtype.kind == "b":
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and out_dtype.kind == "b"
+            and not is_pandas_nullable_extension_dtype(out_dtype)
+        ):
             result = result.fillna(op == "__ne__")
         return result
 
@@ -243,14 +252,14 @@ class TimeDeltaColumn(TemporalBaseColumn):
             with acquire_spill_lock():
                 return type(self).from_pylibcudf(  # type: ignore[return-value]
                     plc.strings.convert.convert_durations.from_durations(
-                        self.to_pylibcudf(mode="read"), format
+                        self.plc_column, format
                     )
                 )
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         if cudf.get_option("mode.pandas_compatible"):
             if isinstance(dtype, np.dtype) and dtype.kind == "O":
-                raise TypeError(
+                raise MixedTypeError(
                     f"cannot astype a timedelta like from {self.dtype} to {dtype}"
                 )
         return self.strftime("%D days %H:%M:%S")

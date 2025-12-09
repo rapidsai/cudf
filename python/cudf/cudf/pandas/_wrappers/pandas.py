@@ -45,6 +45,7 @@ from ..fast_slow_proxy import (
     _FastSlowAttribute,
     _FunctionProxy,
     _maybe_wrap_result,
+    _State,
     _Unusable,
     is_proxy_object,
     make_final_proxy_type as _make_final_proxy_type,
@@ -181,6 +182,7 @@ def Timestamp_Timedelta__new__(cls, *args, **kwargs):
     # hence this method is needed.
     self, _ = _fast_slow_function_call(
         lambda cls, args, kwargs: cls(*args, **kwargs),
+        None,
         cls,
         args,
         kwargs,
@@ -292,11 +294,24 @@ def _DataFrame_dtypes_apply_func(value):
 def _DataFrame__dtypes(self):
     result = _fast_slow_function_call(
         lambda self: self.dtypes,
+        None,
         self,
     )[0]
     result = _maybe_wrap_result(
         result._fsproxy_slow.apply(_DataFrame_dtypes_apply_func), None
     )
+    result.force_state(_State.SLOW)
+    return result
+
+
+@functools.wraps(pd.DataFrame.columns)
+def _DataFrame_columns(self):
+    result = _fast_slow_function_call(
+        lambda self: self.columns,
+        None,
+        self,
+    )[0]
+    result.force_state(_State.SLOW)
     return result
 
 
@@ -314,6 +329,7 @@ DataFrame = make_final_proxy_type(
         "_constructor_sliced": _FastSlowAttribute("_constructor_sliced"),
         "_accessors": set(),
         "_ipython_canary_method_should_not_exist_": ignore_ipython_canary_check,
+        "columns": property(_DataFrame_columns),
         "dtypes": property(_DataFrame__dtypes),
         "__iter__": custom_iter,
         "attrs": _FastSlowAttribute("attrs"),
@@ -340,6 +356,7 @@ def custom_repr_html(obj):
     # for ipython
     return _fast_slow_function_call(
         lambda obj: obj._repr_html_(),
+        None,
         obj,
     )[0]
 
@@ -424,6 +441,7 @@ def Index__new__(cls, *args, **kwargs):
     # make_final_proxy_type provides.
     self, _ = _fast_slow_function_call(
         lambda cls, args, kwargs: cls(*args, **kwargs),
+        None,
         cls,
         args,
         kwargs,
@@ -469,6 +487,8 @@ Index = make_final_proxy_type(
         "_accessors": set(),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_engine": _FastSlowAttribute("_engine", private=True),
+        "_cache": _FastSlowAttribute("_cache", private=True),
         "name": _FastSlowAttribute("name"),
         "nbytes": _FastSlowAttribute("nbytes", private=True),
         "array": _FastSlowAttribute("array", private=True),
@@ -492,6 +512,8 @@ RangeIndex = make_final_proxy_type(
         "nbytes": _FastSlowAttribute("nbytes", private=True),
         "array": _FastSlowAttribute("array", private=True),
         "_range": _FastSlowAttribute("_range"),
+        "_engine": _FastSlowAttribute("_engine", private=True),
+        "_cache": _FastSlowAttribute("_cache", private=True),
     },
 )
 
@@ -543,6 +565,8 @@ CategoricalIndex = make_final_proxy_type(
         "name": _FastSlowAttribute("name"),
         "nbytes": _FastSlowAttribute("nbytes", private=True),
         "array": _FastSlowAttribute("array", private=True),
+        "_engine": _FastSlowAttribute("_engine", private=True),
+        "_cache": _FastSlowAttribute("_cache", private=True),
     },
 )
 
@@ -577,6 +601,8 @@ DatetimeIndex = make_final_proxy_type(
         "__setattr__": Index__setattr__,
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_engine": _FastSlowAttribute("_engine", private=True),
+        "_cache": _FastSlowAttribute("_cache", private=True),
         "name": _FastSlowAttribute("name"),
         "nbytes": _FastSlowAttribute("nbytes", private=True),
         "array": _FastSlowAttribute("array", private=True),
@@ -618,6 +644,8 @@ TimedeltaIndex = make_final_proxy_type(
         "__setattr__": Index__setattr__,
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_engine": _FastSlowAttribute("_engine", private=True),
+        "_cache": _FastSlowAttribute("_cache", private=True),
         "name": _FastSlowAttribute("name"),
         "nbytes": _FastSlowAttribute("nbytes", private=True),
         "array": _FastSlowAttribute("array", private=True),
@@ -678,6 +706,8 @@ PeriodIndex = make_final_proxy_type(
         "__setattr__": Index__setattr__,
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_engine": _FastSlowAttribute("_engine", private=True),
+        "_cache": _FastSlowAttribute("_cache", private=True),
         "name": _FastSlowAttribute("name"),
     },
 )
@@ -729,6 +759,12 @@ MultiIndex = make_final_proxy_type(
         "__init__": _DELETE,
         "__setattr__": Index__setattr__,
         "names": _FastSlowAttribute("names"),
+        "_lexsort_depth": _FastSlowAttribute("_lexsort_depth", private=True),
+        "_should_fallback_to_positional": _FastSlowAttribute(
+            "_should_fallback_to_positional", private=True
+        ),
+        "_engine": _FastSlowAttribute("_engine", private=True),
+        "_cache": _FastSlowAttribute("_cache", private=True),
     },
 )
 
@@ -973,6 +1009,8 @@ IntervalIndex = make_final_proxy_type(
         "__setattr__": Index__setattr__,
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_engine": _FastSlowAttribute("_engine", private=True),
+        "_cache": _FastSlowAttribute("_cache", private=True),
         "name": _FastSlowAttribute("name"),
     },
 )
@@ -2039,6 +2077,15 @@ NamedAgg = make_final_proxy_type(
     },
 )
 
+
+def _arrow_extension_array_astype(self, dtype=None, copy: bool = False):
+    if copy is False and cudf.api.types.is_dtype_equal(self.dtype, dtype):
+        return self
+    return _maybe_wrap_result(
+        self._fsproxy_wrapped.astype(dtype=dtype, copy=copy), self
+    )
+
+
 ArrowExtensionArray = make_final_proxy_type(
     "ArrowExtensionArray",
     _Unusable,
@@ -2055,6 +2102,7 @@ ArrowExtensionArray = make_final_proxy_type(
         "__contains__": _FastSlowAttribute("__contains__"),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "__arrow_array__": arrow_array_method,
+        "astype": _arrow_extension_array_astype,
     },
 )
 
@@ -2117,6 +2165,8 @@ NDArrayBackedExtensionIndex = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
+        "_cache": _FastSlowAttribute("_cache", private=True),
+        "_engine": _FastSlowAttribute("_engine", private=True),
         "__array__": array_method,
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },

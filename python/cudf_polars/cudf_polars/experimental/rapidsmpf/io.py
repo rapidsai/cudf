@@ -34,9 +34,14 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 )
 from cudf_polars.experimental.rapidsmpf.nodes import (
     define_py_node,
+    metadata_feeder_node,
     shutdown_on_error,
 )
-from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
+from cudf_polars.experimental.rapidsmpf.utils import (
+    ChannelManager,
+    Metadata,
+    empty_table_chunk,
+)
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -157,18 +162,22 @@ async def dataframescan_node(
     rows_per_partition
         The number of rows per partition.
     """
-    nrows = max(ir.df.shape()[0], 1)
-    global_count = math.ceil(nrows / rows_per_partition)
+    async with shutdown_on_error(context, ch_out.metadata, ch_out.data):
+        # Find local partition count.
+        nrows = max(ir.df.shape()[0], 1)
+        global_count = math.ceil(nrows / rows_per_partition)
 
-    # For single rank, simplify the logic
-    if context.comm().nranks == 1:
-        local_count = global_count
-        local_offset = 0
-    else:
-        local_count = math.ceil(global_count / context.comm().nranks)
-        local_offset = local_count * context.comm().rank
+        # For single rank, simplify the logic
+        if context.comm().nranks == 1:
+            local_count = global_count
+            local_offset = 0
+        else:
+            local_count = math.ceil(global_count / context.comm().nranks)
+            local_offset = local_count * context.comm().rank
 
-    async with shutdown_on_error(context, ch_out.data):
+        # Send basic metadata
+        await ch_out.send_metadata(context, Metadata(local_count))
+
         # Build list of IR slices to read
         ir_slices = []
         for seq_num in range(local_count):
@@ -182,6 +191,20 @@ async def dataframescan_node(
                     ir.projection,
                 )
             )
+
+        # If there are no slices, send an empty chunk for now.
+        # TODO: We shouldn't need to do this.
+        if len(ir_slices) == 0:
+            stream = ir_context.get_cuda_stream()
+            await ch_out.data.send(
+                context,
+                Message(
+                    0,
+                    empty_table_chunk(ir, context, stream),
+                ),
+            )
+            await ch_out.data.drain(context)
+            return
 
         # Use Lineariser to ensure ordered delivery
         num_producers = min(num_producers, len(ir_slices))
@@ -216,7 +239,7 @@ async def dataframescan_node(
 @generate_ir_sub_network.register(DataFrameScan)
 def _(
     ir: DataFrameScan, rec: SubNetGenerator
-) -> tuple[list[Any], dict[IR, ChannelManager]]:
+) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     config_options = rec.state["config_options"]
     assert config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'generate_ir_sub_network'"
@@ -227,16 +250,18 @@ def _(
     context = rec.state["context"]
     ir_context = rec.state["ir_context"]
     channels: dict[IR, ChannelManager] = {ir: ChannelManager(rec.state["context"])}
-    nodes: list[Any] = [
-        dataframescan_node(
-            context,
-            ir,
-            ir_context,
-            channels[ir].reserve_input_slot(),
-            num_producers=num_producers,
-            rows_per_partition=rows_per_partition,
-        )
-    ]
+    nodes: dict[IR, list[Any]] = {
+        ir: [
+            dataframescan_node(
+                context,
+                ir,
+                ir_context,
+                channels[ir].reserve_input_slot(),
+                num_producers=num_producers,
+                rows_per_partition=rows_per_partition,
+            )
+        ]
+    }
 
     return nodes, channels
 
@@ -345,7 +370,7 @@ async def scan_node(
     parquet_options
         The Parquet options.
     """
-    async with shutdown_on_error(context, ch_out.data):
+    async with shutdown_on_error(context, ch_out.metadata, ch_out.data):
         # Build a list of local Scan operations
         scans: list[Scan | SplitScan] = []
         if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
@@ -353,9 +378,11 @@ async def scan_node(
             local_count = math.ceil(count / context.comm().nranks)
             local_offset = local_count * context.comm().rank
             path_offset = local_offset // plan.factor
-            path_count = math.ceil(local_count / plan.factor)
+            path_end = math.ceil((local_offset + local_count) / plan.factor)
+            path_count = path_end - path_offset
             local_paths = ir.paths[path_offset : path_offset + path_count]
             sindex = local_offset % plan.factor
+            splits_created = 0
             for path in local_paths:
                 base_scan = Scan(
                     ir.schema,
@@ -371,7 +398,7 @@ async def scan_node(
                     ir.predicate,
                     parquet_options,
                 )
-                while sindex < plan.factor:
+                while sindex < plan.factor and splits_created < local_count:
                     scans.append(
                         SplitScan(
                             ir.schema,
@@ -382,6 +409,7 @@ async def scan_node(
                         )
                     )
                     sindex += 1
+                    splits_created += 1
                 sindex = 0
 
         else:
@@ -392,22 +420,40 @@ async def scan_node(
             paths_offset_end = paths_offset_start + plan.factor * local_count
             for offset in range(paths_offset_start, paths_offset_end, plan.factor):
                 local_paths = ir.paths[offset : offset + plan.factor]
-                scans.append(
-                    Scan(
-                        ir.schema,
-                        ir.typ,
-                        ir.reader_options,
-                        ir.cloud_options,
-                        local_paths,
-                        ir.with_columns,
-                        ir.skip_rows,
-                        ir.n_rows,
-                        ir.row_index,
-                        ir.include_file_paths,
-                        ir.predicate,
-                        parquet_options,
+                if len(local_paths) > 0:  # Only add scan if there are paths
+                    scans.append(
+                        Scan(
+                            ir.schema,
+                            ir.typ,
+                            ir.reader_options,
+                            ir.cloud_options,
+                            local_paths,
+                            ir.with_columns,
+                            ir.skip_rows,
+                            ir.n_rows,
+                            ir.row_index,
+                            ir.include_file_paths,
+                            ir.predicate,
+                            parquet_options,
+                        )
                     )
-                )
+
+        # Send basic metadata
+        await ch_out.send_metadata(context, Metadata(max(1, len(scans))))
+
+        # If there are no scans, send an empty chunk for now.
+        # TODO: We shouldn't need to do this.
+        if len(scans) == 0:
+            stream = ir_context.get_cuda_stream()
+            await ch_out.data.send(
+                context,
+                Message(
+                    0,
+                    empty_table_chunk(ir, context, stream),
+                ),
+            )
+            await ch_out.data.drain(context)
+            return
 
         # Use Lineariser to ensure ordered delivery
         num_producers = min(num_producers, len(scans))
@@ -548,7 +594,9 @@ def make_rapidsmpf_read_parquet_node(
 
 
 @generate_ir_sub_network.register(Scan)
-def _(ir: Scan, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManager]]:
+def _(
+    ir: Scan, rec: SubNetGenerator
+) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     config_options = rec.state["config_options"]
     assert config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'generate_ir_sub_network'"
@@ -558,9 +606,18 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
     num_producers = rec.state["max_io_threads"]
     channels: dict[IR, ChannelManager] = {ir: ChannelManager(rec.state["context"])}
 
+    assert partition_info.io_plan is not None, "Scan node must have a partition plan"
+    plan: IOPartitionPlan = partition_info.io_plan
+
+    # Native node cannot split large files in distributed mode yet
+    distributed_split_files = (
+        plan.flavor == IOPartitionFlavor.SPLIT_FILES
+        and rec.state["context"].comm().nranks > 1
+    )
+
     # Use rapidsmpf native read_parquet for multi-partition Parquet scans.
     ch_pair = channels[ir].reserve_input_slot()
-    nodes: list[Any]
+    nodes: dict[IR, list[Any]] = {}
     native_node: Any = None
     if (
         partition_info.count > 1
@@ -569,6 +626,7 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
         and ir.include_file_paths is None
         and ir.n_rows == -1
         and ir.skip_rows == 0
+        and not distributed_split_files
     ):
         native_node = make_rapidsmpf_read_parquet_node(
             rec.state["context"],
@@ -580,17 +638,19 @@ def _(ir: Scan, rec: SubNetGenerator) -> tuple[list[Any], dict[IR, ChannelManage
         )
 
     if native_node is not None:
-        nodes = [native_node]
+        # Need metadata node, because the native read_parquet
+        # node does not send metadata.
+        metadata_node = metadata_feeder_node(
+            rec.state["context"],
+            ch_pair,
+            Metadata(partition_info.count),
+        )
+        nodes[ir] = [metadata_node, native_node]
     else:
         # Fall back to scan_node (predicate not convertible, or other constraint)
-        assert partition_info.io_plan is not None, (
-            "Scan node must have a partition plan"
-        )
-        plan: IOPartitionPlan = partition_info.io_plan
-        if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
-            parquet_options = dataclasses.replace(parquet_options, chunked=False)
+        parquet_options = dataclasses.replace(parquet_options, chunked=False)
 
-        nodes = [
+        nodes[ir] = [
             scan_node(
                 rec.state["context"],
                 ir,

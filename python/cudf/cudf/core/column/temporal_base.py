@@ -19,6 +19,7 @@ import cudf
 from cudf.api.types import is_scalar
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.mixins import Scannable
+from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
@@ -71,11 +72,26 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             isinstance(fill_value, self._NP_SCALAR)
             and self.time_unit != np.datetime_data(fill_value)[0]
         ):
+            if isinstance(fill_value, self._NP_SCALAR):
+                unit = np.datetime_data(fill_value)[0]
+                if unit not in {"s", "ms", "us", "ns"}:
+                    fill_value = fill_value.astype(
+                        np.dtype(f"{fill_value.dtype.kind}8[ns]")
+                    )
             fill_value = fill_value.astype(self.dtype)
         elif isinstance(fill_value, str) and fill_value.lower() == "nat":
             # call-overload must be ignored because numpy stubs only accept literal
             # time unit strings, but we're passing self.time_unit which is valid at runtime
             fill_value = self._NP_SCALAR(fill_value, self.time_unit)  # type: ignore[call-overload]
+        elif (
+            cudf.get_option("mode.pandas_compatible")
+            and is_scalar(fill_value)
+            and not isinstance(fill_value, (self._NP_SCALAR, self._PD_SCALAR))
+        ):
+            raise MixedTypeError(
+                f"Cannot use fill_value of type {type(fill_value)} with "
+                f"TemporalBaseColumn of dtype {self.dtype}."
+            )
         return super()._validate_fillna_value(fill_value)
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:

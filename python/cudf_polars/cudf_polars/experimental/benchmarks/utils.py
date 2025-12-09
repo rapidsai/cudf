@@ -256,6 +256,7 @@ class RunConfig:
     query_set: str
     collect_traces: bool = False
     stats_planning: bool
+    max_io_threads: int
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.gather_shuffle_stats and self.shuffle != "rapidsmpf":
@@ -371,6 +372,7 @@ class RunConfig:
             query_set=args.query_set,
             collect_traces=args.collect_traces,
             stats_planning=args.stats_planning,
+            max_io_threads=args.max_io_threads,
         )
 
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
@@ -450,10 +452,16 @@ def get_executor_options(
             executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
         if run_config.cluster == "distributed":
             executor_options["cluster"] = "distributed"
-        if run_config.stats_planning:
-            executor_options["stats_planning"] = {"use_reduction_planning": True}
+        executor_options["stats_planning"] = {
+            "use_reduction_planning": run_config.stats_planning,
+            "use_sampling": (
+                # Always allow row-group sampling for rapidsmpf runtime
+                run_config.stats_planning or run_config.runtime == "rapidsmpf"
+            ),
+        }
         executor_options["client_device_threshold"] = run_config.spill_device
         executor_options["runtime"] = run_config.runtime
+        executor_options["max_io_threads"] = run_config.max_io_threads
 
     if (
         benchmark
@@ -879,6 +887,12 @@ def parse_args(
         default=False,
         help="Enable statistics planning.",
     )
+    parser.add_argument(
+        "--max-io-threads",
+        default=2,
+        type=int,
+        help="Maximum number of IO threads for rapidsmpf runtime.",
+    )
 
     parsed_args = parser.parse_args(args)
 
@@ -1163,6 +1177,45 @@ PDSH_TABLE_NAMES: list[str] = [
 ]
 
 
+def print_duckdb_plan(
+    q_id: int,
+    sql: str,
+    dataset_path: Path,
+    suffix: str,
+    query_set: str,
+    args: argparse.Namespace,
+) -> None:
+    """Print DuckDB query plan using EXPLAIN."""
+    if duckdb is None:
+        raise ImportError(duckdb_err)
+
+    if query_set == "pdsds":
+        tbl_names = PDSDS_TABLE_NAMES
+    else:
+        tbl_names = PDSH_TABLE_NAMES
+
+    with duckdb.connect() as conn:
+        for name in tbl_names:
+            pattern = (Path(dataset_path) / name).as_posix() + suffix
+            conn.execute(
+                f"CREATE OR REPLACE VIEW {name} AS "
+                f"SELECT * FROM parquet_scan('{pattern}');"
+            )
+
+        if args.explain_logical and args.explain:
+            conn.execute("PRAGMA explain_output = 'all';")
+        elif args.explain_logical:
+            conn.execute("PRAGMA explain_output = 'optimized_only';")
+        else:
+            conn.execute("PRAGMA explain_output = 'physical_only';")
+
+        print(f"\nDuckDB Query {q_id} - Plan\n")
+
+        plan_rows = conn.execute(f"EXPLAIN {sql}").fetchall()
+        for _, line in plan_rows:
+            print(line)
+
+
 def execute_duckdb_query(
     query: str,
     dataset_path: Path,
@@ -1203,6 +1256,17 @@ def run_duckdb(
             raise NotImplementedError(f"Query {q_id} not implemented.") from err
 
         sql = get_q(run_config)
+
+        if args.explain or args.explain_logical:
+            print_duckdb_plan(
+                q_id=q_id,
+                sql=sql,
+                dataset_path=run_config.dataset_path,
+                suffix=run_config.suffix,
+                query_set=duckdb_queries_cls.name,
+                args=args,
+            )
+
         print(f"DuckDB Executing: {q_id}")
         records[q_id] = []
 

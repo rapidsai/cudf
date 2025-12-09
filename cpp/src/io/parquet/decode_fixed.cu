@@ -98,12 +98,8 @@ __device__ void decode_fixed_width_values(
   int const skipped_leaf_values = s->page.skipped_leaf_values;
 
   // decode values
-  int pos = start;
-  while (pos < end) {
-    int const batch_size = min(max_batch_size, end - pos);
-    int const target_pos = pos + batch_size;
-    int const thread_pos = pos + t;
-
+  int thread_pos = start + t;
+  while (thread_pos < end) {
     // Index from value buffer (doesn't include nulls) to final array (has gaps for nulls)
     int const dst_pos = [&]() {
       if constexpr (copy_mode_t == copy_mode::DIRECT) {
@@ -115,9 +111,8 @@ __device__ void decode_fixed_width_values(
       }
     }();
 
-    // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
-    // before first_row) in the flat hierarchy case.
-    if (thread_pos < target_pos && dst_pos >= 0) {
+    // dst_pos may be negative (values before first_row) for non-lists.
+    if (dst_pos >= 0) {
       // nesting level that is storing actual leaf values
 
       // src_pos represents the logical row position we want to read from. But in the case of
@@ -174,7 +169,7 @@ __device__ void decode_fixed_width_values(
       }
     }
 
-    pos += batch_size;
+    thread_pos += max_batch_size;
   }
 }
 
@@ -197,13 +192,8 @@ __device__ inline void decode_fixed_width_split_values(
   int const skipped_leaf_values = s->page.skipped_leaf_values;
 
   // decode values
-  int pos = start;
-  while (pos < end) {
-    int const batch_size = min(max_batch_size, end - pos);
-
-    int const target_pos = pos + batch_size;
-    int const thread_pos = pos + t;
-
+  int thread_pos = start + t;
+  while (thread_pos < end) {
     // Index from value buffer (doesn't include nulls) to final array (has gaps for nulls)
     int const dst_pos = [&]() {
       if constexpr (copy_mode_t == copy_mode::DIRECT) {
@@ -215,9 +205,8 @@ __device__ inline void decode_fixed_width_split_values(
       }
     }();
 
-    // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
-    // before first_row) in the flat hierarchy case.
-    if (thread_pos < target_pos && dst_pos >= 0) {
+    // dst_pos may be negative (values before first_row) for non-lists.
+    if (dst_pos >= 0) {
       // src_pos represents the logical row position we want to read from. But in the case of
       // nested hierarchies (lists), there is no 1:1 mapping of rows to values. So src_pos
       // has to take into account the # of values we have to skip in the page to get to the
@@ -281,7 +270,7 @@ __device__ inline void decode_fixed_width_split_values(
       }
     }
 
-    pos += batch_size;
+    thread_pos += max_batch_size;
   }
 }
 
@@ -930,6 +919,8 @@ constexpr bool is_split_decode()
  * @param num_rows Maximum number of rows to read
  * @param page_mask Boolean vector indicating which pages need to be decoded
  * @param initial_str_offsets Vector to store the initial offsets for large nested string cols
+ * @param page_string_offset_indices Device span of offsets, indexed per-page, into the column's
+ * string offset buffer
  * @param error_code Error code to set if an error is encountered
  */
 template <typename level_t, int decode_block_size_t, decode_kernel_mask kernel_mask_t>
@@ -940,6 +931,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
                            size_t num_rows,
                            cudf::device_span<bool const> page_mask,
                            cudf::device_span<size_t> initial_str_offsets,
+                           cudf::device_span<size_t const> page_string_offset_indices,
                            kernel_error::pointer error_code)
 {
   constexpr bool has_dict_t     = has_dict<kernel_mask_t>();
@@ -954,10 +946,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   constexpr int rle_run_buffer_size = rle_stream_required_run_buffer_size<decode_block_size_t>();
 
   __shared__ __align__(16) page_state_s state_g;
-  constexpr bool use_dict_buffers = has_dict_t || has_bools_t || has_strings_t;
+  constexpr bool use_dict_buffers = has_dict_t || has_bools_t;
   using state_buf_t               = page_state_buffers_s<rolling_buf_size,  // size of nz_idx buffer
                                            use_dict_buffers ? rolling_buf_size : 1,
-                                           has_strings_t ? rolling_buf_size : 1>;
+                                                         1>;
   __shared__ __align__(16) state_buf_t state_buffers;
 
   auto const block      = cg::this_thread_block();
@@ -1083,6 +1075,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   int valid_count                 = 0;
   size_t string_output_offset     = 0;
   int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
+  uint32_t* const str_offsets =
+    s->col.column_string_offset_base + page_string_offset_indices[page_idx];
 
   // Skip ahead in the decoding so that we don't repeat work (skipped_leaf_values = 0 for non-lists)
   auto const skipped_leaf_values = s->page.skipped_leaf_values;
@@ -1094,10 +1088,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
       processed_count = skip_decode<rolling_buf_size>(rep_decoder, skipped_leaf_values, t);
       if constexpr (has_dict_t) {
         skip_decode<rolling_buf_size>(dict_stream, skipped_leaf_values, t);
-      } else if constexpr (has_strings_t) {
-        initialize_string_descriptors<is_calc_sizes_only::YES>(s, sb, skipped_leaf_values, block);
-        if (t == 0) { s->dict_pos = processed_count; }
-        block.sync();
       } else if constexpr (has_bools_t) {
         if (bools_are_rle_stream) {
           skip_decode<rolling_buf_size>(bool_stream, skipped_leaf_values, t);
@@ -1165,11 +1155,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     if constexpr (has_dict_t) {
       dict_stream.decode_next(t, next_valid_count - valid_count);
       block.sync();
-    } else if constexpr (has_strings_t) {
-      auto const target_pos = next_valid_count + skipped_leaf_values;
-      initialize_string_descriptors<is_calc_sizes_only::NO>(s, sb, target_pos, block);
-      if (t == 0) { s->dict_pos = target_pos; }
-      block.sync();
     } else if constexpr (has_bools_t) {
       if (bools_are_rle_stream) {
         bool_stream.decode_next(t, next_valid_count - valid_count);
@@ -1184,8 +1169,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     auto decode_values = [&]<copy_mode copy_mode_t>() {
       if constexpr (has_strings_t) {
         string_output_offset =
-          decode_strings<decode_block_size_t, has_lists_t, split_decode_t, copy_mode_t>(
-            s, sb, valid_count, next_valid_count, t, string_output_offset);
+          decode_strings<decode_block_size_t, has_dict_t, has_lists_t, split_decode_t, copy_mode_t>(
+            s, sb, valid_count, next_valid_count, t, str_offsets, string_output_offset);
       } else if constexpr (split_decode_t) {
         decode_fixed_width_split_values<decode_block_size_t, has_lists_t, copy_mode_t>(
           s, sb, valid_count, next_valid_count, t);
@@ -1210,18 +1195,20 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   }
 
   // Zero-fill null positions after decoding valid values
-  if (should_process_nulls) {
-    uint32_t const dtype_len = has_strings_t ? sizeof(cudf::size_type) : s->dtype_len;
-    int const num_values     = [&]() {
-      if constexpr (has_lists_t) {
-        auto const& ni = s->nesting_info[s->col.max_nesting_depth - 1];
-        return ni.valid_map_offset - init_valid_map_offset;
-      } else {
-        return s->num_rows;
-      }
-    }();
-    zero_fill_null_positions_shared<decode_block_size_t>(
-      s, dtype_len, init_valid_map_offset, num_values, t);
+  if constexpr (has_strings_t || has_lists_t) {
+    if (should_process_nulls) {
+      uint32_t const dtype_len = has_strings_t ? sizeof(cudf::size_type) : s->dtype_len;
+      int const num_values     = [&]() {
+        if constexpr (has_lists_t) {
+          auto const& ni = s->nesting_info[s->col.max_nesting_depth - 1];
+          return ni.valid_map_offset - init_valid_map_offset;
+        } else {
+          return s->num_rows;
+        }
+      }();
+      zero_fill_null_positions_shared<decode_block_size_t>(
+        s, dtype_len, init_valid_map_offset, num_values, t);
+    }
   }
 
   if constexpr (has_strings_t) {
@@ -1269,6 +1256,7 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
                       decode_kernel_mask kernel_mask,
                       cudf::device_span<bool const> page_mask,
                       cudf::device_span<size_t> initial_str_offsets,
+                      cudf::device_span<size_t const> page_string_offset_indices,
                       kernel_error::pointer error_code,
                       rmm::cuda_stream_view stream)
 {
@@ -1288,6 +1276,7 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
                                                      num_rows,
                                                      page_mask,
                                                      initial_str_offsets,
+                                                     page_string_offset_indices,
                                                      error_code);
     } else {
       decode_page_data_generic<uint16_t, decode_block_size, mask>
@@ -1297,6 +1286,7 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
                                                      num_rows,
                                                      page_mask,
                                                      initial_str_offsets,
+                                                     page_string_offset_indices,
                                                      error_code);
     }
   };
