@@ -384,29 +384,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             self._data = self.base_data[start:end]  # type: ignore[assignment]
         return self._data
 
-    @property
-    def data_ptr(self) -> int:
-        if self.data is None:
-            return 0
-        else:
-            # Save the original ptr
-            original_ptr = self.data.get_ptr(mode="read")
-
-            # Get the pointer which may trigger a copy due to copy-on-write
-            ptr = self.data.get_ptr(mode="write")
-
-            # Check if a new buffer was created or if the underlying data was modified
-            # This happens both when the buffer object is replaced and when
-            # ExposureTrackedBuffer.make_single_owner_inplace() is called
-            if cudf.get_option("copy_on_write") and (ptr != original_ptr):
-                # The offset must be reset to 0 because we have migrated to a new copied
-                # buffer starting at the old offset.
-                self._offset = 0
-                # Update base_data to match the new data buffer
-                self.set_base_data(self.data)
-
-            return ptr
-
     def set_base_data(self, value: None | Buffer) -> None:
         if value is not None and not isinstance(value, Buffer):
             raise TypeError(
@@ -441,26 +418,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         )
                     )
         return self._mask
-
-    @property
-    def mask_ptr(self) -> int:
-        if self.mask is None:
-            return 0
-        else:
-            # Save the original ptr
-            original_ptr = self.mask.get_ptr(mode="read")
-
-            # Get the pointer which may trigger a copy due to copy-on-write
-            ptr = self.mask.get_ptr(mode="write")
-
-            # Check if a new buffer was created or if the underlying data was modified
-            # This happens both when the buffer object is replaced and when
-            # ExposureTrackedBuffer.make_single_owner_inplace() is called
-            if cudf.get_option("copy_on_write") and (ptr != original_ptr):
-                # Update base_data to match the new data buffer
-                self.set_base_mask(self.mask)
-
-            return ptr
 
     def set_base_mask(self, value: None | Buffer) -> None:
         """
@@ -2007,11 +1964,25 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
+        # Get data pointer and handle copy-on-write for data
+        if self.data is None:
+            data_ptr = 0
+        else:
+            original_ptr = self.data.get_ptr(mode="read")
+            data_ptr = self.data.get_ptr(mode="write")
+            # Check if a new buffer was created or if the underlying data was modified
+            if cudf.get_option("copy_on_write") and (data_ptr != original_ptr):
+                # The offset must be reset to 0 because we have migrated to a new copied
+                # buffer starting at the old offset.
+                self._offset = 0
+                # Update base_data to match the new data buffer
+                self.set_base_data(self.data)
+
         output = {
             "shape": (len(self),),
             "strides": (self.dtype.itemsize,),
             "typestr": self.dtype.str,
-            "data": (self.data_ptr, False),
+            "data": (data_ptr, False),
             "version": 1,
         }
         data_buf = self._data if self._data is not None else self._base_data
@@ -2023,9 +1994,16 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             # some of the attributes from the numba device array
             mask = self.mask
             assert mask is not None
-            # Directly access the mask pointer to trigger copy-on-write handling
-            # TODO: We should find a cleaner way to handle this
-            self.mask_ptr
+            # Handle copy-on-write for mask
+            if mask is not None:
+                original_mask_ptr = mask.get_ptr(mode="read")
+                mask_ptr = mask.get_ptr(mode="write")
+                # Check if a new buffer was created or if the underlying data was modified
+                if cudf.get_option("copy_on_write") and (
+                    mask_ptr != original_mask_ptr
+                ):
+                    # Update base_mask to match the new mask buffer
+                    self.set_base_mask(self.mask)
             output["mask"] = mask
             self._exposed_buffers.add(mask)
         return output
