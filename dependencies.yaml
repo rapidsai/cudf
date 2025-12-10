@@ -492,7 +492,7 @@ dependencies:
       - output_types: conda
         packages:
           - flatbuffers==24.3.25
-          - librdkafka>=2.8.0,<2.9.0a0
+          - librdkafka>=2.8.0,<2.9.0
   depends_on_libnvcomp:
     common:
       - output_types: conda
@@ -517,7 +517,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - &rapids_build_backend rapids-build-backend>=0.4.0,<0.5.0.dev0
+          - &rapids_build_backend rapids-build-backend>=0.4.0,<0.5.0
       - output_types: conda
         packages:
           - scikit-build-core>=0.10.0
@@ -536,12 +536,12 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           # Pin Cython to <3.2 to avoid https://github.com/rapidsai/rmm/issues/2134
-          - cython>=3.0.3,<3.2.0a0
+          - cython>=3.0.3,<3.2.0
   numpy_run:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - numpy>=1.23,<3.0a0
+          - numpy>=1.23,<3.0
   pyarrow_run:
     common:
       - output_types: [conda]
@@ -682,7 +682,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          - pandas>=2.0,<2.4.0dev0
+          - pandas>=2.0,<2.4.0
   run_pylibcudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -696,17 +696,17 @@ dependencies:
           - matrix:
               cuda: "12.*"
             packages:
-              - cuda-python>=12.9.2,<13.0a0
+              - cuda-python>=12.9.2,<13.0
           # fallback to CUDA 13 versions if 'cuda' is '13.*' or not provided
           - matrix:
             packages:
-              - cuda-python>=13.0.1,<14.0a0
+              - cuda-python>=13.0.1,<14.0
   run_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - &numba numba>=0.60.0,<0.62.0a0
+          - &numba numba>=0.60.0,<0.62.0
           - nvtx>=0.2.1
           - packaging
           - rich
@@ -722,11 +722,11 @@ dependencies:
           - matrix:
               cuda: "12.*"
             packages:
-              - cuda-python>=12.9.2,<13.0a0
+              - cuda-python>=12.9.2,<13.0
           # fallback to CUDA 13 versions if 'cuda' is '13.*' or not provided
           - matrix:
             packages:
-              - cuda-python>=13.0.1,<14.0a0
+              - cuda-python>=13.0.1,<14.0
       - output_types: [requirements, pyproject]
         matrices:
           - matrix:
@@ -770,13 +770,13 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - python-confluent-kafka>=2.8.0,<2.9.0a0
+          - python-confluent-kafka>=2.8.0,<2.9.0
       - output_types: [conda, requirements, pyproject]
         packages:
           - streamz
       - output_types: [requirements, pyproject]
         packages:
-          - confluent-kafka>=2.8.0,<2.9.0a0
+          - confluent-kafka>=2.8.0,<2.9.0
   test_cpp:
     common:
       - output_types: conda
@@ -817,7 +817,7 @@ dependencies:
             packages:
               - numba==0.60.0
               - pandas==2.0.*
-              - numba-cuda==0.19.1
+              - numba-cuda==0.22.1
           - matrix: {dependencies: "latest"}
             packages:
               - pandas==2.3.3
@@ -960,18 +960,18 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-        - numba-cuda>=0.19.1,<0.20.0a0
+        - numba-cuda>=0.22.1,<0.23.0
     specific:
       - output_types: [requirements, pyproject]
         matrices:
           - matrix:
               cuda: "12.*"
             packages:
-              - numba-cuda[cu12]>=0.19.1,<0.20.0a0
+              - numba-cuda[cu12]>=0.22.1,<0.23.0
           # fallback to CUDA 13 versions if 'cuda' is '13.*' or not provided
           - matrix:
             packages:
-              - numba-cuda[cu13]>=0.19.1,<0.20.0a0
+              - numba-cuda[cu13]>=0.22.1,<0.23.0
   depends_on_pylibcudf:
     common:
       - output_types: conda
