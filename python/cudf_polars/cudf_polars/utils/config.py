@@ -828,6 +828,11 @@ class StreamingExecutor:
             )
         object.__setattr__(self, "cluster", Cluster(self.cluster))
         object.__setattr__(self, "shuffle_method", ShuffleMethod(self.shuffle_method))
+        object.__setattr__(
+            self,
+            "shuffler_insertion_method",
+            ShufflerInsertionMethod(self.shuffler_insertion_method),
+        )
 
         # Make sure stats_planning is a dataclass
         if isinstance(self.stats_planning, dict):
@@ -861,10 +866,6 @@ class StreamingExecutor:
             raise TypeError("rapidsmpf_spill must be bool")
         if not isinstance(self.sink_to_directory, bool):
             raise TypeError("sink_to_directory must be bool")
-        if not isinstance(self.shuffler_insertion_method, ShufflerInsertionMethod):
-            raise TypeError(
-                "shuffler_insertion_method must be a ShufflerInsertionMethod"
-            )
         if not isinstance(self.client_device_threshold, float):
             raise TypeError("client_device_threshold must be a float")
         if not isinstance(self.max_io_threads, int):
