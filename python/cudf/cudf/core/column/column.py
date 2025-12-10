@@ -231,7 +231,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self,
         plc_column: plc.Column,
         dtype: DtypeObj,
-        null_count: int,
         exposed: bool,
     ) -> None:
         if not (
@@ -244,9 +243,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self.plc_column = plc_column
         self._distinct_count: dict[bool, int] = {}
         self._dtype = dtype
-        if null_count < 0:
-            raise ValueError("null_count must be >=0")
-        self._null_count = null_count
         self._mask = None
         self._base_mask = None
         self._data = None
@@ -446,6 +442,29 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self._mask = None
         self._children = None
         self._base_mask = value  # type: ignore[assignment]
+
+        # Update plc_column with the new mask and compute null_count eagerly
+        if value is not None:
+            new_mask = plc.gpumemoryview(value)
+            new_null_count = plc.null_mask.null_count(
+                new_mask,
+                self.offset,
+                self.offset + self.size,
+            )
+        else:
+            new_mask = None
+            new_null_count = 0
+
+        self.plc_column = plc.Column(
+            data_type=self.plc_column.type(),
+            size=self.plc_column.size(),
+            data=self.plc_column.data(),
+            mask=new_mask,
+            null_count=new_null_count,
+            offset=self.plc_column.offset(),
+            children=self.plc_column.children(),
+        )
+
         self._clear_cache()
 
     def _clear_cache(self) -> None:
@@ -461,7 +480,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             except AttributeError:
                 # attr was not called yet, so ignore.
                 pass
-        self._null_count = None  # type: ignore[assignment]
 
     def set_mask(self, mask: Buffer | None) -> Self:
         """
@@ -495,17 +513,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def null_count(self) -> int:
-        if self._null_count is None:
-            if not self.nullable or self.size == 0:
-                self._null_count = 0
-            else:
-                with acquire_spill_lock():
-                    self._null_count = plc.null_mask.null_count(
-                        plc.gpumemoryview(self.base_mask),
-                        self.offset,
-                        self.offset + self.size,
-                    )
-        return self._null_count
+        return self.plc_column.null_count()
 
     @property
     def offset(self) -> int:
@@ -721,7 +729,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return column_cls(  # type: ignore[return-value]
             plc_column=col,
             dtype=dtype,
-            null_count=col.null_count(),
             exposed=data_ptr_exposed,
         )
 
@@ -1169,7 +1176,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             col = type(self)(
                 plc_column=self.plc_column,
                 dtype=self.dtype,
-                null_count=self.null_count,
                 exposed=False,
             )
             # copy-on-write and spilling logic tracked on the Buffers
