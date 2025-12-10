@@ -23,9 +23,9 @@ namespace detail {
  * This function performs a reduction operation on device data and returns the result
  * to the host using pinned memory for efficient transfer.
  *
+ * @tparam Op **[inferred]** The type of the binary reduction operator
  * @tparam InputIterator **[inferred]** The type of device-accessible input iterator
  * @tparam OutputType **[inferred]** The type of the reduction result
- * @tparam BinaryOp **[inferred]** The type of the binary reduction operator
  *
  * @param begin Device-accessible iterator to start of input values
  * @param end Device-accessible iterator to end of input values
@@ -87,10 +87,10 @@ OutputType reduce(InputIterator begin,
  * performs a reduction operation on the transformed values. The result is returned to the
  * host using pinned memory for efficient transfer.
  *
+ * @tparam TransformationOp **[inferred]** The type of the unary transformation operator
+ * @tparam ReductionOp **[inferred]** The type of the binary reduction operator
  * @tparam InputIterator **[inferred]** The type of device-accessible input iterator
  * @tparam OutputType **[inferred]** The type of the reduction result
- * @tparam UnaryOp **[inferred]** The type of the unary transformation operator
- * @tparam BinaryOp **[inferred]** The type of the binary reduction operator
  *
  * @param begin Device-accessible iterator to start of input values
  * @param end Device-accessible iterator to end of input values
