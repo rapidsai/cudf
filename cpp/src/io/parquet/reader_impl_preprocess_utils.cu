@@ -539,13 +539,11 @@ void decode_page_headers(pass_intermediate_data& pass,
                                                   stream,
                                                   cudf::get_current_device_resource_ref());
     auto host_result = cudf::detail::make_pinned_vector_async<uint32_t>(1, stream);
-    CUDF_CUDA_TRY(
-      cudaMemcpyAsync(host_result.data(),
-                      static_cast<cudf::numeric_scalar<uint32_t>*>(result.get())->data(),
-                      sizeof(uint32_t),
-                      cudaMemcpyDeviceToHost,
-                      stream.value()));
-    stream.synchronize();
+    cudf::detail::cuda_memcpy(
+      cudf::host_span<uint32_t>{host_result.data(), 1},
+      cudf::device_span<uint32_t const>{
+        static_cast<cudf::numeric_scalar<uint32_t>*>(result.get())->data(), 1},
+      stream);
     return host_result.front();
   }();
 

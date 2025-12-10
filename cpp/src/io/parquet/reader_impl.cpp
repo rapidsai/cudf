@@ -403,11 +403,10 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   // Copy over initial string offsets from device
   auto h_initial_str_offsets =
     cudf::detail::make_pinned_vector_async<size_t>(initial_str_offsets.size(), _stream);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(h_initial_str_offsets.data(),
-                                initial_str_offsets.data(),
-                                initial_str_offsets.size() * sizeof(size_t),
-                                cudaMemcpyDeviceToHost,
-                                _stream.value()));
+  cudf::detail::cuda_memcpy_async(
+    cudf::host_span<size_t>{h_initial_str_offsets.data(), initial_str_offsets.size()},
+    cudf::device_span<size_t const>{initial_str_offsets.data(), initial_str_offsets.size()},
+    _stream);
 
   if (auto const error = error_code.value_sync(_stream); error != 0) {
     CUDF_FAIL("Parquet data decode failed with code(s) " + kernel_error::to_string(error));
@@ -1003,25 +1002,27 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
 
   auto null_masks =
     cudf::detail::make_pinned_vector_async<bitmask_type*>(host_null_masks.size(), _stream);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(null_masks.data(),
-                                host_null_masks.data(),
-                                host_null_masks.size() * sizeof(bitmask_type*),
-                                cudaMemcpyHostToHost,
-                                _stream.value()));
   auto begin_bits =
     cudf::detail::make_pinned_vector_async<cudf::size_type>(host_begin_bits.size(), _stream);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(begin_bits.data(),
-                                host_begin_bits.data(),
-                                host_begin_bits.size() * sizeof(cudf::size_type),
-                                cudaMemcpyHostToHost,
-                                _stream.value()));
   auto end_bits =
     cudf::detail::make_pinned_vector_async<cudf::size_type>(host_end_bits.size(), _stream);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(end_bits.data(),
-                                host_end_bits.data(),
-                                host_end_bits.size() * sizeof(cudf::size_type),
-                                cudaMemcpyHostToHost,
-                                _stream.value()));
+
+  cudf::detail::cuda_memcpy_async(
+    cudf::host_span<bitmask_type*>{null_masks.data(), host_null_masks.size()},
+    cudf::device_span<bitmask_type* const>{host_null_masks.data(), host_null_masks.size()},
+    _stream);
+
+  cudf::detail::cuda_memcpy_async(
+    cudf::host_span<cudf::size_type>{begin_bits.data(), host_begin_bits.size()},
+    cudf::device_span<cudf::size_type const>{host_begin_bits.data(), host_begin_bits.size()},
+    _stream);
+
+  cudf::detail::cuda_memcpy_async(
+    cudf::host_span<cudf::size_type>{end_bits.data(), host_end_bits.size()},
+    cudf::device_span<cudf::size_type const>{host_end_bits.data(), host_end_bits.size()},
+    _stream);
+
+  _stream.synchronize();
 
   // Bulk update the nullmasks if the number of pages is above the threshold
   if (null_masks.size() >= min_nullmasks_for_bulk_update) {

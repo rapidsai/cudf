@@ -71,13 +71,11 @@ void reader_impl::build_string_dict_indices()
                                                   _stream,
                                                   cudf::get_current_device_resource_ref());
     auto host_result = cudf::detail::make_pinned_vector_async<uint32_t>(1, _stream);
-    CUDF_CUDA_TRY(
-      cudaMemcpyAsync(host_result.data(),
-                      static_cast<cudf::numeric_scalar<uint32_t>*>(result.get())->data(),
-                      sizeof(uint32_t),
-                      cudaMemcpyDeviceToHost,
-                      _stream.value()));
-    _stream.synchronize();
+    cudf::detail::cuda_memcpy(
+      cudf::host_span<uint32_t>{host_result.data(), 1},
+      cudf::device_span<uint32_t const>{
+        static_cast<cudf::numeric_scalar<uint32_t>*>(result.get())->data(), 1},
+      _stream);
     return host_result.front();
   }();
 
@@ -409,13 +407,11 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
                                                   _stream,
                                                   cudf::get_current_device_resource_ref());
     auto host_result = cudf::detail::make_pinned_vector_async<uint32_t>(1, _stream);
-    CUDF_CUDA_TRY(
-      cudaMemcpyAsync(host_result.data(),
-                      static_cast<cudf::numeric_scalar<uint32_t>*>(result.get())->data(),
-                      sizeof(uint32_t),
-                      cudaMemcpyDeviceToHost,
-                      _stream.value()));
-    _stream.synchronize();
+    cudf::detail::cuda_memcpy(
+      cudf::host_span<uint32_t>{host_result.data(), 1},
+      cudf::device_span<uint32_t const>{
+        static_cast<cudf::numeric_scalar<uint32_t>*>(result.get())->data(), 1},
+      _stream);
     return host_result.front();
   }();
 
@@ -1050,12 +1046,9 @@ cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
                         d_col_sizes.begin());
 
   auto host_col_sizes = cudf::detail::make_pinned_vector_async<size_t>(d_col_sizes.size(), _stream);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(host_col_sizes.data(),
-                                d_col_sizes.data(),
-                                d_col_sizes.size() * sizeof(size_t),
-                                cudaMemcpyDeviceToHost,
-                                _stream.value()));
-  _stream.synchronize();
+  cudf::detail::cuda_memcpy(cudf::host_span<size_t>{host_col_sizes.data(), d_col_sizes.size()},
+                            cudf::device_span<size_t const>{d_col_sizes.data(), d_col_sizes.size()},
+                            _stream);
   return host_col_sizes;
 }
 
