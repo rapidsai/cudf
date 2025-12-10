@@ -1999,8 +1999,17 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             data_ptr = self.data.get_ptr(mode="write")
             # Check if a new buffer was created or if the underlying data was modified
             if cudf.get_option("copy_on_write") and (data_ptr != original_ptr):
-                # When copy-on-write creates a new buffer, update base_data
-                # Note: offset comes from plc_column which should already be correct
+                # The offset must be reset to 0 because we have migrated to a new copied
+                # buffer starting at the old offset.
+                self.plc_column = plc.Column(
+                    data_type=self.plc_column.type(),
+                    size=self.plc_column.size(),
+                    data=self.plc_column.data(),
+                    mask=self.plc_column.null_mask(),
+                    null_count=self.plc_column.null_count(),
+                    offset=0,
+                    children=self.plc_column.children(),
+                )
                 self.set_base_data(self.data)
 
         output = {
