@@ -519,43 +519,6 @@ class GroupBy(Serializable, Reducible, Scannable):
     def ndim(self) -> int:
         return self.obj.ndim
 
-    @property
-    def dtypes(self):
-        """
-        Return the dtypes in this group.
-
-        .. deprecated:: 24.04
-           Use `.dtypes` on base object instead.
-
-        Returns
-        -------
-        pandas.DataFrame
-            The data type of each column of the group.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [1, 2, 3, 3], 'b': ['x', 'y', 'z', 'a'],
-        ...                      'c':[10, 11, 12, 12]})
-        >>> df.groupby("a").dtypes
-               a       b      c
-        a
-        1  int64  object  int64
-        2  int64  object  int64
-        3  int64  object  int64
-        """
-        warnings.warn(
-            f"{type(self).__name__}.dtypes is deprecated and will be "
-            "removed in a future version. Check the dtypes on the "
-            "base object instead",
-            FutureWarning,
-        )
-        index = self.grouping.keys.unique().sort_values().to_pandas()
-        return pd.DataFrame(
-            {name: [dtype] * len(index) for name, dtype in self.obj._dtypes},
-            index=index,
-        )
-
     @cached_property
     def groups(self):
         """
