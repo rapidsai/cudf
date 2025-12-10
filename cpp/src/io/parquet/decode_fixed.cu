@@ -111,62 +111,59 @@ __device__ void decode_fixed_width_values(
       }
     }();
 
-    // dst_pos may be negative (values before first_row) for non-lists.
-    if (dst_pos >= 0) {
-      // nesting level that is storing actual leaf values
+    // nesting level that is storing actual leaf values
 
-      // src_pos represents the logical row position we want to read from. But in the case of
-      // nested hierarchies (lists), there is no 1:1 mapping of rows to values. So src_pos
-      // has to take into account the # of values we have to skip in the page to get to the
-      // desired logical row.  For flat hierarchies, skipped_leaf_values will always be 0.
-      int const src_pos = [&]() {
-        if constexpr (has_lists_t) { return thread_pos + skipped_leaf_values; }
-        return thread_pos;
-      }();
+    // src_pos represents the logical row position we want to read from. But in the case of
+    // nested hierarchies (lists), there is no 1:1 mapping of rows to values. So src_pos
+    // has to take into account the # of values we have to skip in the page to get to the
+    // desired logical row.  For flat hierarchies, skipped_leaf_values will always be 0.
+    int const src_pos = [&]() {
+      if constexpr (has_lists_t) { return thread_pos + skipped_leaf_values; }
+      return thread_pos;
+    }();
 
-      void* const dst = data_out + (static_cast<size_t>(dst_pos) * dtype_len);
+    void* const dst = data_out + (static_cast<size_t>(dst_pos) * dtype_len);
 
-      if (s->col.logical_type.has_value() && s->col.logical_type->type == LogicalType::DECIMAL) {
-        switch (dtype) {
-          case Type::INT32:
-            read_fixed_width_value_fast(s, sb, src_pos, static_cast<uint32_t*>(dst));
-            break;
-          case Type::INT64:
-            read_fixed_width_value_fast(s, sb, src_pos, static_cast<uint2*>(dst));
-            break;
-          default:
-            if (s->dtype_len_in <= sizeof(int32_t)) {
-              read_fixed_width_byte_array_as_int(s, sb, src_pos, static_cast<int32_t*>(dst));
-            } else if (s->dtype_len_in <= sizeof(int64_t)) {
-              read_fixed_width_byte_array_as_int(s, sb, src_pos, static_cast<int64_t*>(dst));
-            } else {
-              read_fixed_width_byte_array_as_int(s, sb, src_pos, static_cast<__int128_t*>(dst));
-            }
-            break;
-        }
-      } else if (dtype == Type::BOOLEAN) {
-        read_boolean(sb, src_pos, static_cast<uint8_t*>(dst));
-      } else if (dtype == Type::INT96) {
-        read_int96_timestamp(s, sb, src_pos, static_cast<int64_t*>(dst));
-      } else if (dtype_len == 8) {
-        if (s->dtype_len_in == 4) {
-          // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
-          // TIME_MILLIS is the only duration type stored as int32:
-          // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
-          auto const dst_ptr = static_cast<uint32_t*>(dst);
-          read_fixed_width_value_fast(s, sb, src_pos, dst_ptr);
-          // zero out most significant bytes
-          cuda::std::memset(dst_ptr + 1, 0, sizeof(int32_t));
-        } else if (s->ts_scale) {
-          read_int64_timestamp(s, sb, src_pos, static_cast<int64_t*>(dst));
-        } else {
+    if (s->col.logical_type.has_value() && s->col.logical_type->type == LogicalType::DECIMAL) {
+      switch (dtype) {
+        case Type::INT32:
+          read_fixed_width_value_fast(s, sb, src_pos, static_cast<uint32_t*>(dst));
+          break;
+        case Type::INT64:
           read_fixed_width_value_fast(s, sb, src_pos, static_cast<uint2*>(dst));
-        }
-      } else if (dtype_len == 4) {
-        read_fixed_width_value_fast(s, sb, src_pos, static_cast<uint32_t*>(dst));
-      } else {
-        read_nbyte_fixed_width_value(s, sb, src_pos, static_cast<uint8_t*>(dst), dtype_len);
+          break;
+        default:
+          if (s->dtype_len_in <= sizeof(int32_t)) {
+            read_fixed_width_byte_array_as_int(s, sb, src_pos, static_cast<int32_t*>(dst));
+          } else if (s->dtype_len_in <= sizeof(int64_t)) {
+            read_fixed_width_byte_array_as_int(s, sb, src_pos, static_cast<int64_t*>(dst));
+          } else {
+            read_fixed_width_byte_array_as_int(s, sb, src_pos, static_cast<__int128_t*>(dst));
+          }
+          break;
       }
+    } else if (dtype == Type::BOOLEAN) {
+      read_boolean(sb, src_pos, static_cast<uint8_t*>(dst));
+    } else if (dtype == Type::INT96) {
+      read_int96_timestamp(s, sb, src_pos, static_cast<int64_t*>(dst));
+    } else if (dtype_len == 8) {
+      if (s->dtype_len_in == 4) {
+        // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
+        // TIME_MILLIS is the only duration type stored as int32:
+        // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
+        auto const dst_ptr = static_cast<uint32_t*>(dst);
+        read_fixed_width_value_fast(s, sb, src_pos, dst_ptr);
+        // zero out most significant bytes
+        cuda::std::memset(dst_ptr + 1, 0, sizeof(int32_t));
+      } else if (s->ts_scale) {
+        read_int64_timestamp(s, sb, src_pos, static_cast<int64_t*>(dst));
+      } else {
+        read_fixed_width_value_fast(s, sb, src_pos, static_cast<uint2*>(dst));
+      }
+    } else if (dtype_len == 4) {
+      read_fixed_width_value_fast(s, sb, src_pos, static_cast<uint32_t*>(dst));
+    } else {
+      read_nbyte_fixed_width_value(s, sb, src_pos, static_cast<uint8_t*>(dst), dtype_len);
     }
 
     thread_pos += max_batch_size;
@@ -205,69 +202,65 @@ __device__ inline void decode_fixed_width_split_values(
       }
     }();
 
-    // dst_pos may be negative (values before first_row) for non-lists.
-    if (dst_pos >= 0) {
-      // src_pos represents the logical row position we want to read from. But in the case of
-      // nested hierarchies (lists), there is no 1:1 mapping of rows to values. So src_pos
-      // has to take into account the # of values we have to skip in the page to get to the
-      // desired logical row.  For flat hierarchies, skipped_leaf_values will always be 0.
-      int const src_pos = [&]() {
-        if constexpr (has_lists_t) {
-          return thread_pos + skipped_leaf_values;
-        } else {
-          return thread_pos;
-        }
-      }();
-
-      uint32_t const dtype_len = s->dtype_len;
-      uint8_t const* const src = s->data_start + src_pos;
-      uint8_t* const dst       = data_out + static_cast<size_t>(dst_pos) * dtype_len;
-      auto const is_decimal =
-        s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
-
-      // Note: non-decimal FIXED_LEN_BYTE_ARRAY will be handled in the string reader
-      if (is_decimal) {
-        switch (dtype) {
-          case Type::INT32: gpuOutputByteStreamSplit<int32_t>(dst, src, num_values); break;
-          case Type::INT64: gpuOutputByteStreamSplit<int64_t>(dst, src, num_values); break;
-          case Type::FIXED_LEN_BYTE_ARRAY:
-            if (s->dtype_len_in <= sizeof(int32_t)) {
-              gpuOutputSplitFixedLenByteArrayAsInt(
-                reinterpret_cast<int32_t*>(dst), src, num_values, s->dtype_len_in);
-              break;
-            } else if (s->dtype_len_in <= sizeof(int64_t)) {
-              gpuOutputSplitFixedLenByteArrayAsInt(
-                reinterpret_cast<int64_t*>(dst), src, num_values, s->dtype_len_in);
-              break;
-            } else if (s->dtype_len_in <= sizeof(__int128_t)) {
-              gpuOutputSplitFixedLenByteArrayAsInt(
-                reinterpret_cast<__int128_t*>(dst), src, num_values, s->dtype_len_in);
-              break;
-            }
-            // unsupported decimal precision
-            [[fallthrough]];
-
-          default: s->set_error_code(decode_error::UNSUPPORTED_ENCODING);
-        }
-      } else if (dtype_len == 8) {
-        if (s->dtype_len_in == 4) {
-          // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
-          // TIME_MILLIS is the only duration type stored as int32:
-          // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
-          gpuOutputByteStreamSplit<int32_t>(dst, src, num_values);
-          // zero out most significant bytes
-          cuda::std::memset(dst + sizeof(int32_t), 0, sizeof(int32_t));
-        } else if (s->ts_scale) {
-          gpuOutputSplitInt64Timestamp(
-            reinterpret_cast<int64_t*>(dst), src, num_values, s->ts_scale);
-        } else {
-          gpuOutputByteStreamSplit<int64_t>(dst, src, num_values);
-        }
-      } else if (dtype_len == 4) {
-        gpuOutputByteStreamSplit<int32_t>(dst, src, num_values);
+    // src_pos represents the logical row position we want to read from. But in the case of
+    // nested hierarchies (lists), there is no 1:1 mapping of rows to values. So src_pos
+    // has to take into account the # of values we have to skip in the page to get to the
+    // desired logical row.  For flat hierarchies, skipped_leaf_values will always be 0.
+    int const src_pos = [&]() {
+      if constexpr (has_lists_t) {
+        return thread_pos + skipped_leaf_values;
       } else {
-        s->set_error_code(decode_error::UNSUPPORTED_ENCODING);
+        return thread_pos;
       }
+    }();
+
+    uint32_t const dtype_len = s->dtype_len;
+    uint8_t const* const src = s->data_start + src_pos;
+    uint8_t* const dst       = data_out + static_cast<size_t>(dst_pos) * dtype_len;
+    auto const is_decimal =
+      s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
+
+    // Note: non-decimal FIXED_LEN_BYTE_ARRAY will be handled in the string reader
+    if (is_decimal) {
+      switch (dtype) {
+        case Type::INT32: gpuOutputByteStreamSplit<int32_t>(dst, src, num_values); break;
+        case Type::INT64: gpuOutputByteStreamSplit<int64_t>(dst, src, num_values); break;
+        case Type::FIXED_LEN_BYTE_ARRAY:
+          if (s->dtype_len_in <= sizeof(int32_t)) {
+            gpuOutputSplitFixedLenByteArrayAsInt(
+              reinterpret_cast<int32_t*>(dst), src, num_values, s->dtype_len_in);
+            break;
+          } else if (s->dtype_len_in <= sizeof(int64_t)) {
+            gpuOutputSplitFixedLenByteArrayAsInt(
+              reinterpret_cast<int64_t*>(dst), src, num_values, s->dtype_len_in);
+            break;
+          } else if (s->dtype_len_in <= sizeof(__int128_t)) {
+            gpuOutputSplitFixedLenByteArrayAsInt(
+              reinterpret_cast<__int128_t*>(dst), src, num_values, s->dtype_len_in);
+            break;
+          }
+          // unsupported decimal precision
+          [[fallthrough]];
+
+        default: s->set_error_code(decode_error::UNSUPPORTED_ENCODING);
+      }
+    } else if (dtype_len == 8) {
+      if (s->dtype_len_in == 4) {
+        // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
+        // TIME_MILLIS is the only duration type stored as int32:
+        // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
+        gpuOutputByteStreamSplit<int32_t>(dst, src, num_values);
+        // zero out most significant bytes
+        cuda::std::memset(dst + sizeof(int32_t), 0, sizeof(int32_t));
+      } else if (s->ts_scale) {
+        gpuOutputSplitInt64Timestamp(reinterpret_cast<int64_t*>(dst), src, num_values, s->ts_scale);
+      } else {
+        gpuOutputByteStreamSplit<int64_t>(dst, src, num_values);
+      }
+    } else if (dtype_len == 4) {
+      gpuOutputByteStreamSplit<int32_t>(dst, src, num_values);
+    } else {
+      s->set_error_code(decode_error::UNSUPPORTED_ENCODING);
     }
 
     thread_pos += max_batch_size;
