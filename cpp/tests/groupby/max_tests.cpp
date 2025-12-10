@@ -553,7 +553,7 @@ struct groupby_max_hash_based_shmem_kernel_test : cudf::test::BaseFixture {};
 
 TEST_F(groupby_max_hash_based_shmem_kernel_test, all_unique_keys)
 {
-  auto constexpr block_size = 128;
+  auto constexpr block_size      = 128;
   auto constexpr size_multiplier = 4;
 
   // Since the maximum number of thread blocks (128 threads each) can be 100+ depending on GPU
@@ -573,7 +573,7 @@ TEST_F(groupby_max_hash_based_shmem_kernel_test, all_unique_keys)
 
 TEST_F(groupby_max_hash_based_shmem_kernel_test, repeated_keys)
 {
-  auto constexpr block_size = 128;
+  auto constexpr block_size      = 128;
   auto constexpr size_multiplier = 10000;
 
   // Repeat the keys for every 128 rows, thus we will have only 128 distinct keys in total.
