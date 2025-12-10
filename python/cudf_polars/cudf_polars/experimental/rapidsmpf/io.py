@@ -163,8 +163,8 @@ async def dataframescan_node(
     """
     async with shutdown_on_error(context, ch_out.metadata, ch_out.data):
         # Find local partition count.
-        nrows = max(ir.df.shape()[0], 1)
-        global_count = math.ceil(nrows / rows_per_partition)
+        nrows = ir.df.shape()[0]
+        global_count = math.ceil(nrows / rows_per_partition) if nrows > 0 else 0
 
         # For single rank, simplify the logic
         if context.comm().nranks == 1:
@@ -175,7 +175,7 @@ async def dataframescan_node(
             local_offset = local_count * context.comm().rank
 
         # Send basic metadata
-        await ch_out.send_metadata(context, Metadata(local_count))
+        await ch_out.send_metadata(context, Metadata(max(1, local_count)))
 
         # Build list of IR slices to read
         ir_slices = []

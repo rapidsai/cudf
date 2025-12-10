@@ -243,6 +243,7 @@ def evaluate_pipeline(
         )
         for msg in messages
     ]
+    dfs: list[DataFrame] = []
     if chunks:
         dfs = [
             DataFrame.from_table(
