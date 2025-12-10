@@ -27,8 +27,8 @@ namespace detail {
  * @tparam OutputType **[inferred]** The type of the reduction result
  * @tparam BinaryOp **[inferred]** The type of the binary reduction operator
  *
- * @param input Device-accessible iterator to input values
- * @param num_items Number of items to reduce
+ * @param begin Device-accessible iterator to start of input values
+ * @param end Device-accessible iterator to end of input values
  * @param init Initial value for the reduction
  * @param op Binary reduction operator
  * @param stream CUDA stream to use
