@@ -415,48 +415,86 @@ cudf::size_type distinct_count(table_view const& input,
                                null_equality nulls_equal    = null_equality::EQUAL,
                                rmm::cuda_stream_view stream = cudf::get_default_stream());
 
-/**
- * @brief Approximate count of distinct elements in the column_view using HyperLogLog.
- *
- * Uses the HyperLogLog++ algorithm to provide a fast approximation of the number of distinct
- * elements in a column. All NaN values are treated as equal, and all null values are treated as
- * equal.
- *
- * @param input The column_view whose distinct elements will be approximately counted
- * @param precision The precision parameter for HyperLogLog (4-18). Higher precision gives
- *                  better accuracy but uses more memory. Default is 12.
- * @param null_handling `INCLUDE` or `EXCLUDE` null values (default: `EXCLUDE`)
- * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL` (default: `NAN_IS_NULL`)
- * @param stream CUDA stream used for device memory operations and kernel launches
- *
- * @return Approximate number of distinct elements in the column
- */
-cudf::size_type approx_distinct_count(column_view const& input,
-                                      int precision                = 12,
-                                      null_policy null_handling    = null_policy::EXCLUDE,
-                                      nan_policy nan_handling      = nan_policy::NAN_IS_NULL,
-                                      rmm::cuda_stream_view stream = cudf::get_default_stream());
+// Forward declaration
+namespace detail {
+struct approx_distinct_count;
+}
 
 /**
- * @brief Approximate count of distinct rows in a table using HyperLogLog.
+ * @brief Object-oriented HyperLogLog sketch for approximate distinct counting.
  *
- * Uses the HyperLogLog++ algorithm to provide a fast approximation of the number of distinct
- * rows in a table. All NaN values are treated as equal, and all null values are treated as equal.
+ * This class provides an object-oriented interface to HyperLogLog sketches, allowing
+ * incremental addition of data and cardinality estimation.
  *
- * @param input Table whose distinct rows will be approximately counted
- * @param precision The precision parameter for HyperLogLog (4-18). Higher precision gives
- *                  better accuracy but uses more memory. Default is 12.
- * @param null_handling `INCLUDE` or `EXCLUDE` rows with nulls (default: `EXCLUDE`)
- * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL` (default: `NAN_IS_NULL`)
- * @param stream CUDA stream used for device memory operations and kernel launches
+ * The implementation uses XXHash64 to hash table rows into 64-bit values, which are
+ * then added to the HyperLogLog sketch without additional hashing (identity function).
  *
- * @return Approximate number of distinct rows in the table
+ * Example usage:
+ * @code{.cpp}
+ *   auto adc = cudf::approx_distinct_count(table1);
+ *   auto count1 = adc.estimate();
+ *
+ *   adc.add(table2);
+ *   auto count2 = adc.estimate();
+ * @endcode
  */
-cudf::size_type approx_distinct_count(table_view const& input,
-                                      int precision                = 12,
-                                      null_policy null_handling    = null_policy::EXCLUDE,
-                                      nan_policy nan_handling      = nan_policy::NAN_IS_NULL,
-                                      rmm::cuda_stream_view stream = cudf::get_default_stream());
+class approx_distinct_count {
+ public:
+  using impl_type = cudf::detail::approx_distinct_count;  ///< Implementation type
+
+  /**
+   * @brief Construct an approximate distinct count sketch from a table.
+   *
+   * @param input Table whose rows will be added to the sketch
+   * @param precision The precision parameter for HyperLogLog (4-18). Higher precision gives
+   *                  better accuracy but uses more memory. Default is 12.
+   * @param null_handling `INCLUDE` or `EXCLUDE` rows with nulls (default: `EXCLUDE`)
+   * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL` (default: `NAN_IS_NULL`)
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   */
+  approx_distinct_count(table_view const& input,
+                        cudf::size_type precision    = 12,
+                        null_policy null_handling    = null_policy::EXCLUDE,
+                        nan_policy nan_handling      = nan_policy::NAN_IS_NULL,
+                        rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+  ~approx_distinct_count();
+
+  approx_distinct_count(approx_distinct_count const&)            = delete;
+  approx_distinct_count& operator=(approx_distinct_count const&) = delete;
+  /** @brief Default move constructor */
+  approx_distinct_count(approx_distinct_count&&) = default;
+  /**
+   * @brief Default move assignment operator
+   * @return Reference to this object
+   */
+  approx_distinct_count& operator=(approx_distinct_count&&) = default;
+
+  /**
+   * @brief Add rows from a table to the sketch.
+   *
+   * @param input Table whose rows will be added
+   * @param null_handling `INCLUDE` or `EXCLUDE` rows with nulls (default: `EXCLUDE`)
+   * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL` (default: `NAN_IS_NULL`)
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   */
+  void add(table_view const& input,
+           null_policy null_handling    = null_policy::EXCLUDE,
+           nan_policy nan_handling      = nan_policy::NAN_IS_NULL,
+           rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+  /**
+   * @brief Estimate the approximate number of distinct rows in the sketch.
+   *
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @return Approximate number of distinct rows
+   */
+  [[nodiscard]] cudf::size_type estimate(
+    rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
+
+ private:
+  std::unique_ptr<impl_type> _impl;
+};
 
 /**
  * @brief Creates a new column by applying a filter function against every
