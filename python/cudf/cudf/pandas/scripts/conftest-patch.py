@@ -10605,6 +10605,7 @@ NODEIDS_THAT_ARE_FLAKY_WITH_COPY_ON_WRITE: set[str] = {
     "tests/strings/test_find_replace.py::test_contains[string=str[python]]",
     "tests/strings/test_find_replace.py::test_contains[string=string[pyarrow]]",
     "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_consistency_series_cov_corr[series_data1-rolling_consistency_cases0-False-0]",
+    "tests/window/test_dtypes.py::test_dataframe_dtypes[category-None-max-expected_data1-None]",
     "tests/window/test_dtypes.py::test_dataframe_dtypes[category-None-min-expected_data2-None]",
     "tests/window/test_dtypes.py::test_dataframe_dtypes[category-None-std-expected_data5-None]",
     "tests/window/test_dtypes.py::test_dataframe_dtypes[category-None-sum-expected_data3-None]",
