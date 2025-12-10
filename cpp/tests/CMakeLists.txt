@@ -157,6 +157,7 @@ ConfigureTest(
   groupby/sum_tests.cpp
   groupby/sum_with_overflow_tests.cpp
   groupby/tdigest_tests.cpp
+  groupby/topk_tests.cpp
   groupby/var_tests.cpp
   GPUS 1
   PERCENT 100
@@ -297,7 +298,7 @@ ConfigureTest(
   interop/from_arrow_stream_test.cpp
   interop/dlpack_test.cpp
   EXTRA_LIBS
-  nanoarrow
+  nanoarrow::nanoarrow
   ${ARROW_LIBRARIES}
 )
 

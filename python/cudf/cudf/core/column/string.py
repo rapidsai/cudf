@@ -42,7 +42,6 @@ if TYPE_CHECKING:
     from cudf._typing import (
         ColumnBinaryOperand,
         ColumnLike,
-        Dtype,
         DtypeObj,
         ScalarLike,
     )
@@ -359,7 +358,7 @@ class StringColumn(ColumnBase, Scannable):
             return result._with_type_metadata(new_type)
         return result
 
-    def _scan(self, op: str):
+    def _scan(self, op: str) -> ColumnBase:
         return self.scan(op.replace("cum", ""), True)._with_type_metadata(
             self.dtype
         )
@@ -399,9 +398,9 @@ class StringColumn(ColumnBase, Scannable):
             )
 
     def strptime(
-        self, dtype: Dtype, format: str
+        self, dtype: DtypeObj, format: str
     ) -> DatetimeColumn | TimeDeltaColumn:
-        if dtype.kind not in "Mm":  # type: ignore[union-attr]
+        if dtype.kind not in "Mm":
             raise ValueError(
                 f"dtype must be datetime or timedelta type, not {dtype}"
             )
@@ -413,7 +412,7 @@ class StringColumn(ColumnBase, Scannable):
             )
 
         casting_func: Callable[[plc.Column, plc.DataType, str], plc.Column]
-        if dtype.kind == "M":  # type: ignore[union-attr]
+        if dtype.kind == "M":
             if format.endswith("%z"):
                 raise NotImplementedError(
                     "cuDF does not yet support timezone-aware datetimes"
@@ -436,7 +435,7 @@ class StringColumn(ColumnBase, Scannable):
 
             casting_func = plc.strings.convert.convert_datetime.to_timestamps
             add_back_nat = is_nat.any()
-        elif dtype.kind == "m":  # type: ignore[union-attr]
+        elif dtype.kind == "m":
             casting_func = plc.strings.convert.convert_durations.to_durations
             add_back_nat = False
 
@@ -1083,7 +1082,7 @@ class StringColumn(ColumnBase, Scannable):
         )
         res_col = ColumnBase.from_pylibcudf(plc_column)
         return res_col._with_type_metadata(  # type: ignore[return-value]
-            get_dtype_of_same_kind(self.dtype, res_col.dtype)
+            self._get_pandas_compatible_dtype(res_col.dtype)
         )
 
     def split_record_re(self, pattern: str, maxsplit: int) -> Self:
@@ -1501,7 +1500,8 @@ class StringColumn(ColumnBase, Scannable):
                 and self.dtype.na_value is np.nan
             ):
                 res = res.fillna(False)
-                new_type = np.dtype("bool")  # type: ignore[var-annotated]
+                # var-annotated ignore not needed for numpy>=2.4.0
+                new_type = np.dtype("bool")  # type: ignore[var-annotated,unused-ignore]
             else:
                 new_type = get_dtype_of_same_kind(
                     pd.StringDtype()

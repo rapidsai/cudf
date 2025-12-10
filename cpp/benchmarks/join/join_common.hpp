@@ -10,17 +10,12 @@
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/common/nvbench_utilities.hpp>
 #include <benchmarks/common/table_utilities.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/join/nvbench_helpers.hpp>
 
 #include <cudf/ast/expressions.hpp>
-#include <cudf/column/column_factories.hpp>
-#include <cudf/filling.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 
 #include <nvbench/nvbench.cuh>
 
@@ -42,6 +37,25 @@ using JOIN_NULL_EQUALITY =
 
 using DEFAULT_JOIN_DATATYPES     = nvbench::enum_type_list<data_type::INT32>;
 using DEFAULT_JOIN_NULL_EQUALITY = nvbench::enum_type_list<cudf::null_equality::UNEQUAL>;
+
+inline void create_complex_ast_expression(cudf::ast::tree& tree, cudf::size_type ast_levels)
+{
+  CUDF_EXPECTS(ast_levels > 0, "Number of AST levels must be greater than 0");
+
+  tree.push(cudf::ast::column_reference(0));
+  tree.push(cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT));
+
+  tree.push(cudf::ast::operation(cudf::ast::ast_operator::EQUAL, tree.at(0), tree.at(1)));
+
+  if (ast_levels == 1) { return; }
+
+  for (cudf::size_type i = 1; i < ast_levels; i++) {
+    tree.push(cudf::ast::operation(cudf::ast::ast_operator::EQUAL, tree.at(0), tree.at(1)));
+
+    tree.push(cudf::ast::operation(
+      cudf::ast::ast_operator::LOGICAL_AND, tree.at(tree.size() - 2), tree.back()));
+  }
+}
 
 template <bool Nullable,
           join_t join_type                  = join_t::HASH,

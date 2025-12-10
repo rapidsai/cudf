@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -407,14 +407,14 @@ public class ScalarTest extends CudfTestBase {
   @Test
   public void testRepeatString() {
     // Invalid scalar.
-    try (Scalar nullString = Scalar.fromString(null)) {
-      Scalar result = nullString.repeatString(5);
+    try (Scalar nullString = Scalar.fromString(null);
+         Scalar result = nullString.repeatString(5)) {
       assertFalse(result.isValid());
     }
 
     // Empty string.
-    try (Scalar emptyString = Scalar.fromString("")) {
-      Scalar result = emptyString.repeatString(5);
+    try (Scalar emptyString = Scalar.fromString("");
+         Scalar result = emptyString.repeatString(5)) {
       assertTrue(result.isValid());
       assertEquals("", result.getJavaString());
     }

@@ -773,6 +773,16 @@ class StreamingExecutor:
             object.__setattr__(self, "cluster", Cluster.SINGLE)
         assert self.cluster is not None, "Expected cluster to be set."
 
+        # Warn loudly that multi-GPU execution is under construction
+        # for the rapidsmpf runtime
+        if self.cluster == "distributed" and self.runtime == "rapidsmpf":
+            warnings.warn(
+                "UNDER CONSTRUCTION!!!"
+                "The rapidsmpf runtime does NOT support distributed execution yet. "
+                "Use at your own risk!!!",
+                stacklevel=2,
+            )
+
         # Handle shuffle_method defaults for streaming executor
         if self.shuffle_method is None:
             if self.cluster == "distributed" and rapidsmpf_distributed_available():
