@@ -21,6 +21,7 @@
 #include <vector>
 
 namespace cudf::io::experimental {
+namespace detail {
 
 namespace {
 
@@ -47,37 +48,12 @@ struct cutable_header {
 
 }  // anonymous namespace
 
-cutable_writer_options_builder cutable_writer_options::builder(sink_info const& sink,
-                                                               table_view const& table)
-{
-  return cutable_writer_options_builder(sink, table);
-}
-
-cutable_reader_options_builder cutable_reader_options::builder(source_info src)
-{
-  return cutable_reader_options_builder(std::move(src));
-}
-
-void write_cutable(cutable_writer_options const& options,
+void write_cutable(data_sink* sink,
+                   table_view const& input,
                    rmm::cuda_stream_view stream,
                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-
-  auto const& sink_info = options.get_sink();
-  auto const& input     = options.get_table();
-
-  CUDF_EXPECTS(sink_info.num_sinks() == 1, "CUTable format only supports single sink");
-
-  // Create data_sink from sink_info based on type
-  std::unique_ptr<data_sink> sink;
-  switch (sink_info.type()) {
-    case io_type::FILEPATH: sink = data_sink::create(sink_info.filepaths()[0]); break;
-    case io_type::HOST_BUFFER: sink = data_sink::create(sink_info.buffers()[0]); break;
-    case io_type::VOID: sink = data_sink::create(); break;
-    case io_type::USER_IMPLEMENTED: sink = data_sink::create(sink_info.user_sinks()[0]); break;
-    default: CUDF_FAIL("Unsupported sink type for cutable format");
-  }
 
   // Pack the table into contiguous memory
   auto const packed = cudf::pack(input, stream, mr);
@@ -109,27 +85,11 @@ void write_cutable(cutable_writer_options const& options,
   sink->flush();
 }
 
-packed_table read_cutable(cutable_reader_options const& options,
+packed_table read_cutable(datasource* source,
                           rmm::cuda_stream_view stream,
                           rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  auto const& source_info = options.get_source();
-  CUDF_EXPECTS(source_info.num_sources() == 1, "CUTable format only supports single source");
-
-  // Create datasource from source_info based on type
-  std::unique_ptr<datasource> source;
-  switch (source_info.type()) {
-    case io_type::FILEPATH: source = datasource::create(source_info.filepaths()[0]); break;
-    case io_type::HOST_BUFFER: source = datasource::create(source_info.host_buffers()[0]); break;
-    case io_type::DEVICE_BUFFER:
-      source = datasource::create(source_info.device_buffers()[0]);
-      break;
-    case io_type::USER_IMPLEMENTED:
-      source = datasource::create(source_info.user_sources()[0]);
-      break;
-    default: CUDF_FAIL("Unsupported source type for cutable format");
-  }
 
   // Read the header
   cutable_header header;
@@ -172,6 +132,19 @@ packed_table read_cutable(cutable_reader_options const& options,
   auto unpacked_view = cudf::unpack(packed);
 
   return packed_table{unpacked_view, std::move(packed)};
+}
+
+}  // namespace detail
+
+cutable_writer_options_builder cutable_writer_options::builder(sink_info const& sink,
+                                                               table_view const& table)
+{
+  return cutable_writer_options_builder(sink, table);
+}
+
+cutable_reader_options_builder cutable_reader_options::builder(source_info src)
+{
+  return cutable_reader_options_builder(std::move(src));
 }
 
 }  // namespace cudf::io::experimental
