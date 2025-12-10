@@ -394,8 +394,12 @@ int main(int argc, char const** argv)
     // Create io source
     auto const io_source_obj = io_source{input_filepath, io_source_type, stream};
 
-    std::cout << "Note: Not timing the initial parquet read as it may include\n"
-                 "times for nvcomp, cufile loading and RMM growth.\n\n";
+    std::cout << "Note: The reported average time does not include the first iteration of the\n"
+                 "benchmark as it may include times for nvcomp, cufile loading and RMM growth.\n\n";
+
+    std::cout << "Reading " << input_filepath << " with main parquet reader...\n";
+    benchmark([&] { std::ignore = read_parquet(io_source_obj, filter_expression, stream); },
+              benchmark_repetition);
 
     std::cout << "Reading " << input_filepath << " with next-gen parquet reader...\n";
     benchmark(
@@ -404,10 +408,6 @@ int main(int argc, char const** argv)
           hybrid_scan(io_source_obj, filter_expression, filters, stream, stats_mr, verbose);
       },
       benchmark_repetition);
-
-    std::cout << "Reading " << input_filepath << " with main parquet reader...\n";
-    benchmark([&] { std::ignore = read_parquet(io_source_obj, filter_expression, stream); },
-              benchmark_repetition);
 
     // Check validity
     {
