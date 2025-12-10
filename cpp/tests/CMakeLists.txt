@@ -205,6 +205,15 @@ ConfigureTest(
 )
 
 # ##################################################################################################
+# * quantiles tests -------------------------------------------------------------------------------
+ConfigureTest(
+  QUANTILES_TEST quantiles/percentile_approx_test.cpp quantiles/quantile_test.cpp
+  quantiles/quantiles_test.cpp
+  GPUS 1
+  PERCENT 70 EXTRA_LIBS ${ARROW_LIBRARIES}
+)
+
+# ##################################################################################################
 # * reduction tests -------------------------------------------------------------------------------
 ConfigureTest(
   REDUCTIONS_TEST
@@ -745,6 +754,7 @@ ConfigureTest(STREAM_MERGE_TEST streams/merge_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_NULL_MASK_TEST streams/null_mask_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_PARTITIONING_TEST streams/partitioning_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_POOL_TEST streams/pool_test.cu STREAM_MODE testing)
+ConfigureTest(STREAM_QUANTILE_TEST streams/quantile_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_REDUCTION_TEST streams/reduction_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_REPLACE_TEST streams/replace_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_RESHAPE_TEST streams/reshape_test.cpp STREAM_MODE testing)
