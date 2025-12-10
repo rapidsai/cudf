@@ -10,6 +10,7 @@
 #include "rle_stream.cuh"
 
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/reduce.cuh>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/strings/detail/gather.cuh>
 
@@ -1071,12 +1072,12 @@ void compute_page_string_sizes_pass2(cudf::detail::hostdevice_span<PageInfo> pag
     // sum up all of the temp_string_sizes
     auto const page_sizes = cuda::proclaim_return_type<int64_t>(
       [] __device__(PageInfo const& page) { return page.temp_string_size; });
-    auto const total_size = thrust::transform_reduce(rmm::exec_policy(stream),
-                                                     pages.device_begin(),
-                                                     pages.device_end(),
-                                                     page_sizes,
-                                                     0L,
-                                                     cuda::std::plus<int64_t>{});
+    auto const total_size = cudf::detail::transform_reduce(pages.device_begin(),
+                                                           pages.device_end(),
+                                                           page_sizes,
+                                                           int64_t{0},
+                                                           cuda::std::plus<int64_t>{},
+                                                           stream);
 
     // now do an exclusive scan over the temp_string_sizes to get offsets for each
     // page's chunk of the temp buffer

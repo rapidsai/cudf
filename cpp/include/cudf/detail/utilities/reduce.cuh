@@ -77,5 +77,39 @@ OutputType reduce(InputIterator begin,
   return result.front();
 }
 
+/**
+ * @brief Helper to transform and reduce a device-accessible iterator using unary and binary
+ * operations
+ *
+ * This function applies a unary transformation to each element in the input range, then
+ * performs a reduction operation on the transformed values. The result is returned to the
+ * host using pinned memory for efficient transfer.
+ *
+ * @tparam InputIterator **[inferred]** The type of device-accessible input iterator
+ * @tparam OutputType **[inferred]** The type of the reduction result
+ * @tparam UnaryOp **[inferred]** The type of the unary transformation operator
+ * @tparam BinaryOp **[inferred]** The type of the binary reduction operator
+ *
+ * @param begin Device-accessible iterator to start of input values
+ * @param end Device-accessible iterator to end of input values
+ * @param transform_op Unary transformation operator to apply to each element
+ * @param init Initial value for the reduction
+ * @param reduce_op Binary reduction operator
+ * @param stream CUDA stream to use
+ * @return The reduction result
+ */
+template <typename InputIterator, typename OutputType, typename UnaryOp, typename BinaryOp>
+OutputType transform_reduce(InputIterator begin,
+                            InputIterator end,
+                            UnaryOp transform_op,
+                            OutputType init,
+                            BinaryOp reduce_op,
+                            rmm::cuda_stream_view stream)
+{
+  auto const num_items = std::distance(begin, end);
+  auto transform_iter  = thrust::make_transform_iterator(begin, transform_op);
+  return reduce(transform_iter, transform_iter + num_items, init, reduce_op, stream);
+}
+
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf
