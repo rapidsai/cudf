@@ -3370,28 +3370,6 @@ class IndexedFrame(Frame):
             )
 
     @_performance_tracking
-    def backfill(
-        self, value=None, axis=None, inplace: bool = False, limit=None
-    ) -> Self | None:
-        """
-        Synonym for :meth:`Series.fillna` with ``method='bfill'``.
-
-        .. deprecated:: 23.06
-           Use `DataFrame.bfill/Series.bfill` instead.
-
-        Returns
-        -------
-            Object with missing values filled or None if ``inplace=True``.
-        """
-        # Do not remove until pandas removes this.
-        warnings.warn(
-            "DataFrame.backfill/Series.backfill is deprecated. Use "
-            "DataFrame.bfill/Series.bfill instead",
-            FutureWarning,
-        )
-        return self.bfill(value=value, axis=axis, inplace=inplace, limit=limit)
-
-    @_performance_tracking
     def ffill(
         self,
         value=None,
@@ -3419,26 +3397,6 @@ class IndexedFrame(Frame):
                 inplace=inplace,
                 limit=limit,
             )
-
-    @_performance_tracking
-    def pad(self, value=None, axis=None, inplace: bool = False, limit=None):
-        """
-        Synonym for :meth:`Series.fillna` with ``method='ffill'``.
-
-        .. deprecated:: 23.06
-           Use `DataFrame.ffill/Series.ffill` instead.
-
-        Returns
-        -------
-            Object with missing values filled or None if ``inplace=True``.
-        """
-        # Do not remove until pandas removes this.
-        warnings.warn(
-            "DataFrame.pad/Series.pad is deprecated. Use "
-            "DataFrame.ffill/Series.ffill instead",
-            FutureWarning,
-        )
-        return self.ffill(value=value, axis=axis, inplace=inplace, limit=limit)
 
     def add_prefix(self, prefix, axis=None):
         """
