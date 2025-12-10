@@ -510,9 +510,12 @@ uint32_t get_aggregated_decode_kernel_mask(cudf::detail::hostdevice_span<PageInf
                                            rmm::cuda_stream_view stream)
 {
   // determine which kernels to invoke
-  auto mask_iter = thrust::make_transform_iterator(pages.device_begin(), mask_tform{});
-  return cudf::detail::reduce(
-    mask_iter, mask_iter + pages.size(), uint32_t{0}, cuda::std::bit_or<uint32_t>{}, stream);
+  return cudf::detail::transform_reduce(pages.device_begin(),
+                                        pages.device_end(),
+                                        mask_tform{},
+                                        uint32_t{0},
+                                        cuda::std::bit_or<uint32_t>{},
+                                        stream);
 }
 
 /**

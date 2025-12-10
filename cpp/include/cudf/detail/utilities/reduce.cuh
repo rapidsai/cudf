@@ -34,28 +34,28 @@ namespace detail {
  * @param stream CUDA stream to use
  * @return The reduction result
  */
-template <typename InputIterator, typename OutputType, typename BinaryOp>
+template <typename Op,
+          typename InputIterator,
+          typename OutputType = cuda::std::iter_value_t<InputIterator>>
 OutputType reduce(InputIterator begin,
                   InputIterator end,
                   OutputType init,
-                  BinaryOp op,
+                  Op binary_op,
                   rmm::cuda_stream_view stream)
 {
-  // Pinned vector store two values: initial value and reduced result
-  auto host_data       = cudf::detail::make_pinned_vector_async<OutputType>(size_t{2}, stream);
-  host_data.front()    = init;
   auto const num_items = std::distance(begin, end);
+
   // Device memory to store the result
   rmm::device_buffer d_result(sizeof(OutputType), stream, cudf::get_current_device_resource_ref());
-  size_t temp_storage_bytes = 0;
 
+  size_t temp_storage_bytes = 0;
   cub::DeviceReduce::Reduce(nullptr,
                             temp_storage_bytes,
                             begin,
                             static_cast<OutputType*>(d_result.data()),
                             num_items,
-                            op,
-                            host_data.front(),
+                            binary_op,
+                            init,
                             stream.value());
 
   rmm::device_buffer d_temp_storage(
@@ -65,17 +65,18 @@ OutputType reduce(InputIterator begin,
                             begin,
                             static_cast<OutputType*>(d_result.data()),
                             num_items,
-                            op,
-                            host_data.front(),
+                            binary_op,
+                            init,
                             stream.value());
 
   // Copy result back to host via pinned memory
+  auto result = cudf::detail::make_pinned_vector<OutputType>(size_t{1}, stream);
   cudf::detail::cuda_memcpy(
-    cudf::host_span<OutputType>{&host_data.back(), size_t{1}},
+    cudf::host_span<OutputType>{&result.front(), size_t{1}},
     cudf::device_span<OutputType const>{static_cast<OutputType const*>(d_result.data()), size_t{1}},
     stream);
 
-  return host_data.back();
+  return result.front();
 }
 
 /**
@@ -99,17 +100,53 @@ OutputType reduce(InputIterator begin,
  * @param stream CUDA stream to use
  * @return The reduction result
  */
-template <typename InputIterator, typename OutputType, typename UnaryOp, typename BinaryOp>
+template <typename TransformationOp,
+          typename ReductionOp,
+          typename InputIterator,
+          typename OutputType = cuda::std::iter_value_t<InputIterator>>
 OutputType transform_reduce(InputIterator begin,
                             InputIterator end,
-                            UnaryOp transform_op,
+                            TransformationOp transform_op,
                             OutputType init,
-                            BinaryOp reduce_op,
+                            ReductionOp reduce_op,
                             rmm::cuda_stream_view stream)
 {
   auto const num_items = std::distance(begin, end);
-  auto transform_iter  = thrust::make_transform_iterator(begin, transform_op);
-  return reduce(transform_iter, transform_iter + num_items, init, reduce_op, stream);
+
+  // Device memory to store the result
+  rmm::device_buffer d_result(sizeof(OutputType), stream, cudf::get_current_device_resource_ref());
+
+  size_t temp_storage_bytes = 0;
+  cub::DeviceReduce::TransformReduce(nullptr,
+                                     temp_storage_bytes,
+                                     begin,
+                                     static_cast<OutputType*>(d_result.data()),
+                                     num_items,
+                                     reduce_op,
+                                     transform_op,
+                                     init,
+                                     stream.value());
+
+  rmm::device_buffer d_temp_storage(
+    temp_storage_bytes, stream, cudf::get_current_device_resource_ref());
+  cub::DeviceReduce::TransformReduce(d_temp_storage.data(),
+                                     temp_storage_bytes,
+                                     begin,
+                                     static_cast<OutputType*>(d_result.data()),
+                                     num_items,
+                                     reduce_op,
+                                     transform_op,
+                                     init,
+                                     stream.value());
+
+  // Copy result back to host via pinned memory
+  auto result = cudf::detail::make_pinned_vector<OutputType>(size_t{1}, stream);
+  cudf::detail::cuda_memcpy(
+    cudf::host_span<OutputType>{&result.front(), size_t{1}},
+    cudf::device_span<OutputType const>{static_cast<OutputType const*>(d_result.data()), size_t{1}},
+    stream);
+
+  return result.front();
 }
 
 }  // namespace detail

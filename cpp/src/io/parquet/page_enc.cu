@@ -3423,9 +3423,8 @@ void EncodePages(device_span<EncPage> pages,
   auto num_pages = pages.size();
 
   // determine which kernels to invoke
-  auto mask_iter   = thrust::make_transform_iterator(pages.begin(), mask_tform{});
-  auto kernel_mask = cudf::detail::reduce(
-    mask_iter, mask_iter + pages.size(), uint32_t{0}, cuda::std::bit_or<uint32_t>{}, stream);
+  auto kernel_mask = cudf::detail::transform_reduce(
+    pages.begin(), pages.end(), mask_tform{}, uint32_t{0}, cuda::std::bit_or<uint32_t>{}, stream);
 
   // get the number of streams we need from the pool
   int nkernels = std::bitset<32>(kernel_mask).count();
