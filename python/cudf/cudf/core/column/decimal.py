@@ -432,7 +432,7 @@ class Decimal32Column(DecimalBaseColumn):
         )
         return pa.Array.from_buffers(
             type=self.dtype.to_arrow(),  # type: ignore[union-attr]
-            offset=self._offset,
+            offset=self.offset,
             length=self.size,
             # PyArrow stubs are too strict - from_buffers should accept None for missing buffers
             buffers=[mask_buf, data_buf],  # type: ignore[list-item]
@@ -548,7 +548,7 @@ class Decimal64Column(DecimalBaseColumn):
         )
         return pa.Array.from_buffers(
             type=self.dtype.to_arrow(),  # type: ignore[union-attr]
-            offset=self._offset,
+            offset=self.offset,
             length=self.size,
             # PyArrow stubs are too strict - from_buffers should accept None for missing buffers
             buffers=[mask_buf, data_buf],  # type: ignore[list-item]

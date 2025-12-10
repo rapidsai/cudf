@@ -368,15 +368,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def size(self) -> int:
-        # Check if size was explicitly overridden (e.g., for special cases)
-        # Otherwise delegate to plc_column
-        if hasattr(self, "_size"):
-            return self._size
         return self.plc_column.size()
-
-    @size.setter
-    def size(self, value: int) -> None:
-        self._size = value
 
     @property
     def base_data(self) -> None | Buffer:
@@ -523,15 +515,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def offset(self) -> int:
-        # Check if offset was explicitly overridden (e.g., for copy-on-write)
-        # Otherwise delegate to plc_column
-        if hasattr(self, "_offset"):
-            return self._offset
         return self.plc_column.offset()
-
-    @offset.setter
-    def offset(self, value: int) -> None:
-        self._offset = value
 
     @property
     def base_children(self) -> tuple[ColumnBase, ...]:
@@ -2025,10 +2009,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             data_ptr = self.data.get_ptr(mode="write")
             # Check if a new buffer was created or if the underlying data was modified
             if cudf.get_option("copy_on_write") and (data_ptr != original_ptr):
-                # The offset must be reset to 0 because we have migrated to a new copied
-                # buffer starting at the old offset.
-                self.offset = 0
-                # Update base_data to match the new data buffer
+                # When copy-on-write creates a new buffer, update base_data
+                # Note: offset comes from plc_column which should already be correct
                 self.set_base_data(self.data)
 
         output = {
