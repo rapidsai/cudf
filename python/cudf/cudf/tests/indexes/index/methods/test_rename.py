@@ -49,7 +49,7 @@ def test_index_rename_inplace():
     ) == gds._column.data.get_ptr(mode="read")
 
     # inplace=True returns none
-    expected_ptr = gds._column.data_ptr
+    expected_ptr = gds._column.data.get_ptr(mode="read")
     gds.rename("new_name", inplace=True)
 
     assert expected_ptr == gds._column.data.get_ptr(mode="read")
