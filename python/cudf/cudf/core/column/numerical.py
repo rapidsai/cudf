@@ -755,7 +755,7 @@ class NumericalColumn(NumericalBaseColumn):
             replacement_col = replacement_col.repeat(len(to_replace_col))
         elif len(replacement_col) == 1 and len(to_replace_col) == 0:
             return self.copy()
-        replaced = cast("Self", self.astype(common_type))
+        replaced = cast(Self, self.astype(common_type))
         df = cudf.DataFrame._from_data(
             {
                 "old": to_replace_col.astype(common_type),
