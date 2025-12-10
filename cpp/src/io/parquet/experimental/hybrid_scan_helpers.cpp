@@ -150,7 +150,6 @@ void aggregate_reader_metadata::setup_page_index(cudf::host_span<uint8_t const> 
 
   // Get the file metadata and setup the page index
   auto& file_metadata = per_file_metadata.front();
-
   auto const& row_groups = file_metadata.row_groups;
 
   // Check for empty parquet file
