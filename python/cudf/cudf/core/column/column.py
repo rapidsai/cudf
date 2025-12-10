@@ -370,6 +370,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def size(self) -> int:
         return self._size
 
+    @size.setter
+    def size(self, value: int) -> None:
+        self._size = value
+
     @property
     def base_data(self) -> None | Buffer:
         return self._base_data
@@ -517,6 +521,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def offset(self) -> int:
         return self._offset
 
+    @offset.setter
+    def offset(self, value: int) -> None:
+        self._offset = value
+
     @property
     def base_children(self) -> tuple[ColumnBase, ...]:
         return self._base_children
@@ -563,8 +571,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         object with the Buffers and attributes from the other column.
         """
         if inplace:
-            self._offset = other_col.offset
-            self._size = other_col.size
+            self.offset = other_col.offset
+            self.size = other_col.size
             self._dtype = other_col._dtype
             self.plc_column = other_col.plc_column
             self.set_base_data(other_col.base_data)
@@ -2012,7 +2020,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             if cudf.get_option("copy_on_write") and (data_ptr != original_ptr):
                 # The offset must be reset to 0 because we have migrated to a new copied
                 # buffer starting at the old offset.
-                self._offset = 0
+                self.offset = 0
                 # Update base_data to match the new data buffer
                 self.set_base_data(self.data)
 
