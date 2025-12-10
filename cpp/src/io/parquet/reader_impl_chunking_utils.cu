@@ -717,7 +717,7 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
                     compression_type::ZSTD};
   for (auto const codec : codecs) {
     if (cudf::io::detail::is_decompression_scratch_size_ex_supported(codec)) {
-      auto const total_decomp_info = thrust::transform_reduce(
+      auto const total_decomp_info = cudf::detail::transform_reduce(
         rmm::exec_policy(stream),
         decomp_iter,
         decomp_iter + pages.size(),

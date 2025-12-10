@@ -78,8 +78,8 @@ OutputType reduce(InputIterator begin,
 }
 
 /**
- * @brief Helper to transform and reduce a device-accessible iterator using unary and binary
- * operations
+ * @brief Helper to transform device-accessible iterator using a unary operation and then reduce the
+ * transformed values using a binary operation
  *
  * This function applies a unary transformation to each element in the input range, then
  * performs a reduction operation on the transformed values. The result is returned to the
