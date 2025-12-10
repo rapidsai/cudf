@@ -619,7 +619,7 @@ class StructDtype(_BaseDtype):
 
     name = "struct"
 
-    def __init__(self, fields: Mapping[str, Dtype]) -> None:
+    def __init__(self, fields: dict[str, Dtype]) -> None:
         with cudf.option_context("mode.pandas_compatible", False):
             # We need to temporarily disable pandas compatibility mode
             # because `cudf.dtype("object")` raises an error.
