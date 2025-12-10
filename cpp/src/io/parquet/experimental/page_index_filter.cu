@@ -16,6 +16,7 @@
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/logical.cuh>
 #include <cudf/detail/utilities/reduce.cuh>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -35,7 +36,6 @@
 #include <cuda/functional>
 #include <thrust/gather.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/logical.h>
 
 #include <algorithm>
 #include <limits>
@@ -979,10 +979,10 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
 
   // Return an empty vector if all rows are invalid or all rows are required
   if (row_mask.null_count(row_mask_offset, row_mask_offset + total_rows, stream) == total_rows or
-      thrust::all_of(rmm::exec_policy(stream),
-                     row_mask.template begin<bool>() + row_mask_offset,
-                     row_mask.template begin<bool>() + row_mask_offset + total_rows,
-                     cuda::std::identity{})) {
+      cudf::detail::all_of(row_mask.template begin<bool>() + row_mask_offset,
+                           row_mask.template begin<bool>() + row_mask_offset + total_rows,
+                           cuda::std::identity{},
+                           stream)) {
     return thrust::host_vector<bool>(0, stream);
   }
 

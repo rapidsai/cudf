@@ -11,6 +11,7 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/logical.cuh>
 #include <cudf/detail/utilities/reduce.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/parquet.hpp>
@@ -22,7 +23,6 @@
 #include <thrust/binary_search.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
-#include <thrust/logical.h>
 #include <thrust/sequence.h>
 #include <thrust/transform_scan.h>
 #include <thrust/unique.h>
@@ -622,12 +622,12 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     cudf::io::detail::gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, stream);
   }
 
-  CUDF_EXPECTS(
-    thrust::all_of(rmm::exec_policy(stream),
-                   comp_res.begin(),
-                   comp_res.end(),
-                   [] __device__(auto const& res) { return res.status == codec_status::SUCCESS; }),
-    "Error during decompression");
+  CUDF_EXPECTS(cudf::detail::all_of(
+                 comp_res.begin(),
+                 comp_res.end(),
+                 [] __device__(auto const& res) { return res.status == codec_status::SUCCESS; },
+                 stream),
+               "Error during decompression");
 
   return {std::move(pass_decomp_pages), std::move(subpass_decomp_pages)};
 }
