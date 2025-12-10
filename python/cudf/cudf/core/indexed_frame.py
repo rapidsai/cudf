@@ -6589,6 +6589,42 @@ class IndexedFrame(Frame):
             )
 
     @_performance_tracking
+    def pct_change(
+        self,
+        periods: int = 1,
+        fill_method: None = None,
+        freq=None,
+        **kwargs,
+    ):
+        """
+        Calculates the percent change between sequential elements.
+
+        Parameters
+        ----------
+        periods : int, default 1
+            Periods to shift for forming percent change.
+        fill_method : None
+            Must be None.
+        freq : str, optional
+            Increment to use from time series API.
+            Not yet implemented.
+        **kwargs
+            Additional keyword arguments are passed into shift.
+
+        Returns
+        -------
+        Same type as caller.
+        """
+        if freq is not None:
+            raise NotImplementedError("freq parameter not supported yet.")
+        if fill_method is not None:
+            raise ValueError(f"fill_method must be None; got {fill_method=}.")
+
+        return self.diff(periods=periods) / self.shift(  # type: ignore[attr-defined]
+            periods=periods, freq=freq, **kwargs
+        )
+
+    @_performance_tracking
     def serialize(self):
         header, frames = super().serialize()
 
