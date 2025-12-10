@@ -240,6 +240,41 @@ class device_row_comparator {
   {
   }
 
+  class dictionary_comparator {
+   public:
+    __device__ dictionary_comparator(column_device_view lhs,
+                                     column_device_view rhs,
+                                     PhysicalElementComparator comparator = {})
+      : _lhs{lhs}, _rhs{rhs}, _comparator{comparator}
+    {
+    }
+
+    template <typename KeyType>
+    __device__ cuda::std::pair<cudf::detail::weak_ordering, int> operator()(
+      size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
+      requires(cudf::is_relationally_comparable<KeyType, KeyType>())
+    {
+      auto const lidx = _lhs.element<cudf::dictionary32>(lhs_element_index).value();
+      auto const ridx = _rhs.element<cudf::dictionary32>(rhs_element_index).value();
+      auto const lhs  = _lhs.child(1).element<KeyType>(lidx);
+      auto const rhs  = _rhs.child(1).element<KeyType>(ridx);
+      return cuda::std::pair(_comparator(lhs, rhs), cuda::std::numeric_limits<int>::max());
+    }
+
+    template <typename KeyType>
+    __device__ cuda::std::pair<cudf::detail::weak_ordering, int> operator()(
+      size_type const, size_type const) const noexcept
+      requires(not cudf::is_relationally_comparable<KeyType, KeyType>())
+    {
+      CUDF_UNREACHABLE("Key types are not comparable");
+    }
+
+   private:
+    column_device_view const _lhs;
+    column_device_view const _rhs;
+    PhysicalElementComparator const _comparator;
+  };
+
   /**
    * @brief Performs a relational comparison between two elements in two columns.
    */
@@ -291,7 +326,8 @@ class device_row_comparator {
     template <typename Element>
     __device__ cuda::std::pair<cudf::detail::weak_ordering, int> operator()(
       size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
-      requires(cudf::is_relationally_comparable<Element, Element>())
+      requires(cudf::is_relationally_comparable<Element, Element>() and
+               not cudf::is_dictionary<Element>())
     {
       if (_check_nulls) {
         bool const lhs_is_null{_lhs.is_null(lhs_element_index)};
@@ -306,6 +342,28 @@ class device_row_comparator {
       return cuda::std::pair(_comparator(_lhs.element<Element>(lhs_element_index),
                                          _rhs.element<Element>(rhs_element_index)),
                              cuda::std::numeric_limits<int>::max());
+    }
+
+    template <typename Element>
+    __device__ cuda::std::pair<cudf::detail::weak_ordering, int> operator()(
+      size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
+      requires(cudf::is_dictionary<Element>())
+    {
+      if (_check_nulls) {
+        bool const lhs_is_null{_lhs.is_null(lhs_element_index)};
+        bool const rhs_is_null{_rhs.is_null(rhs_element_index)};
+        if (lhs_is_null or rhs_is_null) {
+          return cuda::std::pair(
+            cudf::detail::null_compare(lhs_is_null, rhs_is_null, _null_precedence), _depth);
+        }
+      }
+
+      auto keys = _lhs.child(1);
+      return cudf::type_dispatcher<dispatch_void_if_nested>(
+        keys.type(),
+        dictionary_comparator{_lhs, _rhs, _comparator},
+        lhs_element_index,
+        rhs_element_index);
     }
 
     /**

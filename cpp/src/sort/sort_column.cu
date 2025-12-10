@@ -9,6 +9,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -32,7 +33,10 @@ std::unique_ptr<column> sorted_order<sort_method::UNSTABLE>(column_view const& i
   if (is_radix_sortable(input)) {
     sorted_order_radix(input, indices_view, column_order == order::ASCENDING, stream);
   } else {
-    cudf::type_dispatcher<dispatch_storage_type>(input.type(),
+    auto const dispatch_type = cudf::is_dictionary(input.type())
+                                 ? dictionary_column_view(input).keys().type()
+                                 : input.type();
+    cudf::type_dispatcher<dispatch_storage_type>(dispatch_type,
                                                  column_sorted_order_fn<sort_method::UNSTABLE>{},
                                                  input,
                                                  indices_view,
