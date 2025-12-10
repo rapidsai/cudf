@@ -195,3 +195,13 @@ jobs:
       node_type: "gpu-l4-latest-1"
       container_image: "rapidsai/ci-conda:26.02-latest"
       script: ci/test_narwhals.sh
+  conda-python-cudf-cccl-tests:
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@main
+    with:
+      build_type: ${{ inputs.build_type }}
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      script: "ci/test_python_cudf_cccl.sh"
+      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
