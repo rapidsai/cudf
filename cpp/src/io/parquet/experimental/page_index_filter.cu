@@ -16,6 +16,7 @@
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/reduce.cuh>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/logger.hpp>
@@ -201,11 +202,8 @@ struct page_stats_caster : public stats_caster_base {
                    row_str_sizes.begin());
 
     // Total bytes in the output chars buffer
-    auto const total_bytes = thrust::reduce(rmm::exec_policy(stream),
-                                            row_str_sizes.begin(),
-                                            row_str_sizes.end(),
-                                            size_t{0},
-                                            cuda::std::plus<size_t>());
+    auto const total_bytes = cudf::detail::reduce(
+      row_str_sizes.begin(), row_str_sizes.end(), size_t{0}, cuda::std::plus<size_t>{}, stream);
 
     CUDF_EXPECTS(
       total_bytes <= cuda::std::numeric_limits<cudf::size_type>::max(),

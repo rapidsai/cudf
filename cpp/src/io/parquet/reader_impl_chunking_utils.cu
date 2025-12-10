@@ -11,6 +11,7 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/reduce.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -396,9 +397,9 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
       page_offsets, chunks, page_row_index, start_row, end_row, is_first_subpass, has_page_index});
 
   // total page count over all columns
-  auto page_count_iter = thrust::make_transform_iterator(page_bounds.begin(), get_span_size{});
-  size_t const total_pages =
-    thrust::reduce(rmm::exec_policy(stream), page_count_iter, page_count_iter + num_columns);
+  auto page_count_iter   = thrust::make_transform_iterator(page_bounds.begin(), get_span_size{});
+  auto const total_pages = cudf::detail::reduce(
+    page_count_iter, page_count_iter + num_columns, size_t{0}, cuda::std::plus<size_t>{}, stream);
 
   return {
     std::move(page_bounds), total_pages, h_aggregated_info[end_index].size_bytes - cumulative_size};

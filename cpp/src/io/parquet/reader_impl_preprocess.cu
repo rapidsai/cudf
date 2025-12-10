@@ -12,6 +12,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/batched_memset.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/reduce.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
@@ -21,7 +22,6 @@
 #include <thrust/functional.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
@@ -62,8 +62,12 @@ void reader_impl::build_string_dict_indices()
                    pass.pages.d_end(),
                    set_str_dict_index_count{str_dict_index_count, pass.chunks});
 
-  size_t const total_str_dict_indexes = thrust::reduce(
-    rmm::exec_policy(_stream), str_dict_index_count.begin(), str_dict_index_count.end());
+  auto const total_str_dict_indexes = cudf::detail::reduce(str_dict_index_count.begin(),
+                                                           str_dict_index_count.end(),
+                                                           size_t{0},
+                                                           cuda::std::plus<size_t>{},
+                                                           _stream);
+
   if (total_str_dict_indexes == 0) { return; }
 
   // convert to offsets
@@ -384,10 +388,11 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
                          _page_string_offset_indices.begin());
 
   // Compute the total number of offsets needed
-  size_t total_num_offsets = thrust::reduce(
-    rmm::exec_policy_nosync(_stream), d_page_offset_counts.begin(), d_page_offset_counts.end());
-
-  _stream.synchronize();
+  auto const total_num_offsets = cudf::detail::reduce(d_page_offset_counts.begin(),
+                                                      d_page_offset_counts.end(),
+                                                      size_t{0},
+                                                      cuda::std::plus<size_t>{},
+                                                      _stream);
 
   // Allocate the string offset buffer
   _string_offset_buffer = rmm::device_uvector<uint32_t>(total_num_offsets, _stream, _mr);

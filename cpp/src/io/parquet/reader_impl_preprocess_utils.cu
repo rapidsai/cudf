@@ -11,6 +11,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/reduce.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -21,7 +22,6 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
@@ -527,12 +527,9 @@ void decode_page_headers(pass_intermediate_data& pass,
         max(c.level_bits[level_type::REPETITION], c.level_bits[level_type::DEFINITION]));
     }));
   // max level data bit size.
-  int const max_level_bits = thrust::reduce(rmm::exec_policy(stream),
-                                            level_bit_size,
-                                            level_bit_size + pass.chunks.size(),
-                                            0,
-                                            cuda::maximum<int>());
-  pass.level_type_size     = std::max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
+  auto const max_level_bits = cudf::detail::reduce(
+    level_bit_size, level_bit_size + pass.chunks.size(), int{0}, cuda::maximum<int>{}, stream);
+  pass.level_type_size = std::max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
 
   // sort the pages in chunk/schema order.
   pass.pages = sort_pages(unsorted_pages, pass.chunks, stream);
