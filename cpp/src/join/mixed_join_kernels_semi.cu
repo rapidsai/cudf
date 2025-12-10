@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "join/join_common_utils.hpp"
 #include "join/mixed_join_kernels_semi.cuh"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>

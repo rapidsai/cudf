@@ -19,6 +19,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <memory>
+
 namespace cudf {
 namespace detail {
 /**

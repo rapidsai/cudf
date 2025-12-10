@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "join_common_utils.cuh"
+#include "join_common_utils.hpp"
 
 #include <cudf/copying.hpp>
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/join/hash_join.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -40,6 +42,36 @@ namespace cudf {
 namespace detail {
 namespace {
 using hash_table_t = cudf::hash_join::impl_type::hash_table_t;
+
+/**
+ * @brief Checks if a join operation is trivial (empty tables or certain join types with empty
+ * data).
+ */
+bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type)
+{
+  // If there is nothing to join, then send empty table with all columns
+  if (left.is_empty() || right.is_empty()) { return true; }
+
+  // If left join and the left table is empty, return immediately
+  if ((join_kind::LEFT_JOIN == join_type) && (0 == left.num_rows())) { return true; }
+
+  // If Inner Join and either table is empty, return immediately
+  if ((join_kind::INNER_JOIN == join_type) && ((0 == left.num_rows()) || (0 == right.num_rows()))) {
+    return true;
+  }
+
+  // If left semi join (contains) and right table is empty,
+  // return immediately
+  if ((join_kind::LEFT_SEMI_JOIN == join_type) && (0 == right.num_rows())) { return true; }
+
+  // If left semi- or anti- join, and the left table is empty, return immediately
+  if ((join_kind::LEFT_SEMI_JOIN == join_type || join_kind::LEFT_ANTI_JOIN == join_type) &&
+      (0 == left.num_rows())) {
+    return true;
+  }
+
+  return false;
+}
 
 // Multimap type used for mixed joins. TODO: This is a temporary alias used
 // TODO: `pair_equal` to be moved to common utils during mixed-join migration
