@@ -12,7 +12,7 @@ import org.slf4j.LoggerFactory;
  * Remaps keys to unique integer IDs.
  * <p>
  * Each distinct key in the build table is assigned a unique non-negative integer ID.
- * Note that sentinal values can be negative.
+ * Note that sentinel values can be negative.
  * Rows with equal keys will map to the same ID. The specific ID values are stable
  * for the lifetime of this object but are otherwise unspecified.
  * </p>
