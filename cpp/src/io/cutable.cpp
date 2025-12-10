@@ -55,23 +55,16 @@ void write_cutable(data_sink* sink,
 {
   CUDF_FUNC_RANGE();
 
-  // Pack the table into contiguous memory
   auto const packed = cudf::pack(input, stream, mr);
 
-  // Create and populate the header
-  cutable_header header;
-  header.magic           = cutable_header::magic_number;
-  header.format_version  = cutable_header::version;
-  header.metadata_length = packed.metadata->size();
-  header.data_length     = packed.gpu_data->size();
-
-  // Write the header
+  auto const header = cutable_header{cutable_header::magic_number,
+                                     cutable_header::version,
+                                     packed.metadata->size(),
+                                     packed.gpu_data->size()};
   sink->host_write(&header, sizeof(cutable_header));
 
-  // Write the metadata
   sink->host_write(packed.metadata->data(), header.metadata_length);
 
-  // Write the data
   if (sink->is_device_write_preferred(header.data_length)) {
     sink->device_write(packed.gpu_data->data(), header.data_length, stream);
   } else {
@@ -91,27 +84,22 @@ packed_table read_cutable(datasource* source,
 {
   CUDF_FUNC_RANGE();
 
-  // Read the header
-  cutable_header header;
-  auto header_size = sizeof(cutable_header);
+  auto const header_size = sizeof(cutable_header);
   CUDF_EXPECTS(source->size() >= header_size, "File too small to contain a valid cutable header");
 
+  auto header = cutable_header{};
   source->host_read(0, header_size, reinterpret_cast<uint8_t*>(&header));
-
   CUDF_EXPECTS(header.magic == cutable_header::magic_number,
                "Invalid magic number in cutable header");
   CUDF_EXPECTS(header.format_version == cutable_header::version,
                "Unsupported cutable format version");
 
-  // Calculate offsets
-  size_t metadata_offset = header_size;
-  size_t data_offset     = metadata_offset + header.metadata_length;
-
+  auto const metadata_offset = header_size;
+  auto const data_offset     = metadata_offset + header.metadata_length;
   CUDF_EXPECTS(source->size() >= data_offset + header.data_length,
                "File too small for the specified metadata and data sizes");
 
-  // Create packed_columns and read directly into it
-  packed_columns packed;
+  auto packed = packed_columns{};
   packed.metadata->resize(header.metadata_length);
   source->host_read(metadata_offset, header.metadata_length, packed.metadata->data());
 
