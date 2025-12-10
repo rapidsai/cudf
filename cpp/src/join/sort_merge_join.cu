@@ -210,20 +210,6 @@ merge<LargerIterator, SmallerIterator>::inner(rmm::cuda_stream_view stream,
   // naive: iterate through larger table and binary search on smaller table
   auto match_counts = matches_per_row(stream, temp_mr);
 
-#if 0
-  auto count_matches_it = thrust::transform_iterator(
-    match_counts->begin(),
-    cuda::proclaim_return_type<size_type>([] __device__(auto c) -> size_type { return c != 0; }));
-  auto const count_matches =
-    thrust::reduce(rmm::exec_policy_nosync(stream), count_matches_it, count_matches_it + larger_numrows);
-  rmm::device_uvector<size_type> nonzero_matches(count_matches, stream, temp_mr);
-  thrust::copy_if(rmm::exec_policy_nosync(stream),
-                  thrust::counting_iterator(0),
-                  thrust::counting_iterator(0) + larger_numrows,
-                  match_counts->begin(),
-                  nonzero_matches.begin(),
-                  cuda::std::identity{});
-#endif
   cudf::detail::device_scalar<size_type> count_matches(stream, temp_mr);
   {
     auto count_matches_it = thrust::transform_iterator(
@@ -356,20 +342,6 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
   // Compute match counts per row and identify rows with at least one match
   auto match_counts = matches_per_row(stream, temp_mr);
 
-#if 0
-  auto count_matches_it = thrust::transform_iterator(
-    match_counts->begin(),
-    cuda::proclaim_return_type<size_type>([] __device__(auto c) -> size_type { return c != 0; }));
-  auto const count_matches = thrust::reduce(
-    rmm::exec_policy_nosync(stream), count_matches_it, count_matches_it + larger_numrows);
-  rmm::device_uvector<size_type> nonzero_matches(count_matches, stream, temp_mr);
-  thrust::copy_if(rmm::exec_policy_nosync(stream),
-                  thrust::counting_iterator(0),
-                  thrust::counting_iterator(0) + larger_numrows,
-                  match_counts->begin(),
-                  nonzero_matches.begin(),
-                  cuda::std::identity{});
-#endif
   cudf::detail::device_scalar<size_type> count_matches(stream, temp_mr);
   {
     auto count_matches_it = thrust::transform_iterator(
@@ -424,14 +396,6 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
     inner_join_matches + left_join_only_matches, stream, mr);
   rmm::device_uvector<size_type> smaller_indices(
     inner_join_matches + left_join_only_matches, stream, mr);
-#if 0
-  thrust::copy_if(rmm::exec_policy_nosync(stream),
-                  thrust::counting_iterator(0),
-                  thrust::counting_iterator(0) + larger_numrows,
-                  match_counts->begin(),
-                  larger_indices.begin(),
-                  [] __device__(auto c) -> bool { return c == 0; });
-#endif
   {
     size_t temp_storage_bytes = 0;
     count_matches.set_value_async(left_join_only_matches, stream);
@@ -719,14 +683,6 @@ rmm::device_uvector<size_type> sort_merge_join::preprocessed_table::map_table_to
       unprocessed_table_mapper{static_cast<bitmask_type const*>(_validity_mask.value().data())},
       stream.value());
   }
-#if 0
-  thrust::copy_if(
-    rmm::exec_policy_nosync(stream),
-    thrust::counting_iterator<cudf::size_type>(0),
-    thrust::counting_iterator<cudf::size_type>(_table_view.num_rows()),
-    table_mapping.begin(),
-    unprocessed_table_mapper{static_cast<bitmask_type const*>(_validity_mask.value().data())});
-#endif
   return table_mapping;
 }
 
@@ -943,14 +899,6 @@ sort_merge_join::left_join(table_view const& left,
                               left_join_unequal_nulls{validity_mask},
                               stream.value());
       }
-#if 0
-      auto null_row_it = thrust::counting_iterator<size_type>(0);
-      thrust::copy_if(rmm::exec_policy_nosync(stream),
-                      null_row_it,
-                      null_row_it + left.num_rows(),
-                      left_result_indices.begin() + preprocessed_left_indices->size(),
-                      left_join_unequal_nulls{validity_mask});
-#endif
       thrust::fill(rmm::exec_policy_nosync(stream),
                    right_result_indices.begin() + preprocessed_right_indices->size(),
                    right_result_indices.end(),
