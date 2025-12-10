@@ -20,8 +20,8 @@ namespace detail {
  * This function applies a predicate to all elements in the range and returns true
  * if the predicate returns true for all elements.
  *
+ * @tparam TransformOp **[inferred]** The type of the unary transformation operator
  * @tparam InputIterator **[inferred]** The type of device-accessible input iterator
- * @tparam BinaryOp **[inferred]** The type of the predicate operator
  *
  * @param begin Device-accessible iterator to start of input values
  * @param end Device-accessible iterator to end of input values
@@ -29,12 +29,10 @@ namespace detail {
  * @param stream CUDA stream to use
  * @return true if the predicate is true for all elements, false otherwise
  */
-template <typename InputIterator, typename BinaryOp>
-bool all_of(InputIterator begin, InputIterator end, BinaryOp op, rmm::cuda_stream_view stream)
+template <typename TransformOp, typename InputIterator>
+bool all_of(InputIterator begin, InputIterator end, TransformOp op, rmm::cuda_stream_view stream)
 {
-  auto const num_items = std::distance(begin, end);
-  auto iter            = thrust::make_transform_iterator(begin, op);
-  return reduce(iter, iter + num_items, bool{true}, cuda::std::logical_and<bool>{}, stream);
+  return transform_reduce(begin, end, op, bool{true}, cuda::std::logical_and<bool>{}, stream);
 }
 
 /**
@@ -43,8 +41,8 @@ bool all_of(InputIterator begin, InputIterator end, BinaryOp op, rmm::cuda_strea
  * This function applies a predicate to all elements in the range and returns true
  * if the predicate returns true for at least one element.
  *
+ * @tparam TransformOp **[inferred]** The type of the unary transformation operator
  * @tparam InputIterator **[inferred]** The type of device-accessible input iterator
- * @tparam BinaryOp **[inferred]** The type of the predicate operator
  *
  * @param begin Device-accessible iterator to start of input values
  * @param end Device-accessible iterator to end of input values
@@ -52,12 +50,10 @@ bool all_of(InputIterator begin, InputIterator end, BinaryOp op, rmm::cuda_strea
  * @param stream CUDA stream to use
  * @return true if the predicate is true for any element, false otherwise
  */
-template <typename InputIterator, typename BinaryOp>
-bool any_of(InputIterator begin, InputIterator end, BinaryOp op, rmm::cuda_stream_view stream)
+template <typename TransformOp, typename InputIterator>
+bool any_of(InputIterator begin, InputIterator end, TransformOp op, rmm::cuda_stream_view stream)
 {
-  auto const num_items = std::distance(begin, end);
-  auto iter            = thrust::make_transform_iterator(begin, op);
-  return reduce(iter, iter + num_items, bool{false}, cuda::std::logical_or<bool>{}, stream);
+  return transform_reduce(begin, end, op, bool{false}, cuda::std::logical_or<bool>{}, stream);
 }
 
 /**
@@ -66,9 +62,8 @@ bool any_of(InputIterator begin, InputIterator end, BinaryOp op, rmm::cuda_strea
  * This function applies a predicate to all elements in the range and returns true
  * if the predicate returns false for all elements (i.e., no element satisfies the predicate).
  *
+ * @tparam TransformOp **[inferred]** The type of the predicate operator
  * @tparam InputIterator **[inferred]** The type of device-accessible input iterator
- * @tparam OutputType **[inferred]** The type of the initial value (unused, for API compatibility)
- * @tparam BinaryOp **[inferred]** The type of the predicate operator
  *
  * @param begin Device-accessible iterator to start of input values
  * @param end Device-accessible iterator to end of input values
@@ -77,12 +72,8 @@ bool any_of(InputIterator begin, InputIterator end, BinaryOp op, rmm::cuda_strea
  * @param stream CUDA stream to use
  * @return true if the predicate is false for all elements, false otherwise
  */
-template <typename InputIterator, typename OutputType, typename BinaryOp>
-bool none_of(InputIterator begin,
-             InputIterator end,
-             OutputType init,
-             BinaryOp op,
-             rmm::cuda_stream_view stream)
+template <typename TransformOp, typename InputIterator>
+bool none_of(InputIterator begin, InputIterator end, TransformOp op, rmm::cuda_stream_view stream)
 {
   return not any_of(begin, end, op, stream);
 }
