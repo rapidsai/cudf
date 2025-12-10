@@ -148,7 +148,7 @@ ConfigureNVBench(
 # * join benchmark --------------------------------------------------------------------------------
 ConfigureNVBench(
   JOIN_NVBENCH join/left_join.cu join/conditional_join.cu join/join.cu join/mixed_join.cu
-  join/distinct_join.cu join/multiplicity_join.cu
+  join/distinct_join.cu join/filter_join_indices.cu join/multiplicity_join.cu
 )
 
 # ##################################################################################################
@@ -434,6 +434,11 @@ ConfigureNVBench(
   ROLLING_NVBENCH rolling/grouped_range_rolling_sum.cu rolling/grouped_rolling_sum.cpp
   rolling/range_rolling_sum.cu rolling/rolling_sum.cpp
 )
+
+# ##################################################################################################
+# * dictionary benchmark
+# ---------------------------------------------------------------------------------
+ConfigureNVBench(DICTIONARY_NVBENCH dictionary/encode.cpp)
 
 add_custom_target(
   run_benchmarks

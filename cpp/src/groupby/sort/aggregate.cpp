@@ -802,6 +802,19 @@ void aggregate_result_functor::operator()<aggregation::BITWISE_AGG>(aggregation 
   cache.add_result(values, agg, std::move(result));
 }
 
+template <>
+void aggregate_result_functor::operator()<aggregation::TOP_K>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) { return; }
+
+  auto const k          = dynamic_cast<cudf::detail::top_k_aggregation const&>(agg).k;
+  auto const topk_order = dynamic_cast<cudf::detail::top_k_aggregation const&>(agg).topk_order;
+
+  auto result = detail::group_top_k(
+    k, topk_order, get_grouped_values(), helper.group_offsets(stream), stream, mr);
+  cache.add_result(values, agg, std::move(result));
+}
+
 // Note: the definition for HOST_UDF specialization needs to be at last.
 // This is because it calls to `aggregation_dispatcher` which requires to see all other function
 // specializations defined before this.
