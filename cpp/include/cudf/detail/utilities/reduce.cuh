@@ -41,14 +41,15 @@ OutputType reduce(InputIterator begin,
                   BinaryOp op,
                   rmm::cuda_stream_view stream)
 {
-  // Pinned vector store two values: initial value and reduced result
-  auto host_data       = cudf::detail::make_pinned_vector_async<OutputType>(size_t{2}, stream);
-  host_data.front()    = init;
-  auto const num_items = std::distance(begin, end);
   // Device memory to store the result
   rmm::device_buffer d_result(sizeof(OutputType), stream, cudf::get_current_device_resource_ref());
-  size_t temp_storage_bytes = 0;
 
+  // Pinned vector store two values: initial value and reduced result
+  auto host_data    = cudf::detail::make_pinned_vector<OutputType>(size_t{2}, stream);
+  host_data.front() = init;
+
+  auto const num_items      = std::distance(begin, end);
+  size_t temp_storage_bytes = 0;
   cub::DeviceReduce::Reduce(nullptr,
                             temp_storage_bytes,
                             begin,
