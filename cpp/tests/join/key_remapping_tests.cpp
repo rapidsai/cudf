@@ -31,20 +31,20 @@ struct KeyRemappingTest : public cudf::test::BaseFixture {
   std::vector<T> to_host(cudf::column_view const& col)
   {
     std::vector<T> result(col.size());
-    auto status = cudaMemcpy(result.data(), col.data<T>(), col.size() * sizeof(T), cudaMemcpyDeviceToHost);
+    auto status =
+      cudaMemcpy(result.data(), col.data<T>(), col.size() * sizeof(T), cudaMemcpyDeviceToHost);
     EXPECT_EQ(status, cudaSuccess) << "cudaMemcpy failed: " << cudaGetErrorString(status);
     return result;
   }
 
   // Verify that equal keys in the input map to equal IDs in the output
   // Uses the original keys table and the remapped IDs column
-  void verify_equal_keys_have_equal_ids(cudf::table_view const& keys,
-                                        cudf::column_view const& ids)
+  void verify_equal_keys_have_equal_ids(cudf::table_view const& keys, cudf::column_view const& ids)
   {
     // Sort the keys+ids together by keys, then verify adjacent equal keys have equal ids
-    auto keys_with_ids_cols = keys.column(0).size() > 0 ? 
-      std::vector<cudf::column_view>{} : std::vector<cudf::column_view>{};
-    
+    auto keys_with_ids_cols = keys.column(0).size() > 0 ? std::vector<cudf::column_view>{}
+                                                        : std::vector<cudf::column_view>{};
+
     // Build a table with keys + id column for sorting
     std::vector<cudf::column_view> all_cols;
     for (int i = 0; i < keys.num_columns(); ++i) {
@@ -157,7 +157,7 @@ TEST_F(KeyRemappingTest, ProbeKeys)
 
   cudf::key_remapping remap{build_table};
 
-  auto build_result = remap.remap_build_keys(build_table);
+  auto build_result   = remap.remap_build_keys(build_table);
   auto host_build_ids = to_host<int32_t>(*build_result);
 
   // Probe with some matching and non-matching keys
@@ -209,9 +209,9 @@ TEST_F(KeyRemappingTest, StringKeys)
   auto probe_result   = remap.remap_probe_keys(probe_table);
   auto host_probe_ids = to_host<int32_t>(*probe_result);
 
-  EXPECT_EQ(host_probe_ids[0], host_ids[2]);  // "cherry" matches
+  EXPECT_EQ(host_probe_ids[0], host_ids[2]);                // "cherry" matches
   EXPECT_EQ(host_probe_ids[1], cudf::KEY_REMAP_NOT_FOUND);  // "date" not found
-  EXPECT_EQ(host_probe_ids[2], host_ids[0]);  // "apple" matches
+  EXPECT_EQ(host_probe_ids[2], host_ids[0]);                // "apple" matches
 
   verify_probe_matches_build(build_table, *build_result, probe_table, *probe_result);
 }
@@ -245,8 +245,8 @@ TEST_F(KeyRemappingTest, MultiColumnKeys)
   auto probe_result   = remap.remap_probe_keys(probe_table);
   auto host_probe_ids = to_host<int32_t>(*probe_result);
 
-  EXPECT_EQ(host_probe_ids[0], host_ids[2]);  // (2,"a") matches
-  EXPECT_EQ(host_probe_ids[1], host_ids[1]);  // (1,"b") matches
+  EXPECT_EQ(host_probe_ids[0], host_ids[2]);                // (2,"a") matches
+  EXPECT_EQ(host_probe_ids[1], host_ids[1]);                // (1,"b") matches
   EXPECT_EQ(host_probe_ids[2], cudf::KEY_REMAP_NOT_FOUND);  // (3,"c") not found
 
   verify_probe_matches_build(build_table, *build_result, probe_table, *probe_result);
@@ -452,7 +452,8 @@ TEST_F(KeyRemappingTest, LargeTable)
   }
   // Keys 100-104 should be NOT_FOUND
   for (int i = 100; i < 105; ++i) {
-    EXPECT_EQ(host_probe_ids[i], cudf::KEY_REMAP_NOT_FOUND) << "Probe key " << i << " should be NOT_FOUND";
+    EXPECT_EQ(host_probe_ids[i], cudf::KEY_REMAP_NOT_FOUND)
+      << "Probe key " << i << " should be NOT_FOUND";
   }
 }
 

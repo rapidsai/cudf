@@ -132,4 +132,3 @@ class key_remapping {
 /** @} */  // end of group
 
 }  // namespace CUDF_EXPORT cudf
-

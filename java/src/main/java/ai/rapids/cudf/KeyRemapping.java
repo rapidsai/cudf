@@ -308,4 +308,3 @@ public class KeyRemapping implements AutoCloseable {
   private static native long remapBuildKeys(long handle, long keysTableView);
   private static native long remapProbeKeys(long handle, long keysTableView);
 }
-
