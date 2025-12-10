@@ -20,6 +20,7 @@
 
 #include <thrust/host_vector.h>
 
+#include <concepts>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -298,7 +299,7 @@ void inline print_usage()
     << "Example usage: hybrid_scan example.parquet string_col 0000001 PINNED_BUFFER \n\n";
 }
 
-template <typename F>
+template <std::invocable F>
 void benchmark(F&& f, std::size_t benchmark_repetition)
 {
   double total_time_millis{0.0};
@@ -311,11 +312,11 @@ void benchmark(F&& f, std::size_t benchmark_repetition)
     auto elapsed_time_ms =
       static_cast<double>(std::chrono::duration_cast<timer::micros>(timer_obj.elapsed()).count()) /
       1000.0;
-    std::cout << "Iteration: " << i << ", elapsed time: " << elapsed_time_ms << " ms\n";
+    std::cout << "Iteration: " << i << ", time: " << elapsed_time_ms << " ms\n";
     if (i != 0) { total_time_millis += elapsed_time_ms; }
   }
 
-  std::cout << "Average time: " << total_time_millis / (benchmark_repetition - 1) << " ms\n";
+  std::cout << "Average time: " << total_time_millis / (benchmark_repetition - 1) << " ms\n\n";
 }
 }  // namespace
 
