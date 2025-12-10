@@ -718,7 +718,6 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
   for (auto const codec : codecs) {
     if (cudf::io::detail::is_decompression_scratch_size_ex_supported(codec)) {
       auto const total_decomp_info = cudf::detail::transform_reduce(
-        rmm::exec_policy(stream),
         decomp_iter,
         decomp_iter + pages.size(),
         cuda::proclaim_return_type<decompression_info>(
@@ -726,7 +725,8 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
             return d.type == codec ? d : decompression_info{codec, 0, 0, 0};
           }),
         decompression_info{codec, 0, 0, 0},
-        decomp_sum{});
+        decomp_sum{},
+        stream);
 
       // Collect pages with matching codecs
       rmm::device_uvector<device_span<uint8_t const>> temp_spans(pages.size(), stream);
@@ -760,7 +760,8 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
       }
       page_spans.resize(end_iter - page_spans.begin(), stream);
 
-      auto const total_temp_size    = get_decompression_scratch_size(total_decomp_info);
+      auto const total_temp_size =
+        cudf::io::detail::get_decompression_scratch_size(total_decomp_info);
       auto const total_temp_size_ex = cudf::io::detail::get_decompression_scratch_size_ex(
         total_decomp_info.type,
         page_spans,

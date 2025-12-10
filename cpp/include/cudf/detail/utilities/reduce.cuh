@@ -41,8 +41,10 @@ OutputType reduce(InputIterator begin,
                   BinaryOp op,
                   rmm::cuda_stream_view stream)
 {
+  // Pinned vector store two values: initial value and reduced result
+  auto host_data       = cudf::detail::make_pinned_vector_async<OutputType>(size_t{2}, stream);
+  host_data.front()    = init;
   auto const num_items = std::distance(begin, end);
-
   // Device memory to store the result
   rmm::device_buffer d_result(sizeof(OutputType), stream, cudf::get_current_device_resource_ref());
   size_t temp_storage_bytes = 0;
@@ -53,7 +55,7 @@ OutputType reduce(InputIterator begin,
                             static_cast<OutputType*>(d_result.data()),
                             num_items,
                             op,
-                            init,
+                            host_data.front(),
                             stream.value());
 
   rmm::device_buffer d_temp_storage(
@@ -64,17 +66,16 @@ OutputType reduce(InputIterator begin,
                             static_cast<OutputType*>(d_result.data()),
                             num_items,
                             op,
-                            init,
+                            host_data.front(),
                             stream.value());
 
   // Copy result back to host via pinned memory
-  auto result = cudf::detail::make_pinned_vector_async<OutputType>(1, stream);
   cudf::detail::cuda_memcpy(
-    cudf::host_span<OutputType>{static_cast<OutputType*>(result.data()), size_t{1}},
+    cudf::host_span<OutputType>{&host_data.back(), size_t{1}},
     cudf::device_span<OutputType const>{static_cast<OutputType const*>(d_result.data()), size_t{1}},
     stream);
 
-  return result.front();
+  return host_data.back();
 }
 
 /**
