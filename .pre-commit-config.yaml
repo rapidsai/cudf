@@ -9,7 +9,6 @@ ci:
   autoupdate_schedule: quarterly
   skip: ["mypy", "verify-alpha-spec"]
   submodules: false
-
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -35,14 +34,7 @@ repos:
     hooks:
       - id: mypy
         additional_dependencies: [numpy, polars, pyarrow-stubs, pytest, types-cachetools]
-        args: ["--config-file=pyproject.toml",
-               "python/cudf/cudf",
-               "python/pylibcudf/pylibcudf",
-               "python/custreamz/custreamz",
-               "python/cudf_kafka/cudf_kafka",
-               "python/cudf_polars/cudf_polars",
-               "python/cudf_polars/tests",
-               "python/dask_cudf/dask_cudf"]
+        args: ["--config-file=pyproject.toml", "python/cudf/cudf", "python/pylibcudf/pylibcudf", "python/custreamz/custreamz", "python/cudf_kafka/cudf_kafka", "python/cudf_polars/cudf_polars", "python/cudf_polars/tests", "python/dask_cudf/dask_cudf"]
         pass_filenames: false
   - repo: https://github.com/pre-commit/mirrors-clang-format
     rev: v20.1.4
@@ -222,6 +214,10 @@ repos:
             cpp/include/cudf_test/cxxopts[.]hpp$
           )
       - id: verify-alpha-spec
+        args:
+          - --fix
+          - --mode
+          - release
       - id: verify-codeowners
         args: [--fix, --project-prefix=cudf]
   - repo: https://github.com/rapidsai/dependency-file-generator
@@ -234,6 +230,5 @@ repos:
     hooks:
       - id: shellcheck
         args: ["--severity=warning"]
-
 default_language_version:
-      python: python3
+  python: python3
