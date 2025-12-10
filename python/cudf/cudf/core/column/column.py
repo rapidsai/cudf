@@ -230,9 +230,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def __init__(
         self,
         plc_column: plc.Column,
-        size: int,
         dtype: DtypeObj,
-        offset: int,
         null_count: int,
         exposed: bool,
     ) -> None:
@@ -244,10 +242,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 f"plc_column must be a pylibcudf.Column with a TypeId in {self._VALID_PLC_TYPES}"
             )
         self.plc_column = plc_column
-        # Note: size and offset are read from plc_column via properties
-        # We accept these parameters for backward compatibility but don't store them
-        if size < 0:
-            raise ValueError("size must be >=0")
         self._distinct_count: dict[bool, int] = {}
         self._dtype = dtype
         if null_count < 0:
@@ -726,9 +720,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         return column_cls(  # type: ignore[return-value]
             plc_column=col,
-            size=col.size(),
             dtype=dtype,
-            offset=col.offset(),
             null_count=col.null_count(),
             exposed=data_ptr_exposed,
         )
@@ -1176,9 +1168,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             col = type(self)(
                 plc_column=self.plc_column,
-                size=self.size,
                 dtype=self.dtype,
-                offset=self.offset,
                 null_count=self.null_count,
                 exposed=False,
             )
