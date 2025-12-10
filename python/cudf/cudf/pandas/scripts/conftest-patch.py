@@ -10305,7 +10305,7 @@ NODEIDS_THAT_ARE_FLAKY_WITH_COPY_ON_WRITE: set[str] = {
     "tests/extension/test_categorical.py::TestCategorical::test_setitem_integer_array[True-integer-array]",
     "tests/extension/test_categorical.py::TestCategorical::test_setitem_mask_aligned",
     "tests/extension/test_categorical.py::TestCategorical::test_setitem_mask_aligned[None-True]",
-    "tests/extension/test_categorical.py::TestCategorical::test_setitem_mask_aligned[loc-False]"
+    "tests/extension/test_categorical.py::TestCategorical::test_setitem_mask_aligned[loc-False]",
     "tests/extension/test_interval.py::TestIntervalArray::test_compare_array[eq]",
     "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_setitem_frame_2d_values[float]",
     "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_setitem_frame_2d_values[object]",
@@ -10449,6 +10449,7 @@ NODEIDS_THAT_ARE_FLAKY_WITH_COPY_ON_WRITE: set[str] = {
     "tests/indexing/test_iloc.py::TestILocErrors::test_iloc_float_raises[multi-Series]",
     "tests/indexing/test_iloc.py::TestILocErrors::test_iloc_float_raises[multi-Series]",
     "tests/indexing/test_iloc.py::TestILocErrors::test_iloc_float_raises[object-Series]",
+    "tests/indexing/test_iloc.py::TestILocErrors::test_iloc_float_raises[uint64-Series]",
     "tests/io/excel/test_openpyxl.py::test_engine_kwargs_append_data_only[True-0]",
     "tests/io/excel/test_writers.py::TestExcelWriterEngineTests::test_ExcelWriter_dispatch[OpenpyxlWriter-.xlsx]",
     "tests/io/formats/test_format.py::TestDataFrameFormatting::test_auto_detect",
