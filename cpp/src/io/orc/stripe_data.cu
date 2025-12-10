@@ -1728,9 +1728,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
         // Adjust the maximum number of values
         if (numvals == 0 && vals_skipped == 0) {
           numvals = s->top.data.max_vals;  // Just so that we don't hang if the stream is corrupted
-        } else {
-          if (t == 0 && numvals < s->top.data.max_vals) { s->top.data.max_vals = numvals; }
         }
+        __syncthreads();
+        if (t == 0) { s->top.data.max_vals = cuda::std::min(s->top.data.max_vals, numvals); }
       }
       __syncthreads();
       // Account for skipped values

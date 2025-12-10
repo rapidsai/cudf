@@ -320,7 +320,11 @@ def _cast_literal_to_decimal(
         name = side.name
     if (type_ := phys_type_map[name]).id() in _DECIMAL_IDS:
         scale = abs(type_.scale())
-        return expr.Cast(side.dtype, expr.Cast(DataType(pl.Decimal(38, scale)), lit))
+        return expr.Cast(
+            side.dtype,
+            True,  # noqa: FBT003
+            expr.Cast(DataType(pl.Decimal(38, scale)), True, lit),  # noqa: FBT003
+        )
     return lit
 
 
@@ -1826,7 +1830,12 @@ class GroupBy(IR):
                 col = child.evaluate(df, context=ExecutionContext.GROUPBY).obj
             else:
                 # Anything else, we pre-evaluate
-                col = value.evaluate(df, context=ExecutionContext.GROUPBY).obj
+                column = value.evaluate(df, context=ExecutionContext.GROUPBY)
+                if column.size != keys_cols[0].size:
+                    column = broadcast(
+                        column, target_length=keys_cols[0].size, stream=df.stream
+                    )[0]
+                col = column.obj
             requests.append(plc.groupby.GroupByRequest(col, [value.agg_request]))
             names.append(name)
         group_keys, raw_tables = grouper.aggregate(requests, stream=df.stream)
