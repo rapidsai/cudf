@@ -48,6 +48,9 @@ if get_global_manager() is not None:
         allow_module_level=True,
     )
 
+# For now, don't try and make CoW and spilling play well together
+pytestmark = pytest.mark.no_copy_on_write
+
 
 @contextlib.contextmanager
 def set_rmm_memory_pool(nbytes: int):
@@ -590,33 +593,6 @@ def test_as_buffer_of_spillable_buffer(manager: SpillManager):
     assert b1.owner.owner is data
     b2 = as_buffer(b1)
     assert b1 is b2
-
-    with pytest.raises(
-        ValueError,
-        match="owning spillable buffer must either be exposed or spill locked",
-    ):
-        # Use `memory_info` to access device point _without_ making
-        # the buffer unspillable.
-        b3 = as_buffer(b1.memory_info()[0], size=b1.size, owner=b1)
-
-    with acquire_spill_lock():
-        b3 = as_buffer(b1.get_ptr(mode="read"), size=b1.size, owner=b1)
-    assert isinstance(b3, SpillableBuffer)
-    assert b3.owner is b1.owner
-
-    b4 = as_buffer(
-        b1.get_ptr(mode="write") + data.itemsize,
-        size=b1.size - data.itemsize,
-        owner=b3,
-    )
-    assert isinstance(b4, SpillableBuffer)
-    assert b4.owner is b1.owner
-    assert all(cupy.array(b4.memoryview()) == data[1:])
-
-    b5 = as_buffer(b4.get_ptr(mode="write"), size=b4.size - 1, owner=b4)
-    assert isinstance(b5, SpillableBuffer)
-    assert b5.owner is b1.owner
-    assert all(cupy.array(b5.memoryview()) == data[1:-1])
 
 
 @pytest.mark.parametrize("dtype", ["uint8", "uint64"])

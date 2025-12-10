@@ -16,6 +16,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 from cudf_polars.experimental.rapidsmpf.nodes import define_py_node, shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    Metadata,
     process_children,
 )
 
@@ -51,8 +52,24 @@ async def union_node(
     chs_in
         The input ChannelPairs.
     """
-    # TODO: Use multiple streams
-    async with shutdown_on_error(context, *[ch.data for ch in chs_in], ch_out.data):
+    async with shutdown_on_error(
+        context,
+        *[ch.metadata for ch in chs_in],
+        *[ch.data for ch in chs_in],
+        ch_out.metadata,
+        ch_out.data,
+    ):
+        # Merge and forward metadata.
+        total_count = 0
+        duplicated = True
+        for ch_in in chs_in:
+            metadata = await ch_in.recv_metadata(context)
+            total_count += metadata.count
+            duplicated = duplicated and metadata.duplicated
+        await ch_out.send_metadata(
+            context, Metadata(total_count, duplicated=duplicated)
+        )
+
         seq_num_offset = 0
         for ch_in in chs_in:
             num_ch_chunks = 0
