@@ -416,10 +416,10 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   // that it is difficult/impossible for a given page to know that it is writing the very
   // last value that should then be followed by a terminator (because rows can span
   // page boundaries).
-  std::vector<size_type*> out_buffers;
-  std::vector<size_type> final_offsets;
-  out_buffers.reserve(_input_columns.size());
-  final_offsets.reserve(_input_columns.size());
+  auto out_buffers =
+    cudf::detail::make_empty_host_vector<size_type*>(_input_columns.size(), _stream);
+  auto final_offsets =
+    cudf::detail::make_empty_host_vector<size_type>(_input_columns.size(), _stream);
   for (size_t idx = 0; idx < _input_columns.size(); idx++) {
     input_column_info const& input_col = _input_columns[idx];
 
@@ -435,14 +435,14 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
 
         // the final offset for a list at level N is the size of it's child
         size_type const offset = child.type.id() == type_id::LIST ? child.size - 1 : child.size;
-        out_buffers.emplace_back(static_cast<size_type*>(out_buf.data()) + (out_buf.size - 1));
-        final_offsets.emplace_back(offset);
+        out_buffers.push_back(static_cast<size_type*>(out_buf.data()) + (out_buf.size - 1));
+        final_offsets.push_back(offset);
         out_buf.user_data |= PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED;
       } else if (out_buf.type.id() == type_id::STRING) {
         // only if it is not a large strings column
         if (std::cmp_less_equal(col_string_sizes[idx], strings::detail::get_offset64_threshold())) {
-          out_buffers.emplace_back(static_cast<size_type*>(out_buf.data()) + out_buf.size);
-          final_offsets.emplace_back(static_cast<size_type>(col_string_sizes[idx]));
+          out_buffers.push_back(static_cast<size_type*>(out_buf.data()) + out_buf.size);
+          final_offsets.push_back(static_cast<size_type>(col_string_sizes[idx]));
         }
         // Nested large strings column
         else if (input_col.nesting_depth() > 0) {
