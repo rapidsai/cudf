@@ -43,8 +43,10 @@ __device__ void find_local_mapping(cooperative_groups::thread_block const& block
           cuda::atomic_ref<size_type, cuda::thread_scope_block>{*cardinality};
         auto const shared_set_index = ref_cardinality.fetch_add(1, cuda::std::memory_order_relaxed);
 
-        // The value of shared_set_index is before increment, thus we will have the
-        // cardinality exceeded its threshold value.
+        // The value of `shared_set_index` is before increment, thus if we have
+        // `shared_set_index == GROUPBY_CARDINALITY_THRESHOLD` the value of cardinality
+        // will be at least `GROUPBY_CARDINALITY_THRESHOLD + 1`.
+        // This will trigger fallback to global memory.
         if (shared_set_index >= GROUPBY_CARDINALITY_THRESHOLD) { return cuda::std::pair{0, true}; }
 
         shared_set_indices[shared_set_index] = idx;

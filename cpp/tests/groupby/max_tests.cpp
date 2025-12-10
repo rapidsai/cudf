@@ -554,9 +554,13 @@ struct groupby_max_hash_based_shmem_kernel_test : cudf::test::BaseFixture {};
 TEST_F(groupby_max_hash_based_shmem_kernel_test, all_unique_keys)
 {
   auto constexpr block_size = 128;
+  auto constexpr size_multiplier = 4;
 
-  // Thread blocks (of 128 threads) will not fallback when they encounter up to 128 distinct keys.
-  std::vector<int> h_keys(block_size * 4);
+  // Since the maximum number of thread blocks (128 threads each) can be 100+ depending on GPU
+  // architecture, while the number of rows is just 128*4, each thread block will process exactly
+  // 128 rows. Because all thread blocks encounter no more than 128 distinct keys, they will
+  // run using the shared memory kernel.
+  std::vector<int> h_keys(block_size * size_multiplier);
   std::iota(h_keys.begin(), h_keys.end(), 0);
 
   cudf::test::fixed_width_column_wrapper<int> keys(h_keys.begin(), h_keys.end());
@@ -570,11 +574,12 @@ TEST_F(groupby_max_hash_based_shmem_kernel_test, all_unique_keys)
 TEST_F(groupby_max_hash_based_shmem_kernel_test, repeated_keys)
 {
   auto constexpr block_size = 128;
+  auto constexpr size_multiplier = 10000;
 
-  // Thread blocks (of 128 threads) will not fallback when they encounter up to 128 distinct keys.
-  std::vector<int> h_keys(block_size * 10000);
-
-  // Repeat the keys for all blocks.
+  // Repeat the keys for every 128 rows, thus we will have only 128 distinct keys in total.
+  // Because all thread blocks encounter no more than 128 distinct keys, they will run using the
+  // shared memory kernel.
+  std::vector<int> h_keys(block_size * size_multiplier);
   auto it = h_keys.begin();
   while (it != h_keys.end()) {
     std::iota(it, it + block_size, 0);
