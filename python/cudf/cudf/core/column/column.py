@@ -244,12 +244,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 f"plc_column must be a pylibcudf.Column with a TypeId in {self._VALID_PLC_TYPES}"
             )
         self.plc_column = plc_column
+        # Note: size and offset are read from plc_column via properties
+        # We accept these parameters for backward compatibility but don't store them
         if size < 0:
             raise ValueError("size must be >=0")
-        self._size = size
         self._distinct_count: dict[bool, int] = {}
         self._dtype = dtype
-        self._offset = offset
         if null_count < 0:
             raise ValueError("null_count must be >=0")
         self._null_count = null_count
@@ -368,7 +368,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def size(self) -> int:
-        return self._size
+        # Check if size was explicitly overridden (e.g., for special cases)
+        # Otherwise delegate to plc_column
+        if hasattr(self, "_size"):
+            return self._size
+        return self.plc_column.size()
 
     @size.setter
     def size(self, value: int) -> None:
@@ -519,7 +523,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def offset(self) -> int:
-        return self._offset
+        # Check if offset was explicitly overridden (e.g., for copy-on-write)
+        # Otherwise delegate to plc_column
+        if hasattr(self, "_offset"):
+            return self._offset
+        return self.plc_column.offset()
 
     @offset.setter
     def offset(self, value: int) -> None:
@@ -571,10 +579,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         object with the Buffers and attributes from the other column.
         """
         if inplace:
-            self.offset = other_col.offset
-            self.size = other_col.size
             self._dtype = other_col._dtype
             self.plc_column = other_col.plc_column
+            # Note: size and offset are now read from plc_column via properties
             self.set_base_data(other_col.base_data)
             self.set_base_children(other_col.base_children)
             self.set_base_mask(other_col.base_mask)
