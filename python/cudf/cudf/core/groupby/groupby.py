@@ -19,9 +19,7 @@ import pyarrow as pa
 
 import pylibcudf as plc
 
-from cudf.api.extensions import no_default
 from cudf.api.types import is_list_like, is_scalar
-from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import aggregation, sorting, stream_compaction
 from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
@@ -2708,10 +2706,8 @@ class GroupBy(Serializable, Reducible, Scannable):
     @_performance_tracking
     def pct_change(
         self,
-        periods=1,
-        fill_method=no_default,
-        axis=0,
-        limit=no_default,
+        periods: int = 1,
+        fill_method: None = None,
         freq=None,
     ):
         """
@@ -2723,17 +2719,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         periods : int, default 1
             Periods to shift for forming percent change.
         fill_method : str, default 'ffill'
-            How to handle NAs before computing percent changes.
-
-            .. deprecated:: 24.04
-                All options of `fill_method` are deprecated
-                except `fill_method=None`.
-        limit : int, optional
-            The number of consecutive NAs to fill before stopping.
-            Not yet implemented.
-
-            .. deprecated:: 24.04
-                `limit` is deprecated.
+            Must be None.
         freq : str, optional
             Increment to use from time series API.
             Not yet implemented.
@@ -2743,39 +2729,12 @@ class GroupBy(Serializable, Reducible, Scannable):
         Series or DataFrame
             Percentage changes within each group
         """
-        if not axis == 0:
-            raise NotImplementedError("Only axis=0 is supported.")
-        if limit is not no_default:
-            raise NotImplementedError("limit parameter not supported yet.")
         if freq is not None:
             raise NotImplementedError("freq parameter not supported yet.")
-        elif fill_method not in {no_default, None, "ffill", "bfill"}:
-            raise ValueError("fill_method must be one of 'ffill', or'bfill'.")
+        if fill_method is not None:
+            raise ValueError(f"fill_method must be None; got {fill_method=}.")
 
-        if fill_method not in (no_default, None) or limit is not no_default:
-            # Do not remove until pandas 3.0 support is added.
-            assert PANDAS_LT_300, (
-                "Need to drop after pandas-3.0 support is added."
-            )
-            warnings.warn(
-                "The 'fill_method' keyword being not None and the 'limit' "
-                f"keywords in {type(self).__name__}.pct_change are "
-                "deprecated and will be removed in a future version. "
-                "Either fill in any non-leading NA values prior "
-                "to calling pct_change or specify 'fill_method=None' "
-                "to not fill NA values.",
-                FutureWarning,
-            )
-
-        if fill_method in (no_default, None):
-            fill_method = "ffill"
-        if limit is no_default:
-            limit = None
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            filled = self.fillna(method=fill_method, limit=limit)
-
+        filled = self.ffill()
         fill_grp = filled.groupby(self.grouping)
         shifted = fill_grp.shift(periods=periods, freq=freq)
         return (filled / shifted) - 1
