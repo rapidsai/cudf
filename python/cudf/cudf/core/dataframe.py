@@ -6511,33 +6511,17 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     def _reduce(
         self,
         op: str,
-        axis=None,
+        axis: Axis | None = 0,
         numeric_only: bool = False,
         **kwargs,
     ) -> ScalarLike:
         source = self
 
         if axis is None:
-            assert PANDAS_LT_300, "Replace if/else with just axis=2"
-            # TODO(pandas3.0): Remove if/else for just axis = 2
-            if op in {"sum", "product", "std", "var"}:
-                # pandas only raises FutureWarning for these ops
-                # though it applies for all reductions
-                warnings.warn(
-                    f"In a future version, {type(self).__name__}"
-                    f".{op}(axis=None) will return a scalar {op} over "
-                    "the entire DataFrame. To retain the old behavior, "
-                    f"use '{type(self).__name__}.{op}(axis=0)' or "
-                    f"just '{type(self)}.{op}()'",
-                    FutureWarning,
-                )
-                axis = 0
-            else:
-                axis = 2
-        elif axis is no_default:
-            axis = 0
+            # Both axis
+            reduction_axis = 2
         else:
-            axis = source._get_axis_from_axis_arg(axis)
+            reduction_axis = source._get_axis_from_axis_arg(axis)
 
         if numeric_only:
             numeric_cols = (
@@ -6549,14 +6533,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if source.empty:
                 res = Series(
                     index=self._data.to_pandas_index[:0]
-                    if axis == 0
+                    if reduction_axis == 0
                     else source.index,
                     dtype="float64",
                 )
                 res._attrs = self._attrs
                 return res
         if (
-            axis == 2
+            reduction_axis == 2
             and op in {"kurtosis", "skew"}
             and self._num_rows < 4
             and self._num_columns > 1
@@ -6564,7 +6548,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             # Total number of elements may satisfy the min number of values
             # to compute skew/kurtosis
             return getattr(concat_columns(source._columns), op)(**kwargs)
-        elif axis == 1:
+        elif reduction_axis == 1:
             return source._apply_cupy_method_axis_1(op, **kwargs)
         else:
             axis_0_results = []
@@ -6584,7 +6568,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                         ) from err
                     else:
                         raise
-            if axis == 2:
+            if reduction_axis == 2:
                 return getattr(
                     as_column(axis_0_results, nan_as_null=False), op
                 )(**kwargs)
@@ -6810,7 +6794,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     @_performance_tracking
     def all(
         self,
-        axis: Axis = 0,
+        axis: Axis | None = 0,
         bool_only: bool = False,
         skipna: bool = True,
         **kwargs,

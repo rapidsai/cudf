@@ -1352,7 +1352,7 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def sum(
         self,
-        axis=no_default,
+        axis: Axis | None = 0,
         skipna: bool = True,
         numeric_only: bool = False,
         min_count: int = 0,
@@ -1404,7 +1404,7 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def product(
         self,
-        axis=no_default,
+        axis: Axis | None = 0,
         skipna=True,
         numeric_only=False,
         min_count=0,
@@ -1462,7 +1462,7 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def mean(
         self,
-        axis: Axis = 0,
+        axis: Axis | None = 0,
         skipna: bool = True,
         numeric_only: bool = False,
         **kwargs,
@@ -1504,9 +1504,10 @@ class IndexedFrame(Frame):
             **kwargs,
         )
 
+    @_performance_tracking
     def median(
         self,
-        axis=no_default,
+        axis: Axis | None = 0,
         skipna: bool = True,
         numeric_only: bool = False,
         **kwargs,
@@ -1556,7 +1557,7 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def std(
         self,
-        axis=no_default,
+        axis: Axis | None = 0,
         skipna: bool = True,
         ddof: int = 1,
         numeric_only: bool = False,
@@ -1609,7 +1610,7 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def var(
         self,
-        axis=no_default,
+        axis: Axis | None = 0,
         skipna: bool = True,
         ddof: int = 1,
         numeric_only: bool = False,
@@ -1661,7 +1662,7 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def kurtosis(
         self,
-        axis: Axis = 0,
+        axis: Axis | None = 0,
         skipna: bool = True,
         numeric_only: bool = False,
         **kwargs,
@@ -1722,7 +1723,7 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def skew(
         self,
-        axis: Axis = 0,
+        axis: Axis | None = 0,
         skipna: bool = True,
         numeric_only: bool = False,
         **kwargs,

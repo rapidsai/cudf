@@ -1923,7 +1923,7 @@ class Series(SingleColumnFrame, IndexedFrame):
     @_performance_tracking
     def all(
         self,
-        axis: Axis = 0,
+        axis: Axis | None = 0,
         bool_only: bool | None = None,
         skipna: bool = True,
         **kwargs,
