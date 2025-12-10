@@ -80,11 +80,27 @@ async def default_node_single(
         await ch_out.send_metadata(context, metadata_out)
 
         # Recv/send data.
-        while (msg := await ch_in.data.recv(context)) is not None:
-            chunk = TableChunk.from_message(msg).make_available_and_spill(
-                context.br(), allow_overbooking=True
-            )
-            seq_num = msg.sequence_number
+        seq_num = 0
+        receiving = True
+        received_any = False
+        while receiving:
+            msg = await ch_in.data.recv(context)
+            if msg is None:
+                receiving = False
+                if received_any:
+                    break
+                else:
+                    # Make sure we have an empty chunk in case do_evaluate
+                    # always produces rows (e.g. aggregation)
+                    stream = ir_context.get_cuda_stream()
+                    chunk = empty_table_chunk(ir.children[0], context, stream)
+            else:
+                received_any = True
+                chunk = TableChunk.from_message(msg).make_available_and_spill(
+                    context.br(), allow_overbooking=True
+                )
+                seq_num = msg.sequence_number
+
             df = await asyncio.to_thread(
                 ir.do_evaluate,
                 *ir._non_child_args,

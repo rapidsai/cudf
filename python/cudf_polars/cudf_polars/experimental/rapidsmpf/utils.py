@@ -240,11 +240,9 @@ def empty_table_chunk(ir: IR, context: Context, stream: Stream) -> TableChunk:
     The empty table chunk.
     """
     # Create an empty table with the correct schema
+    # Use dtype.plc_type to get the full DataType (preserves precision/scale for Decimals)
     empty_columns = [
-        plc.column_factories.make_empty_column(
-            plc.DataType(dtype.id()),
-            stream=stream,
-        )
+        plc.column_factories.make_empty_column(dtype.plc_type, stream=stream)
         for dtype in ir.schema.values()
     ]
     empty_table = plc.Table(empty_columns)
