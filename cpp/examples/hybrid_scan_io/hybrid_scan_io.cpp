@@ -344,7 +344,7 @@ int main(int argc, char const** argv)
     auto literal_value       = std::string{"0000001"};
     auto io_source_type      = io_source_type::PINNED_BUFFER;
     int verbose              = 0;
-    int benchmark_repetition = 5;
+    int benchmark_repetition = 11;
 
     switch (argc) {
       case 7: benchmark_repetition = std::stoi(argv[6]); [[fallthrough]];
