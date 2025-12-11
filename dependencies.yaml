@@ -877,7 +877,9 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - aiobotocore>=2.2.0
+          # Upper bound on aiobotocore to avoid build issues in CI
+          # https://github.com/rapidsai/cudf/issues/20843
+          - aiobotocore>=2.2.0,<3
           - boto3>=1.21.21
           - botocore>=1.24.21
           - cramjam
