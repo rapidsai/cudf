@@ -1,11 +1,13 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/type_list_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
@@ -27,18 +29,21 @@ TEST_F(DictionaryEncodeTest, EncodeStringColumn)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.indices(), indices_expected);
 }
 
-TEST_F(DictionaryEncodeTest, EncodeFloat)
+template <typename T>
+class DictionaryEncodeNumericTest : public DictionaryEncodeTest {};
+using NumericTypes =
+  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
+TYPED_TEST_SUITE(DictionaryEncodeNumericTest, NumericTypes);
+
+TYPED_TEST(DictionaryEncodeNumericTest, Encode)
 {
-  cudf::test::fixed_width_column_wrapper<float> input{4.25, 7.125, 0.5, -11.75, 7.125, 0.5};
+  auto input = cudf::test::fixed_width_column_wrapper<TypeParam, int>{4, 7, 0, -11, 7, 0};
 
   auto dictionary = cudf::dictionary::encode(input);
   cudf::dictionary_column_view view(dictionary->view());
 
-  cudf::test::fixed_width_column_wrapper<float> keys_expected{-11.75, 0.5, 4.25, 7.125};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.keys(), keys_expected);
-
-  cudf::test::fixed_width_column_wrapper<int32_t> expected{2, 3, 1, 0, 3, 1};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.indices(), expected);
+  auto decoded = cudf::dictionary::decode(view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(decoded->view(), input);
 }
 
 TEST_F(DictionaryEncodeTest, EncodeWithNull)
@@ -55,6 +60,20 @@ TEST_F(DictionaryEncodeTest, EncodeWithNull)
 
   cudf::test::fixed_width_column_wrapper<int32_t> expected{4, 0, 3, 1, 2, 5, 2, 4, 0};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.indices(), expected);
+}
+
+template <typename T>
+class DictionaryEncodeIndicesTest : public DictionaryEncodeTest {};
+using IndexTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t>;
+TYPED_TEST_SUITE(DictionaryEncodeIndicesTest, IndexTypes);
+
+TYPED_TEST(DictionaryEncodeIndicesTest, IndexType)
+{
+  auto input      = cudf::test::strings_column_wrapper({"aaa", "bbb", "bbb", "cccc"});
+  auto data_type  = cudf::data_type{cudf::type_to_id<TypeParam>()};
+  auto dictionary = cudf::dictionary::encode(input, data_type);
+  auto view       = cudf::dictionary_column_view(dictionary->view());
+  EXPECT_EQ(view.indices().type(), data_type);
 }
 
 TEST_F(DictionaryEncodeTest, InvalidEncode)
