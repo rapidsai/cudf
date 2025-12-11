@@ -43,7 +43,7 @@ OutputType reduce(InputIterator begin,
                   Op binary_op,
                   rmm::cuda_stream_view stream)
 {
-  auto const num_items = std::distance(begin, end);
+  auto const num_items = cuda::std::distance(begin, end);
 
   // Device memory to store the result
   rmm::device_buffer d_result(sizeof(OutputType), stream, cudf::get_current_device_resource_ref());
@@ -98,7 +98,7 @@ OutputType transform_reduce(InputIterator begin,
                             ReductionOp reduce_op,
                             rmm::cuda_stream_view stream)
 {
-  auto const num_items = std::distance(begin, end);
+  auto const num_items = cuda::std::distance(begin, end);
 
   // Device memory to store the result
   rmm::device_buffer d_result(sizeof(OutputType), stream, cudf::get_current_device_resource_ref());
