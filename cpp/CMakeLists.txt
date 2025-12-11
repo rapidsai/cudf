@@ -336,7 +336,6 @@ endif()
 # We can't precompile the LTO-IR as we need to generate fatbins for the specific target machine
 # LTO-IR is not compatible across
 
-
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(CUDF_JIT_CUDA_FLAGS "-G")
 else()
@@ -360,7 +359,6 @@ set(CUDF_JIT_DEFINITIONS "-DCUDF_RUNTIME_JIT;-D__CUDACC_RTC__")
 set(CUDF_JIT_COMPILE_FLAGS
     "-O3;-std=c++${CUDF_CUDA_STANDARD};-Xcompiler=-fPIC;-Xcompiler=-DPIC;-fvisibility=hidden;-Xfatbin=--compress-all;--compress-mode=size;--device-int128"
 )
-
 
 function(embed_jit_sources_var)
 
@@ -401,9 +399,7 @@ embed_jit_sources(
   cudf/jit/filter_params.cuh
 )
 
-embed_jit_sources(
-  identifier_name SOURCE_DIRECTORY src FILES src/jit/accessors.cuh src/jit/span.cuh
-)
+embed_jit_sources(identifier_name SOURCE_DIRECTORY src FILES src/jit/accessors.cuh src/jit/span.cuh)
 
 get_target_property(LIBCUDACXX_RAW_INCLUDE_DIRS CCCL::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)
 
@@ -928,7 +924,6 @@ add_library(
   src/utilities/type_checks.cpp
   src/utilities/type_dispatcher.cpp
 )
-
 
 # Anything that includes jitify needs to be compiled with _FILE_OFFSET_BITS=64 due to a limitation
 # in how conda builds glibc
