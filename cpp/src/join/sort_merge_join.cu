@@ -3,6 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "cuda/__iterator/counting_iterator.h"
+#include "cuda/std/__functional/identity.h"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
@@ -112,6 +115,54 @@ struct left_join_unequal_nulls {
   }
 };
 
+template <typename InputIt>
+cudf::detail::device_scalar<size_type> reduce(InputIt input,
+                                              cudf::detail::device_scalar<size_type>&& output,
+                                              size_type num_items,
+                                              rmm::cuda_stream_view stream)
+{
+  size_t temp_storage_bytes = 0;
+  cub::DeviceReduce::Sum(
+    nullptr, temp_storage_bytes, input, output.data(), num_items, stream.value());
+  rmm::device_buffer temp_storage(temp_storage_bytes, stream);
+  cub::DeviceReduce::Sum(
+    temp_storage.data(), temp_storage_bytes, input, output.data(), num_items, stream.value());
+  return output;
+}
+
+template <typename InputIt, typename StencilIt, typename OutputIt, typename SelectOp>
+cudf::detail::device_scalar<size_type> flagged_if(
+  InputIt input,
+  StencilIt stencil,
+  OutputIt output,
+  cudf::detail::device_scalar<size_type>&& num_selected_out,
+  size_type num_items,
+  SelectOp lambda,
+  rmm::cuda_stream_view stream)
+{
+  size_t temp_storage_bytes = 0;
+  cub::DeviceSelect::FlaggedIf(nullptr,
+                               temp_storage_bytes,
+                               input,
+                               stencil,
+                               output,
+                               num_selected_out.data(),
+                               num_items,
+                               lambda,
+                               stream.value());
+  rmm::device_buffer temp_storage(temp_storage_bytes, stream);
+  cub::DeviceSelect::FlaggedIf(temp_storage.data(),
+                               temp_storage_bytes,
+                               input,
+                               stencil,
+                               output,
+                               num_selected_out.data(),
+                               num_items,
+                               lambda,
+                               stream.value());
+  return num_selected_out;
+}
+
 template <typename LargerIterator, typename SmallerIterator>
 class merge {
  private:
@@ -211,48 +262,18 @@ merge<LargerIterator, SmallerIterator>::inner(rmm::cuda_stream_view stream,
   auto match_counts = matches_per_row(stream, temp_mr);
 
   cudf::detail::device_scalar<size_type> count_matches(stream, temp_mr);
-  {
-    auto count_matches_it = thrust::transform_iterator(
-      match_counts->begin(),
-      cuda::proclaim_return_type<size_type>([] __device__(auto c) -> size_type { return c != 0; }));
-    size_t temp_storage_bytes = 0;
-    cub::DeviceReduce::Sum(nullptr,
-                           temp_storage_bytes,
-                           count_matches_it,
-                           count_matches.data(),
-                           larger_numrows,
-                           stream.value());
-    rmm::device_buffer temp_storage(temp_storage_bytes, stream);
-    cub::DeviceReduce::Sum(temp_storage.data(),
-                           temp_storage_bytes,
-                           count_matches_it,
-                           count_matches.data(),
-                           larger_numrows,
-                           stream.value());
-  }
+  auto count_matches_it = thrust::transform_iterator(
+    match_counts->begin(),
+    cuda::proclaim_return_type<size_type>([] __device__(auto c) -> size_type { return c != 0; }));
+  count_matches = reduce(count_matches_it, std::move(count_matches), larger_numrows, stream);
   rmm::device_uvector<size_type> nonzero_matches(count_matches.value(stream), stream, temp_mr);
-  {
-    size_t temp_storage_bytes = 0;
-    cub::DeviceSelect::FlaggedIf(nullptr,
-                                 temp_storage_bytes,
-                                 cuda::counting_iterator(0),
-                                 match_counts->begin(),
-                                 nonzero_matches.begin(),
-                                 count_matches.data(),
-                                 larger_numrows,
-                                 cuda::std::identity{},
-                                 stream.value());
-    rmm::device_buffer temp_storage(temp_storage_bytes, stream);
-    cub::DeviceSelect::FlaggedIf(temp_storage.data(),
-                                 temp_storage_bytes,
-                                 cuda::counting_iterator(0),
-                                 match_counts->begin(),
-                                 nonzero_matches.begin(),
-                                 count_matches.data(),
-                                 larger_numrows,
-                                 cuda::std::identity{},
-                                 stream.value());
-  }
+  count_matches = flagged_if(cuda::counting_iterator(0),
+                             match_counts->begin(),
+                             nonzero_matches.begin(),
+                             std::move(count_matches),
+                             larger_numrows,
+                             cuda::std::identity{},
+                             stream);
 
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          match_counts->begin(),
@@ -343,49 +364,19 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
   auto match_counts = matches_per_row(stream, temp_mr);
 
   cudf::detail::device_scalar<size_type> count_matches(stream, temp_mr);
-  {
-    auto count_matches_it = thrust::transform_iterator(
-      match_counts->begin(),
-      cuda::proclaim_return_type<size_type>([] __device__(auto c) -> size_type { return c != 0; }));
-    size_t temp_storage_bytes = 0;
-    cub::DeviceReduce::Sum(nullptr,
-                           temp_storage_bytes,
-                           count_matches_it,
-                           count_matches.data(),
-                           larger_numrows,
-                           stream.value());
-    rmm::device_buffer temp_storage(temp_storage_bytes, stream);
-    cub::DeviceReduce::Sum(temp_storage.data(),
-                           temp_storage_bytes,
-                           count_matches_it,
-                           count_matches.data(),
-                           larger_numrows,
-                           stream.value());
-  }
+  auto count_matches_it = thrust::transform_iterator(
+    match_counts->begin(),
+    cuda::proclaim_return_type<size_type>([] __device__(auto c) -> size_type { return c != 0; }));
+  count_matches = reduce(count_matches_it, std::move(count_matches), larger_numrows, stream);
   auto const h_count_matches = count_matches.value(stream);
   rmm::device_uvector<size_type> nonzero_matches(h_count_matches, stream, temp_mr);
-  {
-    size_t temp_storage_bytes = 0;
-    cub::DeviceSelect::FlaggedIf(nullptr,
-                                 temp_storage_bytes,
-                                 cuda::counting_iterator(0),
-                                 match_counts->begin(),
-                                 nonzero_matches.begin(),
-                                 count_matches.data(),
-                                 larger_numrows,
-                                 cuda::std::identity{},
-                                 stream.value());
-    rmm::device_buffer temp_storage(temp_storage_bytes, stream);
-    cub::DeviceSelect::FlaggedIf(temp_storage.data(),
-                                 temp_storage_bytes,
-                                 cuda::counting_iterator(0),
-                                 match_counts->begin(),
-                                 nonzero_matches.begin(),
-                                 count_matches.data(),
-                                 larger_numrows,
-                                 cuda::std::identity{},
-                                 stream.value());
-  }
+  count_matches = flagged_if(cuda::counting_iterator(0),
+                             match_counts->begin(),
+                             nonzero_matches.begin(),
+                             std::move(count_matches),
+                             larger_numrows,
+                             cuda::std::identity{},
+                             stream);
 
   // Fill in unmatched entries (left-join-only rows)
   // These rows exist in the larger table but have no matches in the smaller table
@@ -396,30 +387,16 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
     inner_join_matches + left_join_only_matches, stream, mr);
   rmm::device_uvector<size_type> smaller_indices(
     inner_join_matches + left_join_only_matches, stream, mr);
-  {
-    size_t temp_storage_bytes = 0;
-    count_matches.set_value_async(left_join_only_matches, stream);
-    auto zero_lambda = [] __device__(auto c) -> bool { return c == 0; };
-    cub::DeviceSelect::FlaggedIf(nullptr,
-                                 temp_storage_bytes,
-                                 cuda::counting_iterator(0),
-                                 match_counts->begin(),
-                                 larger_indices.begin(),
-                                 count_matches.data(),
-                                 larger_numrows,
-                                 zero_lambda,
-                                 stream.value());
-    rmm::device_buffer temp_storage(temp_storage_bytes, stream);
-    cub::DeviceSelect::FlaggedIf(temp_storage.data(),
-                                 temp_storage_bytes,
-                                 cuda::counting_iterator(0),
-                                 match_counts->begin(),
-                                 larger_indices.begin(),
-                                 count_matches.data(),
-                                 larger_numrows,
-                                 zero_lambda,
-                                 stream.value());
-  }
+
+  count_matches.set_value_async(left_join_only_matches, stream);
+  count_matches = flagged_if(
+    cuda::counting_iterator(0),
+    match_counts->begin(),
+    larger_indices.begin(),
+    std::move(count_matches),
+    larger_numrows,
+    [] __device__(auto c) -> bool { return c == 0; },
+    stream);
   thrust::fill(rmm::exec_policy_nosync(stream),
                smaller_indices.begin(),
                smaller_indices.begin() + left_join_only_matches,
@@ -660,29 +637,15 @@ rmm::device_uvector<size_type> sort_merge_join::preprocessed_table::map_table_to
   auto temp_mr                  = cudf::get_current_device_resource_ref();
   auto const table_mapping_size = _table_view.num_rows() - _num_nulls.value();
   rmm::device_uvector<size_type> table_mapping(table_mapping_size, stream, temp_mr);
-  {
-    rmm::device_scalar<size_type> d_table_mapping_size(table_mapping_size, stream, temp_mr);
-    size_t temp_storage_bytes = 0;
-    cub::DeviceSelect::If(
-      nullptr,
-      temp_storage_bytes,
-      cuda::counting_iterator(0),
-      table_mapping.begin(),
-      d_table_mapping_size.data(),
-      _table_view.num_rows(),
-      unprocessed_table_mapper{static_cast<bitmask_type const*>(_validity_mask.value().data())},
-      stream.value());
-    rmm::device_buffer temp_storage(temp_storage_bytes, stream);
-    cub::DeviceSelect::If(
-      temp_storage.data(),
-      temp_storage_bytes,
-      cuda::counting_iterator(0),
-      table_mapping.begin(),
-      d_table_mapping_size.data(),
-      _table_view.num_rows(),
-      unprocessed_table_mapper{static_cast<bitmask_type const*>(_validity_mask.value().data())},
-      stream.value());
-  }
+  cudf::detail::device_scalar<size_type> d_table_mapping_size(table_mapping_size, stream, temp_mr);
+  flagged_if(
+    cuda::counting_iterator(0),
+    cuda::counting_iterator(0),
+    table_mapping.begin(),
+    std::move(d_table_mapping_size),
+    _table_view.num_rows(),
+    unprocessed_table_mapper{static_cast<bitmask_type const*>(_validity_mask.value().data())},
+    stream);
   return table_mapping;
 }
 
@@ -878,27 +841,15 @@ sort_merge_join::left_join(table_view const& left,
       // Append filtered null rows with JoinNoMatch for right side
       auto const validity_mask =
         static_cast<bitmask_type const*>(preprocessed_left._validity_mask.value().data());
-      {
-        rmm::device_scalar<size_type> d_num_filtered_nulls(num_filtered_nulls, stream, temp_mr);
-        size_t temp_storage_bytes = 0;
-        cub::DeviceSelect::If(nullptr,
-                              temp_storage_bytes,
-                              cuda::counting_iterator(0),
-                              left_result_indices.begin() + preprocessed_left_indices->size(),
-                              d_num_filtered_nulls.data(),
-                              left.num_rows(),
-                              left_join_unequal_nulls{validity_mask},
-                              stream.value());
-        rmm::device_buffer temp_storage(temp_storage_bytes, stream);
-        cub::DeviceSelect::If(temp_storage.data(),
-                              temp_storage_bytes,
-                              cuda::counting_iterator(0),
-                              left_result_indices.begin() + preprocessed_left_indices->size(),
-                              d_num_filtered_nulls.data(),
-                              left.num_rows(),
-                              left_join_unequal_nulls{validity_mask},
-                              stream.value());
-      }
+      cudf::detail::device_scalar<size_type> d_num_filtered_nulls(
+        num_filtered_nulls, stream, temp_mr);
+      flagged_if(cuda::counting_iterator(0),
+                 cuda::counting_iterator(0),
+                 left_result_indices.begin() + preprocessed_left_indices->size(),
+                 std::move(d_num_filtered_nulls),
+                 left.num_rows(),
+                 left_join_unequal_nulls{validity_mask},
+                 stream);
       thrust::fill(rmm::exec_policy_nosync(stream),
                    right_result_indices.begin() + preprocessed_right_indices->size(),
                    right_result_indices.end(),
