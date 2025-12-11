@@ -5,6 +5,7 @@
 #pragma once
 
 #define CUDF_LTO_EXPORT
+#define CUDF_LTO_ALIAS __attribute__((may_alias))
 
 namespace CUDF_LTO_EXPORT cudf {
 
@@ -49,13 +50,13 @@ enum class type_id : int32_t {};
 
 enum scale_type : int32_t {};
 
-struct __attribute__((may_alias)) data_type {
+struct CUDF_LTO_ALIAS data_type {
  private:
   type_id __id                = {};
   int32_t __fixed_point_scale = 0;
 };
 
-struct __attribute__((may_alias)) string_view {
+struct CUDF_LTO_ALIAS string_view {
  private:
   char const* __data         = nullptr;
   size_type __bytes          = 0;
@@ -121,90 +122,90 @@ struct __attribute__((may_alias)) string_view {
   static inline size_type const npos{-1};
 };
 
-struct __attribute__((may_alias)) decimal32 {
+struct CUDF_LTO_ALIAS decimal32 {
  private:
   int32_t __value    = 0;
   scale_type __scale = scale_type{};
 };
 
-struct __attribute__((may_alias)) decimal64 {
+struct CUDF_LTO_ALIAS decimal64 {
  private:
   int64_t __value    = 0;
   scale_type __scale = scale_type{};
 };
 
-struct __attribute__((may_alias)) decimal128 {
+struct CUDF_LTO_ALIAS decimal128 {
  private:
   __int128_t __value = 0;
   scale_type __scale = scale_type{};
 };
 
-struct __attribute__((may_alias)) timestamp_D {
+struct CUDF_LTO_ALIAS timestamp_D {
  private:
   int32_t __rep = 0;
 };
 
-struct __attribute__((may_alias)) timestamp_h {
+struct CUDF_LTO_ALIAS timestamp_h {
  private:
   int32_t __rep = 0;
 };
 
-struct __attribute__((may_alias)) timestamp_m {
+struct CUDF_LTO_ALIAS timestamp_m {
  private:
   int32_t __rep = 0;
 };
 
-struct __attribute__((may_alias)) timestamp_s {
+struct CUDF_LTO_ALIAS timestamp_s {
  private:
   int64_t __rep = 0;
 };
 
-struct __attribute__((may_alias)) timestamp_ms {
+struct CUDF_LTO_ALIAS timestamp_ms {
  private:
   int64_t __rep = 0;
 };
 
-struct __attribute__((may_alias)) timestamp_us {
+struct CUDF_LTO_ALIAS timestamp_us {
  private:
   int64_t __rep = 0;
 };
 
-struct __attribute__((may_alias)) timestamp_ns {
+struct CUDF_LTO_ALIAS timestamp_ns {
  private:
   int64_t __rep = 0;
 };
 
-struct __attribute__((may_alias)) duration_D {
+struct CUDF_LTO_ALIAS duration_D {
  private:
   int32_t __rep = 0;
 };
 
-struct __attribute__((may_alias)) duration_h {
+struct CUDF_LTO_ALIAS duration_h {
  private:
   int32_t __rep = 0;
 };
 
-struct __attribute__((may_alias)) duration_m {
+struct CUDF_LTO_ALIAS duration_m {
  private:
   int32_t __rep = 0;
 };
 
-struct __attribute__((may_alias)) duration_s {
+struct CUDF_LTO_ALIAS duration_s {
  private:
   int64_t __rep = 0;
 };
 
-struct __attribute__((may_alias)) duration_ms {
+struct CUDF_LTO_ALIAS duration_ms {
  private:
   int64_t __rep = 0;
 };
 
-struct __attribute__((may_alias)) duration_us {
+struct CUDF_LTO_ALIAS duration_us {
  private:
   int64_t __rep = 0;
 };
 
-struct __attribute__((may_alias)) duration_ns {
+struct CUDF_LTO_ALIAS duration_ns {
  private:
   int64_t __rep = 0;
 };
@@ -215,7 +216,7 @@ inline constexpr inplace_t inplace{};
 
 // [ ] assumes T is trivially copyable
 template <typename T>
-struct __attribute__((may_alias)) optional {
+struct CUDF_LTO_ALIAS optional {
  private:
   T __val;
   bool __engaged;
@@ -269,7 +270,7 @@ struct __attribute__((may_alias)) optional {
 template <typename T>
 optional(T) -> optional<T>;
 
-struct alignas(16) __attribute__((may_alias)) column_device_view_core {
+struct alignas(16) CUDF_LTO_ALIAS column_device_view_core {
  private:
   data_type __type                      = {};
   size_type __size                      = 0;
@@ -373,7 +374,7 @@ CUDF_LTO_DECL(duration_ns)
 
 #undef CUDF_LTO_DECL
 
-struct alignas(16) __attribute__((may_alias)) mutable_column_device_view_core {
+struct alignas(16) CUDF_LTO_ALIAS mutable_column_device_view_core {
  private:
   data_type __type                              = {};
   size_type __size                              = 0;

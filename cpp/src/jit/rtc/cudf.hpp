@@ -29,7 +29,7 @@ namespace rtc {
 // [ ] disable caching
 // [ ] cache statistics: hits, misses, etc.
 // [ ] on startup, log cache path, loading information, etc.
-
+// [ ] not compatible across major driver versions
 // [ ] if a user provides a key, use: USER_KEY+${key}, otherwise use sha256 of contents
 // [ ] use resource type in key to avoid collisions
 

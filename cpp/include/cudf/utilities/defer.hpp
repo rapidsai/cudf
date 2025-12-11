@@ -23,6 +23,8 @@ struct defer {
   T func_;
 
  public:
+  /// @brief Construct a `defer` object that will invoke the provided callable upon destruction.
+  /// @param args Arguments to forward to the callable's constructor.
   template <typename... Args>
   defer(Args&&... args) : func_{static_cast<Args&&>(args)...}
   {
@@ -35,6 +37,6 @@ struct defer {
 };
 
 template <typename T>
-defer(T) -> defer<T>;
+defer(T) -> defer<T>;  ///< Class template argument deduction guide
 
 }  // namespace CUDF_EXPORT cudf
