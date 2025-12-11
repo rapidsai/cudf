@@ -34,9 +34,11 @@ std::unique_ptr<column> encode(column_view const& input_column,
                                rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(is_signed(indices_type) && is_index_type(indices_type),
-               "indices must be type signed integer");
+               "indices must be type signed integer",
+               std::invalid_argument);
   CUDF_EXPECTS(input_column.type().id() != type_id::DICTIONARY32,
-               "cannot encode a dictionary from a dictionary");
+               "cannot encode a dictionary from a dictionary",
+               std::invalid_argument);
 
   auto codified       = cudf::detail::encode(cudf::table_view({input_column}), stream, mr);
   auto keys_table     = std::move(codified.first);
