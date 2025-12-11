@@ -2066,18 +2066,18 @@ TEST_F(ParquetReaderTest, ManyLargeLists)
         .build();
 
     // Expect an overflow error when reading the files
-    ASSERT_THROW(cudf::io::read_parquet(in_opts), std::overflow_error);
+    EXPECT_THROW(cudf::io::read_parquet(in_opts), std::overflow_error);
 
     // Now read the files with the chunked reader (no limits) without the overflow error
     auto const reader = cudf::io::chunked_parquet_reader(0, 0, in_opts);
     auto num_chunks   = 0;
     while (reader.has_next()) {
-      ASSERT_NO_THROW(std::ignore = reader.read_chunk());
+      EXPECT_NO_THROW(std::ignore = reader.read_chunk());
       num_chunks++;
     }
     // We will end up with exactly two chunks as the total number of leaf rows is just above 2B
     // rows per table chunk limit and we haven't set any chunk or pass read limits
-    ASSERT_EQ(num_chunks, 2);
+    EXPECT_EQ(num_chunks, 2);
   };
 
   // Test the case where the number of top-level (list) rows does not exceed the cudf column size
