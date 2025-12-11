@@ -578,7 +578,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         )
 
     @_performance_tracking
-    def get_group(self, name, obj=None):
+    def get_group(self, name):
         """
         Construct DataFrame from group with provided name.
 
@@ -586,10 +586,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         ----------
         name : object
             The name of the group to get as a DataFrame.
-        obj : DataFrame, default None
-            The DataFrame to take the DataFrame out of.  If
-            it is None, the object groupby was called on will
-            be used.
 
         Returns
         -------
@@ -610,21 +606,12 @@ class GroupBy(Serializable, Reducible, Scannable):
         0  A  1
         2  A  3
         """
-        if obj is None:
-            obj = self.obj
-        else:
-            warnings.warn(
-                "obj is deprecated and will be removed in a future version. "
-                "Use ``df.iloc[gb.indices.get(name)]`` "
-                "instead of ``gb.get_group(name, obj=df)``.",
-                FutureWarning,
-            )
         if is_list_like(self._by) and len(self._by) == 1:
             if isinstance(name, tuple) and len(name) == 1:
                 name = name[0]
             else:
                 raise KeyError(name)
-        return obj.iloc[self.indices[name]]
+        return self.obj.iloc[self.indices[name]]
 
     @_performance_tracking
     def size(self) -> Series:
