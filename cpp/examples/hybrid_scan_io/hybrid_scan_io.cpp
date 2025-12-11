@@ -316,7 +316,8 @@ void benchmark(F&& f, std::size_t benchmark_repetition)
     if (i != 0) { total_time_millis += elapsed_time_ms; }
   }
 
-  std::cout << "Average time: " << total_time_millis / (benchmark_repetition - 1) << " ms\n\n";
+  std::cout << "Average time (first iteration excluded): "
+            << total_time_millis / (benchmark_repetition - 1) << " ms\n\n";
 }
 }  // namespace
 
@@ -394,8 +395,13 @@ int main(int argc, char const** argv)
     // Create io source
     auto const io_source_obj = io_source{input_filepath, io_source_type, stream};
 
-    std::cout << "Note: The reported average time does not include the first iteration of the\n"
-                 "benchmark as it may include times for nvcomp, cufile loading and RMM growth.\n\n";
+    // Read with the main reader without timing
+    {
+      std::cout << "\nReading " << input_filepath << "...\n";
+      std::cout << "Note: Not timing this initial parquet read as it may include\n"
+                   "times for nvcomp, cufile loading and RMM growth.\n\n";
+      std::ignore = read_parquet(io_source_obj, filter_expression, stream);
+    }
 
     std::cout << "Reading " << input_filepath << " with main parquet reader...\n";
     benchmark([&] { std::ignore = read_parquet(io_source_obj, filter_expression, stream); },
