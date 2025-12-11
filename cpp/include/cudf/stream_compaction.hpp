@@ -416,6 +416,49 @@ cudf::size_type distinct_count(table_view const& input,
                                rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
+ * @brief Approximate count of distinct elements in the column_view using HyperLogLog.
+ *
+ * Uses the HyperLogLog++ algorithm to provide a fast approximation of the number of distinct
+ * elements in a column. All NaN values are treated as equal, and all null values are treated as
+ * equal.
+ *
+ * @param input The column_view whose distinct elements will be approximately counted
+ * @param precision The precision parameter for HyperLogLog (4-18). Higher precision gives
+ *                  better accuracy but uses more memory. Default is 12.
+ * @param null_handling `INCLUDE` or `EXCLUDE` null values (default: `EXCLUDE`)
+ * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL` (default: `NAN_IS_NULL`)
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ *
+ * @return Approximate number of distinct elements in the column
+ */
+cudf::size_type approx_distinct_count(column_view const& input,
+                                      int precision                = 12,
+                                      null_policy null_handling    = null_policy::EXCLUDE,
+                                      nan_policy nan_handling      = nan_policy::NAN_IS_NULL,
+                                      rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+/**
+ * @brief Approximate count of distinct rows in a table using HyperLogLog.
+ *
+ * Uses the HyperLogLog++ algorithm to provide a fast approximation of the number of distinct
+ * rows in a table. All NaN values are treated as equal, and all null values are treated as equal.
+ *
+ * @param input Table whose distinct rows will be approximately counted
+ * @param precision The precision parameter for HyperLogLog (4-18). Higher precision gives
+ *                  better accuracy but uses more memory. Default is 12.
+ * @param null_handling `INCLUDE` or `EXCLUDE` rows with nulls (default: `EXCLUDE`)
+ * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL` (default: `NAN_IS_NULL`)
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ *
+ * @return Approximate number of distinct rows in the table
+ */
+cudf::size_type approx_distinct_count(table_view const& input,
+                                      int precision                = 12,
+                                      null_policy null_handling    = null_policy::EXCLUDE,
+                                      nan_policy nan_handling      = nan_policy::NAN_IS_NULL,
+                                      rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+/**
  * @brief Creates a new column by applying a filter function against every
  * element of the input columns.
  *
