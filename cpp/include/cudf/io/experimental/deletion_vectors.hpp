@@ -95,6 +95,63 @@ class chunked_parquet_reader {
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
+   * @brief Constructor for the chunked reader
+   *
+   * Requires the same arguments as the `cudf::io::parquet::experimental::read_parquet()`, and an
+   * additional parameter to specify the size byte limit of the output table chunk produced.
+   *
+   * @param chunk_read_limit Byte limit on the returned table chunk size, `0` if there is no limit
+   * @param options Parquet reader options
+   * @param serialized_roaring64 Host span of `portable` serialized 64-bit roaring bitmap
+   * @param row_group_offsets Host span of row offsets of each row group
+   * @param row_group_num_rows Host span of number of rows in each row group
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  chunked_parquet_reader(
+    std::size_t chunk_read_limit,
+    parquet_reader_options const& options,
+    cudf::host_span<cudf::host_span<cuda::std::byte const> const> serialized_roaring64,
+    cudf::host_span<size_type const> deletion_vector_row_counts,
+    cudf::host_span<size_t const> row_group_offsets,
+    cudf::host_span<size_type const> row_group_num_rows,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
+   * @brief Constructor for the chunked reader
+   *
+   * Requires the same arguments as `cudf::io::parquet::experimental::read_parquet()`, with
+   * additional parameters to specify the size byte limit of the output table chunk produced, and a
+   * byte limit on the amount of temporary memory to use when reading. The `pass_read_limit` affects
+   * how many row groups we can read at a time by limiting the amount of memory dedicated to
+   * decompression space. The `pass_read_limit` is a hint, not an absolute limit - if a single row
+   * group cannot fit within the limit given, it will still be loaded. Also note that the
+   * `pass_read_limit` does not include the memory to deserialize and construct the roaring64 bitmap
+   * deletion vector that stays alive throughout the the lifetime of the reader.
+   *
+   * @param chunk_read_limit Byte limit on the returned table chunk size, `0` if there is no limit
+   * @param pass_read_limit Byte limit on the amount of memory used for decompressing and decoding
+   * data, `0` if there is no limit
+   * @param options Parquet reader options
+   * @param serialized_roaring64 Host span of `portable` serialized 64-bit roaring bitmap
+   * @param row_group_offsets Host span of row offsets of each row group
+   * @param row_group_num_rows Host span of number of rows in each row group
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  chunked_parquet_reader(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    parquet_reader_options const& options,
+    cudf::host_span<cudf::host_span<cuda::std::byte const> const> serialized_roaring64,
+    cudf::host_span<size_type const> deletion_vector_row_counts,
+    cudf::host_span<size_t const> row_group_offsets,
+    cudf::host_span<size_type const> row_group_num_rows,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
    * @brief Destructor, destroying the internal reader instance and the roaring bitmap deletion
    * vector
    */
@@ -125,7 +182,8 @@ class chunked_parquet_reader {
   std::unique_ptr<cudf::io::chunked_parquet_reader> _reader;
   std::queue<size_t> _row_group_row_offsets;
   std::queue<size_type> _row_group_row_counts;
-  std::unique_ptr<roaring_bitmap_impl> _deletion_vector;
+  std::queue<roaring_bitmap_impl> _deletion_vectors;
+  std::queue<size_type> _deletion_vector_row_counts;
   size_t _start_row;
   bool _is_unspecified_row_group_data;
   rmm::cuda_stream_view _stream;
@@ -159,6 +217,40 @@ class chunked_parquet_reader {
 table_with_metadata read_parquet(
   parquet_reader_options const& options,
   cudf::host_span<cuda::std::byte const> serialized_roaring64,
+  cudf::host_span<size_t const> row_group_offsets,
+  cudf::host_span<size_type const> row_group_num_rows,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource_ref());
+
+/**
+ * @brief Reads a table from parquet source, prepends an index column to it, deserializes the
+ * roaring64 deletion vector and applies it to the read table
+ *
+ * Reads a table from a parquet source, builds a row index column to the table using the specified
+ * row group offsets and row counts and prepends it to the table, deserializes the specified
+ * roaring64 deletion vector and applies it to the read table. If the row group offsets and row
+ * counts are empty, the index column is simply a sequence of UINT64 from 0 to the total number of
+ * rows in the table. If the serialized roaring64 bitmap span is empty, the read table (prepended
+ * with the index column) is returned as is.
+ *
+ * @ingroup io_readers
+ *
+ * @param options Parquet reader options
+ * @param serialized_roaring64 Host span of host spans containing `portable` serialized 64-bit
+ * roaring bitmaps
+ * @param deletion_vector_row_counts Host span of number of rows in each deletion vector
+ * @param row_group_offsets Host span of row index offsets for each row group
+ * @param row_group_num_rows Host span of number of rows in each row group
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate device memory of the returned table
+ *
+ * @return Read table with a prepended index column filtered using the deletion vector, along with
+ * its metadata
+ */
+table_with_metadata read_parquet(
+  parquet_reader_options const& options,
+  cudf::host_span<cudf::host_span<cuda::std::byte const> const> serialized_roaring64,
+  cudf::host_span<size_type const> deletion_vector_row_counts,
   cudf::host_span<size_t const> row_group_offsets,
   cudf::host_span<size_type const> row_group_num_rows,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
