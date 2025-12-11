@@ -2453,9 +2453,9 @@ public class TableTest extends CudfTestBase {
          Table expected = new Table.TestBuilder()
              .column(  0,   1, 2,   3,   4,   5,   6, 7, 8,   9)
              .column(inv, inv, 2, inv, inv, inv, inv, 0, 1, inv)
-             .build()) {
-      MixedJoinSize sizeInfo = Table.mixedLeftJoinSize(leftKeys, rightKeys, left, right,
-          condition, NullEquality.UNEQUAL);
+             .build();
+         MixedJoinSize sizeInfo = Table.mixedLeftJoinSize(leftKeys, rightKeys, left, right,
+             condition, NullEquality.UNEQUAL)) {
       assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
       GatherMap[] maps = Table.mixedLeftJoinGatherMaps(leftKeys, rightKeys, left, right, condition,
           NullEquality.UNEQUAL, sizeInfo);
@@ -2489,9 +2489,9 @@ public class TableTest extends CudfTestBase {
          Table expected = new Table.TestBuilder()
              .column(0,   1,   2,   3,   4,   5,   6, 7, 7, 8,   9)
              .column(0, inv, inv, inv, inv, inv, inv, 0, 2, 1, inv)
-             .build()) {
-      MixedJoinSize sizeInfo = Table.mixedLeftJoinSize(leftKeys, rightKeys, left, right,
-          condition, NullEquality.EQUAL);
+             .build();
+         MixedJoinSize sizeInfo = Table.mixedLeftJoinSize(leftKeys, rightKeys, left, right,
+             condition, NullEquality.EQUAL)) {
       assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
       GatherMap[] maps = Table.mixedLeftJoinGatherMaps(leftKeys, rightKeys, left, right, condition,
               NullEquality.EQUAL, sizeInfo);
@@ -2968,9 +2968,9 @@ public class TableTest extends CudfTestBase {
          Table expected = new Table.TestBuilder()
              .column(2, 7, 8)
              .column(2, 0, 1)
-             .build()) {
-      MixedJoinSize sizeInfo = Table.mixedInnerJoinSize(leftKeys, rightKeys, left, right,
-          condition, NullEquality.UNEQUAL);
+             .build();
+         MixedJoinSize sizeInfo = Table.mixedInnerJoinSize(leftKeys, rightKeys, left, right,
+             condition, NullEquality.UNEQUAL)) {
       assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
       GatherMap[] maps = Table.mixedInnerJoinGatherMaps(leftKeys, rightKeys, left, right, condition,
           NullEquality.UNEQUAL, sizeInfo);
@@ -3003,9 +3003,9 @@ public class TableTest extends CudfTestBase {
          Table expected = new Table.TestBuilder()
              .column(0, 7, 7, 8)
              .column(0, 0, 2, 1)
-             .build()) {
-      MixedJoinSize sizeInfo = Table.mixedInnerJoinSize(leftKeys, rightKeys, left, right,
-          condition, NullEquality.EQUAL);
+             .build();
+         MixedJoinSize sizeInfo = Table.mixedInnerJoinSize(leftKeys, rightKeys, left, right,
+             condition, NullEquality.EQUAL)) {
       assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
       GatherMap[] maps = Table.mixedInnerJoinGatherMaps(leftKeys, rightKeys, left, right, condition,
           NullEquality.EQUAL, sizeInfo);
@@ -9286,7 +9286,8 @@ public class TableTest extends CudfTestBase {
       assertEquals(OriginalType.MAP, schema.getType("my_map").getOriginalType());
     }
     try (ColumnVector cv = Table.readParquet(f).getColumn(0);
-         ColumnVector res = cv.getMapValue(Scalar.fromString("a"));
+         Scalar aString = Scalar.fromString("a");
+         ColumnVector res = cv.getMapValue(aString);
          ColumnVector expected = ColumnVector.fromStrings("b", "c", null)) {
       assertColumnsAreEqual(expected, res);
     }

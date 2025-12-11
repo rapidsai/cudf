@@ -438,26 +438,30 @@ async def fanout_node_unbounded(
                                 device_size > 0
                                 and available_device_mem >= required_headroom
                             ):
-                                target_memory = MemoryType.DEVICE
+                                # Use reserve_device_memory_and_spill to automatically trigger spilling
+                                # if needed to make room for the copy
+                                memory_reservation = (
+                                    context.br().reserve_device_memory_and_spill(
+                                        total_copy_cost,
+                                        allow_overbooking=True,
+                                    )
+                                )
                             else:
                                 # Use host memory for buffering - much safer
                                 # Downstream consumers will make_available() when they need device memory
-                                target_memory = MemoryType.HOST
+                                memory_reservation, _ = context.br().reserve(
+                                    MemoryType.HOST,
+                                    total_copy_cost,
+                                    allow_overbooking=True,
+                                )
 
                             # Copy message for each output buffer
                             # Copies are spillable and allow downstream consumers
                             # to control device memory allocation
                             for idx, sm in enumerate(output_buffers):
                                 if idx < num_outputs - 1:
-                                    # Use reserve_and_spill to automatically trigger
-                                    # spilling if needed to make room for the copy
-                                    res = context.br().reserve_and_spill(
-                                        target_memory,
-                                        copy_cost,
-                                        allow_overbooking=True,
-                                    )
                                     # Copy to target memory and insert into spillable buffer
-                                    mid = sm.insert(msg.copy(res))
+                                    mid = sm.insert(msg.copy(memory_reservation))
                                 else:
                                     # Optimization: reuse the original message for last output
                                     # (no copy needed)
