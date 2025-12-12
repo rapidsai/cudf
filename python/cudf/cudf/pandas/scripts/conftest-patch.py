@@ -10319,6 +10319,7 @@ NODEIDS_THAT_ARE_FLAKY_WITH_COPY_ON_WRITE: set[str] = {
     "tests/frame/methods/test_fillna.py::test_fillna_nones_inplace",
     "tests/frame/methods/test_head_tail.py::test_head_tail_generic[multi-DataFrame]",
     "tests/frame/methods/test_head_tail.py::test_head_tail_generic[tuples-DataFrame]",
+    "tests/frame/methods/test_interpolate.py::TestDataFrameInterpolate::test_interp_inplace",
     "tests/frame/methods/test_matmul.py::TestMatMul::test_matmul",
     "tests/frame/methods/test_sample.py::TestSample::test_sample_random_state[DataFrame-np.array-arg0]",
     "tests/frame/methods/test_sample.py::TestSample::test_sample_random_state[Series-np.array-arg0]",
