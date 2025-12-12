@@ -10,6 +10,7 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/join/conditional_join.hpp>
+#include <cudf/join/hash_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/join/mixed_join.hpp>
 #include <cudf/table/table_view.hpp>
@@ -175,6 +176,51 @@ struct MixedJoinTest : public cudf::test::BaseFixture {
                            left.select(conditional_columns),
                            right.select(conditional_columns));
   }
+
+  /**
+   * Compare two join results, sorting both before comparison since order is not guaranteed.
+   */
+  void compare_join_results(const PairJoinReturn& expected_result,
+                            const PairJoinReturn& actual_result)
+  {
+    auto device_results_to_host = [](const PairJoinReturn& result) {
+      // Create column views from device_uvectors
+      auto left_view  = cudf::column_view(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
+                                         result.first->size(),
+                                         result.first->data(),
+                                         nullptr,
+                                         0);
+      auto right_view = cudf::column_view(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
+                                          result.second->size(),
+                                          result.second->data(),
+                                          nullptr,
+                                          0);
+      auto left_host  = cudf::test::to_host<cudf::size_type>(left_view).first;
+      auto right_host = cudf::test::to_host<cudf::size_type>(right_view).first;
+      return std::make_pair(left_host, right_host);
+    };
+
+    auto [expected_left, expected_right] = device_results_to_host(expected_result);
+    auto [actual_left, actual_right]     = device_results_to_host(actual_result);
+
+    // Create pairs for sorting
+    std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_pairs;
+    std::vector<std::pair<cudf::size_type, cudf::size_type>> actual_pairs;
+
+    for (size_t i = 0; i < expected_left.size(); ++i) {
+      expected_pairs.emplace_back(expected_left[i], expected_right[i]);
+    }
+    for (size_t i = 0; i < actual_left.size(); ++i) {
+      actual_pairs.emplace_back(actual_left[i], actual_right[i]);
+    }
+
+    // Sort both results since order is not guaranteed
+    std::sort(expected_pairs.begin(), expected_pairs.end());
+    std::sort(actual_pairs.begin(), actual_pairs.end());
+
+    EXPECT_EQ(expected_pairs.size(), actual_pairs.size());
+    EXPECT_TRUE(std::equal(expected_pairs.begin(), expected_pairs.end(), actual_pairs.begin()));
+  }
 };
 
 /**
@@ -332,8 +378,29 @@ struct MixedInnerJoinTest : public MixedJoinPairReturnTest<T> {
                       cudf::ast::operation predicate,
                       cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
   {
-    return cudf::mixed_inner_join(
+    // Test both approaches and verify they produce the same results
+    auto mixed_result = cudf::mixed_inner_join(
       left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
+
+    // Alternative approach: hash_join + filter_join_indices
+    // Skip hash_join approach for empty tables (hash_join doesn't support empty tables)
+    if (left_equality.num_rows() > 0 && right_equality.num_rows() > 0) {
+      cudf::hash_join hash_joiner(right_equality, compare_nulls);
+      auto hash_join_result = hash_joiner.inner_join(left_equality);
+
+      auto hash_filter_result = cudf::filter_join_indices(
+        left_conditional,
+        right_conditional,
+        cudf::device_span<cudf::size_type const>(*hash_join_result.first),
+        cudf::device_span<cudf::size_type const>(*hash_join_result.second),
+        predicate,
+        cudf::join_kind::INNER_JOIN);
+
+      // Verify both approaches produce the same results
+      this->compare_join_results(mixed_result, hash_filter_result);
+    }
+
+    return mixed_result;
   }
 
   std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<cudf::size_type>>> join_size(
@@ -662,8 +729,29 @@ struct MixedLeftJoinTest : public MixedJoinPairReturnTest<T> {
                       cudf::ast::operation predicate,
                       cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
   {
-    return cudf::mixed_left_join(
+    // Test both approaches and verify they produce the same results
+    auto mixed_result = cudf::mixed_left_join(
       left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
+
+    // Alternative approach: hash_join + filter_join_indices
+    // Skip hash_join approach for empty right table (hash_join doesn't support empty build tables)
+    if (right_equality.num_rows() > 0) {
+      cudf::hash_join hash_joiner(right_equality, compare_nulls);
+      auto hash_join_result = hash_joiner.left_join(left_equality);
+
+      auto hash_filter_result = cudf::filter_join_indices(
+        left_conditional,
+        right_conditional,
+        cudf::device_span<cudf::size_type const>(*hash_join_result.first),
+        cudf::device_span<cudf::size_type const>(*hash_join_result.second),
+        predicate,
+        cudf::join_kind::LEFT_JOIN);
+
+      // Verify both approaches produce the same results
+      this->compare_join_results(mixed_result, hash_filter_result);
+    }
+
+    return mixed_result;
   }
 
   std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<cudf::size_type>>> join_size(
@@ -775,8 +863,29 @@ struct MixedFullJoinTest : public MixedJoinPairReturnTest<T> {
                       cudf::ast::operation predicate,
                       cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
   {
-    return cudf::mixed_full_join(
+    // Test both approaches and verify they produce the same results
+    auto mixed_result = cudf::mixed_full_join(
       left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
+
+    // Alternative approach: hash_join + filter_join_indices
+    // Skip hash_join approach for empty tables (hash_join doesn't support empty tables)
+    if (left_equality.num_rows() > 0 && right_equality.num_rows() > 0) {
+      cudf::hash_join hash_joiner(right_equality, compare_nulls);
+      auto hash_join_result = hash_joiner.full_join(left_equality);
+
+      auto hash_filter_result = cudf::filter_join_indices(
+        left_conditional,
+        right_conditional,
+        cudf::device_span<cudf::size_type const>(*hash_join_result.first),
+        cudf::device_span<cudf::size_type const>(*hash_join_result.second),
+        predicate,
+        cudf::join_kind::FULL_JOIN);
+
+      // Verify both approaches produce the same results
+      this->compare_join_results(mixed_result, hash_filter_result);
+    }
+
+    return mixed_result;
   }
 
   std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<cudf::size_type>>> join_size(
