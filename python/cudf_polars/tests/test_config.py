@@ -413,6 +413,25 @@ def test_validate_shuffle_method_defaults(
         )
 
 
+def test_validate_shuffle_insertion_method() -> None:
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
+            executor_options={"shuffler_insertion_method": "concat_insert"},
+        )
+    )
+    assert config.executor.name == "streaming"
+    assert config.executor.shuffler_insertion_method == "concat_insert"
+
+    with pytest.raises(ValueError, match="is not a valid ShufflerInsertionMethod"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"shuffler_insertion_method": object()},
+            )
+        )
+
+
 @pytest.mark.parametrize(
     "option",
     [
@@ -491,6 +510,7 @@ def test_config_option_from_env(
         m.setenv("CUDF_POLARS__EXECUTOR__RAPIDSMPF_SPILL", "1")
         m.setenv("CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY", "1")
         m.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "new")
+        m.setenv("CUDF_POLARS__EXECUTOR__SHUFFLER_INSERTION_METHOD", "concat_insert")
 
         if rapidsmpf_distributed_available:
             m.setenv("CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD", "rapidsmpf")
@@ -510,6 +530,7 @@ def test_config_option_from_env(
         assert config.executor.rapidsmpf_spill is True
         assert config.executor.sink_to_directory is True
         assert config.cuda_stream_policy == CUDAStreamPolicy.NEW
+        assert config.executor.shuffler_insertion_method == "concat_insert"
 
         if rapidsmpf_distributed_available:
             assert config.executor.shuffle_method == "rapidsmpf"
