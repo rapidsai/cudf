@@ -7,11 +7,13 @@
 
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
 #include <cub/device/device_reduce.cuh>
+#include <cuda/std/functional>
 #include <cuda/stream_ref>
 
 namespace CUDF_EXPORT cudf {
@@ -23,9 +25,9 @@ namespace detail {
  * This function performs a reduction operation on device data and returns the result
  * to the host using pinned memory for efficient transfer.
  *
- * @tparam Op **[inferred]** The type of the binary reduction operator
- * @tparam InputIterator **[inferred]** The type of device-accessible input iterator
- * @tparam OutputType **[inferred]** The type of the reduction result
+ * @tparam Op **[inferred]** Type of the binary reduction operator
+ * @tparam InputIterator **[inferred]** Type of device-accessible input iterator
+ * @tparam OutputType **[inferred]** Type of the reduction result
  *
  * @param begin Device-accessible iterator to start of input values
  * @param end Device-accessible iterator to end of input values
@@ -46,7 +48,8 @@ OutputType reduce(InputIterator begin,
   auto const num_items = cuda::std::distance(begin, end);
 
   // Device memory to store the result
-  rmm::device_buffer d_result(sizeof(OutputType), stream, cudf::get_current_device_resource_ref());
+  auto d_result =
+    rmm::device_uvector<OutputType>(1, stream, cudf::get_current_device_resource_ref());
 
   // Build environment with stream and memory resource for cub::DeviceReduce::Reduce
   auto env = cuda::std::execution::env{
@@ -74,10 +77,10 @@ OutputType reduce(InputIterator begin,
  * performs a reduction operation on the transformed values. The result is returned to the
  * host using pinned memory for efficient transfer.
  *
- * @tparam TransformationOp **[inferred]** The type of the unary transformation operator
- * @tparam ReductionOp **[inferred]** The type of the binary reduction operator
- * @tparam InputIterator **[inferred]** The type of device-accessible input iterator
- * @tparam OutputType **[inferred]** The type of the reduction result
+ * @tparam TransformationOp **[inferred]** Type of the unary transformation operator
+ * @tparam ReductionOp **[inferred]** Type of the binary reduction operator
+ * @tparam InputIterator **[inferred]** Type of device-accessible input iterator
+ * @tparam OutputType **[inferred]** Type of the reduction result
  *
  * @param begin Device-accessible iterator to start of input values
  * @param end Device-accessible iterator to end of input values
@@ -101,7 +104,8 @@ OutputType transform_reduce(InputIterator begin,
   auto const num_items = cuda::std::distance(begin, end);
 
   // Device memory to store the result
-  rmm::device_buffer d_result(sizeof(OutputType), stream, cudf::get_current_device_resource_ref());
+  auto d_result =
+    rmm::device_uvector<OutputType>(1, stream, cudf::get_current_device_resource_ref());
 
   size_t temp_storage_bytes = 0;
   cub::DeviceReduce::TransformReduce(nullptr,
@@ -134,6 +138,89 @@ OutputType transform_reduce(InputIterator begin,
     stream);
 
   return result.front();
+}
+
+/**
+ * @brief Helper to perform reduce-by-key operation using CUB with pinned memory for result transfer
+ *
+ * This function reduces values by consecutive equal keys, similar to thrust::reduce_by_key,
+ * but uses CUB's implementation with pinned memory for efficient device-to-host transfer
+ * of the number of unique keys.
+ *
+ * @tparam Op **[inferred]** Type of the binary reduction operator
+ * @tparam KeysInputIterator **[inferred]** Type of device-accessible input iterator for keys
+ * @tparam KeysOutputIterator **[inferred]** Type of device-accessible output iterator for unique
+ * keys
+ * @tparam ValuesInputIterator **[inferred]** Type of device-accessible input iterator for values
+ * @tparam ValuesOutputIterator **[inferred]** Type of device-accessible output iterator for reduced
+ * values
+ *
+ * @param keys_begin Device-accessible iterator to start of input keys
+ * @param keys_end Device-accessible iterator to end of input keys
+ * @param values_begin Device-accessible iterator to start of input values
+ * @param keys_output Device-accessible iterator to start of output unique keys
+ * @param values_output Device-accessible iterator to start of output reduced values
+ * @param op Binary reduction operator
+ * @param stream CUDA stream to use
+ * @return A pair of iterators pointing to the end of the output key and value ranges
+ */
+template <typename Op,
+          typename KeysInputIterator,
+          typename KeysOutputIterator,
+          typename ValuesInputIterator,
+          typename ValuesOutputIterator>
+cuda::std::pair<KeysOutputIterator, ValuesOutputIterator> reduce_by_key(
+  KeysInputIterator keys_begin,
+  KeysInputIterator keys_end,
+  ValuesInputIterator values_begin,
+  KeysOutputIterator keys_output,
+  ValuesOutputIterator values_output,
+  Op op,
+  rmm::cuda_stream_view stream)
+{
+  auto const num_items = cuda::std::distance(keys_begin, keys_end);
+
+  // Device memory to store the number of runs (unique keys)
+  auto d_num_runs =
+    rmm::device_uvector<cuda::std::size_t>(1, stream, cudf::get_current_device_resource_ref());
+
+  // First call to get temporary storage size
+  size_t temp_storage_bytes = 0;
+  cub::DeviceReduce::ReduceByKey(nullptr,
+                                 temp_storage_bytes,
+                                 keys_begin,
+                                 keys_output,
+                                 values_begin,
+                                 values_output,
+                                 d_num_runs.begin(),
+                                 op,
+                                 num_items,
+                                 stream.value());
+
+  // Allocate temporary storage
+  rmm::device_buffer d_temp_storage(
+    temp_storage_bytes, stream, cudf::get_current_device_resource_ref());
+
+  // Run reduce-by-key
+  cub::DeviceReduce::ReduceByKey(d_temp_storage.data(),
+                                 temp_storage_bytes,
+                                 keys_begin,
+                                 keys_output,
+                                 values_begin,
+                                 values_output,
+                                 d_num_runs.begin(),
+                                 op,
+                                 num_items,
+                                 stream.value());
+
+  // Copy number of runs back to host via pinned memory
+  auto num_runs = cudf::detail::make_pinned_vector<size_t>(size_t{1}, stream);
+  cudf::detail::cuda_memcpy(
+    cudf::host_span<cuda::std::size_t>{&num_runs.front(), size_t{1}},
+    cudf::device_span<cuda::std::size_t const>{d_num_runs.begin(), size_t{1}},
+    stream);
+
+  return {keys_output + num_runs.front(), values_output + num_runs.front()};
 }
 
 }  // namespace detail
