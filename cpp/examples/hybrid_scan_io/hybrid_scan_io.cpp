@@ -292,11 +292,12 @@ void inline print_usage()
 {
   std::cout
     << std::endl
-    << "Usage: hybrid_scan <input parquet file> <column name> <literal> <io source type>\n\n"
-    << "Available IO source types: HOST_BUFFER, PINNED_BUFFER (Default) \n\n"
+    << "Usage: hybrid_scan <input parquet file> <column name> <literal> <io source type> <verbose> "
+       "<benchmark repetition>\n\n"
+    << "Available IO source types: HOST_BUFFER, PINNED_BUFFER, FILEPATH (Default) \n\n"
     << "Note: Both the column name and literal must be of `string` type. The constructed filter "
        "expression\n      will be of the form <column name> == <literal>\n\n"
-    << "Example usage: hybrid_scan example.parquet string_col 0000001 PINNED_BUFFER \n\n";
+    << "Example usage: hybrid_scan example.parquet string_col 0000001 FILEPATH \n\n";
 }
 
 template <std::invocable F>
@@ -328,12 +329,17 @@ void benchmark(F&& f, std::size_t benchmark_repetition)
  * 1. parquet input file name/path (default: "example.parquet")
  * 2. column name for filter expression (default: "string_col")
  * 3. literal for filter expression (default: "0000001")
- * 4. io source type (default: "PINNED_BUFFER")
+ * 4. io source type (default: "FILEPATH")
+ * 5. verbose time info (default: 0)
+ * 6. benchmark repetition (default: 11)
  *
  * The filter expression will be of the form col_name == literal (default: string_col == 0000001)
  *
  * Example invocation from directory `cudf/cpp/examples/hybrid_scan`:
- * ./build/hybrid_scan_io example.parquet string_col 0000001 PINNED_BUFFER
+ * - Perform actual I/O
+ *   ./build/hybrid_scan_io example.parquet string_col 0000001 FILEPATH
+ * - Use in-memory data source
+ *   ./build/hybrid_scan_io example.parquet string_col 0000001 PINNED_BUFFER
  *
  */
 int main(int argc, char const** argv)
@@ -342,7 +348,7 @@ int main(int argc, char const** argv)
     auto input_filepath      = std::string{"example.parquet"};
     auto column_name         = std::string{"string_col"};
     auto literal_value       = std::string{"0000001"};
-    auto io_source_type      = io_source_type::PINNED_BUFFER;
+    auto io_source_type      = io_source_type::FILEPATH;
     int verbose              = 0;
     int benchmark_repetition = 11;
 
