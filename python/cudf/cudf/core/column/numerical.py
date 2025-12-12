@@ -85,7 +85,6 @@ class NumericalColumn(NumericalBaseColumn):
         self,
         plc_column: plc.Column,
         dtype: np.dtype,
-        null_count: int,
         exposed: bool,
     ) -> None:
         if (
@@ -101,7 +100,6 @@ class NumericalColumn(NumericalBaseColumn):
         super().__init__(
             plc_column=plc_column,
             dtype=dtype,
-            null_count=null_count,
             exposed=exposed,
         )
 
@@ -910,7 +908,6 @@ class NumericalColumn(NumericalBaseColumn):
             return CategoricalColumn(
                 plc_column=codes.to_pylibcudf(mode="read"),
                 dtype=dtype,
-                null_count=codes.null_count,
                 exposed=False,
             )
         if cudf.get_option("mode.pandas_compatible"):
