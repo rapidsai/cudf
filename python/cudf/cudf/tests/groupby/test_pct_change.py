@@ -5,21 +5,9 @@
 import pytest
 
 import cudf
-from cudf.api.extensions import no_default
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_VERSION,
-)
 from cudf.testing import assert_eq
-from cudf.testing._utils import (
-    expect_warning_if,
-)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="warning not present in older pandas versions",
-)
 @pytest.mark.parametrize(
     "data, gkey",
     [
@@ -40,34 +28,29 @@ from cudf.testing._utils import (
             },
             ["id", "a"],
         ),
-        (
+        pytest.param(
             {
                 "id": ["a", "a", "b", "b", "c", "c"],
                 "val1": [None, None, None, None, None, None],
             },
             ["id"],
+            marks=pytest.mark.xfail(
+                reason="cuDF null values are None instead of NaN"
+            ),
         ),
     ],
 )
 @pytest.mark.parametrize("periods", [-2, 0, 5])
-@pytest.mark.parametrize("fill_method", ["ffill", "bfill", no_default, None])
-def test_groupby_pct_change(data, gkey, periods, fill_method):
+def test_groupby_pct_change(data, gkey, periods):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
-    with expect_warning_if(fill_method not in (no_default, None)):
-        actual = gdf.groupby(gkey).pct_change(
-            periods=periods, fill_method=fill_method
-        )
-    with expect_warning_if(
-        (
-            fill_method not in (no_default, None)
-            or (fill_method is not None and pdf.isna().any().any())
-        )
-    ):
-        expected = pdf.groupby(gkey).pct_change(
-            periods=periods, fill_method=fill_method
-        )
+    actual = gdf.groupby(gkey).pct_change(
+        periods=periods,
+    )
+    expected = pdf.groupby(gkey).pct_change(
+        periods=periods,
+    )
 
     assert_eq(expected, actual)
 

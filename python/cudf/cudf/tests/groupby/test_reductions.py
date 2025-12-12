@@ -940,10 +940,6 @@ def test_group_by_empty_reduction(
     )
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Warning only given on newer versions.",
-)
 def test_categorical_grouping_pandas_compatibility():
     gdf = cudf.DataFrame(
         {
@@ -955,9 +951,7 @@ def test_categorical_grouping_pandas_compatibility():
 
     with cudf.option_context("mode.pandas_compatible", True):
         actual = gdf.groupby("key", sort=False).sum()
-    with pytest.warns(FutureWarning):
-        # observed param deprecation.
-        expected = pdf.groupby("key", sort=False).sum()
+    expected = pdf.groupby("key", sort=False).sum()
     assert_eq(actual, expected)
 
 

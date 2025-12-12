@@ -10,7 +10,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
@@ -884,10 +883,6 @@ def test_dataframe_loc_iloc_inplace_update_with_RHS_dataframe():
     assert_eq(expected, actual)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="No warning in older versions of pandas",
-)
 def test_dataframe_loc_inplace_update_with_invalid_RHS_df_columns():
     gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
     pdf = gdf.to_pandas()
@@ -895,12 +890,9 @@ def test_dataframe_loc_inplace_update_with_invalid_RHS_df_columns():
     actual = gdf.loc[[0, 2], ["x", "y"]] = cudf.DataFrame(
         {"b": [10, 20], "y": [30, 40]}, index=cudf.Index([0, 2])
     )
-    with pytest.warns(FutureWarning):
-        # Seems to be a false warning from pandas,
-        # but nevertheless catching it.
-        expected = pdf.loc[[0, 2], ["x", "y"]] = pd.DataFrame(
-            {"b": [10, 20], "y": [30, 40]}, index=pd.Index([0, 2])
-        )
+    expected = pdf.loc[[0, 2], ["x", "y"]] = pd.DataFrame(
+        {"b": [10, 20], "y": [30, 40]}, index=pd.Index([0, 2])
+    )
 
     assert_eq(expected, actual)
 

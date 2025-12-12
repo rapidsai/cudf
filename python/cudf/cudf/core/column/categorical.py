@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import warnings
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -542,15 +541,6 @@ class CategoricalColumn(column.ColumnBase):
                 categories=new_cats["cats"], ordered=self.dtype.ordered
             )
         )
-        if result.dtype != self.dtype:
-            warnings.warn(
-                "The behavior of replace with "
-                "CategoricalDtype is deprecated. In a future version, replace "
-                "will only be used for cases that preserve the categories. "
-                "To change the categories, use ser.cat.rename_categories "
-                "instead.",
-                FutureWarning,
-            )
         return result  # type: ignore[return-value]
 
     def isnull(self) -> ColumnBase:

@@ -51,11 +51,11 @@ class SingleColumnFrame(Frame, NotIterable):
     def _reduce(
         self,
         op: str,
-        axis=no_default,
+        axis: Axis | None = 0,
         numeric_only: bool = False,
         **kwargs,
     ) -> ScalarLike:
-        if axis not in (None, 0, no_default):
+        if axis not in (None, 0):
             raise NotImplementedError("axis parameter is not implemented yet")
 
         if numeric_only and not is_dtype_obj_numeric(self.dtype):

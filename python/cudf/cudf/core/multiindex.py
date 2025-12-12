@@ -1195,27 +1195,6 @@ class MultiIndex(Index):
         )
         return level_values
 
-    def _is_numeric(self) -> bool:
-        return False
-
-    def _is_boolean(self) -> bool:
-        return False
-
-    def _is_integer(self) -> bool:
-        return False
-
-    def _is_floating(self) -> bool:
-        return False
-
-    def _is_object(self) -> bool:
-        return False
-
-    def _is_categorical(self) -> bool:
-        return False
-
-    def _is_interval(self) -> bool:
-        return False
-
     @classmethod
     @_performance_tracking
     def _concat(cls, objs) -> Self:

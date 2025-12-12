@@ -1797,7 +1797,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
     def _reduce(
         self,
         op: str,
-        axis=no_default,
+        axis: Axis | None = 0,
         numeric_only: bool = False,
         **kwargs,
     ) -> ScalarLike:
@@ -1821,7 +1821,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @_performance_tracking
     def min(
         self,
-        axis: Axis = 0,
+        axis: Axis | None = 0,
         skipna: bool = True,
         numeric_only: bool = False,
         **kwargs,
@@ -1872,7 +1872,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @_performance_tracking
     def max(
         self,
-        axis: Axis = 0,
+        axis: Axis | None = 0,
         skipna: bool = True,
         numeric_only: bool = False,
         **kwargs,
@@ -1918,7 +1918,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         )
 
     @_performance_tracking
-    def all(self, axis: Axis = 0, skipna: bool = True, **kwargs):
+    def all(self, axis: Axis | None = 0, skipna: bool = True, **kwargs):
         """
         Return whether all elements are True in DataFrame.
 
@@ -1971,7 +1971,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         )
 
     @_performance_tracking
-    def any(self, axis: Axis = 0, skipna: bool = True, **kwargs):
+    def any(self, axis: Axis | None = 0, skipna: bool = True, **kwargs):
         """
         Return whether any elements is True in DataFrame.
 

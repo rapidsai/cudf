@@ -196,7 +196,6 @@ Missing data handling
 .. autosummary::
    :toctree: api/
 
-   Series.backfill
    Series.bfill
    Series.dropna
    Series.ffill
@@ -207,7 +206,6 @@ Missing data handling
    Series.nans_to_nulls
    Series.notna
    Series.notnull
-   Series.pad
    Series.replace
 
 Reshaping, sorting

@@ -4988,39 +4988,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         return self._apply(func, DataFrameApplyKernel, *args, **kwargs)
 
-    def applymap(
-        self,
-        func: Callable[[Any], Any],
-        na_action: str | None = None,
-        **kwargs,
-    ) -> DataFrame:
-        """
-        Apply a function to a Dataframe elementwise.
-
-        This method applies a function that accepts and returns a scalar
-        to every element of a DataFrame.
-
-        Parameters
-        ----------
-        func : callable
-            Python function, returns a single value from a single value.
-        na_action : {None, 'ignore'}, default None
-            If 'ignore', propagate NaN values, without passing them to func.
-
-        Returns
-        -------
-        DataFrame
-            Transformed DataFrame.
-        """
-        # Do not remove until pandas 3.0 support is added.
-        assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
-        warnings.warn(
-            "DataFrame.applymap has been deprecated. Use DataFrame.map "
-            "instead.",
-            FutureWarning,
-        )
-        return self.map(func=func, na_action=na_action, **kwargs)
-
     def map(
         self,
         func: Callable[[Any], Any],
@@ -5048,7 +5015,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         if kwargs:
             raise NotImplementedError(
-                "DataFrame.applymap does not yet support **kwargs."
+                "DataFrame.map does not yet support **kwargs."
             )
 
         if na_action not in {"ignore", None}:
@@ -6544,33 +6511,17 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     def _reduce(
         self,
         op: str,
-        axis=None,
+        axis: Axis | None = 0,
         numeric_only: bool = False,
         **kwargs,
     ) -> ScalarLike:
         source = self
 
         if axis is None:
-            assert PANDAS_LT_300, "Replace if/else with just axis=2"
-            # TODO(pandas3.0): Remove if/else for just axis = 2
-            if op in {"sum", "product", "std", "var"}:
-                # pandas only raises FutureWarning for these ops
-                # though it applies for all reductions
-                warnings.warn(
-                    f"In a future version, {type(self).__name__}"
-                    f".{op}(axis=None) will return a scalar {op} over "
-                    "the entire DataFrame. To retain the old behavior, "
-                    f"use '{type(self).__name__}.{op}(axis=0)' or "
-                    f"just '{type(self)}.{op}()'",
-                    FutureWarning,
-                )
-                axis = 0
-            else:
-                axis = 2
-        elif axis is no_default:
-            axis = 0
+            # Both axis
+            reduction_axis = 2
         else:
-            axis = source._get_axis_from_axis_arg(axis)
+            reduction_axis = source._get_axis_from_axis_arg(axis)
 
         if numeric_only:
             numeric_cols = (
@@ -6582,14 +6533,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if source.empty:
                 res = Series(
                     index=self._data.to_pandas_index[:0]
-                    if axis == 0
+                    if reduction_axis == 0
                     else source.index,
                     dtype="float64",
                 )
                 res._attrs = self._attrs
                 return res
         if (
-            axis == 2
+            reduction_axis == 2
             and op in {"kurtosis", "skew"}
             and self._num_rows < 4
             and self._num_columns > 1
@@ -6597,7 +6548,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             # Total number of elements may satisfy the min number of values
             # to compute skew/kurtosis
             return getattr(concat_columns(source._columns), op)(**kwargs)
-        elif axis == 1:
+        elif reduction_axis == 1:
             return source._apply_cupy_method_axis_1(op, **kwargs)
         else:
             axis_0_results = []
@@ -6617,7 +6568,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                         ) from err
                     else:
                         raise
-            if axis == 2:
+            if reduction_axis == 2:
                 return getattr(
                     as_column(axis_0_results, nan_as_null=False), op
                 )(**kwargs)
@@ -6843,7 +6794,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     @_performance_tracking
     def all(
         self,
-        axis: Axis = 0,
+        axis: Axis | None = 0,
         bool_only: bool = False,
         skipna: bool = True,
         **kwargs,
@@ -7951,88 +7902,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         3     5  44
         """
         return super()._explode(column, ignore_index)
-
-    def pct_change(
-        self,
-        periods=1,
-        fill_method=no_default,
-        limit=no_default,
-        freq=None,
-        **kwargs,
-    ):
-        """
-        Calculates the percent change between sequential elements
-        in the DataFrame.
-
-        Parameters
-        ----------
-        periods : int, default 1
-            Periods to shift for forming percent change.
-        fill_method : str, default 'ffill'
-            How to handle NAs before computing percent changes.
-
-            .. deprecated:: 24.04
-                All options of `fill_method` are deprecated
-                except `fill_method=None`.
-        limit : int, optional
-            The number of consecutive NAs to fill before stopping.
-            Not yet implemented.
-
-            .. deprecated:: 24.04
-                `limit` is deprecated.
-        freq : str, optional
-            Increment to use from time series API.
-            Not yet implemented.
-        **kwargs
-            Additional keyword arguments are passed into
-            `DataFrame.shift`.
-
-        Returns
-        -------
-        DataFrame
-        """
-        if limit is not no_default:
-            raise NotImplementedError("limit parameter not supported yet.")
-        if freq is not None:
-            raise NotImplementedError("freq parameter not supported yet.")
-        elif fill_method not in {
-            no_default,
-            None,
-            "ffill",
-            "pad",
-            "bfill",
-            "backfill",
-        }:
-            raise ValueError(
-                "fill_method must be one of None, 'ffill', 'pad', "
-                "'bfill', or 'backfill'."
-            )
-
-        if fill_method not in (no_default, None) or limit is not no_default:
-            # Do not remove until pandas 3.0 support is added.
-            assert PANDAS_LT_300, (
-                "Need to drop after pandas-3.0 support is added."
-            )
-            warnings.warn(
-                "The 'fill_method' and 'limit' keywords in "
-                f"{type(self).__name__}.pct_change are deprecated and will be "
-                "removed in a future version. Either fill in any non-leading "
-                "NA values prior to calling pct_change or specify "
-                "'fill_method=None' to not fill NA values.",
-                FutureWarning,
-            )
-        if fill_method is no_default:
-            fill_method = "ffill"
-        if limit is no_default:
-            limit = None
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            data = self.fillna(method=fill_method, limit=limit)
-
-        return data.diff(periods=periods) / data.shift(
-            periods=periods, freq=freq, **kwargs
-        )
 
     def nunique(self, axis=0, dropna: bool = True) -> Series:
         """
