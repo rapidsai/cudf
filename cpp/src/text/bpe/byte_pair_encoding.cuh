@@ -16,6 +16,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/static_map.cuh>
 #include <cuda/std/iterator>
