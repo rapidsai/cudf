@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -27,11 +27,13 @@ namespace dictionary {
 
  * The output column has a child indices column that is of integer type and with
  * the same size as the input column.
+ * The indices column will be of type `indices_type`.
+ * The result is undefined if the `indices_type` is not large enough for the indices values.
  *
  * The null mask and null count are copied from the input column to the output column.
  *
- * @throw cudf::logic_error if indices type is not a signed integer type
- * @throw cudf::logic_error if the column to encode is already a DICTIONARY type
+ * @throw std::invalid_argument if indices type is not a signed integer type
+ * @throw std::invalid_argument if the column to encode is already a DICTIONARY type
  *
  * @code{.pseudo}
  * c = [429, 111, 213, 111, 213, 429, 213]
