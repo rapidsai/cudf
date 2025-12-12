@@ -48,7 +48,7 @@ class fixed_pinned_pool_memory_resource : public rmm::mr::device_memory_resource
     CUDF_LOG_INFO("Pinned pool size = %zu", pool_size_);
 
     // Allocate full size from the pinned pool to figure out the beginning and end address
-    auto stream{cudf::detail::global_cuda_stream_pool().get_stream().value()};
+    auto stream{cudf::detail::global_cuda_stream_pool().get_stream()};
     pool_begin_ = pool_->allocate(stream, pool_size_);
     pool_end_   = static_cast<void*>(static_cast<uint8_t*>(pool_begin_) + pool_size_);
     pool_->deallocate(stream, pool_begin_, pool_size_);
