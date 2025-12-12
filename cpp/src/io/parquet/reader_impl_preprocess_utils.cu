@@ -9,6 +9,7 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -206,11 +207,11 @@ void generate_depth_remappings(
         page_data[chunk] = rmm::device_buffer(
           cudf::util::round_up_safe(read_buffer->size(), cudf::io::detail::BUFFER_PADDING_MULTIPLE),
           stream);
-        CUDF_CUDA_TRY(cudaMemcpyAsync(page_data[chunk].data(),
-                                      read_buffer->data(),
-                                      read_buffer->size(),
-                                      cudaMemcpyDefault,
-                                      stream));
+        CUDF_CUDA_TRY(cudf::detail::memcpy_async(page_data[chunk].data(),
+                                                 read_buffer->data(),
+                                                 read_buffer->size(),
+                                                 cudaMemcpyDefault,
+                                                 stream));
       }
       auto d_compdata = static_cast<uint8_t const*>(page_data[chunk].data());
       do {
