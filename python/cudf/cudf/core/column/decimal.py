@@ -49,7 +49,6 @@ if TYPE_CHECKING:
         DtypeObj,
         ScalarLike,
     )
-    from cudf.core.buffer import Buffer
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.string import StringColumn
 
@@ -77,26 +76,16 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
     def __init__(
         self,
-        data: Buffer,
-        size: int,
+        plc_column: plc.Column,
         dtype: DecimalDtype,
-        mask: Buffer | None,
-        offset: int,
-        null_count: int,
-        children: tuple,
-    ):
-        if not isinstance(size, int):
-            raise ValueError("Must specify an integer size")
+        exposed: bool,
+    ) -> None:
         if not isinstance(dtype, DecimalDtype):
             raise ValueError(f"{dtype=} must be a DecimalDtype instance")
         super().__init__(
-            data=data,
-            size=size,
+            plc_column=plc_column,
             dtype=dtype,
-            mask=mask,
-            offset=offset,
-            null_count=null_count,
-            children=children,
+            exposed=exposed,
         )
 
     @property
@@ -255,6 +244,12 @@ class DecimalBaseColumn(NumericalBaseColumn):
                     other = other.astype(self.dtype)
             other_cudf_dtype = other.dtype
         elif isinstance(other, (int, Decimal)):
+            if cudf.get_option("mode.pandas_compatible") and not isinstance(
+                self.dtype, DecimalDtype
+            ):
+                raise NotImplementedError(
+                    "binary operations with arbitrary decimal types are not supported in pandas compatibility mode"
+                )
             other_cudf_dtype = self.dtype._from_decimal(Decimal(other))  # type: ignore[union-attr]
         elif isinstance(other, float):
             return self._binaryop(as_column(other, length=len(self)), op)
@@ -376,26 +371,20 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
 
 class Decimal32Column(DecimalBaseColumn):
+    _VALID_PLC_TYPES = {plc.TypeId.DECIMAL32}
+
     def __init__(
         self,
-        data: Buffer,
-        size: int,
+        plc_column: plc.Column,
         dtype: Decimal32Dtype,
-        mask: Buffer | None,
-        offset: int,
-        null_count: int,
-        children: tuple,
-    ):
+        exposed: bool,
+    ) -> None:
         if not isinstance(dtype, Decimal32Dtype):
             raise ValueError(f"{dtype=} must be a Decimal32Dtype instance")
         super().__init__(
-            data=data,
-            size=size,
+            plc_column=plc_column,
             dtype=dtype,
-            mask=mask,
-            offset=offset,
-            null_count=null_count,
-            children=children,
+            exposed=exposed,
         )
 
     @classmethod
@@ -431,7 +420,7 @@ class Decimal32Column(DecimalBaseColumn):
         )
         return pa.Array.from_buffers(
             type=self.dtype.to_arrow(),  # type: ignore[union-attr]
-            offset=self._offset,
+            offset=self.offset,
             length=self.size,
             # PyArrow stubs are too strict - from_buffers should accept None for missing buffers
             buffers=[mask_buf, data_buf],  # type: ignore[list-item]
@@ -446,16 +435,14 @@ class Decimal32Column(DecimalBaseColumn):
 
 
 class Decimal128Column(DecimalBaseColumn):
+    _VALID_PLC_TYPES = {plc.TypeId.DECIMAL128}
+
     def __init__(
         self,
-        data: Buffer,
-        size: int,
+        plc_column: plc.Column,
         dtype: Decimal128Dtype,
-        mask: Buffer | None,
-        offset: int,
-        null_count: int,
-        children: tuple,
-    ):
+        exposed: bool,
+    ) -> None:
         if (
             not cudf.get_option("mode.pandas_compatible")
             and not isinstance(dtype, Decimal128Dtype)
@@ -465,13 +452,9 @@ class Decimal128Column(DecimalBaseColumn):
         ):
             raise ValueError(f"{dtype=} must be a Decimal128Dtype instance")
         super().__init__(
-            data=data,
-            size=size,
+            plc_column=plc_column,
             dtype=dtype,
-            mask=mask,
-            offset=offset,
-            null_count=null_count,
-            children=children,
+            exposed=exposed,
         )
 
     @classmethod
@@ -498,26 +481,20 @@ class Decimal128Column(DecimalBaseColumn):
 
 
 class Decimal64Column(DecimalBaseColumn):
+    _VALID_PLC_TYPES = {plc.TypeId.DECIMAL64}
+
     def __init__(
         self,
-        data: Buffer,
-        size: int,
+        plc_column: plc.Column,
         dtype: Decimal64Dtype,
-        mask: Buffer | None,
-        offset: int,
-        null_count: int,
-        children: tuple,
-    ):
+        exposed: bool,
+    ) -> None:
         if not isinstance(dtype, Decimal64Dtype):
             raise ValueError(f"{dtype=} must be a Decimal64Dtype instance")
         super().__init__(
-            data=data,
-            size=size,
+            plc_column=plc_column,
             dtype=dtype,
-            mask=mask,
-            offset=offset,
-            null_count=null_count,
-            children=children,
+            exposed=exposed,
         )
 
     @classmethod
@@ -547,7 +524,7 @@ class Decimal64Column(DecimalBaseColumn):
         )
         return pa.Array.from_buffers(
             type=self.dtype.to_arrow(),  # type: ignore[union-attr]
-            offset=self._offset,
+            offset=self.offset,
             length=self.size,
             # PyArrow stubs are too strict - from_buffers should accept None for missing buffers
             buffers=[mask_buf, data_buf],  # type: ignore[list-item]

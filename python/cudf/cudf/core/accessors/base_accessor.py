@@ -81,11 +81,14 @@ class BaseAccessor(NotIterable):
                     idx.names = None
                     return idx
                 else:
-                    return self._parent._constructor_expanddim._from_data(
+                    df = self._parent._constructor_expanddim._from_data(
                         data=table,
                         index=self._parent.index,
                         attrs=self._parent.attrs,
                     )
+                    if len(table) == 0:
+                        df._data.rangeindex = True
+                    return df
             elif isinstance(self._parent, cudf.Series):
                 return cudf.Series._from_column(
                     new_col,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools
 import os
+import warnings
 from pickle import dumps
 from typing import TYPE_CHECKING
 
@@ -13,8 +14,9 @@ import llvmlite.binding as ll
 import numpy as np
 from cuda.bindings import runtime
 from numba import cuda, typeof
-from numba.core.datamodel import default_manager, models
+from numba.core.datamodel import models
 from numba.core.extending import register_model
+from numba.cuda.descriptor import cuda_target
 from numba.np import numpy_support
 from numba.types import CPointer, Record, Tuple, int64, void
 
@@ -48,6 +50,7 @@ if TYPE_CHECKING:
     from cudf.core.buffer.buffer import Buffer
     from cudf.core.indexed_frame import IndexedFrame
 
+
 # Maximum size of a string column is 2 GiB
 _STRINGS_UDF_DEFAULT_HEAP_SIZE = os.environ.get("STRINGS_UDF_HEAP_SIZE", 2**31)
 _HEAP_SIZE = 0
@@ -74,6 +77,8 @@ _udf_code_cache: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 UDF_SHIM_FILE = os.path.join(
     os.path.dirname(strings_udf.__file__), "..", "core", "udf", "shim.fatbin"
 )
+
+DEPRECATED_SM_REGEX = "Architectures prior to '<compute/sm>_75' are deprecated"
 
 
 def _all_dtypes_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
@@ -238,9 +243,7 @@ def _get_input_args_from_frame(fr: IndexedFrame) -> list:
     offsets = []
     for col in _supported_cols_from_frame(fr).values():
         if col.dtype == CUDF_STRING_DTYPE:
-            data = column_to_string_view_array_init_heap(
-                col.to_pylibcudf(mode="read")
-            )
+            data = column_to_string_view_array_init_heap(col.plc_column)
         else:
             data = col.data
         if col.mask is not None:
@@ -265,16 +268,24 @@ def _return_arr_from_dtype(dtype, size):
 @functools.cache
 def _make_free_string_kernel():
     with nrt_enabled():
+        with warnings.catch_warnings():
+            warnings.simplefilter("default")
+            warnings.filterwarnings(
+                "ignore",
+                message=DEPRECATED_SM_REGEX,
+                category=UserWarning,
+                module=r"^numba\.cuda(\.|$)",
+            )
 
-        @cuda.jit(
-            void(CPointer(managed_udf_string), int64),
-            link=[UDF_SHIM_FILE],
-            extensions=[str_view_arg_handler],
-        )
-        def free_managed_udf_string_array(ary, size):
-            gid = cuda.grid(1)
-            if gid < size:
-                NRT_decref(ary[gid])
+            @cuda.jit(
+                void(CPointer(managed_udf_string), int64),
+                link=[UDF_SHIM_FILE],
+                extensions=[str_view_arg_handler],
+            )
+            def free_managed_udf_string_array(ary, size):
+                gid = cuda.grid(1)
+                if gid < size:
+                    NRT_decref(ary[gid])
 
     return free_managed_udf_string_array
 
@@ -293,7 +304,7 @@ def _get_extensionty_size(ty):
     Return the size of an extension type in bytes
     """
     target_data = ll.create_target_data(_nvvm_data_layout)
-    llty = default_manager[ty].get_value_type()
+    llty = cuda_target.target_context.data_model_manager[ty].get_value_type()
     return llty.get_abi_size(target_data)
 
 

@@ -75,12 +75,12 @@ from cudf.utils.utils import _EQUALITY_OPS, _is_same_name
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, Iterable, MutableMapping
+    from types import NotImplementedType
 
     from cudf._typing import (
         Axis,
         DataFrameOrSeries,
         Dtype,
-        NotImplementedType,
         ScalarLike,
     )
     from cudf.core.dataframe import DataFrame
@@ -268,6 +268,10 @@ class _SeriesIlocIndexer(_FrameIndexer):
         self._frame._column[key] = value
 
 
+class _SeriesiAtIndexer(_SeriesIlocIndexer):
+    pass
+
+
 class _SeriesLocIndexer(_FrameIndexer):
     """
     Label-based selection
@@ -306,7 +310,6 @@ class _SeriesLocIndexer(_FrameIndexer):
             arg = self._loc_to_iloc(arg)
         except (TypeError, KeyError, IndexError, ValueError) as err:
             raise KeyError(arg) from err
-
         return self._frame.iloc[arg]
 
     @_performance_tracking
@@ -407,6 +410,10 @@ class _SeriesLocIndexer(_FrameIndexer):
                     )
                     raise KeyError(f"{missing} not in the index.")
                 return indices
+
+
+class _SeriesAtIndexer(_SeriesLocIndexer):
+    pass
 
 
 class Series(SingleColumnFrame, IndexedFrame):
@@ -511,7 +518,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         self,
         data=None,
         index=None,
-        dtype=None,
+        dtype: Dtype | None = None,
         name=None,
         copy=False,
         nan_as_null=no_default,
@@ -639,6 +646,20 @@ class Series(SingleColumnFrame, IndexedFrame):
     @_performance_tracking
     def __contains__(self, item) -> bool:
         return item in self.index
+
+    @property
+    def iat(self):
+        """
+        Alias for ``Series.iloc``; provided for compatibility with Pandas.
+        """
+        return _SeriesiAtIndexer(self)
+
+    @property
+    def at(self):
+        """
+        Alias for ``Series.loc``; provided for compatibility with Pandas.
+        """
+        return _SeriesAtIndexer(self)
 
     @classmethod
     @_performance_tracking
@@ -1291,18 +1312,28 @@ class Series(SingleColumnFrame, IndexedFrame):
         inputs.
         """
         if isinstance(spec, indexing_utils.MapIndexer):
-            return self._gather(spec.key, keep_index=True)
+            result = self._gather(spec.key, keep_index=True)
         elif isinstance(spec, indexing_utils.MaskIndexer):
-            return self._apply_boolean_mask(spec.key, keep_index=True)
+            result = self._apply_boolean_mask(spec.key, keep_index=True)
         elif isinstance(spec, indexing_utils.SliceIndexer):
-            return self._slice(spec.key)
+            result = self._slice(spec.key)
         elif isinstance(spec, indexing_utils.ScalarIndexer):
             return self._gather(
                 spec.key, keep_index=False
             )._column.element_indexing(0)
         elif isinstance(spec, indexing_utils.EmptyIndexer):
             return self._empty_like(keep_index=True)
-        assert_never(spec)
+        else:
+            assert_never(spec)
+
+        if isinstance(result.index, cudf.DatetimeIndex):
+            result.index._freq = (
+                result.index._get_slice_frequency(spec.key)
+                if isinstance(spec, indexing_utils.SliceIndexer)
+                else None
+            )
+
+        return result
 
     @_performance_tracking
     def __getitem__(self, arg):
@@ -1553,7 +1584,14 @@ class Series(SingleColumnFrame, IndexedFrame):
         if len(objs):
             col = col._with_type_metadata(objs[0].dtype)
 
-        return cls._from_column(col, name=name, index=result_index)
+        result = cls._from_column(col, name=name, index=result_index)
+        if cudf.get_option("mode.pandas_compatible"):
+            if isinstance(result.index, DatetimeIndex):
+                try:
+                    result.index._freq = result.index.inferred_freq
+                except NotImplementedError:
+                    result.index._freq = None
+        return result
 
     @property
     @_performance_tracking
@@ -1889,12 +1927,19 @@ class Series(SingleColumnFrame, IndexedFrame):
         bool_only: bool | None = None,
         skipna: bool = True,
         **kwargs,
-    ) -> bool:
+    ) -> bool | np.bool_:
         if bool_only not in (None, True):
             raise NotImplementedError(
                 "The bool_only parameter is not supported for Series."
             )
-        return super().all(axis, skipna, **kwargs)
+        result = super().all(axis, skipna, **kwargs)
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and isinstance(result, bool)
+            and not isinstance(self.dtype, pd.ArrowDtype)
+        ):
+            return np.bool_(result)
+        return result
 
     @_performance_tracking
     def any(
@@ -1903,12 +1948,19 @@ class Series(SingleColumnFrame, IndexedFrame):
         bool_only: bool | None = None,
         skipna: bool = True,
         **kwargs,
-    ) -> bool:
+    ) -> bool | np.bool_:
         if bool_only not in (None, True):
             raise NotImplementedError(
                 "The bool_only parameter is not supported for Series."
             )
-        return super().any(axis, skipna, **kwargs)
+        result = super().any(axis, skipna, **kwargs)
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and isinstance(result, bool)
+            and not isinstance(self.dtype, pd.ArrowDtype)
+        ):
+            return np.bool_(result)
+        return result
 
     @_performance_tracking
     def to_pandas(

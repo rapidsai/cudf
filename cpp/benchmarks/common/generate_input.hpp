@@ -675,6 +675,17 @@ std::unique_ptr<cudf::column> create_string_column(cudf::size_type num_rows,
                                                    int32_t hit_rate);
 
 /**
+ * @brief Generates an string column filled with ASCII characters only
+ *
+ * @param num_rows Number of rows in the output column
+ * @param profile Data profile for the output column
+ * @param seed Optional, seed for the pseudo-random engine
+ */
+std::unique_ptr<cudf::column> create_ascii_string_column(cudf::size_type num_rows,
+                                                         data_profile const& profile,
+                                                         unsigned seed = 1);
+
+/**
  * @brief Generate sequence columns starting with value 0 in first row and increasing by 1 in
  * subsequent rows.
  *

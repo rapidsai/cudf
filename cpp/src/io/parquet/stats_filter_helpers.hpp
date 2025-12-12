@@ -193,9 +193,9 @@ class stats_caster_base {
       return {std::move(d_chars), std::move(d_offsets), std::move(d_sizes)};
     }
 
-    std::unique_ptr<column> inline to_device(cudf::data_type dtype,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr)
+    [[nodiscard]] std::unique_ptr<column> inline to_device(cudf::data_type dtype,
+                                                           rmm::cuda_stream_view stream,
+                                                           rmm::device_async_resource_ref mr) const
     {
       if constexpr (std::is_same_v<T, string_view>) {
         auto [d_chars, d_offsets, _] = make_strings_children(val, chars, stream, mr);
@@ -255,7 +255,7 @@ class stats_columns_collector : public ast::detail::expression_transformer {
    *
    * @return Boolean vector indicating input columns that can participate in stats based filtering
    */
-  thrust::host_vector<bool> get_stats_columns_mask() &&;
+  std::pair<thrust::host_vector<bool>, bool> get_stats_columns_mask() &&;
 
  protected:
   std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
@@ -265,19 +265,22 @@ class stats_columns_collector : public ast::detail::expression_transformer {
 
  private:
   thrust::host_vector<bool> _columns_mask;
+  bool _has_is_null_operator = false;
 };
 
 /**
  * @brief Converts AST expression to StatsAST for comparing with column statistics
  *
  * This is used in row group filtering based on predicate.
- * statistics min value of a column is referenced by column_index*2
- * statistics max value of a column is referenced by column_index*2+1
+ * statistics min value of a column is referenced by column_index*3
+ * statistics max value of a column is referenced by column_index*3+1
+ * statistics is_null value of a column is referenced by column_index*3+2
  */
 class stats_expression_converter : public stats_columns_collector {
  public:
   stats_expression_converter(ast::expression const& expr,
                              size_type num_columns,
+                             bool has_is_null_operator,
                              rmm::cuda_stream_view stream);
 
   // Bring all overrides of `visit` from stats_columns_collector into scope
@@ -302,6 +305,7 @@ class stats_expression_converter : public stats_columns_collector {
 
  private:
   ast::tree _stats_expr;
+  cudf::size_type _stats_cols_per_column;
   std::unique_ptr<cudf::numeric_scalar<bool>> _always_true_scalar;
   std::unique_ptr<ast::literal> _always_true;
 };

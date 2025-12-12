@@ -9,6 +9,7 @@
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/row_operator/primitive_row_operators.cuh>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -164,7 +165,7 @@ class filtered_join {
   using storage_type =
     cuco::bucket_storage<key,
                          1,  /// fixing bucket size to be 1 i.e each thread handles one slot
-                         cuco::extent<cudf::size_type>,
+                         cuco::extent<std::size_t>,
                          rmm::mr::polymorphic_allocator<char>>;
 
   // Hasher for primitive row types
@@ -192,7 +193,7 @@ class filtered_join {
 
   // Empty sentinel key used to mark empty slots in the hash table
   static constexpr auto empty_sentinel_key = cuco::empty_key{
-    cuco::pair{std::numeric_limits<hash_value_type>::max(), lhs_index_type{JoinNoneValue}}};
+    cuco::pair{std::numeric_limits<hash_value_type>::max(), lhs_index_type{cudf::JoinNoMatch}}};
   build_properties _build_props;           ///< Properties of the build table
   cudf::table_view _build;                 ///< input table to build the hash map
   cudf::null_equality const _nulls_equal;  ///< whether to consider nulls as equal

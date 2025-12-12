@@ -36,19 +36,22 @@ class Gather(Expr):
             child.evaluate(df, context=context) for child in self.children
         )
         n = values.size
-        lo, hi = plc.reduce.minmax(indices.obj)
-        if hi.to_py() >= n or lo.to_py() < -n:  # type: ignore[operator]
+        lo, hi = plc.reduce.minmax(indices.obj, stream=df.stream)
+        if hi.to_py(stream=df.stream) >= n or lo.to_py(stream=df.stream) < -n:  # type: ignore[operator]
             raise ValueError("gather indices are out of bounds")
         if indices.null_count:
             bounds_policy = plc.copying.OutOfBoundsPolicy.NULLIFY
             obj = plc.replace.replace_nulls(
                 indices.obj,
-                plc.Scalar.from_py(n, dtype=indices.obj.type()),
+                plc.Scalar.from_py(n, dtype=indices.obj.type(), stream=df.stream),
+                stream=df.stream,
             )
         else:
             bounds_policy = plc.copying.OutOfBoundsPolicy.DONT_CHECK
             obj = indices.obj
-        table = plc.copying.gather(plc.Table([values.obj]), obj, bounds_policy)
+        table = plc.copying.gather(
+            plc.Table([values.obj]), obj, bounds_policy, stream=df.stream
+        )
         return Column(table.columns()[0], dtype=self.dtype)
 
 
@@ -67,6 +70,6 @@ class Filter(Expr):
         """Evaluate this expression given a dataframe for context."""
         values, mask = (child.evaluate(df, context=context) for child in self.children)
         table = plc.stream_compaction.apply_boolean_mask(
-            plc.Table([values.obj]), mask.obj
+            plc.Table([values.obj]), mask.obj, stream=df.stream
         )
         return Column(table.columns()[0], dtype=self.dtype).sorted_like(values)

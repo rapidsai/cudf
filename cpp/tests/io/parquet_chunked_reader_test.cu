@@ -1220,6 +1220,9 @@ struct bool_gen {
 
 TEST_F(ParquetChunkedReaderInputLimitTest, List)
 {
+  // this test runs over 1 hour when racecheck is used
+  if (getenv("LIBCUDF_RACECHECK_ENABLED")) { GTEST_SKIP(); }
+
   auto base_path      = temp_env->get_temp_filepath("list");
   auto test_filenames = input_limit_get_test_names(base_path);
 
@@ -1368,6 +1371,9 @@ struct char_values {
 
 TEST_F(ParquetChunkedReaderInputLimitTest, Mixed)
 {
+  // this test runs over 1 hour when racecheck is used
+  if (getenv("LIBCUDF_RACECHECK_ENABLED")) { GTEST_SKIP(); }
+
   auto base_path      = temp_env->get_temp_filepath("mixed_types");
   auto test_filenames = input_limit_get_test_names(base_path);
 
@@ -2007,6 +2013,9 @@ TEST_F(ParquetReaderTest, BooleanList)
 
 TEST_F(ParquetReaderTest, ManyLargeLists)
 {
+  // this test runs over 3 hours when racecheck is used
+  if (getenv("LIBCUDF_RACECHECK_ENABLED")) { GTEST_SKIP(); }
+
   auto const stream = cudf::get_default_stream();
 
   // Generate a large list<bool> column
@@ -2063,7 +2072,7 @@ TEST_F(ParquetReaderTest, ManyLargeLists)
     auto const reader = cudf::io::chunked_parquet_reader(0, 0, in_opts);
     auto num_chunks   = 0;
     while (reader.has_next()) {
-      EXPECT_NO_THROW(std::ignore = reader.read_chunk());
+      ASSERT_NO_THROW(std::ignore = reader.read_chunk());
       num_chunks++;
     }
     // We will end up with exactly two chunks as the total number of leaf rows is just above 2B

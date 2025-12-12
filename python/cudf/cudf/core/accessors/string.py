@@ -15,7 +15,11 @@ import pylibcudf as plc
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.api.types import is_integer, is_scalar
+from cudf.api.types import (
+    is_integer,
+    is_scalar,
+    is_string_dtype,
+)
 from cudf.core.accessors.base_accessor import BaseAccessor
 from cudf.core.accessors.lists import ListMethods
 from cudf.core.column.column import ColumnBase, as_column, column_empty
@@ -88,7 +92,17 @@ class StringMethods(BaseAccessor):
             if isinstance(parent.dtype, ListDtype)
             else parent.dtype
         )
-        if value_type != CUDF_STRING_DTYPE:
+        # Convert categorical with string categories to string dtype
+        if isinstance(value_type, cudf.CategoricalDtype) and is_string_dtype(
+            value_type.categories.dtype
+        ):
+            parent = parent.astype(value_type.categories.dtype)
+            value_type = parent.dtype
+            is_valid_string = True
+        else:
+            # Validate dtype is suitable for string operations
+            is_valid_string = is_string_dtype(value_type)
+        if not is_valid_string:
             raise AttributeError(
                 "Can only use .str accessor with string values"
             )
@@ -305,6 +319,8 @@ class StringMethods(BaseAccessor):
 
         if others is None:
             data = self._column.join_strings(sep, na_rep)
+            if len(data) == 0:
+                return ""
         else:
             parent_index = (
                 self._parent.index
@@ -535,7 +551,9 @@ class StringMethods(BaseAccessor):
                 f"found {type(sep)}"
             )
 
-        return self._return_or_inplace(data)
+        return self._return_or_inplace(
+            data._with_type_metadata(self._column.dtype)
+        )
 
     def extract(
         self, pat: str, flags: int = 0, expand: bool = True
@@ -597,6 +615,8 @@ class StringMethods(BaseAccessor):
             The `flags` parameter currently only supports re.DOTALL and
             re.MULTILINE.
         """
+        if not isinstance(expand, bool):
+            raise ValueError("expand parameter must be True or False")
         if not _is_supported_regex_flags(flags):
             raise NotImplementedError(
                 "unsupported value for `flags` parameter"
@@ -605,6 +625,8 @@ class StringMethods(BaseAccessor):
         data = self._column.extract(pat, flags)
         if len(data) == 1 and expand is False:
             _, data = data.popitem()  # type: ignore[assignment]
+        elif expand is False and len(data) > 1:
+            expand = True
         return self._return_or_inplace(data, expand=expand)
 
     def contains(
@@ -990,7 +1012,7 @@ class StringMethods(BaseAccessor):
             raise TypeError(f"repl must be a str, not {type(repl).__name__}.")
 
         # Pandas forces non-regex replace when pat is a single-character
-        if regex is True and len(pat) > 1:
+        if regex is True and len(pat) > 0:
             result = self._column.replace_re(
                 pat,  # type: ignore[arg-type]
                 pa_repl,
@@ -2546,12 +2568,16 @@ class StringMethods(BaseAccessor):
 
         if pat is None:
             pat = ""
+            regex = False
 
         if regex and isinstance(pat, re.Pattern):
             pat = pat.pattern
 
-        if len(str(pat)) <= 1:
-            regex = False
+        if regex is None:
+            if len(str(pat)) <= 1:
+                regex = False
+            else:
+                regex = True
 
         result_table: StringColumn | dict[int, StringColumn]
         if expand:
@@ -3410,6 +3436,8 @@ class StringMethods(BaseAccessor):
         if expand_tabs is True:
             raise NotImplementedError("`expand_tabs=True` is not supported")
         elif expand_tabs is None:
+            if cudf.get_option("mode.pandas_compatible"):
+                raise NotImplementedError("not implemented for pandas mode")
             warnings.warn(
                 "wrap current implementation defaults to `expand_tabs`=False"
             )
@@ -4247,6 +4275,10 @@ class StringMethods(BaseAccessor):
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
         if isinstance(pat, re.Pattern):
+            if flags:
+                raise ValueError(
+                    "cannot process flags argument with a compiled pattern"
+                )
             flags = pat.flags & ~re.U
             pat = pat.pattern
         if not _is_supported_regex_flags(flags):

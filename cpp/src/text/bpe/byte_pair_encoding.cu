@@ -14,7 +14,6 @@
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.hpp>
@@ -27,6 +26,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <cuda/std/iterator>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
@@ -203,8 +203,7 @@ CUDF_KERNEL void bpe_parallel_fn(cudf::column_device_view const d_strings,
     }
   }
   // compute the min rank across the block
-  auto const reduce_rank =
-    block_reduce(temp_storage).Reduce(min_rank, cudf::detail::minimum{}, num_valid);
+  auto const reduce_rank = block_reduce(temp_storage).Reduce(min_rank, cuda::minimum{}, num_valid);
   if (lane_idx == 0) { block_min_rank = reduce_rank; }
   __syncthreads();
 
@@ -270,7 +269,7 @@ CUDF_KERNEL void bpe_parallel_fn(cudf::column_device_view const d_strings,
 
     // re-compute the minimum rank across the block (since new pairs are created above)
     auto const reduce_rank =
-      block_reduce(temp_storage).Reduce(min_rank, cudf::detail::minimum{}, num_valid);
+      block_reduce(temp_storage).Reduce(min_rank, cuda::minimum{}, num_valid);
     if (lane_idx == 0) { block_min_rank = reduce_rank; }
     __syncthreads();
   }  // if no min ranks are found we are done, otherwise start again

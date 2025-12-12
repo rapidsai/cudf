@@ -104,6 +104,11 @@ def test_multiindex_from_dataframe():
     assert_eq(pmi, gmi)
 
 
+def test_multindex_from_frame_invalid():
+    with pytest.raises(TypeError):
+        cudf.MultiIndex.from_frame("invalid_input")
+
+
 @pytest.mark.parametrize(
     "arrays",
     [

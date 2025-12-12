@@ -118,6 +118,7 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
                                          {},
                                          _use_pandas_metadata,
                                          _strings_to_categorical,
+                                         options.is_enabled_ignore_missing_columns(),
                                          _options.timestamp_type.id());
 
     _is_filter_columns_selected  = true;
@@ -130,6 +131,7 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
                                                  _filter_columns_names,
                                                  _use_pandas_metadata,
                                                  _strings_to_categorical,
+                                                 options.is_enabled_ignore_missing_columns(),
                                                  _options.timestamp_type.id());
 
     _is_payload_columns_selected = true;
@@ -164,6 +166,22 @@ size_type hybrid_scan_reader_impl::total_rows_in_row_groups(
   cudf::host_span<std::vector<size_type> const> row_group_indices) const
 {
   return _extended_metadata->total_rows_in_row_groups(row_group_indices);
+}
+
+std::vector<std::vector<cudf::size_type>>
+hybrid_scan_reader_impl::filter_row_groups_with_byte_range(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  parquet_reader_options const& options) const
+{
+  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+
+  if (options.get_skip_bytes() == 0 and not options.get_num_bytes().has_value()) {
+    return std::vector<std::vector<cudf::size_type>>{row_group_indices.begin(),
+                                                     row_group_indices.end()};
+  }
+
+  return _extended_metadata->filter_row_groups_with_byte_range(
+    row_group_indices, options.get_skip_bytes(), options.get_num_bytes());
 }
 
 std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_with_stats(
@@ -444,7 +462,7 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
     (mask_data_pages == use_data_page_mask::YES)
       ? _extended_metadata->compute_data_page_mask(
           row_mask, row_group_indices, _input_columns, _rows_processed_so_far, stream)
-      : std::vector<std::vector<bool>>{};
+      : thrust::host_vector<bool>{};
 
   prepare_data(
     read_mode::READ_ALL, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
@@ -474,7 +492,7 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
     (mask_data_pages == use_data_page_mask::YES)
       ? _extended_metadata->compute_data_page_mask(
           row_mask, row_group_indices, _input_columns, _rows_processed_so_far, stream)
-      : std::vector<std::vector<bool>>{};
+      : thrust::host_vector<bool>{};
 
   prepare_data(
     read_mode::READ_ALL, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
@@ -513,7 +531,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
     (mask_data_pages == use_data_page_mask::YES)
       ? _extended_metadata->compute_data_page_mask(
           row_mask, row_group_indices, _input_columns, _rows_processed_so_far, _stream)
-      : std::vector<std::vector<bool>>{};
+      : thrust::host_vector<bool>{};
 
   prepare_data(
     read_mode::CHUNKED_READ, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
@@ -564,7 +582,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
     (mask_data_pages == use_data_page_mask::YES)
       ? _extended_metadata->compute_data_page_mask(
           row_mask, row_group_indices, _input_columns, _rows_processed_so_far, _stream)
-      : std::vector<std::vector<bool>>{};
+      : thrust::host_vector<bool>{};
 
   prepare_data(
     read_mode::CHUNKED_READ, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
@@ -645,7 +663,7 @@ void hybrid_scan_reader_impl::prepare_data(
   read_mode mode,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   std::vector<rmm::device_buffer>&& column_chunk_buffers,
-  cudf::host_span<std::vector<bool> const> data_page_mask)
+  cudf::host_span<bool const> data_page_mask)
 {
   // if we have not preprocessed at the whole-file level, do that now
   if (not _file_preprocessed) {
@@ -857,8 +875,7 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
   }
 }
 
-void hybrid_scan_reader_impl::set_pass_page_mask(
-  cudf::host_span<std::vector<bool> const> data_page_mask)
+void hybrid_scan_reader_impl::set_pass_page_mask(cudf::host_span<bool const> data_page_mask)
 {
   auto const& pass   = _pass_itm_data;
   auto const& chunks = pass->chunks;
@@ -872,13 +889,11 @@ void hybrid_scan_reader_impl::set_pass_page_mask(
     return;
   }
 
+  size_t num_inserted_data_pages = 0;
   std::for_each(
     thrust::counting_iterator<size_t>(0),
     thrust::counting_iterator(_input_columns.size()),
     [&](auto col_idx) {
-      auto const& col_page_mask      = data_page_mask[col_idx];
-      size_t num_inserted_data_pages = 0;
-
       for (size_t chunk_idx = col_idx; chunk_idx < chunks.size(); chunk_idx += num_columns) {
         // Insert a true value for each dictionary page
         if (chunks[chunk_idx].num_dict_pages > 0) { _pass_page_mask.push_back(true); }
@@ -888,21 +903,17 @@ void hybrid_scan_reader_impl::set_pass_page_mask(
 
         // Make sure we have enough page mask for this column chunk
         CUDF_EXPECTS(
-          col_page_mask.size() >= num_inserted_data_pages + num_data_pages_this_col_chunk,
+          data_page_mask.size() >= num_inserted_data_pages + num_data_pages_this_col_chunk,
           "Encountered invalid data page mask size");
 
         // Insert page mask for this column chunk
         _pass_page_mask.insert(
           _pass_page_mask.end(),
-          col_page_mask.begin() + num_inserted_data_pages,
-          col_page_mask.begin() + num_inserted_data_pages + num_data_pages_this_col_chunk);
-
+          data_page_mask.begin() + num_inserted_data_pages,
+          data_page_mask.begin() + num_inserted_data_pages + num_data_pages_this_col_chunk);
         // Update the number of inserted data pages
         num_inserted_data_pages += num_data_pages_this_col_chunk;
       }
-      // Make sure we inserted exactly the number of data pages for this column
-      CUDF_EXPECTS(num_inserted_data_pages == col_page_mask.size(),
-                   "Encountered mismatch in number of data pages and page mask size");
     });
 
   // Make sure we inserted exactly the number of pages for this pass

@@ -10,7 +10,6 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/strings/detail/split_utils.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/split/split.hpp>
@@ -167,7 +166,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& input,
       return static_cast<size_type>(d_offsets[idx + 1] - d_offsets[idx]);
     }),
     0,
-    cudf::detail::maximum{});
+    cuda::maximum{});
 
   // build strings columns for each token position
   for (size_type col = 0; col < columns_count; ++col) {

@@ -117,6 +117,7 @@ from cudf.testing import assert_eq
                 "OGbssOJLUI",
             ]
         ),
+        lambda: cudf.date_range("2000-01-01", periods=12, freq="10s"),
     ],
     ids=itertools.count(),
 )

@@ -37,7 +37,7 @@ cdef class OwnerMaskWithCAI:
     cdef create(column_view cv, object owner)
 
 
-cdef gpumemoryview _copy_array_to_device(object buf)
+cdef gpumemoryview _copy_array_to_device(object buf, Stream stream=*)
 
 
 cdef class Column:
@@ -80,6 +80,7 @@ cdef class Column:
         tuple shape,
         DataType dtype,
         Column base=*,
+        Stream stream=*,
     )
 
     cpdef Scalar to_scalar(self, Stream stream=*, DeviceMemoryResource mr=*)

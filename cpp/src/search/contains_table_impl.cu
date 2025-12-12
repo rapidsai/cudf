@@ -7,7 +7,6 @@
 
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/row_operator/hashing.cuh>
-#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <cuco/static_set.cuh>

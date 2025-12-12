@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import importlib.util
+
 import pytest
 
 import cudf_polars.callback
@@ -36,6 +38,14 @@ def pytest_addoption(parser):
     )
 
     parser.addoption(
+        "--runtime",
+        action="store",
+        default="tasks",
+        choices=("tasks", "rapidsmpf"),
+        help="Runtime to use for the 'streaming' executor.",
+    )
+
+    parser.addoption(
         "--cluster",
         action="store",
         default="single",
@@ -64,7 +74,17 @@ def pytest_configure(config):
     ):
         raise pytest.UsageError("Distributed cluster requires --executor='streaming'")
 
+    if config.getoption("--runtime") == "rapidsmpf":
+        if config.getoption("--executor") == "in-memory":
+            raise pytest.UsageError("Rapidsmpf runtime requires --executor='streaming'")
+
+        if importlib.util.find_spec("rapidsmpf") is None:
+            raise pytest.UsageError(
+                "Rapidsmpf runtime requires the 'rapidsmpf' package"
+            )
+
     cudf_polars.testing.asserts.DEFAULT_EXECUTOR = config.getoption("--executor")
+    cudf_polars.testing.asserts.DEFAULT_RUNTIME = config.getoption("--runtime")
     cudf_polars.testing.asserts.DEFAULT_CLUSTER = config.getoption("--cluster")
     cudf_polars.testing.asserts.DEFAULT_BLOCKSIZE_MODE = config.getoption(
         "--blocksize-mode"

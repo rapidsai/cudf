@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -150,6 +150,17 @@ std::unique_ptr<table> stable_sort(table_view const& values,
                                    std::vector<null_order> const& null_precedence,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr);
+
+/**
+ * @copydoc cudf::segmented_top_k
+ *
+ */
+std::unique_ptr<column> segmented_top_k(column_view const& col,
+                                        column_view const& segment_offsets,
+                                        size_type k,
+                                        order topk_order,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf

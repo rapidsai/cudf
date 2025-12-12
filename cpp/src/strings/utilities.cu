@@ -98,12 +98,16 @@ thread_safe_per_context_cache<special_case_mapping> d_special_case_mappings;
 /**
  * @copydoc cudf::strings::detail::get_character_flags_table
  */
-character_flags_table_type const* get_character_flags_table()
+character_flags_table_type const* get_character_flags_table(rmm::cuda_stream_view stream)
 {
   return d_character_codepoint_flags.find_or_initialize([&](void) {
     character_flags_table_type* table = nullptr;
-    CUDF_CUDA_TRY(cudaMemcpyToSymbol(
-      character_codepoint_flags, g_character_codepoint_flags, sizeof(g_character_codepoint_flags)));
+    CUDF_CUDA_TRY(cudaMemcpyToSymbolAsync(character_codepoint_flags,
+                                          g_character_codepoint_flags,
+                                          sizeof(g_character_codepoint_flags),
+                                          0,
+                                          cudaMemcpyHostToDevice,
+                                          stream.value()));
     CUDF_CUDA_TRY(cudaGetSymbolAddress((void**)&table, character_codepoint_flags));
     return table;
   });
@@ -112,12 +116,16 @@ character_flags_table_type const* get_character_flags_table()
 /**
  * @copydoc cudf::strings::detail::get_character_cases_table
  */
-character_cases_table_type const* get_character_cases_table()
+character_cases_table_type const* get_character_cases_table(rmm::cuda_stream_view stream)
 {
   return d_character_cases_table.find_or_initialize([&](void) {
     character_cases_table_type* table = nullptr;
-    CUDF_CUDA_TRY(cudaMemcpyToSymbol(
-      character_cases_table, g_character_cases_table, sizeof(g_character_cases_table)));
+    CUDF_CUDA_TRY(cudaMemcpyToSymbolAsync(character_cases_table,
+                                          g_character_cases_table,
+                                          sizeof(g_character_cases_table),
+                                          0,
+                                          cudaMemcpyHostToDevice,
+                                          stream.value()));
     CUDF_CUDA_TRY(cudaGetSymbolAddress((void**)&table, character_cases_table));
     return table;
   });
@@ -126,12 +134,16 @@ character_cases_table_type const* get_character_cases_table()
 /**
  * @copydoc cudf::strings::detail::get_special_case_mapping_table
  */
-special_case_mapping const* get_special_case_mapping_table()
+special_case_mapping const* get_special_case_mapping_table(rmm::cuda_stream_view stream)
 {
   return d_special_case_mappings.find_or_initialize([&](void) {
     special_case_mapping* table = nullptr;
-    CUDF_CUDA_TRY(cudaMemcpyToSymbol(
-      character_special_case_mappings, g_special_case_mappings, sizeof(g_special_case_mappings)));
+    CUDF_CUDA_TRY(cudaMemcpyToSymbolAsync(character_special_case_mappings,
+                                          g_special_case_mappings,
+                                          sizeof(g_special_case_mappings),
+                                          0,
+                                          cudaMemcpyHostToDevice,
+                                          stream.value()));
     CUDF_CUDA_TRY(cudaGetSymbolAddress((void**)&table, character_special_case_mappings));
     return table;
   });

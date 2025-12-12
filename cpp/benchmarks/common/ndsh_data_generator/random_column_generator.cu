@@ -16,6 +16,7 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/random.h>
 #include <thrust/transform.h>
@@ -34,10 +35,10 @@ struct random_string_generator {
 
   CUDF_HOST_DEVICE random_string_generator(char* c) : chars(c), char_dist(44, 122) {}
 
-  __device__ void operator()(thrust::tuple<int64_t, int64_t> str_begin_end)
+  __device__ void operator()(cuda::std::tuple<int64_t, int64_t> str_begin_end)
   {
-    auto begin = thrust::get<0>(str_begin_end);
-    auto end   = thrust::get<1>(str_begin_end);
+    auto begin = cuda::std::get<0>(str_begin_end);
+    auto end   = cuda::std::get<1>(str_begin_end);
     engine.discard(begin);
     for (auto i = begin; i < end; ++i) {
       auto ch = char_dist(engine);
@@ -94,7 +95,7 @@ std::unique_ptr<cudf::column> generate_random_string_column(cudf::size_type lowe
   // We generate the strings in parallel into the `chars` vector using the
   // offsets vector generated above.
   thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_zip_iterator(offset_itr, offset_itr + 1),
+                     thrust::make_zip_iterator(cuda::std::make_tuple(offset_itr, offset_itr + 1)),
                      num_rows,
                      random_string_generator(chars.data()));
 

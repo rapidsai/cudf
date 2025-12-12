@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -161,7 +161,7 @@ void run_test(std::string const& input, bool enable_lines = true)
                                                      options.is_enabled_lines(),
                                                      false,
                                                      stream,
-                                                     rmm::mr::get_current_device_resource());
+                                                     cudf::get_current_device_resource_ref());
   auto& gpu_col_id      = std::get<0>(tup);
   auto& gpu_row_offsets = std::get<1>(tup);
 
@@ -179,6 +179,7 @@ void run_test(std::string const& input, bool enable_lines = true)
   cudf::size_type const row_array_parent_col_id = [&]() {
     cudf::size_type value      = cuio_json::parent_node_sentinel;
     auto const list_node_index = options.is_enabled_lines() ? 0 : 1;
+    if (std::cmp_greater_equal(list_node_index, gpu_col_id.size())) { return value; }
     CUDF_CUDA_TRY(cudaMemcpyAsync(&value,
                                   gpu_col_id.data() + list_node_index,
                                   sizeof(cudf::size_type),

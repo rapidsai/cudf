@@ -13,7 +13,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
-#include <cudf/hashing/detail/helper_functions.cuh>
+#include <cudf/join/join.hpp>
 #include <cudf/join/mixed_join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -26,6 +26,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/fill.h>
 #include <thrust/scan.h>
 
@@ -104,7 +105,7 @@ precompute_mixed_join_data(mixed_multiset_type const& hash_table,
     rmm::exec_policy_nosync(stream),
     thrust::counting_iterator<size_type>(0),
     thrust::counting_iterator<size_type>(probe_table_num_rows),
-    thrust::make_zip_iterator(thrust::make_tuple(input_pairs.begin(), hash_indices.begin())),
+    thrust::make_zip_iterator(cuda::std::make_tuple(input_pairs.begin(), hash_indices.begin())),
     precompute_fn);
 
   return std::make_pair(std::move(input_pairs), std::move(hash_indices));
@@ -167,13 +168,11 @@ mixed_join_setup_data setup_mixed_join_common(table_view const& left_equality,
   auto& probe = swap_tables ? right_equality : left_equality;
   auto& build = swap_tables ? left_equality : right_equality;
 
-  // Create hash table with computed size following hash join pattern
-  auto const hash_table_size = compute_hash_table_size(build.num_rows());
+  // Create hash table with load factor following hash join pattern
   mixed_multiset_type hash_table{
-    cuco::extent{hash_table_size},
+    cuco::extent{static_cast<std::size_t>(build.num_rows())},
     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
-    cuco::empty_key{
-      cuco::pair{std::numeric_limits<hash_value_type>::max(), cudf::detail::JoinNoneValue}},
+    cuco::empty_key{cuco::pair{std::numeric_limits<hash_value_type>::max(), cudf::JoinNoMatch}},
     {},
     {},
     {},
@@ -577,7 +576,7 @@ mixed_inner_join(
                             right_conditional,
                             binary_predicate,
                             compare_nulls,
-                            detail::join_kind::INNER_JOIN,
+                            join_kind::INNER_JOIN,
                             output_size_data,
                             stream,
                             mr);
@@ -600,7 +599,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_in
                                                 right_conditional,
                                                 binary_predicate,
                                                 compare_nulls,
-                                                detail::join_kind::INNER_JOIN,
+                                                join_kind::INNER_JOIN,
                                                 stream,
                                                 mr);
 }
@@ -624,7 +623,7 @@ mixed_left_join(table_view const& left_equality,
                             right_conditional,
                             binary_predicate,
                             compare_nulls,
-                            detail::join_kind::LEFT_JOIN,
+                            join_kind::LEFT_JOIN,
                             output_size_data,
                             stream,
                             mr);
@@ -647,7 +646,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
                                                 right_conditional,
                                                 binary_predicate,
                                                 compare_nulls,
-                                                detail::join_kind::LEFT_JOIN,
+                                                join_kind::LEFT_JOIN,
                                                 stream,
                                                 mr);
 }
@@ -671,7 +670,7 @@ mixed_full_join(table_view const& left_equality,
                             right_conditional,
                             binary_predicate,
                             compare_nulls,
-                            detail::join_kind::FULL_JOIN,
+                            join_kind::FULL_JOIN,
                             output_size_data,
                             stream,
                             mr);

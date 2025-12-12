@@ -5,13 +5,13 @@
     "args": {
       "CUDA": "12.9",
       "PYTHON_PACKAGE_MANAGER": "conda",
-      "BASE": "rapidsai/devcontainers:25.12-cpp-mambaforge"
+      "BASE": "rapidsai/devcontainers:26.02-cpp-mambaforge"
     }
   },
   "runArgs": [
     "--rm",
     "--name",
-    "${localEnv:USER:anon}-rapids-${localWorkspaceFolderBasename}-25.12-cuda12.9-conda",
+    "${localEnv:USER:anon}-rapids-${localWorkspaceFolderBasename}-26.02-cuda12.9-conda",
     "--ulimit",
     "nofile=500000"
   ],
@@ -19,7 +19,7 @@
     "gpu": "optional"
   },
   "features": {
-    "ghcr.io/rapidsai/devcontainers/features/cuda:25.12": {
+    "ghcr.io/rapidsai/devcontainers/features/cuda:26.2": {
       "version": "12.9",
       "installCompilers": false,
       "installProfilers": true,
@@ -40,7 +40,7 @@
       "installnvJPEG": false,
       "pruneStaticLibs": true
     },
-    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils:25.12": {}
+    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils:26.2": {}
   },
   "overrideFeatureInstallOrder": [
     "ghcr.io/rapidsai/devcontainers/features/cuda",

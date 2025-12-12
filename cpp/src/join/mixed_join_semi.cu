@@ -9,12 +9,13 @@
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
-#include <cudf/hashing/detail/helper_functions.cuh>
+#include <cudf/join/join.hpp>
 #include <cudf/join/mixed_join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -142,8 +143,9 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   auto const equality_build_conditional =
     row_comparator_conditional_build.equal_to<false>(build_nulls, compare_nulls);
 
-  hash_set_type row_set{{compute_hash_table_size(build.num_rows())},
-                        cuco::empty_key{JoinNoneValue},
+  hash_set_type row_set{{static_cast<std::size_t>(build.num_rows())},
+                        cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
+                        cuco::empty_key{JoinNoMatch},
                         {equality_build_equality, equality_build_conditional},
                         {row_hash_build.device_hasher(build_nulls)},
                         {},
@@ -203,7 +205,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
                     left_table_keep_mask.begin(),
                     gather_map->begin(),
                     [join_type] __device__(bool keep_row) {
-                      return keep_row == (join_type == detail::join_kind::LEFT_SEMI_JOIN);
+                      return keep_row == (join_type == join_kind::LEFT_SEMI_JOIN);
                     });
 
   gather_map->resize(cuda::std::distance(gather_map->begin(), gather_map_end), stream);
@@ -229,7 +231,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
                                  right_conditional,
                                  binary_predicate,
                                  compare_nulls,
-                                 detail::join_kind::LEFT_SEMI_JOIN,
+                                 join_kind::LEFT_SEMI_JOIN,
                                  stream,
                                  mr);
 }
@@ -251,7 +253,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
                                  right_conditional,
                                  binary_predicate,
                                  compare_nulls,
-                                 detail::join_kind::LEFT_ANTI_JOIN,
+                                 join_kind::LEFT_ANTI_JOIN,
                                  stream,
                                  mr);
 }

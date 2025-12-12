@@ -92,6 +92,7 @@ if TYPE_CHECKING:
         MutableMapping,
         Sequence,
     )
+    from types import NotImplementedType
 
     from cudf._typing import (
         Axis,
@@ -99,7 +100,6 @@ if TYPE_CHECKING:
         DataFrameOrSeries,
         Dtype,
         DtypeObj,
-        NotImplementedType,
         ScalarLike,
     )
     from cudf.core.series import Series
@@ -633,8 +633,7 @@ class IndexedFrame(Frame):
         """
         return self._from_data(
             self._data.copy(deep=deep),
-            # Indexes are immutable so copies can always be shallow.
-            self.index.copy(deep=False),
+            self.index.copy(deep=deep),
             attrs=copy.deepcopy(self.attrs) if deep else self._attrs,
         )
 
@@ -1354,9 +1353,9 @@ class IndexedFrame(Frame):
     def sum(
         self,
         axis=no_default,
-        skipna=True,
-        numeric_only=False,
-        min_count=0,
+        skipna: bool = True,
+        numeric_only: bool = False,
+        min_count: int = 0,
         **kwargs,
     ):
         """
@@ -1461,7 +1460,13 @@ class IndexedFrame(Frame):
     prod = product
 
     @_performance_tracking
-    def mean(self, axis=0, skipna=True, numeric_only=False, **kwargs):
+    def mean(
+        self,
+        axis: Axis = 0,
+        skipna: bool = True,
+        numeric_only: bool = False,
+        **kwargs,
+    ):
         """
         Return the mean of the values for the requested axis.
 
@@ -1500,7 +1505,11 @@ class IndexedFrame(Frame):
         )
 
     def median(
-        self, axis=no_default, skipna=True, numeric_only=None, **kwargs
+        self,
+        axis=no_default,
+        skipna: bool = True,
+        numeric_only: bool = False,
+        **kwargs,
     ):
         """
         Return the median of the values for the requested axis.
@@ -1548,9 +1557,9 @@ class IndexedFrame(Frame):
     def std(
         self,
         axis=no_default,
-        skipna=True,
-        ddof=1,
-        numeric_only=False,
+        skipna: bool = True,
+        ddof: int = 1,
+        numeric_only: bool = False,
         **kwargs,
     ):
         """
@@ -1601,9 +1610,9 @@ class IndexedFrame(Frame):
     def var(
         self,
         axis=no_default,
-        skipna=True,
-        ddof=1,
-        numeric_only=False,
+        skipna: bool = True,
+        ddof: int = 1,
+        numeric_only: bool = False,
         **kwargs,
     ):
         """
@@ -1650,7 +1659,13 @@ class IndexedFrame(Frame):
         )
 
     @_performance_tracking
-    def kurtosis(self, axis=0, skipna=True, numeric_only=False, **kwargs):
+    def kurtosis(
+        self,
+        axis: Axis = 0,
+        skipna: bool = True,
+        numeric_only: bool = False,
+        **kwargs,
+    ):
         """
         Return Fisher's unbiased kurtosis of a sample.
 
@@ -1705,7 +1720,13 @@ class IndexedFrame(Frame):
     kurt = kurtosis
 
     @_performance_tracking
-    def skew(self, axis=0, skipna=True, numeric_only=False, **kwargs):
+    def skew(
+        self,
+        axis: Axis = 0,
+        skipna: bool = True,
+        numeric_only: bool = False,
+        **kwargs,
+    ):
         """
         Return unbiased Fisher-Pearson skew of a sample.
 
@@ -2912,9 +2933,7 @@ class IndexedFrame(Frame):
                 f"`{method}`. Only {seed_hash_methods} support seeds."
             )
         with acquire_spill_lock():
-            plc_table = plc.Table(
-                [c.to_pylibcudf(mode="read") for c in self._columns]
-            )
+            plc_table = plc.Table([c.plc_column for c in self._columns])
             if method == "murmur3":
                 plc_column = plc.hashing.murmurhash3_x86_32(plc_table, seed)
             elif method == "xxhash32":
@@ -2989,6 +3008,8 @@ class IndexedFrame(Frame):
         -----
         This slicing has normal python semantics.
         """
+        if arg.step == 0:
+            raise ValueError("slice step cannot be zero")
         num_rows = len(self)
         if num_rows == 0:
             return self
@@ -3251,7 +3272,7 @@ class IndexedFrame(Frame):
 
         with acquire_spill_lock():
             plc_column = plc.stream_compaction.distinct_indices(
-                plc.Table([col.to_pylibcudf(mode="read") for col in columns]),
+                plc.Table([col.plc_column for col in columns]),
                 keep_option,
                 plc.types.NullEquality.EQUAL,
                 plc.types.NanEquality.ALL_EQUAL,
@@ -3274,7 +3295,7 @@ class IndexedFrame(Frame):
             plc_table = plc.copying.empty_like(
                 plc.Table(
                     [
-                        col.to_pylibcudf(mode="read")
+                        col.plc_column
                         for col in (
                             itertools.chain(self.index._columns, self._columns)
                             if keep_index
@@ -3554,7 +3575,7 @@ class IndexedFrame(Frame):
 
         # Mask and data column preallocated
         ans_col = _return_arr_from_dtype(retty, len(self))
-        ans_mask = as_column(True, length=len(self), dtype="bool")
+        ans_mask = as_column(True, length=len(self), dtype=np.dtype("bool"))
         output_args = [(ans_col, ans_mask), len(self)]
         input_args = _get_input_args_from_frame(self)
         launch_args = output_args + input_args + list(args)
@@ -3574,7 +3595,7 @@ class IndexedFrame(Frame):
         else:
             col = as_column(ans_col, retty)
 
-        col.set_base_mask(ans_mask.as_mask())
+        col = col.set_mask(ans_mask.as_mask())
         result = cudf.Series._from_column(
             col, index=self.index, attrs=self.attrs
         )
@@ -5430,7 +5451,7 @@ class IndexedFrame(Frame):
             plc_table = plc.lists.explode_outer(
                 plc.Table(
                     [
-                        col.to_pylibcudf(mode="read")
+                        col.plc_column
                         for col in itertools.chain(idx_cols, self._columns)
                     ]
                 ),
@@ -5522,7 +5543,7 @@ class IndexedFrame(Frame):
             plc_table = plc.reshape.tile(
                 plc.Table(
                     [
-                        col.to_pylibcudf(mode="read")
+                        col.plc_column
                         for col in itertools.chain(
                             self.index._columns, self._columns
                         )

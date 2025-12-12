@@ -34,7 +34,15 @@ repos:
     rev: 'v1.13.0'
     hooks:
       - id: mypy
-        additional_dependencies: [types-cachetools, pyarrow-stubs, numpy]
+        additional_dependencies: [
+          polars,
+          "numpy",
+          pyarrow-stubs,
+          pytest,
+          types-cachetools,
+          "rmm-cu12==26.2.*,>=0.0.0a0",
+          "--extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/"
+        ]
         args: ["--config-file=pyproject.toml",
                "python/cudf/cudf",
                "python/pylibcudf/pylibcudf",
@@ -81,7 +89,8 @@ repos:
         exclude: |
           (?x)^(
             ^python/cudf/cudf/core/dtypes.py|
-            ^python/cudf/cudf/tests/pytest.ini
+            ^python/cudf/cudf/tests/pytest.ini|
+            ^python/cudf/cudf/tests/series/test_binops.py
           )
       - id: no-programmatic-xfail
         name: no-programmatic-xfail
@@ -147,7 +156,7 @@ repos:
         args: ["--fix"]
       - id: ruff-format
   - repo: https://github.com/rapidsai/pre-commit-hooks
-    rev: v1.1.0
+    rev: v1.2.0
     hooks:
       - id: verify-copyright
         name: verify-copyright-cudf

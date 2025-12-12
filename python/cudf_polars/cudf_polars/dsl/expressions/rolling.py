@@ -17,10 +17,16 @@ from cudf_polars.containers import Column, DataFrame, DataType
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.utils.reshape import broadcast
-from cudf_polars.dsl.utils.windows import offsets_to_windows, range_window_bounds
+from cudf_polars.dsl.utils.windows import (
+    duration_to_int,
+    offsets_to_windows,
+    range_window_bounds,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.typing import ClosedInterval, Duration
 
@@ -89,12 +95,12 @@ def to_request(
 class RollingWindow(Expr):
     __slots__ = (
         "closed_window",
-        "following",
+        "following_ordinal",
         "offset",
         "orderby",
         "orderby_dtype",
         "period",
-        "preceding",
+        "preceding_ordinal",
     )
     _non_child = (
         "dtype",
@@ -123,9 +129,11 @@ class RollingWindow(Expr):
         # within `__init__`).
         self.offset = offset
         self.period = period
-        self.preceding, self.following = offsets_to_windows(
-            orderby_dtype, offset, period
-        )
+        self.orderby_dtype = orderby_dtype
+        self.offset = offset
+        self.period = period
+        self.preceding_ordinal = duration_to_int(orderby_dtype, *offset)
+        self.following_ordinal = duration_to_int(orderby_dtype, *period)
         self.closed_window = closed_window
         self.orderby = orderby
         self.children = (agg,)
@@ -153,18 +161,28 @@ class RollingWindow(Expr):
             plc.traits.is_integral(orderby.obj.type())
             and orderby.obj.type().id() != plc.TypeId.INT64
         ):
-            orderby_obj = plc.unary.cast(orderby.obj, plc.DataType(plc.TypeId.INT64))
+            orderby_obj = plc.unary.cast(
+                orderby.obj, plc.DataType(plc.TypeId.INT64), stream=df.stream
+            )
         else:
             orderby_obj = orderby.obj
+        preceding_scalar, following_scalar = offsets_to_windows(
+            self.orderby_dtype,
+            self.preceding_ordinal,
+            self.following_ordinal,
+            stream=df.stream,
+        )
         preceding, following = range_window_bounds(
-            self.preceding, self.following, self.closed_window
+            preceding_scalar, following_scalar, self.closed_window
         )
         if orderby.obj.null_count() != 0:
             raise RuntimeError(
                 f"Index column '{self.orderby}' in rolling may not contain nulls"
             )
         if not orderby.check_sorted(
-            order=plc.types.Order.ASCENDING, null_order=plc.types.NullOrder.BEFORE
+            order=plc.types.Order.ASCENDING,
+            null_order=plc.types.NullOrder.BEFORE,
+            stream=df.stream,
         ):
             raise RuntimeError(
                 f"Index column '{self.orderby}' in rolling is not sorted, please sort first"
@@ -177,6 +195,7 @@ class RollingWindow(Expr):
             preceding,
             following,
             [to_request(agg, orderby, df)],
+            stream=df.stream,
         ).columns()
         return Column(result, dtype=self.dtype)
 
@@ -306,6 +325,7 @@ class GroupedRollingWindow(Expr):
                     plc.Table([val_col]),
                     order_index,
                     plc.copying.OutOfBoundsPolicy.NULLIFY,
+                    stream=df.stream,
                 ).columns()[0]
             assert isinstance(rank_expr, expr.UnaryFunction)
             method_str, descending, _ = rank_expr.options
@@ -364,6 +384,7 @@ class GroupedRollingWindow(Expr):
                 plc.Table(plc_cols),
                 op.order_index,
                 plc.copying.OutOfBoundsPolicy.NULLIFY,
+                stream=df.stream,
             )
         else:
             vals_tbl = plc.Table(plc_cols)
@@ -404,6 +425,7 @@ class GroupedRollingWindow(Expr):
                 plc.Table(plc_cols),
                 order_index,
                 plc.copying.OutOfBoundsPolicy.NULLIFY,
+                stream=df.stream,
             ).columns()
         else:
             val_cols = [
@@ -433,6 +455,7 @@ class GroupedRollingWindow(Expr):
         rank_out_dtypes: list[DataType],
         *,
         order_index: plc.Column | None = None,
+        stream: Stream,
     ) -> list[Column]:
         # Reorder scan results from grouped-order back to input row order
         if order_index is None:
@@ -442,6 +465,7 @@ class GroupedRollingWindow(Expr):
                 plc.Table([*(c.obj for c in by_cols), row_id]),
                 [*key_orders, plc.types.Order.ASCENDING],
                 [*key_nulls, plc.types.NullOrder.AFTER],
+                stream=stream,
             )
 
         return [
@@ -452,11 +476,15 @@ class GroupedRollingWindow(Expr):
                     plc.Table(
                         [
                             plc.Column.from_scalar(
-                                plc.Scalar.from_py(None, tbl.columns()[0].type()),
+                                plc.Scalar.from_py(
+                                    None, tbl.columns()[0].type(), stream=stream
+                                ),
                                 n_rows,
+                                stream=stream,
                             )
                         ]
                     ),
+                    stream=stream,
                 ).columns()[0],
                 name=name,
                 dtype=dtype,
@@ -495,6 +523,7 @@ class GroupedRollingWindow(Expr):
         ob_nulls_last: bool,
         value_col: plc.Column | None = None,
         value_desc: bool = False,
+        stream: Stream,
     ) -> plc.Column:
         """Compute a stable row ordering for unary operations in a grouped context."""
         cols: list[plc.Column] = [c.obj for c in by_cols]
@@ -527,17 +556,18 @@ class GroupedRollingWindow(Expr):
         orders.append(plc.types.Order.ASCENDING)
         nulls.append(plc.types.NullOrder.AFTER)
 
-        return plc.sorting.stable_sorted_order(plc.Table(cols), orders, nulls)
+        return plc.sorting.stable_sorted_order(
+            plc.Table(cols), orders, nulls, stream=stream
+        )
 
     def _gather_columns(
-        self,
-        cols: Sequence[Column],
-        order_index: plc.Column,
+        self, cols: Sequence[Column], order_index: plc.Column, stream: Stream
     ) -> list[Column]:
         gathered_tbl = plc.copying.gather(
             plc.Table([c.obj for c in cols]),
             order_index,
             plc.copying.OutOfBoundsPolicy.NULLIFY,
+            stream=stream,
         )
 
         return [
@@ -561,6 +591,7 @@ class GroupedRollingWindow(Expr):
         ob_desc: bool,
         ob_nulls_last: bool,
         grouper: plc.groupby.GroupBy,
+        stream: Stream,
     ) -> tuple[plc.Column | None, list[Column] | None, plc.groupby.GroupBy]:
         if order_by_col is None:
             # keep the original ordering
@@ -571,8 +602,9 @@ class GroupedRollingWindow(Expr):
             order_by_col=order_by_col,
             ob_desc=ob_desc,
             ob_nulls_last=ob_nulls_last,
+            stream=stream,
         )
-        by_cols_for_scan = self._gather_columns(by_cols, order_index)
+        by_cols_for_scan = self._gather_columns(by_cols, order_index, stream=stream)
         assert by_cols_for_scan is not None
         local = self._sorted_grouper(by_cols_for_scan)
         return order_index, by_cols_for_scan, local
@@ -584,12 +616,13 @@ class GroupedRollingWindow(Expr):
         value_tbls: list[plc.Table],
         names: list[str],
         dtypes: list[DataType],
+        stream: Stream,
     ) -> list[Column]:
         # We do a left-join between the input keys to group-keys
         # so every input row appears exactly once. left_order is
         # returned un-ordered by libcudf.
         left_order, right_order = plc.join.left_join(
-            by_tbl, group_keys_tbl, plc.types.NullEquality.EQUAL
+            by_tbl, group_keys_tbl, plc.types.NullEquality.EQUAL, stream
         )
 
         # Scatter the right order indices into an all-null table
@@ -597,12 +630,13 @@ class GroupedRollingWindow(Expr):
         # have the map between rows and groups with the correct ordering.
         left_rows = left_order.size()
         target = plc.Column.from_scalar(
-            plc.Scalar.from_py(None, plc.types.SIZE_TYPE), left_rows
+            plc.Scalar.from_py(None, plc.types.SIZE_TYPE, stream), left_rows, stream
         )
         aligned_map = plc.copying.scatter(
             plc.Table([right_order]),
             left_order,
             plc.Table([target]),
+            stream,
         ).columns()[0]
 
         # Broadcast each scalar aggregated result back to row-shape using
@@ -614,6 +648,7 @@ class GroupedRollingWindow(Expr):
                     plc.Table([col]),
                     aligned_map,
                     plc.copying.OutOfBoundsPolicy.NULLIFY,
+                    stream,
                 ).columns()[0],
                 name=name,
                 dtype=dtype,
@@ -651,7 +686,10 @@ class GroupedRollingWindow(Expr):
 
         if order_index is not None and eval_cols:
             eval_cols = plc.copying.gather(
-                plc.Table(eval_cols), order_index, plc.copying.OutOfBoundsPolicy.NULLIFY
+                plc.Table(eval_cols),
+                order_index,
+                plc.copying.OutOfBoundsPolicy.NULLIFY,
+                stream=df.stream,
             ).columns()
 
         gathered_iter = iter(eval_cols)
@@ -680,9 +718,12 @@ class GroupedRollingWindow(Expr):
         by_cols = broadcast(
             *(b.evaluate(df) for b in by_exprs),
             target_length=df.num_rows,
+            stream=df.stream,
         )
         order_by_col = (
-            broadcast(order_by_expr.evaluate(df), target_length=df.num_rows)[0]
+            broadcast(
+                order_by_expr.evaluate(df), target_length=df.num_rows, stream=df.stream
+            )[0]
             if order_by_expr is not None
             else None
         )
@@ -724,14 +765,20 @@ class GroupedRollingWindow(Expr):
 
         group_keys_tbl, value_tables = grouper.aggregate(gb_requests)
         broadcasted_cols = self._broadcast_agg_results(
-            by_tbl, group_keys_tbl, value_tables, out_names, out_dtypes
+            by_tbl,
+            group_keys_tbl,
+            value_tables,
+            out_names,
+            out_dtypes,
+            df.stream,
         )
 
         if order_sensitive:
             row_id = plc.filling.sequence(
                 df.num_rows,
-                plc.Scalar.from_py(0, plc.types.SIZE_TYPE),
-                plc.Scalar.from_py(1, plc.types.SIZE_TYPE),
+                plc.Scalar.from_py(0, plc.types.SIZE_TYPE, stream=df.stream),
+                plc.Scalar.from_py(1, plc.types.SIZE_TYPE, stream=df.stream),
+                stream=df.stream,
             )
             _, _, ob_desc, ob_nulls_last = self.options
             order_index, _, local = self._grouped_window_scan_setup(
@@ -741,6 +788,7 @@ class GroupedRollingWindow(Expr):
                 ob_desc=ob_desc,
                 ob_nulls_last=ob_nulls_last,
                 grouper=grouper,
+                stream=df.stream,
             )
             assert order_index is not None
 
@@ -756,13 +804,15 @@ class GroupedRollingWindow(Expr):
                     value_tables_local,
                     out_names,
                     out_dtypes,
+                    df.stream,
                 )
             )
 
         row_id = plc.filling.sequence(
             df.num_rows,
-            plc.Scalar.from_py(0, plc.types.SIZE_TYPE),
-            plc.Scalar.from_py(1, plc.types.SIZE_TYPE),
+            plc.Scalar.from_py(0, plc.types.SIZE_TYPE, stream=df.stream),
+            plc.Scalar.from_py(1, plc.types.SIZE_TYPE, stream=df.stream),
+            stream=df.stream,
         )
 
         if rank_named := unary_window_ops["rank"]:
@@ -784,8 +834,11 @@ class GroupedRollingWindow(Expr):
                             df, context=ExecutionContext.FRAME
                         ).obj,
                         value_desc=desc,
+                        stream=df.stream,
                     )
-                    rank_by_cols_for_scan = self._gather_columns(by_cols, order_index)
+                    rank_by_cols_for_scan = self._gather_columns(
+                        by_cols, order_index, stream=df.stream
+                    )
                     local = GroupedRollingWindow._sorted_grouper(rank_by_cols_for_scan)
                     names, dtypes, tables = self._apply_unary_op(
                         RankOp(
@@ -806,6 +859,7 @@ class GroupedRollingWindow(Expr):
                             names,
                             dtypes,
                             order_index=order_index,
+                            stream=df.stream,
                         )
                     )
             else:
@@ -818,7 +872,13 @@ class GroupedRollingWindow(Expr):
                 )
                 broadcasted_cols.extend(
                     self._reorder_to_input(
-                        row_id, by_cols, df.num_rows, tables, names, dtypes
+                        row_id,
+                        by_cols,
+                        df.num_rows,
+                        tables,
+                        names,
+                        dtypes,
+                        stream=df.stream,
                     )
                 )
 
@@ -837,6 +897,7 @@ class GroupedRollingWindow(Expr):
                     if self._order_by_expr is not None
                     else False,
                     grouper=grouper,
+                    stream=df.stream,
                 )
             )
 
@@ -872,6 +933,7 @@ class GroupedRollingWindow(Expr):
                         names,
                         dtypes,
                         order_index=order_index,
+                        stream=df.stream,
                     )
                 )
 
@@ -890,6 +952,7 @@ class GroupedRollingWindow(Expr):
                     if self._order_by_expr is not None
                     else False,
                     grouper=grouper,
+                    stream=df.stream,
                 )
             )
             names, dtypes, tables = self._apply_unary_op(
@@ -911,6 +974,7 @@ class GroupedRollingWindow(Expr):
                     names,
                     dtypes,
                     order_index=order_index,
+                    stream=df.stream,
                 )
             )
 

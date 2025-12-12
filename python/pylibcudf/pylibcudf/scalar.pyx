@@ -151,14 +151,15 @@ cdef class Scalar:
         """The type of data in the column."""
         return self._data_type
 
-    cpdef bool is_valid(self):
+    cpdef bool is_valid(self, Stream stream = None):
         """True if the scalar is valid, false if not"""
-        return self.get().is_valid()
+        stream = _get_stream(stream)
+        return self.get().is_valid(stream.view())
 
     def to_arrow(
         self,
         metadata: list[ColumnMetadata] | str | None = None,
-        stream: Stream = None,
+        stream: Stream | None = None,
     ) -> ArrowLike:
         """Create a PyArrow array from a pylibcudf scalar.
 
@@ -297,47 +298,53 @@ cdef class Scalar:
         mr = _get_memory_resource(mr)
         return _from_numpy(np_val, stream, mr)
 
-    def to_py(self):
+    def to_py(self, stream: Stream | None = None):
         """
         Convert a Scalar to a Python scalar.
+
+        Parameters
+        ----------
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
 
         Returns
         -------
         Python scalar
             A Python scalar associated with the type of the Scalar.
         """
-        if not self.is_valid():
+        stream = _get_stream(stream)
+        if not self.is_valid(stream):
             return None
 
         cdef type_id tid = self.type().id()
         cdef const scalar* slr = self.c_obj.get()
         if tid == type_id.BOOL8:
-            return (<numeric_scalar[cbool]*>slr).value()
+            return (<numeric_scalar[cbool]*>slr).value(stream.view())
         elif tid == type_id.STRING:
-            return (<string_scalar*>slr).to_string().decode()
+            return (<string_scalar*>slr).to_string(stream.view()).decode()
         elif tid == type_id.FLOAT32:
-            return (<numeric_scalar[float]*>slr).value()
+            return (<numeric_scalar[float]*>slr).value(stream.view())
         elif tid == type_id.FLOAT64:
-            return (<numeric_scalar[double]*>slr).value()
+            return (<numeric_scalar[double]*>slr).value(stream.view())
         elif tid == type_id.INT8:
-            return (<numeric_scalar[int8_t]*>slr).value()
+            return (<numeric_scalar[int8_t]*>slr).value(stream.view())
         elif tid == type_id.INT16:
-            return (<numeric_scalar[int16_t]*>slr).value()
+            return (<numeric_scalar[int16_t]*>slr).value(stream.view())
         elif tid == type_id.INT32:
-            return (<numeric_scalar[int32_t]*>slr).value()
+            return (<numeric_scalar[int32_t]*>slr).value(stream.view())
         elif tid == type_id.INT64:
-            return (<numeric_scalar[int64_t]*>slr).value()
+            return (<numeric_scalar[int64_t]*>slr).value(stream.view())
         elif tid == type_id.UINT8:
-            return (<numeric_scalar[uint8_t]*>slr).value()
+            return (<numeric_scalar[uint8_t]*>slr).value(stream.view())
         elif tid == type_id.UINT16:
-            return (<numeric_scalar[uint16_t]*>slr).value()
+            return (<numeric_scalar[uint16_t]*>slr).value(stream.view())
         elif tid == type_id.UINT32:
-            return (<numeric_scalar[uint32_t]*>slr).value()
+            return (<numeric_scalar[uint32_t]*>slr).value(stream.view())
         elif tid == type_id.UINT64:
-            return (<numeric_scalar[uint64_t]*>slr).value()
+            return (<numeric_scalar[uint64_t]*>slr).value(stream.view())
         elif tid == type_id.DECIMAL128:
             return decimal.Decimal(
-                (<fixed_point_scalar[decimal128]*>slr).value().value()
+                (<fixed_point_scalar[decimal128]*>slr).value(stream.view()).value()
             ).scaleb(
                 (<fixed_point_scalar[decimal128]*>slr).type().scale()
             )
@@ -700,7 +707,12 @@ def _(
     cdef DataType c_dtype = dtype
     cdef type_id tid = c_dtype.id()
     if isinstance(py_val, datetime.datetime):
-        epoch_seconds = py_val.timestamp()
+        if py_val.tzinfo is None:
+            # Treat tz-naive datetime as UTC so .timestamp()
+            # does not account for the system's timezone.
+            epoch_seconds = py_val.replace(tzinfo=datetime.timezone.utc).timestamp()
+        else:
+            epoch_seconds = py_val.timestamp()
     else:
         epoch_seconds = (py_val - datetime.date(1970, 1, 1)).total_seconds()
     if tid == type_id.TIMESTAMP_NANOSECONDS:

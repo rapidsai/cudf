@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
-from libc.stdint cimport uint64_t
+from libc.stdint cimport int64_t, uint64_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -18,6 +18,9 @@ cdef extern from "cudf/io/text/byte_range_info.hpp" \
         byte_range_info(
             size_t offset, size_t size
         ) except +libcudf_exception_handler
+
+        int64_t offset() except +libcudf_exception_handler
+        int64_t size() except +libcudf_exception_handler
 
 cdef extern from "cudf/io/text/data_chunk_source.hpp" \
         namespace "cudf::io::text" nogil:

@@ -105,7 +105,7 @@ class Column:
     ) -> Column: ...
     @classmethod
     def from_cuda_array_interface(
-        cls, obj: SupportsCudaArrayInterface
+        cls, obj: SupportsCudaArrayInterface, stream: Stream | None = None
     ) -> Column: ...
     @classmethod
     def from_array_interface(
@@ -113,7 +113,9 @@ class Column:
     ) -> Column: ...
     @staticmethod
     def from_array(
-        cls, obj: SupportsCudaArrayInterface | SupportsArrayInterface
+        cls,
+        obj: SupportsCudaArrayInterface | SupportsArrayInterface,
+        stream: Stream | None = None,
     ) -> Column: ...
     @staticmethod
     def struct_from_children(children: Sequence[Column]) -> Column: ...

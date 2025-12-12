@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.  All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -29,8 +29,7 @@ reprog_device::reprog_device(reprog const& prog)
     _insts_count{prog.insts_count()},
     _starts_count{prog.starts_count()},
     _classes_count{prog.classes_count()},
-    _max_insts{prog.insts_count()},
-    _codepoint_flags{get_character_flags_table()}
+    _max_insts{prog.insts_count()}
 {
 }
 
@@ -65,6 +64,8 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
 
   // create our device object; this is managed separately and returned to the caller
   auto* d_prog = new reprog_device(h_prog);
+
+  d_prog->_codepoint_flags = get_character_flags_table(stream);
 
   // copy the instructions array first (fixed-sized structs)
   memcpy(h_ptr, h_prog.insts_data(), insts_size);
