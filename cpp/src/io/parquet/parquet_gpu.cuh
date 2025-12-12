@@ -11,7 +11,7 @@
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/types.hpp>
 
-#include <rmm/mr/device/polymorphic_allocator.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/pair.cuh>
 #include <cuco/storage.cuh>

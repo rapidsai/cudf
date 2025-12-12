@@ -10,7 +10,7 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/types.hpp>
 
-#include <rmm/mr/device/polymorphic_allocator.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/static_set.cuh>
 
