@@ -215,6 +215,8 @@ class ShufflerInsertionMethod(str, enum.Enum):
 
     * ``ShufflerInsertionMethod.INSERT_CHUNKS`` : Use insert_chunks for inserting data.
     * ``ShufflerInsertionMethod.CONCAT_INSERT`` : Use concat_insert for inserting data.
+
+    Only applicable with the "rapidsmpf" shuffle method and the "tasks" runtime.
     """
 
     INSERT_CHUNKS = "insert_chunks"
@@ -614,6 +616,8 @@ class StreamingExecutor:
     shuffler_insertion_method
         The method to use for inserting chunks with the rapidsmpf shuffler.
         Can be 'insert_chunks' (default) or 'concat_insert'.
+
+        Only applicable with ``shuffle_method="rapidsmpf"`` and ``runtime="tasks"``.
     rapidsmpf_spill
         Whether to wrap task arguments and output in objects that are
         spillable by 'rapidsmpf'.
