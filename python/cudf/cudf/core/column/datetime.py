@@ -113,14 +113,12 @@ class DatetimeColumn(TemporalBaseColumn):
         self,
         plc_column: plc.Column,
         dtype: np.dtype | pd.DatetimeTZDtype,
-        null_count: int,
         exposed: bool,
     ) -> None:
         dtype = self._validate_dtype_instance(dtype)
         super().__init__(
             plc_column=plc_column,
             dtype=dtype,
-            null_count=null_count,
             exposed=exposed,
         )
 
@@ -690,7 +688,6 @@ class DatetimeColumn(TemporalBaseColumn):
             return DatetimeTZColumn(
                 plc_column=self.plc_column,
                 dtype=dtype,
-                null_count=self.null_count,
                 exposed=False,
             )
         if cudf.get_option("mode.pandas_compatible"):
@@ -855,7 +852,6 @@ class DatetimeTZColumn(DatetimeColumn):
         return DatetimeColumn(
             plc_column=self.plc_column,
             dtype=_get_base_dtype(self.dtype),
-            null_count=self.null_count,
             exposed=False,
         )
 
