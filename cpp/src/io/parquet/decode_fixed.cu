@@ -313,7 +313,7 @@ __device__ int skip_validity_and_row_indices_nonlist(
     // thread and block validity count
     using block_scan = cub::BlockScan<int, decode_block_size>;
     __shared__ typename block_scan::TempStorage scan_storage;
-    int thread_valid_count, block_valid_count;
+    int thread_valid_count = 0, block_valid_count = 0;
     block_scan(scan_storage).ExclusiveSum(is_valid, thread_valid_count, block_valid_count);
 
     value_count += batch_size;
