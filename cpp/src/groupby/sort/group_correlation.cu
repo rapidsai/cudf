@@ -151,7 +151,7 @@ std::unique_ptr<column> group_covariance(column_view const& values_0,
   auto corr_iter =
     thrust::make_transform_iterator(thrust::make_counting_iterator(0), covariance_transform_op);
 
-  thrust::reduce_by_key(rmm::exec_policy(stream),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                         group_labels.begin(),
                         group_labels.end(),
                         corr_iter,
@@ -185,7 +185,7 @@ std::unique_ptr<column> group_correlation(column_view const& covariance,
                                     stream,
                                     mr);
   auto d_result    = result->mutable_view().begin<result_type>();
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     covariance.begin<result_type>(),
                     covariance.end<result_type>(),
                     stddev_iter,

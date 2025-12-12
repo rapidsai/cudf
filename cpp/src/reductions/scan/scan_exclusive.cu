@@ -60,8 +60,12 @@ struct scan_dispatcher {
 
     // CUB 2.0.0 requires that the binary operator returns the same type as the identity.
     auto const binary_op = cudf::detail::cast_functor<T>(Op{});
-    thrust::exclusive_scan(
-      rmm::exec_policy(stream), begin, begin + input.size(), output.data<T>(), identity, binary_op);
+    thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+                           begin,
+                           begin + input.size(),
+                           output.data<T>(),
+                           identity,
+                           binary_op);
 
     CUDF_CHECK_CUDA(stream.value());
     return output_column;

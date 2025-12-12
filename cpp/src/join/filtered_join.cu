@@ -199,7 +199,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::qu
     query_set(probe_iter, contains_map.begin());
   }
   rmm::device_uvector<size_type> gather_map(probe.num_rows(), stream, mr);
-  auto gather_map_end = thrust::copy_if(rmm::exec_policy(stream),
+  auto gather_map_end = thrust::copy_if(rmm::exec_policy_nosync(stream),
                                         thrust::counting_iterator<size_type>(0),
                                         thrust::counting_iterator<size_type>(probe.num_rows()),
                                         gather_map.begin(),

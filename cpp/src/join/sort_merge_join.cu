@@ -166,8 +166,8 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
   auto count_matches_it = thrust::transform_iterator(
     match_counts->begin(),
     cuda::proclaim_return_type<size_type>([] __device__(auto c) -> size_type { return c != 0; }));
-  auto const count_matches =
-    thrust::reduce(rmm::exec_policy(stream), count_matches_it, count_matches_it + larger_numrows);
+  auto const count_matches = thrust::reduce(
+    rmm::exec_policy_nosync(stream), count_matches_it, count_matches_it + larger_numrows);
   rmm::device_uvector<size_type> nonzero_matches(count_matches, stream, temp_mr);
   thrust::copy_if(rmm::exec_policy_nosync(stream),
                   thrust::counting_iterator(0),
@@ -267,7 +267,7 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
       rmm::device_uvector<int32_t> offsets_subset(offsets.size(), stream, temp_mr);
       rmm::device_uvector<int32_t> child_positions(offsets.size(), stream, temp_mr);
       auto unique_end = thrust::unique_by_key_copy(
-        rmm::exec_policy(stream),
+        rmm::exec_policy_nosync(stream),
         thrust::reverse_iterator(lcv.offsets_end()),
         thrust::reverse_iterator(lcv.offsets_end()) + offsets.size(),
         thrust::reverse_iterator(thrust::counting_iterator(offsets.size())),
@@ -620,13 +620,13 @@ sort_merge_join::partitioned_inner_join(cudf::join_partition_context const& cont
     auto left_mapping = preprocessed_left.map_table_to_unprocessed(stream);
     null_processed_table_start_idx =
       cuda::std::distance(left_mapping.begin(),
-                          thrust::lower_bound(rmm::exec_policy(stream),
+                          thrust::lower_bound(rmm::exec_policy_nosync(stream),
                                               left_mapping.begin(),
                                               left_mapping.end(),
                                               left_partition_start_idx));
     null_processed_table_end_idx =
       cuda::std::distance(left_mapping.begin(),
-                          thrust::upper_bound(rmm::exec_policy(stream),
+                          thrust::upper_bound(rmm::exec_policy_nosync(stream),
                                               left_mapping.begin(),
                                               left_mapping.end(),
                                               left_partition_end_idx - 1));

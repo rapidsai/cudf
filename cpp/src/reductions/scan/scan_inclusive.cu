@@ -44,10 +44,11 @@ std::pair<rmm::device_buffer, size_type> mask_scan(column_view const& input_view
   auto valid_itr = detail::make_validity_iterator(*d_input);
 
   auto first_null_position = [&] {
-    size_type const first_null =
-      thrust::find_if_not(
-        rmm::exec_policy(stream), valid_itr, valid_itr + input_view.size(), cuda::std::identity{}) -
-      valid_itr;
+    size_type const first_null = thrust::find_if_not(rmm::exec_policy_nosync(stream),
+                                                     valid_itr,
+                                                     valid_itr + input_view.size(),
+                                                     cuda::std::identity{}) -
+                                 valid_itr;
     size_type const exclusive_offset = (inclusive == scan_type::EXCLUSIVE) ? 1 : 0;
     return std::min(input_view.size(), first_null + exclusive_offset);
   }();
@@ -77,8 +78,11 @@ struct scan_functor {
 
     // CUB 2.0.0 requires that the binary operator returns the same type as the identity.
     auto const binary_op = cudf::detail::cast_functor<T>(Op{});
-    thrust::inclusive_scan(
-      rmm::exec_policy(stream), begin, begin + input_view.size(), result.data<T>(), binary_op);
+    thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
+                           begin,
+                           begin + input_view.size(),
+                           result.data<T>(),
+                           binary_op);
 
     CUDF_CHECK_CUDA(stream.value());
     return output_column;

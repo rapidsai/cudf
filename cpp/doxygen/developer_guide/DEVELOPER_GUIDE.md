@@ -547,7 +547,7 @@ void external_function(..., rmm::cuda_stream_view stream, rmm::device_async_reso
   rmm::device_buffer buff(..., stream, mr);
   CUDF_CUDA_TRY(cudaMemcpyAsync(...,stream.value()));
   kernel<<<..., stream>>>(...);
-  thrust::algorithm(rmm::exec_policy(stream), ...);
+  thrust::algorithm(rmm::exec_policy_nosync(stream), ...);
 }
 } // namespace detail
 
@@ -904,7 +904,7 @@ Example output iterator usage:
 
 ```c++
 auto result_itr = indexalator_factory::create_output_iterator(indices->mutable_view());
-thrust::lower_bound(rmm::exec_policy(stream),
+thrust::lower_bound(rmm::exec_policy_nosync(stream),
                     input->begin<Element>(),
                     input->end<Element>(),
                     values->begin<Element>(),

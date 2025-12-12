@@ -511,7 +511,7 @@ uint32_t get_aggregated_decode_kernel_mask(cudf::detail::hostdevice_span<PageInf
 {
   // determine which kernels to invoke
   auto mask_iter = thrust::make_transform_iterator(pages.device_begin(), mask_tform{});
-  return thrust::reduce(rmm::exec_policy(stream),
+  return thrust::reduce(rmm::exec_policy_nosync(stream),
                         mask_iter,
                         mask_iter + pages.size(),
                         0U,

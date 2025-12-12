@@ -162,7 +162,7 @@ struct dispatch_compute_indices {
     // new indices values are computed by matching the concatenated keys to the new key set
 
 #ifdef NDEBUG
-    thrust::lower_bound(rmm::exec_policy(stream),
+    thrust::lower_bound(rmm::exec_policy_nosync(stream),
                         begin,
                         end,
                         all_itr,
@@ -173,7 +173,7 @@ struct dispatch_compute_indices {
     // There is a problem with thrust::lower_bound and the output_indexalator.
     // https://github.com/NVIDIA/thrust/issues/1452; thrust team created nvbug 3322776
     // This is a workaround.
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       all_itr,
                       all_itr + all_indices.size(),
                       result_itr,
@@ -257,7 +257,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     }));
   // the indices offsets (pair.second) are for building the map
   thrust::lower_bound(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     children_offsets.begin() + 1,
     children_offsets.end(),
     indices_itr,

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -203,8 +203,11 @@ struct interleave_columns_impl<T, std::enable_if_t<cudf::is_fixed_width<T>()>> {
       });
 
     if (not create_mask) {
-      thrust::transform(
-        rmm::exec_policy(stream), index_begin, index_end, device_output->begin<T>(), func_value);
+      thrust::transform(rmm::exec_policy_nosync(stream),
+                        index_begin,
+                        index_end,
+                        device_output->begin<T>(),
+                        func_value);
 
       return output;
     }
@@ -214,7 +217,7 @@ struct interleave_columns_impl<T, std::enable_if_t<cudf::is_fixed_width<T>()>> {
       return input.column(idx % divisor).is_valid(idx / divisor);
     };
 
-    thrust::transform_if(rmm::exec_policy(stream),
+    thrust::transform_if(rmm::exec_policy_nosync(stream),
                          index_begin,
                          index_end,
                          device_output->begin<T>(),

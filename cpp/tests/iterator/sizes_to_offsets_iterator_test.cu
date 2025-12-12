@@ -44,7 +44,7 @@ TYPED_TEST(SizesToOffsetsIteratorTestTyped, ExclusiveScan)
     cudf::detail::make_sizes_to_offsets_iterator(result.begin(), result.end(), last.data());
 
   thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_view.begin<T>(), d_view.end<T>(), output_itr, LastType{0});
+    rmm::exec_policy_nosync(stream), d_view.begin<T>(), d_view.end<T>(), output_itr, LastType{0});
 
   auto expected_values = std::vector<T>(sizes.size());
   std::exclusive_scan(sizes.begin(), sizes.end(), expected_values.begin(), T{0});
@@ -75,7 +75,7 @@ TEST_F(SizesToOffsetsIteratorTest, ScanWithOverflow)
   auto output_itr =
     cudf::detail::make_sizes_to_offsets_iterator(result.begin(), result.end(), last.data());
 
-  thrust::exclusive_scan(rmm::exec_policy(stream),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          d_view.begin<int32_t>(),
                          d_view.end<int32_t>(),
                          output_itr,

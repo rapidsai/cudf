@@ -345,7 +345,7 @@ std::string encoding_to_string(Encoding encoding)
   auto const to_mask = cuda::proclaim_return_type<uint32_t>([] __device__(auto const& page) {
     return is_supported_encoding(page.encoding) ? uint32_t{0} : encoding_to_mask(page.encoding);
   });
-  uint32_t const unsupported = thrust::transform_reduce(rmm::exec_policy(stream),
+  uint32_t const unsupported = thrust::transform_reduce(rmm::exec_policy_nosync(stream),
                                                         pages.begin(),
                                                         pages.end(),
                                                         to_mask,
@@ -527,7 +527,7 @@ void decode_page_headers(pass_intermediate_data& pass,
         max(c.level_bits[level_type::REPETITION], c.level_bits[level_type::DEFINITION]));
     }));
   // max level data bit size.
-  int const max_level_bits = thrust::reduce(rmm::exec_policy(stream),
+  int const max_level_bits = thrust::reduce(rmm::exec_policy_nosync(stream),
                                             level_bit_size,
                                             level_bit_size + pass.chunks.size(),
                                             0,
@@ -543,7 +543,7 @@ void decode_page_headers(pass_intermediate_data& pass,
   // result:      0,          4,          8
   rmm::device_uvector<size_type> page_counts(pass.pages.size() + 1, stream);
   auto page_keys             = make_page_key_iterator(pass.pages);
-  auto const page_counts_end = thrust::reduce_by_key(rmm::exec_policy(stream),
+  auto const page_counts_end = thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                                                      page_keys,
                                                      page_keys + pass.pages.size(),
                                                      thrust::make_constant_iterator(1),

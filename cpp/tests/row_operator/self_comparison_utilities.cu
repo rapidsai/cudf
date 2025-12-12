@@ -31,14 +31,14 @@ std::unique_ptr<cudf::column> self_comparison(cudf::table_view input,
     cudf::data_type(cudf::type_id::BOOL8), input.num_rows(), cudf::mask_state::UNALLOCATED);
 
   if (cudf::has_nested_columns(input)) {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(input.num_rows()),
                       thrust::make_counting_iterator(0),
                       output->mutable_view().data<bool>(),
                       table_comparator.less<true>(cudf::nullate::NO{}, comparator));
   } else {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(input.num_rows()),
                       thrust::make_counting_iterator(0),

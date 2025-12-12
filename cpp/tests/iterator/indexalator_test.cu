@@ -123,24 +123,24 @@ TYPED_TEST(IndexalatorTest, output_iterator)
     cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 33, 6, 43, 7, 45, 14, 63, 23});
 
   thrust::transform(
-    rmm::exec_policy(stream), input.begin<T>(), input.end<T>(), itr, transform_fn<T>{});
+    rmm::exec_policy_nosync(stream), input.begin<T>(), input.end<T>(), itr, transform_fn<T>{});
   expected =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 12, 14, 28, 46, 66, 86, 90, 126});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(d_col2, expected);
 
-  thrust::fill(rmm::exec_policy(stream), itr, itr + input.size(), 77);
+  thrust::fill(rmm::exec_policy_nosync(stream), itr, itr + input.size(), 77);
   expected =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>({77, 77, 77, 77, 77, 77, 77, 77, 77});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(d_col2, expected);
 
-  thrust::sequence(rmm::exec_policy(stream), itr, itr + input.size());
+  thrust::sequence(rmm::exec_policy_nosync(stream), itr, itr + input.size());
   expected = cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 1, 2, 3, 4, 5, 6, 7, 8});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(d_col2, expected);
 
   auto indices =
     cudf::test::fixed_width_column_wrapper<T, int32_t>({0, 10, 20, 30, 40, 50, 60, 70, 80});
   auto d_indices = cudf::column_view(indices);
-  thrust::lower_bound(rmm::exec_policy(stream),
+  thrust::lower_bound(rmm::exec_policy_nosync(stream),
                       d_indices.begin<T>(),
                       d_indices.end<T>(),
                       input.begin<T>(),

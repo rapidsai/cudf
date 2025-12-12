@@ -208,7 +208,7 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
 
   // the output column count is the maximum number of tokens generated for any input string
   auto const columns_count = thrust::transform_reduce(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings_count),
     cuda::proclaim_return_type<size_type>([d_offsets] __device__(auto const idx) -> size_type {

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -56,8 +56,11 @@ struct launcher {
         rmm::device_buffer{input.null_mask(), bitmask_allocation_size_bytes(input.size())},
         input.null_count());
 
-    thrust::transform(
-      rmm::exec_policy(stream), input.begin<T>(), input.end<T>(), output_view.begin<Tout>(), F{});
+    thrust::transform(rmm::exec_policy_nosync(stream),
+                      input.begin<T>(),
+                      input.end<T>(),
+                      output_view.begin<Tout>(),
+                      F{});
 
     CUDF_CHECK_CUDA(stream.value());
 

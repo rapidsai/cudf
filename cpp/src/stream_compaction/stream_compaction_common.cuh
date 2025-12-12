@@ -90,7 +90,7 @@ OutputIterator unique_copy(InputIterator first,
 {
   size_type const last_index = cuda::std::distance(first, last) - 1;
   return thrust::copy_if(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     first,
     last,
     thrust::counting_iterator<size_type>(0),

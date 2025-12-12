@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -129,7 +129,8 @@ std::unique_ptr<cudf::column> redact_strings(cudf::column_view const& names,
     *d_names, *d_visibilities, offsets.data());
 
   // convert sizes to offsets (in place)
-  thrust::exclusive_scan(rmm::exec_policy(stream), offsets.begin(), offsets.end(), offsets.begin());
+  thrust::exclusive_scan(
+    rmm::exec_policy_nosync(stream), offsets.begin(), offsets.end(), offsets.begin());
 
   // last element is the total output size
   // (device-to-host copy of 1 integer -- includes syncing the stream)

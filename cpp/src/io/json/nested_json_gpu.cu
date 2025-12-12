@@ -1542,11 +1542,11 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
   auto const num_total_tokens = d_num_selected_tokens.value(stream);
   rmm::device_uvector<PdaTokenT> tokens_out{num_total_tokens, stream, mr};
   rmm::device_uvector<SymbolOffsetT> token_indices_out{num_total_tokens, stream, mr};
-  thrust::copy(rmm::exec_policy(stream),
+  thrust::copy(rmm::exec_policy_nosync(stream),
                filtered_tokens_out.end() - num_total_tokens,
                filtered_tokens_out.end(),
                tokens_out.data());
-  thrust::copy(rmm::exec_policy(stream),
+  thrust::copy(rmm::exec_policy_nosync(stream),
                filtered_token_indices_out.end() - num_total_tokens,
                filtered_token_indices_out.end(),
                token_indices_out.data());

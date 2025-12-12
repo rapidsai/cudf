@@ -189,7 +189,7 @@ struct null_considering_binop {
     compare_functor<LhsViewT, RhsViewT, OutT, CompareFunc> binop_func{lhsv, rhsv, cfunc};
 
     // Execute it on every element
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(col_size),
                       out_col,

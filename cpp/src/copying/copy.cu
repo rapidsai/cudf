@@ -157,7 +157,7 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::column_view const& lh
                                                      rmm::device_async_resource_ref mr)
 {
   auto gather_map = rmm::device_uvector<size_type>{static_cast<std::size_t>(size), stream};
-  auto const gather_map_end = thrust::copy_if(rmm::exec_policy(stream),
+  auto const gather_map_end = thrust::copy_if(rmm::exec_policy_nosync(stream),
                                               thrust::make_counting_iterator(size_type{0}),
                                               thrust::make_counting_iterator(size_type{size}),
                                               gather_map.begin(),
@@ -191,7 +191,7 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::scalar const& lhs,
                                                      rmm::device_async_resource_ref mr)
 {
   auto scatter_map = rmm::device_uvector<size_type>{static_cast<std::size_t>(size), stream};
-  auto const scatter_map_end = thrust::copy_if(rmm::exec_policy(stream),
+  auto const scatter_map_end = thrust::copy_if(rmm::exec_policy_nosync(stream),
                                                thrust::make_counting_iterator(size_type{0}),
                                                thrust::make_counting_iterator(size_type{size}),
                                                scatter_map.begin(),
