@@ -478,6 +478,7 @@ def test_parquet_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__PASS_READ_LIMIT", "200")
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__MAX_FOOTER_SAMPLES", "0")
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__MAX_ROW_GROUP_SAMPLES", "0")
+        m.setenv("CUDF_POLARS__PARQUET_OPTIONS__USE_RAPIDSMPF_NATIVE", "0")
 
         # Test default
         engine = pl.GPUEngine()
@@ -488,6 +489,7 @@ def test_parquet_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         assert config.parquet_options.pass_read_limit == 200
         assert config.parquet_options.max_footer_samples == 0
         assert config.parquet_options.max_row_group_samples == 0
+        assert config.parquet_options.use_rapidsmpf_native is False
 
     with monkeypatch.context() as m:
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__CHUNKED", "foo")
@@ -586,6 +588,7 @@ def test_cardinality_factor_compat() -> None:
         "pass_read_limit",
         "max_footer_samples",
         "max_row_group_samples",
+        "use_rapidsmpf_native",
     ],
 )
 def test_validate_parquet_options(option: str) -> None:
