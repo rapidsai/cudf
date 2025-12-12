@@ -624,12 +624,13 @@ def _(
         and rec.state["context"].comm().nranks > 1
     )
 
-    # Use rapidsmpf native read_parquet for multi-partition Parquet scans.
+    # Use rapidsmpf native read_parquet node if possible
     ch_pair = channels[ir].reserve_input_slot()
     nodes: dict[IR, list[Any]] = {}
     native_node: Any = None
     if (
-        partition_info.count > 1
+        parquet_options.use_rapidsmpf_native
+        and partition_info.count > 1
         and ir.typ == "parquet"
         and ir.row_index is None
         and ir.include_file_paths is None
