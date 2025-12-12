@@ -39,10 +39,13 @@ struct chunked_parquet_reader::roaring_bitmap_impl {
   std::unique_ptr<roaring_bitmap_type> roaring_bitmap;
   cudf::host_span<cuda::std::byte const> const roaring_bitmap_data;
 
-  roaring_bitmap_impl(cudf::host_span<cuda::std::byte const> serialized_roaring_bitmap)
+  explicit roaring_bitmap_impl(cudf::host_span<cuda::std::byte const> serialized_roaring_bitmap)
     : roaring_bitmap_data{serialized_roaring_bitmap}
   {
   }
+
+  roaring_bitmap_impl(roaring_bitmap_impl&&)      = default;
+  roaring_bitmap_impl(roaring_bitmap_impl const&) = delete;
 
   void construct_roaring_bitmap(rmm::mr::polymorphic_allocator<char> const& allocator,
                                 rmm::cuda_stream_view stream)
