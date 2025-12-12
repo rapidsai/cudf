@@ -46,7 +46,6 @@ class ListColumn(ColumnBase):
         self,
         plc_column: plc.Column,
         dtype: ListDtype,
-        null_count: int,
         exposed: bool,
     ) -> None:
         if (
@@ -60,7 +59,6 @@ class ListColumn(ColumnBase):
         super().__init__(
             plc_column=plc_column,
             dtype=dtype,
-            null_count=null_count,
             exposed=exposed,
         )
 
@@ -226,7 +224,6 @@ class ListColumn(ColumnBase):
             return type(self)(
                 plc_column=new_plc_column,
                 dtype=dtype,
-                null_count=self.null_count,
                 exposed=False,
             )
         # For pandas dtypes, store them directly in the column's dtype property
