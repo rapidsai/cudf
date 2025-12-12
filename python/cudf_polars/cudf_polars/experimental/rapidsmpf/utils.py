@@ -17,6 +17,8 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import pylibcudf as plc
 
+from cudf_polars.containers import DataFrame
+
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable
 
@@ -251,6 +253,29 @@ def empty_table_chunk(ir: IR, context: Context, stream: Stream) -> TableChunk:
         empty_table,
         stream,
         exclusive_view=True,
+    )
+
+
+def chunk_to_frame(chunk: TableChunk, ir: IR) -> DataFrame:
+    """
+    Convert a TableChunk to a DataFrame.
+
+    Parameters
+    ----------
+    chunk
+        The TableChunk to convert.
+    ir
+        The IR node to use for the schema.
+
+    Returns
+    -------
+    A DataFrame.
+    """
+    return DataFrame.from_table(
+        chunk.table_view(),
+        list(ir.schema.keys()),
+        list(ir.schema.values()),
+        chunk.stream,
     )
 
 
