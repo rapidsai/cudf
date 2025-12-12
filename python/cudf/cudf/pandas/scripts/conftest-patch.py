@@ -10559,6 +10559,7 @@ NODEIDS_THAT_ARE_FLAKY_WITH_COPY_ON_WRITE: set[str] = {
     "tests/series/indexing/test_indexing.py::test_setitem_empty_indexer[indexer3-val1]",
     "tests/series/indexing/test_indexing.py::test_underlying_data_conversion",
     "tests/series/indexing/test_where.py::test_where_dups",
+    "tests/series/methods/test_clip.py::TestSeriesClip::test_clip_against_list_like[upper1-True]",
     "tests/series/methods/test_convert_dtypes.py::TestSeriesConvertDtypes::test_convert_dtypes[test_cases15-params0]",
     "tests/series/methods/test_convert_dtypes.py::TestSeriesConvertDtypes::test_convert_dtypes[test_cases15-params10]",
     "tests/series/methods/test_convert_dtypes.py::TestSeriesConvertDtypes::test_convert_dtypes[test_cases15-params11]",
