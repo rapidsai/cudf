@@ -234,41 +234,68 @@ void test_read_parquet_and_apply_deletion_vector(
 
   auto const num_input_rows = input_table_view.num_rows();
 
-  auto expected_table = [&]() {
-    if constexpr (num_concat == 1) {
-      return build_expected_table(
-        input_table_view, expected_row_index_column, expected_row_mask_column, stream, mr);
-    } else {
-      auto expected_table = build_expected_table(
-        input_table_view, expected_row_index_column, expected_row_mask_column, stream, mr);
-      auto table_views = std::vector<cudf::table_view>{};
-      table_views.reserve(num_concat);
-      for (auto i = 0; i < num_concat; ++i) {
-        table_views.emplace_back(expected_table->view());
-      }
-      return cudf::concatenate(table_views, stream, mr);
-    }
-  }();
-
   auto input_buffers              = std::vector<cudf::host_span<char const>>{};
-  auto serialized_roaring_bitmaps = std::vector<cudf::host_span<cuda::std::byte const>>{};
-  auto deletion_vector_row_counts = std::vector<cudf::size_type>{};
   auto row_group_row_offsets      = std::vector<size_t>{};
   auto row_group_num_counts       = std::vector<cudf::size_type>{};
+  auto deletion_vector_row_counts = std::vector<cudf::size_type>{};
   input_buffers.reserve(num_concat);
-  serialized_roaring_bitmaps.reserve(num_concat);
-  deletion_vector_row_counts.reserve(num_concat);
   row_group_row_offsets.reserve(num_concat * row_group_offsets.size());
   row_group_num_counts.reserve(num_concat * row_group_num_rows.size());
+  deletion_vector_row_counts.reserve(num_concat);
+
   for (auto i = 0; i < num_concat; ++i) {
     input_buffers.emplace_back(parquet_buffer.data(), parquet_buffer.size());
-    serialized_roaring_bitmaps.emplace_back(serialized_roaring_bitmap);
-    deletion_vector_row_counts.emplace_back(num_input_rows);
     row_group_row_offsets.insert(
       row_group_row_offsets.end(), row_group_offsets.begin(), row_group_offsets.end());
     row_group_num_counts.insert(
       row_group_num_counts.end(), row_group_num_rows.begin(), row_group_num_rows.end());
+    deletion_vector_row_counts.emplace_back(num_input_rows);
   }
+
+  // Insert the first serialized roaring bitmap
+  auto serialized_roaring_bitmaps = std::vector<cudf::host_span<cuda::std::byte const>>{};
+  serialized_roaring_bitmaps.reserve(num_concat);
+  serialized_roaring_bitmaps.emplace_back(serialized_roaring_bitmap);
+
+  // Build the expected table
+  auto expected_table = [&]() {
+    auto tables      = std::vector<std::unique_ptr<cudf::table>>{};
+    auto table_views = std::vector<cudf::table_view>{};
+    tables.reserve(num_concat);
+    table_views.reserve(num_concat);
+    // Insert the first table
+    tables.emplace_back(build_expected_table(
+      input_table_view, expected_row_index_column, expected_row_mask_column, stream, mr));
+    table_views.emplace_back(tables.back()->view());
+
+    if constexpr (num_concat == 1) {
+      return std::move(tables.back());
+    } else {
+      constexpr auto deletion_probability = 0.45;
+
+      for (auto i = 0; i < num_concat - 1; ++i) {
+        // Build deletion vector and the expected row mask column
+        auto local_expected_row_indices =
+          build_expected_row_indices(row_group_offsets, row_group_num_rows, num_input_rows);
+
+        auto local_expected_row_index_column = build_column_from_host_data<size_t>(
+          local_expected_row_indices, cudf::type_id::UINT64, stream, mr);
+
+        auto [local_deletion_vector, local_expected_row_mask_column] =
+          build_deletion_vector_and_expected_row_mask(
+            num_input_rows, deletion_probability, local_expected_row_indices, stream, mr);
+        tables.emplace_back(build_expected_table(input_table_view,
+                                                 local_expected_row_index_column->view(),
+                                                 local_expected_row_mask_column->view(),
+                                                 stream,
+                                                 mr));
+        table_views.emplace_back(tables.back()->view());
+        serialized_roaring_bitmaps.emplace_back(std::move(local_deletion_vector));
+      }
+
+      return cudf::concatenate(table_views, stream, mr);
+    }
+  }();
 
   // Read parquet and apply deletion vector
   auto const in_opts =
