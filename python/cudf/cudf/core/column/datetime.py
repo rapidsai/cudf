@@ -37,6 +37,7 @@ from cudf.utils.dtypes import (
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 
 if TYPE_CHECKING:
+    import datetime
     from collections.abc import Callable
 
     from cudf._typing import (
@@ -111,19 +112,13 @@ class DatetimeColumn(TemporalBaseColumn):
     def __init__(
         self,
         plc_column: plc.Column,
-        size: int,
         dtype: np.dtype | pd.DatetimeTZDtype,
-        offset: int,
-        null_count: int,
         exposed: bool,
     ) -> None:
         dtype = self._validate_dtype_instance(dtype)
         super().__init__(
             plc_column=plc_column,
-            size=size,
             dtype=dtype,
-            offset=offset,
-            null_count=null_count,
             exposed=exposed,
         )
 
@@ -303,7 +298,7 @@ class DatetimeColumn(TemporalBaseColumn):
         raise NotImplementedError("day_of_week is currently not implemented.")
 
     @functools.cached_property
-    def tz(self):
+    def tz(self) -> datetime.tzinfo | None:
         """
         Return the timezone.
 
@@ -325,15 +320,15 @@ class DatetimeColumn(TemporalBaseColumn):
         raise NotImplementedError("freq is not yet implemented.")
 
     @functools.cached_property
-    def date(self):
+    def date(self) -> None:
         raise NotImplementedError("date is not yet implemented.")
 
     @functools.cached_property
-    def time(self):
+    def time(self) -> None:
         raise NotImplementedError("time is not yet implemented.")
 
     @functools.cached_property
-    def timetz(self):
+    def timetz(self) -> None:
         raise NotImplementedError("timetz is not yet implemented.")
 
     @functools.cached_property
@@ -692,10 +687,7 @@ class DatetimeColumn(TemporalBaseColumn):
         if isinstance(dtype, pd.DatetimeTZDtype):
             return DatetimeTZColumn(
                 plc_column=self.plc_column,
-                size=self.size,
                 dtype=dtype,
-                offset=self.offset,
-                null_count=self.null_count,
                 exposed=False,
             )
         if cudf.get_option("mode.pandas_compatible"):
@@ -859,10 +851,7 @@ class DatetimeTZColumn(DatetimeColumn):
         """Return UTC time as naive timestamps."""
         return DatetimeColumn(
             plc_column=self.plc_column,
-            size=self.size,
             dtype=_get_base_dtype(self.dtype),
-            offset=self.offset,
-            null_count=self.null_count,
             exposed=False,
         )
 

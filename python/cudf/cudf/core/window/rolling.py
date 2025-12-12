@@ -373,7 +373,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                     source_column.plc_column,
                     pre,
                     fwd,
-                    self.min_periods or 1,
+                    1 if self.min_periods is None else self.min_periods,
                     rolling_agg,
                 )
             )
@@ -442,9 +442,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         return self._apply_agg("count")
 
     def median(self, **kwargs):
-        raise NotImplementedError(
-            "groupby().rolling().median() is not yet implemented"
-        )
+        raise NotImplementedError("Rolling.median() is not yet implemented")
 
     def apply(self, func, *args, **kwargs) -> DataFrame | Series:
         """

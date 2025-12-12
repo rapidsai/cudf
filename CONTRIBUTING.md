@@ -174,7 +174,7 @@ To build C++ tests, you can also request that build.sh build the `tests` target.
 To build all libraries and tests, with Python packages in development mode, simply run
 
 ```bash
-./build.sh --pydevelop libcudf libcudf_kafka pylibcudf cudf dask_cudf cudf_kafka custreamz
+./build.sh --pydevelop libcudf libcudf_kafka pylibcudf cudf cudf_polars dask_cudf cudf_kafka custreamz
 ```
 
 - **Note**: if Cython files (`*.pyx` or `*.pxd`) have changed, the Python build must be rerun.

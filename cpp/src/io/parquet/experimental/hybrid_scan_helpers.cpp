@@ -76,7 +76,7 @@ aggregate_reader_metadata::aggregate_reader_metadata(FileMetaData const& parquet
   : aggregate_reader_metadata_base({}, false, false)
 {
   // Just copy over the FileMetaData struct to the internal metadata struct
-  per_file_metadata.emplace_back(metadata{parquet_metadata}.get_file_metadata());
+  per_file_metadata.emplace_back(metadata{parquet_metadata});
   initialize_internals(use_arrow_schema, has_cols_from_mismatched_srcs);
 }
 
@@ -86,7 +86,7 @@ aggregate_reader_metadata::aggregate_reader_metadata(cudf::host_span<uint8_t con
   : aggregate_reader_metadata_base({}, false, false)
 {
   // Re-initialize internal variables here as base class was initialized without a source
-  per_file_metadata.emplace_back(metadata{footer_bytes}.get_file_metadata());
+  per_file_metadata.emplace_back(metadata{footer_bytes});
   initialize_internals(use_arrow_schema, has_cols_from_mismatched_srcs);
 }
 
@@ -148,36 +148,12 @@ void aggregate_reader_metadata::setup_page_index(cudf::host_span<uint8_t const> 
     return;
   }
 
-  auto& row_groups = per_file_metadata.front().row_groups;
-
-  CUDF_EXPECTS(not row_groups.empty() and not row_groups.front().columns.empty(),
-               "No column chunks in Parquet schema to read page index for");
-
-  CompactProtocolReader cp(page_index_bytes.data(), page_index_bytes.size());
-
+  // Get the file metadata and setup the page index
+  auto& file_metadata = per_file_metadata.front();
   // Set the first ColumnChunk's offset of ColumnIndex as the adjusted zero offset
-  int64_t const min_offset = row_groups.front().columns.front().column_index_offset;
-  // now loop over row groups
-  for (auto& rg : row_groups) {
-    for (auto& col : rg.columns) {
-      // Read the ColumnIndex for this ColumnChunk
-      if (col.column_index_length > 0 && col.column_index_offset > 0) {
-        int64_t const offset = col.column_index_offset - min_offset;
-        cp.init(page_index_bytes.data() + offset, col.column_index_length);
-        ColumnIndex ci;
-        cp.read(&ci);
-        col.column_index = std::move(ci);
-      }
-      // Read the OffsetIndex for this ColumnChunk
-      if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
-        int64_t const offset = col.offset_index_offset - min_offset;
-        cp.init(page_index_bytes.data() + offset, col.offset_index_length);
-        OffsetIndex oi;
-        cp.read(&oi);
-        col.offset_index = std::move(oi);
-      }
-    }
-  }
+  int64_t const min_offset = file_metadata.row_groups.front().columns.front().column_index_offset;
+
+  file_metadata.setup_page_index(page_index_bytes, min_offset);
 }
 
 size_type aggregate_reader_metadata::total_rows_in_row_groups(
@@ -277,6 +253,15 @@ aggregate_reader_metadata::select_payload_columns(
                         strings_to_categorical,
                         ignore_missing_columns,
                         timestamp_type_id);
+}
+
+std::vector<std::vector<cudf::size_type>>
+aggregate_reader_metadata::filter_row_groups_with_byte_range(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  std::size_t bytes_to_skip,
+  std::optional<std::size_t> const& bytes_to_read) const
+{
+  return apply_byte_bounds_filter(row_group_indices, bytes_to_skip, bytes_to_read);
 }
 
 std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_groups_with_stats(

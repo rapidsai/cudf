@@ -32,16 +32,11 @@ endif()
 
 rapids_cmake_write_version_file(include/cudf/version_config.hpp)
 
-# Needed because GoogleBenchmark changes the state of FindThreads.cmake, causing subsequent runs to
-# have different values for the `Threads::Threads` target. Setting this flag ensures
-# `Threads::Threads` is the same value in first run and subsequent runs.
-set(THREADS_PREFER_PTHREAD_FLAG ON)
-
 # ##################################################################################################
 # * build options ---------------------------------------------------------------------------------
 option(USE_NVTX "Build with NVTX support" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
-option(BUILD_BENCHMARKS "Configure CMake to build (google & nvbench) benchmarks" OFF)
+option(BUILD_BENCHMARKS "Configure CMake to build benchmarks" OFF)
 option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 option(CUDF_BUILD_TESTUTIL "Whether to build the test utilities contained in libcudf" ON)
@@ -91,7 +86,7 @@ option(
 
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
-message(VERBOSE "CUDF: Configure CMake to build (google & nvbench) benchmarks: ${BUILD_BENCHMARKS}")
+message(VERBOSE "CUDF: Configure CMake to build benchmarks: ${BUILD_BENCHMARKS}")
 message(VERBOSE "CUDF: Build cuDF shared libraries: ${BUILD_SHARED_LIBS}")
 message(VERBOSE "CUDF: Use a file cache for JIT compiled kernels: ${JITIFY_USE_CACHE}")
 message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}")
@@ -440,25 +435,26 @@ add_library(
   src/groupby/sort/group_collect.cu
   src/groupby/sort/group_correlation.cu
   src/groupby/sort/group_count.cu
+  src/groupby/sort/group_count_scan.cu
   src/groupby/sort/group_histogram.cu
   src/groupby/sort/group_m2.cu
   src/groupby/sort/group_max.cu
-  src/groupby/sort/group_min.cu
+  src/groupby/sort/group_max_scan.cu
   src/groupby/sort/group_merge_lists.cu
   src/groupby/sort/group_merge_m2.cu
+  src/groupby/sort/group_min.cu
+  src/groupby/sort/group_min_scan.cu
   src/groupby/sort/group_nth_element.cu
   src/groupby/sort/group_nunique.cu
   src/groupby/sort/group_product.cu
-  src/groupby/sort/group_quantiles.cu
-  src/groupby/sort/group_std.cu
-  src/groupby/sort/group_sum.cu
-  src/groupby/sort/group_count_scan.cu
-  src/groupby/sort/group_max_scan.cu
-  src/groupby/sort/group_min_scan.cu
   src/groupby/sort/group_product_scan.cu
+  src/groupby/sort/group_quantiles.cu
   src/groupby/sort/group_rank_scan.cu
   src/groupby/sort/group_replace_nulls.cu
+  src/groupby/sort/group_std.cu
+  src/groupby/sort/group_sum.cu
   src/groupby/sort/group_sum_scan.cu
+  src/groupby/sort/group_topk.cu
   src/groupby/sort/host_udf_aggregation.cpp
   src/groupby/sort/scan.cpp
   src/groupby/sort/sort_helper.cu
@@ -582,6 +578,11 @@ add_library(
   src/join/conditional_join.cu
   src/join/cross_join.cu
   src/join/distinct_hash_join.cu
+  src/join/filter_join_indices.cu
+  src/join/filter_join_indices_kernel_complex.cu
+  src/join/filter_join_indices_kernel_null_complex.cu
+  src/join/filter_join_indices_kernel_null_primitive.cu
+  src/join/filter_join_indices_kernel_primitive.cu
   src/join/filtered_join.cu
   src/join/hash_join.cu
   src/join/join.cu
@@ -593,7 +594,6 @@ add_library(
   src/join/mixed_join_semi.cu
   src/join/mixed_join_size_kernel.cu
   src/join/mixed_join_size_kernel_nulls.cu
-  src/join/semi_join.cu
   src/join/sort_merge_join.cu
   src/json/json_path.cu
   src/lists/contains.cu
@@ -982,7 +982,7 @@ target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio nanoarrow zstd
+          kvikio::kvikio nanoarrow::nanoarrow zstd
 )
 
 # Add Conda library, and include paths if specified
@@ -1177,10 +1177,6 @@ endif()
 # ##################################################################################################
 # * add benchmarks --------------------------------------------------------------------------------
 if(CUDF_BUILD_BENCHMARKS)
-  # Find or install GoogleBench
-  include(${rapids-cmake-dir}/cpm/gbench.cmake)
-  rapids_cpm_gbench(BUILD_STATIC)
-
   # Find or install nvbench
   include(cmake/thirdparty/get_nvbench.cmake)
 

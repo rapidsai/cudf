@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import warnings
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -99,10 +99,7 @@ class CategoricalColumn(column.ColumnBase):
     def __init__(
         self,
         plc_column: plc.Column,
-        size: int,
         dtype: CategoricalDtype,
-        offset: int,
-        null_count: int,
         exposed: bool,
     ) -> None:
         if not isinstance(dtype, CategoricalDtype):
@@ -111,10 +108,7 @@ class CategoricalColumn(column.ColumnBase):
             )
         super().__init__(
             plc_column=plc_column,
-            size=size,
             dtype=dtype,
-            offset=offset,
-            null_count=null_count,
             exposed=exposed,
         )
         self._codes = self.children[0].set_mask(self.mask)
@@ -174,10 +168,7 @@ class CategoricalColumn(column.ColumnBase):
             # which doesn't necessarily match the attributes of plc_column
             child = cudf.core.column.numerical.NumericalColumn(
                 plc_column=self.plc_column,
-                size=self.size,
                 dtype=dtype_from_pylibcudf_column(self.plc_column),
-                offset=self.offset,
-                null_count=self.null_count,
                 exposed=False,
             )
             self._children = (child,)
@@ -195,7 +186,7 @@ class CategoricalColumn(column.ColumnBase):
     def ordered(self) -> bool | None:
         return self.dtype.ordered
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: Any, value: Any) -> None:
         if is_scalar(value) and _is_null_host_scalar(value):
             to_add_categories = 0
         else:
@@ -255,8 +246,8 @@ class CategoricalColumn(column.ColumnBase):
         op: str,
         skipna: bool = True,
         min_count: int = 0,
-        *args,
-        **kwargs,
+        *args: Any,
+        **kwargs: Any,
     ) -> ScalarLike:
         # Only valid reductions are min and max
         if not self.ordered:
@@ -309,7 +300,11 @@ class CategoricalColumn(column.ColumnBase):
             return self._get_decategorized_column()._binaryop(other, op)
         return self.codes._binaryop(other.codes, op)
 
-    def sort_values(self, ascending: bool = True, na_position="last") -> Self:
+    def sort_values(
+        self,
+        ascending: bool = True,
+        na_position: Literal["first", "last"] = "last",
+    ) -> Self:
         return self.codes.sort_values(  # type: ignore[return-value]
             ascending, na_position
         )._with_type_metadata(self.dtype)
@@ -407,7 +402,7 @@ class CategoricalColumn(column.ColumnBase):
 
         return self.codes, other
 
-    def _encode(self, value) -> ScalarLike:
+    def _encode(self, value: ScalarLike) -> ScalarLike:
         return self.categories.find_first_value(value)
 
     def _decode(self, value: int) -> ScalarLike:
@@ -654,7 +649,7 @@ class CategoricalColumn(column.ColumnBase):
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         return self._get_decategorized_column().as_numerical_column(dtype)
 
-    def as_string_column(self, dtype) -> StringColumn:
+    def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         return self._get_decategorized_column().as_string_column(dtype)
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
@@ -729,10 +724,7 @@ class CategoricalColumn(column.ColumnBase):
         if isinstance(dtype, CategoricalDtype):
             return type(self)(
                 plc_column=self.plc_column,
-                size=self.size,
                 dtype=dtype,
-                offset=self.offset,
-                null_count=self.null_count,
                 exposed=False,
             )
 
@@ -794,7 +786,7 @@ class CategoricalColumn(column.ColumnBase):
         return out_col
 
     def _categories_equal(
-        self, new_categories: ColumnBase, ordered=False
+        self, new_categories: ColumnBase, ordered: bool = False
     ) -> bool:
         cur_categories = self.categories
         if len(new_categories) != len(cur_categories):
@@ -937,7 +929,7 @@ class CategoricalColumn(column.ColumnBase):
             )
         return self._set_categories(new_categories, ordered=ordered)
 
-    def rename_categories(self, new_categories) -> CategoricalColumn:
+    def rename_categories(self, new_categories: Any) -> CategoricalColumn:
         raise NotImplementedError(
             "rename_categories is currently not supported."
         )
