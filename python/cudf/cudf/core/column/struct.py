@@ -56,14 +56,12 @@ class StructColumn(ColumnBase):
         self,
         plc_column: plc.Column,
         dtype: StructDtype,
-        null_count: int,
         exposed: bool,
     ):
         dtype = self._validate_dtype_instance(dtype)
         super().__init__(
             plc_column=plc_column,
             dtype=dtype,
-            null_count=null_count,
             exposed=exposed,
         )
 
@@ -228,7 +226,6 @@ class StructColumn(ColumnBase):
             return IntervalColumn(
                 plc_column=new_plc_column,
                 dtype=dtype,
-                null_count=self.null_count,
                 exposed=False,
             )
         elif isinstance(dtype, StructDtype):
@@ -250,7 +247,6 @@ class StructColumn(ColumnBase):
             return StructColumn(
                 plc_column=new_plc_column,
                 dtype=dtype,
-                null_count=self.null_count,
                 exposed=False,
             )
         # For pandas dtypes, store them directly in the column's dtype property
