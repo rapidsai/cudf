@@ -455,15 +455,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             new_mask = None
             new_null_count = 0
 
-        self.plc_column = plc.Column(
-            data_type=self.plc_column.type(),
-            size=self.plc_column.size(),
-            data=self.plc_column.data(),
-            mask=new_mask,
-            null_count=new_null_count,
-            offset=self.plc_column.offset(),
-            children=self.plc_column.children(),
-        )
+        self.plc_column = self.plc_column.with_mask(new_mask, new_null_count)
 
         self._clear_cache()
 
