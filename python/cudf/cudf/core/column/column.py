@@ -230,9 +230,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def __init__(
         self,
         plc_column: plc.Column,
-        size: int,
         dtype: DtypeObj,
-        offset: int,
         null_count: int,
         exposed: bool,
     ) -> None:
@@ -244,12 +242,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 f"plc_column must be a pylibcudf.Column with a TypeId in {self._VALID_PLC_TYPES}"
             )
         self.plc_column = plc_column
-        if size < 0:
-            raise ValueError("size must be >=0")
-        self._size = size
         self._distinct_count: dict[bool, int] = {}
         self._dtype = dtype
-        self._offset = offset
         if null_count < 0:
             raise ValueError("null_count must be >=0")
         self._null_count = null_count
@@ -368,7 +362,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def size(self) -> int:
-        return self._size
+        return self.plc_column.size()
 
     @property
     def base_data(self) -> None | Buffer:
@@ -515,7 +509,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def offset(self) -> int:
-        return self._offset
+        return self.plc_column.offset()
 
     @property
     def base_children(self) -> tuple[ColumnBase, ...]:
@@ -563,10 +557,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         object with the Buffers and attributes from the other column.
         """
         if inplace:
-            self._offset = other_col.offset
-            self._size = other_col.size
             self._dtype = other_col._dtype
             self.plc_column = other_col.plc_column
+            # Note: size and offset are now read from plc_column via properties
             self.set_base_data(other_col.base_data)
             self.set_base_children(other_col.base_children)
             self.set_base_mask(other_col.base_mask)
@@ -727,9 +720,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         return column_cls(  # type: ignore[return-value]
             plc_column=col,
-            size=col.size(),
             dtype=dtype,
-            offset=col.offset(),
             null_count=col.null_count(),
             exposed=data_ptr_exposed,
         )
@@ -1177,9 +1168,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             col = type(self)(
                 plc_column=self.plc_column,
-                size=self.size,
                 dtype=self.dtype,
-                offset=self.offset,
                 null_count=self.null_count,
                 exposed=False,
             )
@@ -2012,8 +2001,15 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             if cudf.get_option("copy_on_write") and (data_ptr != original_ptr):
                 # The offset must be reset to 0 because we have migrated to a new copied
                 # buffer starting at the old offset.
-                self._offset = 0
-                # Update base_data to match the new data buffer
+                self.plc_column = plc.Column(
+                    data_type=self.plc_column.type(),
+                    size=self.plc_column.size(),
+                    data=self.plc_column.data(),
+                    mask=self.plc_column.null_mask(),
+                    null_count=self.plc_column.null_count(),
+                    offset=0,
+                    children=self.plc_column.children(),
+                )
                 self.set_base_data(self.data)
 
         output = {

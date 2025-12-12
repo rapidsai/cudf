@@ -99,9 +99,7 @@ class CategoricalColumn(column.ColumnBase):
     def __init__(
         self,
         plc_column: plc.Column,
-        size: int,
         dtype: CategoricalDtype,
-        offset: int,
         null_count: int,
         exposed: bool,
     ) -> None:
@@ -111,9 +109,7 @@ class CategoricalColumn(column.ColumnBase):
             )
         super().__init__(
             plc_column=plc_column,
-            size=size,
             dtype=dtype,
-            offset=offset,
             null_count=null_count,
             exposed=exposed,
         )
@@ -174,9 +170,7 @@ class CategoricalColumn(column.ColumnBase):
             # which doesn't necessarily match the attributes of plc_column
             child = cudf.core.column.numerical.NumericalColumn(
                 plc_column=self.plc_column,
-                size=self.size,
                 dtype=dtype_from_pylibcudf_column(self.plc_column),
-                offset=self.offset,
                 null_count=self.null_count,
                 exposed=False,
             )
@@ -733,9 +727,7 @@ class CategoricalColumn(column.ColumnBase):
         if isinstance(dtype, CategoricalDtype):
             return type(self)(
                 plc_column=self.plc_column,
-                size=self.size,
                 dtype=dtype,
-                offset=self.offset,
                 null_count=self.null_count,
                 exposed=False,
             )
