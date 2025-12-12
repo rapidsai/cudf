@@ -622,12 +622,14 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     cudf::io::detail::gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, stream);
   }
 
-  CUDF_EXPECTS(cudf::detail::all_of(
-                 comp_res.begin(),
-                 comp_res.end(),
-                 [] __device__(auto const& res) { return res.status == codec_status::SUCCESS; },
-                 stream),
-               "Error during decompression");
+  CUDF_EXPECTS(
+    cudf::detail::all_of(comp_res.begin(),
+                         comp_res.end(),
+                         cuda::proclaim_return_type<bool>([] __device__(auto const& res) {
+                           return res.status == codec_status::SUCCESS;
+                         }),
+                         stream),
+    "Error during decompression");
 
   return {std::move(pass_decomp_pages), std::move(subpass_decomp_pages)};
 }

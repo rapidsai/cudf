@@ -1065,7 +1065,7 @@ void compute_page_string_sizes_pass2(cudf::detail::hostdevice_span<PageInfo> pag
     cudf::detail::any_of(pages.device_begin(),
                          pages.device_end(),
                          cuda::proclaim_return_type<bool>(
-                           [] __device__(auto& page) { return page.temp_string_size != 0; }),
+                           [] __device__(auto const& page) { return page.temp_string_size != 0; }),
                          stream);
 
   if (need_sizes) {
