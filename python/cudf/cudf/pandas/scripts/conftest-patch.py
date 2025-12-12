@@ -10311,6 +10311,7 @@ NODEIDS_THAT_ARE_FLAKY_WITH_COPY_ON_WRITE: set[str] = {
     "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_setitem_frame_2d_values[object]",
     "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_setitem_mask_aligned[float-None-False]",
     "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_setitem_mask_aligned[float-loc-False]",
+    "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_setitem_mask_aligned[float-loc-True]",
     "tests/extension/test_numpy.py::TestNumpyExtensionArray::test_where_series[float-False]",
     "tests/frame/methods/test_cov_corr.py::TestDataFrameCorr::test_corr_numeric_only[False-spearman]",
     "tests/frame/methods/test_drop.py::test_drop_with_non_unique_datetime_index_and_invalid_keys",
