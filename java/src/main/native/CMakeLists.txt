@@ -29,7 +29,6 @@ option(USE_NVTX "Build with NVTX support" ON)
 option(BUILD_SHARED_LIBS "Build cuDF JNI shared libraries" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(CUDF_USE_PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
-option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 option(USE_GDS "Build with GPUDirect Storage (GDS)/cuFile support" OFF)
 option(CUDF_JNI_LIBCUDF_STATIC "Link with libcudf.a" OFF)
 option(CUDF_JNI_ENABLE_PROFILING "Build with profiling support" ON)
@@ -41,7 +40,6 @@ message(VERBOSE "CUDF_JNI: Configure CMake to build tests: ${BUILD_TESTS}")
 message(VERBOSE
         "CUDF_JNI: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}"
 )
-message(VERBOSE "CUDF_JNI: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}")
 message(VERBOSE "CUDF_JNI: Build with GPUDirect Storage support: ${USE_GDS}")
 message(VERBOSE "CUDF_JNI: Link with libcudf statically: ${CUDF_JNI_LIBCUDF_STATIC}")
 
@@ -274,16 +272,9 @@ target_link_libraries(
 
 # ##################################################################################################
 # * cudart options --------------------------------------------------------------------------------
-#   cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic
-#   linking
+#   cudart is always statically linked
 
-if(CUDA_STATIC_RUNTIME)
-  # Tell CMake what CUDA language runtime to use
-  set_target_properties(cudfjni PROPERTIES CUDA_RUNTIME_LIBRARY Static)
-else()
-  # Tell CMake what CUDA language runtime to use
-  set_target_properties(cudfjni PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
-endif()
+set_target_properties(cudfjni PROPERTIES CUDA_RUNTIME_LIBRARY Static)
 
 # ##################################################################################################
 # * install shared libraries ----------------------------------------------------------------------
