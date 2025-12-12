@@ -12,7 +12,7 @@
 #include <rmm/device_buffer.hpp>
 
 #include <cub/device/device_reduce.cuh>
-#include <cuda/functional>
+#include <cuda/stream_ref>
 
 namespace CUDF_EXPORT cudf {
 namespace detail {
@@ -43,31 +43,18 @@ OutputType reduce(InputIterator begin,
                   Op binary_op,
                   rmm::cuda_stream_view stream)
 {
-  auto const num_items = std::distance(begin, end);
+  auto const num_items = cuda::std::distance(begin, end);
 
   // Device memory to store the result
   rmm::device_buffer d_result(sizeof(OutputType), stream, cudf::get_current_device_resource_ref());
 
-  size_t temp_storage_bytes = 0;
-  cub::DeviceReduce::Reduce(nullptr,
-                            temp_storage_bytes,
-                            begin,
-                            static_cast<OutputType*>(d_result.data()),
-                            num_items,
-                            binary_op,
-                            init,
-                            stream.value());
-
-  rmm::device_buffer d_temp_storage(
-    temp_storage_bytes, stream, cudf::get_current_device_resource_ref());
-  cub::DeviceReduce::Reduce(d_temp_storage.data(),
-                            temp_storage_bytes,
-                            begin,
-                            static_cast<OutputType*>(d_result.data()),
-                            num_items,
-                            binary_op,
-                            init,
-                            stream.value());
+  // Build environment with stream and memory resource for cub::DeviceReduce::Reduce
+  auto env = cuda::std::execution::env{
+    cuda::std::execution::prop{cuda::get_stream_t{}, cuda::stream_ref{stream.value()}},
+    cuda::std::execution::prop{cuda::mr::get_memory_resource_t{},
+                               cudf::get_current_device_resource_ref()}};
+  cub::DeviceReduce::Reduce(
+    begin, static_cast<OutputType*>(d_result.data()), num_items, binary_op, init, env);
 
   // Copy result back to host via pinned memory
   auto result = cudf::detail::make_pinned_vector<OutputType>(size_t{1}, stream);
@@ -111,7 +98,7 @@ OutputType transform_reduce(InputIterator begin,
                             ReductionOp reduce_op,
                             rmm::cuda_stream_view stream)
 {
-  auto const num_items = std::distance(begin, end);
+  auto const num_items = cuda::std::distance(begin, end);
 
   // Device memory to store the result
   rmm::device_buffer d_result(sizeof(OutputType), stream, cudf::get_current_device_resource_ref());

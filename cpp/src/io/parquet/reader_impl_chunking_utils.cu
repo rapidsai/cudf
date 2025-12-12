@@ -9,10 +9,10 @@
 #include "reader_impl_chunking.hpp"
 #include "reader_impl_chunking_utils.cuh"
 
+#include <cudf/detail/algorithm/logical.cuh>
+#include <cudf/detail/algorithm/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/logical.cuh>
-#include <cudf/detail/utilities/reduce.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/utilities/memory_resource.hpp>
