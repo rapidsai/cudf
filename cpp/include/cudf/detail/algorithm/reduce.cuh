@@ -223,5 +223,36 @@ cuda::std::pair<KeysOutputIterator, ValuesOutputIterator> reduce_by_key(
   return {keys_output + num_runs.front(), values_output + num_runs.front()};
 }
 
+/**
+ * @brief Helper to count elements satisfying a predicate using CUB with pinned memory
+ *
+ * This function counts elements in the input range that satisfy the given predicate,
+ * using CUB's transform_reduce implementation with pinned memory for efficient
+ * device-to-host transfer of the count.
+ *
+ * @tparam Predicate **[inferred]** Type of the unary predicate
+ * @tparam InputIterator **[inferred]** Type of device-accessible input iterator
+ *
+ * @param begin Device-accessible iterator to start of input values
+ * @param end Device-accessible iterator to end of input values
+ * @param predicate Unary predicate that returns true for elements to count
+ * @param stream CUDA stream to use
+ * @return The count of elements satisfying the predicate
+ */
+template <typename Predicate, typename InputIterator>
+cuda::std::size_t count_if(InputIterator begin,
+                           InputIterator end,
+                           Predicate predicate,
+                           rmm::cuda_stream_view stream)
+{
+  // Transform each element to 0 or 1 based on predicate, then sum
+  auto transform_op = [predicate] __device__(auto const& val) -> cuda::std::size_t {
+    return predicate(val) ? cuda::std::size_t{1} : cuda::std::size_t{0};
+  };
+
+  return transform_reduce(
+    begin, end, transform_op, cuda::std::size_t{0}, cuda::std::plus<>{}, stream);
+}
+
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf
