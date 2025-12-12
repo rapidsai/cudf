@@ -12,6 +12,7 @@ For the most part, the public API of `cudf-polars` is the polars API.
       ParquetOptions,
       Cluster,
       ShuffleMethod,
+      ShufflerInsertionMethod,
       StatsPlanningOptions,
       StreamingExecutor,
       StreamingFallbackMode,
