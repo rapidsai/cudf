@@ -84,9 +84,7 @@ class NumericalColumn(NumericalBaseColumn):
     def __init__(
         self,
         plc_column: plc.Column,
-        size: int,
         dtype: np.dtype,
-        offset: int,
         null_count: int,
         exposed: bool,
     ) -> None:
@@ -102,9 +100,7 @@ class NumericalColumn(NumericalBaseColumn):
             )
         super().__init__(
             plc_column=plc_column,
-            size=size,
             dtype=dtype,
-            offset=offset,
             null_count=null_count,
             exposed=exposed,
         )
@@ -913,9 +909,7 @@ class NumericalColumn(NumericalBaseColumn):
             codes = cast(NumericalColumn, self.astype(codes_dtype))
             return CategoricalColumn(
                 plc_column=codes.to_pylibcudf(mode="read"),
-                size=codes.size,
                 dtype=dtype,
-                offset=codes.offset,
                 null_count=codes.null_count,
                 exposed=False,
             )

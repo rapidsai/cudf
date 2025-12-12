@@ -45,9 +45,7 @@ class ListColumn(ColumnBase):
     def __init__(
         self,
         plc_column: plc.Column,
-        size: int,
         dtype: ListDtype,
-        offset: int,
         null_count: int,
         exposed: bool,
     ) -> None:
@@ -61,9 +59,7 @@ class ListColumn(ColumnBase):
             raise ValueError("dtype must be a cudf.ListDtype")
         super().__init__(
             plc_column=plc_column,
-            size=size,
             dtype=dtype,
-            offset=offset,
             null_count=null_count,
             exposed=exposed,
         )
@@ -229,9 +225,7 @@ class ListColumn(ColumnBase):
             )
             return type(self)(
                 plc_column=new_plc_column,
-                size=self.size,
                 dtype=dtype,
-                offset=self.offset,
                 null_count=self.null_count,
                 exposed=False,
             )
