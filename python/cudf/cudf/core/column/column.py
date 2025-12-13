@@ -216,12 +216,36 @@ class spillable_gpumemoryview(plc.gpumemoryview):
         return self._buf
 
     @property
+    def owner(self) -> SpillableBuffer:
+        """Return the underlying buffer for owner chain traversal."""
+        return self._buf
+
+    @property
+    def __cuda_array_interface__(self) -> dict[str, Any]:
+        """Minimal CUDA array interface for buffer slicing without unspilling."""
+        return {
+            "data": (0, False),  # ptr=0 indicates potentially spilled
+            "shape": (self._buf.size,),
+            "strides": None,
+            "typestr": "|u1",
+            "version": 3,
+        }
+
+    @property
     def cai(self) -> None:  # type: ignore[override]
         assert False
 
     @property
-    def ptr(self) -> None:  # type: ignore[override]
-        assert False
+    def ptr(self) -> int:
+        """Device pointer (Span protocol) - DO NOT ACCESS.
+
+        This property exists only to satisfy Span protocol validation.
+        Accessing it would trigger unspilling, which defeats the purpose
+        of spillable_gpumemoryview.
+        """
+        # Return 0 to indicate the buffer may be spilled (no valid GPU pointer)
+        # This matches SpillableBufferOwner behavior when ptr_desc["type"] == "cpu"
+        return 0
 
     @property
     def nbytes(self) -> None:  # type: ignore[override]
@@ -279,11 +303,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             self.plc_column, exposed
         )
         mask_view = plc_column.null_mask()
-        mask = (
-            as_buffer(mask_view, exposed=exposed)
-            if mask_view is not None
-            else None
-        )
+        mask: Buffer | None
+        if mask_view is None:
+            mask = None
+        elif isinstance(mask_view, spillable_gpumemoryview):
+            # Unwrap spillable_gpumemoryview to get the underlying SpillableBuffer
+            mask = mask_view.obj
+        else:
+            mask = as_buffer(mask_view, exposed=exposed)
         children = self._get_children_from_pylibcudf_column(
             self.plc_column,
             dtype,
@@ -321,11 +348,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             The data buffer.
         """
         data_view = plc_column.data()
-        return (
-            as_buffer(data_view, exposed=exposed)
-            if data_view is not None
-            else None
-        )
+        if data_view is None:
+            return None
+        # Unwrap spillable_gpumemoryview to get the underlying SpillableBuffer
+        if isinstance(data_view, spillable_gpumemoryview):
+            return data_view.obj
+        return as_buffer(data_view, exposed=exposed)
 
     def _get_children_from_pylibcudf_column(
         self,
@@ -2219,6 +2247,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if isinstance(dtype, CategoricalDtype):
             data = children.pop(0)
 
+        # Wrap SpillableBuffers to prevent premature unspilling
         if isinstance(data, SpillableBuffer):
             data = spillable_gpumemoryview(data)
         elif data is not None:
@@ -2237,7 +2266,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             0,
             [child.to_pylibcudf(mode="read") for child in children],
         )
-        return cls.from_pylibcudf(plc_column)._with_type_metadata(dtype)
+        # Use spill lock to safely extract buffers from spillable_gpumemoryview
+        with acquire_spill_lock():
+            return cls.from_pylibcudf(plc_column)._with_type_metadata(dtype)
 
     def unary_operator(self, unaryop: str) -> ColumnBase:
         raise TypeError(
