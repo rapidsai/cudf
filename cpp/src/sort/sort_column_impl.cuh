@@ -59,7 +59,17 @@ struct simple_comparator {
         return (null_precedence == cudf::null_order::BEFORE ? !rhs_null : !lhs_null);
       }
     }
-    return relational_compare(d_column.element<T>(lhs), d_column.element<T>(rhs)) ==
+
+    auto left_elememt =
+      d_column.type().id() == type_id::DICTIONARY32
+        ? d_column.child(1).element<T>(d_column.element<dictionary32>(lhs).value())
+        : d_column.element<T>(lhs);
+    auto right_elememt =
+      d_column.type().id() == type_id::DICTIONARY32
+        ? d_column.child(1).element<T>(d_column.element<dictionary32>(rhs).value())
+        : d_column.element<T>(rhs);
+
+    return relational_compare(left_elememt, right_elememt) ==
            (ascending ? weak_ordering::LESS : weak_ordering::GREATER);
   }
   column_device_view const d_column;
