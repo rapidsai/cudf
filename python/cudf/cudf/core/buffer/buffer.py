@@ -381,7 +381,7 @@ class Buffer(Serializable):
             "shape": (self.size,),
             "strides": None,
             "typestr": "|u1",
-            "version": 0,
+            "version": 3,
         }
 
     def serialize(self) -> tuple[dict, list]:

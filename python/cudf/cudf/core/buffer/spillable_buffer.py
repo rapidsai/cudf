@@ -82,7 +82,7 @@ class SpillableBufferCAIWrapper:
             "shape": (size,),
             "strides": None,
             "typestr": "|u1",
-            "version": 0,
+            "version": 3,
         }
 
 
@@ -360,7 +360,7 @@ class SpillableBufferOwner(BufferOwner):
             "shape": (self.size,),
             "strides": None,
             "typestr": "|u1",
-            "version": 0,
+            "version": 3,
         }
 
     def memoryview(
@@ -476,5 +476,5 @@ class SpillableBuffer(ExposureTrackedBuffer):
             "shape": (self.size,),
             "strides": None,
             "typestr": "|u1",
-            "version": 0,
+            "version": 3,
         }

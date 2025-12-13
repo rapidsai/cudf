@@ -184,7 +184,7 @@ class ROCAIWrapper:
             "shape": (self._buffer.size,),
             "strides": None,
             "typestr": "|u1",
-            "version": 0,
+            "version": 3,
         }
 
     @property
@@ -2057,7 +2057,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             "strides": (self.dtype.itemsize,),
             "typestr": self.dtype.str,
             "data": (data_ptr, False),
-            "version": 1,
+            "version": 3,
         }
         data_buf = self._data if self._data is not None else self._base_data
         if data_buf is not None:
