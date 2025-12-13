@@ -658,7 +658,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             if not use_base:
                 assert col.data is not None
                 data_buff = col.data
-            data = plc.gpumemoryview(ROCAIWrapper(data_buff, mode))
+            data = ROCAIWrapper(data_buff, mode)
 
         mask = None
         if self.nullable:
@@ -669,7 +669,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             if not use_base:
                 assert self.mask is not None
                 mask_buff = self.mask
-            mask = plc.gpumemoryview(ROCAIWrapper(mask_buff, mode))
+            mask = ROCAIWrapper(mask_buff, mode)
 
         children = []
         if col.base_children:
