@@ -938,7 +938,6 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
                                   size_input.cbegin(),
                                   thrust::make_discard_iterator(),
                                   sizes.d_begin() + (key_start / subpass.pages.size()),
-
                                   cuda::std::plus<>{},
                                   _stream);
 
