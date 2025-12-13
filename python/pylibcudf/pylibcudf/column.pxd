@@ -95,7 +95,7 @@ cdef class Column:
     cpdef list children(self)
     cpdef Column copy(self, Stream stream=*, DeviceMemoryResource mr=*)
     cpdef uint64_t device_buffer_size(self)
-    cpdef Column with_mask(self, object, size_type)
+    cpdef Column with_mask(self, object, size_type, bint validate=*)
 
     cpdef ListColumnView list_view(self)
 

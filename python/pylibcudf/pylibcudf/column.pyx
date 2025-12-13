@@ -338,22 +338,25 @@ cdef class Column:
     def __init__(
         self, DataType data_type not None, size_type size, object data,
         object mask, size_type null_count, size_type offset,
-        list children
+        list children, bint validate=True
     ):
         if not all(isinstance(c, Column) for c in children):
             raise ValueError("All children must be pylibcudf Column objects")
 
         # Validate data and mask satisfy Span protocol (or are None)
-        if data is not None and not py_is_span(data):
-            raise TypeError(
-                f"data must satisfy Span protocol (have .ptr and .size), "
-                f"got {type(data).__name__}"
-            )
-        if mask is not None and not py_is_span(mask):
-            raise TypeError(
-                f"mask must satisfy Span protocol (have .ptr and .size), "
-                f"got {type(mask).__name__}"
-            )
+        # Validation can be disabled to avoid side effects from hasattr accessing
+        # properties (e.g., SpillableBuffer.ptr triggers unspilling)
+        if validate:
+            if data is not None and not py_is_span(data):
+                raise TypeError(
+                    f"data must satisfy Span protocol (have .ptr and .size), "
+                    f"got {type(data).__name__}"
+                )
+            if mask is not None and not py_is_span(mask):
+                raise TypeError(
+                    f"mask must satisfy Span protocol (have .ptr and .size), "
+                    f"got {type(mask).__name__}"
+                )
 
         self._data_type = data_type
         self._size = size
@@ -700,7 +703,7 @@ cdef class Column:
             children,
         )
 
-    cpdef Column with_mask(self, object mask, size_type null_count):
+    cpdef Column with_mask(self, object mask, size_type null_count, bint validate=True):
         """Augment this column with a new null mask.
 
         Parameters
@@ -709,12 +712,14 @@ cdef class Column:
             New mask (or None to unset the mask). Must satisfy Span protocol.
         null_count : int
             New null count. If this is incorrect, bad things happen.
+        validate : bool, default True
+            Whether to validate that mask satisfies Span protocol.
 
         Returns
         -------
         New Column object sharing data with self (except for the mask which is new).
         """
-        if mask is not None and not py_is_span(mask):
+        if validate and mask is not None and not py_is_span(mask):
             raise TypeError(
                 f"mask must satisfy Span protocol or None, "
                 f"got {type(mask).__name__}"
@@ -729,6 +734,7 @@ cdef class Column:
             null_count,
             self._offset,
             self._children,
+            validate=False,  # Already validated above if needed
         )
 
     @staticmethod
