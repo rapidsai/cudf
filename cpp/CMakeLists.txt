@@ -140,6 +140,8 @@ if(NOT CUDF_GENERATED_INCLUDE_DIR)
   set(CUDF_GENERATED_INCLUDE_DIR ${CUDF_BINARY_DIR})
 endif()
 
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/cudf)
+
 # ##################################################################################################
 # * linter configuration ---------------------------------------------------------------------------
 if(CUDF_CLANG_TIDY)
@@ -243,6 +245,8 @@ rapids_find_package(
 )
 include(cmake/Modules/ConfigureCUDA.cmake) # set other CUDA compilation flags
 
+find_program(BIN2C_EXE bin2c REQUIRED)
+
 # ##################################################################################################
 # * dependencies ----------------------------------------------------------------------------------
 
@@ -328,6 +332,88 @@ if(NOT BUILD_SHARED_LIBS)
     install(TARGETS conda_env EXPORT cudf-exports)
   endif()
 endif()
+
+# We can't precompile the LTO-IR as we need to generate fatbins for the specific target machine
+# LTO-IR is not compatible across
+
+
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  set(CUDF_JIT_CUDA_FLAGS "-G")
+else()
+  if(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+    set(CUDF_JIT_CUDA_FLAGS "-O2;-DNDEBUG")
+  else()
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+      set(CUDF_JIT_CUDA_FLAGS "-O3;-DNDEBUG")
+    endif()
+  endif()
+endif()
+
+if(CUDA_ENABLE_LINEINFO)
+  list(APPEND CUDF_JIT_CUDA_FLAGS "${CUDF_JIT_CUDA_FLAGS};-lineinfo")
+endif()
+
+set(CUDF_CXX_STANDARD 20)
+set(CUDF_CUDA_STANDARD ${CUDF_CXX_STANDARD})
+set(CUDF_JIT_ARCHITECTURES "75;80;86;90;100;120")
+set(CUDF_JIT_DEFINITIONS "-DCUDF_RUNTIME_JIT;-D__CUDACC_RTC__")
+set(CUDF_JIT_COMPILE_FLAGS
+    "-O3;-std=c++${CUDF_CUDA_STANDARD};-Xcompiler=-fPIC;-Xcompiler=-DPIC;-fvisibility=hidden;-Xfatbin=--compress-all;--compress-mode=size;--device-int128"
+)
+
+
+function(embed_jit_sources_var)
+
+endfunction()
+
+function(embed_jit_options_var)
+
+endfunction()
+
+function(embed_jit_blob)
+
+endfunction()
+
+embed_jit_sources(
+  identifier_name
+  SOURCE_DIRECTORY
+  cudf/include/
+  FILES
+  cudf/table/table_device_view.cuh
+  cudf/jit/lto/types.cuh
+  cudf/jit/lto/operators.cuh
+  cudf/jit/lto/library.cuh
+  cudf/jit/lto/thunk.cuh
+  cudf/jit/transform_params.cuh
+  cudf/jit/filter_params.cuh
+  cudf/utilities/traits.cuh
+  cudf/strings/string_view.cuh
+  cudf/column/column_device_view_base.cuh
+  cudf/detail/null_mask.cuh
+  cudf/detail/utilities/grid_1d.cuh
+  cudf/detail/offsets_iterator.cuh
+  cudf/detail/indexalator.cuh
+  cudf/ast/detail/operator_functor.cuh
+  cudf/ast/detail/operators.cuh
+  cudf/jit/lto/types.cuh
+  cudf/jit/lto/operators.cuh
+  cudf/jit/transform_params.cuh
+  cudf/jit/filter_params.cuh
+)
+
+embed_jit_sources(
+  identifier_name SOURCE_DIRECTORY src FILES src/jit/accessors.cuh src/jit/span.cuh
+)
+
+get_target_property(LIBCUDACXX_RAW_INCLUDE_DIRS CCCL::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)
+
+# CUDA/STD headers needs to recursively bundle the actually used headers; not everything should we
+# just use the install include dir? provided cudacxx will also be exported? can we get the installed
+# include dir path? after installing, should be configure a file that points to the installed
+# cudacxx include dir?
+embed_jit_sources_directory(identifier_name SOURCE_DIRECTORY ${LIBCUDACXX_RAW_INCLUDE_DIRS})
+
+embed_jit_options(identifier_name OPTIONS ${CUDF_JIT_COMPILE_FLAGS})
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
@@ -575,6 +661,10 @@ add_library(
   src/jit/parser.cpp
   src/jit/row_ir.cpp
   src/jit/util.cpp
+  src/jit/rtc/cache.cpp
+  src/jit/rtc/cudf.cpp
+  src/jit/rtc/rtc.cpp
+  src/jit/rtc/sha256.cpp
   src/join/conditional_join.cu
   src/join/cross_join.cu
   src/join/distinct_hash_join.cu
@@ -839,6 +929,7 @@ add_library(
   src/utilities/type_checks.cpp
   src/utilities/type_dispatcher.cpp
 )
+
 
 # Anything that includes jitify needs to be compiled with _FILE_OFFSET_BITS=64 due to a limitation
 # in how conda builds glibc
