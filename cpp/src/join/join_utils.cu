@@ -6,9 +6,13 @@
 #include "join_common_utils.cuh"
 
 #include <cudf/join/join.hpp>
-#include <cudf/utilities/memory_resource.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/std/functional>
 #include <thrust/copy.h>
@@ -18,34 +22,14 @@
 #include <thrust/sequence.h>
 #include <thrust/uninitialized_fill.h>
 
+#include <memory>
+
 namespace cudf {
 namespace detail {
 
-bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type)
-{
-  // If there is nothing to join, then send empty table with all columns
-  if (left.is_empty() || right.is_empty()) { return true; }
-
-  // If left join and the left table is empty, return immediately
-  if ((join_kind::LEFT_JOIN == join_type) && (0 == left.num_rows())) { return true; }
-
-  // If Inner Join and either table is empty, return immediately
-  if ((join_kind::INNER_JOIN == join_type) && ((0 == left.num_rows()) || (0 == right.num_rows()))) {
-    return true;
-  }
-
-  // If left semi join (contains) and right table is empty,
-  // return immediately
-  if ((join_kind::LEFT_SEMI_JOIN == join_type) && (0 == right.num_rows())) { return true; }
-
-  // If left semi- or anti- join, and the left table is empty, return immediately
-  if ((join_kind::LEFT_SEMI_JOIN == join_type || join_kind::LEFT_ANTI_JOIN == join_type) &&
-      (0 == left.num_rows())) {
-    return true;
-  }
-
-  return false;
-}
+// Convenient alias for a pair of unique pointers to device uvectors.
+using VectorPair = std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                             std::unique_ptr<rmm::device_uvector<size_type>>>;
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
