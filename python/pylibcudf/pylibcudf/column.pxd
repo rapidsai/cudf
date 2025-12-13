@@ -46,8 +46,8 @@ cdef class Column:
         # Core data
         DataType _data_type
         size_type _size
-        gpumemoryview _data
-        gpumemoryview _mask
+        object _data
+        object _mask
         size_type _null_count
         size_type _offset
         # _children: List[Column]
@@ -76,7 +76,7 @@ cdef class Column:
 
     @staticmethod
     cdef Column _wrap_nested_list_column(
-        gpumemoryview data,
+        object data,
         tuple shape,
         DataType dtype,
         Column base=*,
@@ -90,12 +90,12 @@ cdef class Column:
     cpdef size_type size(self)
     cpdef size_type null_count(self)
     cpdef size_type offset(self)
-    cpdef gpumemoryview data(self)
-    cpdef gpumemoryview null_mask(self)
+    cpdef object data(self)
+    cpdef object null_mask(self)
     cpdef list children(self)
     cpdef Column copy(self, Stream stream=*, DeviceMemoryResource mr=*)
     cpdef uint64_t device_buffer_size(self)
-    cpdef Column with_mask(self, gpumemoryview, size_type)
+    cpdef Column with_mask(self, object, size_type)
 
     cpdef ListColumnView list_view(self)
 

@@ -43,6 +43,7 @@ from .gpumemoryview cimport gpumemoryview
 from .filling cimport sequence
 from .gpumemoryview cimport gpumemoryview
 from .scalar cimport Scalar
+from .span import is_span as py_is_span
 from .traits cimport (
     is_fixed_width as plc_is_fixed_width,
     is_nested,
@@ -335,12 +336,27 @@ cdef class Column:
     __hash__ = None
 
     def __init__(
-        self, DataType data_type not None, size_type size, gpumemoryview data,
-        gpumemoryview mask, size_type null_count, size_type offset,
+        self, DataType data_type not None, size_type size, object data,
+        object mask, size_type null_count, size_type offset,
         list children
     ):
         if not all(isinstance(c, Column) for c in children):
             raise ValueError("All children must be pylibcudf Column objects")
+
+        # Validate data and mask satisfy Span protocol (or are None)
+        if data is not None and not py_is_span(data):
+            raise TypeError(
+                f"data must satisfy Span protocol "
+                f"(have .ptr, .size, and .element_type), "
+                f"got {type(data).__name__}"
+            )
+        if mask is not None and not py_is_span(mask):
+            raise TypeError(
+                f"mask must satisfy Span protocol "
+                f"(have .ptr, .size, and .element_type), "
+                f"got {type(mask).__name__}"
+            )
+
         self._data_type = data_type
         self._size = size
         self._data = data
@@ -676,13 +692,13 @@ cdef class Column:
             children,
         )
 
-    cpdef Column with_mask(self, gpumemoryview mask, size_type null_count):
+    cpdef Column with_mask(self, object mask, size_type null_count):
         """Augment this column with a new null mask.
 
         Parameters
         ----------
-        mask : gpumemoryview
-            New mask (or None to unset the mask)
+        mask : Span-like or None
+            New mask (or None to unset the mask). Must satisfy Span protocol.
         null_count : int
             New null count. If this is incorrect, bad things happen.
 
@@ -690,6 +706,11 @@ cdef class Column:
         -------
         New Column object sharing data with self (except for the mask which is new).
         """
+        if mask is not None and not py_is_span(mask):
+            raise TypeError(
+                f"mask must satisfy Span protocol or None, "
+                f"got {type(mask).__name__}"
+            )
         if mask is None and null_count > 0:
             raise ValueError("Empty mask must have null count of zero")
         return Column(
@@ -1290,11 +1311,11 @@ cdef class Column:
         """Accessor for methods of a Column that are specific to lists."""
         return ListColumnView(self)
 
-    cpdef gpumemoryview data(self):
+    cpdef object data(self):
         """The data buffer of the column."""
         return self._data
 
-    cpdef gpumemoryview null_mask(self):
+    cpdef object null_mask(self):
         """The null mask of the column."""
         return self._mask
 

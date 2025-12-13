@@ -253,7 +253,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
         mask_view = plc_column.null_mask()
         mask = (
-            as_buffer(mask_view.obj, exposed=exposed)
+            as_buffer(mask_view, exposed=exposed)
             if mask_view is not None
             else None
         )
@@ -295,7 +295,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         data_view = plc_column.data()
         return (
-            as_buffer(data_view.obj, exposed=exposed)
+            as_buffer(data_view, exposed=exposed)
             if data_view is not None
             else None
         )
