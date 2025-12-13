@@ -158,11 +158,6 @@ class MaskCAIWrapper:
             self._mask.__cuda_array_interface__["shape"][0]
         )
 
-    @property
-    def element_type(self) -> type:
-        """Element type (Span protocol) - char/single byte."""
-        return int  # Represents char
-
 
 class ROCAIWrapper:
     # A wrapper that exposes the __cuda_array_interface__ of a buffer as read-only to
@@ -196,11 +191,6 @@ class ROCAIWrapper:
     def size(self) -> int:
         """Size in bytes (Span protocol)."""
         return self._buffer.size
-
-    @property
-    def element_type(self) -> type:
-        """Element type (Span protocol) - char/single byte."""
-        return int  # Represents char
 
 
 class spillable_gpumemoryview(plc.gpumemoryview):
@@ -241,11 +231,6 @@ class spillable_gpumemoryview(plc.gpumemoryview):
     def size(self) -> int:
         """Size in bytes (Span protocol)."""
         return self._buf.size
-
-    @property
-    def element_type(self) -> type:
-        """Element type (Span protocol) - char/single byte."""
-        return int  # Represents char
 
 
 class ColumnBase(Serializable, BinaryOperand, Reducible):

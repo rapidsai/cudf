@@ -11,10 +11,9 @@ import pylibcudf as plc
 class MockSpan:
     """Mock object that satisfies Span protocol."""
 
-    def __init__(self, ptr: int, size: int, element_type: type):
+    def __init__(self, ptr: int, size: int):
         self._ptr = ptr
         self._size = size
-        self._element_type = element_type
 
     @property
     def ptr(self) -> int:
@@ -24,10 +23,6 @@ class MockSpan:
     def size(self) -> int:
         return self._size
 
-    @property
-    def element_type(self) -> type:
-        return self._element_type
-
 
 class NotASpan:
     """Object that does not satisfy Span protocol (missing size)."""
@@ -36,16 +31,12 @@ class NotASpan:
     def ptr(self) -> int:
         return 0
 
-    @property
-    def element_type(self) -> type:
-        return int
-
 
 def test_column_construction_with_mock_span():
     """Test Column can be constructed with mock Span objects."""
     # Create a real buffer and mock Span around it
     buf = rmm.DeviceBuffer(size=100)
-    mock_data = MockSpan(ptr=buf.ptr, size=buf.size, element_type=int)
+    mock_data = MockSpan(ptr=buf.ptr, size=buf.size)
 
     # Create column with mock Span
     col = plc.Column(
@@ -123,9 +114,7 @@ def test_column_construction_with_span_mask():
 
     # Create mask buffer (bitmask)
     mask_buf = rmm.DeviceBuffer(size=4)  # 32 bits = 32 rows
-    mask_span = MockSpan(
-        ptr=mask_buf.ptr, size=mask_buf.size, element_type=int
-    )
+    mask_span = MockSpan(ptr=mask_buf.ptr, size=mask_buf.size)
 
     col = plc.Column(
         data_type=plc.DataType(plc.TypeId.INT32),
@@ -184,7 +173,7 @@ def test_column_rejects_non_span_mask():
 def test_column_data_accessor_returns_span():
     """Test Column.data() returns the Span object."""
     buf = rmm.DeviceBuffer(size=100)
-    mock_data = MockSpan(ptr=buf.ptr, size=buf.size, element_type=int)
+    mock_data = MockSpan(ptr=buf.ptr, size=buf.size)
 
     col = plc.Column(
         data_type=plc.DataType(plc.TypeId.INT32),
@@ -217,9 +206,7 @@ def test_column_with_mask_accepts_span():
 
     # Create a new mask
     mask_buf = rmm.DeviceBuffer(size=4)
-    mask_span = MockSpan(
-        ptr=mask_buf.ptr, size=mask_buf.size, element_type=int
-    )
+    mask_span = MockSpan(ptr=mask_buf.ptr, size=mask_buf.size)
 
     # with_mask should accept Span
     new_col = col.with_mask(mask_span, 5)

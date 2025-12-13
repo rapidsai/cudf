@@ -9,30 +9,17 @@ from typing import Any, Protocol, TypeGuard, runtime_checkable
 @runtime_checkable
 class Span(Protocol):
     """
-    Protocol for objects that provide direct pointer, size, and element type access.
+    Protocol for objects that provide direct pointer and size access.
 
     This protocol is designed for zero-overhead access in Cython code,
-    where ptr, size, and element_type can be accessed as C attributes without
-    Python overhead. Objects implementing this protocol must provide:
+    where ptr and size can be accessed as C attributes without Python overhead.
+    Objects implementing this protocol must provide:
 
     - ptr: An integer pointer (uintptr_t) to device or host memory
     - size: Size of the memory region in bytes (uint64_t)
-    - element_type: Type of each element (currently hardcoded to int representing char)
 
     The Span protocol enables pylibcudf.Column to accept arbitrary buffer types
     beyond gpumemoryview, including cudf Buffers and custom wrapper objects.
-
-    Current Usage
-    -------------
-    All current implementations use element_type = int to represent char (single byte).
-    This means size represents the total size in bytes, and each element is 1 byte.
-
-    Future Extensibility
-    --------------------
-    The element_type attribute prepares for future support of different underlying
-    data types. In the future, we may support Spans with element_type representing
-    int32, float64, etc., where size would still be in bytes but the element count
-    would be size / sizeof(element_type).
 
     Notes
     -----
@@ -52,7 +39,6 @@ class Span(Protocol):
     >>> assert is_span(gmv)
     >>> assert gmv.ptr != 0
     >>> assert gmv.size == 1024
-    >>> assert gmv.element_type == int
     """
 
     @property
@@ -63,16 +49,6 @@ class Span(Protocol):
     @property
     def size(self) -> int:
         """Size of the memory region in bytes."""
-        ...
-
-    @property
-    def element_type(self) -> type:
-        """
-        Type of each element in the span.
-
-        Currently all implementations return int (representing char/single byte).
-        Future implementations may support other types like int32, float64, etc.
-        """
         ...
 
 
@@ -92,22 +68,17 @@ def is_span(obj: Any) -> TypeGuard[Span]:
     Returns
     -------
     TypeGuard[Span]
-        True if obj has 'ptr', 'size', and 'element_type' attributes
+        True if obj has 'ptr' and 'size' attributes
 
     Examples
     --------
     >>> class MockSpan:
     ...     ptr = 0x1234
     ...     size = 1024
-    ...     element_type = int
     >>> buffer = MockSpan()
     >>> if is_span(buffer):
     ...     # Type checker knows buffer is a Span here
     ...     print(f"ptr: {buffer.ptr}, size: {buffer.size}")
     ptr: 4660, size: 1024
     """
-    return (
-        hasattr(obj, "ptr")
-        and hasattr(obj, "size")
-        and hasattr(obj, "element_type")
-    )
+    return hasattr(obj, "ptr") and hasattr(obj, "size")

@@ -196,11 +196,6 @@ class BufferOwner(Serializable):
         """Device pointer (Span protocol)."""
         return self.get_ptr(mode="read")
 
-    @property
-    def element_type(self) -> type:
-        """Element type (Span protocol) - char/single byte."""
-        return int  # Represents char
-
     def mark_exposed(self) -> None:
         """Mark the buffer as "exposed" permanently
 
@@ -313,11 +308,6 @@ class Buffer(Serializable):
     def ptr(self) -> int:
         """Device pointer (Span protocol)."""
         return self.get_ptr(mode="read")
-
-    @property
-    def element_type(self) -> type:
-        """Element type (Span protocol) - char/single byte."""
-        return int  # Represents char
 
     def __getitem__(self, key: slice) -> Self:
         """Create a new slice of the buffer."""

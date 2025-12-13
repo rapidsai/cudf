@@ -346,14 +346,12 @@ cdef class Column:
         # Validate data and mask satisfy Span protocol (or are None)
         if data is not None and not py_is_span(data):
             raise TypeError(
-                f"data must satisfy Span protocol "
-                f"(have .ptr, .size, and .element_type), "
+                f"data must satisfy Span protocol (have .ptr and .size), "
                 f"got {type(data).__name__}"
             )
         if mask is not None and not py_is_span(mask):
             raise TypeError(
-                f"mask must satisfy Span protocol "
-                f"(have .ptr, .size, and .element_type), "
+                f"mask must satisfy Span protocol (have .ptr and .size), "
                 f"got {type(mask).__name__}"
             )
 

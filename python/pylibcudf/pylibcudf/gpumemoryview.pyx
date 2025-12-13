@@ -82,16 +82,6 @@ cdef class gpumemoryview:
         """
         return self.nbytes
 
-    @property
-    def element_type(self) -> type:
-        """
-        Element type (Span protocol).
-
-        Currently returns int to represent char (single byte).
-        This prepares for future extensibility with other data types.
-        """
-        return int
-
     def __len__(self):
         return self.obj.__cuda_array_interface__["shape"][0]
 
