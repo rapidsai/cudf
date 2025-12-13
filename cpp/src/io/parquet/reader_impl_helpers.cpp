@@ -301,6 +301,8 @@ void metadata::sanitize_schema()
   process(0);
 }
 
+metadata::metadata(FileMetaData&& other) : FileMetaData(std::move(other)) {}
+
 metadata::metadata(datasource* source, bool read_page_indexes)
 {
   constexpr auto header_len = sizeof(file_header_s);
@@ -678,16 +680,8 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
   rg_info.column_chunks = std::move(chunks);
 }
 
-aggregate_reader_metadata::aggregate_reader_metadata(
-  host_span<std::unique_ptr<datasource> const> sources,
-  bool use_arrow_schema,
-  bool has_cols_from_mismatched_srcs,
-  bool read_page_indexes)
-  : per_file_metadata(metadatas_from_sources(sources, read_page_indexes)),
-    keyval_maps(collect_keyval_metadata()),
-    schema_idx_maps(init_schema_idx_maps(has_cols_from_mismatched_srcs)),
-    num_rows(calc_num_rows()),
-    num_row_groups(calc_num_row_groups())
+void aggregate_reader_metadata::initialize_internals(bool use_arrow_schema,
+                                                     bool has_cols_from_mismatched_srcs)
 {
   if (per_file_metadata.size() > 1) {
     auto& first_meta = per_file_metadata.front();
@@ -736,6 +730,38 @@ aggregate_reader_metadata::aggregate_reader_metadata(
   // Erase ARROW_SCHEMA_KEY from the output pfm if exists
   std::for_each(
     keyval_maps.begin(), keyval_maps.end(), [](auto& pfm) { pfm.erase(ARROW_SCHEMA_KEY); });
+}
+
+aggregate_reader_metadata::aggregate_reader_metadata(std::vector<FileMetaData>&& parquet_metadatas,
+                                                     bool use_arrow_schema,
+                                                     bool has_cols_from_mismatched_srcs)
+{
+  per_file_metadata.reserve(parquet_metadatas.size());
+  std::transform(std::make_move_iterator(parquet_metadatas.begin()),
+                 std::make_move_iterator(parquet_metadatas.end()),
+                 std::back_inserter(per_file_metadata),
+                 [](FileMetaData&& meta) { return metadata{std::move(meta)}; });
+
+  keyval_maps     = collect_keyval_metadata();
+  schema_idx_maps = init_schema_idx_maps(has_cols_from_mismatched_srcs);
+  num_rows        = calc_num_rows();
+  num_row_groups  = calc_num_row_groups();
+
+  initialize_internals(use_arrow_schema, has_cols_from_mismatched_srcs);
+}
+
+aggregate_reader_metadata::aggregate_reader_metadata(
+  host_span<std::unique_ptr<datasource> const> sources,
+  bool use_arrow_schema,
+  bool has_cols_from_mismatched_srcs,
+  bool read_page_indexes)
+  : per_file_metadata(metadatas_from_sources(sources, read_page_indexes)),
+    keyval_maps(collect_keyval_metadata()),
+    schema_idx_maps(init_schema_idx_maps(has_cols_from_mismatched_srcs)),
+    num_rows(calc_num_rows()),
+    num_row_groups(calc_num_row_groups())
+{
+  initialize_internals(use_arrow_schema, has_cols_from_mismatched_srcs);
 }
 
 arrow_schema_data_types aggregate_reader_metadata::collect_arrow_schema() const
