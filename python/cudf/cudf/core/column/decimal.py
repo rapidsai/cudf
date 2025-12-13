@@ -77,20 +77,14 @@ class DecimalBaseColumn(NumericalBaseColumn):
     def __init__(
         self,
         plc_column: plc.Column,
-        size: int,
         dtype: DecimalDtype,
-        offset: int,
-        null_count: int,
         exposed: bool,
     ) -> None:
         if not isinstance(dtype, DecimalDtype):
             raise ValueError(f"{dtype=} must be a DecimalDtype instance")
         super().__init__(
             plc_column=plc_column,
-            size=size,
             dtype=dtype,
-            offset=offset,
-            null_count=null_count,
             exposed=exposed,
         )
 
@@ -382,20 +376,14 @@ class Decimal32Column(DecimalBaseColumn):
     def __init__(
         self,
         plc_column: plc.Column,
-        size: int,
         dtype: Decimal32Dtype,
-        offset: int,
-        null_count: int,
         exposed: bool,
     ) -> None:
         if not isinstance(dtype, Decimal32Dtype):
             raise ValueError(f"{dtype=} must be a Decimal32Dtype instance")
         super().__init__(
             plc_column=plc_column,
-            size=size,
             dtype=dtype,
-            offset=offset,
-            null_count=null_count,
             exposed=exposed,
         )
 
@@ -432,7 +420,7 @@ class Decimal32Column(DecimalBaseColumn):
         )
         return pa.Array.from_buffers(
             type=self.dtype.to_arrow(),  # type: ignore[union-attr]
-            offset=self._offset,
+            offset=self.offset,
             length=self.size,
             # PyArrow stubs are too strict - from_buffers should accept None for missing buffers
             buffers=[mask_buf, data_buf],  # type: ignore[list-item]
@@ -452,10 +440,7 @@ class Decimal128Column(DecimalBaseColumn):
     def __init__(
         self,
         plc_column: plc.Column,
-        size: int,
         dtype: Decimal128Dtype,
-        offset: int,
-        null_count: int,
         exposed: bool,
     ) -> None:
         if (
@@ -468,10 +453,7 @@ class Decimal128Column(DecimalBaseColumn):
             raise ValueError(f"{dtype=} must be a Decimal128Dtype instance")
         super().__init__(
             plc_column=plc_column,
-            size=size,
             dtype=dtype,
-            offset=offset,
-            null_count=null_count,
             exposed=exposed,
         )
 
@@ -504,20 +486,14 @@ class Decimal64Column(DecimalBaseColumn):
     def __init__(
         self,
         plc_column: plc.Column,
-        size: int,
         dtype: Decimal64Dtype,
-        offset: int,
-        null_count: int,
         exposed: bool,
     ) -> None:
         if not isinstance(dtype, Decimal64Dtype):
             raise ValueError(f"{dtype=} must be a Decimal64Dtype instance")
         super().__init__(
             plc_column=plc_column,
-            size=size,
             dtype=dtype,
-            offset=offset,
-            null_count=null_count,
             exposed=exposed,
         )
 
@@ -548,7 +524,7 @@ class Decimal64Column(DecimalBaseColumn):
         )
         return pa.Array.from_buffers(
             type=self.dtype.to_arrow(),  # type: ignore[union-attr]
-            offset=self._offset,
+            offset=self.offset,
             length=self.size,
             # PyArrow stubs are too strict - from_buffers should accept None for missing buffers
             buffers=[mask_buf, data_buf],  # type: ignore[list-item]
