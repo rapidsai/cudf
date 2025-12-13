@@ -3236,8 +3236,8 @@ class Series(SingleColumnFrame, IndexedFrame):
 
         >>> s = cudf.Series([3, 1, 2, 3, 4, np.nan])
         >>> s.value_counts(bins=3)
-        (2.0, 3.0]      2
         (0.996, 2.0]    2
+        (2.0, 3.0]      2
         (3.0, 4.0]      1
         Name: count, dtype: int64
         """
@@ -3275,7 +3275,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         res.index.name = self.name
 
         if sort:
-            res = res.sort_values(ascending=ascending)
+            res = res.sort_index().sort_values(ascending=ascending)
 
         if normalize:
             res = res / float(res._column.sum())
