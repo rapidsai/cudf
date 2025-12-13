@@ -539,11 +539,16 @@ cdef class Column:
         """
         cdef const void * data = NULL
         cdef const bitmask_type * null_mask = NULL
+        cdef size_t data_ptr
+        cdef size_t mask_ptr
 
-        if self._data is not None:
-            data = <void*>self._data.ptr
-        if self._mask is not None:
-            null_mask = <bitmask_type*>self._mask.ptr
+        with gil:
+            if self._data is not None:
+                data_ptr = <size_t>self._data.ptr
+                data = <void*>data_ptr
+            if self._mask is not None:
+                mask_ptr = <size_t>self._mask.ptr
+                null_mask = <bitmask_type*>mask_ptr
 
         # TODO: Check if children can ever change. If not, this could be
         # computed once in the constructor and always be reused.
@@ -576,11 +581,16 @@ cdef class Column:
         """
         cdef void * data = NULL
         cdef bitmask_type * null_mask = NULL
+        cdef size_t data_ptr
+        cdef size_t mask_ptr
 
-        if self._data is not None:
-            data = <void*>self._data.ptr
-        if self._mask is not None:
-            null_mask = <bitmask_type*>self._mask.ptr
+        with gil:
+            if self._data is not None:
+                data_ptr = <size_t>self._data.ptr
+                data = <void*>data_ptr
+            if self._mask is not None:
+                mask_ptr = <size_t>self._mask.ptr
+                null_mask = <bitmask_type*>mask_ptr
 
         cdef vector[mutable_column_view] c_children
         with gil:
