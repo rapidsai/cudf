@@ -52,7 +52,6 @@ from cudf.core.buffer import (
     acquire_spill_lock,
     as_buffer,
 )
-from cudf.core.buffer.spillable_buffer import SpillableBuffer
 from cudf.core.copy_types import GatherMap
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -432,13 +431,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         # Update plc_column with the new mask and compute null_count eagerly
         if value is not None:
-            # null_count requires gpumemoryview, but with_mask accepts Span
+            # Buffer is Span-compliant, pass directly to both null_count and with_mask
             new_null_count = plc.null_mask.null_count(
-                plc.gpumemoryview(value),
+                value,
                 self.offset,
                 self.offset + self.size,
             )
-            # Buffer is Span-compliant, pass directly to with_mask
             new_mask = value
         else:
             new_mask = None
@@ -472,9 +470,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         The input mask is assumed to be of appropriate size for self.
         """
         if isinstance(mask, Buffer):
-            # null_count requires gpumemoryview, but Buffer is Span-compliant for Column
+            # Buffer is Span-compliant, pass directly to null_count
             new_null_count = plc.null_mask.null_count(
-                plc.gpumemoryview(mask),
+                mask,
                 0,
                 self.size,
             )
@@ -2173,19 +2171,17 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if mask is None:
             null_count = 0
         else:
-            # Don't wrap SpillableBuffer in gpumemoryview as that would trigger
-            # unspilling via DelayedPointerTuple. Regular Buffers and other objects
-            # need to be wrapped since null_count expects gpumemoryview.
-            mask_for_null_count: plc.gpumemoryview | SpillableBuffer
-            if isinstance(mask, SpillableBuffer):
-                mask_for_null_count = mask
+            # null_count accepts Span objects (Buffer, SpillableBuffer)
+            # For SpillableBuffer, accessing .ptr doesn't trigger unspilling (it's read-only)
+            # Wrap non-Buffer objects in gpumemoryview
+            if isinstance(mask, Buffer):
+                # Buffer and SpillableBuffer are Span-compliant, pass directly
+                null_count = plc.null_mask.null_count(mask, 0, header["size"])
             else:
-                mask_for_null_count = plc.gpumemoryview(mask)
-            null_count = plc.null_mask.null_count(
-                mask_for_null_count,  # type: ignore[arg-type]
-                0,
-                header["size"],
-            )
+                # Other objects need wrapping
+                null_count = plc.null_mask.null_count(
+                    plc.gpumemoryview(mask), 0, header["size"]
+                )
         if isinstance(dtype, IntervalDtype):
             # TODO: Handle in dtype_to_pylibcudf_type?
             plc_type = plc.DataType(plc.TypeId.STRUCT)

@@ -1,11 +1,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
+from libc.stdint cimport uintptr_t
 from libcpp.memory cimport make_unique
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from pylibcudf.libcudf cimport null_mask as cpp_null_mask
 from pylibcudf.libcudf.types cimport mask_state, size_type, bitmask_type
-from pylibcudf.gpumemoryview cimport gpumemoryview
 
 from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
@@ -190,7 +190,7 @@ cpdef tuple bitmask_or(list columns, Stream stream=None, DeviceMemoryResource mr
 
 
 cpdef size_type null_count(
-    gpumemoryview bitmask,
+    object bitmask,
     size_type start,
     size_type stop,
     Stream stream=None
@@ -201,8 +201,8 @@ cpdef size_type null_count(
 
     Parameters
     ----------
-    bitmask : int
-        Integer pointer to the bitmask.
+    bitmask : Span-like object
+        Object with ptr and size attributes (e.g., gpumemoryview, Buffer, DeviceBuffer).
     start : int
         Index of the first bit to count (inclusive).
     stop : int
@@ -215,10 +215,12 @@ cpdef size_type null_count(
     int
         The number of null elements in the specified range.
     """
+    # Accept any Span-compliant object (gpumemoryview, Buffer, DeviceBuffer, etc.)
+    cdef uintptr_t ptr = bitmask.ptr
     stream = _get_stream(stream)
     with nogil:
         return cpp_null_mask.null_count(
-            <bitmask_type*>(bitmask.ptr),
+            <bitmask_type*>ptr,
             start,
             stop,
             stream.view()
