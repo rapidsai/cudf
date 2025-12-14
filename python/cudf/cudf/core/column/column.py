@@ -2171,17 +2171,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if mask is None:
             null_count = 0
         else:
-            # null_count accepts Span objects (Buffer, SpillableBuffer)
-            # For SpillableBuffer, accessing .ptr doesn't trigger unspilling (it's read-only)
-            # Wrap non-Buffer objects in gpumemoryview
-            if isinstance(mask, Buffer):
-                # Buffer and SpillableBuffer are Span-compliant, pass directly
-                null_count = plc.null_mask.null_count(mask, 0, header["size"])
-            else:
-                # Other objects need wrapping
-                null_count = plc.null_mask.null_count(
-                    plc.gpumemoryview(mask), 0, header["size"]
-                )
+            # mask is always a Buffer here (Buffer.deserialize converts memoryviews)
+            # Buffer is Span-compliant, pass directly to null_count
+            null_count = plc.null_mask.null_count(mask, 0, header["size"])
         if isinstance(dtype, IntervalDtype):
             # TODO: Handle in dtype_to_pylibcudf_type?
             plc_type = plc.DataType(plc.TypeId.STRUCT)
@@ -2192,14 +2184,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if isinstance(dtype, CategoricalDtype):
             data = children.pop(0)
 
-        # Wrap non-Buffer objects in gpumemoryview
-        # Buffers (including SpillableBuffer) are passed directly since they
-        # satisfy the Span protocol and as_buffer() will handle them correctly
-        if data is not None and not isinstance(data, Buffer):
-            data = plc.gpumemoryview(data)
-        if mask is not None and not isinstance(mask, Buffer):
-            mask = plc.gpumemoryview(mask)
-
+        # data and mask are always Buffers here (Buffer.deserialize converts memoryviews)
+        # Buffers are Span-compliant and can be passed directly to plc.Column
         plc_column = plc.Column(
             plc_type,
             header["size"],
