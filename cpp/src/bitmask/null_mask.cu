@@ -36,6 +36,7 @@
 #include <algorithm>
 #include <limits>
 #include <numeric>
+#include <string>
 #include <type_traits>
 
 namespace cg = cooperative_groups;
@@ -622,9 +623,11 @@ std::vector<size_type> batch_null_count(host_span<bitmask_type const* const> bit
   constexpr size_type block_size{256};
   cudf::detail::grid_1d grid(num_words, block_size);
   CUDF_EXPECTS(grid.num_blocks <= static_cast<size_type>(std::numeric_limits<unsigned int>::max()),
-               "Too many blocks for batch_null_count");
+               "Grid dimension overflow: num_blocks=" + std::to_string(grid.num_blocks) +
+                 " exceeds max unsigned int for batch_null_count");
   CUDF_EXPECTS(num_bitmasks <= static_cast<size_type>(std::numeric_limits<unsigned int>::max()),
-               "Too many bitmasks for batch_null_count");
+               "Bitmask count overflow: num_bitmasks=" + std::to_string(num_bitmasks) +
+                 " exceeds max unsigned int for batch_null_count");
   dim3 grid_dim{
     static_cast<unsigned int>(grid.num_blocks), static_cast<unsigned int>(num_bitmasks), 1};
   batch_count_unset_bit_kernel<block_size>
