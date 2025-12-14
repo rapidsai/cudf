@@ -408,9 +408,9 @@ namespace {
  */
 template <size_type block_size>
 CUDF_KERNEL void count_set_bits_kernel(bitmask_type const* bitmask,
-                                        size_type first_bit_index,
-                                        size_type last_bit_index,
-                                        size_type* global_count)
+                                       size_type first_bit_index,
+                                       size_type last_bit_index,
+                                       size_type* global_count)
 {
   constexpr auto const word_size{detail::size_in_bits<bitmask_type>()};
 
@@ -526,7 +526,7 @@ CUDF_KERNEL void batch_count_unset_bit_kernel(bitmask_type const* const* bitmask
 
 // Count non-zero bits in the specified range
 cudf::size_type count_set_bits(bitmask_type const* bitmask,
-                                size_type start,
+                               size_type start,
                                size_type stop,
                                rmm::cuda_stream_view stream)
 {
@@ -578,9 +578,9 @@ cudf::size_type valid_count(bitmask_type const* bitmask,
 
 // Count null elements in the specified range of a validity bitmask
 cudf::size_type null_count(bitmask_type const* bitmask,
-                            size_type start,
-                            size_type stop,
-                            rmm::cuda_stream_view stream)
+                           size_type start,
+                           size_type stop,
+                           rmm::cuda_stream_view stream)
 {
   if (bitmask == nullptr) {
     CUDF_EXPECTS(start >= 0 and start <= stop, "Invalid bit range.");
@@ -598,15 +598,14 @@ std::vector<size_type> batch_null_count(host_span<bitmask_type const* const> bit
 {
   CUDF_EXPECTS(start >= 0 and start <= stop, "Invalid bit range.");
 
-  auto const num_bitmasks     = bitmasks.size();
+  auto const num_bitmasks      = bitmasks.size();
   auto const num_bits_to_count = stop - start;
 
   std::vector<size_type> null_counts(num_bitmasks, 0);
   if (num_bitmasks == 0 || num_bits_to_count == 0) { return null_counts; }
 
-  auto const has_bitmask = std::any_of(bitmasks.begin(), bitmasks.end(), [](auto p) {
-    return p != nullptr;
-  });
+  auto const has_bitmask =
+    std::any_of(bitmasks.begin(), bitmasks.end(), [](auto p) { return p != nullptr; });
   if (not has_bitmask) { return null_counts; }
 
   std::vector<bitmask_type const*> h_bitmasks(bitmasks.begin(), bitmasks.end());
@@ -622,17 +621,17 @@ std::vector<size_type> batch_null_count(host_span<bitmask_type const* const> bit
 
   constexpr size_type block_size{256};
   cudf::detail::grid_1d grid(num_words, block_size);
-  dim3 grid_dim{grid.num_blocks, static_cast<unsigned int>(num_bitmasks), 1};
+  dim3 grid_dim{
+    static_cast<unsigned int>(grid.num_blocks), static_cast<unsigned int>(num_bitmasks), 1};
   batch_count_unset_bit_kernel<block_size>
     <<<grid_dim, grid.num_threads_per_block, 0, stream.value()>>>(
       d_bitmasks.data(), num_bitmasks, start, stop - 1, d_set_counts.data());
   CUDF_CHECK_CUDA(stream.value());
 
   auto const set_counts = cudf::detail::make_std_vector<size_type>(d_set_counts, stream);
-  std::transform(
-    set_counts.begin(), set_counts.end(), null_counts.begin(), [&](auto count) {
-      return num_bits_to_count - count;
-    });
+  std::transform(set_counts.begin(), set_counts.end(), null_counts.begin(), [&](auto count) {
+    return num_bits_to_count - count;
+  });
   return null_counts;
 }
 
@@ -859,9 +858,9 @@ std::pair<rmm::device_buffer, size_type> bitmask_or(table_view const& view,
 
 // Count non-zero bits in the specified range
 cudf::size_type null_count(bitmask_type const* bitmask,
-                            size_type start,
-                            size_type stop,
-                            rmm::cuda_stream_view stream)
+                           size_type start,
+                           size_type stop,
+                           rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
   return detail::null_count(bitmask, start, stop, stream);

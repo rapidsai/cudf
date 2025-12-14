@@ -84,10 +84,8 @@ TEST_F(NullMaskTest, BatchNullCount)
 {
   auto stream = cudf::test::get_default_stream();
 
-  cudf::test::fixed_width_column_wrapper<int32_t> const col1(
-    {0, 1, 2, 3}, {1, 0, 1, 0});
-  cudf::test::fixed_width_column_wrapper<int32_t> const col2(
-    {0, 1, 2, 3}, {1, 1, 0, 0});
+  cudf::test::fixed_width_column_wrapper<int32_t> const col1({0, 1, 2, 3}, {1, 0, 1, 0});
+  cudf::test::fixed_width_column_wrapper<int32_t> const col2({0, 1, 2, 3}, {1, 1, 0, 0});
   cudf::test::fixed_width_column_wrapper<int32_t> const col3({0, 1, 2, 3});
 
   auto const col1_view = static_cast<cudf::column_view>(col1);

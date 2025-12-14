@@ -257,9 +257,9 @@ std::pair<rmm::device_buffer, size_type> bitmask_or(
  * @return The number of null elements in the specified range.
  */
 cudf::size_type null_count(bitmask_type const* bitmask,
-                            size_type start,
-                            size_type stop,
-                            rmm::cuda_stream_view stream = cudf::get_default_stream());
+                           size_type start,
+                           size_type stop,
+                           rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Given multiple validity bitmasks, counts the number of null elements (unset bits) in the
@@ -277,10 +277,9 @@ cudf::size_type null_count(bitmask_type const* bitmask,
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return A vector of null counts for each bitmask.
  */
-std::vector<size_type> batch_null_count(
-  host_span<bitmask_type const* const> bitmasks,
-  size_type start,
-  size_type stop,
-  rmm::cuda_stream_view stream = cudf::get_default_stream());
+std::vector<size_type> batch_null_count(host_span<bitmask_type const* const> bitmasks,
+                                        size_type start,
+                                        size_type stop,
+                                        rmm::cuda_stream_view stream = cudf::get_default_stream());
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf

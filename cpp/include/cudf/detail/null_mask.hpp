@@ -142,9 +142,9 @@ cudf::size_type valid_count(bitmask_type const* bitmask,
  * @param stream Stream view on which to allocate resources and queue execution.
  */
 cudf::size_type null_count(bitmask_type const* bitmask,
-                            size_type start,
-                            size_type stop,
-                            rmm::cuda_stream_view stream);
+                           size_type start,
+                           size_type stop,
+                           rmm::cuda_stream_view stream);
 
 /**
  * @brief Given multiple validity bitmasks, counts the number of null elements (unset bits) in the
