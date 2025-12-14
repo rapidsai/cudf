@@ -432,12 +432,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         # Update plc_column with the new mask and compute null_count eagerly
         if value is not None:
-            new_mask = plc.gpumemoryview(value)
+            # null_count requires gpumemoryview, but with_mask accepts Span
             new_null_count = plc.null_mask.null_count(
-                new_mask,
+                plc.gpumemoryview(value),
                 self.offset,
                 self.offset + self.size,
             )
+            # Buffer is Span-compliant, pass directly to with_mask
+            new_mask = value
         else:
             new_mask = None
             new_null_count = 0
@@ -470,12 +472,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         The input mask is assumed to be of appropriate size for self.
         """
         if isinstance(mask, Buffer):
-            new_mask = plc.gpumemoryview(mask)
+            # null_count requires gpumemoryview, but Buffer is Span-compliant for Column
             new_null_count = plc.null_mask.null_count(
-                new_mask,
+                plc.gpumemoryview(mask),
                 0,
                 self.size,
             )
+            new_mask = mask
         elif mask is None:
             new_mask = None
             new_null_count = 0
@@ -2670,13 +2673,12 @@ def column_empty(
                 as_column(0, length=row_count + 1, dtype=SIZE_TYPE_DTYPE),
                 column_empty(row_count, dtype=dtype.element_type),
             )
+        # create_null_mask returns DeviceBuffer which is Span-compliant
         mask = (
             None
             if row_count == 0
-            else plc.gpumemoryview(
-                plc.null_mask.create_null_mask(
-                    row_count, plc.types.MaskState.ALL_NULL
-                )
+            else plc.null_mask.create_null_mask(
+                row_count, plc.types.MaskState.ALL_NULL
             )
         )
         return ColumnBase.from_pylibcudf(

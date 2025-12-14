@@ -517,13 +517,12 @@ class NumericalColumn(NumericalBaseColumn):
 
     def _as_temporal_column(self, dtype: np.dtype) -> plc.Column:
         """Convert Self to a temporal pylibcudf Column for as_datetime_column and as_timedelta_column"""
+        # base_data and base_mask are Buffers which are Span-compliant
         return plc.Column(
             data_type=dtype_to_pylibcudf_type(dtype),
             size=self.size,
-            data=plc.gpumemoryview(self.astype(np.dtype(np.int64)).base_data),
-            mask=plc.gpumemoryview(self.base_mask)
-            if self.base_mask is not None
-            else None,
+            data=self.astype(np.dtype(np.int64)).base_data,
+            mask=self.base_mask,
             null_count=self.null_count,
             offset=self.offset,
             children=[],
