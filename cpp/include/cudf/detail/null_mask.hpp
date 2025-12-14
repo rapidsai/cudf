@@ -142,9 +142,30 @@ cudf::size_type valid_count(bitmask_type const* bitmask,
  * @param stream Stream view on which to allocate resources and queue execution.
  */
 cudf::size_type null_count(bitmask_type const* bitmask,
-                           size_type start,
-                           size_type stop,
-                           rmm::cuda_stream_view stream);
+                            size_type start,
+                            size_type stop,
+                            rmm::cuda_stream_view stream);
+
+/**
+ * @brief Given multiple validity bitmasks, counts the number of null elements (unset bits) in the
+ * range `[start, stop)` for each bitmask.
+ *
+ * If a bitmask pointer is nullptr, all elements are assumed to be valid and the corresponding null
+ * count is 0.
+ *
+ * @throws cudf::logic_error if `start > stop`
+ * @throws cudf::logic_error if `start < 0`
+ *
+ * @param bitmasks Validity bitmasks residing in device memory.
+ * @param start Index of the first bit to count (inclusive).
+ * @param stop Index of the last bit to count (exclusive).
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return A vector of null counts for each bitmask.
+ */
+std::vector<size_type> batch_null_count(host_span<bitmask_type const* const> bitmasks,
+                                        size_type start,
+                                        size_type stop,
+                                        rmm::cuda_stream_view stream);
 
 /**
  * @brief Given a validity bitmask, counts the number of valid elements (set
