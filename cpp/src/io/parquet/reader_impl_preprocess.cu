@@ -8,6 +8,7 @@
 #include "reader_impl.hpp"
 #include "reader_impl_preprocess_utils.cuh"
 
+#include <cudf/detail/algorithm/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/batched_memset.hpp>
@@ -22,7 +23,6 @@
 #include <thrust/functional.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
@@ -63,21 +63,11 @@ void reader_impl::build_string_dict_indices()
                    pass.pages.d_end(),
                    set_str_dict_index_count{str_dict_index_count, pass.chunks});
 
-  size_t const total_str_dict_indexes = [&]() {
-    auto result      = cudf::reduction::detail::reduce(str_dict_index_count.begin(),
-                                                  str_dict_index_count.size(),
-                                                  cudf::reduction::detail::op::sum{},
-                                                       {},
-                                                  _stream,
-                                                  cudf::get_current_device_resource_ref());
-    auto host_result = cudf::detail::make_pinned_vector_async<uint32_t>(1, _stream);
-    cudf::detail::cuda_memcpy(
-      cudf::host_span<uint32_t>{host_result.data(), 1},
-      cudf::device_span<uint32_t const>{
-        static_cast<cudf::numeric_scalar<uint32_t>*>(result.get())->data(), 1},
-      _stream);
-    return host_result.front();
-  }();
+  auto const total_str_dict_indexes = cudf::detail::reduce(str_dict_index_count.begin(),
+                                                           str_dict_index_count.end(),
+                                                           size_t{0},
+                                                           cuda::std::plus<size_t>{},
+                                                           _stream);
 
   if (total_str_dict_indexes == 0) { return; }
 
@@ -399,21 +389,11 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
                          _page_string_offset_indices.begin());
 
   // Compute the total number of offsets needed
-  size_t total_num_offsets = [&]() {
-    auto result      = cudf::reduction::detail::reduce(d_page_offset_counts.begin(),
-                                                  d_page_offset_counts.size(),
-                                                  cudf::reduction::detail::op::sum{},
-                                                       {},
-                                                  _stream,
-                                                  cudf::get_current_device_resource_ref());
-    auto host_result = cudf::detail::make_pinned_vector_async<uint32_t>(1, _stream);
-    cudf::detail::cuda_memcpy(
-      cudf::host_span<uint32_t>{host_result.data(), 1},
-      cudf::device_span<uint32_t const>{
-        static_cast<cudf::numeric_scalar<uint32_t>*>(result.get())->data(), 1},
-      _stream);
-    return host_result.front();
-  }();
+  auto const total_num_offsets = cudf::detail::reduce(d_page_offset_counts.begin(),
+                                                      d_page_offset_counts.end(),
+                                                      size_t{0},
+                                                      cuda::std::plus<size_t>{},
+                                                      _stream);
 
   // Allocate the string offset buffer
   _string_offset_buffer = rmm::device_uvector<uint32_t>(total_num_offsets, _stream, _mr);

@@ -40,7 +40,6 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     Metadata,
-    empty_table_chunk,
 )
 
 if TYPE_CHECKING:
@@ -164,8 +163,8 @@ async def dataframescan_node(
     """
     async with shutdown_on_error(context, ch_out.metadata, ch_out.data):
         # Find local partition count.
-        nrows = max(ir.df.shape()[0], 1)
-        global_count = math.ceil(nrows / rows_per_partition)
+        nrows = ir.df.shape()[0]
+        global_count = math.ceil(nrows / rows_per_partition) if nrows > 0 else 0
 
         # For single rank, simplify the logic
         if context.comm().nranks == 1:
@@ -176,7 +175,7 @@ async def dataframescan_node(
             local_offset = local_count * context.comm().rank
 
         # Send basic metadata
-        await ch_out.send_metadata(context, Metadata(local_count))
+        await ch_out.send_metadata(context, Metadata(max(1, local_count)))
 
         # Build list of IR slices to read
         ir_slices = []
@@ -192,17 +191,22 @@ async def dataframescan_node(
                 )
             )
 
-        # If there are no slices, send an empty chunk for now.
-        # TODO: We shouldn't need to do this.
+        # If there are no slices, drain the channel and return
         if len(ir_slices) == 0:
-            stream = ir_context.get_cuda_stream()
-            await ch_out.data.send(
-                context,
-                Message(
-                    0,
-                    empty_table_chunk(ir, context, stream),
-                ),
-            )
+            await ch_out.data.drain(context)
+            return
+
+        # If there is only one ir_slices or one producer, we can
+        # skip the lineariser and read the chunks directly
+        if len(ir_slices) == 1 or num_producers == 1:
+            for seq_num, ir_slice in enumerate(ir_slices):
+                await read_chunk(
+                    context,
+                    ir_slice,
+                    seq_num,
+                    ch_out.data,
+                    ir_context,
+                )
             await ch_out.data.drain(context)
             return
 
@@ -441,17 +445,22 @@ async def scan_node(
         # Send basic metadata
         await ch_out.send_metadata(context, Metadata(max(1, len(scans))))
 
-        # If there are no scans, send an empty chunk for now.
-        # TODO: We shouldn't need to do this.
+        # If there is nothing to scan, drain the channel and return
         if len(scans) == 0:
-            stream = ir_context.get_cuda_stream()
-            await ch_out.data.send(
-                context,
-                Message(
-                    0,
-                    empty_table_chunk(ir, context, stream),
-                ),
-            )
+            await ch_out.data.drain(context)
+            return
+
+        # If there is only one scan or one producer, we can
+        # skip the lineariser and read the chunks directly
+        if len(scans) == 1 or num_producers == 1:
+            for seq_num, scan in enumerate(scans):
+                await read_chunk(
+                    context,
+                    scan,
+                    seq_num,
+                    ch_out.data,
+                    ir_context,
+                )
             await ch_out.data.drain(context)
             return
 
@@ -615,12 +624,13 @@ def _(
         and rec.state["context"].comm().nranks > 1
     )
 
-    # Use rapidsmpf native read_parquet for multi-partition Parquet scans.
+    # Use rapidsmpf native read_parquet node if possible
     ch_pair = channels[ir].reserve_input_slot()
     nodes: dict[IR, list[Any]] = {}
     native_node: Any = None
     if (
-        partition_info.count > 1
+        parquet_options.use_rapidsmpf_native
+        and partition_info.count > 1
         and ir.typ == "parquet"
         and ir.row_index is None
         and ir.include_file_paths is None

@@ -7,6 +7,7 @@
 #include "io/comp/common.hpp"
 #include "reader_impl_preprocess_utils.cuh"
 
+#include <cudf/detail/algorithm/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
@@ -22,7 +23,6 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
@@ -343,15 +343,11 @@ std::string encoding_to_string(Encoding encoding)
 [[nodiscard]] std::string list_unsupported_encodings(device_span<PageInfo const> pages,
                                                      rmm::cuda_stream_view stream)
 {
-  auto const to_mask = cuda::proclaim_return_type<uint32_t>([] __device__(auto const& page) {
+  auto const to_mask     = cuda::proclaim_return_type<uint32_t>([] __device__(auto const& page) {
     return is_supported_encoding(page.encoding) ? uint32_t{0} : encoding_to_mask(page.encoding);
   });
-  uint32_t const unsupported = thrust::transform_reduce(rmm::exec_policy(stream),
-                                                        pages.begin(),
-                                                        pages.end(),
-                                                        to_mask,
-                                                        uint32_t{0},
-                                                        cuda::std::bit_or<uint32_t>());
+  auto const unsupported = cudf::detail::transform_reduce(
+    pages.begin(), pages.end(), to_mask, uint32_t{0}, cuda::std::bit_or<uint32_t>(), stream);
   return encoding_bitmask_to_str(unsupported);
 }
 
@@ -531,22 +527,8 @@ void decode_page_headers(pass_intermediate_data& pass,
                                c.level_bits[level_type::DEFINITION]);
     }));
   // max level data bit size.
-  int32_t const max_level_bits = [&]() {
-    auto result      = cudf::reduction::detail::reduce(level_bit_size,
-                                                  pass.chunks.size(),
-                                                  cudf::reduction::detail::op::max{},
-                                                       {},
-                                                  stream,
-                                                  cudf::get_current_device_resource_ref());
-    auto host_result = cudf::detail::make_pinned_vector_async<uint32_t>(1, stream);
-    cudf::detail::cuda_memcpy(
-      cudf::host_span<uint32_t>{host_result.data(), 1},
-      cudf::device_span<uint32_t const>{
-        static_cast<cudf::numeric_scalar<uint32_t>*>(result.get())->data(), 1},
-      stream);
-    return host_result.front();
-  }();
-
+  auto const max_level_bits = cudf::detail::reduce(
+    level_bit_size, level_bit_size + pass.chunks.size(), int{0}, cuda::maximum<int>{}, stream);
   pass.level_type_size = std::max<int32_t>(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
 
   // sort the pages in chunk/schema order.
