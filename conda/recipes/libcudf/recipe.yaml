@@ -129,7 +129,7 @@ outputs:
       run:
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
         - cuda-nvrtc
-        - nvjitlink >=${{ cuda_version }}
+        - libnvjitlink >=${{ cuda_version }}
         - if: linux and x86_64
           then:
             - libcufile
@@ -154,10 +154,10 @@ outputs:
           - libcufile
           - libcurand
           - libkvikio
+          - libnvjitlink
           - librdkafka
           - libzlib
           - librmm
-          - nvjitlink
     tests:
       - script:
         - test -f $PREFIX/include/cudf/column/column.hpp
