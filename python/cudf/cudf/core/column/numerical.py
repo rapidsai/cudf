@@ -520,10 +520,8 @@ class NumericalColumn(NumericalBaseColumn):
         return plc.Column(
             data_type=dtype_to_pylibcudf_type(dtype),
             size=self.size,
-            data=plc.gpumemoryview(self.astype(np.dtype(np.int64)).base_data),
-            mask=plc.gpumemoryview(self.base_mask)
-            if self.base_mask is not None
-            else None,
+            data=self.astype(np.dtype(np.int64)).base_data,
+            mask=self.base_mask,
             null_count=self.null_count,
             offset=self.offset,
             children=[],
@@ -569,6 +567,15 @@ class NumericalColumn(NumericalBaseColumn):
                 res = self.nans_to_nulls().cast(dtype=dtype)
                 res._dtype = dtype
                 return res  # type: ignore[return-value]
+
+            if (
+                self.dtype.kind == "f"
+                and dtype.kind == "b"
+                and not is_pandas_nullable_extension_dtype(dtype)
+                and self.has_nulls()
+            ):
+                return self.fillna(np.nan).cast(dtype=dtype)  # type: ignore[return-value]
+
             if dtype_to_pylibcudf_type(dtype) == dtype_to_pylibcudf_type(
                 self.dtype
             ):
