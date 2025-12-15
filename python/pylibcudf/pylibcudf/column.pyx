@@ -332,6 +332,8 @@ cdef class Column:
         The offset into the data buffer where the column's data begins.
     children : list
         The children of this column if it is a compound column type.
+    validate : bool, default True
+        Whether to validate that data and mask satisfy Span protocol.
     """
     __hash__ = None
 
@@ -343,9 +345,6 @@ cdef class Column:
         if not all(isinstance(c, Column) for c in children):
             raise ValueError("All children must be pylibcudf Column objects")
 
-        # Validate data and mask satisfy Span protocol (or are None)
-        # Validation can be disabled to avoid side effects from hasattr accessing
-        # properties (e.g., SpillableBuffer.ptr triggers unspilling)
         if validate:
             if data is not None and not py_is_span(data):
                 raise TypeError(

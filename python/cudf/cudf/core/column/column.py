@@ -431,7 +431,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         # Update plc_column with the new mask and compute null_count eagerly
         if value is not None:
-            # Buffer is Span-compliant, pass directly to both null_count and with_mask
             new_null_count = plc.null_mask.null_count(
                 value,
                 self.offset,
@@ -470,7 +469,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         The input mask is assumed to be of appropriate size for self.
         """
         if isinstance(mask, Buffer):
-            # Buffer is Span-compliant, pass directly to null_count
             new_null_count = plc.null_mask.null_count(
                 mask,
                 0,
@@ -2171,8 +2169,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if mask is None:
             null_count = 0
         else:
-            # mask is always a Buffer here (Buffer.deserialize converts memoryviews)
-            # Buffer is Span-compliant, pass directly to null_count
             null_count = plc.null_mask.null_count(mask, 0, header["size"])
         if isinstance(dtype, IntervalDtype):
             # TODO: Handle in dtype_to_pylibcudf_type?
@@ -2184,8 +2180,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if isinstance(dtype, CategoricalDtype):
             data = children.pop(0)
 
-        # data and mask are always Buffers here (Buffer.deserialize converts memoryviews)
-        # Buffers are Span-compliant and can be passed directly to plc.Column
         plc_column = plc.Column(
             plc_type,
             header["size"],
@@ -2655,7 +2649,6 @@ def column_empty(
                 as_column(0, length=row_count + 1, dtype=SIZE_TYPE_DTYPE),
                 column_empty(row_count, dtype=dtype.element_type),
             )
-        # create_null_mask returns DeviceBuffer which is Span-compliant
         mask = (
             None
             if row_count == 0

@@ -215,7 +215,6 @@ cpdef size_type null_count(
     int
         The number of null elements in the specified range.
     """
-    # Accept any Span-compliant object (gpumemoryview, Buffer, DeviceBuffer, etc.)
     cdef uintptr_t ptr = bitmask.ptr
     stream = _get_stream(stream)
     with nogil:

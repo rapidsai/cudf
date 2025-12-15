@@ -252,7 +252,6 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             )
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
-        # base_data and base_mask are Buffers which are Span-compliant
         new_plc_column = plc.Column(
             data_type=dtype_to_pylibcudf_type(self._UNDERLYING_DTYPE),
             size=self.size,
