@@ -567,6 +567,15 @@ class NumericalColumn(NumericalBaseColumn):
                 res = self.nans_to_nulls().cast(dtype=dtype)
                 res._dtype = dtype
                 return res  # type: ignore[return-value]
+
+            if (
+                self.dtype.kind == "f"
+                and dtype.kind == "b"
+                and not is_pandas_nullable_extension_dtype(dtype)
+                and self.has_nulls()
+            ):
+                return self.fillna(np.nan).cast(dtype=dtype)  # type: ignore[return-value]
+
             if dtype_to_pylibcudf_type(dtype) == dtype_to_pylibcudf_type(
                 self.dtype
             ):
