@@ -7,7 +7,6 @@
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -15,28 +14,24 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
-#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
 
 #include <cooperative_groups.h>
 #include <cub/cub.cuh>
 #include <cuda/atomic>
-#include <thrust/binary_search.h>
-#include <thrust/copy.h>
-#include <thrust/device_ptr.h>
-#include <thrust/extrema.h>
+#include <thrust/execution_policy.h>
 #include <thrust/tabulate.h>
 
 #include <algorithm>
 #include <limits>
 #include <numeric>
-#include <type_traits>
 
 namespace cg = cooperative_groups;
 
@@ -455,6 +450,117 @@ CUDF_KERNEL void count_set_bits_kernel(bitmask_type const* bitmask,
   if (threadIdx.x == 0) { atomicAdd(global_count, block_count); }
 }
 
+/**
+ * @brief Batch version of `count_set_bits_kernel` that counts set bits for multiple bitmasks.
+ *
+ * @tparam block_size Number of threads in each thread block
+ *
+ * @param bitmasks Array of bitmask pointers
+ * @param num_bitmasks Number of bitmasks to process
+ * @param first_bit_index The index (inclusive) of the first bit to count
+ * @param last_bit_index The index (inclusive) of the last bit to count
+ * @param global_count Output array of set bit counts for each bitmask
+ */
+template <size_type block_size>
+CUDF_KERNEL void batch_count_set_bit_kernel(bitmask_type const* const* bitmasks,
+                                            size_type num_bitmasks,
+                                            size_type first_bit_index,
+                                            size_type last_bit_index,
+                                            size_type* global_count)
+{
+  auto const bitmask_idx = static_cast<size_type>(blockIdx.y);
+  if (bitmask_idx >= num_bitmasks) { return; }
+  auto const bitmask = bitmasks[bitmask_idx];
+  if (bitmask == nullptr) { return; }
+
+  constexpr auto const word_size{detail::size_in_bits<bitmask_type>()};
+  auto const first_word_index{word_index(first_bit_index)};
+  auto const last_word_index{word_index(last_bit_index)};
+
+  // Although we use a 2D grid for launching the kernel, elements of each bitmask are indexed by
+  // the first dimension.
+  thread_index_type const tid    = grid_1d::global_thread_id<block_size>();
+  thread_index_type const stride = grid_1d::grid_stride<block_size>();
+  size_type thread_word_index    = tid + first_word_index;
+  size_type thread_count{0};
+
+  // First, just count the bits in all words
+  while (thread_word_index <= last_word_index) {
+    thread_count += cuda::std::popcount(bitmask[thread_word_index]);
+    thread_word_index += stride;
+  }
+
+  // Subtract any slack bits counted from the first and last word
+  // Two threads handle this -- one for first word, one for last
+  if (tid < 2) {
+    bool const first{tid == 0};
+    bool const last{not first};
+
+    size_type bit_index  = (first) ? first_bit_index : last_bit_index;
+    size_type word_index = (first) ? first_word_index : last_word_index;
+
+    size_type num_slack_bits = bit_index % word_size;
+    if (last) { num_slack_bits = word_size - num_slack_bits - 1; }
+
+    if (num_slack_bits > 0) {
+      bitmask_type word = bitmask[word_index];
+      auto slack_mask   = (first) ? set_least_significant_bits(num_slack_bits)
+                                  : set_most_significant_bits(num_slack_bits);
+
+      thread_count -= cuda::std::popcount(word & slack_mask);
+    }
+  }
+
+  using BlockReduce = cub::BlockReduce<size_type, block_size>;
+  __shared__ typename BlockReduce::TempStorage temp_storage;
+  size_type block_count{BlockReduce(temp_storage).Sum(thread_count)};
+
+  if (threadIdx.x == 0) { atomicAdd(&global_count[bitmask_idx], block_count); }
+}
+
+// Count null elements in the specified range of multiple validity bitmasks
+std::vector<size_type> batch_null_count(host_span<bitmask_type const* const> bitmasks,
+                                        size_type start,
+                                        size_type stop,
+                                        rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(start >= 0 and start <= stop, "Invalid bit range.");
+
+  auto const num_bitmasks      = bitmasks.size();
+  auto const num_bits_to_count = stop - start;
+
+  std::vector<size_type> output(num_bitmasks, 0);
+  if (num_bitmasks == 0 || num_bits_to_count == 0) { return output; }
+
+  auto const has_bitmask =
+    std::any_of(bitmasks.begin(), bitmasks.end(), [](auto p) { return p != nullptr; });
+  if (!has_bitmask) { return output; }
+
+  auto const tmp_mr     = cudf::get_current_device_resource_ref();
+  auto const d_bitmasks = cudf::detail::make_device_uvector_async(bitmasks, stream, tmp_mr);
+  auto const num_words  = num_bitmask_words(num_bits_to_count);
+  auto d_non_zero_count =
+    cudf::detail::make_zeroed_device_uvector_async<size_type>(num_bitmasks, stream, tmp_mr);
+
+  constexpr size_type block_size{256};
+  // We use a 2D grid to launch the kernel, where the first dimension is to access elements in each
+  // single bitmask while the second dimension is to access the bitmask indices.
+  auto const grid = grid_1d{num_words, block_size};
+  auto const kernel_grid =
+    dim3{static_cast<unsigned int>(grid.num_blocks), static_cast<unsigned int>(num_bitmasks), 1};
+  batch_count_set_bit_kernel<block_size><<<kernel_grid, block_size, 0, stream.value()>>>(
+    d_bitmasks.data(), num_bitmasks, start, stop - 1, d_non_zero_count.data());
+
+  auto h_non_zero_count = cudf::detail::make_pinned_vector<size_type>(num_bitmasks, stream);
+  cudf::detail::cuda_memcpy(host_span<size_type>{h_non_zero_count.data(), num_bitmasks},
+                            device_span<size_type const>{d_non_zero_count.data(), num_bitmasks},
+                            stream);
+  for (std::size_t i = 0; i < num_bitmasks; ++i) {
+    if (bitmasks[i] != nullptr) { output[i] = num_bits_to_count - h_non_zero_count[i]; }
+  }
+  return output;
+}
+
 }  // namespace
 
 // Count non-zero bits in the specified range
@@ -752,6 +858,15 @@ cudf::size_type null_count(bitmask_type const* bitmask,
 {
   CUDF_FUNC_RANGE();
   return detail::null_count(bitmask, start, stop, stream);
+}
+
+std::vector<size_type> batch_null_count(host_span<bitmask_type const* const> bitmasks,
+                                        size_type start,
+                                        size_type stop,
+                                        rmm::cuda_stream_view stream)
+{
+  CUDF_FUNC_RANGE();
+  return detail::batch_null_count(bitmasks, start, stop, stream);
 }
 
 }  // namespace cudf
