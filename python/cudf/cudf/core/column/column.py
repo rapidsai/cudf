@@ -230,27 +230,17 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self._distinct_count: dict[bool, int] = {}
         self._dtype = dtype
         self._mask = None
-        self._base_mask = None
         self._data = None
         self._children = None
-        # CategoricalColumn overrides this method
-        data = self._get_data_buffer_from_pylibcudf_column(
-            self.plc_column, exposed
-        )
-        mask_view = plc_column.null_mask()
-        mask = (
-            as_buffer(mask_view, exposed=exposed)
-            if mask_view is not None
-            else None
-        )
+        # Initialize cached base buffers from plc_column
+        self._base_data = self._get_base_data_from_plc_column(exposed)
+        self._base_mask = self._get_base_mask_from_plc_column(exposed)
         children = self._get_children_from_pylibcudf_column(
             self.plc_column,
             dtype,
             exposed,
         )
         self.set_base_children(children)
-        self.set_base_data(data)
-        self.set_base_mask(mask)
         # The set of exposed buffers associated with this column. These buffers must be
         # kept alive for the lifetime of this column since anything that accessed the
         # CAI of this column will still be pointing to those buffers. As such objects
@@ -258,33 +248,19 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # triggering the destruction of the exposed buffers.
         self._exposed_buffers: set[Buffer] = set()
 
-    @classmethod
-    def _get_data_buffer_from_pylibcudf_column(
-        cls, plc_column: plc.Column, exposed: bool
-    ) -> Buffer | None:
-        """
-        Extract the data buffer from a pylibcudf.Column.
+    def _get_base_data_from_plc_column(self, exposed: bool) -> Buffer | None:
+        """Extract and wrap data buffer from plc_column."""
+        data_view = self.plc_column.data()
+        if data_view is None:
+            return None
+        return as_buffer(data_view, exposed=exposed)
 
-        Necessary to wrap the data buffer in a cuDF Buffer for spilling support.
-
-        Parameters
-        ----------
-        plc_column : plc.Column
-            The pylibcudf.Column to extract the data buffer from.
-        exposed : bool
-            Whether the data buffer is exposed.
-
-        Returns
-        -------
-        Buffer | None
-            The data buffer.
-        """
-        data_view = plc_column.data()
-        return (
-            as_buffer(data_view, exposed=exposed)
-            if data_view is not None
-            else None
-        )
+    def _get_base_mask_from_plc_column(self, exposed: bool) -> Buffer | None:
+        """Extract and wrap mask buffer from plc_column."""
+        mask_view = self.plc_column.null_mask()
+        if mask_view is None:
+            return None
+        return as_buffer(mask_view, exposed=exposed)
 
     def _get_children_from_pylibcudf_column(
         self,
@@ -348,6 +324,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def base_data(self) -> None | Buffer:
+        """Get cached data buffer."""
         return self._base_data
 
     @property
@@ -361,14 +338,30 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return self._data
 
     def set_base_data(self, value: None | Buffer) -> None:
+        """Set base data buffer by updating plc_column and cache."""
         if value is not None and not isinstance(value, Buffer):
             raise TypeError(
                 "Expected a Buffer or None for data, "
                 f"got {type(value).__name__}"
             )
 
+        # Clear offset-aware cache
         self._data = None
+
+        # Update cached base_data
         self._base_data = value
+
+        # Create new plc_column with updated data buffer
+        # Access mask directly from plc_column to avoid wrapping/unwrapping
+        self.plc_column = plc.Column(
+            data_type=self.plc_column.type(),
+            size=self.plc_column.size(),
+            data=value,  # New data buffer
+            mask=self.plc_column.null_mask(),  # Keep existing mask (raw gpumemoryview)
+            null_count=self.plc_column.null_count(),
+            offset=self.plc_column.offset(),
+            children=[c.plc_column for c in self.base_children],
+        )
 
     @property
     def nullable(self) -> bool:
@@ -379,6 +372,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def base_mask(self) -> None | Buffer:
+        """Get cached mask buffer."""
         return self._base_mask
 
     @property
@@ -425,9 +419,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     )
                 raise ValueError(error_msg)
 
+        # Clear offset-aware caches
         self._mask = None
         self._children = None
-        self._base_mask = value  # type: ignore[assignment]
 
         # Update plc_column with the new mask and compute null_count eagerly
         if value is not None:
@@ -446,6 +440,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             new_null_count,
             validate=False,
         )
+
+        # Update cached base_mask
+        self._base_mask = value
 
         self._clear_cache()
 
@@ -549,11 +546,16 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if inplace:
             self._dtype = other_col._dtype
             self.plc_column = other_col.plc_column
-            # Note: size and offset are now read from plc_column via properties
-            self.set_base_data(other_col.base_data)
-            self.set_base_children(other_col.base_children)
-            self.set_base_mask(other_col.base_mask)
-            # TODO: self._clear_cache here?
+            # Directly update cached attributes to avoid recreating plc_column multiple times
+            self._base_data = other_col._base_data
+            self._base_mask = other_col._base_mask
+            self._base_children = other_col._base_children
+            # Clear offset-aware caches
+            self._data = None
+            self._mask = None
+            self._children = None
+            # Clear cached properties (memory_usage, etc.) since column state changed
+            self._clear_cache()
             return None
         else:
             return other_col
@@ -1104,20 +1106,53 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return result
 
         if not fill_value.is_valid(DEFAULT_STREAM) and not self.nullable:
+            # Create mask sized for base buffer to preserve view semantics
             mask = as_buffer(
                 plc.null_mask.create_null_mask(
-                    self.size, plc.types.MaskState.ALL_VALID
+                    self.base_size, plc.types.MaskState.ALL_VALID
                 )
             )
             self.set_base_mask(mask)
 
         with acquire_spill_lock():
+            # Create a pylibcudf column to modify in-place
+            plc_col = self.to_pylibcudf(mode="write")
             plc.filling.fill_in_place(
-                self.to_pylibcudf(mode="write"),
+                plc_col,
                 begin,
                 end,
                 fill_value,
             )
+            # fill_in_place modifies the buffers but doesn't update metadata
+            # We need to recompute null_count if filling with null values
+            if not fill_value.is_valid(DEFAULT_STREAM):
+                # Recompute null_count from the mask
+                plc_mask = plc_col.null_mask()
+                assert (
+                    plc_mask is not None
+                )  # Must have mask after filling with null
+                new_null_count = plc.null_mask.null_count(
+                    plc_mask,
+                    self.offset,
+                    self.offset + self.size,
+                )
+                # Create a new column with the updated null_count
+                plc_col = plc.Column(
+                    data_type=plc_col.type(),
+                    size=plc_col.size(),
+                    data=plc_col.data(),
+                    mask=plc_col.null_mask(),
+                    null_count=new_null_count,
+                    offset=plc_col.offset(),
+                    children=plc_col.children(),
+                )
+            # Update self.plc_column with the modified column
+            self.plc_column = plc_col
+            # Clear offset-aware caches since the data/mask may have changed
+            self._data = None
+            self._mask = None
+            # Clear cached properties (memory_usage, etc.) since they may be stale
+            self._clear_cache()
         return self
 
     @acquire_spill_lock()
