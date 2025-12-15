@@ -113,6 +113,13 @@ class CategoricalColumn(column.ColumnBase):
         )
         self._codes = self.children[0].set_mask(self.mask)
 
+    def _get_base_data_from_plc_column(self, exposed: bool) -> None:
+        """
+        Categorical columns don't have a data buffer - data is stored
+        in the codes child column instead.
+        """
+        return None
+
     def _get_children_from_pylibcudf_column(
         self, plc_column: plc.Column, dtype: DtypeObj, exposed: bool
     ) -> tuple[ColumnBase]:
@@ -122,23 +129,6 @@ class CategoricalColumn(column.ColumnBase):
         return (
             type(self).from_pylibcudf(plc_column, data_ptr_exposed=exposed),
         )
-
-    @property
-    def data(self) -> Buffer | None:
-        """
-        Get the data buffer for categorical column.
-
-        The data buffer contains the codes (uint8), not the categories.
-        We need to override this because CategoricalDtype doesn't have itemsize.
-        """
-        if self.base_data is None:
-            return None
-        if self._data is None:  # type: ignore[has-type]
-            # Codes are stored as uint8, so itemsize is always 1
-            start = self.offset * 1  # 1 byte per code
-            end = start + self.size * 1
-            self._data = self.base_data[start:end]  # type: ignore[assignment]
-        return self._data  # type: ignore[has-type]
 
     @property
     def base_size(self) -> int:
