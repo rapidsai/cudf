@@ -884,6 +884,101 @@ __device__ int skip_decode(stream_type& parquet_stream, int num_to_skip, int t)
   return num_skipped;
 }
 
+template <int decode_block_size_t,
+          int rolling_buf_size,
+          bool has_lists_t,
+          bool has_dict_t,
+          bool has_bools_t,
+          bool has_nesting_t,
+          typename level_t,
+          typename state_buf,
+          typename def_decoder_t,
+          typename rep_decoder_t,
+          typename dict_stream_t,
+          typename bool_stream_t,
+          typename thread_block_t>
+__device__ void skip_ahead_in_decoding(page_state_s* s,
+                                       state_buf* sb,
+                                       def_decoder_t& def_decoder,
+                                       rep_decoder_t& rep_decoder,
+                                       dict_stream_t& dict_stream,
+                                       bool_stream_t& bool_stream,
+                                       bool bools_are_rle_stream,
+                                       bool should_process_nulls,
+                                       level_t const* const def,
+                                       thread_block_t const& block,
+                                       int t,
+                                       int& processed_count,
+                                       int& valid_count)
+{
+  auto skip_bools = [&](int num_to_skip) {
+    if (bools_are_rle_stream) {
+      skip_decode<rolling_buf_size>(bool_stream, num_to_skip, t);
+    } else {
+      if (t == 0) { s->dict_pos = num_to_skip; }
+      // For non-lists don't sync: we'll sync at the end of the lambda instead
+      if constexpr (has_lists_t) { block.sync(); }
+    }
+  };
+
+  if constexpr (has_lists_t) {
+    auto const skipped_leaf_values = s->page.skipped_leaf_values;
+    if (skipped_leaf_values > 0) {
+      if (should_process_nulls) {
+        skip_decode<rolling_buf_size>(def_decoder, skipped_leaf_values, t);
+      }
+      processed_count = skip_decode<rolling_buf_size>(rep_decoder, skipped_leaf_values, t);
+      if constexpr (has_dict_t) {
+        skip_decode<rolling_buf_size>(dict_stream, skipped_leaf_values, t);
+      } else if constexpr (has_bools_t) {
+        skip_bools(skipped_leaf_values);
+      }
+    }
+    return;
+  }
+
+  // Non-lists
+  int const first_row = s->first_row;
+  if (first_row <= 0) { return; }
+  if (!should_process_nulls) {
+    processed_count = first_row;
+    valid_count     = first_row;
+  } else {
+    while (processed_count < first_row) {
+      auto to_process          = min(rolling_buf_size, first_row - processed_count);
+      int next_processed_count = processed_count + def_decoder.decode_next(t, to_process);
+
+      int num_valids = skip_validity_and_row_indices_nonlist<decode_block_size_t,
+                                                             level_t,
+                                                             has_nesting_t,
+                                                             rolling_buf_size>(
+        processed_count, next_processed_count, s, def, t);
+
+      valid_count += num_valids;
+      processed_count = next_processed_count;
+    }
+  }
+
+  if constexpr (has_dict_t) {
+    skip_decode<rolling_buf_size>(dict_stream, valid_count, t);
+  } else if constexpr (has_bools_t) {
+    skip_bools(valid_count);
+  }
+
+  if (t == 0) {
+    int const max_depth = s->col.max_nesting_depth - 1;
+    auto& ni            = s->nesting_info[max_depth];
+
+    // update valid value count for decoding and total # of values we've processed
+    ni.valid_count       = valid_count;
+    ni.value_count       = processed_count;
+    s->nz_count          = valid_count;
+    s->input_value_count = processed_count;
+    s->input_row_count   = processed_count;
+  }
+  block.sync();
+}
+
 template <decode_kernel_mask kernel_mask_t>
 constexpr bool has_dict()
 {
@@ -1112,74 +1207,25 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     s->col.column_string_offset_base + page_string_offset_indices[page_idx];
 
   // Skip ahead in the decoding so that we don't repeat work
-  [&]() {
-    auto skip_bools = [&](int num_to_skip) {
-      if (bools_are_rle_stream) {
-        skip_decode<rolling_buf_size>(bool_stream, num_to_skip, t);
-      } else {
-        if (t == 0) { s->dict_pos = num_to_skip; }
-        // For non-lists don't sync: we'll sync at the end of the lambda instead
-        if constexpr (has_lists_t) { block.sync(); }
-      }
-    };
-
-    if constexpr (has_lists_t) {
-      auto const skipped_leaf_values = s->page.skipped_leaf_values;
-      if (skipped_leaf_values > 0) {
-        if (should_process_nulls) {
-          skip_decode<rolling_buf_size>(def_decoder, skipped_leaf_values, t);
-        }
-        processed_count = skip_decode<rolling_buf_size>(rep_decoder, skipped_leaf_values, t);
-        if constexpr (has_dict_t) {
-          skip_decode<rolling_buf_size>(dict_stream, skipped_leaf_values, t);
-        } else if constexpr (has_bools_t) {
-          skip_bools(skipped_leaf_values);
-        }
-      }
-      return;
-    }
-
-    // Non-lists
-    int const first_row = s->first_row;
-    if (first_row <= 0) { return; }
-    if (!should_process_nulls) {
-      processed_count = first_row;
-      valid_count     = first_row;
-    } else {
-      while (processed_count < first_row) {
-        auto to_process          = min(rolling_buf_size, first_row - processed_count);
-        int next_processed_count = processed_count + def_decoder.decode_next(t, to_process);
-
-        int num_valids = skip_validity_and_row_indices_nonlist<decode_block_size_t,
-                                                               level_t,
-                                                               has_nesting_t,
-                                                               rolling_buf_size>(
-          processed_count, next_processed_count, s, def, t);
-
-        valid_count += num_valids;
-        processed_count = next_processed_count;
-      }
-    }
-
-    if constexpr (has_dict_t) {
-      skip_decode<rolling_buf_size>(dict_stream, valid_count, t);
-    } else if constexpr (has_bools_t) {
-      skip_bools(valid_count);
-    }
-
-    if (t == 0) {
-      int const max_depth = s->col.max_nesting_depth - 1;
-      auto& ni            = s->nesting_info[max_depth];
-
-      // update valid value count for decoding and total # of values we've processed
-      ni.valid_count       = valid_count;
-      ni.value_count       = processed_count;
-      s->nz_count          = valid_count;
-      s->input_value_count = processed_count;
-      s->input_row_count   = processed_count;
-    }
-    block.sync();
-  }();
+  skip_ahead_in_decoding<decode_block_size_t,
+                         rolling_buf_size,
+                         has_lists_t,
+                         has_dict_t,
+                         has_bools_t,
+                         has_nesting_t,
+                         level_t>(s,
+                                  sb,
+                                  def_decoder,
+                                  rep_decoder,
+                                  dict_stream,
+                                  bool_stream,
+                                  bools_are_rle_stream,
+                                  should_process_nulls,
+                                  def,
+                                  block,
+                                  t,
+                                  processed_count,
+                                  valid_count);
 
   // the core loop. decode batches of level stream data using rle_stream objects
   // and pass the results to decode_values
