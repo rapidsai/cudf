@@ -9,6 +9,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_reduce.cuh>
 #include <cuda/stream_ref>
