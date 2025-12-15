@@ -26,6 +26,7 @@
 #include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/static_set.cuh>
+#include <thrust/count.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
@@ -167,6 +168,13 @@ struct build_comparator {
 };
 
 /**
+ * @brief Functor to check if a count is greater than zero.
+ */
+struct is_nonzero_count {
+  __device__ bool operator()(cudf::size_type c) const { return c > 0; }
+};
+
+/**
  * @brief Functor for inserting keys with counting (with null filtering).
  */
 template <typename SetRef, typename KeyIter>
@@ -174,7 +182,6 @@ struct insert_and_count_with_nulls_fn {
   mutable SetRef set_ref;  // mutable because insert_and_find is non-const
   KeyIter key_iter;
   cudf::size_type* counts_ptr;
-  cudf::size_type* distinct_ptr;
   cudf::bitmask_type const* bitmask_ptr;
 
   __device__ void operator()(cudf::size_type idx) const
@@ -187,10 +194,8 @@ struct insert_and_count_with_nulls_fn {
     auto const stored_idx       = static_cast<cudf::size_type>(iter->second);
 
     // Atomically increment the count for this key's first occurrence
+    // This is a distributed atomic (different keys update different locations)
     atomicAdd(&counts_ptr[stored_idx], 1);
-
-    // Track distinct count
-    if (inserted) { atomicAdd(distinct_ptr, 1); }
   }
 };
 
@@ -202,7 +207,6 @@ struct insert_and_count_fn {
   mutable SetRef set_ref;  // mutable because insert_and_find is non-const
   KeyIter key_iter;
   cudf::size_type* counts_ptr;
-  cudf::size_type* distinct_ptr;
 
   __device__ void operator()(cudf::size_type idx) const
   {
@@ -211,10 +215,8 @@ struct insert_and_count_fn {
     auto const stored_idx       = static_cast<cudf::size_type>(iter->second);
 
     // Atomically increment the count for this key's first occurrence
+    // This is a distributed atomic (different keys update different locations)
     atomicAdd(&counts_ptr[stored_idx], 1);
-
-    // Track distinct count
-    if (inserted) { atomicAdd(distinct_ptr, 1); }
   }
 };
 
@@ -246,6 +248,8 @@ class key_remap_table_interface {
 
 /**
  * @brief Hash table implementation for key remapping with deduplication and counting.
+ *
+ * Computes distinct_count and max_duplicate_count eagerly during construction.
  */
 template <typename BuildEqual>
 class key_remap_table : public key_remap_table_interface {
@@ -269,6 +273,8 @@ class key_remap_table : public key_remap_table_interface {
 
   /**
    * @brief Construct a key remap hash table with counting.
+   *
+   * Computes distinct_count and max_duplicate_count during construction.
    */
   template <typename RowHasher>
   key_remap_table(
@@ -306,9 +312,6 @@ class key_remap_table : public key_remap_table_interface {
     rmm::device_uvector<cudf::size_type> counts(build_num_rows, stream);
     thrust::fill(rmm::exec_policy_nosync(stream), counts.begin(), counts.end(), 0);
 
-    // Device scalar for distinct count
-    rmm::device_scalar<cudf::size_type> d_distinct_count(0, stream);
-
     // Get hash table reference for insert_and_find
     auto set_ref = _hash_table.ref(cuco::op::insert_and_find);
 
@@ -332,25 +335,29 @@ class key_remap_table : public key_remap_table_interface {
         rmm::exec_policy_nosync(stream),
         thrust::make_counting_iterator<cudf::size_type>(0),
         build_num_rows,
-        functor_type{set_ref, key_iter, counts.data(), d_distinct_count.data(), bitmask_ptr});
+        functor_type{set_ref, key_iter, counts.data(), bitmask_ptr});
     } else {
       // Insert all rows with counting
       using functor_type = insert_and_count_fn<decltype(set_ref), decltype(key_iter)>;
       thrust::for_each_n(rmm::exec_policy_nosync(stream),
                          thrust::make_counting_iterator<cudf::size_type>(0),
                          build_num_rows,
-                         functor_type{set_ref, key_iter, counts.data(), d_distinct_count.data()});
+                         functor_type{set_ref, key_iter, counts.data()});
     }
 
-    // Copy distinct count back to host
-    _distinct_count = d_distinct_count.value(stream);
+    // Compute distinct count by counting non-zero entries in counts array
+    _distinct_count = thrust::count_if(rmm::exec_policy_nosync(stream),
+                                       counts.begin(),
+                                       counts.end(),
+                                       is_nonzero_count{});
 
-    // Find max duplicate count
-    _max_duplicate_count = thrust::reduce(rmm::exec_policy(stream),
+    // Compute max duplicate count
+    _max_duplicate_count = thrust::reduce(rmm::exec_policy_nosync(stream),
                                           counts.begin(),
                                           counts.end(),
                                           cudf::size_type{0},
                                           thrust::maximum<cudf::size_type>{});
+    // counts array is freed here when it goes out of scope
   }
 
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> probe(
@@ -358,7 +365,7 @@ class key_remap_table : public key_remap_table_interface {
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const override
   {
-    cudf::scoped_range range{"cudf::key_remap_table::probe"};
+    CUDF_FUNC_RANGE();
 
     cudf::size_type const probe_num_rows{probe_keys.num_rows()};
 
@@ -545,13 +552,16 @@ class key_remapping_impl {
     if (_table == nullptr) {
       auto result =
         std::make_unique<rmm::device_uvector<cudf::size_type>>(keys.num_rows(), stream, mr);
-      thrust::fill(rmm::exec_policy(stream), result->begin(), result->end(), cudf::JoinNoMatch);
+      thrust::fill(rmm::exec_policy_nosync(stream), result->begin(), result->end(), cudf::JoinNoMatch);
       return result;
     }
     return _table->probe(keys, stream, mr);
   }
 
-  cudf::size_type get_distinct_count() const { return _table ? _table->get_distinct_count() : 0; }
+  cudf::size_type get_distinct_count() const
+  {
+    return _table ? _table->get_distinct_count() : 0;
+  }
 
   cudf::size_type get_max_duplicate_count() const
   {
@@ -594,7 +604,7 @@ std::unique_ptr<cudf::column> key_remapping::remap_build_keys(
   auto indices = _impl->probe(keys, stream, mr);
 
   // Replace JoinNoMatch with BUILD_NULL sentinel
-  thrust::replace(rmm::exec_policy(stream),
+  thrust::replace(rmm::exec_policy_nosync(stream),
                   indices->begin(),
                   indices->end(),
                   cudf::JoinNoMatch,
@@ -620,7 +630,7 @@ std::unique_ptr<cudf::column> key_remapping::remap_probe_keys(
   auto indices = _impl->probe(keys, stream, mr);
 
   // Replace JoinNoMatch with NOT_FOUND sentinel
-  thrust::replace(rmm::exec_policy(stream),
+  thrust::replace(rmm::exec_policy_nosync(stream),
                   indices->begin(),
                   indices->end(),
                   cudf::JoinNoMatch,
