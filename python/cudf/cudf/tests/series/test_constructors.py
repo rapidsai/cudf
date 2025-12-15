@@ -1409,6 +1409,7 @@ def test_from_pandas_obj_tz_aware_unsupported(klass):
 @pytest.mark.parametrize(
     "codes",
     [
+        [],
         [0],
         [0, 1, 2],
         [0, 1, -1],
