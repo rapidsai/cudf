@@ -41,16 +41,18 @@ public class KeyRemappingTest extends CudfTestBase {
   @Test
   void testStringKeys() {
     try (Table buildTable = new Table.TestBuilder()
-            .column("apple", "banana", "cherry", "banana")
+            .column("apple", "banana", null, "cherry", "banana", null)
             .build();
          KeyRemapping remap = new KeyRemapping(buildTable)) {
 
-      assertEquals(3, remap.getDistinctCount());
+      // Distinct keys: "apple", "banana", null, "cherry" = 4 (with default EQUAL null handling)
+      assertEquals(4, remap.getDistinctCount());
+      // "banana" appears twice, null appears twice = max duplicate count 2
       assertEquals(2, remap.getMaxDuplicateCount());
 
       try (ColumnVector result = remap.remapBuildKeys(buildTable);
            HostColumnVector hostResult = result.copyToHost()) {
-        assertEquals(4, hostResult.getRowCount());
+        assertEquals(6, hostResult.getRowCount());
       }
     }
   }

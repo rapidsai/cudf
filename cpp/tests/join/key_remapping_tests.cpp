@@ -482,3 +482,148 @@ TEST_F(KeyRemappingTest, StructKeys)
   EXPECT_NE(host_ids[0], host_ids[2]);
   EXPECT_NE(host_ids[1], host_ids[2]);
 }
+
+TEST_F(KeyRemappingTest, FloatKeys)
+{
+  // Test with float keys including duplicates
+  column_wrapper<float> build_col{1.5f, 2.5f, 3.5f, 2.5f, 1.5f};
+  auto build_table = cudf::table_view{{build_col}};
+
+  cudf::key_remapping remap{build_table};
+
+  // Distinct: 1.5, 2.5, 3.5 = 3
+  EXPECT_EQ(remap.get_distinct_count(), 3);
+  EXPECT_EQ(remap.get_max_duplicate_count(), 2);
+
+  auto build_result = remap.remap_build_keys(build_table);
+  verify_remapping_contract(build_table, *build_result, 3);
+
+  auto host_ids = to_host<int32_t>(*build_result);
+  // Equal keys should have equal IDs
+  EXPECT_EQ(host_ids[0], host_ids[4]);  // Both 1.5
+  EXPECT_EQ(host_ids[1], host_ids[3]);  // Both 2.5
+  // Different keys should have different IDs
+  EXPECT_NE(host_ids[0], host_ids[1]);
+  EXPECT_NE(host_ids[0], host_ids[2]);
+  EXPECT_NE(host_ids[1], host_ids[2]);
+
+  // Probe with matching and non-matching keys
+  column_wrapper<float> probe_col{3.5f, 1.5f, 9.9f, 2.5f};
+  auto probe_table = cudf::table_view{{probe_col}};
+
+  auto probe_result   = remap.remap_probe_keys(probe_table);
+  auto host_probe_ids = to_host<int32_t>(*probe_result);
+
+  EXPECT_EQ(host_probe_ids[0], host_ids[2]);                // 3.5 matches
+  EXPECT_EQ(host_probe_ids[1], host_ids[0]);                // 1.5 matches
+  EXPECT_EQ(host_probe_ids[2], cudf::KEY_REMAP_NOT_FOUND);  // 9.9 not found
+  EXPECT_EQ(host_probe_ids[3], host_ids[1]);                // 2.5 matches
+
+  verify_probe_matches_build(build_table, *build_result, probe_table, *probe_result);
+}
+
+TEST_F(KeyRemappingTest, DoubleKeys)
+{
+  // Test with double keys including duplicates
+  column_wrapper<double> build_col{1.123456789, 2.987654321, 3.141592653, 2.987654321};
+  auto build_table = cudf::table_view{{build_col}};
+
+  cudf::key_remapping remap{build_table};
+
+  // Distinct: 3 values (the second 2.987654321 is a duplicate)
+  EXPECT_EQ(remap.get_distinct_count(), 3);
+  EXPECT_EQ(remap.get_max_duplicate_count(), 2);
+
+  auto build_result = remap.remap_build_keys(build_table);
+  verify_remapping_contract(build_table, *build_result, 3);
+
+  auto host_ids = to_host<int32_t>(*build_result);
+  // Equal keys should have equal IDs
+  EXPECT_EQ(host_ids[1], host_ids[3]);  // Both 2.987654321
+  // Different keys should have different IDs
+  EXPECT_NE(host_ids[0], host_ids[1]);
+  EXPECT_NE(host_ids[0], host_ids[2]);
+  EXPECT_NE(host_ids[1], host_ids[2]);
+
+  // Probe with matching and non-matching keys
+  column_wrapper<double> probe_col{3.141592653, 1.123456789, 99.99};
+  auto probe_table = cudf::table_view{{probe_col}};
+
+  auto probe_result   = remap.remap_probe_keys(probe_table);
+  auto host_probe_ids = to_host<int32_t>(*probe_result);
+
+  EXPECT_EQ(host_probe_ids[0], host_ids[2]);                // pi matches
+  EXPECT_EQ(host_probe_ids[1], host_ids[0]);                // 1.123... matches
+  EXPECT_EQ(host_probe_ids[2], cudf::KEY_REMAP_NOT_FOUND);  // 99.99 not found
+
+  verify_probe_matches_build(build_table, *build_result, probe_table, *probe_result);
+}
+
+TEST_F(KeyRemappingTest, FloatWithNulls)
+{
+  // Test float keys with null values
+  column_wrapper<float> build_col{{1.5f, 2.5f, 0.0f, 2.5f}, {true, true, false, true}};
+  auto build_table = cudf::table_view{{build_col}};
+
+  cudf::key_remapping remap{build_table, cudf::null_equality::EQUAL};
+
+  // Distinct: 1.5, 2.5, null = 3
+  EXPECT_EQ(remap.get_distinct_count(), 3);
+
+  auto build_result = remap.remap_build_keys(build_table);
+  verify_remapping_contract(build_table, *build_result, 3);
+
+  auto host_ids = to_host<int32_t>(*build_result);
+  // Equal keys should have equal IDs
+  EXPECT_EQ(host_ids[1], host_ids[3]);  // Both 2.5
+  // All IDs should be non-negative (nulls treated as equal)
+  for (auto id : host_ids) {
+    EXPECT_GE(id, 0);
+  }
+
+  // Test with UNEQUAL null semantics
+  cudf::key_remapping remap_unequal{build_table, cudf::null_equality::UNEQUAL};
+
+  // Distinct: 1.5, 2.5 = 2 (null skipped)
+  EXPECT_EQ(remap_unequal.get_distinct_count(), 2);
+
+  auto build_result_unequal = remap_unequal.remap_build_keys(build_table);
+  auto host_ids_unequal     = to_host<int32_t>(*build_result_unequal);
+
+  // Null row should get BUILD_NULL sentinel
+  EXPECT_EQ(host_ids_unequal[2], cudf::KEY_REMAP_BUILD_NULL);
+}
+
+TEST_F(KeyRemappingTest, DoubleWithNulls)
+{
+  // Test double keys with null values
+  column_wrapper<double> build_col{{1.0, 2.0, 0.0, 2.0}, {true, true, false, true}};
+  auto build_table = cudf::table_view{{build_col}};
+
+  cudf::key_remapping remap{build_table, cudf::null_equality::EQUAL};
+
+  // Distinct: 1.0, 2.0, null = 3
+  EXPECT_EQ(remap.get_distinct_count(), 3);
+
+  auto build_result = remap.remap_build_keys(build_table);
+  auto host_ids     = to_host<int32_t>(*build_result);
+
+  // Equal keys should have equal IDs
+  EXPECT_EQ(host_ids[1], host_ids[3]);  // Both 2.0
+  // All IDs should be non-negative (nulls treated as equal)
+  for (auto id : host_ids) {
+    EXPECT_GE(id, 0);
+  }
+
+  // Test with UNEQUAL null semantics
+  cudf::key_remapping remap_unequal{build_table, cudf::null_equality::UNEQUAL};
+
+  // Distinct: 1.0, 2.0 = 2 (null skipped)
+  EXPECT_EQ(remap_unequal.get_distinct_count(), 2);
+
+  auto build_result_unequal = remap_unequal.remap_build_keys(build_table);
+  auto host_ids_unequal     = to_host<int32_t>(*build_result_unequal);
+
+  // Null row should get BUILD_NULL sentinel
+  EXPECT_EQ(host_ids_unequal[2], cudf::KEY_REMAP_BUILD_NULL);
+}
