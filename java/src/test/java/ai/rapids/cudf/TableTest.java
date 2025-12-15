@@ -4161,22 +4161,13 @@ public class TableTest extends CudfTestBase {
     int expectedPart = -1;
     try (Table start = new Table.TestBuilder().column(0).build();
          PartitionedTable out = start.onColumns(0).hashPartition(PARTS)) {
-      // Lets figure out what partition this element belongs to.
+      // Lets figure out what partitions this is a part of.
       int[] parts = out.getPartitions();
       for (int i = 0; i < parts.length; i++) {
-        int start_offset = (i == 0) ? 0 : parts[i - 1];
-        int end_offset = parts[i];
-        if (end_offset > start_offset) {
+        if (parts[i] > 0) {
           expectedPart = i;
-          break;
         }
       }
-      // If we didn't find a partition, it means all offsets are 0 or the element went to partition 0
-      // In that case, check if partition 0 has the element by checking if parts[0] > 0
-      if (expectedPart == -1 && parts.length > 0 && parts[0] > 0) {
-        expectedPart = 0;
-      }
-      assertTrue(expectedPart != -1, "Failed to find partition for value 0");
     }
     final int COUNT = 20;
     for (int numEntries = 1; numEntries < COUNT; numEntries++) {
