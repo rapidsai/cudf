@@ -891,14 +891,11 @@ template <int decode_block_size_t,
           bool has_bools_t,
           bool has_nesting_t,
           typename level_t,
-          typename state_buf,
           typename def_decoder_t,
           typename rep_decoder_t,
           typename dict_stream_t,
-          typename bool_stream_t,
-          typename thread_block_t>
+          typename bool_stream_t>
 __device__ void skip_ahead_in_decoding(page_state_s* s,
-                                       state_buf* sb,
                                        def_decoder_t& def_decoder,
                                        rep_decoder_t& rep_decoder,
                                        dict_stream_t& dict_stream,
@@ -906,11 +903,12 @@ __device__ void skip_ahead_in_decoding(page_state_s* s,
                                        bool bools_are_rle_stream,
                                        bool should_process_nulls,
                                        level_t const* const def,
-                                       thread_block_t const& block,
-                                       int t,
                                        int& processed_count,
                                        int& valid_count)
 {
+  auto const block = cg::this_thread_block();
+  int const t      = block.thread_rank();
+
   auto skip_bools = [&](int num_to_skip) {
     if (bools_are_rle_stream) {
       skip_decode<rolling_buf_size>(bool_stream, num_to_skip, t);
@@ -1214,7 +1212,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
                          has_bools_t,
                          has_nesting_t,
                          level_t>(s,
-                                  sb,
                                   def_decoder,
                                   rep_decoder,
                                   dict_stream,
@@ -1222,8 +1219,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
                                   bools_are_rle_stream,
                                   should_process_nulls,
                                   def,
-                                  block,
-                                  t,
                                   processed_count,
                                   valid_count);
 
