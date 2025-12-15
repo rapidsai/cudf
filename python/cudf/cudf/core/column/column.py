@@ -621,6 +621,59 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             children,
         )
 
+    @staticmethod
+    def _ensure_buffers_in_plc_column(
+        col: plc.Column, exposed: bool = False
+    ) -> plc.Column:
+        """
+        Ensure data and mask in plc.Column are cudf Buffers.
+
+        This optimization wraps Span-like objects (gpumemoryview, OwnerWithCAI, etc.)
+        in cudf Buffer objects once during column construction, eliminating the need
+        to call as_buffer() repeatedly in base_data/base_mask property accessors.
+
+        Parameters
+        ----------
+        col : plc.Column
+            The pylibcudf column to process
+        exposed : bool
+            Whether the buffers should be marked as exposed
+
+        Returns
+        -------
+        plc.Column
+            Column with Buffer objects for data and mask (if they weren't already)
+        """
+        data = col.data()
+        mask = col.null_mask()
+
+        # Check if reconstruction is needed
+        data_needs_wrapping = data is not None and not isinstance(data, Buffer)
+        mask_needs_wrapping = mask is not None and not isinstance(mask, Buffer)
+
+        if not data_needs_wrapping and not mask_needs_wrapping:
+            return col  # Already optimal - no reconstruction needed
+
+        # Wrap non-Buffer Span objects in Buffer
+        new_data = (
+            as_buffer(data, exposed=exposed) if data_needs_wrapping else data
+        )
+        new_mask = (
+            as_buffer(mask, exposed=exposed) if mask_needs_wrapping else mask
+        )
+
+        # Reconstruct column with Buffer objects
+        return plc.Column(
+            data_type=col.type(),
+            size=col.size(),
+            data=new_data,
+            mask=new_mask,
+            null_count=col.null_count(),
+            offset=col.offset(),
+            children=col.children(),
+            validate=False,  # Skip validation - inputs already validated
+        )
+
     @classmethod
     def from_pylibcudf(
         cls, col: plc.Column, data_ptr_exposed: bool = False
@@ -654,6 +707,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             col = plc.column_factories.make_numeric_column(
                 new_dtype, col.size(), plc.types.MaskState.ALL_NULL
             )
+
+        # Ensure data and mask are cudf Buffers to avoid repeated as_buffer() calls
+        col = cls._ensure_buffers_in_plc_column(col, exposed=data_ptr_exposed)
 
         dtype = dtype_from_pylibcudf_column(col)
 
