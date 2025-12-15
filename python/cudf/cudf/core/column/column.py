@@ -295,7 +295,15 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def base_size(self) -> int:
-        return int(self.base_data.size / self.dtype.itemsize)  # type: ignore[union-attr]
+        if self.base_data is None:
+            # For columns without a data buffer (e.g., categorical codes during
+            # construction), we cannot compute base_size from a buffer.
+            # As a fallback, compute it from size + offset, which is correct
+            # if this column is a view from offset to the end of the base buffer.
+            # Note: Subclasses like CategoricalColumn, ListColumn, StructColumn,
+            # and StringColumn override this property with their own logic.
+            return self.size + self.offset
+        return int(self.base_data.size / self.dtype.itemsize)
 
     @property
     def dtype(self) -> DtypeObj:
