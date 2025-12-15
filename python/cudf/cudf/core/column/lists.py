@@ -331,11 +331,12 @@ class ListColumn(ColumnBase):
         while leaf_queue:
             col = leaf_queue.pop()
             offsets = col.children[0].plc_column
+            # col.mask is a Buffer which is Span-compliant
             plc_leaf_col = plc.Column(
                 plc.DataType(plc.TypeId.LIST),
                 col.size,
                 None,
-                plc.gpumemoryview(col.mask) if col.mask is not None else None,
+                col.mask,
                 col.null_count,
                 col.offset,
                 [offsets, plc_leaf_col],
