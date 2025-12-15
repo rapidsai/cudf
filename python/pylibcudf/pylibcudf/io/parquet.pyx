@@ -198,6 +198,10 @@ cdef class ParquetReaderOptions:
         """
         self.c_obj.set_source(src.c_obj)
 
+    cpdef bool is_enabled_use_jit_filter(self):
+        """Returns whether to use JIT compilation for filtering."""
+        return self.c_obj.is_enabled_use_jit_filter()
+
 
 cdef class ParquetReaderOptionsBuilder:
     cpdef ParquetReaderOptionsBuilder convert_strings_to_categories(self, bool val):
@@ -316,6 +320,22 @@ cdef class ParquetReaderOptionsBuilder:
         for name in col_names:
             vec.push_back(<string>str(name).encode())
         self.c_obj.columns(vec)
+        return self
+
+    cpdef ParquetReaderOptionsBuilder use_jit_filter(self, bool use_jit_filter):
+        """
+        Sets whether to use JIT compilation for filtering.
+
+        Parameters
+        ----------
+        use_jit_filter : bool
+            Boolean value whether to use JIT filter
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        self.c_obj.use_jit_filter(use_jit_filter)
         return self
 
     cpdef build(self):

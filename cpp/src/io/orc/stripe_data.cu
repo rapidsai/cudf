@@ -1482,6 +1482,7 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
   if (t < s->u.rowdec.nz_count) {
     s->u.rowdec.row[t] = 0;  // Skipped values (below first_row)
   }
+  __syncthreads();
   while (s->u.rowdec.nz_count < s->top.data.max_vals &&
          s->top.data.cur_row + s->top.data.nrows < s->top.data.end_row) {
     uint32_t const remaining_rows = s->top.data.end_row - (s->top.data.cur_row + s->top.data.nrows);
@@ -1504,6 +1505,7 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
       } else {
         row_plus1 = 0;
       }
+      __syncthreads();
       if (t == nrows - 1) { s->u.rowdec.nz_count = min(nz_count, s->top.data.max_vals); }
       __syncthreads();
 
@@ -1514,7 +1516,6 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
       nz_pos   = (valid) ? nz_count : 0;
       if (t == 0) { s->top.data.nrows = last_row; }
       if (valid && nz_pos - 1 < s->u.rowdec.nz_count) { s->u.rowdec.row[nz_pos - 1] = row_plus1; }
-      __syncthreads();
     } else {
       // All values are valid
       nrows = min(nrows, s->top.data.max_vals - s->u.rowdec.nz_count);
@@ -1524,8 +1525,8 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
         s->top.data.nrows += nrows;
         s->u.rowdec.nz_count += nrows;
       }
-      __syncthreads();
     }
+    __syncthreads();
   }
 }
 
@@ -1728,9 +1729,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
         // Adjust the maximum number of values
         if (numvals == 0 && vals_skipped == 0) {
           numvals = s->top.data.max_vals;  // Just so that we don't hang if the stream is corrupted
-        } else {
-          if (t == 0 && numvals < s->top.data.max_vals) { s->top.data.max_vals = numvals; }
         }
+        __syncthreads();
+        if (t == 0) { s->top.data.max_vals = cuda::std::min(s->top.data.max_vals, numvals); }
       }
       __syncthreads();
       // Account for skipped values

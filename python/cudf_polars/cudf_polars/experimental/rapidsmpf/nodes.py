@@ -80,11 +80,27 @@ async def default_node_single(
         await ch_out.send_metadata(context, metadata_out)
 
         # Recv/send data.
-        while (msg := await ch_in.data.recv(context)) is not None:
-            chunk = TableChunk.from_message(msg).make_available_and_spill(
-                context.br(), allow_overbooking=True
-            )
-            seq_num = msg.sequence_number
+        seq_num = 0
+        receiving = True
+        received_any = False
+        while receiving:
+            msg = await ch_in.data.recv(context)
+            if msg is None:
+                receiving = False
+                if received_any:
+                    break
+                else:
+                    # Make sure we have an empty chunk in case do_evaluate
+                    # always produces rows (e.g. aggregation)
+                    stream = ir_context.get_cuda_stream()
+                    chunk = empty_table_chunk(ir.children[0], context, stream)
+            else:
+                received_any = True
+                chunk = TableChunk.from_message(msg).make_available_and_spill(
+                    context.br(), allow_overbooking=True
+                )
+                seq_num = msg.sequence_number
+
             df = await asyncio.to_thread(
                 ir.do_evaluate,
                 *ir._non_child_args,
@@ -161,9 +177,7 @@ async def default_node_multi(
         # Recv/send data.
         while True:
             # Receive from all non-finished channels
-            for ch_idx, (ch_in, _child) in enumerate(
-                zip(chs_in, ir.children, strict=True)
-            ):
+            for ch_idx, ch_in in enumerate(chs_in):
                 if ch_idx in finished_channels:
                     continue  # This channel already finished, reuse its data
 
@@ -175,19 +189,19 @@ async def default_node_multi(
                     # Store the new chunk (replacing previous if any)
                     ready_chunks[ch_idx] = TableChunk.from_message(msg)
                     chunk_count[ch_idx] += 1
-                assert ready_chunks[ch_idx] is not None, (
-                    f"Channel {ch_idx} has no data after receive loop."
-                )
 
             # If all channels finished, we're done
             if len(finished_channels) == n_children:
                 break
 
-            # Convert chunks to DataFrames right before evaluation
-            # All chunks are guaranteed to be non-None by the assertion above
-            assert all(chunk is not None for chunk in ready_chunks), (
-                "All chunks must be non-None"
-            )
+            # Check if any channel drained without providing data.
+            # If so, create an empty chunk for that channel.
+            for ch_idx, child in enumerate(ir.children):
+                if ready_chunks[ch_idx] is None:
+                    # Channel drained without data - create empty chunk
+                    stream = ir_context.get_cuda_stream()
+                    ready_chunks[ch_idx] = empty_table_chunk(child, context, stream)
+
             # Ensure all table chunks are unspilled and available.
             ready_chunks = [
                 chunk.make_available_and_spill(context.br(), allow_overbooking=True)
@@ -438,26 +452,30 @@ async def fanout_node_unbounded(
                                 device_size > 0
                                 and available_device_mem >= required_headroom
                             ):
-                                target_memory = MemoryType.DEVICE
+                                # Use reserve_device_memory_and_spill to automatically trigger spilling
+                                # if needed to make room for the copy
+                                memory_reservation = (
+                                    context.br().reserve_device_memory_and_spill(
+                                        total_copy_cost,
+                                        allow_overbooking=True,
+                                    )
+                                )
                             else:
                                 # Use host memory for buffering - much safer
                                 # Downstream consumers will make_available() when they need device memory
-                                target_memory = MemoryType.HOST
+                                memory_reservation, _ = context.br().reserve(
+                                    MemoryType.HOST,
+                                    total_copy_cost,
+                                    allow_overbooking=True,
+                                )
 
                             # Copy message for each output buffer
                             # Copies are spillable and allow downstream consumers
                             # to control device memory allocation
                             for idx, sm in enumerate(output_buffers):
                                 if idx < num_outputs - 1:
-                                    # Use reserve_and_spill to automatically trigger
-                                    # spilling if needed to make room for the copy
-                                    res = context.br().reserve_and_spill(
-                                        target_memory,
-                                        copy_cost,
-                                        allow_overbooking=True,
-                                    )
                                     # Copy to target memory and insert into spillable buffer
-                                    mid = sm.insert(msg.copy(res))
+                                    mid = sm.insert(msg.copy(memory_reservation))
                                 else:
                                     # Optimization: reuse the original message for last output
                                     # (no copy needed)

@@ -435,25 +435,26 @@ add_library(
   src/groupby/sort/group_collect.cu
   src/groupby/sort/group_correlation.cu
   src/groupby/sort/group_count.cu
+  src/groupby/sort/group_count_scan.cu
   src/groupby/sort/group_histogram.cu
   src/groupby/sort/group_m2.cu
   src/groupby/sort/group_max.cu
-  src/groupby/sort/group_min.cu
+  src/groupby/sort/group_max_scan.cu
   src/groupby/sort/group_merge_lists.cu
   src/groupby/sort/group_merge_m2.cu
+  src/groupby/sort/group_min.cu
+  src/groupby/sort/group_min_scan.cu
   src/groupby/sort/group_nth_element.cu
   src/groupby/sort/group_nunique.cu
   src/groupby/sort/group_product.cu
-  src/groupby/sort/group_quantiles.cu
-  src/groupby/sort/group_std.cu
-  src/groupby/sort/group_sum.cu
-  src/groupby/sort/group_count_scan.cu
-  src/groupby/sort/group_max_scan.cu
-  src/groupby/sort/group_min_scan.cu
   src/groupby/sort/group_product_scan.cu
+  src/groupby/sort/group_quantiles.cu
   src/groupby/sort/group_rank_scan.cu
   src/groupby/sort/group_replace_nulls.cu
+  src/groupby/sort/group_std.cu
+  src/groupby/sort/group_sum.cu
   src/groupby/sort/group_sum_scan.cu
+  src/groupby/sort/group_topk.cu
   src/groupby/sort/host_udf_aggregation.cpp
   src/groupby/sort/scan.cpp
   src/groupby/sort/sort_helper.cu
@@ -577,6 +578,11 @@ add_library(
   src/join/conditional_join.cu
   src/join/cross_join.cu
   src/join/distinct_hash_join.cu
+  src/join/filter_join_indices.cu
+  src/join/filter_join_indices_kernel_complex.cu
+  src/join/filter_join_indices_kernel_null_complex.cu
+  src/join/filter_join_indices_kernel_null_primitive.cu
+  src/join/filter_join_indices_kernel_primitive.cu
   src/join/filtered_join.cu
   src/join/hash_join.cu
   src/join/join.cu
@@ -588,7 +594,6 @@ add_library(
   src/join/mixed_join_semi.cu
   src/join/mixed_join_size_kernel.cu
   src/join/mixed_join_size_kernel_nulls.cu
-  src/join/semi_join.cu
   src/join/sort_merge_join.cu
   src/json/json_path.cu
   src/lists/contains.cu
@@ -814,7 +819,7 @@ add_library(
   src/transform/nans_to_nulls.cu
   src/transform/one_hot_encode.cu
   src/transform/row_bit_count.cu
-  src/transform/transform.cpp
+  src/transform/transform.cu
   src/transpose/transpose.cu
   src/unary/cast_ops.cu
   src/unary/math_ops.cu
@@ -844,7 +849,7 @@ set_source_files_properties(
   src/rolling/detail/rolling_variable_window.cu
   src/rolling/grouped_rolling.cu
   src/rolling/rolling.cu
-  src/transform/transform.cpp
+  src/transform/transform.cu
   PROPERTIES COMPILE_DEFINITIONS "_FILE_OFFSET_BITS=64"
 )
 
@@ -977,7 +982,7 @@ target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio nanoarrow zstd
+          kvikio::kvikio nanoarrow::nanoarrow zstd
 )
 
 # Add Conda library, and include paths if specified

@@ -44,7 +44,6 @@ if TYPE_CHECKING:
     from cudf._typing import (
         ColumnBinaryOperand,
         ColumnLike,
-        Dtype,
         DtypeObj,
         ScalarLike,
     )
@@ -85,10 +84,7 @@ class NumericalColumn(NumericalBaseColumn):
     def __init__(
         self,
         plc_column: plc.Column,
-        size: int,
         dtype: np.dtype,
-        offset: int,
-        null_count: int,
         exposed: bool,
     ) -> None:
         if (
@@ -103,10 +99,7 @@ class NumericalColumn(NumericalBaseColumn):
             )
         super().__init__(
             plc_column=plc_column,
-            size=size,
             dtype=dtype,
-            offset=offset,
-            null_count=null_count,
             exposed=exposed,
         )
 
@@ -833,7 +826,8 @@ class NumericalColumn(NumericalBaseColumn):
                     finfo = np.finfo(to_dtype_numpy)
                     lower_: int | float
                     upper_: int | float
-                    lower_, upper_ = finfo.min, finfo.max  # type: ignore[assignment]
+                    # assignment ignore not needed for numpy>=2.4.0
+                    lower_, upper_ = finfo.min, finfo.max  # type: ignore[assignment,unused-ignore]
 
                     # Check specifically for np.pi values when casting to lower precision
                     if self_dtype_numpy.itemsize > to_dtype_numpy.itemsize:
@@ -913,10 +907,7 @@ class NumericalColumn(NumericalBaseColumn):
             codes = cast(NumericalColumn, self.astype(codes_dtype))
             return CategoricalColumn(
                 plc_column=codes.to_pylibcudf(mode="read"),
-                size=codes.size,
                 dtype=dtype,
-                offset=codes.offset,
-                null_count=codes.null_count,
                 exposed=False,
             )
         if cudf.get_option("mode.pandas_compatible"):
@@ -935,7 +926,7 @@ class NumericalColumn(NumericalBaseColumn):
 
         return self
 
-    def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
+    def _reduction_result_dtype(self, reduction_op: str) -> DtypeObj:
         if reduction_op in {"sum", "product"}:
             if self.dtype.kind == "f":
                 return self.dtype
