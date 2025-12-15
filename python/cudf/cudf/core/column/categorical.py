@@ -113,7 +113,8 @@ class CategoricalColumn(column.ColumnBase):
         )
         self._codes = self.children[0].set_mask(self.mask)
 
-    def _get_base_data_from_plc_column(self, exposed: bool) -> None:
+    @property
+    def base_data(self) -> None:
         """
         Categorical columns don't have a data buffer - data is stored
         in the codes child column instead.

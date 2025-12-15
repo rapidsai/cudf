@@ -232,9 +232,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self._mask = None
         self._data = None
         self._children = None
-        # Initialize cached base buffers from plc_column
-        self._base_data = self._get_base_data_from_plc_column(exposed)
-        self._base_mask = self._get_base_mask_from_plc_column(exposed)
         children = self._get_children_from_pylibcudf_column(
             self.plc_column,
             dtype,
@@ -247,20 +244,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # are destroyed, all references to this column will be removed as well,
         # triggering the destruction of the exposed buffers.
         self._exposed_buffers: set[Buffer] = set()
-
-    def _get_base_data_from_plc_column(self, exposed: bool) -> Buffer | None:
-        """Extract and wrap data buffer from plc_column."""
-        data_view = self.plc_column.data()
-        if data_view is None:
-            return None
-        return as_buffer(data_view, exposed=exposed)
-
-    def _get_base_mask_from_plc_column(self, exposed: bool) -> Buffer | None:
-        """Extract and wrap mask buffer from plc_column."""
-        mask_view = self.plc_column.null_mask()
-        if mask_view is None:
-            return None
-        return as_buffer(mask_view, exposed=exposed)
 
     def _get_children_from_pylibcudf_column(
         self,
@@ -324,8 +307,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def base_data(self) -> None | Buffer:
-        """Get cached data buffer."""
-        return self._base_data
+        """Get data buffer from pylibcudf column."""
+        data_view = self.plc_column.data()
+        if data_view is None:
+            return None
+        return as_buffer(data_view, exposed=False)
 
     @property
     def data(self) -> None | Buffer:
@@ -338,7 +324,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return self._data
 
     def set_base_data(self, value: None | Buffer) -> None:
-        """Set base data buffer by updating plc_column and cache."""
+        """Set base data buffer by updating plc_column."""
         if value is not None and not isinstance(value, Buffer):
             raise TypeError(
                 "Expected a Buffer or None for data, "
@@ -347,9 +333,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         # Clear offset-aware cache
         self._data = None
-
-        # Update cached base_data
-        self._base_data = value
 
         # Create new plc_column with updated data buffer
         # Access mask directly from plc_column to avoid wrapping/unwrapping
@@ -372,8 +355,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def base_mask(self) -> None | Buffer:
-        """Get cached mask buffer."""
-        return self._base_mask
+        """Get mask buffer from pylibcudf column."""
+        mask_view = self.plc_column.null_mask()
+        if mask_view is None:
+            return None
+        return as_buffer(mask_view, exposed=False)
 
     @property
     def mask(self) -> None | Buffer:
@@ -440,9 +426,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             new_null_count,
             validate=False,
         )
-
-        # Update cached base_mask
-        self._base_mask = value
 
         self._clear_cache()
 
@@ -546,9 +529,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if inplace:
             self._dtype = other_col._dtype
             self.plc_column = other_col.plc_column
-            # Directly update cached attributes to avoid recreating plc_column multiple times
-            self._base_data = other_col._base_data
-            self._base_mask = other_col._base_mask
+            # Update base_children (still a cached attribute)
             self._base_children = other_col._base_children
             # Clear offset-aware caches
             self._data = None
@@ -2042,7 +2023,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             "data": (data_ptr, False),
             "version": 3,
         }
-        data_buf = self._data if self._data is not None else self._base_data
+        data_buf = self._data if self._data is not None else self.base_data
         if data_buf is not None:
             self._exposed_buffers.add(data_buf)
         if self.nullable and self.has_nulls():
