@@ -1235,7 +1235,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   while ((s->error == 0) && (processed_count < s->page.num_input_values) &&
          (s->input_row_count <= last_row)) {
     int next_valid_count;
-
+    block.sync();
     // only need to process definition levels if this is a nullable column
     if (should_process_nulls) {
       processed_count += def_decoder.decode_next(t);
@@ -1317,7 +1317,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
         decode_values.template operator()<copy_mode::DIRECT>();
       }
     }
-    block.sync();
 
     valid_count = next_valid_count;
   }
