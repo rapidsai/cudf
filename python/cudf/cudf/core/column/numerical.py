@@ -520,10 +520,8 @@ class NumericalColumn(NumericalBaseColumn):
         return plc.Column(
             data_type=dtype_to_pylibcudf_type(dtype),
             size=self.size,
-            data=plc.gpumemoryview(self.astype(np.dtype(np.int64)).base_data),
-            mask=plc.gpumemoryview(self.base_mask)
-            if self.base_mask is not None
-            else None,
+            data=self.astype(np.dtype(np.int64)).base_data,
+            mask=self.base_mask,
             null_count=self.null_count,
             offset=self.offset,
             children=[],
