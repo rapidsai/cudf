@@ -230,10 +230,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def __init__(
         self,
         plc_column: plc.Column,
-        size: int,
         dtype: DtypeObj,
-        offset: int,
-        null_count: int,
         exposed: bool,
     ) -> None:
         if not (
@@ -244,15 +241,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 f"plc_column must be a pylibcudf.Column with a TypeId in {self._VALID_PLC_TYPES}"
             )
         self.plc_column = plc_column
-        if size < 0:
-            raise ValueError("size must be >=0")
-        self._size = size
         self._distinct_count: dict[bool, int] = {}
         self._dtype = dtype
-        self._offset = offset
-        if null_count < 0:
-            raise ValueError("null_count must be >=0")
-        self._null_count = null_count
         self._mask = None
         self._base_mask = None
         self._data = None
@@ -368,7 +358,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def size(self) -> int:
-        return self._size
+        return self.plc_column.size()
 
     @property
     def base_data(self) -> None | Buffer:
@@ -452,6 +442,21 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self._mask = None
         self._children = None
         self._base_mask = value  # type: ignore[assignment]
+
+        # Update plc_column with the new mask and compute null_count eagerly
+        if value is not None:
+            new_mask = plc.gpumemoryview(value)
+            new_null_count = plc.null_mask.null_count(
+                new_mask,
+                self.offset,
+                self.offset + self.size,
+            )
+        else:
+            new_mask = None
+            new_null_count = 0
+
+        self.plc_column = self.plc_column.with_mask(new_mask, new_null_count)
+
         self._clear_cache()
 
     def _clear_cache(self) -> None:
@@ -467,7 +472,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             except AttributeError:
                 # attr was not called yet, so ignore.
                 pass
-        self._null_count = None  # type: ignore[assignment]
 
     def set_mask(self, mask: Buffer | None) -> Self:
         """
@@ -501,21 +505,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @property
     def null_count(self) -> int:
-        if self._null_count is None:
-            if not self.nullable or self.size == 0:
-                self._null_count = 0
-            else:
-                with acquire_spill_lock():
-                    self._null_count = plc.null_mask.null_count(
-                        plc.gpumemoryview(self.base_mask),
-                        self.offset,
-                        self.offset + self.size,
-                    )
-        return self._null_count
+        return self.plc_column.null_count()
 
     @property
     def offset(self) -> int:
-        return self._offset
+        return self.plc_column.offset()
 
     @property
     def base_children(self) -> tuple[ColumnBase, ...]:
@@ -563,10 +557,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         object with the Buffers and attributes from the other column.
         """
         if inplace:
-            self._offset = other_col.offset
-            self._size = other_col.size
             self._dtype = other_col._dtype
             self.plc_column = other_col.plc_column
+            # Note: size and offset are now read from plc_column via properties
             self.set_base_data(other_col.base_data)
             self.set_base_children(other_col.base_children)
             self.set_base_mask(other_col.base_mask)
@@ -727,10 +720,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         return column_cls(  # type: ignore[return-value]
             plc_column=col,
-            size=col.size(),
             dtype=dtype,
-            offset=col.offset(),
-            null_count=col.null_count(),
             exposed=data_ptr_exposed,
         )
 
@@ -1177,10 +1167,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             col = type(self)(
                 plc_column=self.plc_column,
-                size=self.size,
                 dtype=self.dtype,
-                offset=self.offset,
-                null_count=self.null_count,
                 exposed=False,
             )
             # copy-on-write and spilling logic tracked on the Buffers
@@ -2012,8 +1999,15 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             if cudf.get_option("copy_on_write") and (data_ptr != original_ptr):
                 # The offset must be reset to 0 because we have migrated to a new copied
                 # buffer starting at the old offset.
-                self._offset = 0
-                # Update base_data to match the new data buffer
+                self.plc_column = plc.Column(
+                    data_type=self.plc_column.type(),
+                    size=self.plc_column.size(),
+                    data=self.plc_column.data(),
+                    mask=self.plc_column.null_mask(),
+                    null_count=self.plc_column.null_count(),
+                    offset=0,
+                    children=self.plc_column.children(),
+                )
                 self.set_base_data(self.data)
 
         output = {
