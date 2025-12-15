@@ -631,7 +631,6 @@ TEST_F(ReplaceDictionaryTest, ReplaceNulls)
   auto replacement   = cudf::dictionary::encode(replacement_w);
   auto expected      = cudf::test::strings_column_wrapper({"c", "c", "", "a", "d", "d", "b", ""},
                                                           {1, 1, 0, 1, 1, 1, 1, 0});
-  // auto expected = cudf::dictionary::encode(expected_w);
 
   auto result  = cudf::replace_nulls(input->view(), replacement->view());
   auto decoded = cudf::dictionary::decode(result->view());

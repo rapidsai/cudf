@@ -23,7 +23,6 @@ from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     Metadata,
-    empty_table_chunk,
 )
 from cudf_polars.experimental.shuffle import Shuffle
 
@@ -189,7 +188,6 @@ async def shuffle_node(
         await shuffle.insert_finished()
 
         # Extract shuffled partitions and send them out
-        num_partitions_local = 0
         stream = ir_context.get_cuda_stream()
         for partition_id in range(
             # Round-robin partition assignment
@@ -206,20 +204,6 @@ async def shuffle_node(
 
             # Send the output chunk
             await ch_out.data.send(context, Message(partition_id, output_chunk))
-            num_partitions_local += 1
-
-        # Make sure we send at least one chunk.
-        # This can happen during multi-GPU execution.
-        # TODO: Investigate and address the underlying issue(s)
-        # with skipping this empty-table message.
-        if num_partitions_local < 1:
-            await ch_out.data.send(
-                context,
-                Message(
-                    num_partitions + 1,
-                    empty_table_chunk(ir, context, stream),
-                ),
-            )
 
         await ch_out.data.drain(context)
 
