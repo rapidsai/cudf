@@ -32,7 +32,7 @@ namespace detail {
 template <typename TransformOp, typename InputIterator>
 bool all_of(InputIterator begin, InputIterator end, TransformOp op, rmm::cuda_stream_view stream)
 {
-  return transform_reduce(begin, end, op, bool{true}, cuda::std::logical_and<bool>{}, stream);
+  return transform_reduce(begin, end, op, true, cuda::std::logical_and<bool>{}, stream);
 }
 
 /**
@@ -53,7 +53,7 @@ bool all_of(InputIterator begin, InputIterator end, TransformOp op, rmm::cuda_st
 template <typename TransformOp, typename InputIterator>
 bool any_of(InputIterator begin, InputIterator end, TransformOp op, rmm::cuda_stream_view stream)
 {
-  return transform_reduce(begin, end, op, bool{false}, cuda::std::logical_or<bool>{}, stream);
+  return transform_reduce(begin, end, op, false, cuda::std::logical_or<bool>{}, stream);
 }
 
 /**
