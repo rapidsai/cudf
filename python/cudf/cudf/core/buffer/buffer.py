@@ -191,6 +191,11 @@ class BufferOwner(Serializable):
         """
         return self._exposed
 
+    @property
+    def ptr(self) -> int:
+        """Device pointer (Span protocol)."""
+        return self.get_ptr(mode="read")
+
     def mark_exposed(self) -> None:
         """Mark the buffer as "exposed" permanently
 
@@ -299,6 +304,11 @@ class Buffer(Serializable):
         """Object owning the memory of the buffer."""
         return self._owner
 
+    @property
+    def ptr(self) -> int:
+        """Device pointer (Span protocol)."""
+        return self.get_ptr(mode="read")
+
     def __getitem__(self, key: slice) -> Self:
         """Create a new slice of the buffer."""
         if not isinstance(key, slice):
@@ -361,7 +371,7 @@ class Buffer(Serializable):
             "shape": (self.size,),
             "strides": None,
             "typestr": "|u1",
-            "version": 0,
+            "version": 3,
         }
 
     def serialize(self) -> tuple[dict, list]:
