@@ -88,14 +88,9 @@ def test_column_set_equal_length_object_by_mask():
 @pytest.mark.parametrize("size", [50, 10, 0])
 def test_column_offset_and_size(pandas_input, offset, size):
     col = as_column(pandas_input)
-    col = cudf.core.column.build_column(
-        plc_column=col.to_pylibcudf(mode="read"),
-        size=size,
-        dtype=col.dtype,
-        offset=offset,
-        null_count=col.null_count,
-        exposed=False,
-    )
+
+    # Use column.slice() to preserve dtype information
+    col = col.slice(offset, offset + size)
 
     if isinstance(col.dtype, cudf.CategoricalDtype):
         assert col.size == col.codes.size
