@@ -8,12 +8,11 @@
 #include "page_index_filter_utils.hpp"
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/algorithm/logical.cuh>
-#include <cudf/detail/algorithm/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/host_worker_pool.hpp>

@@ -9,8 +9,7 @@
 #include "page_string_utils.cuh"
 #include "rle_stream.cuh"
 
-#include <cudf/detail/algorithm/logical.cuh>
-#include <cudf/detail/algorithm/reduce.cuh>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/strings/detail/gather.cuh>
